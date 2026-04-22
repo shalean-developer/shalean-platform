@@ -70,6 +70,11 @@
 --     multi-pending offers per booking, travel_route_cache, surge/demand on bookings,
 --     cleaner response metrics + tier, expire-peer + record-response RPCs
 --
+-- 21. migrations/20260439_move_crons_to_supabase_scheduler.sql (optional legacy)
+--     + migrations/20260467_pg_cron_expire_offers_and_http_maintenance.sql (recommended)
+--     pg_cron: dispatch-cycle (*/5) → run_dispatch_cycle(); retry-unassigned (*/10) → retry_unassigned_jobs()
+--     + dispatch_logs + HTTP jobs to Next /api/cron/* (replace YOUR_DOMAIN / YOUR_CRON_SECRET in SQL + in retry_unassigned_jobs()).
+--
 -- Optional seed (SQL Editor, after migrations — order matters):
 --   1) seed/locations_seed.sql — 170+ Western Cape areas (kebab slugs, cities)
 --   2) seed/cleaners_seed.sql — 32 demo cleaners + auth users (+ location_id backfill)
