@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /**
  * Hourly (Vercel cron): adjust `pricing_slot_adjustments` from `pricing_metrics` with ±10% steps, clamped [0.8, 1.2].
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {
     return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
@@ -71,4 +71,8 @@ export async function GET(request: Request) {
     evaluated: plan.length,
     rowsUpdated: updated,
   });
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }

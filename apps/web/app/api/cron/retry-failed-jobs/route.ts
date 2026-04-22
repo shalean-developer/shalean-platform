@@ -20,7 +20,7 @@ const MAX_LIFECYCLE_RETRY = 20;
  * 2) Retries lifecycle emails stuck in `failed` with attempts &lt; 5.
  * 3) Processes `dispatch_retry_queue` (auto-assign backoff).
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {
     return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
@@ -147,4 +147,8 @@ export async function GET(request: Request) {
     },
     dispatchRetry,
   });
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }

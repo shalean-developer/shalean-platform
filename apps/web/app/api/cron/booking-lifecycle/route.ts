@@ -95,7 +95,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
  * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
  * Processes pending lifecycle emails due now (status=pending, scheduled_for <= now).
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {
     return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
@@ -177,4 +177,8 @@ export async function GET(request: Request) {
     skipped,
     processed: jobs?.length ?? 0,
   });
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }
