@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
-import { notifyCleanerOfDispatchOffer } from "@/lib/dispatch/offerNotifications";
+import {
+  notifyCleanerOfDispatchOffer,
+  notifyCleanerOfferAccepted,
+  notifyCleanerOfferDeclined,
+} from "@/lib/dispatch/offerNotifications";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 const POLL_MS = 400;
@@ -9,13 +13,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+export type CreateDispatchOfferRowResult =
+  | { ok: true; offerId: string; expiresAtIso: string }
+  | { ok: false; error: string };
+
 export async function createDispatchOfferRow(params: {
   supabase: SupabaseClient;
   bookingId: string;
   cleanerId: string;
   rankIndex: number;
   ttlSeconds: number;
-}): Promise<{ offerId: string; expiresAtIso: string } | null> {
+}): Promise<CreateDispatchOfferRowResult> {
   const expiresAt = new Date(Date.now() + params.ttlSeconds * 1000).toISOString();
   const { data, error } = await params.supabase
     .from("dispatch_offers")
@@ -30,7 +38,22 @@ export async function createDispatchOfferRow(params: {
     .single();
 
   if (error || !data?.id) {
-    return null;
+    const msg = error?.message ?? "Insert dispatch_offers failed.";
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[createDispatchOfferRow] insert failed", {
+        bookingId: params.bookingId,
+        cleanerId: params.cleanerId,
+        message: msg,
+        details: error,
+      });
+    }
+    await logSystemEvent({
+      level: "warn",
+      source: "dispatch_offer_insert",
+      message: msg,
+      context: { bookingId: params.bookingId, cleanerId: params.cleanerId },
+    });
+    return { ok: false, error: msg };
   }
 
   const offerId = String(data.id);
@@ -38,8 +61,20 @@ export async function createDispatchOfferRow(params: {
     p_cleaner_id: params.cleanerId,
   });
   if (rpcErr) {
-    await params.supabase.from("dispatch_offers").delete().eq("id", offerId);
-    return null;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[createDispatchOfferRow] dispatch_cleaner_offer_sent failed (offer kept)", {
+        bookingId: params.bookingId,
+        cleanerId: params.cleanerId,
+        offerId,
+        message: rpcErr.message,
+      });
+    }
+    await logSystemEvent({
+      level: "warn",
+      source: "dispatch_offer_sent_rpc",
+      message: rpcErr.message,
+      context: { bookingId: params.bookingId, cleanerId: params.cleanerId, offerId },
+    });
   }
 
   const t0 = Date.now();
@@ -63,7 +98,12 @@ export async function createDispatchOfferRow(params: {
     expiresAtIso: expiresAt,
   });
 
-  return { offerId, expiresAtIso: expiresAt };
+  await params.supabase
+    .from("bookings")
+    .update({ dispatch_status: "offered" })
+    .eq("id", params.bookingId);
+
+  return { ok: true, offerId, expiresAtIso: expiresAt };
 }
 
 export type OfferPollResult = "assigned" | "rejected" | "expired";
@@ -205,10 +245,12 @@ export async function acceptDispatchOffer(params: {
     .update({
       cleaner_id: params.cleanerId,
       status: "assigned",
+      dispatch_status: "assigned",
       assigned_at: now,
     })
     .eq("id", bookingId)
     .eq("status", "pending")
+    .neq("dispatch_status", "assigned")
     .select("id");
 
   if (uBook) {
@@ -269,6 +311,7 @@ export async function acceptDispatchOffer(params: {
   }
 
   await syncCleanerBusyFromBookings(params.supabase, params.cleanerId);
+  await params.supabase.from("cleaners").update({ is_available: false }).eq("id", params.cleanerId);
 
   await logSystemEvent({
     level: "info",
@@ -280,6 +323,12 @@ export async function acceptDispatchOffer(params: {
       offerId: params.offerId,
       latency_ms: latencyMs,
     },
+  });
+
+  await notifyCleanerOfferAccepted({
+    cleanerId: params.cleanerId,
+    bookingId,
+    offerId: params.offerId,
   });
 
   return { ok: true };
@@ -337,6 +386,12 @@ export async function rejectDispatchOffer(params: {
       offerId: params.offerId,
       latency_ms: latencyMs,
     },
+  });
+
+  await notifyCleanerOfferDeclined({
+    cleanerId: params.cleanerId,
+    bookingId: String(row.booking_id ?? ""),
+    offerId: params.offerId,
   });
 
   return { ok: true };

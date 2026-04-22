@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -18,6 +19,9 @@ type Row = {
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   status: string | null;
+  dispatch_status: string | null;
+  surge_multiplier: number | null;
+  surge_reason: string | null;
   user_id: string | null;
   cleaner_id: string | null;
   assigned_at: string | null;
@@ -26,6 +30,7 @@ type Row = {
   completed_at: string | null;
   created_at: string;
   paystack_reference: string;
+  city_id: string | null;
 };
 
 function classifyBooking(row: Row, today: string): "today" | "upcoming" | "completed" {
@@ -75,14 +80,17 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const filter = searchParams.get("filter") ?? "all";
+  const cityId = searchParams.get("cityId");
 
-  const { data: rawRows, error: selErr } = await admin
+  let bookingQuery = admin
     .from("bookings")
     .select(
-      "id, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, user_id, cleaner_id, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference",
+      "id, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id",
     )
     .order("created_at", { ascending: false })
     .limit(2500);
+  if (cityId) bookingQuery = bookingQuery.eq("city_id", cityId);
+  const { data: rawRows, error: selErr } = await bookingQuery;
 
   if (selErr) {
     await reportOperationalIssue("error", "api/admin/bookings", selErr.message);
@@ -151,6 +159,8 @@ export async function GET(request: Request) {
     .slice(0, 10);
 
   const { data: profileRows } = await admin.from("user_profiles").select("tier");
+  const demandSupply = await getDemandSupplySnapshotByCity(admin, cityId || null);
+  const { data: cityRows } = await admin.from("cities").select("id, name, is_active").order("name", { ascending: true });
   const vipDistribution = { regular: 0, silver: 0, gold: 0, platinum: 0 };
   for (const p of profileRows ?? []) {
     const t = typeof p === "object" && p && "tier" in p ? String((p as { tier?: string }).tier ?? "regular") : "regular";
@@ -173,7 +183,12 @@ export async function GET(request: Request) {
       failedJobsCount: (failedJobs ?? []).length,
       vipDistribution,
       topCustomers,
+      demandOpenBookings: demandSupply.demand,
+      supplyAvailableCleaners: demandSupply.supply,
+      liveSurgeMultiplier: demandSupply.multiplier,
     },
     failedJobs: failedJobs ?? [],
+    cities: cityRows ?? [],
+    selectedCityId: cityId || null,
   });
 }

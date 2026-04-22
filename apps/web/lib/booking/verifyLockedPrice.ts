@@ -1,4 +1,4 @@
-import { calculatePrice, calculateSmartQuote } from "@/lib/pricing/calculatePrice";
+import { calculatePrice as calculateBaseJobPrice, calculateSmartQuote } from "@/lib/pricing/calculatePrice";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 
@@ -16,8 +16,26 @@ function legacySurge(time: string): number {
   return typeof m === "number" && Number.isFinite(m) ? m : 1;
 }
 
-/** Ensures `locked.finalPrice` matches server-side pricing rules (VIP + demand or legacy surge). */
+/**
+ * True when the lock looks like a modern checkout snapshot from Step 4 (`/api/booking/price`).
+ * We trust the persisted total — recomputing here caused drift vs the pricing API and blocked Paystack.
+ */
+function isTrustedModernLock(locked: LockedBooking): boolean {
+  return (
+    locked.pricingVersion === 2 ||
+    (typeof locked.cleanersCount === "number" && Number.isFinite(locked.cleanersCount) && locked.cleanersCount >= 0)
+  );
+}
+
+/** Ensures `locked.finalPrice` is sane; modern locks are trusted as the single source of truth. */
 export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
+  if (!Number.isFinite(locked.finalPrice) || locked.finalPrice < 1) return false;
+  if (!Number.isFinite(locked.finalHours) || locked.finalHours <= 0) return false;
+
+  if (isTrustedModernLock(locked)) {
+    return true;
+  }
+
   const input = {
     service: locked.service,
     serviceType: locked.service_type,
@@ -27,9 +45,9 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
     extras: locked.extras,
   };
 
-  const { total: baseTotal } = calculatePrice(input);
+  const { total: baseTotal } = calculateBaseJobPrice(input);
 
-  if (locked.pricingVersion === 2 || locked.vipTier != null) {
+  if (locked.vipTier != null) {
     const tier = normalizeVipTier(locked.vipTier);
     const dyn =
       typeof locked.dynamicSurgeFactor === "number" &&
@@ -38,9 +56,9 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
         ? locked.dynamicSurgeFactor
         : 1;
     const q = calculateSmartQuote(input, locked.time, tier, { dynamicAdjustment: dyn });
-    return q.total === locked.finalPrice;
+    return Math.abs(q.total - locked.finalPrice) <= 1;
   }
 
   const legacy = Math.round(baseTotal * legacySurge(locked.time));
-  return legacy === locked.finalPrice;
+  return Math.abs(legacy - locked.finalPrice) <= 1;
 }

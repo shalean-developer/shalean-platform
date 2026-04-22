@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
-import { calculatePrice } from "@/lib/pricing/calculatePrice";
-import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
-import type { BookingPricePreviewLock } from "@/lib/booking/bookingPricePreview";
+import {
+  formatLockedAppointmentLabel,
+  getLockedBookingDisplayPrice,
+  type LockedBooking,
+} from "@/lib/booking/lockedBooking";
 import type { BookingStep1State, PropertyTypeKind } from "./useBookingStep1";
 import { BOOKING_EXTRA_LABELS } from "@/lib/booking/extraLabels";
 import { getBookingSummaryServiceLabel } from "./serviceCategories";
@@ -12,13 +14,14 @@ import { normalizeVipTier, vipDiscountLabel, vipTierDisplayName } from "@/lib/pr
 
 type BookingSummaryCardProps = {
   state: BookingStep1State;
-  showPricePreview?: boolean;
-  /** Step 2: no estimate until a slot is locked — show selection hint instead. */
+  /** Step 4: no sidebar total until a slot is locked — show selection hint instead. */
   suppressEstimateUntilLocked?: boolean;
-  /** When set, price and appointment are fixed — never recomputed from `calculatePrice`. */
+  /** When set, price and appointment are fixed — from `booking_locked` only. */
   locked?: LockedBooking | null;
-  /** Early funnel lock (job subtotal before slot surge). */
-  pricePreview?: BookingPricePreviewLock | null;
+  /** Steps 2–3: “From R …” smart-quote floor (not the slot total). */
+  estimateFromZar?: number | null;
+  /** Step 5: total due after discounts (matches pay footer). */
+  amountToPayZar?: number;
   /** Step 3+ — from `booking_cleaner`; does not affect pricing. */
   selectedCleanerName?: string | null;
 };
@@ -73,10 +76,10 @@ function propertyLabel(t: PropertyTypeKind | null): string | null {
 
 export function BookingSummaryCard({
   state,
-  showPricePreview = false,
   suppressEstimateUntilLocked = false,
   locked = null,
-  pricePreview = null,
+  estimateFromZar = null,
+  amountToPayZar,
   selectedCleanerName = null,
 }: BookingSummaryCardProps) {
   const serviceLine =
@@ -107,18 +110,6 @@ export function BookingSummaryCard({
       </span>
     );
 
-  const estimate =
-    !locked && showPricePreview && !suppressEstimateUntilLocked
-      ? calculatePrice({
-          service: state.service,
-          serviceType: state.service_type,
-          rooms: state.rooms,
-          bathrooms: state.bathrooms,
-          extraRooms: state.extraRooms,
-          extras: state.extras,
-        })
-      : null;
-
   const showSelectSlotHint = !locked && suppressEstimateUntilLocked;
 
   return (
@@ -134,9 +125,7 @@ export function BookingSummaryCard({
           ? bookingCopy.summary.lockedHint
           : suppressEstimateUntilLocked
             ? bookingCopy.summary.selectTimeHint
-            : pricePreview && !locked
-              ? bookingCopy.summary.previewHint
-              : "Updates as you make changes."}
+            : "Updates as you make changes."}
       </p>
 
       {state.location.trim() || propertyLabel(state.propertyType) ? (
@@ -171,16 +160,16 @@ export function BookingSummaryCard({
         <SummaryRow label="Extras">{extrasContent}</SummaryRow>
       </div>
 
-      {pricePreview && !locked ? (
-        <div className="mt-4 space-y-2 rounded-xl border border-emerald-200/80 bg-emerald-50/90 px-3 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/35">
-          <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-            {bookingCopy.summary.priceSecured}
+      {!locked && estimateFromZar != null && !suppressEstimateUntilLocked ? (
+        <div className="mt-4 space-y-1 rounded-xl border border-dashed border-zinc-300/90 bg-white/70 px-3 py-3 dark:border-zinc-600 dark:bg-zinc-950/40">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Estimated price
           </p>
-          <p className="flex justify-between text-sm text-emerald-950 dark:text-emerald-50">
-            <span className="text-emerald-800/90 dark:text-emerald-200/90">{bookingCopy.quote.priceLabel}</span>
-            <span className="font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-              R {pricePreview.finalPrice.toLocaleString("en-ZA")}
-            </span>
+          <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+            From R {estimateFromZar.toLocaleString("en-ZA")}
+          </p>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            Exact amount depends on the time you choose — shown on each slot in the next step.
           </p>
         </div>
       ) : null}
@@ -229,12 +218,37 @@ export function BookingSummaryCard({
               {formatHoursLabel(locked.finalHours)} hrs
             </span>
           </p>
-          <p className="flex justify-between font-semibold">
-            <span className="text-emerald-800 dark:text-emerald-200">Final price</span>
-            <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-              R {locked.finalPrice.toLocaleString("en-ZA")}
-            </span>
-          </p>
+          {typeof amountToPayZar === "number" &&
+          Number.isFinite(amountToPayZar) &&
+          Math.round(amountToPayZar) !== Math.round(getLockedBookingDisplayPrice(locked)) ? (
+            <>
+              <p className="flex justify-between font-semibold">
+                <span className="text-emerald-800 dark:text-emerald-200">Total to pay</span>
+                <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  R {amountToPayZar.toLocaleString("en-ZA")}
+                </span>
+              </p>
+              <p className="flex justify-between text-xs text-zinc-600 dark:text-zinc-400">
+                <span>Visit price (locked)</span>
+                <span className="font-medium tabular-nums">
+                  R {getLockedBookingDisplayPrice(locked).toLocaleString("en-ZA")}
+                </span>
+              </p>
+            </>
+          ) : (
+            <p className="flex justify-between font-semibold">
+              <span className="text-emerald-800 dark:text-emerald-200">
+                {typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar) ? "Total to pay" : "Final price"}
+              </span>
+              <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                R{" "}
+                {(typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar)
+                  ? amountToPayZar
+                  : getLockedBookingDisplayPrice(locked)
+                ).toLocaleString("en-ZA")}
+              </span>
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -246,27 +260,6 @@ export function BookingSummaryCard({
         </div>
       ) : null}
 
-      {!locked && estimate ? (
-        <div className="mt-4 space-y-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-          <p className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="text-zinc-500 dark:text-zinc-400">Estimated time</span>
-            <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
-              {formatHoursLabel(estimate.hours)} hrs
-            </span>
-          </p>
-          <p className="flex justify-between font-semibold">
-            <span className="text-zinc-500 dark:text-zinc-400">Estimated total</span>
-            <span className="text-xl font-bold tabular-nums text-primary">
-              R {estimate.total.toLocaleString("en-ZA")}
-            </span>
-          </p>
-          {state.service === null ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400/90">
-              Choose a cleaning type on the price step to refine this estimate.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }

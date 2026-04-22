@@ -1,22 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { SectionCard } from "@/components/booking/SectionCard";
 import { HomeDetails } from "@/components/booking/HomeDetails";
 import { SmartExtraSuggestions } from "@/components/booking/SmartExtraSuggestions";
 import { SmartRetentionBanner } from "@/components/booking/SmartRetentionBanner";
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { usePastBookingHints } from "@/lib/booking/usePastBookingHints";
-import { useIsBookingLocked } from "@/components/booking/useLockedBooking";
+import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
-import { calculatePrice } from "@/lib/pricing/calculatePrice";
-import { writeBookingPricePreviewLock } from "@/lib/booking/bookingPricePreview";
 import { bookingServiceIdFromType, normalizeStep1ForService } from "@/components/booking/serviceCategories";
+import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
+import { clearLockedBookingFromStorage, getLockedBookingDisplayPrice } from "@/lib/booking/lockedBooking";
+import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 
 const ExtrasSection = lazy(() =>
   import("@/components/booking/ExtrasSection").then((m) => ({ default: m.ExtrasSection })),
@@ -25,44 +27,42 @@ const ExtrasSection = lazy(() =>
 export function StepDetailsForm() {
   const router = useRouter();
   const copy = bookingCopy.details;
+  const { handleResetBooking } = useBookingFlow();
   const booking = useBookingStep1();
   const { state, setState, maxRooms, blockedExtras, canContinue } = booking;
 
   const { tier: vipTier } = useBookingVipTier();
   const pastHints = usePastBookingHints();
-  const isLocked = useIsBookingLocked();
+  const locked = useLockedBooking();
+  const isLocked = locked != null;
+  const skipLockClearOnMount = useRef(true);
 
-  const live = useMemo(
-    () =>
-      calculatePrice({
-        service: state.service,
-        serviceType: state.service_type,
-        rooms: state.rooms,
-        bathrooms: state.bathrooms,
-        extraRooms: state.extraRooms,
-        extras: state.extras,
-      }),
-    [state.bathrooms, state.extraRooms, state.extras, state.rooms, state.service, state.service_type],
-  );
+  useEffect(() => {
+    if (skipLockClearOnMount.current) {
+      skipLockClearOnMount.current = false;
+      return;
+    }
+    if (!locked) return;
+    clearLockedBookingFromStorage();
+    clearSelectedCleanerFromStorage();
+  }, [
+    locked,
+    state.rooms,
+    state.bathrooms,
+    state.extraRooms,
+    state.extras.join(","),
+    state.cleaningFrequency,
+    state.service_type,
+    state.service,
+  ]);
 
-  const persistPreview = () => {
-    if (!state.service) return;
-    writeBookingPricePreviewLock({
-      finalPrice: live.total,
-      surgeMultiplier: 1,
-      lockedAt: new Date().toISOString(),
-      estimatedHours: live.hours,
-      service: state.service,
-      rooms: state.rooms,
-      bathrooms: state.bathrooms,
-      extraRooms: state.extraRooms,
-      extras: state.extras,
-    });
-  };
+  const recurringDiscountPct =
+    state.cleaningFrequency === "weekly" ? 0.1 : state.cleaningFrequency === "biweekly" ? 0.05 : 0;
+
+  const estimateFrom = useMemo(() => estimateFromSmartQuoteMin(state, vipTier), [state, vipTier]);
 
   const goWhen = () => {
     if (!canContinue) return;
-    persistPreview();
     router.push(bookingFlowHref("when"));
   };
 
@@ -104,17 +104,34 @@ export function StepDetailsForm() {
     );
   };
 
+  const lockedVisitZar = locked ? getLockedBookingDisplayPrice(locked) : null;
+
   return (
     <BookingLayout
-      useFlowHeader
       summaryState={state}
-      showPricePreview
-      stepLabel="Step 3 of 5"
       canContinue={canContinue}
       onContinue={goWhen}
       continueLabel={copy.cta}
-      stickyMobileBar={{ totalZar: live.total, subline: copy.reassurance, totalCaption: bookingCopy.stickyBar.total }}
-      footerTotalZar={live.total}
+      stickyMobileBar={
+        isLocked && lockedVisitZar != null
+          ? {
+              totalZar: lockedVisitZar,
+              totalCaption: "Locked visit price",
+              subline: "Reset booking to edit your details, or continue to schedule / pay",
+              ctaShort: copy.cta,
+            }
+          : !isLocked && estimateFrom != null
+            ? {
+                totalZar: estimateFrom,
+                totalCaption: "Estimated from",
+                subline: "Slot prices in the next step are the real totals",
+                ctaShort: copy.cta,
+              }
+            : undefined
+      }
+      footerTotalZar={
+        isLocked && lockedVisitZar != null ? lockedVisitZar : !isLocked && estimateFrom != null ? estimateFrom : undefined
+      }
     >
       <div className="space-y-6 pb-6">
         {isLocked ? (
@@ -122,7 +139,14 @@ export function StepDetailsForm() {
             className="rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
             role="status"
           >
-            This booking is locked for checkout. Use <strong>Reset</strong> in the menu to edit again.
+            <span>This booking is locked for checkout.</span>{" "}
+            <button
+              type="button"
+              onClick={handleResetBooking}
+              className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
+            >
+              Reset booking
+            </button>
           </div>
         ) : null}
 
@@ -131,6 +155,19 @@ export function StepDetailsForm() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
+          {!isLocked && estimateFrom != null ? (
+            <div className="mt-4 rounded-xl border border-dashed border-zinc-300/90 bg-zinc-50/90 px-4 py-3 dark:border-zinc-600 dark:bg-zinc-900/40">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Estimated price
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+                From R {estimateFrom.toLocaleString("en-ZA")}
+              </p>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                Final amount is shown on each time slot when you schedule.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <fieldset
@@ -235,6 +272,44 @@ export function StepDetailsForm() {
 
           <SectionCard title={copy.homeDetailsTitle} description={copy.homeDetailsHint}>
             <HomeDetails state={state} maxRooms={maxRooms} setState={setState} omitLocation />
+          </SectionCard>
+
+          <SectionCard title="Choose cleaning frequency" description="Most popular: Weekly cleaning">
+            <div className="space-y-2">
+              {(
+                [
+                  ["one_time", "One-time", "No recurring plan"],
+                  ["weekly", "Weekly (save 10%)", "Most popular"],
+                  ["biweekly", "Every 2 weeks (save 5%)", "Great value"],
+                  ["monthly", "Monthly", "Low-maintenance"],
+                ] as const
+              ).map(([id, label, hint]) => {
+                const active = state.cleaningFrequency === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setState((p) => ({ ...p, cleaningFrequency: id }))}
+                    className={[
+                      "w-full rounded-xl border px-4 py-3 text-left text-sm transition-all",
+                      active
+                        ? "border-primary bg-primary/10 text-zinc-900 dark:text-zinc-50"
+                        : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-200",
+                    ].join(" ")}
+                  >
+                    <p className="font-semibold">{label}</p>
+                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
+                  </button>
+                );
+              })}
+              {recurringDiscountPct > 0 ? (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  {state.cleaningFrequency === "weekly"
+                    ? "Weekly plan: 10% off each visit — applied at checkout after your time is locked."
+                    : "Every 2 weeks: 5% off each visit — applied at checkout after your time is locked."}
+                </p>
+              ) : null}
+            </div>
           </SectionCard>
 
           <Suspense

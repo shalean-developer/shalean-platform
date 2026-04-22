@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -33,29 +33,13 @@ export async function POST(
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   }
 
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!token) {
-    return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  }
-
-  const pub = createClient(url, anon);
-  const { data: userData, error: userErr } = await pub.auth.getUser(token);
-  if (userErr || !userData.user?.id) {
-    return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
-  }
-
-  const cleanerId = userData.user.id;
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
+  const session = await resolveCleanerIdFromRequest(request, admin);
+  if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
+  const cleanerId = session.cleanerId;
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
@@ -154,9 +138,9 @@ export async function POST(
 
     if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
 
-    const { data: cj } = await admin.from("cleaners").select("total_jobs").eq("id", cleanerId).maybeSingle();
-    const prev = cj && typeof cj === "object" ? Number((cj as { total_jobs?: number }).total_jobs ?? 0) : 0;
-    await admin.from("cleaners").update({ total_jobs: prev + 1 }).eq("id", cleanerId);
+    const { data: cj } = await admin.from("cleaners").select("jobs_completed").eq("id", cleanerId).maybeSingle();
+    const prev = cj && typeof cj === "object" ? Number((cj as { jobs_completed?: number }).jobs_completed ?? 0) : 0;
+    await admin.from("cleaners").update({ jobs_completed: prev + 1 }).eq("id", cleanerId);
 
     await syncCleanerBusyFromBookings(admin, cleanerId);
     return NextResponse.json({ ok: true, status: "completed" });

@@ -1,11 +1,10 @@
 "use client";
 
 import { Check, Star } from "lucide-react";
-import type { CleanerProfile } from "@/lib/booking/cleanersMock";
-import { TAG_COPY } from "@/lib/booking/cleanersMock";
+import type { LiveCleaner } from "@/components/booking/useCleaners";
 
 type CleanerCardProps = {
-  cleaner: CleanerProfile;
+  cleaner: LiveCleaner;
   selected: boolean;
   onSelect: () => void;
   variant: "featured" | "compact";
@@ -55,15 +54,15 @@ export function CleanerCard({
           {/* External avatar URLs — avoid next/image remotePatterns churn */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={cleaner.imageUrl}
-            alt={cleaner.name}
+            src={`https://i.pravatar.cc/128?u=${cleaner.id}`}
+            alt={cleaner.full_name}
             className="h-full w-full object-cover"
             loading="lazy"
           />
         </div>
 
         <div className="min-w-0 flex-1">
-          {isFeatured && recommendHint ? (
+            {isFeatured && recommendHint ? (
             <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
               <Star className="h-3.5 w-3.5 fill-primary/20" strokeWidth={2} aria-hidden />
               Recommended for you
@@ -77,11 +76,15 @@ export function CleanerCard({
                 isFeatured ? "text-lg" : "text-base",
               ].join(" ")}
             >
-              {cleaner.name}
+              {cleaner.full_name}
             </h3>
-            {cleaner.tag ? (
+            {cleaner.rating >= 4.8 ? (
               <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                {TAG_COPY[cleaner.tag]}
+                Top rated
+              </span>
+            ) : cleaner.jobs_completed > 300 ? (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                Experienced
               </span>
             ) : null}
           </div>
@@ -92,18 +95,20 @@ export function CleanerCard({
               {cleaner.rating.toFixed(1)}
             </span>
             <span className="text-zinc-400">·</span>
-            <span>{cleaner.reviewCount.toLocaleString("en-ZA")} reviews</span>
+            <span>{cleaner.jobs_completed.toLocaleString("en-ZA")} jobs</span>
           </p>
 
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             <span className="font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
-              {cleaner.jobsCompleted.toLocaleString("en-ZA")}
+              {cleaner.jobs_completed.toLocaleString("en-ZA")}
             </span>{" "}
             jobs ·{" "}
             <span className="font-medium text-zinc-800 dark:text-zinc-200">
-              {cleaner.yearsExperience}+ yrs
+              {typeof cleaner.distance_km === "number"
+                ? `${cleaner.distance_km.toFixed(1)} km away`
+                : "Distance unavailable"}
             </span>{" "}
-            experience
+            · {cleaner.is_available ? "Available now" : "Unavailable"}
           </p>
 
           {isFeatured && recommendHint ? (

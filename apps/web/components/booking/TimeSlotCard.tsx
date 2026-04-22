@@ -1,50 +1,17 @@
 "use client";
 
-import { BadgeDollarSign, Flame, Sparkles, Users } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { SlotLabelKind } from "@/lib/booking/slotLabels";
+import { Flame } from "lucide-react";
 
-export type { SlotLabelKind };
-
-const LABEL_META: Record<
-  SlotLabelKind,
-  { Icon: LucideIcon; text: string; className: string }
-> = {
-  "best-value": {
-    Icon: BadgeDollarSign,
-    text: "💰 Best value today",
-    className: "text-emerald-700 dark:text-emerald-400/90",
-  },
-  "high-demand": {
-    Icon: Flame,
-    text: "🔥 High demand",
-    className: "text-rose-700 dark:text-rose-400/90",
-  },
-  recommended: {
-    Icon: Sparkles,
-    text: "⭐ Balanced slot",
-    className: "text-primary",
-  },
-  "almost-full": {
-    Icon: Flame,
-    text: "Only 2 slots left",
-    className: "text-amber-700 dark:text-amber-400/90",
-  },
-  "most-booked": {
-    Icon: Users,
-    text: "Most customers choose this",
-    className: "text-primary",
-  },
-};
+/** Relative to the average slot price for the day (demand-based pricing, not a checkout discount). */
+export type SlotDemandPriceBand = "best-value" | "peak" | "standard";
 
 type TimeSlotCardProps = {
   time: string;
-  priceZar: number;
-  /** Strikethrough “was” price (e.g. peak in this view) */
-  compareAtZar?: number | null;
-  savingsZar?: number | null;
+  /** Slot list price in ZAR; null while loading or if server did not attach pricing. */
+  priceZar: number | null;
+  /** How this slot’s price compares to the day’s average for the same job. */
+  priceDemandBand?: SlotDemandPriceBand | null;
   durationLabel: string;
-  slotLabel: SlotLabelKind | null;
   selected: boolean;
   dimUnselected: boolean;
   onSelect: () => void;
@@ -52,29 +19,33 @@ type TimeSlotCardProps = {
   assistantRecommended?: boolean;
   /** Badge text when `assistantRecommended` (conversion copy). */
   recommendedBadgeText?: string;
-  showMostPopularBadge?: boolean;
   showFillsFastBadge?: boolean;
+  availabilityHint?: string | null;
 };
+
+function DemandBandLabel({ band }: { band: SlotDemandPriceBand }) {
+  if (band === "best-value") {
+    return <span className="text-xs font-medium text-green-600 dark:text-green-400">💚 Best value</span>;
+  }
+  if (band === "peak") {
+    return <span className="text-xs font-medium text-orange-500 dark:text-orange-400">🔥 Peak time</span>;
+  }
+  return <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Standard time</span>;
+}
 
 export function TimeSlotCard({
   time,
   priceZar,
-  compareAtZar,
-  savingsZar,
+  priceDemandBand = null,
   durationLabel,
-  slotLabel,
   selected,
   dimUnselected,
   onSelect,
   assistantRecommended = false,
   recommendedBadgeText = "Recommended for you",
-  showMostPopularBadge = false,
   showFillsFastBadge = false,
+  availabilityHint = null,
 }: TimeSlotCardProps) {
-  const labelRow = slotLabel ? LABEL_META[slotLabel] : null;
-  const showSavings = savingsZar != null && savingsZar > 0;
-  const showCompare = compareAtZar != null && compareAtZar > priceZar;
-
   const assistantHighlight = assistantRecommended && !selected;
 
   return (
@@ -116,53 +87,30 @@ export function TimeSlotCard({
       </div>
 
       <div className="mt-1 flex flex-wrap items-end justify-between gap-x-2 gap-y-1">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <p
             className={[
               "text-2xl font-bold tabular-nums tracking-tight",
               selected ? "text-primary" : assistantHighlight ? "text-sky-700 dark:text-sky-300" : "text-emerald-600 dark:text-emerald-400",
             ].join(" ")}
           >
-            R {priceZar.toLocaleString("en-ZA")}
+            {priceZar != null ? `R ${priceZar.toLocaleString("en-ZA")}` : "—"}
           </p>
-          {showCompare ? (
-            <p className="text-sm tabular-nums text-zinc-400 line-through dark:text-zinc-500">
-              R {compareAtZar!.toLocaleString("en-ZA")}
-            </p>
-          ) : null}
+          {priceZar != null && priceDemandBand ? <DemandBandLabel band={priceDemandBand} /> : null}
         </div>
       </div>
 
-      {showSavings ? (
-        <p className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400/90">
-          Save R {Math.round(savingsZar!).toLocaleString("en-ZA")} vs peak today
-        </p>
+      <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{durationLabel}</p>
+      {availabilityHint ? (
+        <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">{availabilityHint}</p>
       ) : null}
 
-      <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{durationLabel}</p>
-
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {showMostPopularBadge ? (
-          <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-            Most popular
-          </span>
-        ) : null}
-        {showFillsFastBadge ? (
-          <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
+      {showFillsFastBadge ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
+            <Flame className="h-3 w-3 shrink-0" aria-hidden />
             Fills fast
           </span>
-        ) : null}
-      </div>
-
-      {labelRow ? (
-        <div
-          className={[
-            "mt-2 flex items-center gap-1.5 text-xs font-medium",
-            labelRow.className,
-          ].join(" ")}
-        >
-          <labelRow.Icon className="h-3.5 w-3.5 shrink-0 stroke-[1.75]" aria-hidden />
-          <span>{labelRow.text}</span>
         </div>
       ) : null}
     </button>

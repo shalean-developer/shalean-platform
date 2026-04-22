@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
+import { BookingHeader } from "@/components/booking/BookingHeader";
 import BookingSummary from "./BookingSummary";
 import { StickyPriceBar } from "@/components/booking/StickyPriceBar";
 import { bookingCopy } from "@/lib/booking/copy";
@@ -13,13 +14,12 @@ type BookingLayoutProps = {
   summaryState?: BookingStep1State;
   /** When set, replaces default `BookingSummary` (desktop + mobile). */
   summaryOverride?: ReactNode;
-  /** When true, summary may show live estimate from `calculatePrice` (unless suppressed). */
-  showPricePreview?: boolean;
-  /** Step 2: hide estimate until a slot is locked — show “select a time” instead. */
+  /** Step 2: never show locked slot totals in the sidebar — estimate from live selections only. */
+  summaryIgnoreLockedBooking?: boolean;
+  /** Step 4: hide sidebar totals until a slot is locked — show “select a time” instead. */
   suppressEstimateUntilLocked?: boolean;
-  onBack?: () => void;
-  /** e.g. "Step 1 of 4" */
-  stepLabel?: string;
+  /** Checkout: amount due (after discounts); sidebar matches footer when set. */
+  summaryAmountToPayZar?: number;
   canContinue?: boolean;
   onContinue?: () => void;
   continueLabel?: string;
@@ -39,11 +39,11 @@ type BookingLayoutProps = {
   footerTotalZar?: number;
   /** Renders above main content (e.g. multi-step progress). */
   progressSlot?: ReactNode;
-  /** When true, hides the built-in sticky bar; use with `BookingHeader` in the parent. */
-  useFlowHeader?: boolean;
   /** Mobile-first fixed bottom bar (split total + CTA). Desktop keeps standard footer. */
   stickyMobileBar?: {
     totalZar: number;
+    /** Replaces the currency line when no numeric total should appear yet. */
+    amountDisplayOverride?: string | null;
     subline?: string;
     /** Label above amount on mobile sticky (defaults to copy pack). */
     totalCaption?: string;
@@ -60,10 +60,9 @@ export default function BookingLayout({
   children,
   summaryState,
   summaryOverride,
-  showPricePreview = false,
+  summaryIgnoreLockedBooking = false,
   suppressEstimateUntilLocked = false,
-  onBack,
-  stepLabel = "Step 1 of 4",
+  summaryAmountToPayZar,
   canContinue = false,
   onContinue,
   continueLabel = "Continue",
@@ -75,48 +74,18 @@ export default function BookingLayout({
   footerSplit = false,
   footerTotalZar,
   progressSlot,
-  useFlowHeader = false,
   stickyMobileBar,
   summaryColumnFirst = false,
 }: BookingLayoutProps) {
   const showSummary = summaryOverride != null || summaryState != null;
 
   return (
-    <div
-      className={[
-        "flex flex-col bg-zinc-50 dark:bg-zinc-950",
-        useFlowHeader ? "min-h-0 flex-1" : "min-h-dvh",
-      ].join(" ")}
-    >
-      {!useFlowHeader ? (
-        <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95">
-          <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 lg:px-6">
-            <div className="flex min-w-0 items-center gap-3">
-              {onBack ? (
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent text-sm font-medium text-zinc-700 transition hover:border-zinc-200 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
-                  aria-label="Go back"
-                >
-                  ←
-                </button>
-              ) : null}
-              <span className="truncate font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-                Shalean Cleaning
-              </span>
-            </div>
-            <span className="shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              {stepLabel}
-            </span>
-          </div>
-        </header>
-      ) : null}
+    <div className="flex min-h-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
+      <BookingHeader />
 
       <main
         className={[
-          "flex-1",
-          useFlowHeader ? "py-0" : "py-6",
+          "flex-1 py-0",
           footerSplit || stickyMobileBar ? "pb-32 sm:pb-28" : "",
         ]
           .filter(Boolean)
@@ -131,8 +100,9 @@ export default function BookingLayout({
               ) : summaryState ? (
                 <BookingSummary
                   state={summaryState}
-                  showPricePreview={showPricePreview}
+                  ignoreLockedBooking={summaryIgnoreLockedBooking}
                   suppressEstimateUntilLocked={suppressEstimateUntilLocked}
+                  amountToPayZar={summaryAmountToPayZar}
                 />
               ) : null}
             </div>
@@ -151,7 +121,7 @@ export default function BookingLayout({
               <aside
                 className={[
                   "sticky order-first hidden h-fit min-w-0 lg:order-none lg:block",
-                  useFlowHeader ? "top-28" : "top-6",
+                  "top-28",
                 ].join(" ")}
               >
                 {summaryOverride ? (
@@ -159,22 +129,23 @@ export default function BookingLayout({
                 ) : summaryState ? (
                   <BookingSummary
                     state={summaryState}
-                    showPricePreview={showPricePreview}
+                    ignoreLockedBooking={summaryIgnoreLockedBooking}
                     suppressEstimateUntilLocked={suppressEstimateUntilLocked}
+                    amountToPayZar={summaryAmountToPayZar}
                   />
                 ) : null}
               </aside>
             ) : null}
 
             <div className="min-w-0">
-              {useFlowHeader ? <BookingContainer>{children}</BookingContainer> : children}
+              <BookingContainer>{children}</BookingContainer>
             </div>
 
             {showSummary && !summaryColumnFirst ? (
               <aside
                 className={[
                   "sticky hidden h-fit min-w-0 lg:block",
-                  useFlowHeader ? "top-28" : "top-6",
+                  "top-28",
                 ].join(" ")}
               >
                 {summaryOverride ? (
@@ -182,8 +153,9 @@ export default function BookingLayout({
                 ) : summaryState ? (
                   <BookingSummary
                     state={summaryState}
-                    showPricePreview={showPricePreview}
+                    ignoreLockedBooking={summaryIgnoreLockedBooking}
                     suppressEstimateUntilLocked={suppressEstimateUntilLocked}
+                    amountToPayZar={summaryAmountToPayZar}
                   />
                 ) : null}
               </aside>
@@ -200,13 +172,7 @@ export default function BookingLayout({
             : "sticky bottom-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3",
         ].join(" ")}
       >
-        <div
-          className={
-            useFlowHeader
-              ? "mx-auto max-w-3xl px-4 lg:px-6"
-              : "mx-auto max-w-7xl px-4 lg:px-6"
-          }
-        >
+        <div className="mx-auto max-w-7xl px-4 lg:px-6">
           {footerPreCta ? (
             <div className="mb-2 text-center text-[11px] text-zinc-600 dark:text-zinc-400">{footerPreCta}</div>
           ) : null}
@@ -215,6 +181,7 @@ export default function BookingLayout({
             <div className="lg:hidden">
               <StickyPriceBar
                 totalZar={stickyMobileBar.totalZar}
+                amountDisplayOverride={stickyMobileBar.amountDisplayOverride}
                 totalCaption={stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total}
                 subline={stickyMobileBar.subline}
                 ctaLabel={stickyMobileBar.ctaShort ?? bookingCopy.stickyBar.cta}
@@ -236,6 +203,9 @@ export default function BookingLayout({
                     </p>
                     <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
                       {(() => {
+                        if (stickyMobileBar.amountDisplayOverride) {
+                          return stickyMobileBar.amountDisplayOverride;
+                        }
                         const z =
                           typeof footerTotalZar === "number"
                             ? footerTotalZar

@@ -31,3 +31,19 @@ export async function resolveLocationIdFromLabel(
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : null;
   return id || null;
 }
+
+export async function resolveLocationContextFromLabel(
+  supabase: SupabaseClient,
+  label: string | null | undefined,
+): Promise<{ locationId: string | null; cityId: string | null }> {
+  const t = typeof label === "string" ? label.trim() : "";
+  if (!t) return { locationId: null, cityId: null };
+  const slug = locationLabelToSlug(t);
+  if (!slug) return { locationId: null, cityId: null };
+  const { data } = await supabase.from("locations").select("id, city_id").eq("slug", slug).maybeSingle();
+  if (!data || typeof data !== "object") return { locationId: null, cityId: null };
+  return {
+    locationId: "id" in data ? String((data as { id: string }).id) : null,
+    cityId: "city_id" in data ? String((data as { city_id?: string | null }).city_id ?? "") || null : null,
+  };
+}

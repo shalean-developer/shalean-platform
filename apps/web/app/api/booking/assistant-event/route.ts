@@ -4,7 +4,13 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-const ALLOWED = new Set(["slot_selected", "extra_added", "recommendation_clicked"]);
+const ALLOWED = new Set([
+  "slot_selected",
+  "extra_added",
+  "recommendation_clicked",
+  "times_loaded",
+  "price_calculated",
+]);
 
 /**
  * Persists assistant UX events to `user_events` (service role) for future ML / funnel analysis.

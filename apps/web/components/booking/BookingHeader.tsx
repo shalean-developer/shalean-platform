@@ -4,17 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { type BookingFlowStep } from "@/lib/booking/bookingFlow";
 import { BookingProgressBar } from "@/components/booking/BookingProgressBar";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
-
-type Props = {
-  step: BookingFlowStep;
-  onBack?: () => void;
-};
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 
 function avatarLetter(user: User): string {
   const meta = user.user_metadata as Record<string, unknown> | undefined;
@@ -29,7 +24,8 @@ function avatarLetter(user: User): string {
   return "?";
 }
 
-export default function BookingHeader({ step, onBack }: Props) {
+export function BookingHeader() {
+  const { step, handleBack, handleResetBooking, lockedBooking } = useBookingFlow();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -80,10 +76,10 @@ export default function BookingHeader({ step, onBack }: Props) {
     <header className="sticky top-0 z-50 border-b border-zinc-200/90 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 sm:gap-3">
         <div className="flex min-w-[100px] shrink-0 items-center gap-2 sm:min-w-[120px]">
-          {onBack ? (
+          {step !== "entry" ? (
             <button
               type="button"
-              onClick={onBack}
+              onClick={handleBack}
               className="shrink-0 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
               aria-label="Go back"
             >
@@ -102,7 +98,16 @@ export default function BookingHeader({ step, onBack }: Props) {
           <BookingProgressBar step={step} />
         </div>
 
-        <div className="flex w-[88px] shrink-0 items-center justify-end sm:w-[140px]">
+        <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:max-w-[200px]">
+          {lockedBooking ? (
+            <button
+              type="button"
+              onClick={handleResetBooking}
+              className="shrink-0 text-[11px] font-semibold text-blue-600 underline-offset-2 hover:underline sm:text-xs dark:text-blue-400"
+            >
+              Reset booking
+            </button>
+          ) : null}
           {loading ? (
             <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" aria-hidden />
           ) : user && initial ? (
@@ -145,16 +150,26 @@ export default function BookingHeader({ step, onBack }: Props) {
               ) : null}
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={handleLogin}
-              className="rounded-lg px-2 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 sm:px-3 sm:text-sm dark:text-blue-400 dark:hover:bg-blue-950/40"
-            >
-              Login
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLogin}
+                className="rounded-lg px-2 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 sm:px-3 sm:text-sm dark:text-blue-400 dark:hover:bg-blue-950/40"
+              >
+                Login
+              </button>
+              <Link
+                href={`/auth/signup?redirect=${encodeURIComponent(redirectTarget)}`}
+                className="rounded-lg border border-zinc-300 px-2 py-1.5 text-xs font-semibold text-zinc-700 sm:px-3 sm:text-sm dark:border-zinc-700 dark:text-zinc-200"
+              >
+                Create account
+              </Link>
+            </div>
           )}
         </div>
       </div>
     </header>
   );
 }
+
+export default BookingHeader;

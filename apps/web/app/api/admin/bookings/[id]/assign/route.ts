@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
-import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { isBookingTimeInWindow } from "@/lib/dispatch/timeWindow";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -42,8 +42,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const cleanerId = typeof body.cleanerId === "string" ? body.cleanerId.trim() : "";
-  if (!cleanerId) {
+  const rawCleanerId = typeof body.cleanerId === "string" ? body.cleanerId.trim() : "";
+  if (!rawCleanerId) {
     return NextResponse.json({ error: "cleanerId required." }, { status: 400 });
   }
 
@@ -54,7 +54,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, status, cleaner_id")
+    .select("id, date, time, status, cleaner_id, city_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -70,6 +70,28 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const dateYmd = String((booking as { date?: string }).date ?? "");
   const timeHm = String((booking as { time?: string }).time ?? "");
   const force = body.force === true;
+
+  /** Always use `cleaners.id` for FKs; body may mistakenly send `auth.users` id. */
+  const { data: cleaner, error: cErr } = await admin
+    .from("cleaners")
+    .select("id, status, city_id")
+    .or(`id.eq.${rawCleanerId},auth_user_id.eq.${rawCleanerId}`)
+    .maybeSingle();
+
+  if (cErr || !cleaner) {
+    return NextResponse.json({ error: "Cleaner not found." }, { status: 404 });
+  }
+
+  const cleanerId = String((cleaner as { id: string }).id);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[admin/assign] resolved cleaner", {
+      bookingId,
+      rawCleanerId,
+      cleanerId,
+      matchedBySurrogate: rawCleanerId === cleanerId,
+    });
+  }
 
   if (!force && dateYmd && timeHm) {
     const { data: windows } = await admin
@@ -102,13 +124,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const prevCleaner = (booking as { cleaner_id?: string | null }).cleaner_id;
 
-  const now = new Date().toISOString();
+  const cleanerStatus = String((cleaner as { status?: string | null }).status ?? "").toLowerCase();
+  const bookingCityId = String((booking as { city_id?: string | null }).city_id ?? "");
+  const cleanerCityId = String((cleaner as { city_id?: string | null }).city_id ?? "");
+  if (bookingCityId && cleanerCityId && bookingCityId !== cleanerCityId) {
+    return NextResponse.json({ error: "Cleaner is in a different city." }, { status: 400 });
+  }
+  if (!force && cleanerStatus === "offline") {
+    return NextResponse.json({ error: "Cleaner is not available." }, { status: 400 });
+  }
+
   const { error: uErr } = await admin
     .from("bookings")
     .update({
-      cleaner_id: cleanerId,
-      status: "assigned",
-      assigned_at: now,
+      cleaner_id: null,
+      status: "pending",
+      dispatch_status: "offered",
+      assigned_at: null,
     })
     .eq("id", bookingId);
 
@@ -116,11 +148,30 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: uErr.message }, { status: 500 });
   }
 
+  const nowIso = new Date().toISOString();
+  await admin
+    .from("dispatch_offers")
+    .update({ status: "expired", responded_at: nowIso })
+    .eq("booking_id", bookingId)
+    .eq("status", "pending");
+
+  const offer = await createDispatchOfferRow({
+    supabase: admin,
+    bookingId,
+    cleanerId,
+    rankIndex: 0,
+    ttlSeconds: 60,
+  });
+  if (!offer.ok) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[admin/assign] createDispatchOfferRow failed", { bookingId, cleanerId, error: offer.error });
+    }
+    return NextResponse.json({ error: offer.error || "Could not create offer." }, { status: 500 });
+  }
+
   if (prevCleaner && prevCleaner !== cleanerId) {
     await syncCleanerBusyFromBookings(admin, prevCleaner);
   }
-  await syncCleanerBusyFromBookings(admin, cleanerId);
-  await notifyCleanerAssignedBooking(admin, bookingId, cleanerId);
 
-  return NextResponse.json({ ok: true, cleanerId });
+  return NextResponse.json({ ok: true, cleanerId, offerId: offer.offerId, expiresAt: offer.expiresAtIso });
 }

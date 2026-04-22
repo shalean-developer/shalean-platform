@@ -94,9 +94,7 @@ export function StepEntry() {
 
   return (
     <BookingLayout
-      useFlowHeader
       summaryOverride={trustMini}
-      stepLabel="Step 1 of 5"
       canContinue={canContinue}
       onContinue={goQuote}
       continueLabel={copy.cta}

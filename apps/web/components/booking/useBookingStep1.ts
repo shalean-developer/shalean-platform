@@ -32,6 +32,7 @@ export type BookingStep1State = {
   location: string;
   /** Low-friction step 1 — apartment vs house (UX; does not change pricing today). */
   propertyType: PropertyTypeKind | null;
+  cleaningFrequency: "one_time" | "weekly" | "biweekly" | "monthly";
   rooms: number;
   bathrooms: number;
   extraRooms: number;
@@ -49,6 +50,7 @@ const initialState: BookingStep1State = {
   service_type: null,
   location: "",
   propertyType: null,
+  cleaningFrequency: "one_time",
   rooms: 1,
   bathrooms: 1,
   extraRooms: 0,
@@ -155,6 +157,13 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
     typeof o.location === "string" ? o.location.trim().slice(0, 500) : "";
 
   const propertyType = parsePropertyType(o.propertyType);
+  const cleaningFrequency =
+    o.cleaningFrequency === "weekly" ||
+    o.cleaningFrequency === "biweekly" ||
+    o.cleaningFrequency === "monthly" ||
+    o.cleaningFrequency === "one_time"
+      ? o.cleaningFrequency
+      : "one_time";
 
   return syncStep1ServiceFields(
     normalizeStep1ForService({
@@ -164,6 +173,7 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
       service_type,
       location,
       propertyType,
+      cleaningFrequency,
       rooms,
       bathrooms,
       extraRooms,

@@ -17,12 +17,32 @@ type JobRow = {
   assigned_at: string | null;
 };
 
+type OfferRow = {
+  id: string;
+  booking_id: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  booking: {
+    id: string;
+    service: string | null;
+    date: string | null;
+    time: string | null;
+    location: string | null;
+    customer_name: string | null;
+    customer_phone: string | null;
+    status: string | null;
+  } | null;
+};
+
 export default function CleanerJobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [offers, setOffers] = useState<OfferRow[]>([]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -37,22 +57,33 @@ export default function CleanerJobsPage() {
       router.replace("/auth/login?next=/cleaner/jobs");
       return;
     }
-    const res = await fetch("/api/cleaner/jobs", { headers: { Authorization: `Bearer ${token}` } });
-    const j = (await res.json()) as { jobs?: JobRow[]; error?: string };
-    if (!res.ok) {
+    const [jobsRes, offersRes] = await Promise.all([
+      fetch("/api/cleaner/jobs", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/cleaner/offers", { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    const j = (await jobsRes.json()) as { jobs?: JobRow[]; error?: string };
+    const o = (await offersRes.json()) as { offers?: OfferRow[]; error?: string };
+    if (!jobsRes.ok) {
       setError(j.error ?? "Could not load jobs.");
       setJobs([]);
+      setOffers([]);
       setLoading(false);
       return;
     }
     setError(null);
     setJobs(j.jobs ?? []);
+    setOffers(offersRes.ok ? (o.offers ?? []) : []);
     setLoading(false);
   }, [router]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
 
   useEffect(() => {
     const sb = getSupabaseBrowser();
@@ -100,6 +131,23 @@ export default function CleanerJobsPage() {
     if (res.ok) void load();
   }
 
+  async function respondToOffer(offerId: string, action: "accept" | "decline") {
+    setActingId(offerId);
+    const sb = getSupabaseBrowser();
+    const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setActingId(null);
+      return;
+    }
+    const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setActingId(null);
+    if (res.ok) void load();
+  }
+
   if (loading) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
@@ -119,6 +167,10 @@ export default function CleanerJobsPage() {
   }
 
   const list = jobs ?? [];
+  const activeOffer = offers[0] ?? null;
+  const secondsLeft = activeOffer
+    ? Math.max(0, Math.floor((new Date(activeOffer.expires_at).getTime() - nowMs) / 1000))
+    : 0;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -126,6 +178,38 @@ export default function CleanerJobsPage() {
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
         Updates appear automatically when operations assigns work.
       </p>
+
+      {activeOffer ? (
+        <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Active offer</p>
+          <p className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {activeOffer.booking?.service ?? "Cleaning job"}
+          </p>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            {activeOffer.booking?.date ?? "—"} {activeOffer.booking?.time ?? ""}
+            {activeOffer.booking?.location ? ` · ${activeOffer.booking.location}` : ""}
+          </p>
+          <p className="mt-2 text-sm font-medium text-amber-900 dark:text-amber-100">Respond in {secondsLeft}s</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={actingId === activeOffer.id}
+              onClick={() => void respondToOffer(activeOffer.id, "accept")}
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              {actingId === activeOffer.id ? "Saving..." : "Accept"}
+            </button>
+            <button
+              type="button"
+              disabled={actingId === activeOffer.id}
+              onClick={() => void respondToOffer(activeOffer.id, "decline")}
+              className="rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-800 disabled:opacity-60 dark:border-rose-800 dark:text-rose-200"
+            >
+              Decline
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {list.length === 0 ? (
         <p className="mt-8 text-center text-sm text-zinc-500">No jobs yet — stay available to receive assignments.</p>

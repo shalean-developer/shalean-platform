@@ -50,7 +50,10 @@ export async function runParallelDispatchOfferRace(params: {
   const joined: Array<{ c: SmartDispatchCandidate; offerId: string }> = [];
   for (let i = 0; i < slice.length; i++) {
     const row = created[i];
-    if (row) joined.push({ c: slice[i]!, offerId: row.offerId });
+    if (row?.ok) joined.push({ c: slice[i]!, offerId: row.offerId });
+    else if (row && !row.ok && process.env.NODE_ENV !== "production") {
+      console.warn("[offerRace] createDispatchOfferRow failed", { bookingId, error: row.error });
+    }
   }
 
   if (joined.length === 0) return null;

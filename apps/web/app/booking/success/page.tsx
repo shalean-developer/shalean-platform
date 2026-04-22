@@ -16,6 +16,9 @@ import type {
   PaystackVerifyPostSuccess,
 } from "@/lib/booking/paystackVerifyResponse";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { clearStoredReferral } from "@/lib/referrals/client";
+import { CheckoutNoticeBanner } from "@/components/booking/CheckoutNoticeBanner";
 
 const VERIFY_MAX_ATTEMPTS = 3;
 const VERIFY_RETRY_DELAY_MS = 1500;
@@ -76,6 +79,11 @@ function SuccessContent() {
   const [statusData, setStatusData] = useState<StatusPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [waitNote, setWaitNote] = useState(false);
+  const [guestAccountNotice, setGuestAccountNotice] = useState<{
+    tone: "danger" | "success";
+    title: string;
+    description: string;
+  } | null>(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
@@ -103,6 +111,16 @@ function SuccessContent() {
           setStatusData(mapVerifySuccessToStatus(data));
           setErrorMessage(null);
           setWaitNote(false);
+          markRetargetingCandidate(false);
+          clearStoredReferral("customer");
+          trackGrowthEvent("complete_booking", {
+            reference: data.reference ?? null,
+            booking_id: data.bookingId ?? null,
+          });
+          trackGrowthEvent("booking_completed", {
+            reference: data.reference ?? null,
+            booking_id: data.bookingId ?? null,
+          });
           setPhase("success");
           return true;
         }
@@ -328,12 +346,22 @@ function SuccessContent() {
           reference,
         }),
       });
-      const data = (await res.json()) as { error?: string };
+      const resBody = (await res.json()) as { error?: string };
       if (!res.ok) {
-        window.alert(data.error ?? "Something went wrong. Try again.");
+        void resBody;
+        setGuestAccountNotice({
+          tone: "danger",
+          title: "Something went wrong",
+          description: "We couldn’t send the account link. Please try again in a moment.",
+        });
         return;
       }
-      window.alert("Check your email for a link to access your account.");
+      void resBody;
+      setGuestAccountNotice({
+        tone: "success",
+        title: "Check your email",
+        description: "We sent you a link to access your account.",
+      });
     } finally {
       setUpgradeLoading(false);
     }
@@ -341,6 +369,14 @@ function SuccessContent() {
 
   return (
     <BookingContainer className="py-10 sm:py-14">
+      <CheckoutNoticeBanner
+        open={guestAccountNotice != null}
+        tone={guestAccountNotice?.tone ?? "danger"}
+        title={guestAccountNotice?.title ?? ""}
+        description={guestAccountNotice?.description ?? ""}
+        onDismiss={() => setGuestAccountNotice(null)}
+        autoDismissMs={guestAccountNotice?.tone === "success" ? 6000 : 5000}
+      />
       <div className="text-center">
         <div className="mx-auto mb-4 text-3xl" aria-hidden>
           🎉

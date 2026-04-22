@@ -4,6 +4,8 @@ import { bookingCopy } from "@/lib/booking/copy";
 
 type StickyPriceBarProps = {
   totalZar: number;
+  /** When set, replaces the formatted `R …` line (e.g. before a slot is locked). */
+  amountDisplayOverride?: string | null;
   /** Shown above the amount (defaults to `bookingCopy.stickyBar.total`). */
   totalCaption?: string;
   /** Mobile sticky primary action (defaults to `bookingCopy.stickyBar.cta`). */
@@ -18,6 +20,7 @@ type StickyPriceBarProps = {
 
 export function StickyPriceBar({
   totalZar,
+  amountDisplayOverride = null,
   totalCaption = bookingCopy.stickyBar.total,
   ctaLabel = bookingCopy.stickyBar.cta,
   ctaUrgency,
@@ -33,7 +36,7 @@ export function StickyPriceBar({
           {totalCaption}
         </p>
         <p className="truncate text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
-          R {totalZar.toLocaleString("en-ZA")}
+          {amountDisplayOverride ?? `R ${totalZar.toLocaleString("en-ZA")}`}
         </p>
         {subline ? (
           <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{subline}</p>

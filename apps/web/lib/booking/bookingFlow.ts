@@ -1,6 +1,5 @@
 import { loadBookingStep1FromStorage } from "@/components/booking/useBookingStep1";
 import { readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
-import { readBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 
 export const BOOKING_STEP_QUERY = "step";
 export const BOOKING_STEP_LS_KEY = "booking_step";
@@ -53,7 +52,6 @@ export function getBookingStepGateRedirect(step: BookingFlowStep): BookingFlowSt
 
   const s1 = loadBookingStep1FromStorage();
   const locked = readLockedBookingFromStorage();
-  const preview = readBookingPricePreviewFromStorage();
 
   if (step === "entry") return null;
 
@@ -65,7 +63,6 @@ export function getBookingStepGateRedirect(step: BookingFlowStep): BookingFlowSt
   if (step === "details") {
     if (!s1 || !hasValidLocation(s1)) return "entry";
     if (!s1.service) return "quote";
-    if (!preview) return "quote";
     return null;
   }
 

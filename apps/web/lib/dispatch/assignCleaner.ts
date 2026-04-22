@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolveLocationIdFromLabel } from "@/lib/booking/resolveLocationId";
+import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { smartAssignCleaner, type SmartAssignOptions } from "@/lib/dispatch/smartAssignCleaner";
 
@@ -46,15 +46,18 @@ export async function assignCleanerToBooking(
   const locationText = (booking as { location?: string | null }).location ?? null;
 
   if (!locationId && locationText) {
-    const resolved = await resolveLocationIdFromLabel(supabase, locationText);
-    if (resolved) {
-      const { error: locErr } = await supabase.from("bookings").update({ location_id: resolved }).eq("id", bookingId);
+    const resolved = await resolveLocationContextFromLabel(supabase, locationText);
+    if (resolved.locationId) {
+      const { error: locErr } = await supabase
+        .from("bookings")
+        .update({ location_id: resolved.locationId, city_id: resolved.cityId })
+        .eq("id", bookingId);
       if (locErr) {
         await reportOperationalIssue("warn", "assignCleanerToBooking", `location_id update: ${locErr.message}`, {
           bookingId,
         });
       } else {
-        locationId = resolved;
+        locationId = resolved.locationId;
       }
     }
   }

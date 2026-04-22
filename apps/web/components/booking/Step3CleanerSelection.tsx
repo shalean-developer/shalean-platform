@@ -3,12 +3,10 @@
 import { useEffect, useMemo } from "react";
 import { CleanerCard } from "@/components/booking/CleanerCard";
 import { useSelectedCleaner } from "@/components/booking/useSelectedCleaner";
-import {
-  getCleanersAvailableForTime,
-  getRecommendedCleaner,
-  type CleanerProfile,
-} from "@/lib/booking/cleanersMock";
+import { useCleaners, type LiveCleaner } from "@/components/booking/useCleaners";
 import { writeSelectedCleanerToStorage } from "@/lib/booking/cleanerSelection";
+import { mergeCleanerIdIntoLockedBooking } from "@/lib/booking/lockedBooking";
+import { useLockedBooking } from "@/components/booking/useLockedBooking";
 
 const RECOMMEND_HINT =
   "Recommended based on your location and service.";
@@ -20,10 +18,11 @@ type Step3CleanerSelectionProps = {
 
 export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) {
   const selected = useSelectedCleaner();
-
-  const pool = useMemo(() => getCleanersAvailableForTime(slotTime), [slotTime]);
-
-  const recommended = useMemo(() => getRecommendedCleaner(pool), [pool]);
+  const locked = useLockedBooking();
+  const { cleaners: pool, recommendedCleaner: recommended, loading, error } = useCleaners({
+    selectedDate: locked?.date ?? null,
+    selectedTime: slotTime,
+  });
   const others = useMemo(() => {
     if (!recommended) return pool.slice(0, 4);
     return pool.filter((c) => c.id !== recommended.id).slice(0, 4);
@@ -33,17 +32,32 @@ export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) 
   useEffect(() => {
     if (!recommended) return;
     if (selected) return;
-    writeSelectedCleanerToStorage({ id: recommended.id, name: recommended.name });
+    writeSelectedCleanerToStorage({ id: recommended.id, name: recommended.full_name });
+    mergeCleanerIdIntoLockedBooking(recommended.id);
   }, [recommended, selected]);
 
-  function selectCleaner(c: CleanerProfile) {
-    writeSelectedCleanerToStorage({ id: c.id, name: c.name });
+  function selectCleaner(c: LiveCleaner) {
+    writeSelectedCleanerToStorage({ id: c.id, name: c.full_name });
+    mergeCleanerIdIntoLockedBooking(c.id);
+  }
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="h-40 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+        <div className="h-40 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>;
   }
 
   if (pool.length === 0) {
     return (
       <p className="text-sm text-amber-800 dark:text-amber-400/90">
-        No cleaners available for this time slot. Go back and pick a different time.
+        No cleaners available for this time
       </p>
     );
   }

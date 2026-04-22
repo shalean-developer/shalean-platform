@@ -145,6 +145,7 @@ export function intentToStep1State(
     service_type,
     location: overrides?.location ?? "",
     propertyType: null,
+    cleaningFrequency: "one_time",
     rooms: intent.rooms,
     bathrooms: intent.bathrooms,
     extraRooms: intent.extraRooms,

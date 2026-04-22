@@ -10,9 +10,8 @@ import { loadBookingStep1FromStorage } from "./useBookingStep1";
  * Recalculates when other tabs update storage; same-tab updates rely on navigation remounts.
  */
 export function usePersistedBookingSummaryState(): BookingStep1State | null {
-  const [state, setState] = useState<BookingStep1State | null>(() =>
-    typeof window !== "undefined" ? loadBookingStep1FromStorage() : null,
-  );
+  // Keep first client render identical to SSR markup.
+  const [state, setState] = useState<BookingStep1State | null>(null);
 
   useEffect(() => {
     function sync() {

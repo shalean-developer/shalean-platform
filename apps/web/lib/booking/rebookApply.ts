@@ -28,18 +28,20 @@ function step1FromFlat(snapshot: BookingSnapshotV1): BookingStep1State | null {
   const location = typeof f.location === "string" ? f.location.trim().slice(0, 500) : "";
   const group = inferServiceGroupFromServiceId(service);
   const typ = inferServiceTypeFromServiceId(service);
-  return normalizeStep1ForService({
+  const draft: BookingStep1State = {
     selectedCategory: group,
     service_group: group,
     service_type: typ,
     service,
     location,
     propertyType: null,
+    cleaningFrequency: "one_time",
     rooms,
     bathrooms,
     extraRooms: 0,
     extras,
-  });
+  };
+  return normalizeStep1ForService(draft);
 }
 
 /**

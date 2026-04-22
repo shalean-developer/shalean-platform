@@ -15,7 +15,13 @@ export async function POST(request: Request) {
 
   const result = await processPaystackInitializeBody(body as Record<string, unknown>);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(
+      {
+        error: result.error,
+        ...(result.errorCode != null ? { errorCode: result.errorCode } : {}),
+      },
+      { status: result.status },
+    );
   }
 
   return NextResponse.json({

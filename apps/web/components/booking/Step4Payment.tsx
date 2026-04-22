@@ -9,6 +9,7 @@ import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/
 import { splitLockedFinalPrice } from "@/lib/pricing/lockedPriceSplit";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getStoredReferral } from "@/lib/referrals/client";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import { getBookingSummaryServiceLabel } from "./serviceCategories";
@@ -29,6 +30,8 @@ export type Step4Totals = {
   contactReady: boolean;
   userId: string | null;
   accessToken: string | null;
+  referralCode: string | null;
+  subscriptionFrequency: "weekly" | "biweekly" | "monthly" | null;
 };
 
 const TIP_PRESETS = [20, 50, 100] as const;
@@ -72,6 +75,17 @@ export function Step4Payment({
     description: string;
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [referralDiscount, setReferralDiscount] = useState<{
+    code: string;
+    discountZar: number;
+  } | null>(null);
+
+  const recurringDiscount = useMemo(() => {
+    const f = locked.cleaningFrequency ?? "one_time";
+    if (f === "weekly") return { label: "Weekly plan discount", amount: Math.round(locked.finalPrice * 0.1), frequency: f };
+    if (f === "biweekly") return { label: "Bi-weekly plan discount", amount: Math.round(locked.finalPrice * 0.05), frequency: f };
+    return null;
+  }, [locked.cleaningFrequency, locked.finalPrice]);
 
   const [authMode, setAuthMode] = useState<AuthMode>("guest");
   const [name, setName] = useState("");
@@ -148,12 +162,44 @@ export function Step4Payment({
 
   const { serviceTotal, extrasTotal } = useMemo(() => splitLockedFinalPrice(locked), [locked]);
 
-  const discountZar = promoApplied?.discountZar ?? 0;
+  useEffect(() => {
+    const code = getStoredReferral("customer");
+    if (!code) return;
+    setReferralDiscount({ code, discountZar: 50 });
+  }, []);
+
+  const discountZar = (promoApplied?.discountZar ?? 0) + (referralDiscount?.discountZar ?? 0) + (recurringDiscount?.amount ?? 0);
 
   const totalZar = useMemo(
     () => computeCheckoutTotalZar(locked.finalPrice, tip, discountZar),
     [locked.finalPrice, tip, discountZar],
   );
+
+  const checkoutDiscountLines = useMemo(() => {
+    const lines: { key: string; label: string; amount: number }[] = [];
+    if (promoApplied && promoApplied.discountZar > 0) {
+      lines.push({
+        key: "promo",
+        label: promoApplied.description.trim() || `Promo (${promoApplied.code})`,
+        amount: promoApplied.discountZar,
+      });
+    }
+    if (referralDiscount && referralDiscount.discountZar > 0) {
+      lines.push({
+        key: "referral",
+        label: "Referral discount",
+        amount: referralDiscount.discountZar,
+      });
+    }
+    if (recurringDiscount && recurringDiscount.amount > 0) {
+      lines.push({
+        key: "plan",
+        label: recurringDiscount.label,
+        amount: recurringDiscount.amount,
+      });
+    }
+    return lines;
+  }, [promoApplied, referralDiscount, recurringDiscount]);
 
   const emailValid = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()), [email]);
 
@@ -184,6 +230,13 @@ export function Step4Payment({
       contactReady: payReadyForMode,
       userId,
       accessToken,
+      referralCode: referralDiscount?.code ?? null,
+      subscriptionFrequency:
+        locked.cleaningFrequency === "weekly" ||
+        locked.cleaningFrequency === "biweekly" ||
+        locked.cleaningFrequency === "monthly"
+          ? locked.cleaningFrequency
+          : null,
     });
   }, [
     totalZar,
@@ -198,6 +251,9 @@ export function Step4Payment({
     payReadyForMode,
     sessionUser,
     onTotalsChange,
+    referralDiscount?.code,
+    locked.cleaningFrequency,
+    recurringDiscount?.amount,
   ]);
 
   function persistGuest() {
@@ -409,12 +465,37 @@ export function Step4Payment({
         ) : null}
       </div>
 
-      {/* Final price */}
-      <div className="mt-1">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Final price</p>
-        <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-          R {formatZar(totalZar)}
-        </p>
+      {/* Visit price + real checkout discounts only (no demand “savings” — those stay on slot selection). */}
+      <div className="mt-1 rounded-xl border border-zinc-200/90 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950/60">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payment summary</h2>
+        <dl className="mt-3 space-y-2 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-600 dark:text-zinc-400">Visit price</dt>
+            <dd className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">R {formatZar(locked.finalPrice)}</dd>
+          </div>
+          {checkoutDiscountLines.map((row) => (
+            <div key={row.key} className="flex justify-between gap-4">
+              <dt className="text-zinc-600 dark:text-zinc-400">{row.label}</dt>
+              <dd className="tabular-nums font-medium text-emerald-700 dark:text-emerald-400">− R {formatZar(row.amount)}</dd>
+            </div>
+          ))}
+          {tip > 0 ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-zinc-600 dark:text-zinc-400">Tip</dt>
+              <dd className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">+ R {formatZar(tip)}</dd>
+            </div>
+          ) : null}
+        </dl>
+        <div className="my-3 border-t border-zinc-200 dark:border-zinc-700" aria-hidden />
+        <div className="flex items-end justify-between gap-4">
+          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Total to pay</span>
+          <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">R {formatZar(totalZar)}</span>
+        </div>
+        {locked.cleaningFrequency === "weekly" || locked.cleaningFrequency === "biweekly" || locked.cleaningFrequency === "monthly" ? (
+          <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            Auto-pay enabled for your subscription
+          </p>
+        ) : null}
       </div>
 
       {/* Collapsible price breakdown */}
@@ -429,29 +510,24 @@ export function Step4Payment({
         </button>
         {breakdownOpen ? (
           <ul className="mt-3 space-y-2 rounded-xl border border-zinc-200/90 bg-white p-4 text-sm dark:border-zinc-700 dark:bg-zinc-950/60">
+            <li className="pb-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Components of your locked visit price (not discounts).
+            </li>
             <li className="flex justify-between gap-4">
-              <span className="text-zinc-600 dark:text-zinc-400">Service total</span>
+              <span className="text-zinc-600 dark:text-zinc-400">Service</span>
               <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
                 R {formatZar(serviceTotal)}
               </span>
             </li>
             <li className="flex justify-between gap-4">
-              <span className="text-zinc-600 dark:text-zinc-400">Extras total</span>
+              <span className="text-zinc-600 dark:text-zinc-400">Extras</span>
               <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
                 R {formatZar(extrasTotal)}
               </span>
             </li>
-            <li className="flex justify-between gap-4">
-              <span className="text-zinc-600 dark:text-zinc-400">Tip</span>
-              <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
-                {tip > 0 ? `R ${formatZar(tip)}` : "R 0"}
-              </span>
-            </li>
-            <li className="flex justify-between gap-4">
-              <span className="text-zinc-600 dark:text-zinc-400">Discount</span>
-              <span className="tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
-                {discountZar > 0 ? `− R ${formatZar(discountZar)}` : "—"}
-              </span>
+            <li className="flex justify-between gap-4 border-t border-zinc-100 pt-2 font-medium dark:border-zinc-800">
+              <span className="text-zinc-700 dark:text-zinc-300">Visit price (locked)</span>
+              <span className="tabular-nums text-zinc-900 dark:text-zinc-100">R {formatZar(locked.finalPrice)}</span>
             </li>
           </ul>
         ) : null}
@@ -480,6 +556,17 @@ export function Step4Payment({
         </button>
         {promoOpen ? (
           <div className="space-y-2 border-t border-zinc-200/80 px-4 pb-4 pt-2 dark:border-zinc-800">
+            {recurringDiscount ? (
+              <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
+                {recurringDiscount.label} applied.
+              </div>
+            ) : null}
+            {referralDiscount ? (
+              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+                <p className="font-medium">Referral discount applied 🎉</p>
+                <p className="mt-0.5 text-[11px]">Code: {referralDiscount.code} · −R {formatZar(referralDiscount.discountZar)}</p>
+              </div>
+            ) : null}
             {promoApplied ? (
               <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
                 <p className="font-medium">{promoApplied.code} applied</p>

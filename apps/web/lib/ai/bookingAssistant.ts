@@ -171,14 +171,6 @@ export function getSmartExtras(context: BookingContext): SmartExtraSuggestion[] 
   });
 }
 
-/** When user locks the cheapest slot vs grid max — “Save Rxx” copy. */
-export function getCheapSlotSavingsMessage(selectedPrice: number, maxPriceInGrid: number): string | null {
-  if (maxPriceInGrid <= selectedPrice) return null;
-  const save = Math.round(maxPriceInGrid - selectedPrice);
-  if (save < 1) return null;
-  return `Save R${save.toLocaleString("en-ZA")} with this time — best value today.`;
-}
-
 /** Premium / peak window → nudge higher-value extras */
 export function getPremiumTimeUpsellExtras(context: BookingContext): SmartExtraSuggestion[] {
   const out: SmartExtraSuggestion[] = [];

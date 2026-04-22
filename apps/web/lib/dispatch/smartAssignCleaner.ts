@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { enqueueDispatchRetry } from "@/lib/dispatch/dispatchRetryQueue";
 import { haversineDistanceKm } from "@/lib/dispatch/distance";
 import { runParallelDispatchOfferRace } from "@/lib/dispatch/offerRace";
+import { getDistanceKm } from "@/lib/dispatch/routeOptimization";
 import { getDefaultTravelTimeProvider } from "@/lib/dispatch/travelProvider";
 import type { TravelTimeProvider } from "@/lib/dispatch/travelProviderTypes";
 import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
@@ -18,6 +19,7 @@ export type AssignParams = {
   /** HH:MM */
   time: string;
   locationId: string;
+  cityId?: string | null;
 };
 
 export type DemandLevel = "low" | "normal" | "peak";
@@ -78,10 +80,12 @@ const DEFAULT_MAX_CANDIDATES = 10;
 const DEFAULT_MAX_SOFT_OFFERS = 9;
 const DEFAULT_OFFER_TIMEOUT_MS = 60_000;
 const OFFER_TTL_SECONDS = 60;
-const MAX_PARALLEL_OFFERS = 3;
+export const MAX_PARALLEL_OFFERS = 3;
+const MAX_PARALLEL_OFFERS_PEAK = 5;
+const FORCED_PRIORITY_CLEANER_ID = "abe30dda-a927-4f75-b204-c7165f6eadd0";
 
 function defaultAssignmentMode(): "instant" | "soft" {
-  return process.env.DISPATCH_SOFT_ASSIGN === "true" ? "soft" : "instant";
+  return "soft";
 }
 
 /**
@@ -309,6 +313,7 @@ export async function findSmartDispatchCandidates(
     dateYmd: string;
     timeHm: string;
     locationId: string;
+    cityId?: string | null;
     newJobDurationMinutes?: number | null;
     searchExpansion?: "none" | "city" | "broadcast";
     demandLevel?: DemandLevel;
@@ -319,6 +324,7 @@ export async function findSmartDispatchCandidates(
   options?: { randomFn?: () => number; travelProvider?: TravelTimeProvider; maxCandidates?: number },
 ): Promise<SmartDispatchCandidate[]> {
   const { dateYmd, timeHm, locationId } = params;
+  const cityId = params.cityId ?? null;
   const newJobDuration = params.newJobDurationMinutes ?? DEFAULT_JOB_DURATION_MIN;
   const searchExpansion = params.searchExpansion ?? "none";
   const demandLevel: DemandLevel = params.demandLevel ?? "normal";
@@ -391,13 +397,16 @@ export async function findSmartDispatchCandidates(
   let cleanersQuery = supabase
     .from("cleaners")
     .select(
-      "id, full_name, rating, total_jobs, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier",
+      "id, full_name, rating, jobs_completed, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score",
     )
     .neq("status", "offline")
     .in("id", [...eligibleFromWindow]);
 
   if (searchExpansion !== "broadcast" && cleanerLocationIds?.length) {
     cleanersQuery = cleanersQuery.in("location_id", cleanerLocationIds);
+  }
+  if (cityId) {
+    cleanersQuery = cleanersQuery.eq("city_id", cityId);
   }
 
   const { data: cleaners, error: cErr } = await cleanersQuery;
@@ -428,6 +437,7 @@ export async function findSmartDispatchCandidates(
   );
 
   const baseCleaners = (cleaners as (CleanerRow & {
+    city_id?: string | null;
     location_id?: string | null;
     latitude?: number | null;
     longitude?: number | null;
@@ -537,7 +547,23 @@ export async function findSmartDispatchCandidates(
       fallback,
       innerTravel,
     });
-    if (!travelOk) continue;
+    if (!travelOk) {
+      await logSystemEvent({
+        level: "info",
+        source: "dispatch_filter_debug",
+        message: "Cleaner excluded from dispatch scoring",
+        context: {
+          cleanerId: c.id,
+          passesCity: cityId ? String(c.city_id ?? "") === cityId : true,
+          passesAvailability: true,
+          passesService: true,
+          distance: Math.round(distanceKm * 100) / 100,
+          included: false,
+          reason: "travel_or_overlap",
+        },
+      });
+      continue;
+    }
 
     const jobs7 = jobsLast7ByCleaner.get(c.id) ?? 0;
     const acceptanceLife = Number((c as { acceptance_rate?: number | null }).acceptance_rate ?? 1);
@@ -555,10 +581,24 @@ export async function findSmartDispatchCandidates(
       inner: innerTravel,
     });
 
-    const score = computeDispatchScoreV4(
+    const nearbyJobDistancesKm = existing
+      .map((iv) => {
+        if (!iv.location_id) return null;
+        const lc = locCoords.get(iv.location_id);
+        if (!lc) return null;
+        return getDistanceKm({ lat: lc.lat, lng: lc.lon }, { lat: jobLat as number, lng: jobLon as number });
+      })
+      .filter((v): v is number => v != null);
+    const nearbyWorkBoost =
+      nearbyJobDistancesKm.length > 0 ? Math.max(0, 1.8 - Math.min(...nearbyJobDistancesKm) * 0.45) : 0;
+
+    const priorityScore = Number((c as { priority_score?: number | null }).priority_score ?? 0) || 0;
+    const forcedCleanerBoost = c.id === FORCED_PRIORITY_CLEANER_ID ? 1000 : 0;
+    const score =
+      computeDispatchScoreV4(
       {
         rating: c.rating ?? 0,
-        totalJobs: c.total_jobs ?? 0,
+        totalJobs: c.jobs_completed ?? 0,
         jobsLast7Days: jobs7,
         distanceKm,
         acceptanceLifetime: acceptanceLife,
@@ -572,7 +612,26 @@ export async function findSmartDispatchCandidates(
         randomJitter: rand(),
       },
       { distanceKm, travelMinutes: travelMin },
-    );
+      ) +
+      nearbyWorkBoost +
+      priorityScore +
+      forcedCleanerBoost;
+
+    await logSystemEvent({
+      level: "info",
+      source: "dispatch_filter_debug",
+      message: "Cleaner evaluated for dispatch scoring",
+      context: {
+        cleanerId: c.id,
+        passesCity: cityId ? String(c.city_id ?? "") === cityId : true,
+        passesService: true,
+        passesAvailability: true,
+        distance: Math.round(distanceKm * 100) / 100,
+        included: true,
+        priorityScore,
+        forcedCleanerBoost,
+      },
+    });
 
     scored.push({
       ...c,
@@ -588,11 +647,11 @@ export async function findSmartDispatchCandidates(
 async function readAssignedCleanerScore(supabase: SupabaseClient, cleanerId: string): Promise<number> {
   const { data: row } = await supabase
     .from("cleaners")
-    .select("rating, total_jobs, acceptance_rate, acceptance_rate_recent, avg_response_time_ms, tier")
+    .select("rating, jobs_completed, acceptance_rate, acceptance_rate_recent, avg_response_time_ms, tier")
     .eq("id", cleanerId)
     .maybeSingle();
   const r = row && typeof row === "object" ? Number((row as { rating?: number }).rating ?? 0) : 0;
-  const j = row && typeof row === "object" ? Number((row as { total_jobs?: number }).total_jobs ?? 0) : 0;
+  const j = row && typeof row === "object" ? Number((row as { jobs_completed?: number }).jobs_completed ?? 0) : 0;
   const acc = row && typeof row === "object" ? Number((row as { acceptance_rate?: number }).acceptance_rate ?? 1) : 1;
   const accR = row && typeof row === "object" ? Number((row as { acceptance_rate_recent?: number }).acceptance_rate_recent ?? 1) : 1;
   const avg = row && typeof row === "object" ? ((row as { avg_response_time_ms?: number | null }).avg_response_time_ms ?? null) : null;
@@ -618,13 +677,15 @@ function resolveParallelCount(params: {
   supplyRatio: number;
   demandLevel: DemandLevel;
   retryTier: number;
+  surgeMultiplier?: number;
 }): number {
   let n = 2;
   if (params.supplyRatio < 1 || params.demandLevel === "peak") n = 3;
   if (params.supplyRatio > 3) n = 2;
   if (params.retryTier >= 2) n = Math.min(MAX_PARALLEL_OFFERS, n + 1);
   if (params.supplyRatio > 3) n = Math.min(n, 2);
-  return Math.min(MAX_PARALLEL_OFFERS, Math.max(1, n));
+  const cap = (params.surgeMultiplier ?? 1) > 1.5 ? MAX_PARALLEL_OFFERS_PEAK : MAX_PARALLEL_OFFERS;
+  return Math.min(cap, Math.max(1, n));
 }
 
 export async function smartAssignCleaner(
@@ -638,13 +699,14 @@ export async function smartAssignCleaner(
   const maxSoftOffers = options?.maxSoftOffers ?? DEFAULT_MAX_SOFT_OFFERS;
   const maxCandidates = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
   const retryTier = options?.retryTier ?? 0;
+  await supabase.from("bookings").update({ dispatch_status: "searching" }).eq("id", params.bookingId);
 
   let searchExpansion = options?.searchExpansion ?? "none";
 
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, location_id, duration_minutes, surge_multiplier, demand_level",
+      "id, date, time, status, cleaner_id, location_id, city_id, duration_minutes, surge_multiplier, demand_level",
     )
     .eq("id", params.bookingId)
     .maybeSingle();
@@ -664,6 +726,7 @@ export async function smartAssignCleaner(
   const dateYmd = String((booking as { date?: string }).date ?? "");
   const timeHm = String((booking as { time?: string }).time ?? "");
   const locationId = String((booking as { location_id?: string | null }).location_id ?? "");
+  const cityId = String((booking as { city_id?: string | null }).city_id ?? "");
   const durationMinutes = (booking as { duration_minutes?: number | null }).duration_minutes ?? null;
   const surgeMultiplier = Number((booking as { surge_multiplier?: number | null }).surge_multiplier ?? 1) || 1;
   const demandLevelRaw = String((booking as { demand_level?: string | null }).demand_level ?? "normal").toLowerCase();
@@ -706,20 +769,24 @@ export async function smartAssignCleaner(
     return { ok: false, error: "missing_job_coordinates", message: "Location coordinates required for dispatch v4" };
   }
 
-  const { count: pendingCount, error: pErr } = await supabase
+  let pendingCountQuery = supabase
     .from("bookings")
     .select("id", { count: "exact", head: true })
     .eq("location_id", locationId)
     .eq("status", "pending");
+  if (cityId) pendingCountQuery = pendingCountQuery.eq("city_id", cityId);
+  const { count: pendingCount, error: pErr } = await pendingCountQuery;
 
   const pendingJobs = pErr ? 1 : Math.max(1, pendingCount ?? 1);
 
   if (searchExpansion === "none" && pendingJobs > 0) {
-    const { count: availRough } = await supabase
+    let availRoughQuery = supabase
       .from("cleaners")
       .select("id", { count: "exact", head: true })
       .eq("location_id", locationId)
       .neq("status", "offline");
+    if (cityId) availRoughQuery = availRoughQuery.eq("city_id", cityId);
+    const { count: availRough } = await availRoughQuery;
     const ratioRough = (availRough ?? 0) / pendingJobs;
     if (ratioRough < 1) {
       searchExpansion = "city";
@@ -738,6 +805,7 @@ export async function smartAssignCleaner(
       dateYmd,
       timeHm: normalizeHm(timeHm),
       locationId: params.locationId,
+      cityId: cityId || null,
       newJobDurationMinutes: durationMinutes,
       searchExpansion,
       demandLevel,
@@ -747,6 +815,18 @@ export async function smartAssignCleaner(
     },
     findOpts,
   );
+
+  const { data: priorOffers } = await supabase
+    .from("dispatch_offers")
+    .select("cleaner_id, status")
+    .eq("booking_id", params.bookingId)
+    .in("status", ["pending", "rejected", "expired", "accepted"]);
+  const alreadyOfferedCleanerIds = new Set(
+    (priorOffers ?? [])
+      .map((r) => String((r as { cleaner_id?: string }).cleaner_id ?? ""))
+      .filter(Boolean),
+  );
+  candidates = candidates.filter((c) => !alreadyOfferedCleanerIds.has(c.id));
 
   const supplyRatio = candidates.length / pendingJobs;
   await logSystemEvent({
@@ -769,6 +849,7 @@ export async function smartAssignCleaner(
         dateYmd,
         timeHm: normalizeHm(timeHm),
         locationId: params.locationId,
+        cityId: cityId || null,
         newJobDurationMinutes: durationMinutes,
         searchExpansion,
         demandLevel,
@@ -784,6 +865,7 @@ export async function smartAssignCleaner(
     supplyRatio,
     demandLevel,
     retryTier,
+    surgeMultiplier,
   });
 
   if (mode === "instant") {
@@ -802,6 +884,7 @@ export async function smartAssignCleaner(
         },
       });
       await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4");
+      await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
       return { ok: false, error: "no_candidate" };
     }
 
@@ -811,6 +894,7 @@ export async function smartAssignCleaner(
       .update({
         cleaner_id: top.id,
         status: "assigned",
+        dispatch_status: "assigned",
         assigned_at: now,
       })
       .eq("id", params.bookingId)
@@ -853,6 +937,7 @@ export async function smartAssignCleaner(
       },
     });
     await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4");
+    await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
     return { ok: false, error: "no_candidate" };
   }
 
@@ -912,5 +997,6 @@ export async function smartAssignCleaner(
     },
   });
   await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4_soft");
+  await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
   return { ok: false, error: "no_candidate" };
 }

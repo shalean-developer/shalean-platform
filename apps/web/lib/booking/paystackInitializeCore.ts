@@ -26,6 +26,7 @@ function buildBookingSnapshot(params: {
     user_id: string | null;
     type: BookingCustomerAuthType;
   };
+  subscriptionFrequency: "weekly" | "biweekly" | "monthly" | null;
 }) {
   return {
     v: 1,
@@ -36,6 +37,10 @@ function buildBookingSnapshot(params: {
     total_zar: params.totalZar,
     cleaner_id: params.cleanerId,
     cleaner_name: params.cleanerName,
+    subscription:
+      params.subscriptionFrequency != null
+        ? { frequency: params.subscriptionFrequency, discount_zar: params.discountZar }
+        : null,
     customer: params.customer,
   };
 }
@@ -54,10 +59,15 @@ export type PaystackInitializeSuccess = {
   reference: string;
 };
 
+/** Returned in JSON as `errorCode` for client UX (never show raw lock validation strings). */
+export const PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE = "TIME_SLOT_UNAVAILABLE" as const;
+
 export type PaystackInitializeFailure = {
   ok: false;
   status: number;
+  /** Safe, non-technical message for clients that display `error` verbatim */
   error: string;
+  errorCode?: typeof PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE | "AMOUNT_MISMATCH" | "SESSION_EXPIRED" | "VALIDATION";
 };
 
 /**
@@ -73,14 +83,31 @@ export async function processPaystackInitializeBody(
 
   const locked = parseLockedBookingFromUnknown(b.locked);
   if (!locked || !isLockedBookingPriceValid(locked)) {
-    return { ok: false, status: 400, error: "Invalid or tampered booking lock." };
+    return {
+      ok: false,
+      status: 400,
+      errorCode: PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE,
+      error: "Select a valid time to continue.",
+    };
   }
 
   const tip = clamp(Math.round(Number(b.tip) || 0), 0, MAX_TIP_ZAR);
 
   const promoCode = typeof b.promoCode === "string" ? b.promoCode.trim() : "";
   const promo = promoCode ? getPromoDiscountZar(promoCode, locked.finalPrice) : null;
-  const discountZar = promo ? promo.discountZar : 0;
+  let discountZar = promo ? promo.discountZar : 0;
+
+  const referralCode = typeof b.referralCode === "string" ? b.referralCode.trim().toUpperCase() : "";
+  if (referralCode) {
+    discountZar += 50;
+  }
+
+  const freq = locked.cleaningFrequency ?? "one_time";
+  if (freq === "weekly") {
+    discountZar += Math.round(locked.finalPrice * 0.1);
+  } else if (freq === "biweekly") {
+    discountZar += Math.round(locked.finalPrice * 0.05);
+  }
 
   const totalZar = computeCheckoutTotalZar(locked.finalPrice, tip, discountZar);
 
@@ -93,7 +120,8 @@ export async function processPaystackInitializeBody(
     return {
       ok: false,
       status: 400,
-      error: "Amount does not match server quote. Refresh the page and try again.",
+      errorCode: "AMOUNT_MISMATCH",
+      error: "The total changed. Refresh the page and try again.",
     };
   }
 
@@ -155,6 +183,7 @@ export async function processPaystackInitializeBody(
       return {
         ok: false,
         status: 401,
+        errorCode: "SESSION_EXPIRED",
         error: "Your session expired. Sign in again or continue as guest.",
       };
     }
@@ -184,6 +213,12 @@ export async function processPaystackInitializeBody(
 
   const cleanerId = typeof b.cleanerId === "string" ? b.cleanerId : null;
   const cleanerName = typeof b.cleanerName === "string" ? b.cleanerName.trim() : null;
+  const subscriptionFrequency =
+    (b as { metadata?: { subscriptionFrequency?: unknown } }).metadata?.subscriptionFrequency === "weekly" ||
+    (b as { metadata?: { subscriptionFrequency?: unknown } }).metadata?.subscriptionFrequency === "biweekly" ||
+    (b as { metadata?: { subscriptionFrequency?: unknown } }).metadata?.subscriptionFrequency === "monthly"
+      ? ((b as { metadata?: { subscriptionFrequency?: "weekly" | "biweekly" | "monthly" } }).metadata?.subscriptionFrequency ?? null)
+      : null;
 
   const snapshot = buildBookingSnapshot({
     locked,
@@ -194,6 +229,7 @@ export async function processPaystackInitializeBody(
     cleanerId,
     cleanerName,
     customer,
+    subscriptionFrequency,
   });
 
   const extraMetadata =
@@ -211,6 +247,7 @@ export async function processPaystackInitializeBody(
     pay_total_zar: String(totalZar),
     cleaner_id: cleanerId ?? "",
     cleaner_name: cleanerName ?? "",
+    referral_code: referralCode || "",
     customer_email: customer.email,
     customer_name: customer.name,
     customer_phone: customer.phone,

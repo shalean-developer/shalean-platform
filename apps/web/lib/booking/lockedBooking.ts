@@ -18,8 +18,14 @@ export type LockedBooking = BookingStep1State & {
   time: string;
   finalPrice: number;
   finalHours: number;
+  /** Same as `finalPrice` when locked from `/api/booking/price` (display / logging alias). */
+  price?: number;
+  /** Same as `finalHours` when locked from API. */
+  duration?: number;
   /** Demand multiplier applied after VIP discount */
   surge: number;
+  surgeLabel?: string;
+  cleanersCount?: number;
   /**
    * Optional AI dynamic layer (0.8–1.2) multiplied with surge in `calculateSmartQuote`.
    * Omitted in legacy web locks (= 1).
@@ -29,6 +35,8 @@ export type LockedBooking = BookingStep1State & {
   vipTier?: VipTier;
   /** `2` = VIP + demand pricing; omit = legacy clients should re-lock */
   pricingVersion?: number;
+  /** Selected cleaner for checkout — mirrored for `/api/booking/validate` (no re-fetch roster). */
+  cleaner_id?: string | null;
   locked: true;
   lockedAt: string;
 };
@@ -62,8 +70,20 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
   }
   if (!isRecord(data)) return null;
   if (data.locked !== true) return null;
-  if (typeof data.finalPrice !== "number" || !Number.isFinite(data.finalPrice)) return null;
-  if (typeof data.finalHours !== "number" || !Number.isFinite(data.finalHours)) return null;
+  const finalPrice =
+    typeof data.finalPrice === "number" && Number.isFinite(data.finalPrice)
+      ? data.finalPrice
+      : typeof data.price === "number" && Number.isFinite(data.price)
+        ? data.price
+        : NaN;
+  if (!Number.isFinite(finalPrice)) return null;
+  const finalHours =
+    typeof data.finalHours === "number" && Number.isFinite(data.finalHours)
+      ? data.finalHours
+      : typeof data.duration === "number" && Number.isFinite(data.duration)
+        ? data.duration
+        : NaN;
+  if (!Number.isFinite(finalHours)) return null;
   if (typeof data.time !== "string" || !data.time) return null;
   if (typeof data.lockedAt !== "string") return null;
   if (typeof data.rooms !== "number" || typeof data.bathrooms !== "number") return null;
@@ -89,17 +109,35 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
 
   const propertyType =
     data.propertyType === "apartment" || data.propertyType === "house" ? data.propertyType : null;
+  const cleaningFrequency =
+    data.cleaningFrequency === "weekly" ||
+    data.cleaningFrequency === "biweekly" ||
+    data.cleaningFrequency === "monthly" ||
+    data.cleaningFrequency === "one_time"
+      ? data.cleaningFrequency
+      : "one_time";
 
   return {
     ...data,
     date,
+    finalPrice,
+    finalHours,
+    price: typeof data.price === "number" && Number.isFinite(data.price) ? data.price : finalPrice,
+    duration:
+      typeof data.duration === "number" && Number.isFinite(data.duration) ? data.duration : finalHours,
     surge,
     locked: true,
     location,
     propertyType,
+    cleaningFrequency,
     ...(vipTier ? { vipTier } : {}),
     ...(dynamicSurgeFactor != null ? { dynamicSurgeFactor } : {}),
   } as LockedBooking;
+}
+
+/** Single checkout display amount — prefer API snapshot field `price` when present. */
+export function getLockedBookingDisplayPrice(locked: LockedBooking): number {
+  return typeof locked.price === "number" && Number.isFinite(locked.price) ? locked.price : locked.finalPrice;
 }
 
 /** Parse a client/API payload (e.g. POST body) into a valid `LockedBooking`. */
@@ -139,6 +177,7 @@ export function lockedToStep1State(l: LockedBooking): BookingStep1State {
     service_type: typ,
     location: l.location ?? "",
     propertyType: l.propertyType ?? null,
+    cleaningFrequency: l.cleaningFrequency ?? "one_time",
     rooms: l.rooms,
     bathrooms: l.bathrooms,
     extraRooms: l.extraRooms,
@@ -163,21 +202,26 @@ export function formatLockedAppointmentLabel(locked: LockedBooking): string {
 export function lockBookingSlot(
   state: BookingStep1State,
   selection: { date: string; time: string },
-  options?: { vipTier?: VipTier },
+  options?: {
+    vipTier?: VipTier;
+    lockedQuote?: { total: number; hours: number; surge: number; surgeLabel?: string; cleanersCount?: number };
+  },
 ): LockedBooking {
   const tier = options?.vipTier ?? "regular";
-  const quote = calculateSmartQuote(
-    {
-      service: state.service,
-      serviceType: state.service_type,
-      rooms: state.rooms,
-      bathrooms: state.bathrooms,
-      extraRooms: state.extraRooms,
-      extras: state.extras,
-    },
-    selection.time,
-    tier,
-  );
+  const quote =
+    options?.lockedQuote ??
+    calculateSmartQuote(
+      {
+        service: state.service,
+        serviceType: state.service_type,
+        rooms: state.rooms,
+        bathrooms: state.bathrooms,
+        extraRooms: state.extraRooms,
+        extras: state.extras,
+      },
+      selection.time,
+      tier,
+    );
 
   const locked: LockedBooking = {
     ...state,
@@ -185,7 +229,11 @@ export function lockBookingSlot(
     time: selection.time,
     finalPrice: quote.total,
     finalHours: quote.hours,
+    price: quote.total,
+    duration: quote.hours,
     surge: quote.surge,
+    surgeLabel: quote.surgeLabel,
+    cleanersCount: options?.lockedQuote?.cleanersCount,
     vipTier: tier,
     pricingVersion: 2,
     locked: true,
@@ -206,6 +254,26 @@ export function lockBookingSlot(
   }
 
   return locked;
+}
+
+/** Persist selected cleaner id on the active lock for pay + `/api/booking/validate` (no roster re-fetch). */
+export function mergeCleanerIdIntoLockedBooking(cleanerId: string): void {
+  if (typeof window === "undefined") return;
+  const id = cleanerId.trim();
+  if (!id) return;
+  try {
+    const raw = localStorage.getItem(BOOKING_LOCKED_KEY);
+    const parsed = parseLockedBooking(raw);
+    if (!parsed) return;
+    if (parsed.cleaner_id === id) return;
+    const next = { ...parsed, cleaner_id: id } as LockedBooking;
+    const serialized = JSON.stringify(next);
+    localStorage.setItem(BOOKING_LOCKED_KEY, serialized);
+    setSnapshotCache(serialized, next);
+    window.dispatchEvent(new Event(BOOKING_LOCKED_EVENT));
+  } catch {
+    /* ignore */
+  }
 }
 
 export function clearLockedBookingFromStorage(): void {

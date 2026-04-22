@@ -31,6 +31,10 @@ export type BookingSnapshotV1 = {
   total_zar?: number;
   cleaner_id?: string | null;
   cleaner_name?: string | null;
+  subscription?: {
+    frequency: "weekly" | "biweekly" | "monthly";
+    discount_zar: number;
+  } | null;
   /** Customer contact + optional Supabase user id (verified server-side when set). */
   customer?: {
     name: string;

@@ -1,5 +1,5 @@
 import { getServiceLabel } from "@/components/booking/serviceCategories";
-import { resolveLocationIdFromLabel } from "@/lib/booking/resolveLocationId";
+import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
 import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -8,6 +8,9 @@ import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
+import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
+import { createPendingCustomerReferral } from "@/lib/referrals/server";
+import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type UpsertBookingInput = {
@@ -18,6 +21,9 @@ export type UpsertBookingInput = {
   snapshot: BookingSnapshotV1 | null;
   /** Flat Paystack metadata (server-set at initialize) — used only to resolve user_id with snapshot. */
   paystackMetadata?: Record<string, string | undefined> | null;
+  paystackAuthorizationCode?: string | null;
+  paystackCustomerCode?: string | null;
+  paidAtIso?: string | null;
 };
 
 /**
@@ -67,7 +73,13 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const flat = buildSnapshotFlat(locked ?? undefined);
   const bookingSnapshotMerged = mergeSnapshotWithFlat(input.snapshot, flat);
 
-  const locationId = await resolveLocationIdFromLabel(supabase, locked?.location?.trim() ?? null);
+  const locationContext = await resolveLocationContextFromLabel(supabase, locked?.location?.trim() ?? null);
+  const locationId = locationContext.locationId;
+  const cityId = locationContext.cityId;
+  const ds = await getDemandSupplySnapshotByCity(supabase, cityId);
+  const lockedSurge = typeof locked?.surge === "number" && Number.isFinite(locked.surge) ? locked.surge : ds.multiplier;
+  const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
+  const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
 
   const row = {
     paystack_reference: input.paystackReference,
@@ -79,12 +91,16 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     currency: input.currency || "ZAR",
     booking_snapshot: bookingSnapshotMerged,
     status: "pending",
+    dispatch_status: "searching",
+    surge_multiplier: surgeMultiplier,
+    surge_reason: surgeReason,
     service: locked?.service != null ? getServiceLabel(locked.service) : null,
     rooms: locked?.rooms ?? null,
     bathrooms: locked?.bathrooms ?? null,
     extras: extras,
     location: locked?.location?.trim() || null,
     location_id: locationId,
+    city_id: cityId,
     date: locked?.date ?? null,
     time: locked?.time ?? null,
     total_paid_zar:
@@ -128,6 +144,46 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       : userIdResolved;
 
   if (id) {
+    const referralCode = String(input.paystackMetadata?.referral_code ?? input.paystackMetadata?.client_referralCode ?? "").trim();
+    if (referralCode) {
+      await createPendingCustomerReferral({
+        admin: supabase,
+        refCode: referralCode,
+        referredUserId: userIdResolved,
+        referredEmail: emailStored,
+      });
+    }
+
+    const subscriptionFrequencyRaw = String(
+      input.paystackMetadata?.client_subscriptionFrequency ??
+        input.paystackMetadata?.subscription_frequency ??
+        "",
+    )
+      .trim()
+      .toLowerCase();
+    const subscriptionFrequency =
+      subscriptionFrequencyRaw === "weekly" ||
+      subscriptionFrequencyRaw === "biweekly" ||
+      subscriptionFrequencyRaw === "monthly"
+        ? (subscriptionFrequencyRaw as SubscriptionFrequency)
+        : null;
+    if (subscriptionFrequency && userIdResolved && locked?.date && locked.time) {
+      await createSubscriptionFromBooking({
+        admin: supabase,
+        userId: userIdResolved,
+        serviceType: String(row.service ?? "cleaning"),
+        frequency: subscriptionFrequency,
+        dateYmd: locked.date,
+        timeSlot: locked.time,
+        address: String(row.location ?? ""),
+        pricePerVisit: Number(row.total_paid_zar ?? Math.round(input.amountCents / 100)),
+        cityId,
+        paystackCustomerCode: input.paystackCustomerCode ?? null,
+        authorizationCode: input.paystackAuthorizationCode ?? null,
+        paymentDate: input.paidAtIso ?? null,
+      });
+    }
+
     /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
     const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
     if (autoDispatch) {

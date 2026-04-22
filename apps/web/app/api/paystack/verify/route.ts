@@ -24,7 +24,8 @@ type PaystackVerifyData = {
   amount?: number;
   currency?: string;
   paid_at?: string;
-  customer?: { email?: string };
+  customer?: { email?: string; customer_code?: string };
+  authorization?: { authorization_code?: string };
   metadata?: Record<string, unknown>;
 };
 
@@ -176,6 +177,14 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
 
   const amount = typeof tx.amount === "number" ? tx.amount : 0;
   const currency = typeof tx.currency === "string" ? tx.currency : "ZAR";
+  const authorizationCode =
+    tx && typeof tx === "object" && tx.authorization && typeof tx.authorization === "object"
+      ? String((tx.authorization as { authorization_code?: string }).authorization_code ?? "")
+      : "";
+  const customerCode =
+    tx && typeof tx === "object" && tx.customer && typeof tx.customer === "object"
+      ? String((tx.customer as { customer_code?: string }).customer_code ?? "")
+      : "";
   const metadata = normalizePaystackMetadata(tx.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: amount });
 
@@ -193,6 +202,9 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     customerEmail: email,
     snapshot,
     paystackMetadata: metadata,
+    paystackAuthorizationCode: authorizationCode || null,
+    paystackCustomerCode: customerCode || null,
+    paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
   });
 
   if (result.error) {

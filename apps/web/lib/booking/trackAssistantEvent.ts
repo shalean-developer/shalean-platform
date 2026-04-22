@@ -6,7 +6,12 @@ import { getSupabaseBrowser } from "@/lib/supabase/browser";
  * Fire-and-forget analytics for the booking assistant (requires signed-in user).
  */
 export function trackAssistantEvent(
-  eventType: "slot_selected" | "extra_added" | "recommendation_clicked",
+  eventType:
+    | "slot_selected"
+    | "extra_added"
+    | "recommendation_clicked"
+    | "times_loaded"
+    | "price_calculated",
   payload: Record<string, unknown>,
 ): void {
   const sb = getSupabaseBrowser();

@@ -42,7 +42,13 @@ export async function POST(request: Request) {
   if (action === "pay") {
     const result = await processPaystackInitializeBody(body);
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json(
+        {
+          error: result.error,
+          ...(result.errorCode != null ? { errorCode: result.errorCode } : {}),
+        },
+        { status: result.status },
+      );
     }
     const userId = await resolveUserIdFromRequest(
       typeof body.accessToken === "string" ? body.accessToken : undefined,

@@ -2,8 +2,9 @@ export type CleanerRow = {
   id: string;
   full_name: string;
   rating: number;
-  total_jobs: number;
+  jobs_completed: number;
   status: string;
+  city_id?: string | null;
   location_id?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -16,6 +17,7 @@ export type CleanerRow = {
   avg_response_time_ms?: number | null;
   last_response_at?: string | null;
   tier?: string | null;
+  priority_score?: number | null;
 };
 
 export type SmartDispatchCandidate = CleanerRow & {

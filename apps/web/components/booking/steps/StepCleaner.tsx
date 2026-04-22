@@ -24,10 +24,7 @@ export function StepCleaner({ onNext }: StepCleanerProps) {
 
   return (
     <BookingLayout
-      useFlowHeader
       summaryState={summaryState ?? undefined}
-      showPricePreview
-      stepLabel="Step 3 of 4"
       canContinue={canContinue}
       onContinue={onNext}
       continueLabel={continueLabel}

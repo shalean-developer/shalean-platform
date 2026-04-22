@@ -104,6 +104,15 @@ export async function POST(request: Request) {
     customerEmail: email,
     snapshot,
     paystackMetadata: metadata,
+    paystackAuthorizationCode:
+      data.authorization && typeof data.authorization === "object"
+        ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+        : null,
+    paystackCustomerCode:
+      customerBlock && typeof customerBlock === "object"
+        ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+        : null,
+    paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
   });
 
   if (result.error) {

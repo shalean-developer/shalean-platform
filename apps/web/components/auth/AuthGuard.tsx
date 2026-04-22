@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 type Props = { children: React.ReactNode };
 
 /**
- * Redirects unauthenticated users to `/auth/login` with return URL.
+ * Redirects unauthenticated users to `/login` with return URL.
  */
 export function AuthGuard({ children }: Props) {
   const { user, loading } = useAuth();
@@ -18,7 +18,7 @@ export function AuthGuard({ children }: Props) {
     if (loading) return;
     if (user) return;
 
-    router.replace(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
+    router.replace(`/login?role=customer&redirect=${encodeURIComponent(pathname)}`);
   }, [loading, user, router, pathname]);
 
   if (loading) {

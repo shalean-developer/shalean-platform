@@ -126,6 +126,12 @@ export default function AccountBookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [referral, setReferral] = useState<{
+    referralCode: string;
+    totalEarned: number;
+    referralsCount: number;
+    creditBalance: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -145,7 +151,16 @@ export default function AccountBookingsPage() {
     const res = await fetch("/api/bookings/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
+    const refRes = await fetch("/api/referrals/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const json = (await res.json()) as { bookings?: BookingRow[]; error?: string };
+    const refJson = (await refRes.json()) as {
+      referralCode?: string;
+      totalEarned?: number;
+      referralsCount?: number;
+      creditBalance?: number;
+    };
     if (!res.ok) {
       setError(json.error ?? "Could not load bookings.");
       setBookings([]);
@@ -153,6 +168,14 @@ export default function AccountBookingsPage() {
       return;
     }
     setBookings(json.bookings ?? []);
+    if (refRes.ok && refJson.referralCode) {
+      setReferral({
+        referralCode: refJson.referralCode,
+        totalEarned: Number(refJson.totalEarned ?? 0),
+        referralsCount: Number(refJson.referralsCount ?? 0),
+        creditBalance: Number(refJson.creditBalance ?? 0),
+      });
+    }
     setLoading(false);
   }, []);
 
@@ -214,10 +237,41 @@ export default function AccountBookingsPage() {
           >
             Home
           </Link>
+          <Link
+            href="/account/subscriptions"
+            className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Subscriptions
+          </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-6">
+        {referral ? (
+          <section className="mb-5 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Refer &amp; Earn</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Invite friends and earn R50 credit each.</p>
+            <div className="mt-3 rounded-xl bg-zinc-50 p-3 text-xs dark:bg-zinc-800/60">
+              <p className="break-all">/?ref={referral.referralCode}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatPill label="Total earned" value={`R ${referral.totalEarned.toLocaleString("en-ZA")}`} />
+              <StatPill label="Referrals" value={String(referral.referralsCount)} />
+              <StatPill label="Credit balance" value={`R ${referral.creditBalance.toLocaleString("en-ZA")}`} />
+            </div>
+            <button
+              type="button"
+              className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+              onClick={() => {
+                const link = `${window.location.origin}/?ref=${referral.referralCode}`;
+                void navigator.clipboard.writeText(link);
+              }}
+            >
+              Copy link
+            </button>
+          </section>
+        ) : null}
+
         {list.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-14 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
             <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">No bookings yet</p>
@@ -323,5 +377,13 @@ export default function AccountBookingsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex rounded-full bg-zinc-100 px-3 py-1 text-xs dark:bg-zinc-800">
+      {label}: {value}
+    </span>
   );
 }

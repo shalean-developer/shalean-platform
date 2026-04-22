@@ -13,11 +13,11 @@ export const bookingCopy = {
   },
 
   quote: {
-    title: "Here’s your cleaning price",
+    title: "Choose your cleaning package",
     priceLabel: "Total",
-    trust: "✅ Your cleaning price is fixed — no hidden fees",
+    trust: "✅ Your price is set when you pick a time — no surprises at checkout",
     supporting: "Includes professional cleaning and supplies",
-    reassurance: "You’ll choose your preferred time next",
+    reassurance: "Next you’ll add home details, then choose a time to lock your total",
     urgency: "🔥 Most customers complete their booking in under 60 seconds",
     cta: "Continue Booking",
     eyebrow: "Your instant price",
@@ -78,6 +78,7 @@ export const bookingCopy = {
     addressShort: "Add a few more characters so we can price your area",
     property: "Please choose apartment or house to continue",
     time: "Select a time to secure your cleaner",
+    selectTimeFirst: "Please select a time first",
   },
 
   exitIntent: {

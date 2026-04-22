@@ -5,14 +5,14 @@ import { useCallback, useEffect, useMemo } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
-import { calculatePrice } from "@/lib/pricing/calculatePrice";
-import { writeBookingPricePreviewLock } from "@/lib/booking/bookingPricePreview";
+import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import {
   bookingServiceIdFromType,
-  getBookingSummaryServiceLabel,
   normalizeStep1ForService,
 } from "@/components/booking/serviceCategories";
+import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
+import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
 
 function GroupCard({
   title,
@@ -75,6 +75,13 @@ export function StepQuote() {
   const booking = useBookingStep1();
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
+  const { tier } = useBookingVipTier();
+
+  const estimateFrom = useMemo(() => estimateFromSmartQuoteMin(state, tier), [state, tier]);
+
+  useEffect(() => {
+    clearBookingPricePreviewFromStorage();
+  }, []);
 
   /** Default funnel on quote when nothing chosen yet (e.g. deep-linked without step 1). */
   useEffect(() => {
@@ -90,47 +97,6 @@ export function StepQuote() {
       }),
     );
   }, [hydrated, setState, state.service, state.service_group]);
-
-  /** Preview pricing for specialised before a concrete option is chosen (guide only). */
-  const estimateInputService = state.service ?? (state.service_group === "specialised" ? "deep" : null);
-  const estimateInputType =
-    state.service_type ??
-    (state.service_group === "specialised" && !state.service ? ("deep_cleaning" as const) : null);
-
-  const estimate = useMemo(
-    () =>
-      calculatePrice({
-        service: estimateInputService,
-        serviceType: estimateInputType,
-        rooms: state.rooms,
-        bathrooms: state.bathrooms,
-        extraRooms: state.extraRooms,
-        extras: state.extras,
-      }),
-    [
-      state.bathrooms,
-      state.extraRooms,
-      state.extras,
-      state.rooms,
-      estimateInputService,
-      estimateInputType,
-    ],
-  );
-
-  useEffect(() => {
-    if (!state.service) return;
-    writeBookingPricePreviewLock({
-      finalPrice: estimate.total,
-      surgeMultiplier: 1,
-      lockedAt: new Date().toISOString(),
-      estimatedHours: estimate.hours,
-      service: state.service,
-      rooms: state.rooms,
-      bathrooms: state.bathrooms,
-      extraRooms: state.extraRooms,
-      extras: state.extras,
-    });
-  }, [estimate.hours, estimate.total, state.bathrooms, state.extraRooms, state.extras, state.rooms, state.service]);
 
   const pickRegularGroup = useCallback(() => {
     setState((p) =>
@@ -194,30 +160,24 @@ export function StepQuote() {
 
   const canContinue = Boolean(state.service && state.service_type && (hasRegularType || hasSpecialisedType));
 
-  const hoursLabel =
-    estimate.hours % 1 === 0 ? `${estimate.hours}` : estimate.hours.toFixed(1).replace(/\.0$/, "");
-
-  const durationServiceLine = state.service
-    ? `≈ ${hoursLabel} hours · ${getBookingSummaryServiceLabel(state.service, state.service_type)}`
-    : isSpecialisedGroup
-      ? "Pick an option below — your total updates when you choose"
-      : "Choose a cleaning type below to see timing";
-
   return (
     <BookingLayout
-      useFlowHeader
+      summaryIgnoreLockedBooking
       summaryState={state}
-      showPricePreview={false}
-      stepLabel="Step 2 of 5"
       canContinue={canContinue}
       onContinue={() => router.push(bookingFlowHref("details"))}
       continueLabel={copy.cta}
-      stickyMobileBar={{
-        totalZar: estimate.total,
-        subline: copy.supporting,
-        totalCaption: copy.priceLabel,
-      }}
-      footerTotalZar={estimate.total}
+      stickyMobileBar={
+        estimateFrom != null
+          ? {
+              totalZar: estimateFrom,
+              totalCaption: "Estimated from",
+              subline: "Final price is set per time slot in the next step",
+              ctaShort: copy.cta,
+            }
+          : undefined
+      }
+      footerTotalZar={estimateFrom ?? undefined}
     >
       <div className="mx-auto max-w-xl space-y-8 pb-6 lg:mx-0">
         <div>
@@ -229,12 +189,20 @@ export function StepQuote() {
 
         <div className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-md dark:border-zinc-800 dark:bg-zinc-900/50">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            {copy.priceLabel}
+            Estimated price
           </p>
-          <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-5xl">
-            R {estimate.total.toLocaleString("en-ZA")}
+          {estimateFrom != null ? (
+            <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
+              From R {estimateFrom.toLocaleString("en-ZA")}
+            </p>
+          ) : (
+            <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              Choose a cleaning type to see an estimate
+            </p>
+          )}
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            This is a guide only — each time slot shows the real price before you pay.
           </p>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{durationServiceLine}</p>
           <p className="mt-4 text-sm font-semibold text-zinc-800 dark:text-zinc-100">{copy.earlyTrust}</p>
           <p className="mt-3 text-sm font-medium text-emerald-800 dark:text-emerald-300">{copy.trust}</p>
           <p className="mt-3 text-sm font-semibold text-amber-900 dark:text-amber-200/90">{copy.urgency}</p>
@@ -282,11 +250,6 @@ export function StepQuote() {
           {isSpecialisedGroup ? (
             <div className="mt-2 space-y-2">
               <p className="text-xs text-zinc-600 dark:text-zinc-400">For deep, moving or specialised cleaning needs</p>
-              {!hasSpecialisedType ? (
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Preview is a guide — tap the option that matches your visit to lock your total.
-                </p>
-              ) : null}
               <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Pick one:</p>
               <div className="grid gap-2 sm:grid-cols-3">
                 <MiniOption

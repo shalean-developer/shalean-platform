@@ -28,6 +28,18 @@ export const TAG_COPY: Record<CleanerTag, string> = {
 /** Demo roster — replace with API. */
 export const CLEANERS: CleanerProfile[] = [
   {
+    id: "abe30dda-a927-4f75-b204-c7165f6eadd0",
+    name: "Priority Cleaner",
+    imageUrl: "https://i.pravatar.cc/128?img=21",
+    rating: 5.0,
+    reviewCount: 320,
+    jobsCompleted: 520,
+    yearsExperience: 7,
+    tag: "top-rated",
+    recommended: true,
+    availableSlots: null,
+  },
+  {
     id: "cl_thandi",
     name: "Thandi M.",
     imageUrl: "https://i.pravatar.cc/128?img=47",
@@ -36,7 +48,7 @@ export const CLEANERS: CleanerProfile[] = [
     jobsCompleted: 520,
     yearsExperience: 6,
     tag: "top-rated",
-    recommended: true,
+    recommended: false,
     availableSlots: null,
   },
   {

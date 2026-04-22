@@ -4,6 +4,7 @@ import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { completeCleanerReferralOnFirstJob, completeCustomerReferralForBooking } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
   const today = todayYmdJohannesburg();
   const { data: past, error } = await admin
     .from("bookings")
-    .select("id, user_id, date, status, customer_email")
+    .select("id, user_id, cleaner_id, date, status, customer_email")
     .in("status", ["pending", "assigned", "in_progress"])
     .not("date", "is", null)
     .lt("date", today)
@@ -42,6 +43,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
     if (ev) continue;
 
     const uid = typeof b.user_id === "string" ? b.user_id : null;
+    const cleanerId = typeof (b as { cleaner_id?: unknown }).cleaner_id === "string" ? String((b as { cleaner_id?: string }).cleaner_id) : null;
     const dateYmd = typeof b.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : null;
     const rawEmail = typeof b.customer_email === "string" ? b.customer_email : "";
     const { error: upErr } = await admin.from("bookings").update({ status: "completed" }).eq("id", id);
@@ -63,6 +65,16 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
         bookingId: id,
       });
     }
+
+    await completeCustomerReferralForBooking({
+      admin,
+      bookingUserId: uid,
+      customerEmail: rawEmail,
+    });
+    await completeCleanerReferralOnFirstJob({
+      admin,
+      cleanerId,
+    });
 
     if (dateYmd && rawEmail.trim().length >= 3) {
       const reminderDay = addDaysToYmd(dateYmd, 14);

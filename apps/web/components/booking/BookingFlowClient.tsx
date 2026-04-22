@@ -12,13 +12,14 @@ import {
   type BookingFlowStep,
 } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
-import BookingHeader from "@/components/booking/BookingHeader";
+import { BookingFlowProvider } from "@/components/booking/BookingFlowContext";
 import { StepEntry } from "@/components/booking/steps/StepEntry";
 import { StepQuote } from "@/components/booking/steps/StepQuote";
 import { StepDetailsForm } from "@/components/booking/steps/StepDetailsForm";
 import { StepPayment } from "@/components/booking/steps/StepPayment";
 import { StepSchedule } from "@/components/booking/steps/StepSchedule";
 import { ExitIntentModal } from "@/components/booking/ExitIntentModal";
+import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 export function BookingFlowClient() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export function BookingFlowClient() {
   const step = normalizeBookingStepParam(rawStep);
   const [exitIntentOpen, setExitIntentOpen] = useState(false);
   const lastExitIntentAt = useRef(0);
+  const trackedViewRef = useRef(false);
 
   /** Canonicalize legacy `?step=service` / `who` URLs. */
   useEffect(() => {
@@ -61,15 +63,6 @@ export function BookingFlowClient() {
     [router],
   );
 
-  const handleBack = useCallback(() => {
-    if (step === "quote") goTo("entry");
-    else if (step === "details") goTo("quote");
-    else if (step === "when") {
-      clearLockedBookingFromStorage();
-      goTo("details");
-    } else if (step === "checkout") goTo("when");
-  }, [step, goTo]);
-
   useEffect(() => {
     const redirect = getBookingStepGateRedirect(step);
     if (redirect && redirect !== step) {
@@ -83,6 +76,22 @@ export function BookingFlowClient() {
     } catch {
       /* ignore */
     }
+  }, [step]);
+
+  useEffect(() => {
+    if (trackedViewRef.current) return;
+    trackedViewRef.current = true;
+    markRetargetingCandidate(true);
+    trackGrowthEvent("page_view", { page_type: "booking_flow" });
+  }, []);
+
+  useEffect(() => {
+    if (step === "entry") {
+      trackGrowthEvent("start_booking", { step });
+      trackGrowthEvent("booking_started", { step });
+    }
+    if (step === "quote") trackGrowthEvent("view_price", { step });
+    if (step === "when") trackGrowthEvent("select_time", { step });
   }, [step]);
 
   /** Exit intent: cursor leaves toward browser chrome (throttled). */
@@ -123,47 +132,45 @@ export function BookingFlowClient() {
   }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950">
-      <BookingHeader
-        step={step}
-        onBack={step === "entry" ? undefined : handleBack}
-      />
-      <div className="flex min-h-0 flex-1 flex-col">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
-          >
-            {step === "entry" ? <StepEntry /> : null}
-            {step === "quote" ? <StepQuote /> : null}
-            {step === "details" ? <StepDetailsForm /> : null}
-            {step === "when" ? (
-              <StepSchedule onNext={() => goTo("checkout")} onBack={() => goTo("details")} />
-            ) : null}
-            {step === "checkout" ? (
-              <Suspense
-                fallback={
-                  <div className="flex min-h-dvh flex-1 items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
-                    Loading…
-                  </div>
-                }
-              >
-                <StepPayment />
-              </Suspense>
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
+    <BookingFlowProvider step={step}>
+      <div className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              {step === "entry" ? <StepEntry /> : null}
+              {step === "quote" ? <StepQuote /> : null}
+              {step === "details" ? <StepDetailsForm /> : null}
+              {step === "when" ? (
+                <StepSchedule onNext={() => goTo("checkout")} onBack={() => goTo("details")} />
+              ) : null}
+              {step === "checkout" ? (
+                <Suspense
+                  fallback={
+                    <div className="flex min-h-dvh flex-1 items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
+                      Loading…
+                    </div>
+                  }
+                >
+                  <StepPayment />
+                </Suspense>
+              ) : null}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        <ExitIntentModal
+          open={exitIntentOpen}
+          onOpenChange={setExitIntentOpen}
+          onCompleteBooking={handleExitIntentComplete}
+          currentStep={step}
+        />
       </div>
-      <ExitIntentModal
-        open={exitIntentOpen}
-        onOpenChange={setExitIntentOpen}
-        onCompleteBooking={handleExitIntentComplete}
-        currentStep={step}
-      />
-    </div>
+    </BookingFlowProvider>
   );
 }

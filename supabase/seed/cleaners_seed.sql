@@ -1,188 +1,100 @@
 -- ============================================================================
--- Shalean — seed cleaner workforce (Western Cape)
+-- Shalean — seed cleaners (imported from legacy export, mapped to public.cleaners)
 -- ============================================================================
--- Prerequisites:
---   • Marketplace migrations through 20260434_bookings_location_id.sql
---   • seed/locations_seed.sql applied first (so location_id can resolve)
---   • Run in SQL Editor with sufficient privileges (postgres / dashboard)
---
--- Inserts 32 cleaners: auth.users + auth.identities + public.cleaners
--- Login (dev only): email cleaner.seed01@shalean.test … seed32 — password SeedCleaner!2026
---
--- Distribution: ~22 available, ~6 busy, ~4 offline; ratings 4.36–4.98; total_jobs 54–298
+-- Source: cleaners_rows.sql (legacy app). Only columns that exist in this repo's
+--         `public.cleaners` are populated. Omitted: photo_url, areas[], bio,
+--         specialties[], password_hash, OTP flags, day booleans, payout fields, etc.
+-- Prerequisites: ideally apply migrations 20260464–20260465 (or rely on ALTERs below).
+--                  email + phone are NOT NULL: empty legacy emails use {digits}@cleaner.shalean.com.
+-- Regenerate: node scripts/generate-cleaners-seed-from-export.mjs [path/to/export.sql]
 -- ============================================================================
 
 create extension if not exists pgcrypto;
 
--- ---------------------------------------------------------------------------
--- 1) Auth users (skip if email already exists)
--- ---------------------------------------------------------------------------
-with
-  inst as (
-    select coalesce(
-      (select instance_id from auth.users limit 1),
-      '00000000-0000-0000-0000-000000000000'::uuid
-    ) as instance_id
-  ),
-  pw as (
-    select crypt('SeedCleaner!2026', gen_salt('bf')) as hash
-  ),
-  v as (
-    select * from (values
-      ('a0000001-0000-4000-8000-000000000000'::uuid, 'cleaner.seed01@shalean.test'),
-      ('a0000002-0000-4000-8000-000000000000'::uuid, 'cleaner.seed02@shalean.test'),
-      ('a0000003-0000-4000-8000-000000000000'::uuid, 'cleaner.seed03@shalean.test'),
-      ('a0000004-0000-4000-8000-000000000000'::uuid, 'cleaner.seed04@shalean.test'),
-      ('a0000005-0000-4000-8000-000000000000'::uuid, 'cleaner.seed05@shalean.test'),
-      ('a0000006-0000-4000-8000-000000000000'::uuid, 'cleaner.seed06@shalean.test'),
-      ('a0000007-0000-4000-8000-000000000000'::uuid, 'cleaner.seed07@shalean.test'),
-      ('a0000008-0000-4000-8000-000000000000'::uuid, 'cleaner.seed08@shalean.test'),
-      ('a0000009-0000-4000-8000-000000000000'::uuid, 'cleaner.seed09@shalean.test'),
-      ('a000000a-0000-4000-8000-000000000000'::uuid, 'cleaner.seed10@shalean.test'),
-      ('a000000b-0000-4000-8000-000000000000'::uuid, 'cleaner.seed11@shalean.test'),
-      ('a000000c-0000-4000-8000-000000000000'::uuid, 'cleaner.seed12@shalean.test'),
-      ('a000000d-0000-4000-8000-000000000000'::uuid, 'cleaner.seed13@shalean.test'),
-      ('a000000e-0000-4000-8000-000000000000'::uuid, 'cleaner.seed14@shalean.test'),
-      ('a000000f-0000-4000-8000-000000000000'::uuid, 'cleaner.seed15@shalean.test'),
-      ('a0000010-0000-4000-8000-000000000000'::uuid, 'cleaner.seed16@shalean.test'),
-      ('a0000011-0000-4000-8000-000000000000'::uuid, 'cleaner.seed17@shalean.test'),
-      ('a0000012-0000-4000-8000-000000000000'::uuid, 'cleaner.seed18@shalean.test'),
-      ('a0000013-0000-4000-8000-000000000000'::uuid, 'cleaner.seed19@shalean.test'),
-      ('a0000014-0000-4000-8000-000000000000'::uuid, 'cleaner.seed20@shalean.test'),
-      ('a0000015-0000-4000-8000-000000000000'::uuid, 'cleaner.seed21@shalean.test'),
-      ('a0000016-0000-4000-8000-000000000000'::uuid, 'cleaner.seed22@shalean.test'),
-      ('a0000017-0000-4000-8000-000000000000'::uuid, 'cleaner.seed23@shalean.test'),
-      ('a0000018-0000-4000-8000-000000000000'::uuid, 'cleaner.seed24@shalean.test'),
-      ('a0000019-0000-4000-8000-000000000000'::uuid, 'cleaner.seed25@shalean.test'),
-      ('a000001a-0000-4000-8000-000000000000'::uuid, 'cleaner.seed26@shalean.test'),
-      ('a000001b-0000-4000-8000-000000000000'::uuid, 'cleaner.seed27@shalean.test'),
-      ('a000001c-0000-4000-8000-000000000000'::uuid, 'cleaner.seed28@shalean.test'),
-      ('a000001d-0000-4000-8000-000000000000'::uuid, 'cleaner.seed29@shalean.test'),
-      ('a000001e-0000-4000-8000-000000000000'::uuid, 'cleaner.seed30@shalean.test'),
-      ('a000001f-0000-4000-8000-000000000000'::uuid, 'cleaner.seed31@shalean.test'),
-      ('a0000020-0000-4000-8000-000000000000'::uuid, 'cleaner.seed32@shalean.test')
-    ) as t(id, email)
-  )
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-select
-  v.id,
-  inst.instance_id,
-  'authenticated',
-  'authenticated',
-  v.email,
-  pw.hash,
-  now(),
-  '{"provider":"email","providers":["email"]}'::jsonb,
-  '{}'::jsonb,
-  now(),
-  now()
-from v
-cross join inst
-cross join pw
-where not exists (select 1 from auth.users u where lower(u.email) = lower(v.email));
+-- Self-heal when run in SQL Editor on legacy / partial schemas (before 20260464–20260465).
+alter table public.cleaners add column if not exists phone_number text;
+alter table public.cleaners add column if not exists jobs_completed integer default 0;
+alter table public.cleaners add column if not exists home_lat double precision;
+alter table public.cleaners add column if not exists home_lng double precision;
+alter table public.cleaners add column if not exists latitude double precision;
+alter table public.cleaners add column if not exists longitude double precision;
+alter table public.cleaners add column if not exists location text;
+alter table public.cleaners add column if not exists city_id uuid;
+alter table public.cleaners add column if not exists location_id uuid;
+alter table public.cleaners add column if not exists is_available boolean default true;
+alter table public.cleaners add column if not exists availability_start time;
+alter table public.cleaners add column if not exists availability_end time;
+alter table public.cleaners add column if not exists auth_user_id uuid;
+alter table public.cleaners add column if not exists acceptance_rate_recent real default 1.0;
+alter table public.cleaners add column if not exists tier text default 'bronze';
+alter table public.cleaners add column if not exists priority_score double precision default 0;
 
--- ---------------------------------------------------------------------------
--- 2) Email identities (for Supabase Auth email provider)
--- ---------------------------------------------------------------------------
-insert into auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-select
-  gen_random_uuid(),
-  u.id,
-  jsonb_build_object('sub', u.id::text, 'email', u.email),
-  'email',
-  u.email::text,
-  now(),
-  now(),
-  now()
-from auth.users u
-where u.email like 'cleaner.seed%@shalean.test'
-  and not exists (
-    select 1 from auth.identities i where i.user_id = u.id and i.provider = 'email'
-  );
-
--- ---------------------------------------------------------------------------
--- 3) Cleaner profiles (matches user ids)
--- ---------------------------------------------------------------------------
 insert into public.cleaners (
   id,
   full_name,
-  email,
   phone,
+  phone_number,
+  email,
   status,
   rating,
-  total_jobs,
-  location,
+  jobs_completed,
   home_lat,
   home_lng,
-  created_at
-)
-values
-  ('a0000001-0000-4000-8000-000000000000', 'Thabo Mkhize', 'cleaner.seed01@shalean.test', '+27824511001', 'available', 4.62, 187, 'Cape Town CBD', -33.9249, 18.4241, now() - interval '400 days'),
-  ('a0000002-0000-4000-8000-000000000000', 'Nomsa Dlamini', 'cleaner.seed02@shalean.test', '+27824511002', 'available', 4.85, 263, 'Claremont', -33.9804, 18.4655, now() - interval '380 days'),
-  ('a0000003-0000-4000-8000-000000000000', 'Pieter van der Berg', 'cleaner.seed03@shalean.test', '+27824511003', 'available', 4.71, 92, 'Rondebosch', -33.9633, 18.4765, now() - interval '310 days'),
-  ('a0000004-0000-4000-8000-000000000000', 'Fatima Abrahams', 'cleaner.seed04@shalean.test', '+27824511004', 'busy', 4.93, 241, 'Sea Point', -33.9148, 18.3921, now() - interval '290 days'),
-  ('a0000005-0000-4000-8000-000000000000', 'Sipho Nkosi', 'cleaner.seed05@shalean.test', '+27824511005', 'available', 4.55, 156, 'Green Point', -33.9057, 18.4039, now() - interval '270 days'),
-  ('a0000006-0000-4000-8000-000000000000', 'Lindiwe Mthembu', 'cleaner.seed06@shalean.test', '+27824511006', 'available', 4.78, 204, 'Observatory', -33.9358, 18.4476, now() - interval '260 days'),
-  ('a0000007-0000-4000-8000-000000000000', 'Johan du Preez', 'cleaner.seed07@shalean.test', '+27824511007', 'offline', 4.42, 71, 'Woodstock', -33.9276, 18.4432, now() - interval '250 days'),
-  ('a0000008-0000-4000-8000-000000000000', 'Zanele Khumalo', 'cleaner.seed08@shalean.test', '+27824511008', 'available', 4.88, 298, 'Bellville', -33.9022, 18.6292, now() - interval '240 days'),
-  ('a0000009-0000-4000-8000-000000000000', 'André Pretorius', 'cleaner.seed09@shalean.test', '+27824511009', 'available', 4.67, 133, 'Durbanville', -33.8321, 18.6453, now() - interval '230 days'),
-  ('a000000a-0000-4000-8000-000000000000', 'Chantelle Jacobs', 'cleaner.seed10@shalean.test', '+27824511010', 'busy', 4.51, 164, 'Milnerton', -33.8861, 18.4931, now() - interval '220 days'),
-  ('a000000b-0000-4000-8000-000000000000', 'Bongani Cele', 'cleaner.seed11@shalean.test', '+27824511011', 'available', 4.95, 276, 'Table View', -33.8218, 18.4821, now() - interval '210 days'),
-  ('a000000c-0000-4000-8000-000000000000', 'Megan Williams', 'cleaner.seed12@shalean.test', '+27824511012', 'available', 4.73, 119, 'Khayelitsha', -34.0492, 18.6721, now() - interval '200 days'),
-  ('a000000d-0000-4000-8000-000000000000', 'Sibusiso Zulu', 'cleaner.seed13@shalean.test', '+27824511013', 'available', 4.36, 58, 'Mitchells Plain', -34.0517, 18.6097, now() - interval '195 days'),
-  ('a000000e-0000-4000-8000-000000000000', 'Rethabile Moeketsi', 'cleaner.seed14@shalean.test', '+27824511014', 'offline', 4.82, 219, 'Cape Town CBD', -33.9255, 18.4235, now() - interval '190 days'),
-  ('a000000f-0000-4000-8000-000000000000', 'David Govender', 'cleaner.seed15@shalean.test', '+27824511015', 'available', 4.59, 142, 'Claremont', -33.9810, 18.4648, now() - interval '185 days'),
-  ('a0000010-0000-4000-8000-000000000000', 'Anika Naidoo', 'cleaner.seed16@shalean.test', '+27824511016', 'busy', 4.91, 255, 'Rondebosch', -33.9625, 18.4772, now() - interval '180 days'),
-  ('a0000011-0000-4000-8000-000000000000', 'Kwanele Booi', 'cleaner.seed17@shalean.test', '+27824511017', 'available', 4.64, 176, 'Sea Point', -33.9155, 18.3915, now() - interval '175 days'),
-  ('a0000012-0000-4000-8000-000000000000', 'Elmarie Steyn', 'cleaner.seed18@shalean.test', '+27824511018', 'available', 4.77, 201, 'Green Point', -33.9062, 18.4045, now() - interval '170 days'),
-  ('a0000013-0000-4000-8000-000000000000', 'Mpho Radebe', 'cleaner.seed19@shalean.test', '+27824511019', 'available', 4.45, 63, 'Observatory', -33.9365, 18.4468, now() - interval '165 days'),
-  ('a0000014-0000-4000-8000-000000000000', 'Heinrich van Wyk', 'cleaner.seed20@shalean.test', '+27824511020', 'available', 4.69, 189, 'Woodstock', -33.9280, 18.4425, now() - interval '160 days'),
-  ('a0000015-0000-4000-8000-000000000000', 'Nosipho Gumede', 'cleaner.seed21@shalean.test', '+27824511021', 'busy', 4.86, 267, 'Bellville', -33.9015, 18.6285, now() - interval '155 days'),
-  ('a0000016-0000-4000-8000-000000000000', 'Jerome Petersen', 'cleaner.seed22@shalean.test', '+27824511022', 'available', 4.53, 98, 'Durbanville', -33.8330, 18.6445, now() - interval '150 days'),
-  ('a0000017-0000-4000-8000-000000000000', 'Aphiwe Mafuya', 'cleaner.seed23@shalean.test', '+27824511023', 'available', 4.98, 291, 'Milnerton', -33.8855, 18.4925, now() - interval '145 days'),
-  ('a0000018-0000-4000-8000-000000000000', 'Bianca Botha', 'cleaner.seed24@shalean.test', '+27824511024', 'offline', 4.41, 54, 'Table View', -33.8225, 18.4815, now() - interval '140 days'),
-  ('a0000019-0000-4000-8000-000000000000', 'Siya Ntuli', 'cleaner.seed25@shalean.test', '+27824511025', 'available', 4.74, 211, 'Khayelitsha', -34.0485, 18.6715, now() - interval '135 days'),
-  ('a000001a-0000-4000-8000-000000000000', 'Tamara Daniels', 'cleaner.seed26@shalean.test', '+27824511026', 'available', 4.61, 147, 'Mitchells Plain', -34.0525, 18.6088, now() - interval '130 days'),
-  ('a000001b-0000-4000-8000-000000000000', 'Musa Qwabe', 'cleaner.seed27@shalean.test', '+27824511027', 'available', 4.89, 228, 'Cape Town CBD', -33.9242, 18.4250, now() - interval '125 days'),
-  ('a000001c-0000-4000-8000-000000000000', 'René Fourie', 'cleaner.seed28@shalean.test', '+27824511028', 'busy', 4.56, 169, 'Claremont', -33.9795, 18.4662, now() - interval '120 days'),
-  ('a000001d-0000-4000-8000-000000000000', 'Noluthando Maseko', 'cleaner.seed29@shalean.test', '+27824511029', 'available', 4.92, 244, 'Sea Point', -33.9138, 18.3930, now() - interval '115 days'),
-  ('a000001e-0000-4000-8000-000000000000', 'Grant Michaels', 'cleaner.seed30@shalean.test', '+27824511030', 'busy', 4.47, 81, 'Rondebosch', -33.9640, 18.4755, now() - interval '110 days'),
-  ('a000001f-0000-4000-8000-000000000000', 'Zinhle Moyo', 'cleaner.seed31@shalean.test', '+27824511031', 'offline', 4.83, 232, 'Green Point', -33.9048, 18.4055, now() - interval '105 days'),
-  ('a0000020-0000-4000-8000-000000000000', 'Francois le Roux', 'cleaner.seed32@shalean.test', '+27824511032', 'available', 4.68, 195, 'Observatory', -33.9348, 18.4482, now() - interval '100 days')
+  latitude,
+  longitude,
+  location,
+  is_available,
+  created_at,
+  availability_start,
+  availability_end,
+  auth_user_id,
+  acceptance_rate_recent,
+  tier,
+  priority_score
+) values
+
+  ('04d5ae12-5f78-464b-92c8-46d61df5b5cd'::uuid, 'Silibaziso Moyo', '+27845559202', '+27845559202', '27845559202@cleaner.shalean.com', 'available', 4.7::real, 0, -33.9921063::double precision, 18.5063144::double precision, -33.9921063::double precision, 18.5063144::double precision, 'Claremont', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('19e3eb27-5be0-4e8e-a654-e42d27586ada'::uuid, 'Natasha Magashito', '+27678316466', '+27678316466', '27678316466@cleaner.shalean.com', 'available', 4.7::real, 0, -33.889916::double precision, 18.6328149::double precision, -33.889916::double precision, 18.6328149::double precision, 'Cape Town', true, '2025-10-16 22:22:13.815891+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('21c9ed33-7054-49af-b91a-396a40746a51'::uuid, 'Ngwira Madalitso', '+27680582573', '+27680582573', '27680582573@cleaner.shalean.com', 'offline', 5::real, 0, NULL::double precision, NULL::double precision, NULL::double precision, NULL::double precision, 'Claremont', false, '2025-12-05 02:00:28.101478+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('22304709-7c94-4d6b-b4bc-ed35e1c26fce'::uuid, 'Lucia Pazvakavambwa', '+27812736804', '+27812736804', '27812736804@cleaner.shalean.com', 'available', 4.9::real, 0, -33.9678462::double precision, 18.5118828::double precision, -33.9678462::double precision, 18.5118828::double precision, 'Muizenberg', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('2231fa06-1ba5-43d6-bf2d-ca757368a05a'::uuid, 'Normatter Mazhinji', '+27742649775', '+27742649775', '27742649775@cleaner.shalean.com', 'available', 4.8::real, 0, -34.0735381::double precision, 18.5800443::double precision, -34.0735381::double precision, 18.5800443::double precision, 'Camps Bay', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.5::real, 'bronze', 0),
+  ('2a92664c-7e6c-4cbc-9d1b-6387f1c2b021'::uuid, 'Beaulla Chemugarira', '+27810768318', '+27810768318', 'beaullachemugarira@gmail.com', 'available', 5::real, 0, -33.9542016::double precision, 18.5827328::double precision, -33.9542016::double precision, 18.5827328::double precision, 'Cape Town', true, '2025-10-19 12:45:52.990962+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('2ba4ac8f-f271-4ce3-9811-58dbca218dc1'::uuid, 'Magaret Jiri', '+27658193061', '+27658193061', '27658193061@cleaner.shalean.com', 'available', 4.9::real, 0, -33.9921032::double precision, 18.5063148::double precision, -33.9921032::double precision, 18.5063148::double precision, 'Fish Hoek', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.8234999999999999::real, 'bronze', 0),
+  ('45427254-968d-4115-9285-b5f1b03010eb'::uuid, 'Princess Saidi', '+27738111327', '+27738111327', '27738111327@cleaner.shalean.com', 'busy', 5::real, 0, NULL::double precision, NULL::double precision, NULL::double precision, NULL::double precision, 'Seapoint', true, '2025-11-07 18:25:30.82194+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.7917000000000001::real, 'bronze', 0),
+  ('53f7c0c0-684a-4cbe-aeec-8aa9758940c3'::uuid, 'Nicole James', '+27694069060', '+27694069060', '27694069060@cleaner.shalean.com', 'available', 4.8::real, 0, -33.93832843::double precision, 18.54384685::double precision, -33.93832843::double precision, 18.54384685::double precision, 'Gardens', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.6486::real, 'bronze', 0),
+  ('555cf8fc-9669-4d86-8857-570fc667e3f0'::uuid, 'Emarald Nyamoto', '+27719382131', '+27719382131', '27719382131@cleaner.shalean.com', 'busy', 4.6::real, 0, -34.07207207::double precision, 18.46755817::double precision, -34.07207207::double precision, 18.46755817::double precision, 'Plumstead', true, '2025-10-16 22:22:13.815891+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('5d31128f-8508-40e7-b63f-b37ccb166cdf'::uuid, 'Sinikiwe Murire', '+27843640805', '+27843640805', '27843640805@cleaner.shalean.com', 'offline', 5::real, 0, NULL::double precision, NULL::double precision, NULL::double precision, NULL::double precision, 'Claremont', false, '2025-12-05 01:56:05.84902+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('6fd4f144-92a8-44fd-bcd6-64005a5d0ba6'::uuid, 'Chrissy Roman', '+27752175328', '+27752175328', 'jagadrey@gmail.com', 'available', 5::real, 0, NULL::double precision, NULL::double precision, NULL::double precision, NULL::double precision, 'Capetown', true, '2025-12-05 02:04:43.018937+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('72642f1a-4745-47e1-9a13-1edbb19b20d0'::uuid, 'Lucia Chiuta', '+27785567309', '+27785567309', '27785567309@cleaner.shalean.com', 'offline', 4.6::real, 0, -34.1297293::double precision, 18.3792748::double precision, -34.1297293::double precision, 18.3792748::double precision, 'Bishopscourt', false, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.6087::real, 'bronze', 0),
+  ('74ddb79f-8cdc-4483-954a-1e6d5ab562eb'::uuid, 'Ruvarashe Pazvakavambwa', '+27627958190', '+27627958190', '27627958190@cleaner.shalean.com', 'available', 4.7::real, 0, -34.0866803::double precision, 18.4878631::double precision, -34.0866803::double precision, 18.4878631::double precision, 'Bellville', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.9512::real, 'bronze', 0),
+  ('7590892c-6177-4efe-8c5f-7263b7bf19cd'::uuid, 'Tsungaimunashe Mbera', '+27699192765', '+27699192765', '27699192765@cleaner.shalean.com', 'busy', 4.9::real, 0, -34.0823614::double precision, 18.4853572::double precision, -34.0823614::double precision, 18.4853572::double precision, 'Muizenberg', true, '2025-10-16 22:22:13.815891+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('796e3ad7-07f3-44eb-b4cf-bed439a59f8b'::uuid, 'Nyasha Mudani', '+27697567515', '+27697567515', '27697567515@cleaner.shalean.com', 'available', 4.6::real, 0, -34.0070772::double precision, 18.5946443::double precision, -34.0070772::double precision, 18.5946443::double precision, 'Simon''s Town', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.6720999999999999::real, 'bronze', 0),
+  ('869b80b9-00e2-4b34-9e42-7b87d42b4aac'::uuid, 'Mary Mugari', '+27814857486', '+27814857486', '27814857486@cleaner.shalean.com', 'offline', 4.7::real, 0, -33.87387387::double precision, 18.51136826::double precision, -33.87387387::double precision, 18.51136826::double precision, 'Table View', false, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 1::real, 'bronze', 0),
+  ('8aabdbfb-1428-44d5-8ff9-7661a0b355aa'::uuid, 'Shyleen Pfende', '+27641940583', '+27641940583', '27641940583@cleaner.shalean.com', 'available', 4.9::real, 0, -34.0866757::double precision, 18.4878949::double precision, -34.0866757::double precision, 18.4878949::double precision, 'Bergvliet', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('91068f7f-bb91-476f-ad73-ddfe376d5e4c'::uuid, 'Jacqueline Maphosa', '+27693893953', '+27693893953', '27693893953@cleaner.shalean.com', 'available', 4.8::real, 0, -34.1181578::double precision, 18.8696922::double precision, -34.1181578::double precision, 18.8696922::double precision, 'Wynberg', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('914b3acf-40e8-4ad5-a5a2-9e2de711849a'::uuid, 'Ethel Chizombe', '+27743214943', '+27743214943', '27743214943@cleaner.shalean.com', 'available', 4.8::real, 0, -33.942732::double precision, 18.6453737::double precision, -33.942732::double precision, 18.6453737::double precision, 'Claremont', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.45899999999999996::real, 'bronze', 0),
+  ('ac73ea99-48b3-4c30-9d6b-5a8beab40f33'::uuid, 'Mavis Thandeka Gurajena', '+27629474955', '+27629474955', '27629474955@cleaner.shalean.com', 'available', 4.9::real, 0, -34.0866993::double precision, 18.4878712::double precision, -34.0866993::double precision, 18.4878712::double precision, 'Green Point', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('b748ccf2-983e-43aa-9ab2-7ff27882fbe4'::uuid, 'Primrose Chinohamba', '+27815404023', '+27815404023', '27815404023@cleaner.shalean.com', 'busy', 4.8::real, 0, -33.94435381::double precision, 18.64691477::double precision, -33.94435381::double precision, 18.64691477::double precision, 'Cape Town', true, '2025-10-16 22:22:13.815891+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('c0771cf5-3a83-4299-99ee-b0e399e8745f'::uuid, 'Mitchell Piyo', '+27607222189', '+27607222189', '27607222189@cleaner.shalean.com', 'available', 4.9::real, 0, -33.9285715::double precision, 18.414059::double precision, -33.9285715::double precision, 18.414059::double precision, 'City Bowl', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('d8a75570-4b3f-44bc-848a-ad9f33857c91'::uuid, 'Estery Phiri', '+27691445709', '+27691445709', '27691445709@cleaner.shalean.com', 'available', 4.6::real, 0, -34.085689::double precision, 18.4872247::double precision, -34.085689::double precision, 18.4872247::double precision, 'Muizenberg', true, '2025-10-17 19:38:30.924719+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0),
+  ('e7e2e61a-608d-4fc7-b7d7-865988039d4a'::uuid, 'Rutendo Shamba', '+27842676534', '+27842676534', '27842676534@cleaner.shalean.com', 'available', 4.9::real, 0, -33.87387387::double precision, 18.51136826::double precision, -33.87387387::double precision, 18.51136826::double precision, 'Century City', true, '2025-10-16 22:22:13.815891+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0.92::real, 'bronze', 0),
+  ('f781f062-dbed-4a33-84eb-f3bef3493063'::uuid, 'Marvellous Muneri', '+27603634903', '+27603634903', '27603634903@cleaner.shalean.com', 'available', 5::real, 0, NULL::double precision, NULL::double precision, NULL::double precision, NULL::double precision, 'Capetown', true, '2025-12-04 19:58:11.739+00'::timestamptz, '08:00'::time, '17:00'::time, NULL, 0::real, 'bronze', 0)
+
 on conflict (id) do update set
   full_name = excluded.full_name,
-  email = excluded.email,
   phone = excluded.phone,
+  phone_number = excluded.phone_number,
+  email = excluded.email,
   status = excluded.status,
   rating = excluded.rating,
-  total_jobs = excluded.total_jobs,
-  location = excluded.location,
   home_lat = excluded.home_lat,
-  home_lng = excluded.home_lng;
-
--- ---------------------------------------------------------------------------
--- 4) Resolve location_id from text label → locations.slug (kebab-case)
--- ---------------------------------------------------------------------------
-update public.cleaners c
-set location_id = l.id
-from public.locations l
-where c.location_id is null
-  and c.location is not null
-  and l.slug = lower(regexp_replace(trim(c.location), '\s+', '-', 'g'));
-
--- Validation (optional):
--- select count(*) as seed_cleaners from public.cleaners where email like '%@shalean.test';
--- select status, count(*) from public.cleaners where email like '%@shalean.test' group by 1 order by 1;
--- select min(rating)::numeric(3,2), max(rating)::numeric(3,2), min(total_jobs), max(total_jobs) from public.cleaners where email like '%@shalean.test';
+  home_lng = excluded.home_lng,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  location = excluded.location,
+  is_available = excluded.is_available,
+  availability_start = excluded.availability_start,
+  availability_end = excluded.availability_end,
+  acceptance_rate_recent = excluded.acceptance_rate_recent,
+  tier = excluded.tier,
+  priority_score = excluded.priority_score;

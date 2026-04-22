@@ -3,6 +3,7 @@ import { bookingServiceIdFromType } from "@/components/booking/serviceCategories
 import type { VipTier } from "@/lib/pricing/vipTier";
 import { VIP_DISCOUNTS } from "@/lib/pricing/vipTier";
 import { getDemandSurgeMultiplier, getDemandPricingLabel } from "@/lib/pricing/slotSurge";
+import { getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 
 export type CalculatePriceInput = {
   service: BookingServiceId | null;
@@ -99,6 +100,7 @@ export type SmartQuoteResult = {
   hours: number;
   tier: VipTier;
   demandLabel: "peak" | "value" | "standard";
+  surgeLabel: string;
 };
 
 export type SmartQuoteOptions = {
@@ -138,5 +140,6 @@ export function calculateSmartQuote(
     hours,
     tier,
     demandLabel: getDemandPricingLabel(timeHm),
+    surgeLabel: getSurgeLabel(surge),
   };
 }
