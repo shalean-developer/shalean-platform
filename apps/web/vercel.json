@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/booking-lifecycle",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/retry-failed-jobs",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/ai-optimize",
+      "schedule": "5 * * * *"
+    }
+  ]
+}

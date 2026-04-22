@@ -1,0 +1,83 @@
+-- ============================================================================
+-- Shalean booking stack — APPLY IN THIS ORDER (Supabase SQL Editor)
+-- Copy/paste each file’s contents fully before moving to the next.
+-- ============================================================================
+--
+-- 1. migrations/supabase-bookings.sql
+--    Creates: public.bookings, public.failed_jobs (+ RLS)
+--
+-- 2. migrations/20260421_link_bookings_to_users.sql
+--    Adds: bookings.user_id, backfill from auth.users email
+--
+-- 3. migrations/20260421_booking_platform_upgrade.sql
+--    Creates: user_profiles, user_events, booking_lifecycle_jobs (+ RLS)
+--
+-- 4. migrations/20260421_booking_audit_system_logs.sql
+--    Creates: system_logs, first version of increment_user_profile_stats (+ RLS)
+--
+-- 5. migrations/20260421_fix_user_profile_function.sql   ← REQUIRED (RPC arg name p_amount)
+--    DROP + CREATE increment_user_profile_stats(uuid, bigint) for app compatibility
+--
+-- 6. migrations/20260422_booking_lifecycle_automation.sql
+--    Lifecycle jobs: scheduled_for, status (pending|sent|failed), attempts, last_error;
+--    job types: reminder_24h, review_request, rebook_offer
+--
+-- 7. migrations/20260423_user_profiles_full_name_rls.sql
+--    full_name on user_profiles + RLS for authenticated users to upsert own row
+--
+-- 8. migrations/20260424_booking_auto_link_users.sql
+--    resolve_auth_user_id_by_email RPC, BEFORE INSERT trigger auto_link_booking_user,
+--    backfill orphaned bookings.user_id
+--
+-- 9. migrations/20260425_vip_tier_retention.sql
+--    user_profiles.tier, recalculate_user_tier + increment_user_profile_stats,
+--    booking completed → tier refresh trigger, rebook_reminder lifecycle job type
+--
+-- 10. migrations/20260426_user_events_assistant_analytics.sql
+--     slot_selected, extra_added, recommendation_clicked on user_events
+--
+-- 11. migrations/20260427_ai_revenue_system.sql
+--     pricing_metrics, pricing_slot_adjustments, ai_decision_logs, user_behavior,
+--     extended user_events (flow_*, booking_agent_*)
+--
+-- 12. migrations/20260429_marketplace_cleaners.sql
+--     cleaners, cleaner_availability, reviews; bookings.cleaner_id + workflow timestamps;
+--     status pending|assigned|…; RLS + realtime replica identity
+--
+-- 13. migrations/20260431_cleaners_location.sql
+--     cleaners.location (suburb label) for dispatch / AI matching
+--
+-- 14. migrations/20260432_locations.sql
+--     public.locations (name, city, province, slug) — reference areas
+--
+-- 15. migrations/20260433_cleaners_location_id.sql
+--     cleaners.location_id → locations(id)
+--
+-- 16. migrations/20260434_bookings_location_id.sql
+--     bookings.location_id → locations(id)
+--
+-- 17. migrations/20260435_locations_production.sql
+--     locations.slug NOT NULL; RLS select for reference data; column comments
+--
+-- 18. migrations/20260436_dispatch_v2_geo_retry.sql
+--     cleaners/latitude+longitude, locations lat/lng, bookings.duration_minutes,
+--     dispatch_retry_queue + indexes (dispatch v2 + cron retries)
+--
+-- 19. migrations/20260437_dispatch_v3_offers_acceptance.sql
+--     dispatch_offers, cleaners acceptance_rate/total_offers/accepted_offers, RPC bumps
+--
+-- 20. migrations/20260438_dispatch_v4_parallel_surge.sql
+--     multi-pending offers per booking, travel_route_cache, surge/demand on bookings,
+--     cleaner response metrics + tier, expire-peer + record-response RPCs
+--
+-- Optional seed (SQL Editor, after migrations — order matters):
+--   1) seed/locations_seed.sql — 170+ Western Cape areas (kebab slugs, cities)
+--   2) seed/cleaners_seed.sql — 32 demo cleaners + auth users (+ location_id backfill)
+--
+-- Then run: verify_booking_schema.sql (all rows should show exists = true)
+--           verify_locations.sql (locations + cleaner joins)
+-- Optional: verify_booking_post_payment.sql after a test payment (replace :reference)
+--
+-- ============================================================================
+
+select 'booking_stack_apply_order.sql is documentation only — no-op' as note;

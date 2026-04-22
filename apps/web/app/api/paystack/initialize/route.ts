@@ -1,0 +1,25 @@
+import { NextResponse } from "next/server";
+import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
+
+export async function POST(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const result = await processPaystackInitializeBody(body as Record<string, unknown>);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+
+  return NextResponse.json({
+    authorizationUrl: result.authorizationUrl,
+    reference: result.reference,
+  });
+}
