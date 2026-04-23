@@ -32,14 +32,14 @@ export function ExtrasSection({ state, blockedExtras, setState }: ExtrasSectionP
   );
 
   return (
-    <>
+    <div className="w-full max-w-none min-w-0">
       {blockedExtras.size > 0 ? (
         <p className="mb-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
           Some add-ons aren&apos;t available for this service so we can keep the visit focused and
           efficient.
         </p>
       ) : null}
-      <div className="flex flex-wrap gap-2.5">
+      <div className="flex w-full max-w-none min-w-0 flex-wrap gap-2">
         {EXTRAS.map((extra) => (
           <ToggleChip
             key={extra.id}
@@ -51,6 +51,6 @@ export function ExtrasSection({ state, blockedExtras, setState }: ExtrasSectionP
           />
         ))}
       </div>
-    </>
+    </div>
   );
 }

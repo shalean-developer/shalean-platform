@@ -11,7 +11,7 @@ import {
   normalizeBookingStepParam,
   type BookingFlowStep,
 } from "@/lib/booking/bookingFlow";
-import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
+import { clearLockedBookingFromStorage, readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { BookingFlowProvider } from "@/components/booking/BookingFlowContext";
 import { StepEntry } from "@/components/booking/steps/StepEntry";
 import { StepQuote } from "@/components/booking/steps/StepQuote";
@@ -127,9 +127,41 @@ export function BookingFlowClient() {
     };
   }, [step]);
 
+  /** Exit intent: idle on schedule step (12s) — slot selection drop-off. */
+  useEffect(() => {
+    if (step !== "when") return;
+    let timer = 0;
+    function arm() {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setExitIntentOpen(true), 12_000);
+    }
+    arm();
+    const ev = ["mousedown", "keydown", "touchstart", "scroll"] as const;
+    const opts = { capture: true, passive: true } as const;
+    const reset = () => arm();
+    ev.forEach((name) => window.addEventListener(name, reset, opts));
+    return () => {
+      window.clearTimeout(timer);
+      ev.forEach((name) => window.removeEventListener(name, reset, opts));
+    };
+  }, [step]);
+
   const handleExitIntentComplete = useCallback(() => {
-    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
-  }, []);
+    const locked = readLockedBookingFromStorage();
+    if (step === "checkout") {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+      return;
+    }
+    if (locked) {
+      router.push(bookingFlowHref("checkout"));
+      return;
+    }
+    if (step === "when") {
+      document.getElementById("booking-time-slots")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    router.push(bookingFlowHref("when"));
+  }, [router, step]);
 
   return (
     <BookingFlowProvider step={step}>
@@ -168,7 +200,6 @@ export function BookingFlowClient() {
           open={exitIntentOpen}
           onOpenChange={setExitIntentOpen}
           onCompleteBooking={handleExitIntentComplete}
-          currentStep={step}
         />
       </div>
     </BookingFlowProvider>

@@ -58,17 +58,13 @@ export function StepPayment() {
     setTotals(next);
   }, []);
 
-  /** Require a lock so the footer never feels “dead”; `handlePay` validates the rest and shows notices. */
-  const canPay = Boolean(locked);
   const readyForPaystack = Boolean(
     locked && totals?.contactReady && totals.totalZar >= 1,
   );
+  /** Enable CTA only when payment data is truly ready. */
+  const canPay = Boolean(locked && readyForPaystack && !paying);
 
-  const continueLabel = paying
-    ? "Securing your cleaner…"
-    : totals?.totalZar
-      ? `${copy.cta} · R ${totals.totalZar.toLocaleString("en-ZA")}`
-      : "Enter your details below";
+  const continueLabel = paying ? "Securing your cleaner…" : "Confirm →";
 
   const summaryState = useMemo(() => {
     if (locked) return lockedToStep1State(locked);
@@ -221,18 +217,15 @@ export function StepPayment() {
       showContinueArrow={false}
       continueVariant="pay"
       onContinue={handlePay}
-      footerSplit
+      stickyMobileBar={{
+        totalZar: totals?.totalZar ?? 0,
+        amountDisplayOverride: totals?.totalZar ? null : "—",
+        totalCaption: "Total",
+        ctaShort: "Confirm →",
+      }}
       footerTotalZar={totals?.totalZar}
       footerPreCta={readyForPaystack ? copy.speedBeforePay : undefined}
-      footerSubcopy={
-        readyForPaystack ? (
-          <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
-        ) : (
-          <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-            {bookingCopy.quote.reassurance}
-          </p>
-        )
-      }
+      footerSubcopy={readyForPaystack ? <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p> : undefined}
     >
       <CheckoutNoticeBanner
         open={Boolean(notice?.open)}

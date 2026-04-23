@@ -17,6 +17,8 @@ type BookingSummaryProps = {
   suppressEstimateUntilLocked?: boolean;
   /** Step 5: discounted total to pay (matches footer). */
   amountToPayZar?: number;
+  /** Bottom sheet / inline: drop sticky positioning so the card scrolls naturally. */
+  embedded?: boolean;
 };
 
 /**
@@ -28,6 +30,7 @@ export default function BookingSummary({
   ignoreLockedBooking = false,
   suppressEstimateUntilLocked = false,
   amountToPayZar,
+  embedded = false,
 }: BookingSummaryProps) {
   const lockedRaw = useLockedBooking();
   const locked = ignoreLockedBooking ? null : lockedRaw;
@@ -41,7 +44,13 @@ export default function BookingSummary({
   }, [displayState, locked, suppressEstimateUntilLocked, tier]);
 
   return (
-    <div className="sticky top-24 z-10 min-w-0 self-start lg:static lg:self-stretch">
+    <div
+      className={
+        embedded
+          ? "static z-auto min-w-0 self-stretch"
+          : "sticky top-24 z-10 min-w-0 self-start lg:static lg:self-stretch"
+      }
+    >
       <BookingSummaryCard
         state={displayState}
         suppressEstimateUntilLocked={suppressEstimateUntilLocked}

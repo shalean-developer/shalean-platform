@@ -1,12 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { BookingHeader } from "@/components/booking/BookingHeader";
 import BookingSummary from "./BookingSummary";
 import { StickyPriceBar } from "@/components/booking/StickyPriceBar";
 import { bookingCopy } from "@/lib/booking/copy";
 import type { BookingStep1State } from "./useBookingStep1";
+import { cn } from "@/lib/utils";
 
 type BookingLayoutProps = {
   children: ReactNode;
@@ -51,9 +53,15 @@ type BookingLayoutProps = {
     ctaShort?: string;
     /** One line above sticky CTA (urgency / availability). */
     ctaUrgency?: string;
+    /** Quote mobile: tap price to open a bottom sheet with the booking summary. */
+    openSummarySheetOnAmountTap?: boolean;
   };
   /** Desktop: summary column first (checkout trust layout). */
   summaryColumnFirst?: boolean;
+  /** When true, `summaryOverride` / sidebar summary is not shown in the mobile top block (desktop sidebar unchanged). */
+  summaryDesktopOnly?: boolean;
+  /** Entry step: fixed bottom CTA on small screens + extra main padding (desktop keeps sticky footer). */
+  mobileEntryFooter?: boolean;
 };
 
 export default function BookingLayout({
@@ -76,9 +84,28 @@ export default function BookingLayout({
   progressSlot,
   stickyMobileBar,
   summaryColumnFirst = false,
+  summaryDesktopOnly = false,
+  mobileEntryFooter = false,
 }: BookingLayoutProps) {
   const showSummary = summaryOverride != null || summaryState != null;
-  const renderSummary = () => {
+  const sheetFromPrice = Boolean(stickyMobileBar?.openSummarySheetOnAmountTap && showSummary);
+  const [summarySheetOpen, setSummarySheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!summarySheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSummarySheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [summarySheetOpen]);
+
+  const renderSummary = (embedded?: boolean) => {
     if (summaryOverride) return summaryOverride;
     if (!summaryState) return null;
     return (
@@ -87,6 +114,7 @@ export default function BookingLayout({
         ignoreLockedBooking={summaryIgnoreLockedBooking}
         suppressEstimateUntilLocked={suppressEstimateUntilLocked}
         amountToPayZar={summaryAmountToPayZar}
+        embedded={Boolean(embedded)}
       />
     );
   };
@@ -99,13 +127,14 @@ export default function BookingLayout({
         className={[
           "flex-1 py-0",
           footerSplit || stickyMobileBar ? "pb-32 sm:pb-28" : "",
+          mobileEntryFooter && !footerSplit && !stickyMobileBar ? "max-lg:pb-36" : "",
         ]
           .filter(Boolean)
           .join(" ")}
       >
         <div className="mx-auto max-w-7xl px-4 lg:px-6">
           {progressSlot ? <div className="mb-2 max-w-lg lg:max-w-none">{progressSlot}</div> : null}
-          {showSummary ? (
+          {showSummary && !summaryDesktopOnly ? (
             <div className="mb-8 lg:hidden">
               {renderSummary()}
             </div>
@@ -150,14 +179,28 @@ export default function BookingLayout({
       </main>
 
       <footer
-        className={[
+        className={cn(
           "z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95",
-          footerSplit || stickyMobileBar
-            ? "fixed bottom-0 left-0 right-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4"
-            : "sticky bottom-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3",
-        ].join(" ")}
+          mobileEntryFooter &&
+            !footerSplit &&
+            !stickyMobileBar &&
+            "max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:bg-white max-lg:px-4 max-lg:py-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:pt-3 max-lg:shadow-[0_-4px_24px_rgba(0,0,0,0.06)] lg:sticky lg:bottom-0 lg:px-0 lg:py-3 lg:pb-[max(1rem,env(safe-area-inset-bottom))] lg:shadow-none",
+          (footerSplit || stickyMobileBar) &&
+            cn(
+              "fixed bottom-0 left-0 right-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+              stickyMobileBar?.openSummarySheetOnAmountTap ? "max-lg:pt-2 lg:pt-4" : "pt-4",
+            ),
+          !footerSplit && !stickyMobileBar && !mobileEntryFooter &&
+            "sticky bottom-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3",
+        )}
       >
-        <div className="mx-auto max-w-7xl px-4 lg:px-6">
+        <div
+          className={cn(
+            "mx-auto max-w-7xl px-4 lg:px-6",
+            mobileEntryFooter && !footerSplit && !stickyMobileBar && "max-lg:max-w-none max-lg:px-0",
+            stickyMobileBar?.openSummarySheetOnAmountTap && "max-lg:max-w-none max-lg:px-0",
+          )}
+        >
           {footerPreCta ? (
             <div className="mb-2 text-center text-[11px] text-zinc-600 dark:text-zinc-400">{footerPreCta}</div>
           ) : null}
@@ -174,6 +217,11 @@ export default function BookingLayout({
                 onCta={() => onContinue?.()}
                 disabled={!canContinue}
                 loading={continueLoading}
+                variant={stickyMobileBar.openSummarySheetOnAmountTap ? "flat" : "elevated"}
+                onAmountClick={
+                  stickyMobileBar.openSummarySheetOnAmountTap ? () => setSummarySheetOpen(true) : undefined
+                }
+                captionUppercase={!stickyMobileBar.openSummarySheetOnAmountTap}
               />
             </div>
           ) : null}
@@ -263,17 +311,25 @@ export default function BookingLayout({
                 "w-full rounded-xl font-semibold tracking-tight transition-all",
                 continueVariant === "pay"
                   ? "min-h-14 px-4 text-base"
-                  : "h-12 text-[15px]",
+                  : mobileEntryFooter
+                    ? "h-12 max-lg:h-12 text-[15px] max-lg:text-base"
+                    : "h-12 text-[15px]",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                 canContinue
                   ? continueLoading
                     ? continueVariant === "pay"
                       ? "cursor-wait bg-primary text-primary-foreground opacity-95"
-                      : "cursor-wait bg-zinc-900 text-white opacity-95 dark:bg-white dark:text-zinc-950"
+                      : mobileEntryFooter
+                        ? "cursor-wait max-lg:bg-zinc-800 max-lg:text-white lg:cursor-wait lg:bg-zinc-900 lg:text-white lg:opacity-95 dark:lg:bg-white dark:lg:text-zinc-950"
+                        : "cursor-wait bg-zinc-900 text-white opacity-95 dark:bg-white dark:text-zinc-950"
                     : continueVariant === "pay"
                       ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.99] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                      : "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
-                  : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
+                      : mobileEntryFooter
+                        ? "max-lg:bg-black max-lg:text-white max-lg:hover:bg-zinc-900 max-lg:active:scale-[0.99] lg:bg-zinc-900 lg:text-white lg:shadow-lg lg:shadow-zinc-900/20 lg:hover:bg-zinc-800 dark:lg:bg-white dark:lg:text-zinc-950 dark:lg:hover:bg-zinc-100"
+                        : "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
+                  : mobileEntryFooter
+                    ? "cursor-not-allowed max-lg:bg-zinc-200 max-lg:text-zinc-500 lg:cursor-not-allowed lg:bg-zinc-200 lg:text-zinc-500 dark:max-lg:bg-zinc-800 dark:max-lg:text-zinc-500 dark:lg:bg-zinc-800 dark:lg:text-zinc-500"
+                    : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
               ].join(" ")}
             >
               {continueLoading
@@ -284,11 +340,31 @@ export default function BookingLayout({
               {!continueLoading && showContinueArrow ? " →" : ""}
             </button>
           ) : null}
-          {footerSubcopy ? (
+          {footerSubcopy && !stickyMobileBar?.openSummarySheetOnAmountTap ? (
             <div className="mt-3 text-center text-xs text-zinc-500 dark:text-zinc-400">{footerSubcopy}</div>
           ) : null}
         </div>
       </footer>
+
+      {summarySheetOpen && sheetFromPrice ? (
+        <div className="fixed inset-0 z-[60] lg:hidden" role="presentation">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close summary"
+            onClick={() => setSummarySheetOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Booking summary"
+            className="absolute inset-x-0 bottom-0 max-h-[min(80vh,560px)] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-950"
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+            {renderSummary(true)}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

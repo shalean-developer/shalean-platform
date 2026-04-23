@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { SectionCard } from "@/components/booking/SectionCard";
@@ -16,6 +16,8 @@ import { bookingCopy } from "@/lib/booking/copy";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 import { CleaningFrequencySelector } from "@/components/booking/CleaningFrequencySelector";
+import { MobileFullWidth } from "@/components/booking/MobileFullWidth";
+import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
 
 const ExtrasSection = lazy(() =>
   import("@/components/booking/ExtrasSection").then((m) => ({ default: m.ExtrasSection })),
@@ -32,6 +34,8 @@ export function StepDetailsForm() {
   const locked = useLockedBooking();
   const isLocked = locked != null;
   const skipLockClearOnMount = useRef(true);
+
+  const estimateZar = useMemo(() => estimateFromSmartQuoteMin(state, vipTier), [state, vipTier]);
 
   useEffect(() => {
     if (skipLockClearOnMount.current) {
@@ -62,12 +66,21 @@ export function StepDetailsForm() {
 
   return (
     <BookingLayout
+      summaryIgnoreLockedBooking
+      summaryDesktopOnly
       summaryState={state}
+      stickyMobileBar={{
+        totalZar: estimateZar ?? 0,
+        amountDisplayOverride: estimateZar == null ? "—" : null,
+        totalCaption: "From",
+        ctaShort: "Continue →",
+        openSummarySheetOnAmountTap: true,
+      }}
       canContinue={canContinue}
       onContinue={goWhen}
       continueLabel={copy.cta}
     >
-      <div className="space-y-6 pb-6">
+      <div className="w-full max-w-none space-y-5 pb-6 max-lg:space-y-5 lg:space-y-6">
         {isLocked ? (
           <div
             className="rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
@@ -79,26 +92,30 @@ export function StepDetailsForm() {
 
         {!isLocked ? <SmartRetentionBanner /> : null}
 
-        <div>
+        <div className="w-full max-w-none">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
+          <p className="mt-2 hidden text-sm text-zinc-600 dark:text-zinc-400 lg:block">{copy.subtitle}</p>
         </div>
 
         <fieldset
           disabled={isLocked}
-          className="min-w-0 space-y-5 border-0 p-0 disabled:pointer-events-none disabled:opacity-[0.55]"
+          className="w-full max-w-none min-w-0 space-y-5 border-0 p-0 disabled:pointer-events-none disabled:opacity-[0.55] max-lg:space-y-4 lg:space-y-5"
         >
-          <SectionCard title={copy.homeDetailsTitle} description={copy.homeDetailsHint}>
-            <HomeDetails state={state} maxRooms={maxRooms} setState={setState} omitLocation />
+          <SectionCard title={copy.homeDetailsTitle} description={copy.homeDetailsHint} descriptionDesktopOnly>
+            <MobileFullWidth insideSectionCard>
+              <HomeDetails state={state} maxRooms={maxRooms} setState={setState} omitLocation />
+            </MobileFullWidth>
           </SectionCard>
 
-          <SectionCard title="Choose cleaning frequency" description="Most popular: Weekly cleaning">
-            <CleaningFrequencySelector
-              value={state.cleaningFrequency}
-              onChange={(next) => setState((p) => ({ ...p, cleaningFrequency: next }))}
-            />
+          <SectionCard title="Choose cleaning frequency">
+            <MobileFullWidth insideSectionCard>
+              <CleaningFrequencySelector
+                value={state.cleaningFrequency}
+                onChange={(next) => setState((p) => ({ ...p, cleaningFrequency: next }))}
+              />
+            </MobileFullWidth>
             {recurringDiscountPct > 0 ? (
-              <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+              <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-950/30 dark:text-blue-300 max-lg:mt-2 lg:mt-3">
                 {state.cleaningFrequency === "weekly"
                   ? "Weekly plan: 10% off each visit — applied at checkout after your time is locked."
                   : "Every 2 weeks: 5% off each visit — applied at checkout after your time is locked."}
@@ -113,19 +130,23 @@ export function StepDetailsForm() {
               </div>
             }
           >
-            <SectionCard title={copy.extrasTitle} description={copy.reassurance}>
-              <ExtrasSection state={state} blockedExtras={blockedExtras} setState={setState} />
+            <SectionCard title={copy.extrasTitle} description={copy.reassurance} descriptionDesktopOnly>
+              <MobileFullWidth insideSectionCard>
+                <ExtrasSection state={state} blockedExtras={blockedExtras} setState={setState} />
+              </MobileFullWidth>
             </SectionCard>
           </Suspense>
 
           {state.service ? (
-            <RecommendedExtras
-              state={state}
-              setState={setState}
-              blockedExtras={blockedExtras}
-              userTier={vipTier}
-              pastHints={pastHints}
-            />
+            <MobileFullWidth>
+              <RecommendedExtras
+                state={state}
+                setState={setState}
+                blockedExtras={blockedExtras}
+                userTier={vipTier}
+                pastHints={pastHints}
+              />
+            </MobileFullWidth>
           ) : null}
         </fieldset>
       </div>

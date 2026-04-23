@@ -465,68 +465,48 @@ export function Step4Payment({
     "h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-primary";
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70">
-      <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Review &amp; checkout</h1>
-
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-3">
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">What</p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</p>
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Where</p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{locked.location || "Address on file"}</p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">When</p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{formatLockedAppointmentLabel(locked)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Duration</p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{locked.finalHours.toFixed(1)} hrs</p>
-          </div>
-        </div>
+    <div className="mx-auto w-full max-w-3xl space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:p-6">
+      <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
+        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{serviceName}</div>
+        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{formatLockedAppointmentLabel(locked)}</div>
+        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{locked.location || "Address on file"}</div>
       </section>
 
-      <section className="space-y-2 text-sm">
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-zinc-600 dark:text-zinc-400">Visit price</span>
-          <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-50">R {formatZar(locked.finalPrice)}</span>
+      <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
+        <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+          <span>Visit</span>
+          <span className="tabular-nums">R {formatZar(locked.finalPrice)}</span>
         </div>
         {tip > 0 ? (
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-zinc-600 dark:text-zinc-400">Tip</span>
-            <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-50">R {formatZar(tip)}</span>
+          <div className="mt-1 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+            <span>Tip</span>
+            <span className="tabular-nums">R {formatZar(tip)}</span>
           </div>
         ) : null}
         {checkoutDiscountLines.map((row) => (
-          <div key={row.key} className="flex items-center justify-between gap-4">
-            <span className="text-zinc-600 dark:text-zinc-400">{row.label}</span>
-            <span className="font-medium tabular-nums text-emerald-700 dark:text-emerald-400">-R {formatZar(row.amount)}</span>
+          <div key={row.key} className="mt-1 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+            <span>{row.label}</span>
+            <span className="tabular-nums text-emerald-700 dark:text-emerald-400">-R {formatZar(row.amount)}</span>
           </div>
         ))}
-        <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700" />
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Total to pay</span>
-          <span className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">R {formatZar(totalZar)}</span>
+        <div className="mt-2 flex items-center justify-between text-lg font-semibold">
+          <span className="text-zinc-900 dark:text-zinc-50">Total</span>
+          <span className="tabular-nums text-emerald-600 dark:text-emerald-400">R {formatZar(totalZar)}</span>
         </div>
       </section>
 
       <section
-        aria-labelledby="promo-heading"
+        aria-labelledby="optional-heading"
         className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60"
       >
         <button
           type="button"
-          id="promo-heading"
+          id="optional-heading"
           onClick={() => setPromoOpen((o) => !o)}
           className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50"
           aria-expanded={promoOpen}
         >
-          <span>Promo code</span>
+          <span>Add promo or tip (optional)</span>
           <ChevronDown
             className={[
               "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
@@ -536,184 +516,163 @@ export function Step4Payment({
           />
         </button>
         {promoOpen ? (
-          <div className="space-y-2 border-t border-zinc-200/80 px-4 pb-4 pt-2 dark:border-zinc-800">
-            {recurringDiscount ? (
-              <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
-                {recurringDiscount.label} applied.
-              </div>
-            ) : null}
-            {referralDiscount ? (
-              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
-                <p className="font-medium">Referral discount applied 🎉</p>
-                <p className="mt-0.5 text-[11px]">Code: {referralDiscount.code} · −R {formatZar(referralDiscount.discountZar)}</p>
-              </div>
-            ) : null}
-            {promoApplied ? (
-              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
-                <p className="font-medium">{promoApplied.code} applied</p>
-                <p className="mt-0.5 text-[11px] opacity-90">{promoApplied.description}</p>
-                <button
-                  type="button"
-                  onClick={clearPromo}
-                  className="mt-1 text-[11px] font-semibold text-emerald-800 underline dark:text-emerald-300"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={promoInput}
-                    onChange={(e) => {
-                      setPromoInput(e.target.value);
-                      setPromoError(null);
-                    }}
-                    placeholder="Code"
-                    className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950"
-                    autoComplete="off"
-                  />
+          <div className="space-y-4 border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">
+            <div className="space-y-2">
+              {recurringDiscount ? (
+                <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
+                  {recurringDiscount.label} applied.
+                </div>
+              ) : null}
+              {referralDiscount ? (
+                <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+                  Code: {referralDiscount.code} · −R {formatZar(referralDiscount.discountZar)}
+                </div>
+              ) : null}
+              {promoApplied ? (
+                <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+                  <p className="font-medium">{promoApplied.code} applied</p>
                   <button
                     type="button"
-                    onClick={applyPromo}
-                    className="h-9 shrink-0 rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
+                    onClick={clearPromo}
+                    className="mt-1 text-[11px] font-semibold underline"
                   >
-                    Apply
+                    Remove
                   </button>
                 </div>
-                {promoError ? (
-                  <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-                    {promoError}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </div>
-        ) : null}
-      </section>
-
-      <section aria-labelledby="tip-heading" className="space-y-2">
-        <h2 id="tip-heading" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Tip cleaner <span className="font-normal text-zinc-500">(optional)</span>
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {TIP_PRESETS.map((amount) => {
-            const active = !customMode && tip === amount;
-            return (
-              <button
-                key={amount}
-                type="button"
-                onClick={() => selectPreset(amount)}
-                className={[
-                  "rounded-lg border px-3 py-2 text-sm font-semibold transition",
-                  active
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
-                    : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
-                ].join(" ")}
-              >
-                R{amount}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={startCustom}
-            className={[
-              "rounded-lg border px-3 py-2 text-sm font-semibold transition",
-              customMode
-                ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
-                : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950",
-            ].join(" ")}
-          >
-            Custom
-          </button>
-        </div>
-        {customMode ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-9 items-center overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-              <span className="pl-2 text-xs text-zinc-500">R</span>
-              <input
-                type="number"
-                min={0}
-                max={MAX_TIP_ZAR}
-                step={1}
-                value={customTipDraft}
-                onChange={(e) => setCustomTipDraft(e.target.value)}
-                onBlur={commitCustomTip}
-                className="h-full w-20 bg-transparent px-1 text-sm outline-none dark:text-zinc-100"
-                aria-label="Custom tip amount"
-              />
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => {
+                        setPromoInput(e.target.value);
+                        setPromoError(null);
+                      }}
+                      placeholder="Promo code"
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950"
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyPromo}
+                      className="h-9 shrink-0 rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {promoError ? (
+                    <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                      {promoError}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={commitCustomTip}
-              className="h-9 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-            >
-              Set
-            </button>
+
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {TIP_PRESETS.map((amount) => {
+                  const active = !customMode && tip === amount;
+                  return (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => selectPreset(amount)}
+                      className={[
+                        "rounded-full border px-3 py-1 text-sm transition",
+                        active
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
+                          : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
+                      ].join(" ")}
+                    >
+                      R{amount}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={startCustom}
+                  className={[
+                    "rounded-full border px-3 py-1 text-sm transition",
+                    customMode
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
+                      : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950",
+                  ].join(" ")}
+                >
+                  Custom
+                </button>
+              </div>
+              {customMode ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex h-9 items-center overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+                    <span className="pl-2 text-xs text-zinc-500">R</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={MAX_TIP_ZAR}
+                      step={1}
+                      value={customTipDraft}
+                      onChange={(e) => setCustomTipDraft(e.target.value)}
+                      onBlur={commitCustomTip}
+                      className="h-full w-20 bg-transparent px-1 text-sm outline-none dark:text-zinc-100"
+                      aria-label="Custom tip amount"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={commitCustomTip}
+                    className="h-9 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                  >
+                    Set
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </section>
 
       <section
-        id="k7z3np"
-        aria-labelledby="your-details-heading"
+        aria-labelledby="account-heading"
         className="rounded-xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950/60"
       >
-        <h2 id="your-details-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Account</h2>
+        <h2 id="account-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Account &amp; contact</h2>
         {user ? (
-          <div className="mt-3 space-y-2 rounded-lg border border-zinc-200/80 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
-            <div className="space-y-1 text-sm">
-              <p className="text-zinc-700 dark:text-zinc-200">Name: <span className="font-semibold">{name || "—"}</span></p>
-              <p className="text-zinc-700 dark:text-zinc-200">Email: <span className="font-semibold">{email || "—"}</span></p>
-              <p className="text-zinc-700 dark:text-zinc-200">Phone: <span className="font-semibold">{phone || "—"}</span></p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setEditingLoggedInDetails((v) => !v)}
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              {editingLoggedInDetails ? "Done" : "Change details"}
-            </button>
-            {editingLoggedInDetails ? (
-              <div className="grid grid-cols-1 gap-3 pt-1 md:grid-cols-2">
-                <input
-                  type="text"
-                  required
-                  autoComplete="name"
-                  placeholder="Full name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={persistGuest}
-                  className={inputClass}
-                />
-                <input
-                  type="tel"
-                  required
-                  autoComplete="tel"
-                  inputMode="tel"
-                  placeholder="Phone number"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  onBlur={persistGuest}
-                  className={inputClass}
-                />
-                <div className="md:col-span-2">
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    inputMode="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onBlur={persistGuest}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            ) : null}
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Signed in. Confirm your details below.</p>
+            <input
+              type="text"
+              required
+              autoComplete="name"
+              placeholder="Full name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
+            <input
+              type="tel"
+              required
+              autoComplete="tel"
+              inputMode="tel"
+              placeholder="Phone number"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              inputMode="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
           </div>
         ) : (
           <div className="mt-3 space-y-3">
@@ -742,30 +701,28 @@ export function Step4Payment({
             {!supabaseConfigured ? (
               <p className="text-xs text-amber-800 dark:text-amber-400/90">Sign-in is currently unavailable.</p>
             ) : (
-              <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="space-y-2">
+              <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="space-y-3">
                 {authMode === "register" ? (
                   <>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <input
-                        type="text"
-                        required
-                        autoComplete="name"
-                        placeholder="Full name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className={inputClass}
-                      />
-                      <input
-                        type="tel"
-                        required
-                        autoComplete="tel"
-                        inputMode="tel"
-                        placeholder="Phone number"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className={inputClass}
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      required
+                      autoComplete="name"
+                      placeholder="Full name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={inputClass}
+                    />
+                    <input
+                      type="tel"
+                      required
+                      autoComplete="tel"
+                      inputMode="tel"
+                      placeholder="Phone number"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className={inputClass}
+                    />
                     <input
                       type="email"
                       required
@@ -776,7 +733,6 @@ export function Step4Payment({
                       onChange={(e) => setEmail(e.target.value)}
                       className={inputClass}
                     />
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Used for payment confirmation</p>
                   </>
                 ) : (
                   <input
@@ -833,56 +789,9 @@ export function Step4Payment({
         ) : null}
       </section>
 
-      {!user ? (
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Contact details</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <input
-            type="text"
-            required
-            autoComplete="name"
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={persistGuest}
-            className={inputClass}
-          />
-          <input
-            type="tel"
-            required
-            autoComplete="tel"
-            inputMode="tel"
-            placeholder="Phone number"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onBlur={persistGuest}
-            className={inputClass}
-          />
-          <div className="md:col-span-2">
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              inputMode="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={persistGuest}
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <div className="space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-          <p>Used for payment confirmation</p>
-          <p>We may call you about your booking</p>
-        </div>
-        {cleanerName ? (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Cleaner: {cleanerName}</p>
-        ) : null}
-      </section>
-      ) : (
-        cleanerName ? <p className="text-xs text-zinc-500 dark:text-zinc-400">Cleaner: {cleanerName}</p> : null
-      )}
+      {cleanerName ? (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">Cleaner: {cleanerName}</p>
+      ) : null}
     </div>
   );
 }

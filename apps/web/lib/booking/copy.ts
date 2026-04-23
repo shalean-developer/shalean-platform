@@ -20,7 +20,6 @@ export const bookingCopy = {
     reassurance: "Next you’ll add home details, then choose a time to lock your total",
     urgency: "🔥 Most customers complete their booking in under 60 seconds",
     cta: "Continue Booking",
-    eyebrow: "Your instant price",
     earlyTrust: "⭐ Trusted by homeowners across Cape Town",
   },
 
@@ -82,26 +81,10 @@ export const bookingCopy = {
   },
 
   exitIntent: {
-    title: "Wait — don’t miss your spot 👀",
-    offer: "Get R50 off your first cleaning if you book now",
-    cta: "Complete Booking",
-    dismiss: "Not now",
-  },
-
-  /** Contextual exit-intent (shown by step); fallback = `exitIntent`. */
-  exitIntentByStep: {
-    quote: {
-      title: "Don’t lose your price 👀",
-      offer: "Your cleaning price is ready — complete your booking now",
-    },
-    when: {
-      title: "This time slot may go fast ⚡",
-      offer: "Secure your preferred time before it’s taken",
-    },
-    checkout: {
-      title: "You’re almost done 👀",
-      offer: "Confirm your cleaner in under 60 seconds",
-    },
+    title: "Wait! Your booking is almost secured",
+    offer: "Complete your booking now before the slot is taken.",
+    cta: "Complete booking →",
+    dismiss: "Continue later",
   },
 
   summary: {

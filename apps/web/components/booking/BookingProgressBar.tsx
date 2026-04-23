@@ -14,12 +14,41 @@ const STEP_LABELS: Record<BookingFlowStep, string> = {
 type BookingProgressBarProps = {
   step: BookingFlowStep;
   className?: string;
+  /** Compact header row: step label + small dots (mobile-first booking header). */
+  compact?: boolean;
 };
 
-export function BookingProgressBar({ step, className = "" }: BookingProgressBarProps) {
+export function BookingProgressBar({ step, className = "", compact = false }: BookingProgressBarProps) {
   const activeIndex = BOOKING_FLOW_STEPS.indexOf(step);
   const currentStepNumber = activeIndex + 1;
   const showProgressPsych = activeIndex >= 1;
+
+  if (compact) {
+    return (
+      <div className={`flex flex-col items-center gap-0.5 ${className}`.trim()}>
+        <p className="text-center text-[10px] font-medium leading-none text-zinc-500 dark:text-zinc-400">
+          Step {currentStepNumber} of 5
+        </p>
+        <div className="flex items-center justify-center gap-1" aria-hidden>
+          {BOOKING_FLOW_STEPS.map((key, index) => {
+            const isActive = index === activeIndex;
+            const isDone = index < activeIndex;
+            return (
+              <div
+                key={key}
+                className={[
+                  "rounded-full transition-all duration-200",
+                  isActive ? "h-2 w-3 bg-blue-600 dark:bg-blue-500" : "h-2 w-2",
+                  !isActive && isDone ? "bg-blue-600/60 dark:bg-blue-500/50" : "",
+                  !isActive && !isDone ? "bg-zinc-300 dark:bg-zinc-600" : "",
+                ].join(" ")}
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`w-full ${className}`.trim()}>

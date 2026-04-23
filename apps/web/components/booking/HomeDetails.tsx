@@ -15,7 +15,7 @@ type HomeDetailsProps = {
 
 export function HomeDetails({ state, maxRooms, setState, omitLocation = false }: HomeDetailsProps) {
   return (
-    <div className="space-y-4">
+    <div className="w-full max-w-none space-y-4">
       {!omitLocation ? (
         <div className="space-y-1.5">
           <label
@@ -38,43 +38,43 @@ export function HomeDetails({ state, maxRooms, setState, omitLocation = false }:
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
-      <StepperInput
-        label="Bedrooms"
-        description={
-          state.service === "quick"
-            ? "Bedrooms, living areas — Quick Clean caps main rooms at 5."
-            : "Bedrooms, living areas"
-        }
-        value={state.rooms}
-        min={1}
-        max={maxRooms}
-        onChange={(rooms) =>
-          setState((p) => ({
-            ...p,
-            rooms: Math.min(rooms, getMaxRoomsForService(p.service)),
-          }))
-        }
-      />
-      <StepperInput
-        label="Bathrooms"
-        description="Bathrooms & toilets"
-        value={state.bathrooms}
-        min={1}
-        max={10}
-        onChange={(bathrooms) => setState((p) => ({ ...p, bathrooms }))}
-      />
-      <StepperInput
-        label="Extra"
-        description="Offices, garages, etc."
-        value={state.extraRooms}
-        min={0}
-        max={EXTRA_ROOMS_MAX}
-        onChange={(extraRooms) =>
-          setState((p) => ({ ...p, extraRooms }))
-        }
-      />
-    </div>
+      <div className="grid w-full max-w-none min-w-0 grid-cols-3 gap-2 lg:gap-3 lg:items-stretch">
+        <StepperInput
+          label="Bedrooms"
+          description={
+            state.service === "quick"
+              ? "Bedrooms, living areas — Quick Clean caps main rooms at 5."
+              : "Bedrooms, living areas"
+          }
+          value={state.rooms}
+          min={1}
+          max={maxRooms}
+          onChange={(rooms) =>
+            setState((p) => ({
+              ...p,
+              rooms: Math.min(rooms, getMaxRoomsForService(p.service)),
+            }))
+          }
+        />
+        <StepperInput
+          label="Bathrooms"
+          description="Bathrooms & toilets"
+          value={state.bathrooms}
+          min={1}
+          max={10}
+          onChange={(bathrooms) => setState((p) => ({ ...p, bathrooms }))}
+        />
+        <StepperInput
+          label="Extra"
+          description="Offices, garages, etc."
+          value={state.extraRooms}
+          min={0}
+          max={EXTRA_ROOMS_MAX}
+          onChange={(extraRooms) =>
+            setState((p) => ({ ...p, extraRooms }))
+          }
+        />
+      </div>
     </div>
   );
 }

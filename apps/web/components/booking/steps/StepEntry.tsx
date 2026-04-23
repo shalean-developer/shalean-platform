@@ -48,6 +48,14 @@ const SIDEBAR_BENEFITS: { title: string; line: string; Icon: LucideIcon }[] = [
   { title: "Satisfaction guarantee", line: "We'll make it right", Icon: BadgeCheck },
 ];
 
+/** Short lines for mobile bottom sheet */
+const TRUST_SHEET_LINES = [
+  "Trusted & verified",
+  "Fast booking",
+  "Flexible scheduling",
+  "Satisfaction guarantee",
+];
+
 export function StepEntry() {
   const router = useRouter();
   const booking = useBookingStep1();
@@ -58,8 +66,8 @@ export function StepEntry() {
 
   const [locDraft, setLocDraft] = useState(state.location);
   const [addressBlurred, setAddressBlurred] = useState(false);
-  /** Avoid SSR vs first-client mismatch on `booking.hydrated` before effects run. */
   const [entryContinueGate, setEntryContinueGate] = useState(false);
+  const [trustSheetOpen, setTrustSheetOpen] = useState(false);
 
   useEffect(() => {
     setEntryContinueGate(true);
@@ -68,6 +76,20 @@ export function StepEntry() {
   useEffect(() => {
     setLocDraft(state.location);
   }, [state.location]);
+
+  useEffect(() => {
+    if (!trustSheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTrustSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [trustSheetOpen]);
 
   const commitLocation = useCallback(
     (v: string) => {
@@ -138,19 +160,23 @@ export function StepEntry() {
   return (
     <BookingLayout
       summaryOverride={trustMini}
+      summaryDesktopOnly
+      mobileEntryFooter
       canContinue={canContinue}
       onContinue={goQuote}
       continueLabel={copy.cta}
-      footerSubcopy={<p className="text-center text-xs text-zinc-500 dark:text-zinc-400">No payment yet</p>}
+      showContinueArrow
     >
-      <div className="mx-auto max-w-2xl space-y-8 pb-6 lg:mx-0">
+      <div className="w-full max-w-none space-y-4 pb-2 max-lg:space-y-4 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-8 lg:pb-6">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{heading}</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{subheading}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 lg:text-3xl">
+            {heading}
+          </h1>
+          <p className="mt-1 hidden text-sm text-zinc-600 dark:text-zinc-400 lg:mt-2 lg:block">{subheading}</p>
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="entry-location" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+        <div className="space-y-1.5 max-lg:space-y-1.5 lg:space-y-2">
+          <label htmlFor="entry-location" className="text-xs font-medium text-zinc-800 max-lg:text-xs dark:text-zinc-200 lg:text-sm">
             {copy.addressLabel}
           </label>
           <input
@@ -165,7 +191,7 @@ export function StepEntry() {
               commitLocation(locDraft);
             }}
             suppressHydrationWarning
-            className="h-14 w-full rounded-2xl border border-zinc-200/90 bg-white px-4 text-base text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-primary/80"
+            className="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-primary/80 lg:h-14 lg:rounded-2xl lg:text-base lg:leading-normal"
           />
           {addressEmpty ? (
             <p className="text-xs font-medium text-amber-800 dark:text-amber-400/90" role="status">
@@ -179,9 +205,39 @@ export function StepEntry() {
           ) : null}
         </div>
 
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{copy.propertyLabel}</p>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="space-y-3 lg:space-y-3">
+          <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 lg:text-sm">{copy.propertyLabel}</p>
+
+          <div className="grid grid-cols-4 gap-2 lg:hidden">
+            {PROPERTY_OPTIONS.map(({ id, label, Icon }) => {
+              const active = state.propertyType === id;
+              return (
+                <button
+                  key={`m-${id}`}
+                  type="button"
+                  onClick={() => setPropertyType(id)}
+                  suppressHydrationWarning
+                  className={cn(
+                    "flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 py-2 text-center text-[11px] font-medium leading-tight transition-all",
+                    active
+                      ? "border-blue-600 bg-blue-50 text-blue-900 shadow-sm ring-1 ring-blue-600/10 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
+                      : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600",
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "mb-1 h-7 w-7 shrink-0",
+                      active ? "text-blue-700 dark:text-blue-200" : "text-zinc-600 dark:text-zinc-300",
+                    )}
+                    aria-hidden
+                  />
+                  <span className="line-clamp-2 w-full min-w-0 break-words">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-4">
             {PROPERTY_OPTIONS.map(({ id, label, Icon }) => {
               const active = state.propertyType === id;
               return (
@@ -218,7 +274,47 @@ export function StepEntry() {
             </p>
           ) : null}
         </div>
+
+        <div className="mt-3 text-center lg:hidden">
+          <button
+            type="button"
+            onClick={() => setTrustSheetOpen(true)}
+            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+          >
+            Why choose Shalean →
+          </button>
+        </div>
       </div>
+
+      {trustSheetOpen ? (
+        <div className="fixed inset-0 z-[60] lg:hidden" role="presentation">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close"
+            onClick={() => setTrustSheetOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trust-sheet-title"
+            className="absolute inset-x-0 bottom-0 max-h-[min(85vh,520px)] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-950"
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+            <h2 id="trust-sheet-title" className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              Why choose Shalean
+            </h2>
+            <ul className="mt-4 space-y-3 text-sm text-zinc-800 dark:text-zinc-200">
+              {TRUST_SHEET_LINES.map((line) => (
+                <li key={line} className="flex gap-2 border-b border-zinc-100 pb-3 last:border-0 dark:border-zinc-800">
+                  <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" aria-hidden />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
     </BookingLayout>
   );
 }

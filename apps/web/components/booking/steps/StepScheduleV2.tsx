@@ -3,8 +3,8 @@
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
-import { BOOKING_CALENDAR_DAYS, BookingDateSelector, generateNextDates } from "@/components/booking/BookingDateStrip";
-import { TimeSlotCard, type SlotDemandPriceBand } from "@/components/booking/TimeSlotCard";
+import { BOOKING_CALENDAR_DAYS, generateNextDates } from "@/components/booking/BookingDateStrip";
+import type { SlotDemandPriceBand } from "@/components/booking/TimeSlotCard";
 import { useCleaners } from "@/components/booking/useCleaners";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
@@ -25,7 +25,7 @@ type LiveSlot = {
   surgeApplied?: boolean;
 };
 
-const INITIAL_VISIBLE_SLOTS = 7;
+const INITIAL_VISIBLE_SLOTS = 5;
 const SLOT_START_MIN = 7 * 60;
 const SLOT_END_MIN = 12 * 60 + 30;
 
@@ -54,6 +54,15 @@ function ymdTodayLocal(): string {
 
 function tomorrowYmd(allDateValues: string[]): string | null {
   return allDateValues.length > 1 ? allDateValues[1]! : null;
+}
+
+function dateChipLabel(ymd: string): { dow: string; day: string } {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return {
+    dow: date.toLocaleDateString("en-ZA", { weekday: "short" }),
+    day: date.toLocaleDateString("en-ZA", { day: "numeric" }),
+  };
 }
 
 function formatDurationLine(hours: number): string {
@@ -177,7 +186,6 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   );
   const recommendedTime = candidateSlotTimes[0] ?? null;
   const selectedTime = useMemo(() => (locked && locked.date === selectedDate ? locked.time : null), [locked, selectedDate]);
-  const dimOtherSlots = selectedTime !== null;
 
   const cleanerSlotTime = selectedTime ?? recommendedTime;
   const { cleaners: cleanerPool, recommendedCleaner, loading: cleanersLoading, error: cleanersError } = useCleaners({
@@ -192,16 +200,21 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     if (!lockBaseState) return undefined;
     if (locked) {
       const totalZar = getLockedBookingDisplayPrice(locked);
-      const sub = locked.finalHours % 1 === 0 ? String(locked.finalHours) : locked.finalHours.toFixed(1).replace(/\.0$/, "");
-      return { totalZar, subline: `≈ ${sub} hrs`, ctaUrgency: bookingCopy.stickyBar.urgencyCleanerAvailable };
+      return {
+        totalZar,
+        totalCaption: "From",
+        ctaShort: "Continue →",
+        openSummarySheetOnAmountTap: true,
+      };
     }
     return {
       totalZar: 0,
+      totalCaption: "From",
       amountDisplayOverride: "Select a time",
-      subline: durationLine || undefined,
-      ctaUrgency: bookingCopy.stickyBar.urgencySlotsFilling,
+      ctaShort: "Continue →",
+      openSummarySheetOnAmountTap: true,
     };
-  }, [durationLine, lockBaseState, locked]);
+  }, [lockBaseState, locked]);
 
   async function handleSelectSlot(time: string) {
     if (!lockBaseState) return;
@@ -254,10 +267,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       priceZar,
       priceDemandBand: slotDemandPriceBand(priceZar, averageSlotPrice),
       selected: selectedTime === time,
-      dimUnselected: dimOtherSlots,
-      onSelect: () => void handleSelectSlot(time),
       assistantRecommended: time === recommendedTime,
-      recommendedBadgeText: "Recommended",
     };
   }
 
@@ -282,6 +292,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   return (
     <BookingLayout
       summaryState={summaryState ?? undefined}
+      summaryDesktopOnly
       suppressEstimateUntilLocked
       canContinue={canContinue}
       onContinue={onNext}
@@ -302,7 +313,29 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
           <>
             <section className="space-y-3" aria-labelledby="date-heading">
               <h2 id="date-heading" className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{bookingCopy.when.dateHeading}</h2>
-              <BookingDateSelector selected={selectedDate} onSelect={setDateOverride} />
+              <div className="flex items-center gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {allDateValues.map((date) => {
+                  const { dow, day } = dateChipLabel(date);
+                  const active = selectedDate === date;
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => setDateOverride(date)}
+                      className={[
+                        "h-[72px] min-w-[64px] shrink-0 rounded-xl border px-1 text-xs",
+                        "flex flex-col items-center justify-center transition",
+                        active
+                          ? "border-blue-600 bg-blue-50 text-blue-900 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
+                          : "border-zinc-200 bg-white text-zinc-700 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
+                      ].join(" ")}
+                    >
+                      <span className="text-[10px] font-medium uppercase tracking-wide opacity-80">{dow}</span>
+                      <span className="mt-1 text-sm font-semibold tabular-nums">{day}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </section>
 
             <div id="booking-time-slots" className="scroll-mt-28 space-y-5">
@@ -325,7 +358,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                         const tomorrow = tomorrowYmd(allDateValues);
                         if (tomorrow) setDateOverride(tomorrow);
                       }}
-                      className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white dark:bg-amber-700"
+                      className="mt-3 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
                     >
                       Book for tomorrow
                     </button>
@@ -336,10 +369,47 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               ) : null}
 
               {candidateSlotTimes.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <div className="flex flex-col gap-3">
                   {visibleSlotTimes.map((time) => {
                     const p = slotCardProps(time);
-                    return <TimeSlotCard key={time} {...p} />;
+                    const badge = p.assistantRecommended
+                      ? "Recommended"
+                      : p.priceDemandBand === "best-value"
+                        ? "Best value"
+                        : null;
+                    return (
+                      <button
+                        key={time}
+                        type="button"
+                        onClick={() => void handleSelectSlot(time)}
+                        className={[
+                          "w-full rounded-xl border p-4 transition",
+                          "flex items-center justify-between text-left",
+                          p.selected
+                            ? "border-blue-500 bg-blue-50 text-blue-900 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
+                            : "border-zinc-200 bg-white text-zinc-800 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
+                        ].join(" ")}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-base font-medium tabular-nums">{p.time}</div>
+                          <div
+                            className={[
+                              "mt-1 min-h-[1rem] text-sm",
+                              badge === "Recommended"
+                                ? "text-blue-600 dark:text-blue-300"
+                                : badge === "Best value"
+                                  ? "text-emerald-600 dark:text-emerald-300"
+                                  : "text-transparent",
+                            ].join(" ")}
+                          >
+                            {badge ?? "—"}
+                          </div>
+                        </div>
+                        <div className="text-lg font-semibold tabular-nums">
+                          {p.priceZar != null ? `R ${p.priceZar.toLocaleString("en-ZA")}` : "—"}
+                        </div>
+                      </button>
+                    );
                   })}
                 </div>
               ) : null}
@@ -348,7 +418,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 <button
                   type="button"
                   onClick={() => setShowAllTimes(true)}
-                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-200"
+                  className="w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-200"
                 >
                   Show all times
                 </button>
@@ -361,11 +431,9 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 </div>
               ) : null}
 
-              <section className="space-y-3" aria-labelledby="cleaner-heading">
-                <h2 id="cleaner-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Choose your cleaner</h2>
-                {!selectedTime ? (
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Pick a time first to load available cleaners.</p>
-                ) : (
+              {selectedTime ? (
+                <section className="space-y-3" aria-labelledby="cleaner-heading">
+                  <h2 id="cleaner-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Choose your cleaner</h2>
                   <div className="relative">
                     <button
                       type="button"
@@ -455,8 +523,8 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                       )}
                     </div>
                   </div>
-                )}
-              </section>
+                </section>
+              ) : null}
             </div>
           </>
         )}

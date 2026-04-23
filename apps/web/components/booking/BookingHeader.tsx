@@ -81,38 +81,49 @@ export function BookingHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200/90 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95">
-      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 sm:gap-3">
-        <div className="flex min-w-[100px] shrink-0 items-center gap-2 sm:min-w-[120px]">
-          {step !== "entry" ? (
+    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="mx-auto grid h-14 max-w-6xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-4">
+        <div className="flex min-w-0 items-center justify-start">
+          {step === "entry" ? (
+            <Link
+              href="/"
+              className="mr-2 shrink-0 text-lg leading-none text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              aria-label="Back to home"
+            >
+              ←
+            </Link>
+          ) : (
             <button
               type="button"
               onClick={handleBack}
-              className="shrink-0 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+              className="mr-2 shrink-0 text-lg leading-none text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               aria-label="Go back"
             >
               ←
             </button>
-          ) : null}
-          <Link href="/" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          )}
+          <Link
+            href="/"
+            className="truncate text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+          >
             Shalean<span className="text-blue-600">.</span>
           </Link>
         </div>
 
-        <div className="min-w-0 flex-1 px-1 sm:px-4">
-          <BookingProgressBar step={step} />
+        <div className="flex shrink-0 justify-center px-1">
+          <BookingProgressBar step={step} compact />
         </div>
 
-        <div className="flex min-w-0 shrink-0 items-center justify-end">
+        <div className="flex min-w-0 items-center justify-end">
           {loading ? (
-            <div className="h-9 w-20 shrink-0 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+            <div className="h-7 w-14 shrink-0 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700" aria-hidden />
           ) : user && initial ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 text-sm font-semibold text-zinc-800 transition",
+                    "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 text-xs font-semibold text-zinc-800 transition",
                     "outline-none hover:border-blue-300 hover:ring-2 hover:ring-blue-500/20 focus-visible:ring-2 focus-visible:ring-blue-500/40",
                     "dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100",
                   )}
@@ -152,7 +163,7 @@ export function BookingHeader() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                  className="text-sm font-medium text-blue-600 underline-offset-4 transition hover:text-blue-700 hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Login
                 </button>

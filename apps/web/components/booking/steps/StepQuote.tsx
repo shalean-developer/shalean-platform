@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
+import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
+import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import {
   type BookingServiceTypeKey,
   bookingServiceIdFromType,
@@ -19,6 +21,9 @@ export function StepQuote() {
   const booking = useBookingStep1();
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
+  const { tier } = useBookingVipTier();
+
+  const estimateZar = useMemo(() => estimateFromSmartQuoteMin(state, tier), [state, tier]);
 
   useEffect(() => {
     clearBookingPricePreviewFromStorage();
@@ -62,25 +67,31 @@ export function StepQuote() {
   return (
     <BookingLayout
       summaryIgnoreLockedBooking
+      summaryDesktopOnly
       summaryState={state}
+      stickyMobileBar={{
+        totalZar: estimateZar ?? 0,
+        amountDisplayOverride: estimateZar == null ? "—" : null,
+        totalCaption: "From",
+        ctaShort: "Continue →",
+        openSummarySheetOnAmountTap: true,
+      }}
       canContinue={canContinue}
       onContinue={() => router.push(bookingFlowHref("details"))}
       continueLabel={copy.cta}
     >
-      <div className="mx-auto max-w-2xl space-y-8 pb-6 lg:mx-0">
+      <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-8 lg:pb-6">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">{copy.eyebrow}</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             {copy.title}
           </h1>
         </div>
 
         <section className="space-y-3" aria-labelledby="sub-services-heading">
           <h2 id="sub-services-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            Sub-services (optional)
+            Sub-services
           </h2>
           <SubServicesSelector selectedService={state.service_type ?? null} onSelect={selectService} />
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Select one service</p>
         </section>
 
         <section className="space-y-2">

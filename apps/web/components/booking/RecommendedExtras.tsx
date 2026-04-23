@@ -43,19 +43,19 @@ export function RecommendedExtras({ state, setState, blockedExtras, userTier, pa
   }
 
   return (
-    <section className="space-y-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/35">
-      <div>
+    <section className="w-full max-w-none space-y-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/35">
+      <div className="w-full max-w-none">
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Recommended for your home</h3>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Popular add-ons based on your current selection.</p>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-2">
+      <div className="flex w-full max-w-none min-w-0 flex-wrap gap-2 md:flex-nowrap md:gap-4 md:overflow-x-auto md:pb-1">
         {suggestions.map((s) => {
           const added = state.extras.includes(s.id);
           return (
             <article
               key={s.id}
-              className="min-w-[220px] rounded-xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="w-full max-w-none min-w-0 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 md:w-auto md:min-w-[220px] md:shrink-0"
             >
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{s.label}</p>
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{s.reason}</p>
