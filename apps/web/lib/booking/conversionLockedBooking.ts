@@ -2,6 +2,7 @@ import type { ConversionBookingFormState } from "@/components/booking/conversion
 import { buildWidgetLockedQuote, finalizeWidgetStep1, type WidgetIntakePayload } from "@/lib/booking/bookingWidgetDraft";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
+import { PRICING_CONFIG } from "@/lib/pricing/pricingConfig";
 
 /**
  * Builds a Paystack-compatible `LockedBooking` from the 2-step conversion form.
@@ -39,7 +40,7 @@ export function buildConversionLockedBooking(form: ConversionBookingFormState): 
     surgeLabel: quote.surgeLabel,
     cleanersCount: quote.cleanersCount,
     vipTier: "regular" as const,
-    pricingVersion: 2,
+    pricingVersion: PRICING_CONFIG.version,
     locked: true,
     lockedAt,
   };

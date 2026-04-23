@@ -1,4 +1,5 @@
-import { calculatePrice as calculateBaseJobPrice, calculateSmartQuote } from "@/lib/pricing/calculatePrice";
+import { BOOKING_CHECKOUT_LOCK_VERSION, validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
+import { quoteBaseJobZar, quoteCheckoutZar } from "@/lib/pricing/pricingEngine";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 
@@ -16,24 +17,48 @@ function legacySurge(time: string): number {
   return typeof m === "number" && Number.isFinite(m) ? m : 1;
 }
 
-/**
- * True when the lock looks like a modern checkout snapshot from Step 4 (`/api/booking/price`).
- * We trust the persisted total — recomputing here caused drift vs the pricing API and blocked Paystack.
- */
-function isTrustedModernLock(locked: LockedBooking): boolean {
-  return (
-    locked.pricingVersion === 2 ||
-    (typeof locked.cleanersCount === "number" && Number.isFinite(locked.cleanersCount) && locked.cleanersCount >= 0)
+function lockMatchesPricingEngine(locked: LockedBooking): boolean {
+  const tier = normalizeVipTier(locked.vipTier);
+  const dyn =
+    typeof locked.dynamicSurgeFactor === "number" &&
+    locked.dynamicSurgeFactor >= 0.8 &&
+    locked.dynamicSurgeFactor <= 1.2
+      ? locked.dynamicSurgeFactor
+      : 1;
+  const q = quoteCheckoutZar(
+    {
+      service: locked.service,
+      serviceType: locked.service_type,
+      rooms: locked.rooms,
+      bathrooms: locked.bathrooms,
+      extraRooms: locked.extraRooms,
+      extras: locked.extras,
+    },
+    locked.time,
+    tier,
+    {
+      dynamicAdjustment: dyn,
+      cleanersCount: locked.cleanersCount,
+    },
   );
+  const priceOk = Math.abs(q.totalZar - locked.finalPrice) <= 1;
+  const hoursOk = Math.abs(q.hours - locked.finalHours) <= 0.1;
+  return priceOk && hoursOk;
 }
 
-/** Ensures `locked.finalPrice` is sane; modern locks are trusted as the single source of truth. */
+/** Ensures `locked.finalPrice` matches the centralized pricing engine (v2) or legacy rules. */
 export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
   if (!Number.isFinite(locked.finalPrice) || locked.finalPrice < 1) return false;
   if (!Number.isFinite(locked.finalHours) || locked.finalHours <= 0) return false;
 
-  if (isTrustedModernLock(locked)) {
-    return true;
+  if (locked.pricingVersion === BOOKING_CHECKOUT_LOCK_VERSION) {
+    if (typeof locked.time !== "string" || !locked.time.trim()) return false;
+    const hasSig =
+      typeof locked.quoteSignature === "string" && /^[0-9a-f]{64}$/i.test(locked.quoteSignature.trim());
+    if (hasSig) {
+      return validateLockForCheckout(locked, Date.now(), { skipExpiryCheck: true }).ok;
+    }
+    return lockMatchesPricingEngine(locked);
   }
 
   const input = {
@@ -45,9 +70,10 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
     extras: locked.extras,
   };
 
-  const { total: baseTotal } = calculateBaseJobPrice(input);
+  const { totalZar: baseTotal } = quoteBaseJobZar(input);
 
-  if (locked.vipTier != null) {
+  /** Legacy locks: only run full engine when a VIP tier was stored (otherwise use `LEGACY_SLOT_SURGE_MAP`). */
+  if (locked.vipTier != null && typeof locked.time === "string" && locked.time.trim()) {
     const tier = normalizeVipTier(locked.vipTier);
     const dyn =
       typeof locked.dynamicSurgeFactor === "number" &&
@@ -55,8 +81,13 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
       locked.dynamicSurgeFactor <= 1.2
         ? locked.dynamicSurgeFactor
         : 1;
-    const q = calculateSmartQuote(input, locked.time, tier, { dynamicAdjustment: dyn });
-    return Math.abs(q.total - locked.finalPrice) <= 1;
+    const q = quoteCheckoutZar(input, locked.time, tier, {
+      dynamicAdjustment: dyn,
+      cleanersCount: locked.cleanersCount,
+    });
+    const priceOk = Math.abs(q.totalZar - locked.finalPrice) <= 1;
+    const hoursOk = Math.abs(q.hours - locked.finalHours) <= 0.1;
+    return priceOk && hoursOk;
   }
 
   const legacy = Math.round(baseTotal * legacySurge(locked.time));

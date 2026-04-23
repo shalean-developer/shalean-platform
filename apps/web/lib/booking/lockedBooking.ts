@@ -1,4 +1,3 @@
-import { calculateSmartQuote } from "@/lib/pricing/calculatePrice";
 import type { VipTier } from "@/lib/pricing/vipTier";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
@@ -7,6 +6,8 @@ import {
   inferServiceTypeFromServiceId,
 } from "@/components/booking/serviceCategories";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
+import { normalizeExtraRoomsRaw } from "@/lib/pricing/pricingEngine";
+import { PRICING_CONFIG } from "@/lib/pricing/pricingConfig";
 
 export const BOOKING_LOCKED_KEY = "booking_locked";
 
@@ -18,7 +19,7 @@ export type LockedBooking = BookingStep1State & {
   time: string;
   finalPrice: number;
   finalHours: number;
-  /** Same as `finalPrice` when locked from `/api/booking/price` (display / logging alias). */
+  /** Same as `finalPrice` when locked from `/api/booking/lock` (display / logging alias). */
   price?: number;
   /** Same as `finalHours` when locked from API. */
   duration?: number;
@@ -27,16 +28,24 @@ export type LockedBooking = BookingStep1State & {
   surgeLabel?: string;
   cleanersCount?: number;
   /**
-   * Optional AI dynamic layer (0.8–1.2) multiplied with surge in `calculateSmartQuote`.
+   * Optional AI dynamic layer (0.8–1.2) multiplied with surge in `quoteCheckoutZar`.
    * Omitted in legacy web locks (= 1).
    */
   dynamicSurgeFactor?: number;
-  /** Tier used when locking (drives loyalty discount) */
+  /** Tier used when locking (must match server `quoteCheckoutZar`; drives loyalty discount). */
   vipTier?: VipTier;
-  /** `2` = VIP + demand pricing; omit = legacy clients should re-lock */
+  /** Snapshot from lock quote — display only; never subtract VIP again at checkout. */
+  quoteSubtotalZar?: number;
+  quoteAfterVipSubtotalZar?: number;
+  quoteVipSavingsZar?: number;
+  /** Matches {@link PRICING_CONFIG.version} at lock time; checkout rejects mismatch (`REQUOTE_REQUIRED`). */
   pricingVersion?: number;
   /** Selected cleaner for checkout — mirrored for `/api/booking/validate` (no re-fetch roster). */
   cleaner_id?: string | null;
+  /** HMAC/SHA256 of canonical lock quote from `POST /api/booking/lock` — Paystack init requires a match. */
+  quoteSignature?: string;
+  /** ISO timestamp — checkout must complete before this (see `LOCK_HOLD_MS`). */
+  lockExpiresAt?: string;
   locked: true;
   lockedAt: string;
 };
@@ -87,7 +96,8 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
   if (typeof data.time !== "string" || !data.time) return null;
   if (typeof data.lockedAt !== "string") return null;
   if (typeof data.rooms !== "number" || typeof data.bathrooms !== "number") return null;
-  if (typeof data.extraRooms !== "number" || !Array.isArray(data.extras)) return null;
+  if (!Array.isArray(data.extras)) return null;
+  const extraRooms = normalizeExtraRoomsRaw(data.extraRooms);
 
   const date = parseDateYmd(data.date, data.lockedAt);
   if (!date) return null;
@@ -124,6 +134,7 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
 
   return {
     ...data,
+    extraRooms,
     date,
     finalPrice,
     finalHours,
@@ -202,31 +213,31 @@ export function formatLockedAppointmentLabel(locked: LockedBooking): string {
 }
 
 /**
- * Persists a slot decision: `finalPrice` comes from `calculateSmartQuote` (VIP + demand) and is fixed for checkout.
+ * Persists a slot decision: `finalPrice` must come from `POST /api/booking/lock` (server `quoteCheckoutZar`) via `lockedQuote`.
  */
 export function lockBookingSlot(
   state: BookingStep1State,
   selection: { date: string; time: string },
-  options?: {
+  options: {
     vipTier?: VipTier;
-    lockedQuote?: { total: number; hours: number; surge: number; surgeLabel?: string; cleanersCount?: number };
+    lockedQuote: {
+      total: number;
+      hours: number;
+      surge: number;
+      surgeLabel?: string;
+      cleanersCount?: number;
+      quoteSubtotalZar?: number;
+      quoteAfterVipSubtotalZar?: number;
+      quoteVipSavingsZar?: number;
+      quoteSignature?: string;
+      lockExpiresAt?: string;
+      /** From `POST /api/booking/lock` — must match server tariff version. */
+      pricingVersion?: number;
+    };
   },
 ): LockedBooking {
   const tier = options?.vipTier ?? "regular";
-  const quote =
-    options?.lockedQuote ??
-    calculateSmartQuote(
-      {
-        service: state.service,
-        serviceType: state.service_type,
-        rooms: state.rooms,
-        bathrooms: state.bathrooms,
-        extraRooms: state.extraRooms,
-        extras: state.extras,
-      },
-      selection.time,
-      tier,
-    );
+  const quote = options.lockedQuote;
 
   const locked: LockedBooking = {
     ...state,
@@ -238,9 +249,27 @@ export function lockBookingSlot(
     duration: quote.hours,
     surge: quote.surge,
     surgeLabel: quote.surgeLabel,
-    cleanersCount: options?.lockedQuote?.cleanersCount,
+    cleanersCount: options.lockedQuote.cleanersCount,
     vipTier: tier,
-    pricingVersion: 2,
+    ...(typeof quote.quoteSubtotalZar === "number" && Number.isFinite(quote.quoteSubtotalZar)
+      ? { quoteSubtotalZar: Math.round(quote.quoteSubtotalZar) }
+      : {}),
+    ...(typeof quote.quoteAfterVipSubtotalZar === "number" && Number.isFinite(quote.quoteAfterVipSubtotalZar)
+      ? { quoteAfterVipSubtotalZar: Math.round(quote.quoteAfterVipSubtotalZar) }
+      : {}),
+    ...(typeof quote.quoteVipSavingsZar === "number" && Number.isFinite(quote.quoteVipSavingsZar)
+      ? { quoteVipSavingsZar: Math.max(0, Math.round(quote.quoteVipSavingsZar)) }
+      : {}),
+    ...(typeof quote.quoteSignature === "string" && /^[0-9a-f]{64}$/i.test(quote.quoteSignature.trim())
+      ? { quoteSignature: quote.quoteSignature.trim().toLowerCase() }
+      : {}),
+    ...(typeof quote.lockExpiresAt === "string" && quote.lockExpiresAt.trim()
+      ? { lockExpiresAt: quote.lockExpiresAt.trim() }
+      : {}),
+    pricingVersion:
+      typeof quote.pricingVersion === "number" && Number.isFinite(quote.pricingVersion)
+        ? Math.round(quote.pricingVersion)
+        : PRICING_CONFIG.version,
     locked: true,
     lockedAt: new Date().toISOString(),
   };

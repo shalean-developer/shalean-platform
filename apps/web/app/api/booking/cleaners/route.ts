@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAvailableCleaners } from "@/lib/booking/availabilityEngine";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  if (!admin) return NextResponse.json(supabaseAdminNotConfiguredBody(), { status: 503 });
   const url = new URL(request.url);
   const selectedDate = url.searchParams.get("date") ?? "";
   const selectedTime = url.searchParams.get("time") ?? "";

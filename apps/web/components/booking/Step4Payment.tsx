@@ -1,18 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
 import { readGuestUserFromStorage, writeGuestUserToStorage } from "@/lib/booking/guestUserStorage";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
-import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
+import { formatLockedAppointmentLabel, lockedToStep1State, type LockedBooking } from "@/lib/booking/lockedBooking";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
+import { bookingCopy } from "@/lib/booking/copy";
+import { computeBundledExtrasTotalZar, EXTRAS_CATALOG } from "@/lib/pricing/extrasConfig";
+import { getRecommendedExtraIds } from "@/lib/pricing/upsellEngine";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getStoredReferral } from "@/lib/referrals/client";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import { useAuth } from "@/lib/auth/useAuth";
 import { getBookingSummaryServiceLabel } from "./serviceCategories";
+import { normalizeVipTier, vipTierDisplayName } from "@/lib/pricing/vipTier";
 
 export type AuthMode = "guest" | "login" | "register";
 
@@ -457,6 +462,19 @@ export function Step4Payment({
       ? "Not selected"
       : getBookingSummaryServiceLabel(locked.service, locked.service_type);
 
+  const checkoutUpsellId = useMemo(() => {
+    const ctx = lockedToStep1State(locked);
+    const rec = getRecommendedExtraIds(ctx);
+    return rec.find((id) => !locked.extras.includes(id)) ?? null;
+  }, [locked]);
+
+  const extrasBundledZar = useMemo(
+    () => computeBundledExtrasTotalZar(locked.extras, locked.service),
+    [locked.extras, locked.service],
+  );
+
+  const checkoutMicro = bookingCopy.checkout;
+
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
@@ -467,14 +485,88 @@ export function Step4Payment({
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:p-6">
       <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
-        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{serviceName}</div>
-        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{formatLockedAppointmentLabel(locked)}</div>
-        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{locked.location || "Address on file"}</div>
+        <h2 className="sr-only">Booking summary</h2>
+        <dl className="space-y-2.5 text-sm">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhat}</dt>
+            <dd className="min-w-0 font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</dd>
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhere}</dt>
+            <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{locked.location || "Address on file"}</dd>
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhen}</dt>
+            <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{formatLockedAppointmentLabel(locked)}</dd>
+          </div>
+        </dl>
+        {checkoutUpsellId && EXTRAS_CATALOG[checkoutUpsellId] ? (
+          <p className="mt-3 rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs leading-relaxed text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100">
+            <span className="font-semibold">Add before checkout:</span>{" "}
+            {EXTRAS_CATALOG[checkoutUpsellId].label} (+
+            <span className="tabular-nums">R{EXTRAS_CATALOG[checkoutUpsellId].price}</span>).{" "}
+            <Link
+              href={`${bookingFlowHref("details")}#extras`}
+              className="font-semibold underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-200"
+            >
+              Update add-ons
+            </Link>{" "}
+            — most guests add this for a fuller clean.
+          </p>
+        ) : null}
+        <ul className="mt-4 space-y-1 border-t border-zinc-200/80 pt-3 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+          {checkoutMicro.trustShort.map((line) => (
+            <li key={line} className="flex gap-2 leading-snug">
+              <span className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden>
+                ✓
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
-        <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-          <span>Visit</span>
+        {typeof locked.quoteSubtotalZar === "number" &&
+        Number.isFinite(locked.quoteSubtotalZar) &&
+        typeof locked.quoteVipSavingsZar === "number" &&
+        Number.isFinite(locked.quoteVipSavingsZar) &&
+        locked.quoteVipSavingsZar > 0 ? (
+          <>
+            <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+              <span>Subtotal</span>
+              <span className="tabular-nums">R {formatZar(locked.quoteSubtotalZar)}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-sm text-emerald-800 dark:text-emerald-300">
+              <span>VIP discount ({vipTierDisplayName(normalizeVipTier(locked.vipTier))})</span>
+              <span className="tabular-nums">−R {formatZar(locked.quoteVipSavingsZar)}</span>
+            </div>
+            {typeof locked.quoteAfterVipSubtotalZar === "number" &&
+            Number.isFinite(locked.quoteAfterVipSubtotalZar) ? (
+              <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                After loyalty: R {formatZar(locked.quoteAfterVipSubtotalZar)} — visit total below includes time and
+                availability.
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {extrasBundledZar > 0 ? (
+          <div className="mt-2 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+            <span>{checkoutMicro.addOnsLabel}</span>
+            <span className="tabular-nums">R {formatZar(extrasBundledZar)}</span>
+          </div>
+        ) : null}
+        <div
+          className={[
+            "flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400",
+            typeof locked.quoteSubtotalZar === "number" && (locked.quoteVipSavingsZar ?? 0) > 0
+              ? "mt-2 border-t border-zinc-200/80 pt-2 dark:border-zinc-700"
+              : extrasBundledZar > 0
+                ? "mt-2 border-t border-zinc-200/80 pt-2 dark:border-zinc-700"
+                : "",
+          ].join(" ")}
+        >
+          <span>Visit total (locked)</span>
           <span className="tabular-nums">R {formatZar(locked.finalPrice)}</span>
         </div>
         {tip > 0 ? (

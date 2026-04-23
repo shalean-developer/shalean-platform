@@ -1,7 +1,10 @@
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
-import { calculateSmartQuote } from "@/lib/pricing/calculatePrice";
-import type { VipTier } from "@/lib/pricing/vipTier";
+import { pricingJobFromLockedBooking } from "@/lib/booking/bookingLockQuote";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
+import { computeLockQuoteSignature, LOCK_HOLD_MS } from "@/lib/booking/lockQuoteSignature";
+import type { VipTier } from "@/lib/pricing/vipTier";
+import { quoteCheckoutZar } from "@/lib/pricing/pricingEngine";
+import { PRICING_CONFIG } from "@/lib/pricing/pricingConfig";
 
 /**
  * Server-side equivalent of `lockBookingSlot` — builds a validated `LockedBooking` without touching `localStorage`.
@@ -18,32 +21,45 @@ export function buildLockedBookingSnapshot(
     dyn = Math.min(1.2, Math.max(0.8, options.dynamicSurgeFactor));
   }
 
-  const quote = calculateSmartQuote(
-    {
-      service: state.service,
-      serviceType: state.service_type,
-      rooms: state.rooms,
-      bathrooms: state.bathrooms,
-      extraRooms: state.extraRooms,
-      extras: state.extras,
-    },
-    selection.time,
-    tier,
-    { dynamicAdjustment: dyn },
-  );
+  const timeHm = selection.time.trim().slice(0, 5);
+  const job = pricingJobFromLockedBooking({
+    ...state,
+    date: selection.date,
+    time: selection.time,
+    finalPrice: 0,
+    finalHours: 0,
+    surge: 1,
+    locked: true,
+    lockedAt: new Date().toISOString(),
+  } as LockedBooking);
+  const q = quoteCheckoutZar(job, timeHm, tier, {
+    dynamicAdjustment: dyn === 1 ? undefined : dyn,
+  });
+
+  const quoteSignature = computeLockQuoteSignature({
+    job,
+    timeHm,
+    vipTier: tier,
+    dynamicAdjustment: dyn === 1 ? undefined : dyn,
+    cleanersCount: undefined,
+    quote: q,
+  });
+  const lockExpiresAt = new Date(Date.now() + LOCK_HOLD_MS).toISOString();
 
   const locked: LockedBooking = {
     ...state,
     date: selection.date,
     time: selection.time,
-    finalPrice: quote.total,
-    finalHours: quote.hours,
-    price: quote.total,
-    duration: quote.hours,
-    surge: quote.surge,
-    surgeLabel: quote.surgeLabel,
+    finalPrice: q.totalZar,
+    finalHours: q.hours,
+    price: q.totalZar,
+    duration: q.hours,
+    surge: q.effectiveSurgeMultiplier,
+    surgeLabel: q.surgeLabel,
     vipTier: tier,
-    pricingVersion: 2,
+    quoteSignature,
+    lockExpiresAt,
+    pricingVersion: q.pricingVersion ?? PRICING_CONFIG.version,
     locked: true,
     lockedAt: new Date().toISOString(),
   };

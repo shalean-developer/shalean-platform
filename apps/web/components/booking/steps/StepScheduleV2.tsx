@@ -1,10 +1,9 @@
 "use client";
 
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { BOOKING_CALENDAR_DAYS, generateNextDates } from "@/components/booking/BookingDateStrip";
-import type { SlotDemandPriceBand } from "@/components/booking/TimeSlotCard";
 import { useCleaners } from "@/components/booking/useCleaners";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
@@ -12,8 +11,16 @@ import { useSelectedCleaner } from "@/components/booking/useSelectedCleaner";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearSelectedCleanerFromStorage, writeSelectedCleanerToStorage } from "@/lib/booking/cleanerSelection";
 import { getLockedBookingDisplayPrice, lockedToStep1State, lockBookingSlot, mergeCleanerIdIntoLockedBooking } from "@/lib/booking/lockedBooking";
-import { calculatePrice } from "@/lib/pricing/calculatePrice";
+import { quoteJobDurationHours } from "@/lib/pricing/pricingEngine";
+import {
+  minSlotPrice,
+  orderSlotTimesForDisplay,
+  pickRecommendedSlot,
+  slotStrategyBadge,
+  type SlotPickInput,
+} from "@/lib/pricing/slotRevenueStrategy";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
+import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
 
 type LiveSlot = {
   time: string;
@@ -33,13 +40,6 @@ type StepScheduleProps = {
   onNext: () => void;
   onBack: () => void;
 };
-
-function slotDemandPriceBand(price: number | null, avg: number | null): SlotDemandPriceBand | null {
-  if (price == null || avg == null || !Number.isFinite(price) || !Number.isFinite(avg) || avg <= 0) return null;
-  if (price < avg) return "best-value";
-  if (price > avg) return "peak";
-  return "standard";
-}
 
 function hmToMinutes(hm: string): number {
   const [h, m] = hm.split(":").map(Number);
@@ -85,6 +85,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const [showAllTimes, setShowAllTimes] = useState(false);
   const [autoAssignCleaner, setAutoAssignCleaner] = useState(true);
   const cleanerCarouselRef = useRef<HTMLDivElement | null>(null);
+  const autoLockRunRef = useRef<string>("");
 
   const allDateValues = useMemo(() => generateNextDates(BOOKING_CALENDAR_DAYS).map((d) => d.value), []);
   const lockedDateInRange = locked?.date && allDateValues.includes(locked.date) ? locked.date : null;
@@ -97,33 +98,52 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     return now.getHours() * 60 + now.getMinutes() + 60;
   }, [selectedDate]);
 
-  const slotPriceByTime = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const s of liveSlots) if (s.available && typeof s.price === "number" && Number.isFinite(s.price)) m[s.time] = s.price;
-    return m;
-  }, [liveSlots]);
-  const averageSlotPrice = useMemo(() => {
-    const vals = Object.values(slotPriceByTime);
-    if (!vals.length) return null;
-    return vals.reduce((a, b) => a + b, 0) / vals.length;
-  }, [slotPriceByTime]);
+  const extrasJoinKey = lockBaseState?.extras.join("\u0001") ?? "";
+  const slotPricingDepsKey = useMemo(() => {
+    if (!lockBaseState) return "";
+    return [
+      lockBaseState.rooms,
+      lockBaseState.bathrooms,
+      lockBaseState.extraRooms,
+      extrasJoinKey,
+      lockBaseState.service ?? "",
+      lockBaseState.service_type ?? "",
+      vipTier,
+    ].join("|");
+  }, [
+    lockBaseState,
+    lockBaseState?.rooms,
+    lockBaseState?.bathrooms,
+    lockBaseState?.extraRooms,
+    extrasJoinKey,
+    lockBaseState?.service,
+    lockBaseState?.service_type,
+    vipTier,
+  ]);
 
   const durationLine = useMemo(() => {
     const durs = liveSlots.filter((s) => s.available && typeof s.duration === "number" && Number.isFinite(s.duration)).map((s) => s.duration!);
     if (durs.length) return formatDurationLine(durs.reduce((a, b) => a + b, 0) / durs.length);
     if (!lockBaseState) return "";
-    const { hours } = calculatePrice({
-      service: lockBaseState.service,
-      serviceType: lockBaseState.service_type,
-      rooms: lockBaseState.rooms,
-      bathrooms: lockBaseState.bathrooms,
-      extraRooms: lockBaseState.extraRooms,
-      extras: lockBaseState.extras,
-    });
+    const hours = quoteJobDurationHours(
+      {
+        service: lockBaseState.service,
+        serviceType: lockBaseState.service_type,
+        rooms: lockBaseState.rooms,
+        bathrooms: lockBaseState.bathrooms,
+        extraRooms: lockBaseState.extraRooms,
+        extras: lockBaseState.extras,
+      },
+      vipTier,
+    );
     return formatDurationLine(hours);
-  }, [liveSlots, lockBaseState]);
+  }, [liveSlots, lockBaseState, vipTier]);
 
   useEffect(() => setShowAllTimes(false), [selectedDate]);
+
+  useEffect(() => {
+    autoLockRunRef.current = "";
+  }, [selectedDate, slotPricingDepsKey]);
 
   useEffect(() => {
     if (!lockBaseState) return;
@@ -132,21 +152,27 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       setSlotsLoading(true);
       setSlotsError(null);
       try {
-        const estimate = calculatePrice({
-          service: lockBaseState.service,
-          serviceType: lockBaseState.service_type,
-          rooms: lockBaseState.rooms,
-          bathrooms: lockBaseState.bathrooms,
-          extraRooms: lockBaseState.extraRooms,
-          extras: lockBaseState.extras,
-        });
+        const hours = quoteJobDurationHours(
+          {
+            service: lockBaseState.service,
+            serviceType: lockBaseState.service_type,
+            rooms: lockBaseState.rooms,
+            bathrooms: lockBaseState.bathrooms,
+            extraRooms: lockBaseState.extraRooms,
+            extras: lockBaseState.extras,
+          },
+          vipTier,
+        );
         const params = new URLSearchParams();
         params.set("date", selectedDate);
-        params.set("duration", String(Math.round(estimate.hours * 60)));
+        params.set("duration", String(Math.round(hours * 60)));
         const svc = lockBaseState.service_type ?? lockBaseState.service;
         if (svc) params.set("serviceType", String(svc));
         params.set("bedrooms", String(Math.max(1, lockBaseState.rooms)));
         params.set("bathrooms", String(Math.max(1, lockBaseState.bathrooms)));
+        params.set("extraRooms", String(Math.max(0, lockBaseState.extraRooms)));
+        if (lockBaseState.extras.length) params.set("extras", lockBaseState.extras.join(","));
+        params.set("vipTier", vipTier);
         const res = await fetch(`/api/booking/time-slots?${params.toString()}`);
         const json = (await res.json()) as { slots?: LiveSlot[]; error?: string };
         if (!active) return;
@@ -165,29 +191,34 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     return () => {
       active = false;
     };
-  }, [lockBaseState, selectedDate]);
+  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey]);
 
-  const candidateSlotTimes = useMemo(
-    () =>
-      liveSlots
-        .filter((s) => s.available)
-        .map((s) => s.time)
-        .filter((time) => {
-          const mins = hmToMinutes(time);
-          if (mins < SLOT_START_MIN || mins > SLOT_END_MIN) return false;
-          if (isToday && mins < nowPlusOneHour) return false;
-          return true;
-        }),
-    [liveSlots, isToday, nowPlusOneHour],
-  );
+  const slotPickRows: SlotPickInput[] = useMemo(() => {
+    return liveSlots
+      .filter((s) => {
+        if (!s.available) return false;
+        const mins = hmToMinutes(s.time);
+        if (mins < SLOT_START_MIN || mins > SLOT_END_MIN) return false;
+        if (isToday && mins < nowPlusOneHour) return false;
+        return typeof s.price === "number" && Number.isFinite(s.price);
+      })
+      .map((s) => ({ time: s.time, price: s.price!, cleanersCount: s.cleanersCount ?? 0 }));
+  }, [liveSlots, isToday, nowPlusOneHour]);
+
+  const strategyRecommendedTime = useMemo(() => pickRecommendedSlot(slotPickRows), [slotPickRows]);
+  const strategyMinPrice = useMemo(() => minSlotPrice(slotPickRows), [slotPickRows]);
+
+  const orderedDisplayTimes = useMemo(() => {
+    return orderSlotTimesForDisplay(slotPickRows, strategyRecommendedTime);
+  }, [slotPickRows, strategyRecommendedTime]);
+
   const visibleSlotTimes = useMemo(
-    () => (showAllTimes ? candidateSlotTimes : candidateSlotTimes.slice(0, INITIAL_VISIBLE_SLOTS)),
-    [candidateSlotTimes, showAllTimes],
+    () => (showAllTimes ? orderedDisplayTimes : orderedDisplayTimes.slice(0, INITIAL_VISIBLE_SLOTS)),
+    [orderedDisplayTimes, showAllTimes],
   );
-  const recommendedTime = candidateSlotTimes[0] ?? null;
   const selectedTime = useMemo(() => (locked && locked.date === selectedDate ? locked.time : null), [locked, selectedDate]);
 
-  const cleanerSlotTime = selectedTime ?? recommendedTime;
+  const cleanerSlotTime = selectedTime ?? strategyRecommendedTime ?? "09:00";
   const { cleaners: cleanerPool, recommendedCleaner, loading: cleanersLoading, error: cleanersError } = useCleaners({
     selectedDate,
     selectedTime: cleanerSlotTime,
@@ -202,7 +233,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       const totalZar = getLockedBookingDisplayPrice(locked);
       return {
         totalZar,
-        totalCaption: "From",
+        totalCaption: "Price confirmed",
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       };
@@ -216,58 +247,98 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     };
   }, [lockBaseState, locked]);
 
-  async function handleSelectSlot(time: string) {
-    if (!lockBaseState) return;
-    const slot = liveSlots.find((s) => s.time === time);
-    if (!slot) return;
-    if (typeof slot.price === "number" && Number.isFinite(slot.price) && typeof slot.duration === "number" && Number.isFinite(slot.duration)) {
+  const handleSelectSlot = useCallback(
+    async (time: string) => {
+      if (!lockBaseState) return;
+      const slot = liveSlots.find((s) => s.time === time);
+      if (!slot) return;
+      const res = await fetch("/api/booking/lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: lockBaseState.service,
+          service_type: lockBaseState.service_type,
+          rooms: lockBaseState.rooms,
+          bathrooms: lockBaseState.bathrooms,
+          extraRooms: lockBaseState.extraRooms,
+          extras: lockBaseState.extras,
+          date: selectedDate,
+          time,
+          cleanersCount: slot.cleanersCount,
+          vipTier,
+        }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        pricingVersion?: number;
+        total?: number;
+        hours?: number;
+        surgeMultiplier?: number;
+        surgeApplied?: boolean;
+        surgeLabel?: string;
+        signature?: string;
+        lockExpiresAt?: string;
+        breakdown?: {
+          subtotalZar?: number;
+          afterVipSubtotalZar?: number;
+          vipSavingsZar?: number;
+        };
+      };
+      if (!res.ok || json.ok !== true || typeof json.total !== "number" || typeof json.hours !== "number") return;
+      if (typeof json.signature !== "string" || !/^[0-9a-f]{64}$/i.test(json.signature)) return;
+      if (typeof json.lockExpiresAt !== "string" || !json.lockExpiresAt.trim()) return;
+      const b = json.breakdown;
       lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
         vipTier,
         lockedQuote: {
-          total: slot.price,
-          hours: slot.duration,
-          surge: Number(slot.surgeMultiplier ?? 1),
-          surgeLabel: slot.surgeApplied ? "High demand" : "Standard",
+          total: json.total,
+          hours: json.hours,
+          surge: Number(json.surgeMultiplier ?? 1),
+          surgeLabel: json.surgeLabel ?? (json.surgeApplied ? "High demand" : "Standard"),
           cleanersCount: slot.cleanersCount,
+          quoteSubtotalZar: typeof b?.subtotalZar === "number" ? b.subtotalZar : undefined,
+          quoteAfterVipSubtotalZar: typeof b?.afterVipSubtotalZar === "number" ? b.afterVipSubtotalZar : undefined,
+          quoteVipSavingsZar: typeof b?.vipSavingsZar === "number" ? b.vipSavingsZar : undefined,
+          quoteSignature: json.signature,
+          lockExpiresAt: json.lockExpiresAt,
+          pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
         },
       });
-      return;
-    }
-    const res = await fetch("/api/booking/price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        serviceType: lockBaseState.service_type ?? lockBaseState.service,
-        bedrooms: lockBaseState.rooms,
-        bathrooms: lockBaseState.bathrooms,
-        date: selectedDate,
-        time,
-        cleanersCount: slot.cleanersCount,
-      }),
-    });
-    const json = (await res.json()) as { price?: number; duration?: number; surgeMultiplier?: number; surgeApplied?: boolean };
-    if (!res.ok || typeof json.price !== "number" || typeof json.duration !== "number") return;
-    lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
-      vipTier,
-      lockedQuote: {
-        total: json.price,
-        hours: json.duration,
-        surge: Number(json.surgeMultiplier ?? 1),
-        surgeLabel: json.surgeApplied ? "High demand" : "Standard",
-        cleanersCount: slot.cleanersCount,
-      },
-    });
-  }
+    },
+    [lockBaseState, liveSlots, selectedDate, vipTier],
+  );
+
+  useEffect(() => {
+    if (!lockBaseState || slotsLoading || orderedDisplayTimes.length === 0) return;
+    if (locked?.date === selectedDate && locked.time) return;
+    const rec = strategyRecommendedTime;
+    if (!rec || !orderedDisplayTimes.includes(rec)) return;
+    const key = `${selectedDate}|${rec}`;
+    if (autoLockRunRef.current === key) return;
+    autoLockRunRef.current = key;
+    void handleSelectSlot(rec);
+  }, [
+    lockBaseState,
+    slotsLoading,
+    orderedDisplayTimes,
+    strategyRecommendedTime,
+    selectedDate,
+    locked?.date,
+    locked?.time,
+    handleSelectSlot,
+  ]);
 
   function slotCardProps(time: string) {
     const slot = liveSlots.find((s) => s.time === time);
     const priceZar = slot && typeof slot.price === "number" && Number.isFinite(slot.price) ? slot.price : null;
+    const row = slotPickRows.find((r) => r.time === time);
+    const strategyBadge = row ? slotStrategyBadge(time, strategyRecommendedTime, strategyMinPrice, row) : null;
     return {
       time,
       priceZar,
-      priceDemandBand: slotDemandPriceBand(priceZar, averageSlotPrice),
+      strategyBadge,
       selected: selectedTime === time,
-      assistantRecommended: time === recommendedTime,
     };
   }
 
@@ -305,6 +376,20 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{bookingCopy.when.title}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{bookingCopy.when.intro}</p>
+          {isToday && slotPickRows.length > 0 && slotPickRows.length <= 4 ? (
+            <p className="mt-2 text-sm font-medium text-amber-800 dark:text-amber-300/90" role="status">
+              {bookingCopy.when.spotsLeftToday(slotPickRows.length)}
+            </p>
+          ) : null}
+          {lockBaseState && lockBaseState.extraRooms > 0 ? (
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Slot prices include{" "}
+              <span className="font-medium tabular-nums">
+                {lockBaseState.extraRooms} extra room{lockBaseState.extraRooms === 1 ? "" : "s"}
+              </span>
+              ; add-on services are priced separately.
+            </p>
+          ) : null}
         </div>
 
         {!lockBaseState ? (
@@ -338,6 +423,8 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               </div>
             </section>
 
+            <ScheduleUpsellBar state={lockBaseState} />
+
             <div id="booking-time-slots" className="scroll-mt-28 space-y-5">
               {slotsLoading ? (
                 <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -348,7 +435,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               ) : null}
               {slotsError ? <p className="text-sm text-rose-700 dark:text-rose-400">{slotsError}</p> : null}
 
-              {!slotsLoading && !slotsError && candidateSlotTimes.length === 0 ? (
+              {!slotsLoading && !slotsError && orderedDisplayTimes.length === 0 ? (
                 isToday ? (
                   <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-50">
                     <p>All time slots for today are no longer available</p>
@@ -364,19 +451,43 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                     </button>
                   </div>
                 ) : (
-                  <p className="text-sm text-amber-800 dark:text-amber-400/90">No time slots available — try another day</p>
+                  <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-50">
+                    <p>No slots left on this day.</p>
+                    <p className="font-medium">
+                      Next availability: try tomorrow from 09:00 — pick another date above.
+                    </p>
+                  </div>
                 )
               ) : null}
 
-              {candidateSlotTimes.length > 0 ? (
+              {orderedDisplayTimes.length > 0 ? (
                 <div className="flex flex-col gap-3">
                   {visibleSlotTimes.map((time) => {
                     const p = slotCardProps(time);
-                    const badge = p.assistantRecommended
-                      ? "Recommended"
-                      : p.priceDemandBand === "best-value"
-                        ? "Best value"
-                        : null;
+                    const badge =
+                      p.strategyBadge === "recommended"
+                        ? "Recommended"
+                        : p.strategyBadge === "best-value"
+                          ? "Best value"
+                          : p.strategyBadge === "filling-fast"
+                            ? "Filling fast"
+                            : null;
+                    const badgeClass =
+                      p.strategyBadge === "recommended"
+                        ? "text-blue-600 dark:text-blue-300"
+                        : p.strategyBadge === "best-value"
+                          ? "text-emerald-600 dark:text-emerald-300"
+                          : p.strategyBadge === "filling-fast"
+                            ? "text-amber-800 dark:text-amber-400"
+                            : "text-transparent";
+                    const badgeHint =
+                      p.strategyBadge === "recommended"
+                        ? bookingCopy.when.badgeHintRecommended
+                        : p.strategyBadge === "best-value"
+                          ? bookingCopy.when.badgeHintBestValue
+                          : p.strategyBadge === "filling-fast"
+                            ? bookingCopy.when.badgeHintFillingFast
+                            : null;
                     return (
                       <button
                         key={time}
@@ -392,21 +503,26 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                       >
                         <div className="min-w-0">
                           <div className="text-base font-medium tabular-nums">{p.time}</div>
-                          <div
-                            className={[
-                              "mt-1 min-h-[1rem] text-sm",
-                              badge === "Recommended"
-                                ? "text-blue-600 dark:text-blue-300"
-                                : badge === "Best value"
-                                  ? "text-emerald-600 dark:text-emerald-300"
-                                  : "text-transparent",
-                            ].join(" ")}
-                          >
+                          <div className={["mt-1 min-h-[1rem] text-sm font-medium", badgeClass].join(" ")}>
                             {badge ?? "—"}
                           </div>
+                          {badgeHint ? (
+                            <p className="mt-0.5 text-[11px] font-normal leading-snug text-zinc-500 dark:text-zinc-400">
+                              {badgeHint}
+                            </p>
+                          ) : (
+                            <div className="mt-0.5 min-h-[0.875rem]" aria-hidden />
+                          )}
                         </div>
-                        <div className="text-lg font-semibold tabular-nums">
-                          {p.priceZar != null ? `R ${p.priceZar.toLocaleString("en-ZA")}` : "—"}
+                        <div className="text-right">
+                          <div className="text-lg font-semibold tabular-nums">
+                            {p.priceZar != null ? `R ${p.priceZar.toLocaleString("en-ZA")}` : "—"}
+                          </div>
+                          {vipTier !== "regular" && p.priceZar != null ? (
+                            <p className="mt-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                              Member price applied
+                            </p>
+                          ) : null}
                         </div>
                       </button>
                     );
@@ -414,13 +530,13 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 </div>
               ) : null}
 
-              {candidateSlotTimes.length > INITIAL_VISIBLE_SLOTS && !showAllTimes ? (
+              {orderedDisplayTimes.length > INITIAL_VISIBLE_SLOTS && !showAllTimes ? (
                 <button
                   type="button"
                   onClick={() => setShowAllTimes(true)}
                   className="w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-200"
                 >
-                  Show all times
+                  {bookingCopy.when.seeMoreTimes}
                 </button>
               ) : null}
 

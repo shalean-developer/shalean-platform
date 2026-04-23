@@ -1,96 +1,33 @@
-import type { BookingServiceId, BookingServiceTypeKey } from "@/components/booking/serviceCategories";
-import { bookingServiceIdFromType } from "@/components/booking/serviceCategories";
+/**
+ * Back-compat facade over `pricingEngine` for widgets and previews.
+ * Checkout locks must use `POST /api/booking/lock` (server `quoteCheckoutZar`).
+ */
+import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import type { VipTier } from "@/lib/pricing/vipTier";
-import { VIP_DISCOUNTS } from "@/lib/pricing/vipTier";
-import { getDemandSurgeMultiplier, getDemandPricingLabel } from "@/lib/pricing/slotSurge";
-import { getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
+import type { PricingJobInput } from "@/lib/pricing/pricingEngine";
+import { computeBundledExtrasTotalZar } from "@/lib/pricing/extrasConfig";
+import { EXTRAS_ZAR as ENGINE_EXTRAS_ZAR, quoteBaseJobZar, quoteCheckoutZar, SERVICE_BASE_ZAR } from "@/lib/pricing/pricingEngine";
 
-export type CalculatePriceInput = {
-  service: BookingServiceId | null;
-  /** Funnel key — used when `service` is null, or kept in sync with `service` from step state. */
-  serviceType?: BookingServiceTypeKey | null;
-  rooms: number;
-  bathrooms: number;
-  extraRooms: number;
-  extras: string[];
-};
+export type CalculatePriceInput = PricingJobInput;
 
-function resolveServiceForPricing(input: CalculatePriceInput): BookingServiceId | null {
-  if (input.service) return input.service;
-  if (input.serviceType) return bookingServiceIdFromType(input.serviceType);
-  return null;
-}
-
-const SERVICE_BASE_ZAR: Record<BookingServiceId, number> = {
-  quick: 150,
-  standard: 200,
-  airbnb: 220,
-  deep: 300,
-  carpet: 280,
-  move: 290,
-};
-
-const ROOM_RATE = 40;
-const BATHROOM_RATE = 30;
-const EXTRA_ROOM_RATE = 20;
-
-export const EXTRAS_ZAR: Record<string, number> = {
-  "inside-cabinets": 40,
-  "inside-fridge": 30,
-  "inside-oven": 50,
-  "interior-windows": 60,
-  "interior-walls": 55,
-  "water-plants": 25,
-  ironing: 40,
-};
+/** @deprecated Import from `@/lib/pricing/pricingEngine` — re-exported for callers. */
+export { SERVICE_BASE_ZAR, EXTRAS_ZAR } from "@/lib/pricing/pricingEngine";
 
 /** Short ids used by the homepage widget optional-extras catalog. */
 export type WidgetOptionalExtraId = "fridge" | "oven" | "cabinets" | "windows" | "walls" | "plants";
 
 export const WIDGET_OPTIONAL_EXTRA_PRICES: Record<WidgetOptionalExtraId, number> = {
-  fridge: EXTRAS_ZAR["inside-fridge"] ?? 0,
-  oven: EXTRAS_ZAR["inside-oven"] ?? 0,
-  cabinets: EXTRAS_ZAR["inside-cabinets"] ?? 0,
-  windows: EXTRAS_ZAR["interior-windows"] ?? 0,
-  walls: EXTRAS_ZAR["interior-walls"] ?? 0,
-  plants: EXTRAS_ZAR["water-plants"] ?? 0,
+  fridge: ENGINE_EXTRAS_ZAR["inside-fridge"] ?? 0,
+  oven: ENGINE_EXTRAS_ZAR["inside-oven"] ?? 0,
+  cabinets: ENGINE_EXTRAS_ZAR["inside-cabinets"] ?? 0,
+  windows: ENGINE_EXTRAS_ZAR["interior-windows"] ?? 0,
+  walls: ENGINE_EXTRAS_ZAR["interior-walls"] ?? 0,
+  plants: ENGINE_EXTRAS_ZAR["water-plants"] ?? 0,
 };
 
-/** Pre–surge extras sum — used only to split the locked total for display (does not change `finalPrice`). */
-export function sumExtrasSubtotal(extras: string[]): number {
-  let s = 0;
-  for (const id of extras) {
-    s += EXTRAS_ZAR[id] ?? 0;
-  }
-  return s;
-}
-
-function computeBaseTotal(input: CalculatePriceInput): number {
-  const service = resolveServiceForPricing(input);
-  const { rooms, bathrooms, extraRooms, extras } = input;
-
-  let base = 0;
-  if (service !== null) {
-    base += SERVICE_BASE_ZAR[service] ?? 0;
-  }
-
-  base += rooms * ROOM_RATE;
-  base += bathrooms * BATHROOM_RATE;
-  base += extraRooms * EXTRA_ROOM_RATE;
-
-  for (const id of extras) {
-    base += EXTRAS_ZAR[id] ?? 0;
-  }
-
-  return base;
-}
-
-function computeHours(input: CalculatePriceInput): number {
-  const { rooms, bathrooms, extraRooms } = input;
-  return Math.max(
-    2,
-    Math.round((rooms * 1 + bathrooms * 0.5 + extraRooms * 0.25) * 10) / 10,
-  );
+/** Pre–surge extras sum (bundled when applicable) — split display for locked totals only. */
+export function sumExtrasSubtotal(extras: string[], service?: BookingServiceId | null): number {
+  return computeBundledExtrasTotalZar(extras, service ?? null);
 }
 
 /**
@@ -98,8 +35,8 @@ function computeHours(input: CalculatePriceInput): number {
  * (surge depends on slot picked in step 2).
  */
 export function calculatePrice(input: CalculatePriceInput): { total: number; hours: number } {
-  const base = computeBaseTotal(input);
-  return { total: Math.round(base), hours: computeHours(input) };
+  const { totalZar, hours } = quoteBaseJobZar(input);
+  return { total: totalZar, hours };
 }
 
 export type SmartQuoteResult = {
@@ -109,12 +46,19 @@ export type SmartQuoteResult = {
   baseTotal: number;
   /** VIP loyalty discount rate 0–0.15 */
   discount: number;
-  /** Demand multiplier (e.g. 1.2 peak, 0.9 value) */
+  /** Combined multiplier: time × supply × dynamic (after VIP discount applied to subtotal) */
   surge: number;
   hours: number;
   tier: VipTier;
   demandLabel: "peak" | "value" | "standard";
   surgeLabel: string;
+  /** Billable extra-room count (after engine normalization). */
+  extraRoomsNormalized: number;
+  /** ZAR for extra rooms only (`extraRoom` × count; not add-ons). */
+  extraRoomsChargeZar: number;
+  afterVipSubtotalZar: number;
+  vipSavingsZar: number;
+  vipSubtotalMultiplier: number;
 };
 
 export type SmartQuoteOptions = {
@@ -123,10 +67,12 @@ export type SmartQuoteOptions = {
    * Default 1 — web checkout unchanged when omitted.
    */
   dynamicAdjustment?: number;
+  /** Roster density at slot — optional; omit for quotes without cleaner counts */
+  cleanersCount?: number | null;
 };
 
 /**
- * Full quote: VIP loyalty + demand surge (+ optional dynamic adjustment). Use when a time slot is chosen.
+ * Full quote: VIP loyalty + time surge + optional supply + optional dynamic adjustment.
  */
 export function calculateSmartQuote(
   input: CalculatePriceInput,
@@ -134,27 +80,24 @@ export function calculateSmartQuote(
   userTier: VipTier | null | undefined,
   options?: SmartQuoteOptions,
 ): SmartQuoteResult {
-  const baseTotal = computeBaseTotal(input);
-  const hours = computeHours(input);
-  const tier = userTier ?? "regular";
-  const discount = VIP_DISCOUNTS[tier] ?? 0;
-  const afterDiscount = baseTotal * (1 - discount);
-  const surge = getDemandSurgeMultiplier(timeHm);
-  const dyn =
-    typeof options?.dynamicAdjustment === "number" && Number.isFinite(options.dynamicAdjustment)
-      ? options.dynamicAdjustment
-      : 1;
-  const total = Math.round(afterDiscount * surge * dyn);
-
+  const q = quoteCheckoutZar(input, timeHm, userTier, {
+    dynamicAdjustment: options?.dynamicAdjustment,
+    cleanersCount: options?.cleanersCount,
+  });
   return {
-    total,
-    baseTotal: Math.round(baseTotal),
-    discount,
-    surge,
-    hours,
-    tier,
-    demandLabel: getDemandPricingLabel(timeHm),
-    surgeLabel: getSurgeLabel(surge),
+    total: q.totalZar,
+    baseTotal: q.subtotalZar,
+    discount: q.vipDiscountRate,
+    surge: q.effectiveSurgeMultiplier,
+    hours: q.hours,
+    tier: q.tier,
+    demandLabel: q.demandLabel,
+    surgeLabel: q.surgeLabel,
+    extraRoomsNormalized: q.extraRoomsNormalized,
+    extraRoomsChargeZar: q.extraRoomsChargeZar,
+    afterVipSubtotalZar: q.afterVipSubtotalZar,
+    vipSavingsZar: q.vipSavingsZar,
+    vipSubtotalMultiplier: q.vipSubtotalMultiplier,
   };
 }
 
@@ -183,3 +126,6 @@ export function calculateHomeWidgetQuoteZar(input: HomeWidgetQuoteInput): number
 export function calculateHomeWidgetBaseEstimateZar(service: HomeWidgetServiceKey): number {
   return SERVICE_BASE_ZAR[service] ?? 0;
 }
+
+/** Introspection / admin — raw job subtotal before surge. */
+export { computeJobSubtotalZar, quoteJobDurationHours } from "@/lib/pricing/pricingEngine";

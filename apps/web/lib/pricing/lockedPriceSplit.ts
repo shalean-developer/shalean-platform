@@ -10,7 +10,7 @@ export function splitLockedFinalPrice(locked: LockedBooking): {
   extrasTotal: number;
 } {
   const total = locked.finalPrice;
-  const extrasRaw = sumExtrasSubtotal(locked.extras);
+  const extrasRaw = sumExtrasSubtotal(locked.extras, locked.service);
   const extrasTotal = Math.min(total, Math.round(extrasRaw));
   const serviceTotal = total - extrasTotal;
   return { serviceTotal, extrasTotal };

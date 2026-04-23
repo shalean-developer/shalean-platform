@@ -7,6 +7,8 @@ import type { Dispatch, SetStateAction } from "react";
 import { getSmartExtras } from "@/lib/ai/bookingAssistant";
 import type { BookingContext, PastBookingHint } from "@/lib/ai/bookingAssistant";
 import { trackAssistantEvent } from "@/lib/booking/trackAssistantEvent";
+import { trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { bookingExtrasTier } from "@/lib/pricing/extrasConfig";
 import type { VipTier } from "@/lib/pricing/vipTier";
 
 type Props = {
@@ -45,6 +47,13 @@ export function SmartExtraSuggestions({ state, setState, blockedExtras, userTier
     }));
     trackAssistantEvent("recommendation_clicked", { surface: "step1_extras", extra_id: id });
     trackAssistantEvent("extra_added", { extra_id: id, source: "assistant", price_zar: price });
+    trackGrowthEvent("booking_upsell_interaction", {
+      action: "add_extra",
+      extraId: id,
+      service: state.service ?? "",
+      type: bookingExtrasTier(state.service),
+      step: "details_smart",
+    });
     setFlashId(id);
     window.setTimeout(() => setFlashId((x) => (x === id ? null : x)), 1400);
   }

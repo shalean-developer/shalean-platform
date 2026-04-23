@@ -3,6 +3,7 @@ import {
   getLockedBookingDisplayPrice,
   type LockedBooking,
 } from "@/lib/booking/lockedBooking";
+import { BOOKING_CHECKOUT_LOCK_VERSION } from "@/lib/booking/checkoutLockValidation";
 import type { BookingStep1State } from "./useBookingStep1";
 import { getBookingSummaryServiceLabel } from "./serviceCategories";
 import { getDemandPricingLabel } from "@/lib/pricing/slotSurge";
@@ -153,7 +154,7 @@ export function BookingSummaryCard({
 
       {locked ? (
         <div className="mt-4 space-y-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-          {locked.pricingVersion === 2 ? (
+          {locked.pricingVersion === BOOKING_CHECKOUT_LOCK_VERSION ? (
             <div className="flex flex-wrap items-center gap-2">
               <VipBadge tier={normalizeVipTier(locked.vipTier)} />
               {normalizeVipTier(locked.vipTier) !== "regular" ? (
@@ -166,7 +167,7 @@ export function BookingSummaryCard({
               )}
             </div>
           ) : null}
-          {locked.pricingVersion === 2 ? (
+          {locked.pricingVersion === BOOKING_CHECKOUT_LOCK_VERSION ? (
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
               {getDemandPricingLabel(locked.time) === "peak"
                 ? "Popular time — a little busier than other windows."
@@ -188,6 +189,22 @@ export function BookingSummaryCard({
                 {selectedCleanerName}
               </span>
             </p>
+          ) : null}
+          {typeof locked.quoteSubtotalZar === "number" &&
+          Number.isFinite(locked.quoteSubtotalZar) &&
+          typeof locked.quoteVipSavingsZar === "number" &&
+          Number.isFinite(locked.quoteVipSavingsZar) &&
+          locked.quoteVipSavingsZar > 0 ? (
+            <div className="space-y-1 rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2 text-xs dark:border-emerald-900/40 dark:bg-emerald-950/25">
+              <p className="flex justify-between tabular-nums text-zinc-700 dark:text-zinc-300">
+                <span>Job subtotal</span>
+                <span>R {locked.quoteSubtotalZar.toLocaleString("en-ZA")}</span>
+              </p>
+              <p className="flex justify-between tabular-nums font-medium text-emerald-900 dark:text-emerald-200">
+                <span>VIP ({vipTierDisplayName(normalizeVipTier(locked.vipTier))})</span>
+                <span>−R {locked.quoteVipSavingsZar.toLocaleString("en-ZA")}</span>
+              </p>
+            </div>
           ) : null}
           <p className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
             <span className="text-zinc-500 dark:text-zinc-400">Duration (est.)</span>

@@ -2,6 +2,7 @@
 
 import type { BookingFlowStep } from "@/lib/booking/bookingFlow";
 import { BOOKING_FLOW_STEPS } from "@/lib/booking/bookingFlow";
+import { bookingCopy } from "@/lib/booking/copy";
 
 const STEP_LABELS: Record<BookingFlowStep, string> = {
   entry: "Where",
@@ -23,11 +24,26 @@ export function BookingProgressBar({ step, className = "", compact = false }: Bo
   const currentStepNumber = activeIndex + 1;
   const showProgressPsych = activeIndex >= 1;
 
+  const compactPsych =
+    activeIndex === 2
+      ? bookingCopy.progress.psychAfterDetails
+      : activeIndex === 3
+        ? bookingCopy.progress.psychSchedule
+        : activeIndex === 4
+          ? bookingCopy.progress.psychCheckout
+          : null;
+
   if (compact) {
     return (
       <div className={`flex flex-col items-center gap-0.5 ${className}`.trim()}>
         <p className="text-center text-[10px] font-medium leading-none text-zinc-500 dark:text-zinc-400">
           Step {currentStepNumber} of 5
+          {compactPsych ? (
+            <>
+              {" "}
+              <span className="text-zinc-700 dark:text-zinc-300">— {compactPsych}</span>
+            </>
+          ) : null}
         </p>
         <div className="flex items-center justify-center gap-1" aria-hidden>
           {BOOKING_FLOW_STEPS.map((key, index) => {

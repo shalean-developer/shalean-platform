@@ -2,7 +2,8 @@
  * Booking assistant recommendations. Pair with `user_behavior` + `user_events` on the server
  * for repeat extras and slot preferences (see `/api/ai/booking-agent` and `usePastBookingHints`).
  */
-import { EXTRAS_ZAR } from "@/lib/pricing/calculatePrice";
+import { parseBookingServiceId } from "@/components/booking/serviceCategories";
+import { EXTRAS_CATALOG, isExtraAllowedForService } from "@/lib/pricing/extrasConfig";
 import { getDemandPricingLabel } from "@/lib/pricing/slotSurge";
 
 export type BookingContext = {
@@ -103,62 +104,60 @@ const EXTRA_LABEL: Record<string, string> = {
   "inside-fridge": "Inside fridge",
   "inside-oven": "Inside oven",
   "interior-windows": "Interior windows",
+  "interior-walls": "Interior walls",
   ironing: "Ironing",
+  laundry: "Laundry",
+  "water-plants": "Water plants",
+  "balcony-cleaning": "Balcony cleaning",
+  "carpet-cleaning": "Carpet cleaning",
+  "ceiling-cleaning": "Ceiling cleaning",
+  "garage-cleaning": "Garage cleaning",
+  "mattress-cleaning": "Mattress cleaning",
+  "outside-windows": "Outside windows",
+  "extra-cleaner": "Extra cleaner",
+  "supplies-kit": "Supplies kit",
 };
 
 /**
- * Contextual add-ons — only IDs that exist in `EXTRAS_ZAR` / Step 1 chips.
+ * Contextual add-ons — only IDs that exist in `EXTRAS_CATALOG` / Step 1 chips.
  */
 export function getSmartExtras(context: BookingContext): SmartExtraSuggestion[] {
   const suggestions: SmartExtraSuggestion[] = [];
   const has = (id: string) => context.extras.includes(id);
+  const price = (id: string) => EXTRAS_CATALOG[id]?.price ?? 0;
+  const svc = parseBookingServiceId(context.service);
+  if (!svc) return [];
 
-  if (context.rooms >= 3 && !has("inside-cabinets")) {
-    suggestions.push({
-      id: "inside-cabinets",
-      label: "Inside cabinets",
-      reason: "Larger homes benefit from a detailed cabinet wipe-down.",
-      price: EXTRAS_ZAR["inside-cabinets"] ?? 40,
-    });
-  }
+  const push = (id: string, label: string, reason: string) => {
+    if (has(id)) return;
+    if (!svc || !isExtraAllowedForService(id, svc)) return;
+    suggestions.push({ id, label, reason, price: price(id) });
+  };
 
-  if (!has("inside-fridge")) {
-    suggestions.push({
-      id: "inside-fridge",
-      label: "Inside fridge",
-      reason: "Popular add-on — fresh and ready for guests.",
-      price: EXTRAS_ZAR["inside-fridge"] ?? 30,
-    });
-  }
-
-  if (context.service === "airbnb" && !has("ironing")) {
-    suggestions.push({
-      id: "ironing",
-      label: "Ironing",
-      reason: "Great for Airbnb turnovers — crisp linens in photos.",
-      price: EXTRAS_ZAR.ironing ?? 40,
-    });
-  }
-
-  if (context.service === "airbnb" && !has("interior-windows")) {
-    suggestions.push({
-      id: "interior-windows",
-      label: "Interior windows",
-      reason: "Brightens listing photos between guests.",
-      price: EXTRAS_ZAR["interior-windows"] ?? 60,
-    });
+  if (svc && ["deep", "move", "carpet"].includes(svc)) {
+    push("mattress-cleaning", "Mattress cleaning", "Refresh beds after a big clean or move.");
+    push("carpet-cleaning", "Carpet cleaning", "Lift traffic marks in carpeted areas.");
+    push("balcony-cleaning", "Balcony cleaning", "Outdoor living space ready for handover.");
+  } else {
+    if (context.rooms >= 3) {
+      push(
+        "inside-cabinets",
+        "Inside cabinets",
+        "Larger homes benefit from a detailed cabinet wipe-down.",
+      );
+    }
+    push("inside-fridge", "Inside fridge", "Popular add-on — fresh and ready for guests.");
+    if (context.service === "airbnb") {
+      push("ironing", "Ironing", "Great for Airbnb turnovers — crisp linens in photos.");
+      push("interior-windows", "Interior windows", "Brightens listing photos between guests.");
+    }
   }
 
   if (context.pastBookings?.length) {
     const prevExtras = new Set(context.pastBookings.flatMap((b) => b.extras ?? []));
     for (const id of prevExtras) {
-      if (!has(id) && EXTRA_LABEL[id] && EXTRAS_ZAR[id] != null) {
-        suggestions.push({
-          id,
-          label: EXTRA_LABEL[id] ?? id,
-          reason: "You added this last time — one tap to include again.",
-          price: EXTRAS_ZAR[id]!,
-        });
+      if (!has(id) && EXTRA_LABEL[id] && EXTRAS_CATALOG[id] != null) {
+        push(id, EXTRA_LABEL[id] ?? id, "You added this last time — one tap to include again.");
       }
     }
   }
@@ -175,13 +174,20 @@ export function getSmartExtras(context: BookingContext): SmartExtraSuggestion[] 
 export function getPremiumTimeUpsellExtras(context: BookingContext): SmartExtraSuggestion[] {
   const out: SmartExtraSuggestion[] = [];
   const has = (id: string) => context.extras.includes(id);
-  for (const id of ["interior-windows", "inside-oven"] as const) {
-    if (!has(id) && EXTRAS_ZAR[id] != null) {
+  const svc = parseBookingServiceId(context.service);
+  const lightIds = ["interior-windows", "inside-oven"] as const;
+  const heavyIds = ["balcony-cleaning", "outside-windows"] as const;
+  const ids =
+    svc && ["deep", "move", "carpet"].includes(svc)
+      ? (heavyIds as unknown as readonly string[])
+      : (lightIds as unknown as readonly string[]);
+  for (const id of ids) {
+    if (!has(id) && EXTRAS_CATALOG[id] != null && svc && isExtraAllowedForService(id, svc)) {
       out.push({
         id,
         label: EXTRA_LABEL[id] ?? id,
         reason: "Popular with premium time slots — complete the refresh.",
-        price: EXTRAS_ZAR[id]!,
+        price: EXTRAS_CATALOG[id]!.price,
       });
     }
   }

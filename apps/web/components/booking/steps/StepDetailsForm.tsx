@@ -1,6 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
+import { UpsellRecommendations } from "@/components/booking/UpsellRecommendations";
 import { useRouter } from "next/navigation";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { SectionCard } from "@/components/booking/SectionCard";
@@ -27,7 +28,7 @@ export function StepDetailsForm() {
   const router = useRouter();
   const copy = bookingCopy.details;
   const booking = useBookingStep1();
-  const { state, setState, maxRooms, blockedExtras, canContinue } = booking;
+  const { state, setState, maxRooms, blockedExtras, canContinue, hydrated } = booking;
 
   const { tier: vipTier } = useBookingVipTier();
   const pastHints = usePastBookingHints();
@@ -94,7 +95,8 @@ export function StepDetailsForm() {
 
         <div className="w-full max-w-none">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
-          <p className="mt-2 hidden text-sm text-zinc-600 dark:text-zinc-400 lg:block">{copy.subtitle}</p>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
+          <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.priceLiveHint}</p>
         </div>
 
         <fieldset
@@ -106,6 +108,17 @@ export function StepDetailsForm() {
               <HomeDetails state={state} maxRooms={maxRooms} setState={setState} omitLocation />
             </MobileFullWidth>
           </SectionCard>
+
+          {!isLocked && state.service ? (
+            <MobileFullWidth>
+              <UpsellRecommendations
+                state={state}
+                blockedExtras={blockedExtras}
+                setState={setState}
+                estimateZar={estimateZar}
+              />
+            </MobileFullWidth>
+          ) : null}
 
           <SectionCard title="Choose cleaning frequency">
             <MobileFullWidth insideSectionCard>
@@ -130,7 +143,7 @@ export function StepDetailsForm() {
               </div>
             }
           >
-            <SectionCard title={copy.extrasTitle} description={copy.reassurance} descriptionDesktopOnly>
+            <SectionCard id="extras" title={copy.extrasTitle} description={copy.reassurance} descriptionDesktopOnly>
               <MobileFullWidth insideSectionCard>
                 <ExtrasSection state={state} blockedExtras={blockedExtras} setState={setState} />
               </MobileFullWidth>

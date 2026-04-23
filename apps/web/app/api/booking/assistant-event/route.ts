@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -22,10 +22,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim();
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !anon) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+    console.error(
+      "[supabase] assistant-event: missing NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) or NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+    );
+    return NextResponse.json(
+      {
+        error: "Scheduling is temporarily unavailable. Please try again shortly.",
+        errorCode: "SUPABASE_PUBLIC_NOT_CONFIGURED" as const,
+      },
+      { status: 503 },
+    );
   }
 
   const pub = createClient(url, anon);
@@ -56,7 +65,7 @@ export async function POST(request: Request) {
 
   const admin = getSupabaseAdmin();
   if (!admin) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+    return NextResponse.json(supabaseAdminNotConfiguredBody(), { status: 503 });
   }
 
   const { error: insErr } = await admin.from("user_events").insert({

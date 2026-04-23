@@ -75,6 +75,17 @@ export function HomeDetails({ state, maxRooms, setState, omitLocation = false }:
           }
         />
       </div>
+
+      {state.rooms <= 2 && state.extraRooms === 0 ? (
+        <div className="rounded-xl border border-emerald-200/90 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-emerald-950 dark:border-emerald-900/45 dark:bg-emerald-950/30 dark:text-emerald-50">
+          <p className="font-semibold">Have studies, dens, or garages not counted above?</p>
+          <p className="mt-1.5 text-emerald-900/95 dark:text-emerald-100/90">
+            Add them as <span className="font-medium">Extra</span> rooms so time and slot prices match the job — first extra from{" "}
+            <span className="font-medium tabular-nums">R35</span>, two extras <span className="font-medium tabular-nums">R60</span> (save{" "}
+            <span className="font-medium tabular-nums">R10</span>).
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

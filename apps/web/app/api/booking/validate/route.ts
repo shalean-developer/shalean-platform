@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { quoteCheckoutZar } from "@/lib/pricing/pricingEngine";
+import { normalizeVipTier } from "@/lib/pricing/vipTier";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,11 +67,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Does not re-run roster / availability — avoids false negatives from format or engine drift.
  */
 export async function POST(request: Request) {
-  const admin = getSupabaseAdmin();
-  if (!admin) {
-    return NextResponse.json({ valid: false, reason: "unavailable" }, { status: 503 });
-  }
-
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -103,13 +101,48 @@ export async function POST(request: Request) {
     (typeof body.time === "string" ? body.time : "") ??
     "";
 
-  const durationRaw = Number(body.duration_minutes ?? body.durationMinutes ?? 120);
-  const durationMinutes = Number.isFinite(durationRaw) ? Math.max(30, Math.round(durationRaw)) : 120;
+  let durationMinutes = 120;
+  const lockedParsed = lockedPayload ? parseLockedBookingFromUnknown(lockedPayload) : null;
+  if (
+    lockedParsed &&
+    typeof lockedParsed.time === "string" &&
+    lockedParsed.time.trim() &&
+    typeof lockedParsed.rooms === "number" &&
+    typeof lockedParsed.bathrooms === "number"
+  ) {
+    const tier = normalizeVipTier(lockedParsed.vipTier);
+    const dyn =
+      typeof lockedParsed.dynamicSurgeFactor === "number" &&
+      lockedParsed.dynamicSurgeFactor >= 0.8 &&
+      lockedParsed.dynamicSurgeFactor <= 1.2
+        ? lockedParsed.dynamicSurgeFactor
+        : 1;
+    const q = quoteCheckoutZar(
+      {
+        service: lockedParsed.service,
+        serviceType: lockedParsed.service_type,
+        rooms: lockedParsed.rooms,
+        bathrooms: lockedParsed.bathrooms,
+        extraRooms: lockedParsed.extraRooms,
+        extras: lockedParsed.extras,
+      },
+      lockedParsed.time.trim().slice(0, 5),
+      tier,
+      {
+        dynamicAdjustment: dyn,
+        cleanersCount: lockedParsed.cleanersCount,
+      },
+    );
+    durationMinutes = Math.max(30, Math.round(q.hours * 60));
+  } else {
+    const durationRaw = Number(body.duration_minutes ?? body.durationMinutes ?? 120);
+    durationMinutes = Number.isFinite(durationRaw) ? Math.max(30, Math.round(durationRaw)) : 120;
+  }
 
   const normalizedDate = normalizeDateYmd(dateRaw);
   const normalizedTime = timeRaw ? normalizeTime(timeRaw) : "";
 
-  if (!cleanerId || !normalizedDate || !normalizedTime) {
+  if (!normalizedDate || !normalizedTime) {
     console.log({
       cleaner_id: cleanerId,
       date: dateRaw,
@@ -132,6 +165,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ valid: false, reason: "bad_time" }, { status: 400 });
   }
   const selectedEnd = selectedStart + durationMinutes;
+
+  /** Auto-assign checkout — no cleaner to check for calendar conflicts. */
+  if (!cleanerId) {
+    console.log({
+      date: normalizedDate,
+      time: normalizedTime,
+      reason: "validation_result",
+      valid: true,
+      detail: "no_cleaner_skipped_overlap",
+    });
+    return NextResponse.json({ valid: true, reason: "no_cleaner_skipped_overlap" });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ valid: false, reason: "unavailable" }, { status: 503 });
+  }
 
   try {
     const { data: cleanerRow, error: cleanerErr } = await admin

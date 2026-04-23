@@ -2,17 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import {
-  BadgeCheck,
-  Briefcase,
-  Building2,
-  CalendarDays,
-  Home,
-  PanelsTopLeft,
-  ShieldCheck,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { Briefcase, Building2, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
@@ -41,13 +31,6 @@ const PROPERTY_OPTIONS: { id: PropertyTypeKind; label: string; Icon: LucideIcon 
   { id: "office", label: "Office", Icon: Briefcase },
 ];
 
-const SIDEBAR_BENEFITS: { title: string; line: string; Icon: LucideIcon }[] = [
-  { title: "Trusted & verified", line: "Background-checked cleaners", Icon: ShieldCheck },
-  { title: "Fast booking", line: "Takes under 60 seconds", Icon: Zap },
-  { title: "Flexible scheduling", line: "Book anytime, any day", Icon: CalendarDays },
-  { title: "Satisfaction guarantee", line: "We'll make it right", Icon: BadgeCheck },
-];
-
 /** Short lines for mobile bottom sheet */
 const TRUST_SHEET_LINES = [
   "Trusted & verified",
@@ -61,8 +44,6 @@ export function StepEntry() {
   const booking = useBookingStep1();
   const { state, setState } = booking;
   const copy = bookingCopy.entry;
-  const heading = "Book professional home cleaning in Cape Town";
-  const subheading = "Tell us where you are and the home type. We will tailor your options in the next step.";
 
   const [locDraft, setLocDraft] = useState(state.location);
   const [addressBlurred, setAddressBlurred] = useState(false);
@@ -126,54 +107,39 @@ export function StepEntry() {
     router.push(bookingFlowHref("quote"));
   }, [canContinue, commitLocation, locDraft, router, setState]);
 
-  const trustMini = (
-    <section
-      className="h-fit rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"
-      aria-label="Why choose Shalean"
-    >
-      <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Why choose Shalean</h2>
-
-      <ul className="mt-4 space-y-3">
-        {SIDEBAR_BENEFITS.map(({ title, line, Icon }) => (
-          <li key={title} className="flex gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
-              <Icon className="h-4 w-4" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</p>
-              <p className="text-xs leading-snug text-zinc-600 dark:text-zinc-400">{line}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-zinc-800 dark:bg-blue-950/40 dark:text-blue-50">
-        Cleaner home. Less stress.
-      </div>
-    </section>
-  );
-
   const addressEmpty = addressBlurred && locDraft.trim().length === 0;
   const addressShort = locDraft.trim().length > 0 && locDraft.trim().length < 3;
-  const propertyNeeded = locDraft.trim().length >= 3 && state.propertyType === null;
 
   return (
     <BookingLayout
-      summaryOverride={trustMini}
-      summaryDesktopOnly
       mobileEntryFooter
       canContinue={canContinue}
       onContinue={goQuote}
       continueLabel={copy.cta}
       showContinueArrow
     >
-      <div className="w-full max-w-none space-y-4 pb-2 max-lg:space-y-4 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-8 lg:pb-6">
+      <div className="w-full max-w-none space-y-4 pb-2 max-lg:space-y-4 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-6 lg:pb-6">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 lg:text-3xl">
-            {heading}
+            {copy.title}
           </h1>
-          <p className="mt-1 hidden text-sm text-zinc-600 dark:text-zinc-400 lg:mt-2 lg:block">{subheading}</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400 lg:mt-2">{copy.subtitle}</p>
+          <p className="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.socialProof}</p>
         </div>
+
+        <ul
+          className="grid gap-2 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 text-sm text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-200 lg:gap-1.5 lg:p-4"
+          aria-label="Why book with Shalean"
+        >
+          {copy.trustBullets.map((line) => (
+            <li key={line} className="flex gap-2 leading-snug">
+              <span className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden>
+                ✓
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
 
         <div className="space-y-1.5 max-lg:space-y-1.5 lg:space-y-2">
           <label htmlFor="entry-location" className="text-xs font-medium text-zinc-800 max-lg:text-xs dark:text-zinc-200 lg:text-sm">
@@ -205,8 +171,11 @@ export function StepEntry() {
           ) : null}
         </div>
 
-        <div className="space-y-3 lg:space-y-3">
-          <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 lg:text-sm">{copy.propertyLabel}</p>
+        <div className="space-y-2 lg:space-y-3">
+          <div>
+            <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 lg:text-sm">{copy.propertyLabel}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 lg:text-xs">{copy.propertyHint}</p>
+          </div>
 
           <div className="grid grid-cols-4 gap-2 lg:hidden">
             {PROPERTY_OPTIONS.map(({ id, label, Icon }) => {
@@ -268,11 +237,6 @@ export function StepEntry() {
               );
             })}
           </div>
-          {propertyNeeded ? (
-            <p className="text-xs font-medium text-amber-800 dark:text-amber-400/90" role="status">
-              {bookingCopy.errors.property}
-            </p>
-          ) : null}
         </div>
 
         <div className="mt-3 text-center lg:hidden">

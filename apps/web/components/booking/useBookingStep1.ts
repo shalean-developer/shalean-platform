@@ -8,6 +8,7 @@ import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import type { ServiceCategoryKind } from "./CategoryPicker";
+import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import {
   type BookingServiceGroupKey,
   type BookingServiceId,
@@ -47,13 +48,13 @@ export const BOOKING_STEP1_KEY = "booking_step1";
 export const BOOKING_FINAL_KEY = "booking_final";
 export const BOOKING_STEP1_STORAGE_KEY = BOOKING_STEP1_KEY;
 
-const initialState: BookingStep1State = {
+export const INITIAL_BOOKING_STEP1_STATE: BookingStep1State = {
   selectedCategory: null,
   service: null,
   service_group: null,
   service_type: null,
   location: "",
-  propertyType: null,
+  propertyType: "apartment",
   subServices: [],
   notes: "",
   cleaningFrequency: "one_time",
@@ -63,15 +64,7 @@ const initialState: BookingStep1State = {
   extras: [],
 };
 
-const EXTRAS_IDS = [
-  "inside-cabinets",
-  "inside-fridge",
-  "inside-oven",
-  "interior-windows",
-  "ironing",
-] as const;
-
-const ALLOWED_EXTRA_IDS = new Set<string>(EXTRAS_IDS);
+const initialState = INITIAL_BOOKING_STEP1_STATE;
 
 function parseServiceId(value: unknown): BookingServiceId | null {
   return parseBookingServiceId(value);
@@ -155,14 +148,14 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
   let extras: string[] = [];
   if (Array.isArray(o.extras)) {
     extras = o.extras.filter(
-      (e): e is string => typeof e === "string" && ALLOWED_EXTRA_IDS.has(e),
+      (e): e is string => typeof e === "string" && BOOKING_EXTRA_ID_SET.has(e),
     );
   }
 
   const location =
     typeof o.location === "string" ? o.location.trim().slice(0, 500) : "";
 
-  const propertyType = parsePropertyType(o.propertyType);
+  const propertyType = parsePropertyType(o.propertyType) ?? "apartment";
   const cleaningFrequency =
     o.cleaningFrequency === "weekly" ||
     o.cleaningFrequency === "biweekly" ||
@@ -202,6 +195,23 @@ export function loadBookingStep1FromStorage(): BookingStep1State | null {
     return parseStoredStep1(raw);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Patch persisted step-1 from schedule/checkout (e.g. upsell). Keeps service/extras normalization.
+ */
+export function patchPersistedBookingStep1(mutation: (prev: BookingStep1State) => BookingStep1State): void {
+  if (typeof window === "undefined") return;
+  const cur = loadBookingStep1FromStorage();
+  const base = cur ?? INITIAL_BOOKING_STEP1_STATE;
+  const patched = mutation(base);
+  const next = syncStep1ServiceFields(normalizeStep1ForService(patched));
+  try {
+    localStorage.setItem(BOOKING_STEP1_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event("booking-storage-sync"));
+  } catch {
+    /* ignore */
   }
 }
 

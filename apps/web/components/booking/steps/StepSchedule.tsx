@@ -9,7 +9,7 @@ import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import {
   BOOKING_CALENDAR_DAYS,
@@ -17,7 +17,7 @@ import {
   generateNextDates,
 } from "@/components/booking/BookingDateStrip";
 import { SectionCard } from "@/components/booking/SectionCard";
-import { TimeSlotCard, type SlotDemandPriceBand } from "@/components/booking/TimeSlotCard";
+import { TimeSlotCard } from "@/components/booking/TimeSlotCard";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
 import {
@@ -26,8 +26,16 @@ import {
   lockedToStep1State,
   lockBookingSlot,
 } from "@/lib/booking/lockedBooking";
-import { calculatePrice } from "@/lib/pricing/calculatePrice";
+import { quoteJobDurationHours } from "@/lib/pricing/pricingEngine";
+import {
+  minSlotPrice,
+  orderSlotTimesForDisplay,
+  pickRecommendedSlot,
+  slotStrategyBadge,
+  type SlotPickInput,
+} from "@/lib/pricing/slotRevenueStrategy";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
+import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
 
 type LiveSlot = {
   time: string;
@@ -54,15 +62,6 @@ function formatDurationLine(hours: number): string {
 
 function formatDurationNumber(hours: number): string {
   return hours % 1 === 0 ? String(hours) : hours.toFixed(1).replace(/\.0$/, "");
-}
-
-function slotDemandPriceBand(price: number | null, avg: number | null): SlotDemandPriceBand | null {
-  if (price == null || avg == null || !Number.isFinite(price) || !Number.isFinite(avg) || avg <= 0) {
-    return null;
-  }
-  if (price < avg) return "best-value";
-  if (price > avg) return "peak";
-  return "standard";
 }
 
 function AfternoonSlotSection({
@@ -119,6 +118,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const [liveSlots, setLiveSlots] = useState<LiveSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  const autoLockRunRef = useRef<string>("");
 
   const allDateValues = useMemo(
     () => generateNextDates(BOOKING_CALENDAR_DAYS).map((d) => d.value),
@@ -129,7 +129,24 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const [dateOverride, setDateOverride] = useState<string | null>(null);
   const selectedDate = dateOverride ?? lockedDateInRange ?? allDateValues[0]!;
 
-  const allSlotTimes = useMemo(() => liveSlots.filter((s) => s.available).map((s) => s.time), [liveSlots]);
+  const slotPickRows: SlotPickInput[] = useMemo(() => {
+    return liveSlots
+      .filter((s) => s.available && typeof s.price === "number" && Number.isFinite(s.price))
+      .map((s) => ({ time: s.time, price: s.price!, cleanersCount: s.cleanersCount ?? 0 }));
+  }, [liveSlots]);
+
+  const strategyRecommendedTime = useMemo(() => pickRecommendedSlot(slotPickRows), [slotPickRows]);
+  const strategyMinPrice = useMemo(() => minSlotPrice(slotPickRows), [slotPickRows]);
+
+  const orderedAllSlotTimes = useMemo(
+    () => orderSlotTimesForDisplay(slotPickRows, strategyRecommendedTime),
+    [slotPickRows, strategyRecommendedTime],
+  );
+
+  const morningSlotTimes = useMemo(
+    () => orderedAllSlotTimes.filter((t) => Number(t.slice(0, 2)) < 12),
+    [orderedAllSlotTimes],
+  );
 
   const slotPriceByTime = useMemo(() => {
     const m: Record<string, number> = {};
@@ -147,12 +164,6 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     return Math.max(...vals);
   }, [slotPriceByTime]);
 
-  const averageSlotPrice = useMemo(() => {
-    const vals = Object.values(slotPriceByTime);
-    if (vals.length === 0) return null;
-    return vals.reduce((a, b) => a + b, 0) / vals.length;
-  }, [slotPriceByTime]);
-
   const durationLine = useMemo(() => {
     const durs = liveSlots
       .filter((s) => s.available && typeof s.duration === "number" && Number.isFinite(s.duration))
@@ -162,16 +173,42 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
       return formatDurationLine(avg);
     }
     if (!lockBaseState) return "";
-    const { hours } = calculatePrice({
-      service: lockBaseState.service,
-      serviceType: lockBaseState.service_type,
-      rooms: lockBaseState.rooms,
-      bathrooms: lockBaseState.bathrooms,
-      extraRooms: lockBaseState.extraRooms,
-      extras: lockBaseState.extras,
-    });
+    const hours = quoteJobDurationHours(
+      {
+        service: lockBaseState.service,
+        serviceType: lockBaseState.service_type,
+        rooms: lockBaseState.rooms,
+        bathrooms: lockBaseState.bathrooms,
+        extraRooms: lockBaseState.extraRooms,
+        extras: lockBaseState.extras,
+      },
+      vipTier,
+    );
     return formatDurationLine(hours);
-  }, [liveSlots, lockBaseState]);
+  }, [liveSlots, lockBaseState, vipTier]);
+
+  const extrasJoinKey = lockBaseState?.extras.join("\u0001") ?? "";
+  const slotPricingDepsKey = useMemo(() => {
+    if (!lockBaseState) return "";
+    return [
+      lockBaseState.rooms,
+      lockBaseState.bathrooms,
+      lockBaseState.extraRooms,
+      extrasJoinKey,
+      lockBaseState.service ?? "",
+      lockBaseState.service_type ?? "",
+      vipTier,
+    ].join("|");
+  }, [
+    lockBaseState,
+    lockBaseState?.rooms,
+    lockBaseState?.bathrooms,
+    lockBaseState?.extraRooms,
+    extrasJoinKey,
+    lockBaseState?.service,
+    lockBaseState?.service_type,
+    vipTier,
+  ]);
 
   useEffect(() => {
     if (!lockBaseState) return;
@@ -180,21 +217,27 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
       setSlotsLoading(true);
       setSlotsError(null);
       try {
-        const estimate = calculatePrice({
-          service: lockBaseState.service,
-          serviceType: lockBaseState.service_type,
-          rooms: lockBaseState.rooms,
-          bathrooms: lockBaseState.bathrooms,
-          extraRooms: lockBaseState.extraRooms,
-          extras: lockBaseState.extras,
-        });
+        const hours = quoteJobDurationHours(
+          {
+            service: lockBaseState.service,
+            serviceType: lockBaseState.service_type,
+            rooms: lockBaseState.rooms,
+            bathrooms: lockBaseState.bathrooms,
+            extraRooms: lockBaseState.extraRooms,
+            extras: lockBaseState.extras,
+          },
+          vipTier,
+        );
         const params = new URLSearchParams();
         params.set("date", selectedDate);
-        params.set("duration", String(Math.round(estimate.hours * 60)));
+        params.set("duration", String(Math.round(hours * 60)));
         const svc = lockBaseState.service_type ?? lockBaseState.service;
         if (svc) params.set("serviceType", String(svc));
         params.set("bedrooms", String(Math.max(1, lockBaseState.rooms)));
         params.set("bathrooms", String(Math.max(1, lockBaseState.bathrooms)));
+        params.set("extraRooms", String(Math.max(0, lockBaseState.extraRooms)));
+        if (lockBaseState.extras.length) params.set("extras", lockBaseState.extras.join(","));
+        params.set("vipTier", vipTier);
         const res = await fetch(`/api/booking/time-slots?${params.toString()}`);
         const json = (await res.json()) as { slots?: LiveSlot[]; error?: string };
         if (!active) return;
@@ -224,7 +267,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     return () => {
       active = false;
     };
-  }, [lockBaseState, selectedDate]);
+  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey]);
+
+  useEffect(() => {
+    autoLockRunRef.current = "";
+  }, [selectedDate, slotPricingDepsKey]);
 
   /** Deep-link from checkout: `#booking-time-slots` scrolls after slots load. */
   useEffect(() => {
@@ -236,7 +283,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     window.requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }, [slotsLoading, selectedDate, allSlotTimes.length]);
+  }, [slotsLoading, selectedDate, orderedAllSlotTimes.length]);
 
   const bookingContext = useMemo((): BookingContext | null => {
     if (!lockBaseState) return null;
@@ -251,15 +298,15 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   }, [lockBaseState, vipTier, pastHints]);
 
   const assistantSlots = useMemo(() => {
-    return allSlotTimes.map((time) => {
+    return orderedAllSlotTimes.map((time) => {
       const cleanersCount = liveSlots.find((s) => s.time === time)?.cleanersCount ?? 0;
       return {
         time,
         price: slotPriceByTime[time] ?? maxSlotPrice,
-        demand: cleanersCount <= 1 ? ("high" as const) : cleanersCount <= 3 ? ("normal" as const) : ("low" as const),
+        demand: cleanersCount <= 2 ? ("high" as const) : cleanersCount <= 5 ? ("normal" as const) : ("low" as const),
       };
     });
-  }, [allSlotTimes, liveSlots, maxSlotPrice, slotPriceByTime]);
+  }, [orderedAllSlotTimes, liveSlots, maxSlotPrice, slotPriceByTime]);
 
   const recommendations = useMemo(() => {
     if (!bookingContext || assistantSlots.length === 0) return null;
@@ -274,71 +321,98 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     return bookingCopy.when.urgency;
   }, [allDateValues, selectedDate]);
 
-  async function handleSelectSlot(time: string) {
-    if (!lockBaseState) return;
-    const slot = liveSlots.find((s) => s.time === time);
-    if (!slot) return;
-    if (
-      typeof slot.price === "number" &&
-      Number.isFinite(slot.price) &&
-      typeof slot.duration === "number" &&
-      Number.isFinite(slot.duration)
-    ) {
+  const handleSelectSlot = useCallback(
+    async (time: string) => {
+      if (!lockBaseState) return;
+      const slot = liveSlots.find((s) => s.time === time);
+      if (!slot) return;
+      const res = await fetch("/api/booking/lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: lockBaseState.service,
+          service_type: lockBaseState.service_type,
+          rooms: lockBaseState.rooms,
+          bathrooms: lockBaseState.bathrooms,
+          extraRooms: lockBaseState.extraRooms,
+          extras: lockBaseState.extras,
+          date: selectedDate,
+          time,
+          cleanersCount: slot.cleanersCount,
+          vipTier,
+        }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        pricingVersion?: number;
+        total?: number;
+        hours?: number;
+        surgeMultiplier?: number;
+        surgeApplied?: boolean;
+        surgeLabel?: string;
+        signature?: string;
+        lockExpiresAt?: string;
+        breakdown?: {
+          subtotalZar?: number;
+          afterVipSubtotalZar?: number;
+          vipSavingsZar?: number;
+        };
+      };
+      if (!res.ok || json.ok !== true || typeof json.total !== "number" || typeof json.hours !== "number") return;
+      if (typeof json.signature !== "string" || !/^[0-9a-f]{64}$/i.test(json.signature)) return;
+      if (typeof json.lockExpiresAt !== "string" || !json.lockExpiresAt.trim()) return;
+      trackAssistantEvent("price_calculated", {
+        selectedTime: time,
+        price: json.total,
+        cleanersCount: slot.cleanersCount,
+      });
+      trackGrowthEvent("price_calculated", {
+        selectedTime: time,
+        price: json.total,
+        cleanersCount: slot.cleanersCount,
+      });
       trackAssistantEvent("slot_selected", { time, date: selectedDate });
+      const b = json.breakdown;
       lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
         vipTier,
         lockedQuote: {
-          total: slot.price,
-          hours: slot.duration,
-          surge: Number(slot.surgeMultiplier ?? 1),
-          surgeLabel: slot.surgeApplied ? "High demand" : "Standard",
+          total: json.total,
+          hours: json.hours,
+          surge: Number(json.surgeMultiplier ?? 1),
+          surgeLabel: json.surgeLabel ?? (json.surgeApplied ? "High demand" : "Standard"),
           cleanersCount: slot.cleanersCount,
+          quoteSubtotalZar: typeof b?.subtotalZar === "number" ? b.subtotalZar : undefined,
+          quoteAfterVipSubtotalZar: typeof b?.afterVipSubtotalZar === "number" ? b.afterVipSubtotalZar : undefined,
+          quoteVipSavingsZar: typeof b?.vipSavingsZar === "number" ? b.vipSavingsZar : undefined,
+          quoteSignature: json.signature,
+          lockExpiresAt: json.lockExpiresAt,
+          pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
         },
       });
-      return;
-    }
-    const res = await fetch("/api/booking/price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        serviceType: lockBaseState.service_type ?? lockBaseState.service,
-        bedrooms: lockBaseState.rooms,
-        bathrooms: lockBaseState.bathrooms,
-        date: selectedDate,
-        time,
-        cleanersCount: slot.cleanersCount,
-      }),
-    });
-    const json = (await res.json()) as {
-      price?: number;
-      duration?: number;
-      surgeMultiplier?: number;
-      surgeApplied?: boolean;
-      error?: string;
-    };
-    if (!res.ok || typeof json.price !== "number" || typeof json.duration !== "number") return;
-    trackAssistantEvent("price_calculated", {
-      selectedTime: time,
-      price: json.price,
-      cleanersCount: slot.cleanersCount,
-    });
-    trackGrowthEvent("price_calculated", {
-      selectedTime: time,
-      price: json.price,
-      cleanersCount: slot.cleanersCount,
-    });
-    trackAssistantEvent("slot_selected", { time, date: selectedDate });
-    lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
-      vipTier,
-      lockedQuote: {
-        total: json.price,
-        hours: json.duration,
-        surge: Number(json.surgeMultiplier ?? 1),
-        surgeLabel: json.surgeApplied ? "High demand" : "Standard",
-        cleanersCount: slot.cleanersCount,
-      },
-    });
-  }
+    },
+    [lockBaseState, liveSlots, selectedDate, vipTier],
+  );
+
+  useEffect(() => {
+    if (!lockBaseState || slotsLoading || orderedAllSlotTimes.length === 0) return;
+    if (locked?.date === selectedDate && locked.time) return;
+    const rec = strategyRecommendedTime;
+    if (!rec || !orderedAllSlotTimes.includes(rec)) return;
+    const key = `${selectedDate}|${rec}`;
+    if (autoLockRunRef.current === key) return;
+    autoLockRunRef.current = key;
+    void handleSelectSlot(rec);
+  }, [
+    lockBaseState,
+    slotsLoading,
+    orderedAllSlotTimes,
+    strategyRecommendedTime,
+    selectedDate,
+    locked?.date,
+    locked?.time,
+    handleSelectSlot,
+  ]);
 
   const selectedTime = useMemo(
     () => (locked && locked.date === selectedDate ? locked.time : null),
@@ -378,6 +452,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           : locked.finalHours.toFixed(1).replace(/\.0$/, "");
       return {
         totalZar,
+        totalCaption: "Price confirmed",
         subline: `≈ ${sub} hrs`,
         ctaUrgency: bookingCopy.stickyBar.urgencyCleanerAvailable,
       };
@@ -397,17 +472,20 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     const slot = liveSlots.find((s) => s.time === time);
     const priceZar =
       slot && typeof slot.price === "number" && Number.isFinite(slot.price) ? slot.price : null;
+    const row = slotPickRows.find((r) => r.time === time);
+    const sb = row ? slotStrategyBadge(time, strategyRecommendedTime, strategyMinPrice, row) : null;
     return {
       time,
       priceZar,
-      priceDemandBand: slotDemandPriceBand(priceZar, averageSlotPrice),
+      slotStrategyBadge: sb,
       selected: selectedTime === time,
       dimUnselected: dimOtherSlots,
       onSelect: () => {
         void handleSelectSlot(time);
       },
-      assistantRecommended: recommendations ? time === recommendations.recommended.time : false,
+      assistantRecommended: false,
       recommendedBadgeText: bookingCopy.when.recommended,
+      memberPriceApplied: vipTier !== "regular",
     };
   }
 
@@ -435,6 +513,15 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
             Prices vary by time based on demand.
           </p>
+          {lockBaseState && lockBaseState.extraRooms > 0 ? (
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Slot prices include{" "}
+              <span className="font-medium tabular-nums">
+                {lockBaseState.extraRooms} extra room{lockBaseState.extraRooms === 1 ? "" : "s"}
+              </span>
+              ; add-on services are priced separately.
+            </p>
+          ) : null}
           {recommendations?.personalizationNote ? (
             <p
               className="mt-3 max-w-2xl rounded-xl border border-sky-200/90 bg-sky-50/95 px-4 py-3 text-sm font-medium text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-50"
@@ -475,6 +562,8 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
               />
             </section>
 
+            <ScheduleUpsellBar state={lockBaseState} />
+
             {lockBaseState ? (
               <div id="booking-time-slots" className="scroll-mt-28 space-y-8">
                 {slotsLoading ? (
@@ -488,10 +577,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
                   </div>
                 ) : null}
                 {slotsError ? <p className="text-sm text-rose-700 dark:text-rose-400">{slotsError}</p> : null}
-                {!slotsLoading && !slotsError && allSlotTimes.length === 0 ? (
-                  <p className="text-sm text-amber-800 dark:text-amber-400/90">
-                    No time slots available — try another day
-                  </p>
+                {!slotsLoading && !slotsError && orderedAllSlotTimes.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-50">
+                    <p>No slots on this day.</p>
+                    <p className="mt-1 font-medium">Try tomorrow from 09:00 — choose another date above.</p>
+                  </div>
                 ) : null}
                 <section className="space-y-3" aria-labelledby="morning-heading">
                   <div>
@@ -501,7 +591,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">{bookingCopy.when.morningHint}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                    {allSlotTimes.filter((t) => Number(t.slice(0, 2)) < 12).map((time) => {
+                    {morningSlotTimes.map((time) => {
                       const p = slotCardProps(time);
                       return p ? <TimeSlotCard key={time} {...p} /> : null;
                     })}
@@ -510,7 +600,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
 
                 <AfternoonSlotSection
                   key={selectedDate}
-                  times={allSlotTimes.filter((t) => Number(t.slice(0, 2)) >= 12)}
+                  times={orderedAllSlotTimes.filter((t) => Number(t.slice(0, 2)) >= 12)}
                   renderSlot={(time) => {
                     const p = slotCardProps(time);
                     return p ? <TimeSlotCard key={time} {...p} /> : null;

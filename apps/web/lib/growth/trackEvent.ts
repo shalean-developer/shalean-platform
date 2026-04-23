@@ -10,7 +10,9 @@ export type GrowthEventType =
   | "times_loaded"
   | "price_calculated"
   | "booking_started"
-  | "booking_completed";
+  | "booking_completed"
+  /** Upsell funnel: extras / bundles (payload.action, bundleId, extraId, step) */
+  | "booking_upsell_interaction";
 
 const SESSION_KEY = "shalean_growth_session_id";
 const RETARGETING_KEY = "shalean_retargeting_pending";

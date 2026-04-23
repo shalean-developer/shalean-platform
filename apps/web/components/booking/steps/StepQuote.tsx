@@ -85,21 +85,27 @@ export function StepQuote() {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             {copy.title}
           </h1>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.reassurance}</p>
+          <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.urgency}</p>
         </div>
 
         <section className="space-y-3" aria-labelledby="sub-services-heading">
           <h2 id="sub-services-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            Sub-services
+            {copy.serviceSectionTitle}
           </h2>
-          <SubServicesSelector selectedService={state.service_type ?? null} onSelect={selectService} />
+          <SubServicesSelector
+            selectedService={state.service_type ?? null}
+            onSelect={selectService}
+            popularLabel={copy.mostPopularLabel}
+          />
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Anything else we should know?</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{copy.notesHeading}</h2>
           <textarea
             value={state.notes ?? ""}
             onChange={(e) => setState((p) => ({ ...p, notes: e.target.value.slice(0, 1200) }))}
-            placeholder="Add notes (optional)"
+            placeholder={copy.notesPlaceholder}
             rows={4}
             className="w-full resize-y rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />

@@ -5,7 +5,7 @@ import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingCustomerAuthType } from "@/lib/booking/paystackChargeTypes";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
-import { isLockedBookingPriceValid } from "@/lib/booking/verifyLockedPrice";
+import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -67,7 +67,17 @@ export type PaystackInitializeFailure = {
   status: number;
   /** Safe, non-technical message for clients that display `error` verbatim */
   error: string;
-  errorCode?: typeof PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE | "AMOUNT_MISMATCH" | "SESSION_EXPIRED" | "VALIDATION";
+  errorCode?:
+    | typeof PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE
+    | "AMOUNT_MISMATCH"
+    | "SESSION_EXPIRED"
+    | "VALIDATION"
+    | "LOCK_EXPIRED"
+    | "REQUOTE_REQUIRED"
+    | "SIGNATURE_INVALID"
+    | "PRICE_MISMATCH"
+    | "DURATION_MISMATCH"
+    | "PAYSTACK_SECRET_MISSING";
 };
 
 /**
@@ -76,13 +86,19 @@ export type PaystackInitializeFailure = {
 export async function processPaystackInitializeBody(
   b: Record<string, unknown>,
 ): Promise<PaystackInitializeSuccess | PaystackInitializeFailure> {
-  const secret = process.env.PAYSTACK_SECRET_KEY;
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!secret) {
-    return { ok: false, status: 503, error: "Paystack is not configured. Set PAYSTACK_SECRET_KEY." };
+    console.error("[paystack] Missing PAYSTACK_SECRET_KEY.");
+    return {
+      ok: false,
+      status: 503,
+      errorCode: "PAYSTACK_SECRET_MISSING",
+      error: "Something went wrong. Please try again in a moment.",
+    };
   }
 
   const locked = parseLockedBookingFromUnknown(b.locked);
-  if (!locked || !isLockedBookingPriceValid(locked)) {
+  if (!locked) {
     return {
       ok: false,
       status: 400,
@@ -91,10 +107,40 @@ export async function processPaystackInitializeBody(
     };
   }
 
+  const checkout = validateLockForCheckout(locked);
+  if (!checkout.ok) {
+    const code = checkout.code;
+    if (code === "LOCK_EXPIRED") {
+      return {
+        ok: false,
+        status: 400,
+        errorCode: "LOCK_EXPIRED",
+        error: checkout.message,
+      };
+    }
+    if (code === "REQUOTE_REQUIRED") {
+      return { ok: false, status: 400, errorCode: "REQUOTE_REQUIRED", error: checkout.message };
+    }
+    if (code === "SIGNATURE_INVALID") {
+      return { ok: false, status: 400, errorCode: "SIGNATURE_INVALID", error: checkout.message };
+    }
+    if (code === "PRICE_MISMATCH" || code === "DURATION_MISMATCH") {
+      return { ok: false, status: 400, errorCode: code, error: checkout.message };
+    }
+    return {
+      ok: false,
+      status: 400,
+      errorCode: PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE,
+      error: checkout.message,
+    };
+  }
+
+  const visitZar = checkout.visitTotalZar;
+
   const tip = clamp(Math.round(Number(b.tip) || 0), 0, MAX_TIP_ZAR);
 
   const promoCode = typeof b.promoCode === "string" ? b.promoCode.trim() : "";
-  const promo = promoCode ? getPromoDiscountZar(promoCode, locked.finalPrice) : null;
+  const promo = promoCode ? getPromoDiscountZar(promoCode, visitZar) : null;
   let discountZar = promo ? promo.discountZar : 0;
 
   const referralCode = typeof b.referralCode === "string" ? b.referralCode.trim().toUpperCase() : "";
@@ -104,27 +150,13 @@ export async function processPaystackInitializeBody(
 
   const freq = locked.cleaningFrequency ?? "one_time";
   if (freq === "weekly") {
-    discountZar += Math.round(locked.finalPrice * 0.1);
+    discountZar += Math.round(visitZar * 0.1);
   } else if (freq === "biweekly") {
-    discountZar += Math.round(locked.finalPrice * 0.05);
+    discountZar += Math.round(visitZar * 0.05);
   }
 
-  const totalZar = computeCheckoutTotalZar(locked.finalPrice, tip, discountZar);
-
-  const amountField = b.amount;
-  if (amountField === undefined || amountField === null) {
-    return { ok: false, status: 400, error: "Missing amount." };
-  }
-  const clientAmount = Math.round(Number(amountField));
-  if (!Number.isFinite(clientAmount) || clientAmount !== totalZar) {
-    return {
-      ok: false,
-      status: 400,
-      errorCode: "AMOUNT_MISMATCH",
-      error: "The total changed. Refresh the page and try again.",
-    };
-  }
-
+  /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
+  const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
   const amountCents = totalZar * 100;
 
   const email = normalizeEmail(typeof b.email === "string" ? b.email : "");
@@ -243,8 +275,10 @@ export async function processPaystackInitializeBody(
     tip_zar: String(tip),
     discount_zar: String(discountZar),
     promo_code: promoCode || "",
-    locked_final_zar: String(locked.finalPrice),
+    locked_final_zar: String(visitZar),
     pay_total_zar: String(totalZar),
+    quote_signature: locked.quoteSignature ?? "",
+    lock_expires_at: locked.lockExpiresAt ?? "",
     cleaner_id: cleanerId ?? "",
     cleaner_name: cleanerName ?? "",
     referral_code: referralCode || "",

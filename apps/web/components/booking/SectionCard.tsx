@@ -1,4 +1,5 @@
 type SectionCardProps = {
+  id?: string;
   title: string;
   description?: string;
   /** When set, the description is hidden below `lg` (less clutter on mobile). */
@@ -6,9 +7,12 @@ type SectionCardProps = {
   children: React.ReactNode;
 };
 
-export function SectionCard({ title, description, descriptionDesktopOnly, children }: SectionCardProps) {
+export function SectionCard({ id, title, description, descriptionDesktopOnly, children }: SectionCardProps) {
   return (
-    <section className="w-full max-w-none rounded-2xl border border-zinc-200/80 bg-white px-3 py-5 shadow-sm shadow-zinc-900/5 transition-shadow duration-200 hover:shadow-md hover:shadow-zinc-900/5 sm:p-6 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20">
+    <section
+      id={id}
+      className="w-full max-w-none scroll-mt-24 rounded-2xl border border-zinc-200/80 bg-white px-3 py-5 shadow-sm shadow-zinc-900/5 transition-shadow duration-200 hover:shadow-md hover:shadow-zinc-900/5 sm:p-6 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20"
+    >
       <div className="mb-4">
         <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           {title}

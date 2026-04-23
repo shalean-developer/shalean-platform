@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { CheckoutNoticeTone } from "@/components/booking/CheckoutNoticeBanner";
+import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
 import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackInitializeCore";
 
 export type CheckoutNoticePayload = {
@@ -57,11 +58,66 @@ export function useCheckoutNotice() {
         return;
       }
 
+      if (code === "LOCK_EXPIRED") {
+        show({
+          tone: "danger",
+          title: "Price hold expired",
+          description: "Choose your time again to refresh your quote, then continue to payment.",
+          autoDismissMs: 6000,
+          cta: options?.onChooseAnotherTime
+            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
+            : undefined,
+        });
+        return;
+      }
+
+      if (code === "REQUOTE_REQUIRED" || code === "SIGNATURE_INVALID") {
+        show({
+          tone: "danger",
+          title: "Quote needs a refresh",
+          description:
+            typeof data.error === "string" && data.error.trim()
+              ? data.error
+              : "Choose your time again to lock an up-to-date price, then continue.",
+          autoDismissMs: 7000,
+          cta: options?.onChooseAnotherTime
+            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
+            : undefined,
+        });
+        return;
+      }
+
+      if (code === "PRICE_MISMATCH" || code === "DURATION_MISMATCH") {
+        show({
+          tone: "danger",
+          title: "Price updated",
+          description:
+            typeof data.error === "string" && data.error.trim()
+              ? data.error
+              : "Availability or demand changed. Re-lock your slot to continue.",
+          autoDismissMs: 7000,
+          cta: options?.onChooseAnotherTime
+            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
+            : undefined,
+        });
+        return;
+      }
+
       if (code === "SESSION_EXPIRED") {
         show({
           tone: "danger",
           title: "Session expired",
           description: "Sign in again or continue as guest to complete payment.",
+          autoDismissMs: 5000,
+        });
+        return;
+      }
+
+      if (code === "PAYSTACK_SECRET_MISSING" || code === CONFIG_MISSING_BOOKING_LOCK_HMAC) {
+        show({
+          tone: "danger",
+          title: "Payment couldn’t start",
+          description: "Something went wrong on our side. Please try again in a moment.",
           autoDismissMs: 5000,
         });
         return;

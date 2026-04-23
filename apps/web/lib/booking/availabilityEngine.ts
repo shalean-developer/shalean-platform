@@ -1,3 +1,6 @@
+/**
+ * Cleaner availability and slot windows only — no ZAR pricing (see `lib/pricing/pricingEngine.ts`).
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AvailableCleaner = {
@@ -235,6 +238,10 @@ export async function getAvailableCleaners(
   return withDistance.slice(0, limit);
 }
 
+/**
+ * Slot grid for a day. `durationMinutes` must match the same job length as `quoteCheckoutZar` /
+ * `quoteJobDurationHours` for the visit being booked (callers: `/api/booking/time-slots`, tests).
+ */
 export async function getAvailableTimeSlots(
   admin: SupabaseClient,
   args: {
@@ -283,39 +290,4 @@ export async function getAvailableTimeSlots(
   }
 
   return out;
-}
-
-export function calculatePrice(args: {
-  serviceType: string | null | undefined;
-  bedrooms: number;
-  bathrooms: number;
-  date: string;
-  time: string;
-  cleanersCount: number;
-}) {
-  const serviceBase: Record<string, number> = {
-    standard_cleaning: 220,
-    airbnb_cleaning: 250,
-    deep_cleaning: 340,
-    move_cleaning: 320,
-    carpet_cleaning: 280,
-    standard: 220,
-    airbnb: 250,
-    deep: 340,
-    move: 320,
-    carpet: 280,
-  };
-  const base = (serviceBase[args.serviceType ?? "standard_cleaning"] ?? 220) + args.bedrooms * 45 + args.bathrooms * 35;
-  const hour = toMinutes(args.time) / 60;
-  const peak = hour >= 17 || hour < 9 ? 1.15 : 1;
-  const demand = args.cleanersCount <= 1 ? 1.25 : args.cleanersCount <= 3 ? 1.1 : 1;
-  const surgeMultiplier = Number((peak * demand).toFixed(2));
-  const duration = Math.max(2, Number((args.bedrooms * 1 + args.bathrooms * 0.6).toFixed(1)));
-  const price = Math.round(base * surgeMultiplier);
-  return {
-    price,
-    duration,
-    surgeApplied: surgeMultiplier > 1,
-    surgeMultiplier,
-  };
 }

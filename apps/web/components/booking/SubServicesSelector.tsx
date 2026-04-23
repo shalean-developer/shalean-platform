@@ -15,19 +15,53 @@ type Option = {
 };
 
 const OPTIONS: Option[] = [
-  { id: "standard_cleaning", title: "Standard", titleMobile: "Std", subtitle: "General upkeep", Icon: House },
-  { id: "airbnb_cleaning", title: "Airbnb", titleMobile: "Air", subtitle: "Guest-ready", Icon: BedDouble },
-  { id: "deep_cleaning", title: "Deep", subtitle: "Top-to-bottom", Icon: Sparkles },
-  { id: "move_cleaning", title: "Move In / Out", titleMobile: "Move", subtitle: "Moving clean", Icon: BrushCleaning },
-  { id: "carpet_cleaning", title: "Carpet", subtitle: "Carpet care", Icon: Waves },
+  {
+    id: "standard_cleaning",
+    title: "Regular home cleaning",
+    titleMobile: "Regular",
+    subtitle: "Everyday upkeep for lived-in homes",
+    Icon: House,
+  },
+  {
+    id: "airbnb_cleaning",
+    title: "Quick turnover clean",
+    titleMobile: "Turnover",
+    subtitle: "Guest-ready between stays",
+    Icon: BedDouble,
+  },
+  {
+    id: "deep_cleaning",
+    title: "Heavy-duty clean",
+    titleMobile: "Deep",
+    subtitle: "Neglected or very thorough reset",
+    Icon: Sparkles,
+  },
+  {
+    id: "move_cleaning",
+    title: "Empty property clean",
+    titleMobile: "Move",
+    subtitle: "Move in or move out",
+    Icon: BrushCleaning,
+  },
+  {
+    id: "carpet_cleaning",
+    title: "Carpet care",
+    titleMobile: "Carpet",
+    subtitle: "Focused carpet refresh",
+    Icon: Waves,
+  },
 ];
 
 export function SubServicesSelector({
   selectedService,
   onSelect,
+  popularId = "standard_cleaning",
+  popularLabel = "Most popular",
 }: {
   selectedService: BookingServiceTypeKey | null;
   onSelect: (next: BookingServiceTypeKey) => void;
+  popularId?: BookingServiceTypeKey;
+  popularLabel?: string;
 }) {
   const count = OPTIONS.length;
 
@@ -36,6 +70,7 @@ export function SubServicesSelector({
       {OPTIONS.map(({ id, title, titleMobile, subtitle, Icon }, index) => {
         const active = selectedService === id;
         const isLastRemainder = index === count - 1 && count % 4 !== 0;
+        const isPopular = id === popularId;
 
         return (
           <button
@@ -43,25 +78,30 @@ export function SubServicesSelector({
             type="button"
             onClick={() => onSelect(id)}
             className={cn(
-              "flex min-w-0 flex-col items-center justify-center border text-center transition",
-              "max-lg:min-h-[70px] max-lg:rounded-lg max-lg:px-1 max-lg:py-2 max-lg:text-[11px] max-lg:font-medium max-lg:leading-tight",
-              "lg:min-h-[104px] lg:rounded-xl lg:px-3 lg:py-4 lg:text-sm lg:font-semibold",
+              "relative flex min-w-0 flex-col items-center justify-center border text-center transition",
+              "max-lg:min-h-[78px] max-lg:rounded-lg max-lg:px-1 max-lg:pb-2 max-lg:pt-4 max-lg:text-[11px] max-lg:font-medium max-lg:leading-tight",
+              "lg:min-h-[112px] lg:rounded-xl lg:px-3 lg:py-4 lg:text-sm lg:font-semibold",
               isLastRemainder && "max-lg:col-span-4 max-lg:mx-auto max-lg:max-w-[140px] max-lg:w-full",
               active
                 ? "border-blue-600 bg-blue-50 text-blue-900 shadow-sm ring-1 ring-blue-600/10 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
                 : "border-zinc-200/90 bg-white text-zinc-800 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
             )}
           >
+            {isPopular ? (
+              <span className="absolute left-1/2 top-1 max-w-[calc(100%-0.5rem)] -translate-x-1/2 truncate rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-950/80 dark:text-amber-100 lg:top-1.5 lg:px-2 lg:text-[10px]">
+                ★ {popularLabel}
+              </span>
+            ) : null}
             <Icon
               className={cn(
-                "shrink-0 max-lg:mb-1 max-lg:h-6 max-lg:w-6 lg:mb-2 lg:h-6 lg:w-6",
+                "shrink-0 max-lg:mb-0.5 max-lg:h-5 max-lg:w-5 lg:mb-2 lg:h-6 lg:w-6",
                 active ? "text-blue-700 dark:text-blue-200" : "text-zinc-600 dark:text-zinc-300",
               )}
               aria-hidden
             />
             <span className="max-w-full truncate lg:hidden">{titleMobile ?? title}</span>
             <span className="hidden max-w-full truncate lg:inline">{title}</span>
-            <span className="mt-0.5 hidden text-xs text-zinc-500 dark:text-zinc-400 lg:inline">{subtitle}</span>
+            <span className="mt-0.5 hidden text-xs font-normal text-zinc-500 dark:text-zinc-400 lg:inline">{subtitle}</span>
           </button>
         );
       })}

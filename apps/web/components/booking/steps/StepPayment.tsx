@@ -19,6 +19,50 @@ import {
 } from "@/lib/booking/lockedBooking";
 import { bookingCopy } from "@/lib/booking/copy";
 
+const HELD_WINDOW_MS = 5 * 60 * 1000;
+
+function SlotHoldCountdown({ lockedAt }: { lockedAt: string }) {
+  const endMs = useMemo(() => {
+    const t = Date.parse(lockedAt);
+    if (!Number.isFinite(t)) return null;
+    return t + HELD_WINDOW_MS;
+  }, [lockedAt]);
+
+  const [remainingSec, setRemainingSec] = useState(0);
+
+  useEffect(() => {
+    if (endMs == null) return;
+    const tick = () => setRemainingSec(Math.max(0, Math.floor((endMs - Date.now()) / 1000)));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [endMs]);
+
+  if (endMs == null) {
+    return (
+      <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">{bookingCopy.checkout.slotHeldLine}</p>
+    );
+  }
+
+  if (remainingSec <= 0) {
+    return (
+      <p className="text-center text-xs text-amber-800 dark:text-amber-200">
+        If payment does not go through, choose your time again to refresh your quote.
+      </p>
+    );
+  }
+
+  const minutes = Math.max(1, Math.ceil(remainingSec / 60));
+  return (
+    <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">
+      <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+        This slot is held — about {minutes} minute{minutes === 1 ? "" : "s"} left at this price.
+      </span>{" "}
+      {bookingCopy.checkout.slotHeldLine}
+    </p>
+  );
+}
+
 export function StepPayment() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -119,22 +163,35 @@ export function StepPayment() {
         }),
       });
 
-      let validateData: { valid?: boolean } = {};
+      let validateData: { valid?: boolean; reason?: string } = {};
       try {
-        validateData = (await validateRes.json()) as { valid?: boolean };
+        validateData = (await validateRes.json()) as { valid?: boolean; reason?: string };
       } catch {
         validateData = {};
       }
 
       if (!validateRes.ok) {
+        const reason = validateData.reason;
+        let description =
+          validateRes.status >= 500
+            ? "Our servers are busy. Please try again in a moment."
+            : "We couldn’t verify this slot. Please try again.";
+        if (validateRes.status === 400) {
+          if (reason === "missing_fields") {
+            description =
+              "We’re missing your visit date or time. Go back to scheduling and pick a slot again.";
+          } else if (reason === "bad_time") {
+            description = "We couldn’t read the visit time. Choose your slot again, then continue to payment.";
+          } else if (reason === "bad_json") {
+            description = "The request was invalid. Refresh the page and try again.";
+          }
+        }
         show({
           tone: "danger",
           title: "Something went wrong",
-          description:
-            validateRes.status >= 500
-              ? "Our servers are busy. Please try again in a moment."
-              : "We couldn’t verify this slot. Please try again.",
-          autoDismissMs: 5000,
+          description,
+          autoDismissMs: 6000,
+          cta: { label: "Choose another time", onClick: goChooseAnotherTime },
         });
         return;
       }
@@ -154,7 +211,6 @@ export function StepPayment() {
 
       const paystackBody = {
         email: totals.email,
-        amount: totals.totalZar,
         locked: lockedForValidate,
         tip: totals.tipZar,
         promoCode: totals.promoCode ?? "",
@@ -224,8 +280,19 @@ export function StepPayment() {
         ctaShort: "Confirm →",
       }}
       footerTotalZar={totals?.totalZar}
-      footerPreCta={readyForPaystack ? copy.speedBeforePay : undefined}
-      footerSubcopy={readyForPaystack ? <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p> : undefined}
+      footerPreCta={
+        locked && readyForPaystack ? (
+          <div className="mx-auto max-w-md space-y-1.5">
+            <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">{copy.speedBeforePay}</p>
+            <SlotHoldCountdown lockedAt={locked.lockedAt} />
+          </div>
+        ) : undefined
+      }
+      footerSubcopy={
+        readyForPaystack ? (
+          <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
+        ) : undefined
+      }
     >
       <CheckoutNoticeBanner
         open={Boolean(notice?.open)}

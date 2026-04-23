@@ -236,7 +236,7 @@ export function clearWidgetIntakeSessionStorage(): void {
 
 /**
  * Locks checkout with the homepage-widget server total (`/api/bookings` recalculates).
- * `hours` is a display-only estimate — `pricingVersion: 2` marks the lock as trusted for Paystack init.
+ * `hours` is a display-only estimate — `pricingVersion` must match current `PRICING_CONFIG.version` for Paystack init.
  */
 export function buildWidgetLockedQuote(totalZar: number): {
   total: number;
