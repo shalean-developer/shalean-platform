@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
+import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Pre-flight checkout: expiry → lock version → **recompute** → signature → numeric parity.
+ * Pre-flight checkout: expiry → **recompute** → signature → numeric parity.
  * Same rules as Paystack initialize before charging.
  */
 export async function POST(request: Request) {
@@ -17,10 +19,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid JSON." }, { status: 400 });
   }
 
-  const lockedRaw =
-    body !== null && typeof body === "object" && !Array.isArray(body)
-      ? (body as Record<string, unknown>).locked
-      : undefined;
+  const bodyRec = body !== null && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  const lockedRaw = bodyRec?.locked;
+
+  const bookingIdRaw = bodyRec?.bookingId ?? bodyRec?.booking_id;
+  const bookingIdPreflight =
+    typeof bookingIdRaw === "string" && bookingIdRaw.trim() ? bookingIdRaw.trim() : null;
 
   const locked = parseLockedBookingFromUnknown(lockedRaw);
   if (!locked) {
@@ -30,7 +34,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = validateLockForCheckout(locked);
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json(
+      { ok: false, error: "Checkout is temporarily unavailable.", errorCode: "PRICING_SNAPSHOT_MISSING" },
+      { status: 503 },
+    );
+  }
+
+  const ratesSnapshot = await resolveRatesSnapshotForLockedBooking(admin, locked);
+  if (!ratesSnapshot) {
+    return NextResponse.json(
+      { ok: false, error: "Pricing record not found. Pick your time again.", errorCode: "PRICING_SNAPSHOT_MISSING" },
+      { status: 400 },
+    );
+  }
+
+  const result = validateLockForCheckout(locked, Date.now(), {
+    ratesSnapshot,
+    bookingId: bookingIdPreflight,
+  });
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.message, errorCode: result.code },

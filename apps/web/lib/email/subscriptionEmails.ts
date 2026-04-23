@@ -32,7 +32,7 @@ export async function sendSubscriptionChargeSuccessEmail(params: {
   serviceLabel: string;
   dateYmd: string;
 }): Promise<void> {
-  const url = `${getPublicAppUrlBase()}/account/bookings`;
+  const url = `${getPublicAppUrlBase()}/dashboard/bookings`;
   await send(
     params.to,
     "Payment successful — your cleaning is scheduled",

@@ -3,7 +3,6 @@
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
-import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
 import { getBookingSummaryServiceLabel } from "@/components/booking/serviceCategories";
 import {
@@ -11,7 +10,7 @@ import {
   getLockedBookingDisplayPrice,
   type LockedBooking,
 } from "@/lib/booking/lockedBooking";
-import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
 
 type ExitIntentModalProps = {
@@ -34,13 +33,10 @@ function serviceLine(locked: LockedBooking | null, step1: BookingStep1State | nu
 export function ExitIntentModal({ open, onOpenChange, onCompleteBooking }: ExitIntentModalProps) {
   const { step, lockedBooking } = useBookingFlow();
   const step1 = usePersistedBookingSummaryState();
-  const { tier } = useBookingVipTier();
+  const { canonicalTotalZar } = useBookingPrice();
   const primaryRef = useRef<HTMLButtonElement>(null);
 
-  const estimateZar = useMemo(() => {
-    if (!step1) return null;
-    return estimateFromSmartQuoteMin(step1, tier);
-  }, [step1, tier]);
+  const estimateZar = canonicalTotalZar;
 
   const svcLabel = useMemo(() => serviceLine(lockedBooking, step1), [lockedBooking, step1]);
 

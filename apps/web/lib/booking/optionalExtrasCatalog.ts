@@ -1,5 +1,4 @@
 import type { WidgetOptionalExtraId } from "@/lib/pricing/calculatePrice";
-import { WIDGET_OPTIONAL_EXTRA_PRICES } from "@/lib/pricing/calculatePrice";
 
 export type BookingOptionalExtraCategoryId = "kitchen" | "living" | "laundry" | "special";
 
@@ -22,7 +21,6 @@ export type BookingOptionalExtraDef = {
   id: WidgetOptionalExtraId;
   name: string;
   description: string;
-  /** ZAR — must match `WIDGET_OPTIONAL_EXTRA_PRICES[id]`. */
   price: number;
   /** Extra time on site (for display only). */
   durationHours: number;
@@ -33,71 +31,79 @@ export type BookingOptionalExtraDef = {
 
 /**
  * Homepage widget + conversion step optional add-ons (up to six).
- * Prices come from `WIDGET_OPTIONAL_EXTRA_PRICES` (single source of truth for quotes).
+ * `prices` comes from {@link getWidgetOptionalExtraPrices} using the same catalog as checkout.
  */
-export const BOOKING_OPTIONAL_EXTRAS_CATALOG: readonly BookingOptionalExtraDef[] = [
-  {
-    id: "fridge",
-    name: "Inside Fridge",
-    description: "",
-    durationHours: 0.5,
-    category: "kitchen",
-    popular: true,
-    iconKey: "fridge",
-    price: WIDGET_OPTIONAL_EXTRA_PRICES.fridge,
-  },
-  {
-    id: "oven",
-    name: "Inside Oven",
-    description: "",
-    durationHours: 0.75,
-    category: "kitchen",
-    iconKey: "oven",
-    price: WIDGET_OPTIONAL_EXTRA_PRICES.oven,
-  },
-  {
-    id: "cabinets",
-    name: "Inside Cabinets",
-    description: "",
-    durationHours: 0.5,
-    category: "kitchen",
-    iconKey: "cabinets",
-    price: WIDGET_OPTIONAL_EXTRA_PRICES.cabinets,
-  },
-  {
-    id: "windows",
-    name: "Interior Windows",
-    description: "",
-    durationHours: 0.75,
-    category: "living",
-    iconKey: "windows",
-    price: WIDGET_OPTIONAL_EXTRA_PRICES.windows,
-  },
-  {
-    id: "walls",
-    name: "Interior Walls",
-    description: "",
-    durationHours: 1,
-    category: "living",
-    iconKey: "walls",
-    price: WIDGET_OPTIONAL_EXTRA_PRICES.walls,
-  },
-  {
-    id: "plants",
-    name: "Water Plants",
-    description: "",
-    durationHours: 0.25,
-    category: "living",
-    iconKey: "plants",
-    price: WIDGET_OPTIONAL_EXTRA_PRICES.plants,
-  },
-] satisfies readonly BookingOptionalExtraDef[];
+export function buildBookingOptionalExtrasCatalog(
+  prices: Record<WidgetOptionalExtraId, number>,
+): readonly BookingOptionalExtraDef[] {
+  return [
+    {
+      id: "fridge",
+      name: "Inside Fridge",
+      description: "",
+      durationHours: 0.5,
+      category: "kitchen",
+      popular: true,
+      iconKey: "fridge",
+      price: prices.fridge,
+    },
+    {
+      id: "oven",
+      name: "Inside Oven",
+      description: "",
+      durationHours: 0.75,
+      category: "kitchen",
+      iconKey: "oven",
+      price: prices.oven,
+    },
+    {
+      id: "cabinets",
+      name: "Inside Cabinets",
+      description: "",
+      durationHours: 0.5,
+      category: "kitchen",
+      iconKey: "cabinets",
+      price: prices.cabinets,
+    },
+    {
+      id: "windows",
+      name: "Interior Windows",
+      description: "",
+      durationHours: 0.75,
+      category: "living",
+      iconKey: "windows",
+      price: prices.windows,
+    },
+    {
+      id: "walls",
+      name: "Interior Walls",
+      description: "",
+      durationHours: 1,
+      category: "living",
+      iconKey: "walls",
+      price: prices.walls,
+    },
+    {
+      id: "plants",
+      name: "Water Plants",
+      description: "",
+      durationHours: 0.25,
+      category: "living",
+      iconKey: "plants",
+      price: prices.plants,
+    },
+  ] as const;
+}
 
 const CATEGORY_ORDER: BookingOptionalExtraCategoryId[] = ["kitchen", "living", "laundry", "special"];
 
-export function extrasGroupedByCategory(): { category: BookingOptionalExtraCategoryId; items: BookingOptionalExtraDef[] }[] {
+export function extrasGroupedByCategory(prices: Record<WidgetOptionalExtraId, number>): {
+  category: BookingOptionalExtraCategoryId;
+  items: BookingOptionalExtraDef[];
+}[] {
+  const catalog = buildBookingOptionalExtrasCatalog(prices);
   const map = new Map<BookingOptionalExtraCategoryId, BookingOptionalExtraDef[]>();
-  for (const ex of BOOKING_OPTIONAL_EXTRAS_CATALOG) {
+  for (const ex of catalog) {
     const list = map.get(ex.category) ?? [];
     list.push(ex);
     map.set(ex.category, list);

@@ -67,7 +67,7 @@ export default function AccountSubscriptionsPage() {
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">My Subscriptions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Recurring cleaning plans and next visits.</p>
         </div>
-        <Link href="/account/bookings" className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Bookings</Link>
+        <Link href="/dashboard/bookings" className="text-sm font-medium text-blue-700 dark:text-blue-400">Bookings</Link>
       </section>
 
       {loading ? (

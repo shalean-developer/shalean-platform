@@ -30,6 +30,7 @@ export function usePastBookingHints(): PastBookingHint[] {
       .from("bookings")
       .select("time, booking_snapshot, date")
       .eq("user_id", user.id)
+      .neq("status", "pending_payment")
       .order("created_at", { ascending: false })
       .limit(5)
       .then(({ data, error }) => {

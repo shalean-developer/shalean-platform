@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import type { CheckoutNoticeTone } from "@/components/booking/CheckoutNoticeBanner";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
-import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackInitializeCore";
+import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackErrorCodes";
 
 export type CheckoutNoticePayload = {
   tone: CheckoutNoticeTone;

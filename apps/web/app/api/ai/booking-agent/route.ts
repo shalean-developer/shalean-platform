@@ -6,7 +6,7 @@ import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeC
 import { fetchSlotAdjustmentMap } from "@/lib/pricing/loadDynamicPricing";
 import { resolveVipTierForUserId } from "@/lib/booking/resolveVipTierServer";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,12 +100,21 @@ export async function POST(request: Request) {
   const slotAdjustments = await fetchSlotAdjustmentMap();
   const overrideTime = typeof body.overrideTime === "string" ? body.overrideTime : null;
 
-  const quote = buildBookingAgentQuote(intent, step1, {
-    vipTier,
-    slotAdjustments,
-    overrideTime,
-    dateYmdOverride,
-  });
+  let quote;
+  try {
+    quote = await buildBookingAgentQuote(intent, step1, {
+      vipTier,
+      slotAdjustments,
+      overrideTime,
+      dateYmdOverride,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("not configured") || msg.includes("could not be loaded")) {
+      return NextResponse.json(supabaseAdminNotConfiguredBody(), { status: 503 });
+    }
+    throw e;
+  }
 
   const summary = summarizeQuote(quote.dateYmd, quote.suggestedLocked.finalPrice);
 

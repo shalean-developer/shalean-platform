@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 type Row = {
   id: string;
+  customer_name: string | null;
   customer_email: string | null;
   service: string | null;
   date: string | null;
@@ -81,15 +82,27 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const filter = searchParams.get("filter") ?? "all";
   const cityId = searchParams.get("cityId");
+  const bookingStatus = searchParams.get("bookingStatus");
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
 
   let bookingQuery = admin
     .from("bookings")
     .select(
-      "id, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id",
+      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id",
     )
     .order("created_at", { ascending: false })
-    .limit(2500);
+    .limit(4000);
   if (cityId) bookingQuery = bookingQuery.eq("city_id", cityId);
+  if (bookingStatus && bookingStatus !== "all") {
+    bookingQuery = bookingQuery.eq("status", bookingStatus);
+  }
+  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    bookingQuery = bookingQuery.gte("date", from);
+  }
+  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    bookingQuery = bookingQuery.lte("date", to);
+  }
   const { data: rawRows, error: selErr } = await bookingQuery;
 
   if (selErr) {

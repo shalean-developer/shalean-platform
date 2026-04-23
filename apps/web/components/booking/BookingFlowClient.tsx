@@ -13,12 +13,18 @@ import {
 } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage, readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { BookingFlowProvider } from "@/components/booking/BookingFlowContext";
+import { BookingPriceProvider } from "@/components/booking/BookingPriceContext";
 import { StepEntry } from "@/components/booking/steps/StepEntry";
 import { StepQuote } from "@/components/booking/steps/StepQuote";
 import { StepDetailsForm } from "@/components/booking/steps/StepDetailsForm";
 import { StepPayment } from "@/components/booking/steps/StepPayment";
 import { StepScheduleV2 } from "@/components/booking/steps/StepScheduleV2";
 import { ExitIntentModal } from "@/components/booking/ExitIntentModal";
+import {
+  bookingRouteToFunnelStep,
+  getOrCreateBookingFunnelSessionId,
+  trackBookingFunnelEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 export function BookingFlowClient() {
@@ -29,6 +35,8 @@ export function BookingFlowClient() {
   const [exitIntentOpen, setExitIntentOpen] = useState(false);
   const lastExitIntentAt = useRef(0);
   const trackedViewRef = useRef(false);
+  const stepRef = useRef(step);
+  stepRef.current = step;
 
   /** Canonicalize legacy `?step=service` / `who` URLs. */
   useEffect(() => {
@@ -62,6 +70,23 @@ export function BookingFlowClient() {
     },
     [router],
   );
+
+  useEffect(() => {
+    getOrCreateBookingFunnelSessionId();
+  }, []);
+
+  useEffect(() => {
+    trackBookingFunnelEvent(bookingRouteToFunnelStep(step), "view", { route_step: step });
+  }, [step]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      const s = stepRef.current;
+      trackBookingFunnelEvent(bookingRouteToFunnelStep(s), "exit", { route_step: s });
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
 
   useEffect(() => {
     const redirect = getBookingStepGateRedirect(step);
@@ -165,7 +190,13 @@ export function BookingFlowClient() {
 
   return (
     <BookingFlowProvider step={step}>
-      <div className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950">
+      <BookingPriceProvider>
+      <div
+        className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950"
+        data-booking-funnel
+        data-booking-route-step={step}
+        data-booking-funnel-step={bookingRouteToFunnelStep(step)}
+      >
         <div className="flex min-h-0 flex-1 flex-col">
           <AnimatePresence mode="wait">
             <motion.div
@@ -180,7 +211,13 @@ export function BookingFlowClient() {
               {step === "quote" ? <StepQuote /> : null}
               {step === "details" ? <StepDetailsForm /> : null}
               {step === "when" ? (
-                <StepScheduleV2 onNext={() => goTo("checkout")} onBack={() => goTo("details")} />
+                <StepScheduleV2
+                  onNext={() => {
+                    trackBookingFunnelEvent("datetime", "next", { route_step: "when" });
+                    goTo("checkout");
+                  }}
+                  onBack={() => goTo("details")}
+                />
               ) : null}
               {step === "checkout" ? (
                 <Suspense
@@ -202,6 +239,7 @@ export function BookingFlowClient() {
           onCompleteBooking={handleExitIntentComplete}
         />
       </div>
+      </BookingPriceProvider>
     </BookingFlowProvider>
   );
 }

@@ -1,9 +1,10 @@
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
 import {
-  bundlesForService,
-  type ExtraBundleDef,
+  bundlesForServiceFromSnapshot,
   isExtraAllowedForService,
+  type ExtraBundleDef,
 } from "@/lib/pricing/extrasConfig";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
 export type UpsellContextInput = Pick<
   BookingStep1State,
@@ -15,12 +16,12 @@ const HEAVY_SERVICES = new Set<string>(["deep", "move", "carpet"]);
 /**
  * Contextual add-on ids (engine keys) for light-touch recommendations.
  */
-export function getRecommendedExtraIds(input: UpsellContextInput): string[] {
+export function getRecommendedExtraIds(input: UpsellContextInput, snapshot: PricingRatesSnapshot): string[] {
   const svc = input.service;
   if (!svc) return [];
   const out: string[] = [];
   const push = (id: string) => {
-    if (!input.extras.includes(id) && isExtraAllowedForService(id, svc)) out.push(id);
+    if (!input.extras.includes(id) && isExtraAllowedForService(id, svc, snapshot)) out.push(id);
   };
 
   if (HEAVY_SERVICES.has(svc)) {
@@ -58,10 +59,13 @@ export function getRecommendedExtraIds(input: UpsellContextInput): string[] {
 }
 
 /** Primary bundle to reinforce in schedule/checkout for this job shape. */
-export function getPrimaryBundleForContext(input: UpsellContextInput): ExtraBundleDef | null {
+export function getPrimaryBundleForContext(
+  input: UpsellContextInput,
+  snapshot: PricingRatesSnapshot,
+): ExtraBundleDef | null {
   const s = input.service;
   if (!s) return null;
-  const list = bundlesForService(s);
+  const list = bundlesForServiceFromSnapshot(snapshot, s);
   if (list.length === 0) return null;
 
   if (HEAVY_SERVICES.has(s)) {

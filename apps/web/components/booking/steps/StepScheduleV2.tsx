@@ -11,7 +11,8 @@ import { useSelectedCleaner } from "@/components/booking/useSelectedCleaner";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearSelectedCleanerFromStorage, writeSelectedCleanerToStorage } from "@/lib/booking/cleanerSelection";
 import { getLockedBookingDisplayPrice, lockedToStep1State, lockBookingSlot, mergeCleanerIdIntoLockedBooking } from "@/lib/booking/lockedBooking";
-import { quoteJobDurationHours } from "@/lib/pricing/pricingEngine";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
+import type { PricedAvailabilitySlot, RawAvailabilitySlot } from "@/lib/booking/enrichAvailabilitySlots";
 import {
   minSlotPrice,
   orderSlotTimesForDisplay,
@@ -21,16 +22,12 @@ import {
 } from "@/lib/pricing/slotRevenueStrategy";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
+import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 
-type LiveSlot = {
-  time: string;
-  available: boolean;
-  cleanersCount: number;
-  price?: number;
-  duration?: number;
-  surgeMultiplier?: number;
-  surgeApplied?: boolean;
-};
+type LiveSlot = PricedAvailabilitySlot;
+
+const AVAILABILITY_SLOT_CACHE_TTL_MS = 50_000;
+const availabilitySlotCache = new Map<string, { slots: RawAvailabilitySlot[]; at: number }>();
 
 const INITIAL_VISIBLE_SLOTS = 5;
 const SLOT_START_MIN = 7 * 60;
@@ -40,6 +37,10 @@ type StepScheduleProps = {
   onNext: () => void;
   onBack: () => void;
 };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function hmToMinutes(hm: string): number {
   const [h, m] = hm.split(":").map(Number);
@@ -54,6 +55,16 @@ function ymdTodayLocal(): string {
 
 function tomorrowYmd(allDateValues: string[]): string | null {
   return allDateValues.length > 1 ? allDateValues[1]! : null;
+}
+
+function nextAvailableHint(allDateValues: string[], selectedDate: string): string {
+  const next = allDateValues.find((d) => d > selectedDate);
+  const ymd = next ?? (allDateValues.length > 1 ? allDateValues[1]! : null);
+  if (!ymd) return "Next available: tomorrow from 09:00 — pick another date above.";
+  const [y, m, d] = ymd.split("-").map(Number);
+  const when = new Date(y, m - 1, d);
+  const label = when.toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "short" });
+  return `Next available: ${label} from 09:00 — pick that date above.`;
 }
 
 function dateChipLabel(ymd: string): { dow: string; day: string } {
@@ -76,16 +87,26 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const locked = useLockedBooking();
   const selectedCleaner = useSelectedCleaner();
   const { tier: vipTier } = useBookingVipTier();
+  const {
+    fingerprint: pricingFingerprint,
+    canonicalDurationHours,
+    canonicalTotalZar,
+    job: pricingJob,
+    priceRawSlots,
+  } = useBookingPrice();
   const summaryState = step1 ?? (locked ? lockedToStep1State(locked) : null);
   const lockBaseState = step1 ?? (locked ? lockedToStep1State(locked) : null);
 
-  const [liveSlots, setLiveSlots] = useState<LiveSlot[]>([]);
+  const [rawSlots, setRawSlots] = useState<RawAvailabilitySlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [slotHint, setSlotHint] = useState<string | null>(null);
+  const [slotFetchNonce, setSlotFetchNonce] = useState(0);
   const [showAllTimes, setShowAllTimes] = useState(false);
   const [autoAssignCleaner, setAutoAssignCleaner] = useState(true);
   const cleanerCarouselRef = useRef<HTMLDivElement | null>(null);
   const autoLockRunRef = useRef<string>("");
+  const skipAvailabilityCacheOnceRef = useRef(false);
+  const lockFailedTimeKeysRef = useRef<Set<string>>(new Set());
 
   const allDateValues = useMemo(() => generateNextDates(BOOKING_CALENDAR_DAYS).map((d) => d.value), []);
   const lockedDateInRange = locked?.date && allDateValues.includes(locked.date) ? locked.date : null;
@@ -98,100 +119,115 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     return now.getHours() * 60 + now.getMinutes() + 60;
   }, [selectedDate]);
 
-  const extrasJoinKey = lockBaseState?.extras.join("\u0001") ?? "";
-  const slotPricingDepsKey = useMemo(() => {
-    if (!lockBaseState) return "";
-    return [
-      lockBaseState.rooms,
-      lockBaseState.bathrooms,
-      lockBaseState.extraRooms,
-      extrasJoinKey,
-      lockBaseState.service ?? "",
-      lockBaseState.service_type ?? "",
-      vipTier,
-    ].join("|");
-  }, [
-    lockBaseState,
-    lockBaseState?.rooms,
-    lockBaseState?.bathrooms,
-    lockBaseState?.extraRooms,
-    extrasJoinKey,
-    lockBaseState?.service,
-    lockBaseState?.service_type,
-    vipTier,
-  ]);
+  useEffect(() => {
+    if (!slotHint) return;
+    const t = window.setTimeout(() => setSlotHint(null), 5200);
+    return () => window.clearTimeout(t);
+  }, [slotHint]);
+
+  const durationMinutesForApi = useMemo(() => {
+    if (canonicalDurationHours == null) return 120;
+    return Math.max(30, Math.round(canonicalDurationHours * 60));
+  }, [canonicalDurationHours]);
+
+  const forceAvailabilityRefresh = useCallback(() => {
+    skipAvailabilityCacheOnceRef.current = true;
+    availabilitySlotCache.delete(`${selectedDate}|${durationMinutesForApi}`);
+    setSlotFetchNonce((n) => n + 1);
+  }, [selectedDate, durationMinutesForApi]);
+
+  const liveSlots = useMemo(() => priceRawSlots(rawSlots), [priceRawSlots, rawSlots]);
 
   const durationLine = useMemo(() => {
-    const durs = liveSlots.filter((s) => s.available && typeof s.duration === "number" && Number.isFinite(s.duration)).map((s) => s.duration!);
-    if (durs.length) return formatDurationLine(durs.reduce((a, b) => a + b, 0) / durs.length);
-    if (!lockBaseState) return "";
-    const hours = quoteJobDurationHours(
-      {
-        service: lockBaseState.service,
-        serviceType: lockBaseState.service_type,
-        rooms: lockBaseState.rooms,
-        bathrooms: lockBaseState.bathrooms,
-        extraRooms: lockBaseState.extraRooms,
-        extras: lockBaseState.extras,
-      },
-      vipTier,
-    );
-    return formatDurationLine(hours);
-  }, [liveSlots, lockBaseState, vipTier]);
+    if (canonicalDurationHours != null) return formatDurationLine(canonicalDurationHours);
+    return "";
+  }, [canonicalDurationHours]);
 
-  useEffect(() => setShowAllTimes(false), [selectedDate]);
+  useEffect(() => {
+    setShowAllTimes(false);
+    setSlotHint(null);
+    lockFailedTimeKeysRef.current = new Set();
+  }, [selectedDate]);
 
   useEffect(() => {
     autoLockRunRef.current = "";
-  }, [selectedDate, slotPricingDepsKey]);
+  }, [selectedDate, pricingFingerprint]);
 
   useEffect(() => {
-    if (!lockBaseState) return;
-    let active = true;
-    void (async () => {
-      setSlotsLoading(true);
-      setSlotsError(null);
-      try {
-        const hours = quoteJobDurationHours(
-          {
-            service: lockBaseState.service,
-            serviceType: lockBaseState.service_type,
-            rooms: lockBaseState.rooms,
-            bathrooms: lockBaseState.bathrooms,
-            extraRooms: lockBaseState.extraRooms,
-            extras: lockBaseState.extras,
-          },
-          vipTier,
-        );
-        const params = new URLSearchParams();
-        params.set("date", selectedDate);
-        params.set("duration", String(Math.round(hours * 60)));
-        const svc = lockBaseState.service_type ?? lockBaseState.service;
-        if (svc) params.set("serviceType", String(svc));
-        params.set("bedrooms", String(Math.max(1, lockBaseState.rooms)));
-        params.set("bathrooms", String(Math.max(1, lockBaseState.bathrooms)));
-        params.set("extraRooms", String(Math.max(0, lockBaseState.extraRooms)));
-        if (lockBaseState.extras.length) params.set("extras", lockBaseState.extras.join(","));
-        params.set("vipTier", vipTier);
-        const res = await fetch(`/api/booking/time-slots?${params.toString()}`);
-        const json = (await res.json()) as { slots?: LiveSlot[]; error?: string };
-        if (!active) return;
-        if (!res.ok) {
-          setSlotsError(json.error ?? "Failed to load time slots.");
-          setLiveSlots([]);
-          return;
+    if (!lockBaseState || !pricingJob) return;
+    const cacheKey = `${selectedDate}|${durationMinutesForApi}`;
+    const bypassCache = skipAvailabilityCacheOnceRef.current;
+    if (bypassCache) skipAvailabilityCacheOnceRef.current = false;
+    const cached = availabilitySlotCache.get(cacheKey);
+    if (!bypassCache && cached && Date.now() - cached.at < AVAILABILITY_SLOT_CACHE_TTL_MS) {
+      setRawSlots(cached.slots);
+      setSlotsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSlotsLoading(true);
+    const debounceTimer = window.setTimeout(() => {
+      void (async () => {
+        if (cancelled) return;
+        try {
+          const params = new URLSearchParams();
+          params.set("date", selectedDate);
+          params.set("duration", String(durationMinutesForApi));
+          const url = `/api/booking/time-slots?${params.toString()}`;
+          let lastSlots: RawAvailabilitySlot[] = [];
+          let ok = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const res = await fetch(url);
+            const json = (await res.json()) as { slots?: RawAvailabilitySlot[]; error?: string };
+            if (cancelled) return;
+            if (res.ok) {
+              ok = true;
+              lastSlots = json.slots ?? [];
+              break;
+            }
+            trackBookingFunnelEvent("datetime", "error", {
+              message: json.error ?? `status_${res.status}`,
+              action: "time_slots_fetch",
+              date: selectedDate,
+              attempt,
+            });
+            if (attempt === 0) await sleep(400);
+          }
+          if (cancelled) return;
+          if (!ok) {
+            setRawSlots([]);
+            setSlotHint("We’re refreshing availability — try another date or check back in a moment.");
+            trackBookingFunnelEvent("datetime", "error", {
+              message: "time_slots_fetch_exhausted",
+              action: "time_slots_fetch",
+              date: selectedDate,
+            });
+            return;
+          }
+          availabilitySlotCache.set(cacheKey, { slots: lastSlots, at: Date.now() });
+          setRawSlots(lastSlots);
+        } catch {
+          if (!cancelled) {
+            setRawSlots([]);
+            setSlotHint("Checking connection — you can still pick another date.");
+            trackBookingFunnelEvent("datetime", "error", {
+              message: "time_slots_network",
+              action: "time_slots_fetch",
+            });
+          }
+        } finally {
+          if (!cancelled) setSlotsLoading(false);
         }
-        setLiveSlots(json.slots ?? []);
-      } catch {
-        if (active) setSlotsError("Failed to load time slots.");
-      } finally {
-        if (active) setSlotsLoading(false);
-      }
-    })();
+      })();
+    }, 280);
+
     return () => {
-      active = false;
+      cancelled = true;
+      window.clearTimeout(debounceTimer);
+      setSlotsLoading(false);
     };
-  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey]);
+  }, [lockBaseState, pricingJob, selectedDate, durationMinutesForApi, slotFetchNonce]);
 
   const slotPickRows: SlotPickInput[] = useMemo(() => {
     return liveSlots
@@ -222,6 +258,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const { cleaners: cleanerPool, recommendedCleaner, loading: cleanersLoading, error: cleanersError } = useCleaners({
     selectedDate,
     selectedTime: cleanerSlotTime,
+    durationMinutes: durationMinutesForApi,
   });
 
   const continueLabel = locked ? bookingCopy.when.cta : "Select a time";
@@ -239,74 +276,106 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       };
     }
     return {
-      totalZar: 0,
-      totalCaption: "From",
-      amountDisplayOverride: "Select a time",
+      totalZar: canonicalTotalZar ?? 0,
+      totalCaption: "Your visit",
+      amountDisplayOverride: canonicalTotalZar == null ? "Select a time" : null,
       ctaShort: "Continue →",
       openSummarySheetOnAmountTap: true,
     };
-  }, [lockBaseState, locked]);
+  }, [lockBaseState, locked, canonicalTotalZar]);
 
   const handleSelectSlot = useCallback(
-    async (time: string) => {
+    async (time: string, opts?: { fromAutoPick?: boolean }) => {
       if (!lockBaseState) return;
       const slot = liveSlots.find((s) => s.time === time);
       if (!slot) return;
-      const res = await fetch("/api/booking/lock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service: lockBaseState.service,
-          service_type: lockBaseState.service_type,
-          rooms: lockBaseState.rooms,
-          bathrooms: lockBaseState.bathrooms,
-          extraRooms: lockBaseState.extraRooms,
-          extras: lockBaseState.extras,
-          date: selectedDate,
-          time,
-          cleanersCount: slot.cleanersCount,
-          vipTier,
-        }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        pricingVersion?: number;
-        total?: number;
-        hours?: number;
-        surgeMultiplier?: number;
-        surgeApplied?: boolean;
-        surgeLabel?: string;
-        signature?: string;
-        lockExpiresAt?: string;
-        breakdown?: {
-          subtotalZar?: number;
-          afterVipSubtotalZar?: number;
-          vipSavingsZar?: number;
-        };
-      };
-      if (!res.ok || json.ok !== true || typeof json.total !== "number" || typeof json.hours !== "number") return;
-      if (typeof json.signature !== "string" || !/^[0-9a-f]{64}$/i.test(json.signature)) return;
-      if (typeof json.lockExpiresAt !== "string" || !json.lockExpiresAt.trim()) return;
-      const b = json.breakdown;
-      lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
+      const body = JSON.stringify({
+        service: lockBaseState.service,
+        service_type: lockBaseState.service_type,
+        rooms: lockBaseState.rooms,
+        bathrooms: lockBaseState.bathrooms,
+        extraRooms: lockBaseState.extraRooms,
+        extras: lockBaseState.extras,
+        date: selectedDate,
+        time,
+        cleanersCount: slot.cleanersCount,
         vipTier,
-        lockedQuote: {
-          total: json.total,
-          hours: json.hours,
-          surge: Number(json.surgeMultiplier ?? 1),
-          surgeLabel: json.surgeLabel ?? (json.surgeApplied ? "High demand" : "Standard"),
-          cleanersCount: slot.cleanersCount,
-          quoteSubtotalZar: typeof b?.subtotalZar === "number" ? b.subtotalZar : undefined,
-          quoteAfterVipSubtotalZar: typeof b?.afterVipSubtotalZar === "number" ? b.afterVipSubtotalZar : undefined,
-          quoteVipSavingsZar: typeof b?.vipSavingsZar === "number" ? b.vipSavingsZar : undefined,
-          quoteSignature: json.signature,
-          lockExpiresAt: json.lockExpiresAt,
-          pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
-        },
       });
+      let lastErr = "Could not lock this time.";
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const res = await fetch("/api/booking/lock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          pricingVersion?: number;
+          pricing_version_id?: string;
+          total?: number;
+          hours?: number;
+          surgeMultiplier?: number;
+          surgeApplied?: boolean;
+          surgeLabel?: string;
+          signature?: string;
+          lockExpiresAt?: string;
+          extras_line_items?: { slug: string; name: string; price: number }[];
+          breakdown?: {
+            subtotalZar?: number;
+            afterVipSubtotalZar?: number;
+            vipSavingsZar?: number;
+          };
+        };
+        lastErr = typeof json.error === "string" ? json.error : lastErr;
+        if (
+          res.ok &&
+          json.ok === true &&
+          typeof json.total === "number" &&
+          typeof json.hours === "number" &&
+          typeof json.signature === "string" &&
+          /^[0-9a-f]{64}$/i.test(json.signature) &&
+          typeof json.lockExpiresAt === "string" &&
+          json.lockExpiresAt.trim()
+        ) {
+          const b = json.breakdown;
+          lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
+            vipTier,
+            lockedQuote: {
+              total: json.total,
+              hours: json.hours,
+              surge: Number(json.surgeMultiplier ?? 1),
+              surgeLabel: json.surgeLabel ?? (json.surgeApplied ? "High demand" : "Standard"),
+              cleanersCount: slot.cleanersCount,
+              quoteSubtotalZar: typeof b?.subtotalZar === "number" ? b.subtotalZar : undefined,
+              quoteAfterVipSubtotalZar: typeof b?.afterVipSubtotalZar === "number" ? b.afterVipSubtotalZar : undefined,
+              quoteVipSavingsZar: typeof b?.vipSavingsZar === "number" ? b.vipSavingsZar : undefined,
+              quoteSignature: json.signature,
+              lockExpiresAt: json.lockExpiresAt,
+              pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
+              pricing_version_id:
+                typeof json.pricing_version_id === "string" && json.pricing_version_id.trim()
+                  ? json.pricing_version_id.trim()
+                  : undefined,
+              extras_line_items: Array.isArray(json.extras_line_items) ? json.extras_line_items : undefined,
+            },
+          });
+          return;
+        }
+        if (attempt < 3) await sleep(400 * (attempt + 1));
+      }
+      trackBookingFunnelEvent("datetime", "error", {
+        message: lastErr,
+        action: "lock_slot",
+        time,
+        date: selectedDate,
+      });
+      if (opts?.fromAutoPick) lockFailedTimeKeysRef.current.add(`${selectedDate}|${time}`);
+      autoLockRunRef.current = "";
+      setSlotHint("That time may have just been taken — we refreshed the list. Pick another slot below.");
+      forceAvailabilityRefresh();
     },
-    [lockBaseState, liveSlots, selectedDate, vipTier],
+    [lockBaseState, liveSlots, selectedDate, vipTier, forceAvailabilityRefresh],
   );
 
   useEffect(() => {
@@ -314,10 +383,11 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     if (locked?.date === selectedDate && locked.time) return;
     const rec = strategyRecommendedTime;
     if (!rec || !orderedDisplayTimes.includes(rec)) return;
+    if (lockFailedTimeKeysRef.current.has(`${selectedDate}|${rec}`)) return;
     const key = `${selectedDate}|${rec}`;
     if (autoLockRunRef.current === key) return;
     autoLockRunRef.current = key;
-    void handleSelectSlot(rec);
+    void handleSelectSlot(rec, { fromAutoPick: true });
   }, [
     lockBaseState,
     slotsLoading,
@@ -427,15 +497,41 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
 
             <div id="booking-time-slots" className="scroll-mt-28 space-y-5">
               {slotsLoading ? (
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="h-20 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-                  ))}
+                <div className="space-y-2" role="status" aria-live="polite">
+                  <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Checking availability…</p>
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="h-20 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+                    ))}
+                  </div>
                 </div>
               ) : null}
-              {slotsError ? <p className="text-sm text-rose-700 dark:text-rose-400">{slotsError}</p> : null}
+              {slotHint ? (
+                <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/95 p-3 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100">
+                  <p>{slotHint}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => forceAvailabilityRefresh()}
+                      className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
+                    >
+                      Refresh times
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tomorrow = tomorrowYmd(allDateValues);
+                        if (tomorrow) setDateOverride(tomorrow);
+                      }}
+                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                    >
+                      Next day’s slots
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
-              {!slotsLoading && !slotsError && orderedDisplayTimes.length === 0 ? (
+              {!slotsLoading && orderedDisplayTimes.length === 0 ? (
                 isToday ? (
                   <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-50">
                     <p>All time slots for today are no longer available</p>
@@ -453,9 +549,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 ) : (
                   <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-50">
                     <p>No slots left on this day.</p>
-                    <p className="font-medium">
-                      Next availability: try tomorrow from 09:00 — pick another date above.
-                    </p>
+                    <p className="font-medium">{nextAvailableHint(allDateValues, selectedDate)}</p>
                   </div>
                 )
               ) : null}

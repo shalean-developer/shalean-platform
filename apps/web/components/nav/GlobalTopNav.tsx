@@ -31,7 +31,8 @@ export function GlobalTopNav() {
   }, [pathname]);
 
   /** Booking flow uses its own header (`BookingHeader`); avoid duplicate sticky navs. */
-  const hideMarketingNav = pathname === "/booking" || pathname.startsWith("/booking/");
+  const hideMarketingNav =
+    pathname === "/booking" || pathname.startsWith("/booking/") || pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 
   async function handleLogout() {
     if (user) {
@@ -77,7 +78,7 @@ export function GlobalTopNav() {
           {loading ? null : user || cleanerLoggedIn ? (
             <>
               <Link
-                href={user ? "/account/bookings" : "/cleaner"}
+                href={user ? "/dashboard" : "/cleaner"}
                 className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-blue-200 hover:text-blue-700"
               >
                 Dashboard
@@ -148,7 +149,7 @@ export function GlobalTopNav() {
               </>
             ) : (
               <>
-                <Link href={user ? "/account/bookings" : "/cleaner"} className={cn(navLinkClass, "w-full")}>
+                <Link href={user ? "/dashboard" : "/cleaner"} className={cn(navLinkClass, "w-full")}>
                   Dashboard
                 </Link>
                 <button type="button" onClick={() => void handleLogout()} className={cn(navLinkClass, "w-full text-left")}>

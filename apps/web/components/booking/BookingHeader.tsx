@@ -138,10 +138,10 @@ export function BookingHeader() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className={menuContentClass}>
                 <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href="/account/bookings">Dashboard</Link>
+                  <Link href="/dashboard">Dashboard</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href="/account/bookings">My Bookings</Link>
+                  <Link href="/dashboard/bookings">My Bookings</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="cursor-pointer">
                   <Link href="/account/subscriptions">Profile</Link>

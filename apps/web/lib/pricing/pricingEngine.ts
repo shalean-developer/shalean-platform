@@ -1,14 +1,10 @@
 /**
- * Single source of truth for marketplace job pricing (ZAR).
- * Slot revenue: demand tier × time band (clamped) × optional dynamic layer, then charm rounding.
+ * Single source of truth for marketplace job pricing (ZAR) — slot revenue curve, normalization, types.
+ * ZAR line items and extras come from {@link PricingRatesSnapshot} (Supabase → `pricing_versions`).
  */
 import type { BookingServiceId, BookingServiceTypeKey } from "@/components/booking/serviceCategories";
 import { bookingServiceIdFromType } from "@/components/booking/serviceCategories";
 import type { VipTier } from "@/lib/pricing/vipTier";
-import { getVipDiscountMultiplier, getVipDiscountRate, normalizeVipTier } from "@/lib/pricing/vipTier";
-import { getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
-import { computeBundledExtrasTotalZar } from "@/lib/pricing/extrasConfig";
-import { PRICING_CONFIG, tariffForPricingService } from "@/lib/pricing/pricingConfig";
 
 /**
  * Job dimensions for pricing. `extraRooms` is always a non‑negative integer at runtime
@@ -76,47 +72,6 @@ export function resolveServiceForPricing(job: PricingJobInput): BookingServiceId
   if (job.service) return job.service;
   if (job.serviceType) return bookingServiceIdFromType(job.serviceType);
   return null;
-}
-
-/** Base visit fee by service (ZAR) — derived from {@link PRICING_CONFIG}. */
-export const SERVICE_BASE_ZAR: Record<BookingServiceId, number> = {
-  quick: PRICING_CONFIG.services.quick.base,
-  standard: PRICING_CONFIG.services.standard.base,
-  airbnb: PRICING_CONFIG.services.airbnb.base,
-  deep: PRICING_CONFIG.services.deep.base,
-  carpet: PRICING_CONFIG.services.carpet.base,
-  move: PRICING_CONFIG.services.move.base,
-};
-
-/** Re-export catalog prices — use {@link computeBundledExtrasTotalZar} for line totals with bundles. */
-export { EXTRAS_ZAR } from "@/lib/pricing/extrasConfig";
-
-function extraRoomsLineZar(j: PricingJobInput): number {
-  const n = normalizePricingJobInput(j).extraRooms;
-  const cfg = tariffForPricingService(resolveServiceForPricing(j));
-  return n * cfg.extraRoom;
-}
-
-export function computeJobSubtotalZar(job: PricingJobInput): number {
-  const j = normalizePricingJobInput(job);
-  const service = resolveServiceForPricing(j);
-  const cfg = tariffForPricingService(service);
-  const lineBase = service === null ? 0 : cfg.base;
-  let base = lineBase + j.rooms * cfg.bedroom + j.bathrooms * cfg.bathroom + extraRoomsLineZar(j);
-  base += computeBundledExtrasTotalZar(j.extras, resolveServiceForPricing(j));
-  return base;
-}
-
-/**
- * Billable visit length (hours), lower bounded — **only** used inside {@link quoteCheckoutZar} /
- * {@link quoteBaseJobZar}. Callers must use `quoteCheckoutZar(...).hours` or {@link quoteJobDurationHours}.
- */
-export function estimateJobDurationHours(job: PricingJobInput): number {
-  const j = normalizePricingJobInput(job);
-  const cfg = tariffForPricingService(resolveServiceForPricing(j));
-  const d = cfg.duration;
-  const raw = d.base + j.rooms * d.bedroom + j.bathrooms * d.bathroom + j.extraRooms * d.extraRoom;
-  return Math.max(2, Math.round(raw * 10) / 10);
 }
 
 function parseHourFromHm(time: string): number | null {
@@ -190,22 +145,8 @@ export type CheckoutQuoteOptions = {
   cleanersCount?: number | null;
 };
 
-/**
- * Canonical read for visit hours outside a per-slot quote. Uses {@link quoteCheckoutZar} so
- * duration always matches lock/checkout/slots (time band and supply do not change `hours`).
- */
+/** Canonical read for visit hours — use with a DB-backed {@link import("@/lib/pricing/pricingRatesSnapshot").PricingRatesSnapshot}. */
 export const JOB_DURATION_QUOTE_ANCHOR_HM = "10:00" as const;
-
-export function quoteJobDurationHours(
-  job: PricingJobInput,
-  vipTier?: VipTier | null | undefined,
-  options?: Pick<CheckoutQuoteOptions, "cleanersCount" | "dynamicAdjustment">,
-): number {
-  return quoteCheckoutZar(job, JOB_DURATION_QUOTE_ANCHOR_HM, vipTier ?? "regular", {
-    cleanersCount: options?.cleanersCount ?? 1,
-    dynamicAdjustment: options?.dynamicAdjustment ?? 1,
-  }).hours;
-}
 
 export type CheckoutQuoteResult = {
   totalZar: number;
@@ -235,69 +176,6 @@ export type CheckoutQuoteResult = {
   extraRoomsNormalized: number;
   /** ZAR for extra rooms only (`extraRoom` × count; separate from add-ons). */
   extraRoomsChargeZar: number;
-  /** Tariff row — must match persisted `LockedBooking.pricingVersion` for checkout. */
-  pricingVersion: typeof PRICING_CONFIG.version;
+  /** Tariff marker at quote time (`PricingRatesSnapshot.codeVersion`). */
+  pricingVersion: number;
 };
-
-/**
- * Full checkout quote: subtotal → VIP → clamp(demand×time) → dynamic → charm total.
- */
-export function quoteCheckoutZar(
-  job: PricingJobInput,
-  timeHm: string,
-  vipTier: VipTier | null | undefined,
-  options?: CheckoutQuoteOptions,
-): CheckoutQuoteResult {
-  const j = normalizePricingJobInput(job);
-  const subtotal = computeJobSubtotalZar(j);
-  const hours = estimateJobDurationHours(j);
-  const extraRoomsNormalized = j.extraRooms;
-  const extraRoomsChargeZar = extraRoomsLineZar(j);
-  const tier = normalizeVipTier(vipTier === null || vipTier === undefined ? undefined : String(vipTier));
-  const vipSubtotalMultiplier = getVipDiscountMultiplier(tier);
-  const afterVip = subtotal * vipSubtotalMultiplier;
-  const vipDiscountRate = getVipDiscountRate(tier);
-  const subtotalRounded = Math.round(subtotal);
-  const afterVipSubtotalZar = Math.round(afterVip);
-  const vipSavingsZar = Math.max(0, subtotalRounded - afterVipSubtotalZar);
-
-  const timeBandMultiplier = getSlotTimeMultiplier(timeHm);
-  const demandTierMultiplier = getDemandTierMultiplier(options?.cleanersCount);
-  const slotCoreMultiplier = clampSlotRevenueCoreMultiplier(demandTierMultiplier * timeBandMultiplier);
-
-  const dynamicAdjustment = clampDynamicMultiplier(
-    typeof options?.dynamicAdjustment === "number" ? options.dynamicAdjustment : 1,
-  );
-  const effectiveSurgeMultiplier = slotCoreMultiplier * dynamicAdjustment;
-
-  const rawTotal = afterVip * effectiveSurgeMultiplier;
-  const totalZar = charmPriceZar(Math.round(rawTotal));
-
-  return {
-    totalZar,
-    subtotalZar: subtotalRounded,
-    afterVipSubtotalZar,
-    vipSavingsZar,
-    vipSubtotalMultiplier,
-    hours,
-    vipDiscountRate,
-    timeBandMultiplier,
-    demandTierMultiplier,
-    slotCoreMultiplier,
-    dynamicAdjustment,
-    effectiveSurgeMultiplier,
-    tier,
-    demandLabel: getSlotPricingDemandLabel(timeHm),
-    surgeLabel: getSurgeLabel(effectiveSurgeMultiplier),
-    extraRoomsNormalized,
-    extraRoomsChargeZar,
-    pricingVersion: PRICING_CONFIG.version,
-  };
-}
-
-/** Base-only line (no surge) — homepage / early funnel. */
-export function quoteBaseJobZar(job: PricingJobInput): { totalZar: number; hours: number } {
-  const j = normalizePricingJobInput(job);
-  const base = computeJobSubtotalZar(j);
-  return { totalZar: Math.round(base), hours: estimateJobDurationHours(j) };
-}

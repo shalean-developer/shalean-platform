@@ -13,6 +13,9 @@ export async function GET(request: Request) {
   const selectedTime = url.searchParams.get("time") ?? "";
   const userLatRaw = url.searchParams.get("lat");
   const userLngRaw = url.searchParams.get("lng");
+  const durationRaw = Number(url.searchParams.get("duration"));
+  const durationMinutes =
+    Number.isFinite(durationRaw) && durationRaw >= 30 ? Math.round(durationRaw) : 120;
   if (!selectedDate || !selectedTime) {
     return NextResponse.json({ error: "date and time are required." }, { status: 400 });
   }
@@ -24,7 +27,7 @@ export async function GET(request: Request) {
       userLng: Number.isFinite(userLng) ? userLng : null,
       selectedDate,
       selectedTime,
-      durationMinutes: 120,
+      durationMinutes,
       limit: 5,
     });
     return NextResponse.json({ cleaners });

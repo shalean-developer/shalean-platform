@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { quoteLockFromRequestBody } from "@/lib/booking/bookingLockQuote";
+import { quoteLockFromRequestBodyWithSnapshot } from "@/lib/booking/bookingLockQuote";
 import { JOB_DURATION_QUOTE_ANCHOR_HM } from "@/lib/pricing/pricingEngine";
+import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +19,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Pricing is temporarily unavailable." }, { status: 503 });
+  }
+  const snapshot = await buildPricingRatesSnapshotFromDb(admin);
+  if (!snapshot) {
+    return NextResponse.json({ error: "Could not load pricing catalog." }, { status: 503 });
+  }
+
   const input =
     body !== null && typeof body === "object" && !Array.isArray(body)
       ? { ...(body as Record<string, unknown>) }
@@ -30,7 +41,7 @@ export async function POST(request: Request) {
     input.time = JOB_DURATION_QUOTE_ANCHOR_HM;
   }
 
-  const r = quoteLockFromRequestBody(input, { allowClientDynamicAdjustment: false });
+  const r = quoteLockFromRequestBodyWithSnapshot(input, snapshot, { allowClientDynamicAdjustment: false });
   if (!r.ok) {
     return NextResponse.json({ error: r.error }, { status: r.status });
   }

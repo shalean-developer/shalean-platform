@@ -7,7 +7,8 @@ import {
 } from "@/components/booking/serviceCategories";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 import { normalizeExtraRoomsRaw } from "@/lib/pricing/pricingEngine";
-import { PRICING_CONFIG } from "@/lib/pricing/pricingConfig";
+import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
+import type { ExtraLineItem } from "@/lib/pricing/extrasConfig";
 
 export const BOOKING_LOCKED_KEY = "booking_locked";
 
@@ -38,14 +39,20 @@ export type LockedBooking = BookingStep1State & {
   quoteSubtotalZar?: number;
   quoteAfterVipSubtotalZar?: number;
   quoteVipSavingsZar?: number;
-  /** Matches {@link PRICING_CONFIG.version} at lock time; checkout rejects mismatch (`REQUOTE_REQUIRED`). */
+  /** Matches {@link PRICING_ENGINE_ALGORITHM_VERSION} at lock time; checkout rejects mismatch (`REQUOTE_REQUIRED`). */
   pricingVersion?: number;
+  /** DB `pricing_versions.id` — checkout recomputes ZAR from this frozen catalog instead of live code. */
+  pricing_version_id?: string | null;
+  /** Optional `bookings.id` for server trace logs (re-pay, admin, or client-supplied preflight). */
+  booking_id?: string | null;
   /** Selected cleaner for checkout — mirrored for `/api/booking/validate` (no re-fetch roster). */
   cleaner_id?: string | null;
   /** HMAC/SHA256 of canonical lock quote from `POST /api/booking/lock` — Paystack init requires a match. */
   quoteSignature?: string;
   /** ISO timestamp — checkout must complete before this (see `LOCK_HOLD_MS`). */
   lockExpiresAt?: string;
+  /** Frozen add-on rows at lock time — persisted for DB + cleaner (slug + display + catalog ZAR). */
+  extras_line_items?: ExtraLineItem[];
   locked: true;
   lockedAt: string;
 };
@@ -58,6 +65,38 @@ function setSnapshotCache(raw: string | null, value: LockedBooking | null) {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function normalizeLockedExtrasArray(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  for (const x of raw) {
+    if (typeof x === "string") {
+      const s = x.trim();
+      if (s) out.push(s);
+      continue;
+    }
+    if (x && typeof x === "object" && "slug" in x && typeof (x as { slug?: unknown }).slug === "string") {
+      const s = (x as { slug: string }).slug.trim();
+      if (s) out.push(s);
+    }
+  }
+  return out;
+}
+
+function parseExtrasLineItems(raw: unknown): ExtraLineItem[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: ExtraLineItem[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as Record<string, unknown>;
+    const slug = typeof o.slug === "string" ? o.slug.trim() : "";
+    const name = typeof o.name === "string" ? o.name.trim() : "";
+    const price = typeof o.price === "number" && Number.isFinite(o.price) ? o.price : Number.NaN;
+    if (!slug || !name || !Number.isFinite(price)) continue;
+    out.push({ slug, name, price: Math.round(price) });
+  }
+  return out.length ? out : undefined;
 }
 
 function parseDateYmd(v: unknown, lockedAt: unknown): string | null {
@@ -96,14 +135,25 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
   if (typeof data.time !== "string" || !data.time) return null;
   if (typeof data.lockedAt !== "string") return null;
   if (typeof data.rooms !== "number" || typeof data.bathrooms !== "number") return null;
-  if (!Array.isArray(data.extras)) return null;
+  const extrasNorm = normalizeLockedExtrasArray(data.extras);
+  if (extrasNorm === null) return null;
   const extraRooms = normalizeExtraRoomsRaw(data.extraRooms);
+  const extras_line_items = parseExtrasLineItems(data.extras_line_items);
 
   const date = parseDateYmd(data.date, data.lockedAt);
   if (!date) return null;
 
   const surge =
     typeof data.surge === "number" && Number.isFinite(data.surge) && data.surge > 0 ? data.surge : 1;
+
+  const pvRaw =
+    typeof data.pricing_version_id === "string"
+      ? data.pricing_version_id.trim()
+      : typeof (data as Record<string, unknown>).pricingVersionId === "string"
+        ? String((data as Record<string, unknown>).pricingVersionId).trim()
+        : "";
+  const pricing_version_id =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pvRaw) ? pvRaw.toLowerCase() : undefined;
 
   const vipTierRaw = typeof data.vipTier === "string" ? data.vipTier : undefined;
   const vipTier = vipTierRaw ? normalizeVipTier(vipTierRaw) : undefined;
@@ -134,6 +184,7 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
 
   return {
     ...data,
+    extras: extrasNorm,
     extraRooms,
     date,
     finalPrice,
@@ -146,8 +197,10 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
     location,
     propertyType,
     cleaningFrequency,
+    ...(extras_line_items ? { extras_line_items } : {}),
     ...(vipTier ? { vipTier } : {}),
     ...(dynamicSurgeFactor != null ? { dynamicSurgeFactor } : {}),
+    ...(pricing_version_id ? { pricing_version_id } : {}),
   } as LockedBooking;
 }
 
@@ -233,11 +286,20 @@ export function lockBookingSlot(
       lockExpiresAt?: string;
       /** From `POST /api/booking/lock` — must match server tariff version. */
       pricingVersion?: number;
+      /** From `POST /api/booking/lock` — frozen catalog row for checkout parity. */
+      pricing_version_id?: string;
+      /** From `POST /api/booking/lock` — display rows for add-ons. */
+      extras_line_items?: ExtraLineItem[];
     };
   },
 ): LockedBooking {
   const tier = options?.vipTier ?? "regular";
   const quote = options.lockedQuote;
+
+  const extras_line_items =
+    Array.isArray(quote.extras_line_items) && quote.extras_line_items.length > 0
+      ? quote.extras_line_items
+      : [];
 
   const locked: LockedBooking = {
     ...state,
@@ -250,6 +312,7 @@ export function lockBookingSlot(
     surge: quote.surge,
     surgeLabel: quote.surgeLabel,
     cleanersCount: options.lockedQuote.cleanersCount,
+    extras_line_items,
     vipTier: tier,
     ...(typeof quote.quoteSubtotalZar === "number" && Number.isFinite(quote.quoteSubtotalZar)
       ? { quoteSubtotalZar: Math.round(quote.quoteSubtotalZar) }
@@ -269,7 +332,11 @@ export function lockBookingSlot(
     pricingVersion:
       typeof quote.pricingVersion === "number" && Number.isFinite(quote.pricingVersion)
         ? Math.round(quote.pricingVersion)
-        : PRICING_CONFIG.version,
+        : PRICING_ENGINE_ALGORITHM_VERSION,
+    ...(typeof quote.pricing_version_id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(quote.pricing_version_id.trim())
+      ? { pricing_version_id: quote.pricing_version_id.trim().toLowerCase() }
+      : {}),
     locked: true,
     lockedAt: new Date().toISOString(),
   };

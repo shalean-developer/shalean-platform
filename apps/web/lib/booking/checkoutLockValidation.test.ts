@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { quoteLockFromRequestBody } from "@/lib/booking/bookingLockQuote";
+import { quoteLockFromRequestBodyWithSnapshot } from "@/lib/booking/bookingLockQuote";
 import {
   BOOKING_CHECKOUT_LOCK_VERSION,
   validateLockForCheckout,
 } from "@/lib/booking/checkoutLockValidation";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { computeLockQuoteSignature, LOCK_HOLD_MS } from "@/lib/booking/lockQuoteSignature";
+import { vitestTestPricingRatesSnapshot } from "@/lib/pricing/testPricingSnapshot";
+
+const snap = vitestTestPricingRatesSnapshot();
 
 function baseLocked(over: Partial<LockedBooking>): LockedBooking {
   return {
@@ -47,16 +50,19 @@ describe("validateLockForCheckout", () => {
   });
 
   it("passes: recompute + signature + parity", () => {
-    const quoted = quoteLockFromRequestBody({
-      service: "standard",
-      service_type: "standard_cleaning",
-      rooms: 2,
-      bathrooms: 1,
-      extraRooms: 0,
-      extras: [] as string[],
-      time: "10:00",
-      vipTier: "regular",
-    });
+    const quoted = quoteLockFromRequestBodyWithSnapshot(
+      {
+        service: "standard",
+        service_type: "standard_cleaning",
+        rooms: 2,
+        bathrooms: 1,
+        extraRooms: 0,
+        extras: [] as string[],
+        time: "10:00",
+        vipTier: "regular",
+      },
+      snap,
+    );
     expect(quoted.ok).toBe(true);
     if (!quoted.ok) return;
     const sig = computeLockQuoteSignature({
@@ -74,22 +80,30 @@ describe("validateLockForCheckout", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    const r = validateLockForCheckout(locked);
+    const r = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.visitTotalZar).toBe(quoted.quote.totalZar);
+    if (r.ok) {
+      expect(r.visitTotalZar).toBe(quoted.quote.totalZar);
+      const sum =
+        r.jobSubtotalSplit.serviceBaseZar + r.jobSubtotalSplit.roomsZar + r.jobSubtotalSplit.extrasZar;
+      expect(sum).toBe(quoted.quote.subtotalZar);
+    }
   });
 
   it("fails: obsolete tariff version (one behind current)", () => {
-    const quoted = quoteLockFromRequestBody({
-      service: "standard",
-      service_type: "standard_cleaning",
-      rooms: 2,
-      bathrooms: 1,
-      extraRooms: 0,
-      extras: [] as string[],
-      time: "10:00",
-      vipTier: "regular",
-    });
+    const quoted = quoteLockFromRequestBodyWithSnapshot(
+      {
+        service: "standard",
+        service_type: "standard_cleaning",
+        rooms: 2,
+        bathrooms: 1,
+        extraRooms: 0,
+        extras: [] as string[],
+        time: "10:00",
+        vipTier: "regular",
+      },
+      snap,
+    );
     expect(quoted.ok).toBe(true);
     if (!quoted.ok) return;
     const sig = computeLockQuoteSignature({
@@ -107,22 +121,25 @@ describe("validateLockForCheckout", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    const r = validateLockForCheckout(locked);
+    const r = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("REQUOTE_REQUIRED");
   });
 
   it("fails: stale lock version", () => {
-    const quoted = quoteLockFromRequestBody({
-      service: "standard",
-      service_type: "standard_cleaning",
-      rooms: 2,
-      bathrooms: 1,
-      extraRooms: 0,
-      extras: [] as string[],
-      time: "10:00",
-      vipTier: "regular",
-    });
+    const quoted = quoteLockFromRequestBodyWithSnapshot(
+      {
+        service: "standard",
+        service_type: "standard_cleaning",
+        rooms: 2,
+        bathrooms: 1,
+        extraRooms: 0,
+        extras: [] as string[],
+        time: "10:00",
+        vipTier: "regular",
+      },
+      snap,
+    );
     expect(quoted.ok).toBe(true);
     if (!quoted.ok) return;
     const sig = computeLockQuoteSignature({
@@ -140,7 +157,7 @@ describe("validateLockForCheckout", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    const r = validateLockForCheckout(locked);
+    const r = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("REQUOTE_REQUIRED");
   });
@@ -157,7 +174,7 @@ describe("validateLockForCheckout", () => {
       vipTier: "regular" as const,
       cleanersCount: 2,
     };
-    const quoted = quoteLockFromRequestBody(body);
+    const quoted = quoteLockFromRequestBodyWithSnapshot(body, snap);
     expect(quoted.ok).toBe(true);
     if (!quoted.ok) return;
     const sig = computeLockQuoteSignature({
@@ -178,22 +195,25 @@ describe("validateLockForCheckout", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    const r = validateLockForCheckout(locked);
+    const r = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.visitTotalZar).toBe(quoted.quote.totalZar);
   });
 
   it("fails: price drift vs recompute", () => {
-    const quoted = quoteLockFromRequestBody({
-      service: "standard",
-      service_type: "standard_cleaning",
-      rooms: 2,
-      bathrooms: 1,
-      extraRooms: 0,
-      extras: [] as string[],
-      time: "10:00",
-      vipTier: "regular",
-    });
+    const quoted = quoteLockFromRequestBodyWithSnapshot(
+      {
+        service: "standard",
+        service_type: "standard_cleaning",
+        rooms: 2,
+        bathrooms: 1,
+        extraRooms: 0,
+        extras: [] as string[],
+        time: "10:00",
+        vipTier: "regular",
+      },
+      snap,
+    );
     expect(quoted.ok).toBe(true);
     if (!quoted.ok) return;
     const sig = computeLockQuoteSignature({
@@ -210,8 +230,72 @@ describe("validateLockForCheckout", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    const r = validateLockForCheckout(locked);
+    const r = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("PRICE_MISMATCH");
+  });
+
+  it("fails: PRICING_SNAPSHOT_MISSING when pricing_version_id set but no snapshot passed", () => {
+    const quoted = quoteLockFromRequestBodyWithSnapshot(
+      {
+        service: "standard",
+        service_type: "standard_cleaning",
+        rooms: 2,
+        bathrooms: 1,
+        extraRooms: 0,
+        extras: [] as string[],
+        time: "10:00",
+        vipTier: "regular",
+      },
+      snap,
+    );
+    expect(quoted.ok).toBe(true);
+    if (!quoted.ok) return;
+    const locked = baseLocked({
+      finalPrice: quoted.quote.totalZar,
+      finalHours: quoted.quote.hours,
+      surge: quoted.quote.effectiveSurgeMultiplier,
+      pricing_version_id: "00000000-0000-4000-8000-000000000001",
+    });
+    const r = validateLockForCheckout(locked);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("PRICING_SNAPSHOT_MISSING");
+  });
+
+  it("passes: frozen ratesSnapshot path with pricing_version_id", () => {
+    const quoted = quoteLockFromRequestBodyWithSnapshot(
+      {
+        service: "standard",
+        service_type: "standard_cleaning",
+        rooms: 2,
+        bathrooms: 1,
+        extraRooms: 0,
+        extras: [] as string[],
+        time: "10:00",
+        vipTier: "regular",
+      },
+      snap,
+    );
+    expect(quoted.ok).toBe(true);
+    if (!quoted.ok) return;
+    const sig = computeLockQuoteSignature({
+      job: quoted.job,
+      timeHm: quoted.timeHm,
+      vipTier: quoted.vipTier,
+      dynamicAdjustment: quoted.quoteOptions.dynamicAdjustment,
+      cleanersCount: quoted.quoteOptions.cleanersCount,
+      quote: quoted.quote,
+    });
+    const locked = baseLocked({
+      finalPrice: quoted.quote.totalZar,
+      finalHours: quoted.quote.hours,
+      surge: quoted.quote.effectiveSurgeMultiplier,
+      quoteSignature: sig,
+      lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
+      pricing_version_id: "00000000-0000-4000-8000-000000000001",
+    });
+    const r = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.visitTotalZar).toBe(quoted.quote.totalZar);
   });
 });

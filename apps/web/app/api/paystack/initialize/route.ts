@@ -27,5 +27,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     authorizationUrl: result.authorizationUrl,
     reference: result.reference,
+    ...(result.bookingId ? { bookingId: result.bookingId } : {}),
   });
 }

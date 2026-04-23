@@ -1,7 +1,11 @@
 import { BOOKING_CHECKOUT_LOCK_VERSION, validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
-import { quoteBaseJobZar, quoteCheckoutZar } from "@/lib/pricing/pricingEngine";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
+import {
+  quoteCheckoutZarWithSnapshot,
+  computeJobSubtotalZarSnapshot,
+} from "@/lib/pricing/pricingEngineSnapshot";
 
 /** Pre–demand-pricing per-slot map — only for validating legacy `booking_locked` payloads. */
 const LEGACY_SLOT_SURGE_MAP: Record<string, number> = {
@@ -17,7 +21,7 @@ function legacySurge(time: string): number {
   return typeof m === "number" && Number.isFinite(m) ? m : 1;
 }
 
-function lockMatchesPricingEngine(locked: LockedBooking): boolean {
+function lockMatchesPricingEngine(locked: LockedBooking, ratesSnapshot: PricingRatesSnapshot): boolean {
   const tier = normalizeVipTier(locked.vipTier);
   const dyn =
     typeof locked.dynamicSurgeFactor === "number" &&
@@ -25,7 +29,8 @@ function lockMatchesPricingEngine(locked: LockedBooking): boolean {
     locked.dynamicSurgeFactor <= 1.2
       ? locked.dynamicSurgeFactor
       : 1;
-  const q = quoteCheckoutZar(
+  const q = quoteCheckoutZarWithSnapshot(
+    ratesSnapshot,
     {
       service: locked.service,
       serviceType: locked.service_type,
@@ -46,8 +51,10 @@ function lockMatchesPricingEngine(locked: LockedBooking): boolean {
   return priceOk && hoursOk;
 }
 
-/** Ensures `locked.finalPrice` matches the centralized pricing engine (v2) or legacy rules. */
-export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
+/**
+ * Ensures `locked.finalPrice` matches the pricing engine for the given catalog snapshot.
+ */
+export function isLockedBookingPriceValid(locked: LockedBooking, ratesSnapshot: PricingRatesSnapshot): boolean {
   if (!Number.isFinite(locked.finalPrice) || locked.finalPrice < 1) return false;
   if (!Number.isFinite(locked.finalHours) || locked.finalHours <= 0) return false;
 
@@ -56,9 +63,9 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
     const hasSig =
       typeof locked.quoteSignature === "string" && /^[0-9a-f]{64}$/i.test(locked.quoteSignature.trim());
     if (hasSig) {
-      return validateLockForCheckout(locked, Date.now(), { skipExpiryCheck: true }).ok;
+      return validateLockForCheckout(locked, Date.now(), { skipExpiryCheck: true, ratesSnapshot }).ok;
     }
-    return lockMatchesPricingEngine(locked);
+    return lockMatchesPricingEngine(locked, ratesSnapshot);
   }
 
   const input = {
@@ -70,9 +77,8 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
     extras: locked.extras,
   };
 
-  const { totalZar: baseTotal } = quoteBaseJobZar(input);
+  const baseTotal = computeJobSubtotalZarSnapshot(ratesSnapshot, input);
 
-  /** Legacy locks: only run full engine when a VIP tier was stored (otherwise use `LEGACY_SLOT_SURGE_MAP`). */
   if (locked.vipTier != null && typeof locked.time === "string" && locked.time.trim()) {
     const tier = normalizeVipTier(locked.vipTier);
     const dyn =
@@ -81,7 +87,7 @@ export function isLockedBookingPriceValid(locked: LockedBooking): boolean {
       locked.dynamicSurgeFactor <= 1.2
         ? locked.dynamicSurgeFactor
         : 1;
-    const q = quoteCheckoutZar(input, locked.time, tier, {
+    const q = quoteCheckoutZarWithSnapshot(ratesSnapshot, input, locked.time, tier, {
       dynamicAdjustment: dyn,
       cleanersCount: locked.cleanersCount,
     });

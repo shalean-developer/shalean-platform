@@ -23,7 +23,8 @@ type BookingDetails = {
   user_id: string | null;
   cleaner_id: string | null;
   duration_hours?: number | null;
-  extras?: string[] | null;
+  /** Legacy string slugs or persisted `{ slug, name, price }` rows from checkout. */
+  extras?: unknown[] | null;
   created_at: string;
   phone?: string | null;
 };
@@ -78,6 +79,24 @@ function normalizePhoneForWhatsApp(raw: string): string {
   if (digits.startsWith("+")) return digits.slice(1);
   if (digits.startsWith("0")) return `27${digits.slice(1)}`;
   return digits;
+}
+
+function formatBookingExtraChip(item: unknown): { key: string; label: string } {
+  if (typeof item === "string") {
+    const s = item.trim();
+    return { key: s || "extra", label: s || "Extra" };
+  }
+  if (item && typeof item === "object") {
+    const o = item as Record<string, unknown>;
+    const name = typeof o.name === "string" ? o.name.trim() : "";
+    const slug = typeof o.slug === "string" ? o.slug.trim() : "";
+    const price = typeof o.price === "number" && Number.isFinite(o.price) ? Math.round(o.price) : null;
+    const label =
+      name && price != null ? `${name} · R${price.toLocaleString("en-ZA")}` : name || slug || "Extra";
+    const key = slug || name || JSON.stringify(o);
+    return { key, label };
+  }
+  return { key: "extra", label: "Extra" };
 }
 
 async function rescheduleBooking(bookingId: string, newDate: string, newTime: string) {
@@ -374,9 +393,17 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               <p className="text-xs text-zinc-500">Extras</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {Array.isArray(fullBooking.extras) && fullBooking.extras.length ? (
-                  fullBooking.extras.map((item) => (
-                    <span key={item} className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-700">{item}</span>
-                  ))
+                  fullBooking.extras.map((item) => {
+                    const { key, label } = formatBookingExtraChip(item);
+                    return (
+                      <span
+                        key={key}
+                        className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-700"
+                      >
+                        {label}
+                      </span>
+                    );
+                  })
                 ) : (
                   <span className="text-sm text-zinc-500">No extras selected</span>
                 )}

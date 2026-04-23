@@ -11,15 +11,21 @@ import { usePersistedBookingSummaryState } from "@/components/booking/usePersist
 import { useSelectedCleaner } from "@/components/booking/useSelectedCleaner";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
+import { extrasSnapshotAligned } from "@/lib/booking/extrasSnapshot";
 import {
-  getLockedBookingDisplayPrice,
   lockedToStep1State,
   mergeCleanerIdIntoLockedBooking,
+  parseLockedBookingFromUnknown,
   readLockedBookingFromStorage,
 } from "@/lib/booking/lockedBooking";
 import { bookingCopy } from "@/lib/booking/copy";
+import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 
 const HELD_WINDOW_MS = 5 * 60 * 1000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function SlotHoldCountdown({ lockedAt }: { lockedAt: string }) {
   const endMs = useMemo(() => {
@@ -76,6 +82,8 @@ export function StepPayment() {
   const [totals, setTotals] = useState<Step4Totals | null>(null);
   const [paying, setPaying] = useState(false);
   const checkoutRedirected = useRef(false);
+  /** Blocks double-clicks before React re-renders `paying`. Cleared in `finally`. */
+  const payInitInFlight = useRef(false);
 
   useEffect(() => {
     if (locked || checkoutRedirected.current) return;
@@ -117,6 +125,7 @@ export function StepPayment() {
 
   async function handlePay() {
     if (!locked) {
+      trackBookingFunnelEvent("payment", "error", { message: "missing_lock", action: "pay" });
       show({
         tone: "danger",
         title: "Your session expired",
@@ -129,6 +138,7 @@ export function StepPayment() {
     }
 
     if (!totals?.contactReady || !Number.isFinite(totals.totalZar) || totals.totalZar < 1) {
+      trackBookingFunnelEvent("payment", "error", { message: "contact_not_ready", action: "pay" });
       show({
         tone: "danger",
         title: "Almost there",
@@ -138,6 +148,8 @@ export function StepPayment() {
       return;
     }
 
+    if (payInitInFlight.current) return;
+    payInitInFlight.current = true;
     setPaying(true);
     try {
       const cleanerId = selectedCleaner?.id ?? null;
@@ -147,36 +159,63 @@ export function StepPayment() {
         ? { ...freshLock, cleaner_id: cleanerId ?? freshLock.cleaner_id ?? null }
         : { ...locked, cleaner_id: cleanerId ?? locked.cleaner_id ?? null };
 
-      console.log("LOCKED BOOKING:", lockedForValidate);
-      console.log("LOCKED PRICE:", getLockedBookingDisplayPrice(lockedForValidate));
-
-      const validateRes = await fetch("/api/booking/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locked: lockedForValidate,
-          cleaner_id: cleanerId,
-          cleanerId,
-          date: locked.date,
-          time: locked.time,
-          duration_minutes: Math.round(locked.finalHours * 60),
-        }),
-      });
-
-      let validateData: { valid?: boolean; reason?: string } = {};
-      try {
-        validateData = (await validateRes.json()) as { valid?: boolean; reason?: string };
-      } catch {
-        validateData = {};
+      const parsedForExtras = parseLockedBookingFromUnknown(lockedForValidate);
+      if (!parsedForExtras || !extrasSnapshotAligned(parsedForExtras)) {
+        setPaying(false);
+        trackBookingFunnelEvent("payment", "error", { message: "extras_mismatch_client", action: "validate_extras" });
+        show({
+          tone: "danger",
+          title: "Add-ons out of sync",
+          description:
+            "Your selected extras don’t match the locked visit price. Go back to home details to refresh add-ons, then choose your time again before paying.",
+          autoDismissMs: 8000,
+          cta: { label: "Home details", onClick: () => router.push(bookingFlowHref("details")) },
+        });
+        return;
       }
 
-      if (!validateRes.ok) {
+      const validateBody = JSON.stringify({
+        locked: lockedForValidate,
+        cleaner_id: cleanerId,
+        cleanerId,
+        date: locked.date,
+        time: locked.time,
+        duration_minutes: Math.round(locked.finalHours * 60),
+      });
+
+      let validateOk = false;
+      let lastValidateRes: Response | null = null;
+      let validateData: { valid?: boolean; reason?: string } = {};
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const validateRes = await fetch("/api/booking/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: validateBody,
+        });
+        lastValidateRes = validateRes;
+        try {
+          validateData = (await validateRes.json()) as { valid?: boolean; reason?: string };
+        } catch {
+          validateData = {};
+        }
+        if (validateRes.ok && validateData.valid === true) {
+          validateOk = true;
+          break;
+        }
+        if (attempt < 2) await sleep(450 * (attempt + 1));
+      }
+
+      if (!validateOk && lastValidateRes) {
         const reason = validateData.reason;
         let description =
-          validateRes.status >= 500
+          lastValidateRes.status >= 500
             ? "Our servers are busy. Please try again in a moment."
-            : "We couldn’t verify this slot. Please try again.";
-        if (validateRes.status === 400) {
+            : "We couldn’t verify this slot after a few tries. Pick another time and try again.";
+        if (lastValidateRes.ok && validateData.valid !== true) {
+          description = "This time was just booked. Please choose another available slot.";
+        }
+        if (lastValidateRes.status === 400) {
           if (reason === "missing_fields") {
             description =
               "We’re missing your visit date or time. Go back to scheduling and pick a slot again.";
@@ -184,25 +223,28 @@ export function StepPayment() {
             description = "We couldn’t read the visit time. Choose your slot again, then continue to payment.";
           } else if (reason === "bad_json") {
             description = "The request was invalid. Refresh the page and try again.";
+          } else if (reason === "extras_mismatch") {
+            description =
+              "Your selected extras don’t match the locked price. Go back to home details, confirm add-ons, then pick your time again.";
           }
         }
+        trackBookingFunnelEvent("payment", "error", {
+          message: lastValidateRes.ok ? `slot_invalid:${validateData.reason ?? "unknown"}` : `validate_http_${lastValidateRes.status}`,
+          action: "validate_slot",
+        });
+        const extrasMismatch = validateData.reason === "extras_mismatch";
         show({
           tone: "danger",
-          title: "Something went wrong",
+          title: extrasMismatch
+            ? "Add-ons need a refresh"
+            : lastValidateRes.ok
+              ? "Time slot unavailable"
+              : "Something went wrong",
           description,
           autoDismissMs: 6000,
-          cta: { label: "Choose another time", onClick: goChooseAnotherTime },
-        });
-        return;
-      }
-
-      if (validateData.valid !== true) {
-        show({
-          tone: "danger",
-          title: "Time slot unavailable",
-          description: "This time was just booked. Please choose another available slot.",
-          autoDismissMs: 6000,
-          cta: { label: "Choose another time", onClick: goChooseAnotherTime },
+          cta: extrasMismatch
+            ? { label: "Home details", onClick: () => router.push(bookingFlowHref("details")) }
+            : { label: "Choose another time", onClick: goChooseAnotherTime },
         });
         return;
       }
@@ -227,7 +269,7 @@ export function StepPayment() {
         metadata: { source: "web_checkout", subscriptionFrequency: totals.subscriptionFrequency ?? "" },
         referralCode: totals.referralCode ?? "",
       };
-      console.log("PAYLOAD:", paystackBody);
+      trackBookingFunnelEvent("payment", "next", { action: "paystack_init" });
 
       const res = await fetch("/api/paystack/initialize", {
         method: "POST",
@@ -242,6 +284,10 @@ export function StepPayment() {
       };
 
       if (!res.ok) {
+        trackBookingFunnelEvent("payment", "error", {
+          message: typeof data.error === "string" ? data.error : `paystack_init_${res.status}`,
+          action: "paystack_initialize",
+        });
         showFromPaystackResponse(data, { onChooseAnotherTime: goChooseAnotherTime });
         return;
       }
@@ -251,6 +297,7 @@ export function StepPayment() {
         return;
       }
 
+      trackBookingFunnelEvent("payment", "error", { message: "missing_authorization_url", action: "paystack_initialize" });
       show({
         tone: "danger",
         title: "Payment couldn’t start",
@@ -258,9 +305,13 @@ export function StepPayment() {
         autoDismissMs: 5000,
       });
     } catch (e) {
-      console.error("Booking confirm error:", e);
+      trackBookingFunnelEvent("payment", "error", {
+        message: e instanceof Error ? e.message : "pay_network",
+        action: "pay",
+      });
       showNetworkError();
     } finally {
+      payInitInFlight.current = false;
       setPaying(false);
     }
   }
@@ -290,7 +341,15 @@ export function StepPayment() {
       }
       footerSubcopy={
         readyForPaystack ? (
-          <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
+          <div className="mx-auto max-w-md space-y-2 text-center">
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
+            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200/90">{copy.paystackBadge}</p>
+            <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              {copy.trustBadges.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
         ) : undefined
       }
     >

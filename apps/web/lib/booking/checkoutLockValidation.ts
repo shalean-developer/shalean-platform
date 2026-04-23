@@ -1,16 +1,16 @@
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
-import {
-  isLockExpired,
-  recomputeLockCheckoutQuote,
-  verifyLockQuoteSignatureForQuote,
-} from "@/lib/booking/lockQuoteSignature";
+import { isLockExpired, recomputeLockCheckoutQuote, verifyLockQuoteSignatureForQuote } from "@/lib/booking/lockQuoteSignature";
 import type { CheckoutQuoteResult } from "@/lib/pricing/pricingEngine";
-import { quoteBaseJobZar, quoteCheckoutZar } from "@/lib/pricing/pricingEngine";
-import { PRICING_CONFIG } from "@/lib/pricing/pricingConfig";
-import { normalizeVipTier } from "@/lib/pricing/vipTier";
+import {
+  computeJobSubtotalSplitZarSnapshot,
+  normalizeJobSubtotalSplitZar,
+  type JobSubtotalSplitZar,
+} from "@/lib/pricing/pricingEngineSnapshot";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
+import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
 
-/** Tariff / lock schema — bump `PRICING_CONFIG.version` to invalidate stale holds after rate changes. */
-export const BOOKING_CHECKOUT_LOCK_VERSION = PRICING_CONFIG.version;
+/** Bump when lock signature / surge algorithm changes (not when ZAR rows change in Supabase). */
+export const BOOKING_CHECKOUT_LOCK_VERSION = PRICING_ENGINE_ALGORITHM_VERSION;
 
 export type CheckoutLockFailureCode =
   | "INVALID_LOCK"
@@ -19,67 +19,97 @@ export type CheckoutLockFailureCode =
   | "SIGNATURE_INVALID"
   | "PRICE_MISMATCH"
   | "DURATION_MISMATCH"
-  | "QUOTE_MISMATCH";
+  | "QUOTE_MISMATCH"
+  | "PRICING_SNAPSHOT_MISSING";
 
 export type CheckoutLockValidateResult =
-  | { ok: true; serverQuote: CheckoutQuoteResult | null; visitTotalZar: number }
+  | { ok: true; serverQuote: CheckoutQuoteResult | null; visitTotalZar: number; jobSubtotalSplit: JobSubtotalSplitZar }
   | { ok: false; code: CheckoutLockFailureCode; message: string };
 
-/** Pre–demand-pricing per-slot map — validating legacy `booking_locked` payloads only. */
-const LEGACY_SLOT_SURGE_MAP: Record<string, number> = {
-  "08:00": 1.2,
-  "09:00": 1.1,
-  "10:00": 1.0,
-  "13:00": 1.05,
-  "14:00": 1.1,
-};
-
-function legacySurge(time: string): number {
-  const m = LEGACY_SLOT_SURGE_MAP[time];
-  return typeof m === "number" && Number.isFinite(m) ? m : 1;
-}
-
-function validateLegacyLockedPrice(locked: LockedBooking): boolean {
-  const input = {
-    service: locked.service,
-    serviceType: locked.service_type,
-    rooms: locked.rooms,
-    bathrooms: locked.bathrooms,
-    extraRooms: locked.extraRooms,
-    extras: locked.extras,
-  };
-
-  const { totalZar: baseTotal } = quoteBaseJobZar(input);
-
-  if (locked.vipTier != null && typeof locked.time === "string" && locked.time.trim()) {
-    const tier = normalizeVipTier(locked.vipTier);
-    const dyn =
-      typeof locked.dynamicSurgeFactor === "number" &&
-      locked.dynamicSurgeFactor >= 0.8 &&
-      locked.dynamicSurgeFactor <= 1.2
-        ? locked.dynamicSurgeFactor
-        : 1;
-    const q = quoteCheckoutZar(input, locked.time, tier, {
-      dynamicAdjustment: dyn,
-      cleanersCount: locked.cleanersCount,
-    });
-    const priceOk = Math.abs(q.totalZar - locked.finalPrice) <= 1;
-    const hoursOk = Math.abs(q.hours - locked.finalHours) <= 0.1;
-    return priceOk && hoursOk;
-  }
-
-  const legacy = Math.round(baseTotal * legacySurge(locked.time));
-  return Math.abs(legacy - locked.finalPrice) <= 1;
-}
-
 /**
- * Checkout truth path: expiry → lock schema version → **recompute** → signature (integrity) →
- * numeric parity (truth vs snapshot). Paystack must charge `visitTotalZar` from the recompute path.
+ * Checkout truth path: expiry → **recompute** from catalog snapshot →
+ * signature (integrity) → numeric parity. Paystack must charge `visitTotalZar` from the recompute path.
  */
 export type ValidateLockForCheckoutOptions = {
-  /** When true, skip hold window check (e.g. non-payment validation of quote math only). */
   skipExpiryCheck?: boolean;
+  /** Required — frozen `pricing_versions` row or live DB catalog from {@link resolveRatesSnapshotForLockedBooking}. */
+  ratesSnapshot: PricingRatesSnapshot;
+  /** Optional `bookings.id` — pricing normalization / drift logs when support traces a row. */
+  bookingId?: string | null;
 };
+
+function traceBookingId(locked: LockedBooking, override?: string | null): string | null {
+  const o = typeof override === "string" ? override.trim() : "";
+  if (o) return o;
+  const fromLock = typeof locked.booking_id === "string" ? locked.booking_id.trim() : "";
+  return fromLock || null;
+}
+
+function validateSignedLockV2(
+  locked: LockedBooking,
+  ratesSnapshot: PricingRatesSnapshot,
+  bookingIdOverride?: string | null,
+): CheckoutLockValidateResult {
+  const rec = recomputeLockCheckoutQuote(locked, ratesSnapshot);
+  if (!rec) {
+    return { ok: false, code: "INVALID_LOCK", message: "Invalid booking lock." };
+  }
+
+  const { quote: serverQuote, job, timeHm, vipTier, dynamicAdjustment, cleanersCount } = rec;
+
+  const hasSig =
+    typeof locked.quoteSignature === "string" && /^[0-9a-f]{64}$/i.test(locked.quoteSignature.trim());
+
+  if (hasSig) {
+    const sigOk = verifyLockQuoteSignatureForQuote(locked, serverQuote, {
+      job,
+      timeHm,
+      vipTier,
+      dynamicAdjustment,
+      cleanersCount,
+    });
+    if (!sigOk) {
+      return {
+        ok: false,
+        code: "SIGNATURE_INVALID",
+        message: "This quote could not be verified. Please choose your time again.",
+      };
+    }
+  }
+
+  if (Math.abs(serverQuote.totalZar - locked.finalPrice) > 1) {
+    return {
+      ok: false,
+      code: "PRICE_MISMATCH",
+      message: "Price updated due to changes in availability or demand. Please re-lock your slot.",
+    };
+  }
+
+  if (Math.abs(serverQuote.hours - locked.finalHours) > 0.1) {
+    return {
+      ok: false,
+      code: "DURATION_MISMATCH",
+      message: "Visit length no longer matches this quote. Please re-lock your slot.",
+    };
+  }
+
+  const pricingVersionId =
+    typeof locked.pricing_version_id === "string" && locked.pricing_version_id.trim()
+      ? locked.pricing_version_id.trim()
+      : null;
+  const bookingId = traceBookingId(locked, bookingIdOverride);
+  const jobSubtotalSplit = normalizeJobSubtotalSplitZar(
+    computeJobSubtotalSplitZarSnapshot(ratesSnapshot, job),
+    serverQuote.subtotalZar,
+    {
+      bookingId,
+      pricingVersionId,
+      pricingCatalogCodeVersion: serverQuote.pricingVersion,
+      quoteTotalZar: serverQuote.totalZar,
+    },
+  );
+  return { ok: true, serverQuote, visitTotalZar: serverQuote.totalZar, jobSubtotalSplit };
+}
 
 export function validateLockForCheckout(
   locked: LockedBooking,
@@ -101,51 +131,13 @@ export function validateLockForCheckout(
     };
   }
 
-  if (locked.pricingVersion === BOOKING_CHECKOUT_LOCK_VERSION) {
-    const rec = recomputeLockCheckoutQuote(locked);
-    if (!rec) {
-      return { ok: false, code: "INVALID_LOCK", message: "Invalid booking lock." };
-    }
-
-    const { quote: serverQuote, job, timeHm, vipTier, dynamicAdjustment, cleanersCount } = rec;
-
-    const hasSig =
-      typeof locked.quoteSignature === "string" && /^[0-9a-f]{64}$/i.test(locked.quoteSignature.trim());
-
-    if (hasSig) {
-      const sigOk = verifyLockQuoteSignatureForQuote(locked, serverQuote, {
-        job,
-        timeHm,
-        vipTier,
-        dynamicAdjustment,
-        cleanersCount,
-      });
-      if (!sigOk) {
-        return {
-          ok: false,
-          code: "SIGNATURE_INVALID",
-          message: "This quote could not be verified. Please choose your time again.",
-        };
-      }
-    }
-
-    if (Math.abs(serverQuote.totalZar - locked.finalPrice) > 1) {
-      return {
-        ok: false,
-        code: "PRICE_MISMATCH",
-        message: "Price updated due to changes in availability or demand. Please re-lock your slot.",
-      };
-    }
-
-    if (Math.abs(serverQuote.hours - locked.finalHours) > 0.1) {
-      return {
-        ok: false,
-        code: "DURATION_MISMATCH",
-        message: "Visit length no longer matches this quote. Please re-lock your slot.",
-      };
-    }
-
-    return { ok: true, serverQuote, visitTotalZar: serverQuote.totalZar };
+  const snap = options?.ratesSnapshot;
+  if (!snap) {
+    return {
+      ok: false,
+      code: "PRICING_SNAPSHOT_MISSING",
+      message: "Pricing snapshot missing. Refresh the page, then pick your time again before paying.",
+    };
   }
 
   if (typeof locked.pricingVersion === "number" && locked.pricingVersion !== BOOKING_CHECKOUT_LOCK_VERSION) {
@@ -156,20 +148,5 @@ export function validateLockForCheckout(
     };
   }
 
-  if (!validateLegacyLockedPrice(locked)) {
-    return {
-      ok: false,
-      code: "QUOTE_MISMATCH",
-      message: "Quote no longer matches. Update your booking and try again.",
-    };
-  }
-
-  const rec = recomputeLockCheckoutQuote(locked);
-  if (rec) {
-    if (Math.abs(rec.quote.totalZar - locked.finalPrice) <= 1 && Math.abs(rec.quote.hours - locked.finalHours) <= 0.1) {
-      return { ok: true, serverQuote: rec.quote, visitTotalZar: rec.quote.totalZar };
-    }
-  }
-
-  return { ok: true, serverQuote: null, visitTotalZar: locked.finalPrice };
+  return validateSignedLockV2(locked, snap, options?.bookingId);
 }

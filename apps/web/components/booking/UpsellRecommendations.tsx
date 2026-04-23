@@ -3,11 +3,11 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useMemo } from "react";
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import {
-  EXTRAS_CATALOG,
   bookingExtrasTier,
   bundleSavingsZar,
-  EXTRA_BUNDLES,
+  bundlesForServiceFromSnapshot,
   isExtraAllowedForService,
 } from "@/lib/pricing/extrasConfig";
 import {
@@ -27,23 +27,31 @@ type Props = {
 };
 
 export function UpsellRecommendations({ state, blockedExtras, setState, estimateZar }: Props) {
-  const recommended = useMemo(
-    () =>
-      getRecommendedExtraIds(state).filter(
-        (id) =>
-          !blockedExtras.has(id) &&
-          state.service != null &&
-          isExtraAllowedForService(id, state.service),
-      ),
-    [state.service, state.rooms, state.extraRooms, state.extras, blockedExtras],
-  );
+  const { catalog } = useBookingPrice();
 
-  const primaryBundle = useMemo(() => getPrimaryBundleForContext(state), [state]);
+  const recommended = useMemo(() => {
+    if (!catalog) return [];
+    return getRecommendedExtraIds(state, catalog).filter(
+      (id) =>
+        !blockedExtras.has(id) &&
+        state.service != null &&
+        isExtraAllowedForService(id, state.service, catalog),
+    );
+  }, [catalog, state.service, state.rooms, state.extraRooms, state.extras, blockedExtras]);
+
+  const primaryBundle = useMemo(() => {
+    if (!catalog) return null;
+    return getPrimaryBundleForContext(state, catalog);
+  }, [catalog, state]);
 
   const bundleActive = primaryBundle ? bundleFullySelected(primaryBundle, state.extras) : false;
-  const bundleSav = primaryBundle ? bundleSavingsZar(primaryBundle, state.service) : 0;
+  const bundleSav =
+    catalog && primaryBundle && state.service
+      ? bundleSavingsZar(catalog, primaryBundle, state.service)
+      : 0;
 
   if (!state.service) return null;
+  if (!catalog) return null;
   if (recommended.length === 0 && !primaryBundle) return null;
 
   function addExtra(id: string) {
@@ -62,7 +70,9 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
   }
 
   function toggleBundle(bundleId: string) {
-    const b = EXTRA_BUNDLES.find((x) => x.id === bundleId);
+    if (catalog == null) return;
+    const bundles = bundlesForServiceFromSnapshot(catalog, state.service);
+    const b = bundles.find((x) => x.id === bundleId);
     if (!b) return;
     const wasActive = bundleFullySelected(b, state.extras);
     setState((p) => {
@@ -103,7 +113,7 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
       {recommended.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {recommended.slice(0, 4).map((id) => {
-            const meta = EXTRAS_CATALOG[id];
+            const meta = catalog.extras[id];
             if (!meta) return null;
             const on = state.extras.includes(id);
             return (
@@ -120,7 +130,7 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
                   blockedExtras.has(id) && "pointer-events-none opacity-40",
                 )}
               >
-                {meta.label} · +R{meta.price}
+                {meta.name ?? id} · +R{meta.price}
               </button>
             );
           })}

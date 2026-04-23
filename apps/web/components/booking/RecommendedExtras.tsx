@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { BookingStep1State } from "@/components/booking/BookingStep1";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { getSmartExtras } from "@/lib/ai/bookingAssistant";
 import type { BookingContext, PastBookingHint } from "@/lib/ai/bookingAssistant";
 import type { VipTier } from "@/lib/pricing/vipTier";
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function RecommendedExtras({ state, setState, blockedExtras, userTier, pastHints }: Props) {
+  const { catalog } = useBookingPrice();
   const ctx: BookingContext = useMemo(
     () => ({
       service: state.service ?? "",
@@ -30,8 +32,9 @@ export function RecommendedExtras({ state, setState, blockedExtras, userTier, pa
   );
 
   const suggestions = useMemo(() => {
-    return getSmartExtras(ctx).filter((s) => !blockedExtras.has(s.id));
-  }, [ctx, blockedExtras]);
+    if (!catalog) return [];
+    return getSmartExtras(ctx, catalog).filter((s) => !blockedExtras.has(s.id));
+  }, [catalog, ctx, blockedExtras]);
 
   if (suggestions.length === 0) return null;
 

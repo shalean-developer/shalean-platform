@@ -2,7 +2,6 @@
  * Service catalog + booking funnel types. Pricing uses `BookingServiceId` in `lib/pricing/pricingEngine`.
  */
 
-import { isExtraAllowedForService } from "@/lib/pricing/extrasConfig";
 import type { ServiceCategoryKind } from "./CategoryPicker";
 
 export type BookingServiceId =
@@ -235,7 +234,7 @@ export function normalizeStep1ForService<
   const maxRooms = getMaxRoomsForService(prev.service);
   const blocked = getBlockedExtraIds(prev.service);
   const rooms = Math.min(prev.rooms, maxRooms);
-  const extras = prev.extras.filter((e) => !blocked.has(e) && isExtraAllowedForService(e, prev.service));
+  const extras = prev.extras.filter((e) => !blocked.has(e));
   if (rooms === prev.rooms && extras.length === prev.extras.length) return prev;
   return { ...prev, rooms, extras };
 }

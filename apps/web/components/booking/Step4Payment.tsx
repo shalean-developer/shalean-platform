@@ -1,16 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
 import { readGuestUserFromStorage, writeGuestUserToStorage } from "@/lib/booking/guestUserStorage";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
-import { formatLockedAppointmentLabel, lockedToStep1State, type LockedBooking } from "@/lib/booking/lockedBooking";
+import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
+import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
-import { computeBundledExtrasTotalZar, EXTRAS_CATALOG } from "@/lib/pricing/extrasConfig";
-import { getRecommendedExtraIds } from "@/lib/pricing/upsellEngine";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
+import { computeBundledExtrasTotalZarSnapshot, computeExtrasBundleSavingsZar } from "@/lib/pricing/extrasConfig";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getStoredReferral } from "@/lib/referrals/client";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
@@ -67,6 +67,7 @@ export function Step4Payment({
   preferRegisterTab,
   onTotalsChange,
 }: Step4PaymentProps) {
+  const { catalog } = useBookingPrice();
   const [tip, setTip] = useState(0);
   const [customMode, setCustomMode] = useState(false);
   const [customTipDraft, setCustomTipDraft] = useState("");
@@ -176,6 +177,7 @@ export function Step4Payment({
         .from("bookings")
         .select("customer_name, customer_email, customer_phone, created_at")
         .eq("user_id", user.id)
+        .neq("status", "pending_payment")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -462,15 +464,19 @@ export function Step4Payment({
       ? "Not selected"
       : getBookingSummaryServiceLabel(locked.service, locked.service_type);
 
-  const checkoutUpsellId = useMemo(() => {
-    const ctx = lockedToStep1State(locked);
-    const rec = getRecommendedExtraIds(ctx);
-    return rec.find((id) => !locked.extras.includes(id)) ?? null;
-  }, [locked]);
+  const extrasLineItems = useMemo(
+    () => resolveExtrasLineItems({ extras: locked.extras, extras_line_items: locked.extras_line_items, service: locked.service }),
+    [locked.extras, locked.extras_line_items, locked.service],
+  );
 
-  const extrasBundledZar = useMemo(
-    () => computeBundledExtrasTotalZar(locked.extras, locked.service),
-    [locked.extras, locked.service],
+  const extrasBundledZar = useMemo(() => {
+    if (!catalog) return 0;
+    return computeBundledExtrasTotalZarSnapshot(catalog, locked.extras, locked.service);
+  }, [catalog, locked.extras, locked.service]);
+
+  const extrasBundleSavingsZar = useMemo(
+    () => (catalog ? computeExtrasBundleSavingsZar(catalog, locked.extras, locked.service) : 0),
+    [catalog, locked.extras, locked.service],
   );
 
   const checkoutMicro = bookingCopy.checkout;
@@ -499,21 +505,15 @@ export function Step4Payment({
             <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhen}</dt>
             <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{formatLockedAppointmentLabel(locked)}</dd>
           </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">Bedrooms</dt>
+            <dd className="min-w-0 tabular-nums text-zinc-800 dark:text-zinc-100">{locked.rooms}</dd>
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">Bathrooms</dt>
+            <dd className="min-w-0 tabular-nums text-zinc-800 dark:text-zinc-100">{locked.bathrooms}</dd>
+          </div>
         </dl>
-        {checkoutUpsellId && EXTRAS_CATALOG[checkoutUpsellId] ? (
-          <p className="mt-3 rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs leading-relaxed text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100">
-            <span className="font-semibold">Add before checkout:</span>{" "}
-            {EXTRAS_CATALOG[checkoutUpsellId].label} (+
-            <span className="tabular-nums">R{EXTRAS_CATALOG[checkoutUpsellId].price}</span>).{" "}
-            <Link
-              href={`${bookingFlowHref("details")}#extras`}
-              className="font-semibold underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-200"
-            >
-              Update add-ons
-            </Link>{" "}
-            — most guests add this for a fuller clean.
-          </p>
-        ) : null}
         <ul className="mt-4 space-y-1 border-t border-zinc-200/80 pt-3 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
           {checkoutMicro.trustShort.map((line) => (
             <li key={line} className="flex gap-2 leading-snug">
@@ -527,6 +527,10 @@ export function Step4Payment({
       </section>
 
       <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Price breakdown</h2>
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Visit total was locked when you chose your time; discounts and tips apply below.
+        </p>
         {typeof locked.quoteSubtotalZar === "number" &&
         Number.isFinite(locked.quoteSubtotalZar) &&
         typeof locked.quoteVipSavingsZar === "number" &&
@@ -549,6 +553,24 @@ export function Step4Payment({
               </p>
             ) : null}
           </>
+        ) : null}
+        {extrasLineItems.length > 0 ? (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Extras</p>
+            <ul className="space-y-1">
+              {extrasLineItems.map((row) => (
+                <li key={row.slug} className="flex items-center justify-between text-sm text-zinc-600 dark:text-zinc-400">
+                  <span className="min-w-0 pr-2">{row.name}</span>
+                  <span className="shrink-0 tabular-nums">R {formatZar(row.price)}</span>
+                </li>
+              ))}
+            </ul>
+            {extrasBundleSavingsZar > 0 ? (
+              <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                Bundle savings (R {formatZar(extrasBundleSavingsZar)}) are included in your locked visit total below.
+              </p>
+            ) : null}
+          </div>
         ) : null}
         {extrasBundledZar > 0 ? (
           <div className="mt-2 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
@@ -585,6 +607,9 @@ export function Step4Payment({
           <span className="text-zinc-900 dark:text-zinc-50">Total</span>
           <span className="tabular-nums text-emerald-600 dark:text-emerald-400">R {formatZar(totalZar)}</span>
         </div>
+        <p className="mt-3 rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 text-xs font-medium leading-snug text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
+          {checkoutMicro.extrasGuarantee}
+        </p>
       </section>
 
       <section
@@ -730,6 +755,14 @@ export function Step4Payment({
         className="rounded-xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950/60"
       >
         <h2 id="account-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Account &amp; contact</h2>
+        <ol
+          className="mt-2 flex flex-wrap gap-2 text-[10px] font-semibold text-zinc-600 dark:text-zinc-400"
+          aria-label="Checkout steps"
+        >
+          <li className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">1 · Booked</li>
+          <li className="rounded-full bg-primary px-2 py-1 text-primary-foreground">2 · Your details</li>
+          <li className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">3 · Pay</li>
+        </ol>
         {user ? (
           <div className="mt-3 space-y-3">
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Signed in. Confirm your details below.</p>

@@ -26,7 +26,8 @@ import {
   lockedToStep1State,
   lockBookingSlot,
 } from "@/lib/booking/lockedBooking";
-import { quoteJobDurationHours } from "@/lib/pricing/pricingEngine";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
+import type { RawAvailabilitySlot } from "@/lib/booking/enrichAvailabilitySlots";
 import {
   minSlotPrice,
   orderSlotTimesForDisplay,
@@ -112,10 +113,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const step1 = usePersistedBookingSummaryState();
   const locked = useLockedBooking();
   const { tier: vipTier } = useBookingVipTier();
+  const { job, canonicalDurationHours, priceRawSlots, catalogLoading, catalog } = useBookingPrice();
   const pastHints = usePastBookingHints();
   const summaryState = step1 ?? (locked ? lockedToStep1State(locked) : null);
   const lockBaseState = step1 ?? (locked ? lockedToStep1State(locked) : null);
-  const [liveSlots, setLiveSlots] = useState<LiveSlot[]>([]);
+  const [rawSlots, setRawSlots] = useState<RawAvailabilitySlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const autoLockRunRef = useRef<string>("");
@@ -128,6 +130,34 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     locked?.date && allDateValues.includes(locked.date) ? locked.date : null;
   const [dateOverride, setDateOverride] = useState<string | null>(null);
   const selectedDate = dateOverride ?? lockedDateInRange ?? allDateValues[0]!;
+
+  const extrasJoinKey = lockBaseState?.extras.join("\u0001") ?? "";
+  const slotPricingDepsKey = useMemo(() => {
+    if (!lockBaseState) return "";
+    return [
+      lockBaseState.rooms,
+      lockBaseState.bathrooms,
+      lockBaseState.extraRooms,
+      extrasJoinKey,
+      lockBaseState.service ?? "",
+      lockBaseState.service_type ?? "",
+      vipTier,
+    ].join("|");
+  }, [
+    lockBaseState,
+    lockBaseState?.rooms,
+    lockBaseState?.bathrooms,
+    lockBaseState?.extraRooms,
+    extrasJoinKey,
+    lockBaseState?.service,
+    lockBaseState?.service_type,
+    vipTier,
+  ]);
+
+  const liveSlots: LiveSlot[] = useMemo(() => {
+    if (!job || catalogLoading) return [];
+    return priceRawSlots(rawSlots);
+  }, [rawSlots, job, vipTier, priceRawSlots, catalogLoading]);
 
   const slotPickRows: SlotPickInput[] = useMemo(() => {
     return liveSlots
@@ -165,89 +195,30 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   }, [slotPriceByTime]);
 
   const durationLine = useMemo(() => {
-    const durs = liveSlots
-      .filter((s) => s.available && typeof s.duration === "number" && Number.isFinite(s.duration))
-      .map((s) => s.duration!);
-    if (durs.length > 0) {
-      const avg = durs.reduce((a, b) => a + b, 0) / durs.length;
-      return formatDurationLine(avg);
-    }
-    if (!lockBaseState) return "";
-    const hours = quoteJobDurationHours(
-      {
-        service: lockBaseState.service,
-        serviceType: lockBaseState.service_type,
-        rooms: lockBaseState.rooms,
-        bathrooms: lockBaseState.bathrooms,
-        extraRooms: lockBaseState.extraRooms,
-        extras: lockBaseState.extras,
-      },
-      vipTier,
-    );
-    return formatDurationLine(hours);
-  }, [liveSlots, lockBaseState, vipTier]);
-
-  const extrasJoinKey = lockBaseState?.extras.join("\u0001") ?? "";
-  const slotPricingDepsKey = useMemo(() => {
-    if (!lockBaseState) return "";
-    return [
-      lockBaseState.rooms,
-      lockBaseState.bathrooms,
-      lockBaseState.extraRooms,
-      extrasJoinKey,
-      lockBaseState.service ?? "",
-      lockBaseState.service_type ?? "",
-      vipTier,
-    ].join("|");
-  }, [
-    lockBaseState,
-    lockBaseState?.rooms,
-    lockBaseState?.bathrooms,
-    lockBaseState?.extraRooms,
-    extrasJoinKey,
-    lockBaseState?.service,
-    lockBaseState?.service_type,
-    vipTier,
-  ]);
+    if (canonicalDurationHours != null) return formatDurationLine(canonicalDurationHours);
+    return "";
+  }, [canonicalDurationHours]);
 
   useEffect(() => {
-    if (!lockBaseState) return;
+    if (!lockBaseState || canonicalDurationHours == null) return;
     let active = true;
     void (async () => {
       setSlotsLoading(true);
       setSlotsError(null);
       try {
-        const hours = quoteJobDurationHours(
-          {
-            service: lockBaseState.service,
-            serviceType: lockBaseState.service_type,
-            rooms: lockBaseState.rooms,
-            bathrooms: lockBaseState.bathrooms,
-            extraRooms: lockBaseState.extraRooms,
-            extras: lockBaseState.extras,
-          },
-          vipTier,
-        );
         const params = new URLSearchParams();
         params.set("date", selectedDate);
-        params.set("duration", String(Math.round(hours * 60)));
-        const svc = lockBaseState.service_type ?? lockBaseState.service;
-        if (svc) params.set("serviceType", String(svc));
-        params.set("bedrooms", String(Math.max(1, lockBaseState.rooms)));
-        params.set("bathrooms", String(Math.max(1, lockBaseState.bathrooms)));
-        params.set("extraRooms", String(Math.max(0, lockBaseState.extraRooms)));
-        if (lockBaseState.extras.length) params.set("extras", lockBaseState.extras.join(","));
-        params.set("vipTier", vipTier);
+        params.set("duration", String(Math.max(30, Math.round(canonicalDurationHours * 60))));
         const res = await fetch(`/api/booking/time-slots?${params.toString()}`);
-        const json = (await res.json()) as { slots?: LiveSlot[]; error?: string };
+        const json = (await res.json()) as { slots?: RawAvailabilitySlot[]; error?: string };
         if (!active) return;
         if (!res.ok) {
           setSlotsError(json.error ?? "Failed to load time slots.");
-          setLiveSlots([]);
+          setRawSlots([]);
           return;
         }
         const slots = json.slots ?? [];
-        setLiveSlots(slots);
+        setRawSlots(slots);
         trackAssistantEvent("times_loaded", {
           selectedDate,
           slotsCount: slots.filter((s) => s.available).length,
@@ -260,6 +231,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
       } catch {
         if (!active) return;
         setSlotsError("Failed to load time slots.");
+        setRawSlots([]);
       } finally {
         if (active) setSlotsLoading(false);
       }
@@ -267,7 +239,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     return () => {
       active = false;
     };
-  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey]);
+  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey, canonicalDurationHours]);
 
   useEffect(() => {
     autoLockRunRef.current = "";
@@ -346,6 +318,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
         ok?: boolean;
         error?: string;
         pricingVersion?: number;
+        pricing_version_id?: string;
         total?: number;
         hours?: number;
         surgeMultiplier?: number;
@@ -353,6 +326,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
         surgeLabel?: string;
         signature?: string;
         lockExpiresAt?: string;
+        extras_line_items?: { slug: string; name: string; price: number }[];
         breakdown?: {
           subtotalZar?: number;
           afterVipSubtotalZar?: number;
@@ -388,6 +362,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           quoteSignature: json.signature,
           lockExpiresAt: json.lockExpiresAt,
           pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
+          pricing_version_id:
+            typeof json.pricing_version_id === "string" && json.pricing_version_id.trim()
+              ? json.pricing_version_id.trim()
+              : undefined,
+          extras_line_items: Array.isArray(json.extras_line_items) ? json.extras_line_items : undefined,
         },
       });
     },
@@ -421,8 +400,8 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const dimOtherSlots = selectedTime !== null;
 
   const premiumUpsell =
-    bookingContext && selectedTime
-      ? getPremiumTimeUpsellExtras(bookingContext).filter((x) => !bookingContext.extras.includes(x.id))
+    bookingContext && selectedTime && catalog
+      ? getPremiumTimeUpsellExtras(bookingContext, catalog).filter((x) => !bookingContext.extras.includes(x.id))
       : [];
 
   const demandForSelected =

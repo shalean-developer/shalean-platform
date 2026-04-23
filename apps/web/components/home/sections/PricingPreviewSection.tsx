@@ -1,5 +1,9 @@
+"use client";
+
+import { useMemo } from "react";
 import { HomeBookingLink } from "@/components/home/HomeBookingLink";
 import { calculateHomeWidgetQuoteZar } from "@/lib/pricing/calculatePrice";
+import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
 import { cn } from "@/lib/utils";
 
 const samples = [
@@ -9,6 +13,25 @@ const samples = [
 ];
 
 export function PricingPreviewSection() {
+  const { snapshot: catalog } = usePricingCatalogSnapshot();
+
+  const rows = useMemo(() => {
+    if (!catalog) return samples.map((row) => ({ ...row, total: null as number | null }));
+    return samples.map((row) => ({
+      ...row,
+      total: calculateHomeWidgetQuoteZar(
+        {
+          service: row.service,
+          bedrooms: row.bedrooms,
+          bathrooms: row.bathrooms,
+          extraRooms: 0,
+          extras: row.extras,
+        },
+        catalog,
+      ),
+    }));
+  }, [catalog]);
+
   return (
     <section id="pricing" className="scroll-mt-28 border-b border-blue-100 bg-blue-50/50 py-16" aria-labelledby="pricing-heading">
       <div className="mx-auto max-w-7xl px-4">
@@ -20,23 +43,19 @@ export function PricingPreviewSection() {
         </div>
 
         <ul className="mt-10 grid gap-4 md:grid-cols-3">
-          {samples.map((row) => {
-            const total = calculateHomeWidgetQuoteZar({
-              service: row.service,
-              bedrooms: row.bedrooms,
-              bathrooms: row.bathrooms,
-              extraRooms: 0,
-              extras: row.extras,
-            });
-            return (
-              <li key={row.label} className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm transition hover:border-blue-200 hover:shadow-md">
-                <p className="text-sm font-medium text-blue-600">{row.label}</p>
-                <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">{row.service} clean</p>
-                <p className="mt-4 text-3xl font-bold text-blue-600">R{total}</p>
-                <p className="mt-2 text-sm text-gray-600">Includes base service plus room rates shown in checkout.</p>
-              </li>
-            );
-          })}
+          {rows.map((row) => (
+            <li
+              key={row.label}
+              className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+            >
+              <p className="text-sm font-medium text-blue-600">{row.label}</p>
+              <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">{row.service} clean</p>
+              <p className="mt-4 text-3xl font-bold text-blue-600">
+                {row.total != null ? `R ${row.total.toLocaleString("en-ZA")}` : "—"}
+              </p>
+              <p className="mt-2 text-sm text-gray-600">Includes base service plus room rates shown in checkout.</p>
+            </li>
+          ))}
         </ul>
 
         <div className="mx-auto mt-10 max-w-xl text-center">

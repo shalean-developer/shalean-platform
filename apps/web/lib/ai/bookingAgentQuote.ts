@@ -9,8 +9,11 @@ import type { ParsedBookingIntent } from "@/lib/ai/parseBookingIntent";
 import { resolveIntentDateYmd } from "@/lib/ai/parseBookingIntent";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { buildLockedBookingSnapshot } from "@/lib/booking/buildLockedBooking";
+import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { calculateSmartQuote } from "@/lib/pricing/calculatePrice";
+import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import type { VipTier } from "@/lib/pricing/vipTier";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /** Same grid as Step 2 schedule UI. */
 export const BOOKING_AGENT_SLOT_TIMES = [
@@ -31,7 +34,7 @@ export type BookingAgentQuoteResult = {
   dateYmd: string;
   slots: { time: string; priceZar: number; demand: "low" | "normal" | "high" }[];
   recommendations: ReturnType<typeof getSmartRecommendations>;
-  suggestedLocked: ReturnType<typeof buildLockedBookingSnapshot>;
+  suggestedLocked: LockedBooking;
   smartExtras: ReturnType<typeof getSmartExtras>;
   personalizationNote?: string;
 };
@@ -43,7 +46,7 @@ function isAgentSlotTime(time: string): boolean {
 /**
  * Build a full quote: slot grid with dynamic adjustments, assistant picks, and a server-valid `LockedBooking`.
  */
-export function buildBookingAgentQuote(
+export async function buildBookingAgentQuote(
   intent: ParsedBookingIntent,
   step1: BookingStep1State,
   options: {
@@ -56,7 +59,16 @@ export function buildBookingAgentQuote(
     /** User or UI picked a slot from the grid */
     overrideTime?: string | null;
   },
-): BookingAgentQuoteResult {
+): Promise<BookingAgentQuoteResult> {
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    throw new Error("buildBookingAgentQuote: Supabase admin is not configured.");
+  }
+  const snapshot = await buildPricingRatesSnapshotFromDb(admin);
+  if (!snapshot) {
+    throw new Error("buildBookingAgentQuote: pricing catalog could not be loaded.");
+  }
+
   const todayYmd = options.todayYmd ?? todayYmdJohannesburg();
   const dateYmd =
     options.dateYmdOverride && /^\d{4}-\d{2}-\d{2}$/.test(options.dateYmdOverride.trim())
@@ -75,7 +87,7 @@ export function buildBookingAgentQuote(
   const byPrice: Record<string, number> = {};
   for (const t of BOOKING_AGENT_SLOT_TIMES) {
     const adj = options.slotAdjustments[t] ?? 1;
-    byPrice[t] = calculateSmartQuote(input, t, options.vipTier, { dynamicAdjustment: adj }).total;
+    byPrice[t] = calculateSmartQuote(input, snapshot, t, options.vipTier, { dynamicAdjustment: adj }).total;
   }
 
   const slots = buildAssistantSlots(BOOKING_AGENT_SLOT_TIMES, byPrice);
@@ -95,12 +107,12 @@ export function buildBookingAgentQuote(
       : recommendations.recommended.time;
   const dynamicFactor = options.slotAdjustments[pickTime] ?? 1;
 
-  const suggestedLocked = buildLockedBookingSnapshot(step1, { date: dateYmd, time: pickTime }, {
+  const suggestedLocked = await buildLockedBookingSnapshot(step1, { date: dateYmd, time: pickTime }, {
     vipTier: options.vipTier,
     dynamicSurgeFactor: dynamicFactor !== 1 ? dynamicFactor : undefined,
   });
 
-  const smartExtras = getSmartExtras(ctx);
+  const smartExtras = getSmartExtras(ctx, snapshot);
 
   return {
     intent,

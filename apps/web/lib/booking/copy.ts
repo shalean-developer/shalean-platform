@@ -23,6 +23,8 @@ export const bookingCopy = {
     title: "What kind of clean do you need?",
     serviceSectionTitle: "Cleaning type",
     mostPopularLabel: "Most popular",
+    /** Shown on Deep Cleaning card (secondary to “Most popular” on Standard). */
+    recommendedServiceLabel: "Recommended",
     priceLabel: "Total",
     trust: "✅ Your price is set when you pick a time — no surprises at checkout",
     supporting: "Includes professional cleaning and supplies",
@@ -36,9 +38,11 @@ export const bookingCopy = {
 
   details: {
     title: "Tell us about your home",
+    /** Shown under the title — aligns with funnel analytics (home + add-ons before schedule). */
+    funnelProgress: "Step 2 of 4 · Home size & add-ons",
     subtitle: "We’ve pre-filled this for you — adjust if needed",
     extrasTitle: "Add extras (optional)",
-    reassurance: "You can change this anytime before payment",
+    reassurance: "You can change this until you pick a time — then add-ons lock with your visit total.",
     cta: "Continue to schedule",
     cleanTypeTitle: "Clean type",
     cleanTypeHint: "Most homes stay on Standard — switch only if you need something different.",
@@ -86,7 +90,11 @@ export const bookingCopy = {
     summaryWhere: "Where",
     summaryWhen: "When",
     addOnsLabel: "Add-ons (in visit total)",
+    /** Shown at checkout — extras are persisted on the booking and sent to the cleaner. */
+    extrasGuarantee: "✔ All selected extras are included and guaranteed for this visit.",
     slotHeldLine: "This price is held while you complete checkout — finish within a few minutes.",
+    paystackBadge: "Secure payment via Paystack · PCI-DSS certified processing",
+    trustBadges: ["256-bit encryption", "Instant confirmation", "Paystack protected checkout"] as const,
   },
 
   progress: {

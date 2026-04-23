@@ -2,11 +2,10 @@
 
 import { useMemo } from "react";
 import { lockedToStep1State } from "@/lib/booking/lockedBooking";
-import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { BookingSummaryCard } from "./BookingSummaryCard";
 import { useLockedBooking } from "./useLockedBooking";
 import { useSelectedCleaner } from "./useSelectedCleaner";
-import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import type { BookingStep1State } from "./useBookingStep1";
 
 type BookingSummaryProps = {
@@ -35,13 +34,13 @@ export default function BookingSummary({
   const lockedRaw = useLockedBooking();
   const locked = ignoreLockedBooking ? null : lockedRaw;
   const selectedCleaner = useSelectedCleaner();
-  const { tier } = useBookingVipTier();
+  const { canonicalTotalZar } = useBookingPrice();
   const displayState: BookingStep1State = locked ? lockedToStep1State(locked) : state;
 
   const estimateFromZar = useMemo(() => {
     if (locked || suppressEstimateUntilLocked) return null;
-    return estimateFromSmartQuoteMin(displayState, tier);
-  }, [displayState, locked, suppressEstimateUntilLocked, tier]);
+    return canonicalTotalZar;
+  }, [locked, suppressEstimateUntilLocked, canonicalTotalZar]);
 
   return (
     <div

@@ -9,6 +9,7 @@ import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
 import { isBookingTimeInWindow } from "@/lib/dispatch/timeWindow";
 import type { AvailabilityRow, CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { notifyCustomerCleanerAssigned } from "@/lib/notifications/customerUserNotifications";
 
 export type { SmartDispatchCandidate } from "@/lib/dispatch/types";
 
@@ -918,6 +919,8 @@ export async function smartAssignCleaner(
         supply_ratio: Math.round(supplyRatio * 1000) / 1000,
       },
     });
+
+    void notifyCustomerCleanerAssigned(supabase, params.bookingId);
 
     return { ok: true, cleanerId: top.id, score: top.score };
   }

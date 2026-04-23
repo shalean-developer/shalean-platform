@@ -3,7 +3,8 @@
  * for repeat extras and slot preferences (see `/api/ai/booking-agent` and `usePastBookingHints`).
  */
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
-import { EXTRAS_CATALOG, isExtraAllowedForService } from "@/lib/pricing/extrasConfig";
+import { isExtraAllowedForService } from "@/lib/pricing/extrasConfig";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 import { getDemandPricingLabel } from "@/lib/pricing/slotSurge";
 
 export type BookingContext = {
@@ -119,18 +120,18 @@ const EXTRA_LABEL: Record<string, string> = {
 };
 
 /**
- * Contextual add-ons — only IDs that exist in `EXTRAS_CATALOG` / Step 1 chips.
+ * Contextual add-ons — IDs must exist in the active pricing catalog.
  */
-export function getSmartExtras(context: BookingContext): SmartExtraSuggestion[] {
+export function getSmartExtras(context: BookingContext, snapshot: PricingRatesSnapshot): SmartExtraSuggestion[] {
   const suggestions: SmartExtraSuggestion[] = [];
   const has = (id: string) => context.extras.includes(id);
-  const price = (id: string) => EXTRAS_CATALOG[id]?.price ?? 0;
+  const price = (id: string) => snapshot.extras[id]?.price ?? 0;
   const svc = parseBookingServiceId(context.service);
   if (!svc) return [];
 
   const push = (id: string, label: string, reason: string) => {
     if (has(id)) return;
-    if (!svc || !isExtraAllowedForService(id, svc)) return;
+    if (!svc || !isExtraAllowedForService(id, svc, snapshot)) return;
     suggestions.push({ id, label, reason, price: price(id) });
   };
 
@@ -156,7 +157,7 @@ export function getSmartExtras(context: BookingContext): SmartExtraSuggestion[] 
   if (context.pastBookings?.length) {
     const prevExtras = new Set(context.pastBookings.flatMap((b) => b.extras ?? []));
     for (const id of prevExtras) {
-      if (!has(id) && EXTRA_LABEL[id] && EXTRAS_CATALOG[id] != null) {
+      if (!has(id) && EXTRA_LABEL[id] && snapshot.extras[id] != null) {
         push(id, EXTRA_LABEL[id] ?? id, "You added this last time — one tap to include again.");
       }
     }
@@ -171,7 +172,10 @@ export function getSmartExtras(context: BookingContext): SmartExtraSuggestion[] 
 }
 
 /** Premium / peak window → nudge higher-value extras */
-export function getPremiumTimeUpsellExtras(context: BookingContext): SmartExtraSuggestion[] {
+export function getPremiumTimeUpsellExtras(
+  context: BookingContext,
+  snapshot: PricingRatesSnapshot,
+): SmartExtraSuggestion[] {
   const out: SmartExtraSuggestion[] = [];
   const has = (id: string) => context.extras.includes(id);
   const svc = parseBookingServiceId(context.service);
@@ -182,12 +186,12 @@ export function getPremiumTimeUpsellExtras(context: BookingContext): SmartExtraS
       ? (heavyIds as unknown as readonly string[])
       : (lightIds as unknown as readonly string[]);
   for (const id of ids) {
-    if (!has(id) && EXTRAS_CATALOG[id] != null && svc && isExtraAllowedForService(id, svc)) {
+    if (!has(id) && snapshot.extras[id] != null && svc && isExtraAllowedForService(id, svc, snapshot)) {
       out.push({
         id,
         label: EXTRA_LABEL[id] ?? id,
         reason: "Popular with premium time slots — complete the refresh.",
-        price: EXTRAS_CATALOG[id]!.price,
+        price: snapshot.extras[id]!.price,
       });
     }
   }

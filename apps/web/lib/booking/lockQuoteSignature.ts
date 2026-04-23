@@ -1,11 +1,9 @@
 import crypto from "crypto";
 import { pricingJobFromLockedBooking } from "@/lib/booking/bookingLockQuote";
-import {
-  quoteCheckoutZar,
-  type CheckoutQuoteResult,
-  type PricingJobInput,
-} from "@/lib/pricing/pricingEngine";
-import { PRICING_CONFIG } from "@/lib/pricing/pricingConfig";
+import { quoteCheckoutZarWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
+import type { CheckoutQuoteResult, PricingJobInput } from "@/lib/pricing/pricingEngine";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
+import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
 import { resolveBookingLockHmacSecretForSigning } from "@/lib/booking/bookingLockHmacSecret";
 import type { VipTier } from "@/lib/pricing/vipTier";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
@@ -30,7 +28,7 @@ export type LockQuoteSignParams = {
   job: PricingJobInput;
   timeHm: string;
   vipTier: VipTier;
-  /** Must match the options passed into `quoteCheckoutZar` for this quote. */
+  /** Must match the options passed into `quoteCheckoutZarWithSnapshot` for this quote. */
   dynamicAdjustment: number | undefined;
   cleanersCount: number | undefined;
   quote: CheckoutQuoteResult;
@@ -108,13 +106,16 @@ export type RecomputedLockQuote = {
   quote: CheckoutQuoteResult;
 };
 
-export function recomputeLockCheckoutQuote(locked: LockedBooking): RecomputedLockQuote | null {
+export function recomputeLockCheckoutQuote(
+  locked: LockedBooking,
+  ratesSnapshot: PricingRatesSnapshot,
+): RecomputedLockQuote | null {
   if (typeof locked.time !== "string" || !locked.time.trim()) return null;
   const tier = normalizeVipTier(locked.vipTier);
   const { dynamicAdjustment, cleanersCount } = lockQuoteOptionsFromLocked(locked);
-  const job = pricingJobFromLockedBooking(locked);
+  const job = pricingJobFromLockedBooking(locked, ratesSnapshot);
   const timeHm = locked.time.trim().slice(0, 5);
-  const quote = quoteCheckoutZar(job, timeHm, tier, { dynamicAdjustment, cleanersCount });
+  const quote = quoteCheckoutZarWithSnapshot(ratesSnapshot, job, timeHm, tier, { dynamicAdjustment, cleanersCount });
   return { job, timeHm, vipTier: tier, dynamicAdjustment, cleanersCount, quote };
 }
 
@@ -160,9 +161,9 @@ function lockQuoteOptionsFromLocked(locked: LockedBooking): {
  * Signed v2 locks: one recompute, then signature integrity + numeric parity vs snapshot.
  * @deprecated Prefer {@link validateLockForCheckout} at payment boundaries.
  */
-export function verifyLockQuoteSignature(locked: LockedBooking): boolean {
-  if (locked.pricingVersion !== PRICING_CONFIG.version) return false;
-  const rec = recomputeLockCheckoutQuote(locked);
+export function verifyLockQuoteSignature(locked: LockedBooking, ratesSnapshot: PricingRatesSnapshot): boolean {
+  if (locked.pricingVersion !== PRICING_ENGINE_ALGORITHM_VERSION) return false;
+  const rec = recomputeLockCheckoutQuote(locked, ratesSnapshot);
   if (!rec) return false;
   if (typeof locked.quoteSignature !== "string" || !/^[0-9a-f]{64}$/i.test(locked.quoteSignature.trim())) {
     return false;

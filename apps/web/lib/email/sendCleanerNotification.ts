@@ -26,6 +26,8 @@ export async function sendCleanerNewJobEmail(params: {
   dateLabel: string;
   timeLabel: string;
   location: string;
+  /** Human-readable lines, e.g. `Inside Oven (R59)` — from `bookings.extras` jsonb. */
+  extrasRequired?: string[];
 }): Promise<{ sent: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) {
@@ -43,6 +45,13 @@ export async function sendCleanerNewJobEmail(params: {
   const appUrl = getPublicAppUrlBase();
   const jobsUrl = `${appUrl}/cleaner/jobs`;
 
+  const extrasBlock =
+    params.extrasRequired && params.extrasRequired.length > 0
+      ? `<li><strong>Extras required:</strong><ul>${params.extrasRequired
+          .map((line) => `<li>${escapeHtml(line)}</li>`)
+          .join("")}</ul></li>`
+      : "";
+
   const html = `
     <p>Hi ${escapeHtml(params.cleanerName)},</p>
     <p><strong>New job assigned</strong> — you have a cleaning booking.</p>
@@ -50,6 +59,7 @@ export async function sendCleanerNewJobEmail(params: {
       <li><strong>Service:</strong> ${escapeHtml(params.service)}</li>
       <li><strong>When:</strong> ${escapeHtml(params.dateLabel)} ${escapeHtml(params.timeLabel)}</li>
       <li><strong>Location:</strong> ${escapeHtml(params.location || "—")}</li>
+      ${extrasBlock}
     </ul>
     <p><a href="${jobsUrl}">Open your jobs</a> to accept, start, and complete the visit.</p>
     <p style="color:#666;font-size:12px">Booking ID: ${escapeHtml(params.bookingId)}</p>

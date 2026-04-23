@@ -21,10 +21,17 @@ export function useCleaners(args: {
   userLng?: number | null;
   selectedDate?: string | null;
   selectedTime?: string | null;
+  /** Must match slot grid / lock job length (minutes). */
+  durationMinutes?: number;
 }) {
   const [cleaners, setCleaners] = useState<LiveCleaner[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const durationMinutes =
+    typeof args.durationMinutes === "number" && Number.isFinite(args.durationMinutes)
+      ? Math.max(30, Math.round(args.durationMinutes))
+      : 120;
+
   const key = useMemo(
     () =>
       JSON.stringify({
@@ -32,8 +39,9 @@ export function useCleaners(args: {
         time: args.selectedTime ?? "",
         lat: args.userLat ?? null,
         lng: args.userLng ?? null,
+        duration: durationMinutes,
       }),
-    [args.selectedDate, args.selectedTime, args.userLat, args.userLng],
+    [args.selectedDate, args.selectedTime, args.userLat, args.userLng, durationMinutes],
   );
 
   useEffect(() => {
@@ -62,6 +70,7 @@ export function useCleaners(args: {
         const params = new URLSearchParams({
           date: args.selectedDate!,
           time: args.selectedTime!,
+          duration: String(durationMinutes),
         });
         if (typeof args.userLat === "number") params.set("lat", String(args.userLat));
         if (typeof args.userLng === "number") params.set("lng", String(args.userLng));
@@ -92,7 +101,7 @@ export function useCleaners(args: {
       active = false;
       window.clearTimeout(t);
     };
-  }, [args.selectedDate, args.selectedTime, args.userLat, args.userLng, key]);
+  }, [args.selectedDate, args.selectedTime, args.userLat, args.userLng, durationMinutes, key]);
 
   const recommendedCleaner = cleaners[0] ?? null;
   return { cleaners, recommendedCleaner, loading, error };

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Briefcase, Building2, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
+import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { bookingCopy } from "@/lib/booking/copy";
 import { useBookingStep1, type PropertyTypeKind } from "@/components/booking/useBookingStep1";
 import { cn } from "@/lib/utils";
@@ -49,9 +50,22 @@ export function StepEntry() {
   const [addressBlurred, setAddressBlurred] = useState(false);
   const [entryContinueGate, setEntryContinueGate] = useState(false);
   const [trustSheetOpen, setTrustSheetOpen] = useState(false);
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
 
   useEffect(() => {
     setEntryContinueGate(true);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/cities")
+      .then((r) => r.json())
+      .then((j: { cities?: { name?: string | null }[] }) => {
+        const names = (j.cities ?? [])
+          .map((c) => (typeof c.name === "string" ? c.name.trim() : ""))
+          .filter((n) => n.length > 0);
+        setCityOptions(names);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -95,6 +109,7 @@ export function StepEntry() {
 
   const goQuote = useCallback(() => {
     if (!canContinue) return;
+    trackBookingFunnelEvent("entry", "next", { route_step: "entry" });
     commitLocation(locDraft);
     setState((p) => ({
       ...p,
@@ -148,6 +163,7 @@ export function StepEntry() {
           <input
             id="entry-location"
             type="text"
+            list="entry-city-hints"
             autoComplete="street-address"
             placeholder={copy.addressPlaceholder}
             value={locDraft}
@@ -159,6 +175,13 @@ export function StepEntry() {
             suppressHydrationWarning
             className="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-primary/80 lg:h-14 lg:rounded-2xl lg:text-base lg:leading-normal"
           />
+          {cityOptions.length > 0 ? (
+            <datalist id="entry-city-hints">
+              {cityOptions.slice(0, 80).map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          ) : null}
           {addressEmpty ? (
             <p className="text-xs font-medium text-amber-800 dark:text-amber-400/90" role="status">
               {bookingCopy.errors.address}

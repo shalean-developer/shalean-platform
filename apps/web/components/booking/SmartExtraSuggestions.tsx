@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { BookingStep1State } from "@/components/booking/BookingStep1";
 import type { Dispatch, SetStateAction } from "react";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { getSmartExtras } from "@/lib/ai/bookingAssistant";
 import type { BookingContext, PastBookingHint } from "@/lib/ai/bookingAssistant";
 import { trackAssistantEvent } from "@/lib/booking/trackAssistantEvent";
@@ -21,6 +22,7 @@ type Props = {
 
 export function SmartExtraSuggestions({ state, setState, blockedExtras, userTier, pastHints }: Props) {
   const [flashId, setFlashId] = useState<string | null>(null);
+  const { catalog } = useBookingPrice();
 
   const ctx: BookingContext = useMemo(
     () => ({
@@ -35,8 +37,9 @@ export function SmartExtraSuggestions({ state, setState, blockedExtras, userTier
   );
 
   const suggestions = useMemo(() => {
-    return getSmartExtras(ctx).filter((s) => !blockedExtras.has(s.id) && !state.extras.includes(s.id));
-  }, [ctx, blockedExtras, state.extras]);
+    if (!catalog) return [];
+    return getSmartExtras(ctx, catalog).filter((s) => !blockedExtras.has(s.id) && !state.extras.includes(s.id));
+  }, [catalog, ctx, blockedExtras, state.extras]);
 
   if (suggestions.length === 0) return null;
 

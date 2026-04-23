@@ -6,7 +6,7 @@ import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
-import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import {
@@ -15,6 +15,8 @@ import {
   normalizeStep1ForService,
 } from "@/components/booking/serviceCategories";
 import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
+import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import { extrasLineItemsForService } from "@/lib/pricing/extrasConfig";
 
 export function StepQuote() {
   const router = useRouter();
@@ -22,8 +24,14 @@ export function StepQuote() {
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
   const { tier } = useBookingVipTier();
+  const { canonicalTotalZar, catalog } = useBookingPrice();
 
-  const estimateZar = useMemo(() => estimateFromSmartQuoteMin(state, tier), [state, tier]);
+  const estimateZar = canonicalTotalZar;
+
+  const selectedExtras = useMemo(() => {
+    if (!catalog) return [];
+    return extrasLineItemsForService(state.extras, state.service, catalog);
+  }, [state.extras, state.service, catalog]);
 
   useEffect(() => {
     clearBookingPricePreviewFromStorage();
@@ -77,7 +85,10 @@ export function StepQuote() {
         openSummarySheetOnAmountTap: true,
       }}
       canContinue={canContinue}
-      onContinue={() => router.push(bookingFlowHref("details"))}
+      onContinue={() => {
+        trackBookingFunnelEvent("quote", "next", { route_step: "quote" });
+        router.push(bookingFlowHref("details"));
+      }}
       continueLabel={copy.cta}
     >
       <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-8 lg:pb-6">
@@ -85,6 +96,16 @@ export function StepQuote() {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             {copy.title}
           </h1>
+          {estimateZar != null ? (
+            <p className="mt-3 text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+              From R {estimateZar.toLocaleString("en-ZA")}
+              <span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">
+                — same engine as checkout; updates when rooms or extras change
+              </span>
+            </p>
+          ) : (
+            <p className="mt-3 text-sm font-medium text-zinc-600 dark:text-zinc-400">Pick a clean type to see pricing</p>
+          )}
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.reassurance}</p>
           <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.urgency}</p>
         </div>
@@ -97,8 +118,26 @@ export function StepQuote() {
             selectedService={state.service_type ?? null}
             onSelect={selectService}
             popularLabel={copy.mostPopularLabel}
+            recommendedLabel={copy.recommendedServiceLabel}
           />
         </section>
+
+        {selectedExtras.length > 0 ? (
+          <section className="space-y-2" aria-labelledby="quote-extras-heading">
+            <h2 id="quote-extras-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Selected extras
+            </h2>
+            <ul className="space-y-1.5 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+              {selectedExtras.map((row) => (
+                <li key={row.slug} className="flex items-center justify-between gap-2 text-zinc-800 dark:text-zinc-100">
+                  <span className="min-w-0">{row.name}</span>
+                  <span className="shrink-0 tabular-nums text-zinc-600 dark:text-zinc-300">R {row.price.toLocaleString("en-ZA")}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">You can change these on the next step before you pick a time.</p>
+          </section>
+        ) : null}
 
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{copy.notesHeading}</h2>

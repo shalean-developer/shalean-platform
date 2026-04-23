@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const { data: jobs, error } = await admin
     .from("bookings")
     .select(
-      "id, service, date, time, location, status, total_paid_zar, customer_name, customer_phone, assigned_at, en_route_at, started_at, completed_at, created_at",
+      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at",
     )
     .eq("cleaner_id", session.cleanerId)
     .order("date", { ascending: true })

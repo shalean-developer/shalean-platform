@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { UpsellRecommendations } from "@/components/booking/UpsellRecommendations";
 import { useRouter } from "next/navigation";
 import BookingLayout from "@/components/booking/BookingLayout";
@@ -18,7 +18,8 @@ import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 import { CleaningFrequencySelector } from "@/components/booking/CleaningFrequencySelector";
 import { MobileFullWidth } from "@/components/booking/MobileFullWidth";
-import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
+import { useBookingPrice } from "@/components/booking/BookingPriceContext";
+import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 
 const ExtrasSection = lazy(() =>
   import("@/components/booking/ExtrasSection").then((m) => ({ default: m.ExtrasSection })),
@@ -31,12 +32,13 @@ export function StepDetailsForm() {
   const { state, setState, maxRooms, blockedExtras, canContinue, hydrated } = booking;
 
   const { tier: vipTier } = useBookingVipTier();
+  const { canonicalTotalZar } = useBookingPrice();
   const pastHints = usePastBookingHints();
   const locked = useLockedBooking();
   const isLocked = locked != null;
   const skipLockClearOnMount = useRef(true);
 
-  const estimateZar = useMemo(() => estimateFromSmartQuoteMin(state, vipTier), [state, vipTier]);
+  const estimateZar = canonicalTotalZar;
 
   useEffect(() => {
     if (skipLockClearOnMount.current) {
@@ -62,6 +64,7 @@ export function StepDetailsForm() {
 
   const goWhen = () => {
     if (!canContinue) return;
+    trackBookingFunnelEvent("extras", "next", { route_step: "details" });
     router.push(bookingFlowHref("when"));
   };
 
@@ -95,6 +98,7 @@ export function StepDetailsForm() {
 
         <div className="w-full max-w-none">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
+          <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-primary">{copy.funnelProgress}</p>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
           <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.priceLiveHint}</p>
         </div>

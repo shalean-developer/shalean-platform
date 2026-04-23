@@ -1,4 +1,8 @@
 import { getServiceLabel } from "@/components/booking/serviceCategories";
+import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
+import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
+import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
+import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
 import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
@@ -12,6 +16,7 @@ import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/dema
 import { createPendingCustomerReferral } from "@/lib/referrals/server";
 import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyCustomerBookingPlaced } from "@/lib/notifications/customerUserNotifications";
 
 export type UpsertBookingInput = {
   paystackReference: string;
@@ -44,7 +49,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
   const { data: existing, error: selectErr } = await supabase
     .from("bookings")
-    .select("id")
+    .select("id, status")
     .eq("paystack_reference", input.paystackReference)
     .maybeSingle();
 
@@ -55,12 +60,50 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     return { skipped: true, bookingId: null, error: selectErr.message };
   }
 
+  let existingPendingPaymentId: string | null = null;
   if (existing && typeof existing === "object" && "id" in existing) {
-    return { skipped: true, bookingId: String((existing as { id: string }).id) };
+    const st = String((existing as { status?: string }).status ?? "");
+    if (st !== "pending_payment") {
+      return { skipped: true, bookingId: String((existing as { id: string }).id) };
+    }
+    existingPendingPaymentId = String((existing as { id: string }).id);
   }
 
   const locked = input.snapshot?.locked;
-  const extras = locked?.extras ?? [];
+  const lockedRow = parseLockedBookingFromUnknown(locked ?? null);
+
+  let price_breakdown: Record<string, unknown> | null = null;
+  let total_price: number | null = null;
+  let pricing_version_id: string | null = null;
+  let catalogSnap: Awaited<ReturnType<typeof resolveRatesSnapshotForLockedBooking>> = null;
+  if (lockedRow) {
+    catalogSnap = await resolveRatesSnapshotForLockedBooking(supabase, lockedRow);
+    if (catalogSnap) {
+      const v = validateLockForCheckout(lockedRow, Date.now(), {
+        skipExpiryCheck: true,
+        ratesSnapshot: catalogSnap,
+        bookingId: existingPendingPaymentId,
+      });
+      if (v.ok && v.serverQuote) {
+        price_breakdown = { ...v.serverQuote, job: v.jobSubtotalSplit };
+        total_price = v.visitTotalZar;
+      }
+    }
+    pricing_version_id = lockedRow.pricing_version_id?.trim() ?? null;
+  }
+
+  const extrasSnapshot =
+    Array.isArray(locked?.extras_line_items) && locked.extras_line_items.length > 0
+      ? locked.extras_line_items.map(({ slug, name, price }) => ({ slug, name, price }))
+      : catalogSnap
+        ? extrasLineItemsFromSnapshot(catalogSnap, locked?.extras ?? [], locked?.service ?? null).map(
+            ({ slug, name, price }) => ({
+              slug,
+              name,
+              price,
+            }),
+          )
+        : [];
   const cust = input.snapshot?.customer;
   const emailStored = normalizeEmail(input.customerEmail);
   const userIdResolved = await resolveBookingUserId(
@@ -97,7 +140,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     service: locked?.service != null ? getServiceLabel(locked.service) : null,
     rooms: locked?.rooms ?? null,
     bathrooms: locked?.bathrooms ?? null,
-    extras: extras,
+    extras: extrasSnapshot,
     location: locked?.location?.trim() || null,
     location_id: locationId,
     city_id: cityId,
@@ -107,36 +150,62 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       typeof input.snapshot?.total_zar === "number"
         ? input.snapshot.total_zar
         : Math.round(input.amountCents / 100),
+    pricing_version_id: pricing_version_id || null,
+    price_breakdown: price_breakdown,
+    total_price: total_price ?? null,
   };
 
-  const { data: inserted, error: insertErr } = await supabase
-    .from("bookings")
-    .insert(row)
-    .select("id, created_at, user_id")
-    .maybeSingle();
+  type PersistedRow = { id: string; created_at?: string; user_id?: string | null };
+  let inserted: PersistedRow | null = null;
 
-  if (insertErr) {
-    if (insertErr.code === "23505") {
-      const { data: again } = await supabase
-        .from("bookings")
-        .select("id")
-        .eq("paystack_reference", input.paystackReference)
-        .maybeSingle();
-      const id =
-        again && typeof again === "object" && "id" in again ? String((again as { id: string }).id) : null;
-      return { skipped: true, bookingId: id };
+  if (existingPendingPaymentId) {
+    const { paystack_reference: _ref, ...updatePayload } = row;
+    void _ref;
+    const { data: updated, error: updateErr } = await supabase
+      .from("bookings")
+      .update(updatePayload)
+      .eq("id", existingPendingPaymentId)
+      .eq("status", "pending_payment")
+      .select("id, created_at, user_id")
+      .maybeSingle();
+
+    if (updateErr) {
+      await reportOperationalIssue("error", "upsertBookingFromPaystack", `update pending_payment failed: ${updateErr.message}`, {
+        paystackReference: input.paystackReference,
+        code: updateErr.code,
+      });
+      return { skipped: true, bookingId: null, error: updateErr.message };
     }
-    await reportOperationalIssue("error", "upsertBookingFromPaystack", `insert failed: ${insertErr.message}`, {
-      paystackReference: input.paystackReference,
-      code: insertErr.code,
-    });
-    return { skipped: true, bookingId: null, error: insertErr.message };
+    inserted =
+      updated && typeof updated === "object" && "id" in updated ? (updated as PersistedRow) : null;
+  } else {
+    const { data: ins, error: insertErr } = await supabase
+      .from("bookings")
+      .insert(row)
+      .select("id, created_at, user_id")
+      .maybeSingle();
+
+    if (insertErr) {
+      if (insertErr.code === "23505") {
+        const { data: again } = await supabase
+          .from("bookings")
+          .select("id")
+          .eq("paystack_reference", input.paystackReference)
+          .maybeSingle();
+        const id =
+          again && typeof again === "object" && "id" in again ? String((again as { id: string }).id) : null;
+        return { skipped: true, bookingId: id };
+      }
+      await reportOperationalIssue("error", "upsertBookingFromPaystack", `insert failed: ${insertErr.message}`, {
+        paystackReference: input.paystackReference,
+        code: insertErr.code,
+      });
+      return { skipped: true, bookingId: null, error: insertErr.message };
+    }
+    inserted = ins && typeof ins === "object" && "id" in ins ? (ins as PersistedRow) : null;
   }
 
-  const id =
-    inserted && typeof inserted === "object" && "id" in inserted
-      ? String((inserted as { id: string }).id)
-      : null;
+  const id = inserted?.id ?? null;
 
   const userIdForEffects =
     inserted && typeof inserted === "object" && "user_id" in inserted
@@ -191,6 +260,13 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         if (r.ok) void notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
       });
     }
+    void notifyCustomerBookingPlaced(supabase, {
+      bookingId: id,
+      userId: userIdForEffects,
+      serviceLabel: row.service,
+      dateYmd: locked?.date ?? null,
+      timeHm: locked?.time ?? null,
+    });
     const createdAt =
       inserted && typeof inserted === "object" && "created_at" in inserted
         ? String((inserted as { created_at?: string }).created_at ?? "")

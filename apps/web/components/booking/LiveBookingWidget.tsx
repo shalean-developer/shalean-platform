@@ -19,6 +19,7 @@ import {
   type LiveWidgetPriceInput,
   slotsLeftForWidgetDate,
 } from "@/lib/booking/liveWidgetPricing";
+import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
 
 export type LiveBookingWidgetProps = {
   className?: string;
@@ -28,6 +29,7 @@ export type LiveBookingWidgetProps = {
 
 export function LiveBookingWidget({ className, source = "live_widget" }: LiveBookingWidgetProps) {
   const router = useRouter();
+  const { snapshot: catalog } = usePricingCatalogSnapshot();
   const pathname = usePathname() ?? "";
   const isEstimateMode = pathname === "/";
 
@@ -45,8 +47,14 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
     [bedrooms, bathrooms, extraRooms, service, extras],
   );
 
-  const baseEstimate = useMemo(() => calculateLiveWidgetBaseEstimateZar(service), [service]);
-  const fullQuoteForNonHome = useMemo(() => calculateLiveWidgetPrice(priceInput), [priceInput]);
+  const baseEstimate = useMemo(() => {
+    if (!catalog) return null;
+    return calculateLiveWidgetBaseEstimateZar(service, catalog);
+  }, [catalog, service]);
+  const fullQuoteForNonHome = useMemo(() => {
+    if (!catalog) return null;
+    return calculateLiveWidgetPrice(priceInput, catalog);
+  }, [catalog, priceInput]);
   const displayEstimate = isEstimateMode ? baseEstimate : fullQuoteForNonHome;
 
   const slotsLeft = useMemo(() => slotsLeftForWidgetDate(date), [date]);
@@ -60,7 +68,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
           time,
           extras: [],
           location: location.trim().slice(0, 500),
-          quotedPriceZar: baseEstimate,
+          quotedPriceZar: baseEstimate ?? 0,
           savedAt: new Date().toISOString(),
         }
       : {
@@ -72,7 +80,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
           time,
           extras: [...extras],
           location: location.trim().slice(0, 500),
-          quotedPriceZar: fullQuoteForNonHome,
+          quotedPriceZar: fullQuoteForNonHome ?? 0,
           savedAt: new Date().toISOString(),
         };
     try {
@@ -151,7 +159,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
                   From
                 </p>
                 <p className="text-lg font-semibold tabular-nums leading-none text-green-700 dark:text-emerald-300 sm:text-xl">
-                  R{displayEstimate.toLocaleString("en-ZA")}
+                  {displayEstimate != null ? `R ${displayEstimate.toLocaleString("en-ZA")}` : "—"}
                 </p>
                 <p className="mt-1 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400 sm:text-xs">
                   Estimated starting price. Final price confirmed in next step.
@@ -163,7 +171,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
                   Total price
                 </p>
                 <p className="mt-0.5 text-lg font-bold tabular-nums leading-none text-zinc-900 sm:text-xl dark:text-zinc-50">
-                  R{displayEstimate.toLocaleString("en-ZA")}
+                  {displayEstimate != null ? `R ${displayEstimate.toLocaleString("en-ZA")}` : "—"}
                 </p>
               </>
             )}

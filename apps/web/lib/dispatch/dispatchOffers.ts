@@ -6,6 +6,7 @@ import {
   notifyCleanerOfferDeclined,
 } from "@/lib/dispatch/offerNotifications";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { notifyCustomerCleanerAssigned } from "@/lib/notifications/customerUserNotifications";
 
 const POLL_MS = 400;
 
@@ -330,6 +331,8 @@ export async function acceptDispatchOffer(params: {
     bookingId,
     offerId: params.offerId,
   });
+
+  void notifyCustomerCleanerAssigned(params.supabase, bookingId);
 
   return { ok: true };
 }

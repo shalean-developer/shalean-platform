@@ -26,8 +26,8 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
             <nav className="flex items-center gap-4 text-sm font-medium">
               {user ? (
                 <>
-                  <Link href="/account/bookings" className="text-emerald-700 dark:text-emerald-400">
-                    Profile
+                  <Link href="/dashboard/profile" className="text-blue-700 dark:text-blue-400">
+                    Dashboard
                   </Link>
                   <button type="button" onClick={() => void handleLogout()} className="text-zinc-700 dark:text-zinc-300">
                     Logout
@@ -35,10 +35,10 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
                 </>
               ) : (
                 <>
-                  <Link href="/login?role=customer&redirect=/account/bookings" className="text-zinc-700 dark:text-zinc-300">
+                  <Link href="/login?role=customer&redirect=/dashboard/bookings" className="text-zinc-700 dark:text-zinc-300">
                     Login
                   </Link>
-                  <Link href="/auth/signup" className="text-emerald-700 dark:text-emerald-400">
+                  <Link href="/auth/signup?redirect=/dashboard/bookings" className="text-blue-700 dark:text-blue-400">
                     Signup
                   </Link>
                 </>

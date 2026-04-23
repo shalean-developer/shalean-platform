@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { extrasSnapshotAligned } from "@/lib/booking/extrasSnapshot";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { quoteCheckoutZar } from "@/lib/pricing/pricingEngine";
+import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
+import { quoteCheckoutZarWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 
 export const runtime = "nodejs";
@@ -103,6 +105,9 @@ export async function POST(request: Request) {
 
   let durationMinutes = 120;
   const lockedParsed = lockedPayload ? parseLockedBookingFromUnknown(lockedPayload) : null;
+  if (lockedParsed && !extrasSnapshotAligned(lockedParsed)) {
+    return NextResponse.json({ valid: false, reason: "extras_mismatch" }, { status: 400 });
+  }
   if (
     lockedParsed &&
     typeof lockedParsed.time === "string" &&
@@ -110,30 +115,35 @@ export async function POST(request: Request) {
     typeof lockedParsed.rooms === "number" &&
     typeof lockedParsed.bathrooms === "number"
   ) {
-    const tier = normalizeVipTier(lockedParsed.vipTier);
-    const dyn =
-      typeof lockedParsed.dynamicSurgeFactor === "number" &&
-      lockedParsed.dynamicSurgeFactor >= 0.8 &&
-      lockedParsed.dynamicSurgeFactor <= 1.2
-        ? lockedParsed.dynamicSurgeFactor
-        : 1;
-    const q = quoteCheckoutZar(
-      {
-        service: lockedParsed.service,
-        serviceType: lockedParsed.service_type,
-        rooms: lockedParsed.rooms,
-        bathrooms: lockedParsed.bathrooms,
-        extraRooms: lockedParsed.extraRooms,
-        extras: lockedParsed.extras,
-      },
-      lockedParsed.time.trim().slice(0, 5),
-      tier,
-      {
-        dynamicAdjustment: dyn,
-        cleanersCount: lockedParsed.cleanersCount,
-      },
-    );
-    durationMinutes = Math.max(30, Math.round(q.hours * 60));
+    const admin = getSupabaseAdmin();
+    const snap = admin ? await buildPricingRatesSnapshotFromDb(admin) : null;
+    if (snap) {
+      const tier = normalizeVipTier(lockedParsed.vipTier);
+      const dyn =
+        typeof lockedParsed.dynamicSurgeFactor === "number" &&
+        lockedParsed.dynamicSurgeFactor >= 0.8 &&
+        lockedParsed.dynamicSurgeFactor <= 1.2
+          ? lockedParsed.dynamicSurgeFactor
+          : 1;
+      const q = quoteCheckoutZarWithSnapshot(
+        snap,
+        {
+          service: lockedParsed.service,
+          serviceType: lockedParsed.service_type,
+          rooms: lockedParsed.rooms,
+          bathrooms: lockedParsed.bathrooms,
+          extraRooms: lockedParsed.extraRooms,
+          extras: lockedParsed.extras,
+        },
+        lockedParsed.time.trim().slice(0, 5),
+        tier,
+        {
+          dynamicAdjustment: dyn,
+          cleanersCount: lockedParsed.cleanersCount,
+        },
+      );
+      durationMinutes = Math.max(30, Math.round(q.hours * 60));
+    }
   } else {
     const durationRaw = Number(body.duration_minutes ?? body.durationMinutes ?? 120);
     durationMinutes = Number.isFinite(durationRaw) ? Math.max(30, Math.round(durationRaw)) : 120;

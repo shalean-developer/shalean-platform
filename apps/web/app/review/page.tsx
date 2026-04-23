@@ -27,7 +27,7 @@ export default async function ReviewPage({ searchParams }: Props) {
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
-            href={`${base}/account/bookings`}
+            href={`${base}/dashboard/bookings`}
             className="inline-flex justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
           >
             Your bookings

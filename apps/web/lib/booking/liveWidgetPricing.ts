@@ -1,16 +1,20 @@
 import type { HomeWidgetQuoteInput, HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 import { calculateHomeWidgetBaseEstimateZar, calculateHomeWidgetQuoteZar } from "@/lib/pricing/calculatePrice";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
 export type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 
 export type LiveWidgetPriceInput = HomeWidgetQuoteInput;
 
-export function calculateLiveWidgetPrice(input: LiveWidgetPriceInput): number {
-  return calculateHomeWidgetQuoteZar(input);
+export function calculateLiveWidgetPrice(input: LiveWidgetPriceInput, snapshot: PricingRatesSnapshot): number {
+  return calculateHomeWidgetQuoteZar(input, snapshot);
 }
 
-export function calculateLiveWidgetBaseEstimateZar(service: HomeWidgetServiceKey): number {
-  return calculateHomeWidgetBaseEstimateZar(service);
+export function calculateLiveWidgetBaseEstimateZar(
+  service: HomeWidgetServiceKey,
+  snapshot: PricingRatesSnapshot,
+): number {
+  return calculateHomeWidgetBaseEstimateZar(service, snapshot);
 }
 
 /** Deterministic “slots left” for urgency (2–4) from date string; no network. */

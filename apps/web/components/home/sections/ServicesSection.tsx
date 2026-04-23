@@ -1,5 +1,9 @@
+"use client";
+
+import { useMemo } from "react";
 import { BookCleaningLink } from "@/components/home/BookCleaningLink";
 import { calculateHomeWidgetBaseEstimateZar, type HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
+import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
 import { Building2, Home, Layers, Sparkles, Truck } from "lucide-react";
 
 type ServiceCard = {
@@ -49,6 +53,13 @@ const services: ServiceCard[] = [
 ];
 
 export function ServicesSection() {
+  const { snapshot: catalog } = usePricingCatalogSnapshot();
+
+  const priced = useMemo(() => {
+    if (!catalog) return services.map((s) => ({ ...s, from: null as number | null }));
+    return services.map((s) => ({ ...s, from: calculateHomeWidgetBaseEstimateZar(s.service, catalog) }));
+  }, [catalog]);
+
   return (
     <section id="services" className="scroll-mt-28 border-b border-blue-100 bg-white py-16" aria-labelledby="services-heading">
       <div className="mx-auto max-w-7xl px-4">
@@ -60,9 +71,8 @@ export function ServicesSection() {
         </div>
 
         <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((s) => {
+          {priced.map((s) => {
             const Icon = s.icon;
-            const from = calculateHomeWidgetBaseEstimateZar(s.service);
             return (
               <li
                 key={s.title}
@@ -73,7 +83,9 @@ export function ServicesSection() {
                 </div>
                 <h3 className="mt-4 text-lg font-semibold text-zinc-900">{s.title}</h3>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{s.description}</p>
-                <p className="mt-4 text-sm font-semibold text-blue-600">From R{from}</p>
+                <p className="mt-4 text-sm font-semibold text-blue-600">
+                  {s.from != null ? `From R ${s.from.toLocaleString("en-ZA")}` : "From —"}
+                </p>
                 <BookCleaningLink
                   source={s.source}
                   className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"

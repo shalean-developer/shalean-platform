@@ -5,7 +5,15 @@ import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import { resolvePaystackUserId } from "@/lib/booking/resolvePaystackUserId";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
+import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { metrics } from "@/lib/metrics/counters";
+import {
+  expectedCheckoutZarFromVerify,
+  pricingVersionIdFromLocked,
+  recordPaystackPricingMismatch,
+} from "@/lib/metrics/pricingMismatch";
 import {
   buildBookingEmailPayload,
   sendAdminNewBookingEmail,
@@ -187,6 +195,34 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       : "";
   const metadata = normalizePaystackMetadata(tx.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: amount });
+
+  const expectedZar = expectedCheckoutZarFromVerify(snapshot, metadata);
+  const bookingIdFromMeta =
+    typeof metadata.shalean_booking_id === "string" && metadata.shalean_booking_id.trim()
+      ? metadata.shalean_booking_id.trim()
+      : null;
+  let bookingIdForTrace = bookingIdFromMeta;
+  if (!bookingIdForTrace) {
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      bookingIdForTrace = await bookingIdForPaystackReference(admin, ref);
+      if (bookingIdForTrace) {
+        metrics.increment("checkout.paystack_booking_id_db_fallback", {
+          bookingId: bookingIdForTrace,
+          reference: ref,
+        });
+      }
+    }
+  }
+  if (expectedZar != null) {
+    recordPaystackPricingMismatch({
+      expectedZar,
+      amountCents: amount,
+      bookingId: bookingIdForTrace,
+      pricingVersionId: pricingVersionIdFromLocked(snapshot?.locked),
+      reference: ref,
+    });
+  }
 
   const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
   const emailRaw =

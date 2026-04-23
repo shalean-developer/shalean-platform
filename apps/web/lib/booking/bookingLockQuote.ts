@@ -1,18 +1,19 @@
 /**
- * Server-only: parse booking lock / price JSON bodies and run {@link quoteCheckoutZar}.
- * Keeps `/api/booking/lock` and `/api/booking/price` aligned on one code path.
+ * Server-only: parse booking lock / price JSON bodies and run {@link quoteCheckoutZarWithSnapshot}.
+ * Keeps `/api/booking/lock` and `/api/booking/price` aligned on one catalog path.
  */
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { normalizeVipTier, type VipTier } from "@/lib/pricing/vipTier";
-import { filterExtrasForService } from "@/lib/pricing/extrasConfig";
+import { filterExtrasForSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
 import {
   normalizeExtraRoomsRaw,
   parsePricingServiceParams,
-  quoteCheckoutZar,
   resolveServiceForPricing,
   type CheckoutQuoteResult,
   type PricingJobInput,
 } from "@/lib/pricing/pricingEngine";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
+import { quoteCheckoutZarWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
 
 export type LockQuoteError = { ok: false; status: number; error: string };
 
@@ -23,7 +24,7 @@ export type LockQuoteSuccess = {
   /** Normalized HH:mm */
   timeHm: string;
   vipTier: VipTier;
-  /** Options actually passed into `quoteCheckoutZar` (must be echoed into signature verify). */
+  /** Options actually passed into `quoteCheckoutZarWithSnapshot` (must be echoed into signature verify). */
   quoteOptions: { dynamicAdjustment: number | undefined; cleanersCount: number | undefined };
 };
 
@@ -57,11 +58,11 @@ export type QuoteLockRequestOptions = {
 };
 
 /**
- * Validates and quotes from a JSON object (lock or price request).
- * `date` is accepted for API compatibility but does not affect ZAR totals.
+ * Validates and quotes from a JSON object (lock or price request) using a DB-backed catalog snapshot.
  */
-export function quoteLockFromRequestBody(
+export function quoteLockFromRequestBodyWithSnapshot(
   body: unknown,
+  snapshot: PricingRatesSnapshot,
   options?: QuoteLockRequestOptions,
 ): LockQuoteSuccess | LockQuoteError {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
@@ -95,7 +96,7 @@ export function quoteLockFromRequestBody(
   const resolvedService = resolveServiceForPricing(jobDraft);
   const job: PricingJobInput = {
     ...jobDraft,
-    extras: filterExtrasForService(readExtras(b), resolvedService),
+    extras: filterExtrasForSnapshot(snapshot, readExtras(b), resolvedService),
   };
 
   const vipTier = normalizeVipTier(
@@ -111,7 +112,7 @@ export function quoteLockFromRequestBody(
   const cleanersCount =
     typeof ccRaw === "number" && Number.isFinite(ccRaw) ? Math.max(0, Math.round(ccRaw)) : undefined;
 
-  const quote = quoteCheckoutZar(job, timeHm, vipTier, {
+  const quote = quoteCheckoutZarWithSnapshot(snapshot, job, timeHm, vipTier, {
     dynamicAdjustment,
     cleanersCount,
   });
@@ -127,11 +128,14 @@ export function quoteLockFromRequestBody(
 }
 
 /**
- * Pricing job for a persisted lock — must match {@link quoteLockFromRequestBody} so checkout
+ * Pricing job for a persisted lock — must match {@link quoteLockFromRequestBodyWithSnapshot} so checkout
  * HMAC recompute agrees with `POST /api/booking/lock` (same `serviceType ?? service_type ?? service`
  * precedence, rooms, extras filter).
  */
-export function pricingJobFromLockedBooking(locked: LockedBooking): PricingJobInput {
+export function pricingJobFromLockedBooking(
+  locked: LockedBooking,
+  snapshot: PricingRatesSnapshot,
+): PricingJobInput {
   const rec = locked as Record<string, unknown>;
   const svcRaw = String(rec.serviceType ?? rec.service_type ?? rec.service ?? "").trim();
   const { service, serviceType } = parsePricingServiceParams(svcRaw);
@@ -156,6 +160,6 @@ export function pricingJobFromLockedBooking(locked: LockedBooking): PricingJobIn
     : [];
   return {
     ...jobDraft,
-    extras: filterExtrasForService(extrasList, resolvedService),
+    extras: filterExtrasForSnapshot(snapshot, extrasList, resolvedService),
   };
 }

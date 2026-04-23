@@ -39,6 +39,7 @@ export async function GET(request: Request) {
       "id, service, date, time, location, total_paid_zar, amount_paid_cents, currency, status, booking_snapshot, created_at, paystack_reference, cleaner_id, assigned_at, en_route_at, started_at, completed_at",
     )
     .eq("user_id", userData.user.id)
+    .neq("status", "pending_payment")
     .order("created_at", { ascending: false })
     .limit(100);
 

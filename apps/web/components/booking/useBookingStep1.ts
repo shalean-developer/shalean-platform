@@ -58,7 +58,7 @@ export const INITIAL_BOOKING_STEP1_STATE: BookingStep1State = {
   subServices: [],
   notes: "",
   cleaningFrequency: "one_time",
-  rooms: 1,
+  rooms: 2,
   bathrooms: 1,
   extraRooms: 0,
   extras: [],

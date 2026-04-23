@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { checkoutPriceLinesFromPersisted, priceZarFromPersisted } from "@/lib/dashboard/bookingUtils";
 
 type JobRow = {
   id: string;
@@ -14,8 +15,41 @@ type JobRow = {
   customer_name: string | null;
   customer_phone: string | null;
   total_paid_zar: number | null;
+  total_price?: number | string | null;
+  price_breakdown?: Record<string, unknown> | null;
+  pricing_version_id?: string | null;
+  amount_paid_cents?: number | null;
+  extras?: unknown[] | null;
   assigned_at: string | null;
 };
+
+function formatZar(zar: number): string {
+  const n = Math.round(zar);
+  const abs = Math.abs(n).toLocaleString("en-ZA");
+  if (n < 0) return `−R ${abs}`;
+  return `R ${abs}`;
+}
+
+function cleanerExtrasRequiredLines(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const s = item.trim();
+      if (s) out.push(s);
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      const name = typeof o.name === "string" ? o.name.trim() : "";
+      const slug = typeof o.slug === "string" ? o.slug.trim() : "";
+      const price = typeof o.price === "number" && Number.isFinite(o.price) ? Math.round(o.price) : null;
+      if (name) out.push(price != null ? `${name} (R${price.toLocaleString("en-ZA")})` : name);
+      else if (slug) out.push(slug);
+    }
+  }
+  return out;
+}
 
 type OfferRow = {
   id: string;
@@ -218,6 +252,20 @@ export default function CleanerJobsPage() {
           {list.map((j) => {
             const st = (j.status ?? "").toLowerCase();
             const busy = actingId === j.id;
+            const extrasLines = cleanerExtrasRequiredLines(j.extras);
+            const priceLines = checkoutPriceLinesFromPersisted({
+              total_price: j.total_price ?? null,
+              price_breakdown: j.price_breakdown ?? null,
+              pricing_version_id: j.pricing_version_id ?? null,
+              total_paid_zar: j.total_paid_zar ?? null,
+              amount_paid_cents: j.amount_paid_cents ?? null,
+            });
+            const totalZar = priceZarFromPersisted({
+              total_price: j.total_price ?? null,
+              price_breakdown: j.price_breakdown ?? null,
+              total_paid_zar: j.total_paid_zar ?? null,
+              amount_paid_cents: j.amount_paid_cents ?? null,
+            });
             return (
               <li
                 key={j.id}
@@ -232,6 +280,41 @@ export default function CleanerJobsPage() {
                     {j.location ? (
                       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{j.location}</p>
                     ) : null}
+                    {extrasLines.length > 0 ? (
+                      <div className="mt-3 rounded-lg border border-amber-200/90 bg-amber-50/90 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                          Extras required
+                        </p>
+                        <ul className="mt-1 list-inside list-disc text-sm text-zinc-800 dark:text-zinc-200">
+                          {extrasLines.map((line, idx) => (
+                            <li key={`${j.id}-extra-${idx}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {priceLines ? (
+                      <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900/50">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+                          Customer price breakdown
+                        </p>
+                        <ul className="mt-2 space-y-1.5 text-sm text-zinc-800 dark:text-zinc-200">
+                          {priceLines.map((line) => (
+                            <li key={`${j.id}-price-${line.kind}`} className="flex justify-between gap-3 tabular-nums">
+                              <span className="text-zinc-600 dark:text-zinc-400">{line.label}</span>
+                              <span className="font-medium text-zinc-900 dark:text-zinc-100">{formatZar(line.amountZar)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 border-t border-zinc-200 pt-2 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 dark:border-zinc-700">
+                          <span className="font-normal text-zinc-600 dark:text-zinc-400">Total</span>{" "}
+                          {formatZar(totalZar)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+                        Total paid: {formatZar(j.total_paid_zar ?? 0)}
+                      </p>
+                    )}
                     <p className="mt-2 text-xs text-zinc-500">
                       {j.customer_name ?? "Customer"} · {j.customer_phone ?? "—"}
                     </p>

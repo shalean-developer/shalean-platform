@@ -4,7 +4,14 @@ import { enqueueFailedJob } from "@/lib/booking/failedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
+import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { metrics } from "@/lib/metrics/counters";
+import {
+  expectedCheckoutZarFromVerify,
+  pricingVersionIdFromLocked,
+  recordPaystackPricingMismatch,
+} from "@/lib/metrics/pricingMismatch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   buildBookingEmailPayload,
@@ -70,11 +77,14 @@ export async function POST(request: Request) {
   if (supabase) {
     const { data: existing } = await supabase
       .from("bookings")
-      .select("id")
+      .select("id, status")
       .eq("paystack_reference", reference)
       .maybeSingle();
     if (existing && typeof existing === "object" && "id" in existing) {
-      return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      const st = String((existing as { status?: string }).status ?? "");
+      if (st !== "pending_payment") {
+        return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      }
     }
   }
 
@@ -86,6 +96,31 @@ export async function POST(request: Request) {
 
   const metadata = normalizePaystackMetadata(data.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: amount });
+
+  const expectedZar = expectedCheckoutZarFromVerify(snapshot, metadata);
+  const bookingIdFromMeta =
+    typeof metadata.shalean_booking_id === "string" && metadata.shalean_booking_id.trim()
+      ? metadata.shalean_booking_id.trim()
+      : null;
+  let bookingIdForTrace = bookingIdFromMeta;
+  if (!bookingIdForTrace && supabase) {
+    bookingIdForTrace = await bookingIdForPaystackReference(supabase, reference);
+    if (bookingIdForTrace) {
+      metrics.increment("checkout.paystack_booking_id_db_fallback", {
+        bookingId: bookingIdForTrace,
+        reference,
+      });
+    }
+  }
+  if (expectedZar != null) {
+    recordPaystackPricingMismatch({
+      expectedZar,
+      amountCents: amount,
+      bookingId: bookingIdForTrace,
+      pricingVersionId: pricingVersionIdFromLocked(snapshot?.locked),
+      reference,
+    });
+  }
 
   const emailRaw =
     emailFromCustomer ||

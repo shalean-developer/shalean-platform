@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { quoteLockFromRequestBody } from "@/lib/booking/bookingLockQuote";
+import { quoteLockFromRequestBodyWithSnapshot } from "@/lib/booking/bookingLockQuote";
 import {
   computeLockQuoteSignature,
   isLockExpired,
@@ -8,19 +8,25 @@ import {
 } from "@/lib/booking/lockQuoteSignature";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { BOOKING_CHECKOUT_LOCK_VERSION } from "@/lib/booking/checkoutLockValidation";
+import { vitestTestPricingRatesSnapshot } from "@/lib/pricing/testPricingSnapshot";
+
+const snap = vitestTestPricingRatesSnapshot();
 
 /** Same job shape as `POST /api/booking/lock` (service_type wins over service id). */
 function lockApiQuote() {
-  const quoted = quoteLockFromRequestBody({
-    service: "standard",
-    service_type: "standard_cleaning",
-    rooms: 2,
-    bathrooms: 1,
-    extraRooms: 0,
-    extras: [] as string[],
-    time: "10:00",
-    vipTier: "regular",
-  });
+  const quoted = quoteLockFromRequestBodyWithSnapshot(
+    {
+      service: "standard",
+      service_type: "standard_cleaning",
+      rooms: 2,
+      bathrooms: 1,
+      extraRooms: 0,
+      extras: [] as string[],
+      time: "10:00",
+      vipTier: "regular",
+    },
+    snap,
+  );
   if (!quoted.ok) throw new Error(quoted.error);
   return quoted;
 }
@@ -81,7 +87,7 @@ describe("lockQuoteSignature", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    expect(verifyLockQuoteSignature(locked)).toBe(true);
+    expect(verifyLockQuoteSignature(locked, snap)).toBe(true);
   });
 
   it("tamper finalPrice: verify fails", () => {
@@ -101,7 +107,7 @@ describe("lockQuoteSignature", () => {
       quoteSignature: sig,
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
     });
-    expect(verifyLockQuoteSignature(locked)).toBe(false);
+    expect(verifyLockQuoteSignature(locked, snap)).toBe(false);
   });
 
   it("extras changed after lock: verify fails", () => {
@@ -122,7 +128,7 @@ describe("lockQuoteSignature", () => {
       lockExpiresAt: new Date(Date.now() + LOCK_HOLD_MS).toISOString(),
       extras: ["inside-oven"],
     });
-    expect(verifyLockQuoteSignature(locked)).toBe(false);
+    expect(verifyLockQuoteSignature(locked, snap)).toBe(false);
   });
 
   it("expired lock: isLockExpired true", () => {

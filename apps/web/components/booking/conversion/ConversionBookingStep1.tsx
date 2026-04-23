@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
-import { calculateHomeWidgetQuoteZar } from "@/lib/pricing/calculatePrice";
+import { calculateHomeWidgetQuoteZar, getWidgetOptionalExtraPrices, type WidgetOptionalExtraId } from "@/lib/pricing/calculatePrice";
+import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 import { Button } from "@/components/ui/button";
 import { BookingDateTimeSection } from "@/components/booking/BookingDateTimeSection";
 import { BookingOptionalExtrasSection } from "@/components/booking/BookingOptionalExtrasSection";
@@ -35,6 +36,21 @@ export function ConversionBookingStep1({
   locking,
   hideScheduleFields = false,
 }: ConversionBookingStep1Props) {
+  const [catalog, setCatalog] = useState<PricingRatesSnapshot | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/pricing/catalog")
+      .then((r) => r.json())
+      .then((j: { snapshot?: PricingRatesSnapshot }) => {
+        if (cancelled || !j?.snapshot) return;
+        setCatalog(j.snapshot);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const onConvDateChange = useCallback(
     (ymd: string) => setForm((p) => ({ ...p, date: ymd })),
     [setForm],
@@ -58,19 +74,31 @@ export function ConversionBookingStep1({
     [setForm],
   );
 
-  const finalPrice = useMemo(
-    () =>
-      calculateHomeWidgetQuoteZar({
+  const finalPrice = useMemo(() => {
+    if (!catalog) return 0;
+    return calculateHomeWidgetQuoteZar(
+      {
         service: form.service,
         bedrooms: form.bedrooms,
         bathrooms: form.bathrooms,
         extraRooms: form.extraRooms,
         extras: form.extras,
-      }),
-    [form.service, form.bedrooms, form.bathrooms, form.extraRooms, form.extras],
-  );
+      },
+      catalog,
+    );
+  }, [form.service, form.bedrooms, form.bathrooms, form.extraRooms, form.extras, catalog]);
 
   const displayPrice = form.price != null ? form.price : finalPrice;
+
+  const zeroWidget: Record<WidgetOptionalExtraId, number> = {
+    fridge: 0,
+    oven: 0,
+    cabinets: 0,
+    windows: 0,
+    walls: 0,
+    plants: 0,
+  };
+  const widgetPrices = catalog ? getWidgetOptionalExtraPrices(catalog) : zeroWidget;
 
   return (
     <section className="space-y-6" aria-labelledby="conversion-step1-heading">
@@ -140,6 +168,7 @@ export function ConversionBookingStep1({
       <BookingOptionalExtrasSection
         selectedIds={form.extras}
         onToggle={toggleExtra}
+        widgetPrices={widgetPrices}
         className="rounded-2xl border border-zinc-100 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-950/40"
       />
 

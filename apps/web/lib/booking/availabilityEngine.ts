@@ -239,8 +239,8 @@ export async function getAvailableCleaners(
 }
 
 /**
- * Slot grid for a day. `durationMinutes` must match the same job length as `quoteCheckoutZar` /
- * `quoteJobDurationHours` for the visit being booked (callers: `/api/booking/time-slots`, tests).
+ * Slot grid for a day. `durationMinutes` must match the visit length from the pricing engine
+ * (callers pass `duration` from `calculateBookingPrice` / `quoteJobDurationHours`).
  */
 export async function getAvailableTimeSlots(
   admin: SupabaseClient,

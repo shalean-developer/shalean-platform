@@ -9,6 +9,7 @@ import {
   calculateHomeWidgetQuoteZar,
   type HomeWidgetServiceKey,
 } from "@/lib/pricing/calculatePrice";
+import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
 import { cn } from "@/lib/utils";
 
 const SERVICE_OPTIONS: { label: string; value: HomeWidgetServiceKey }[] = [
@@ -33,22 +34,25 @@ const labelClass = "text-xs font-semibold uppercase tracking-wide text-blue-700"
 
 export function HeroBookingWidgetCard() {
   const router = useRouter();
+  const { snapshot: catalog } = usePricingCatalogSnapshot();
   const [service, setService] = useState<HomeWidgetServiceKey>("standard");
   const [bedrooms, setBedrooms] = useState(2);
   const [bathrooms, setBathrooms] = useState(2);
   const [extras, setExtras] = useState<string[]>([]);
 
-  const price = useMemo(
-    () =>
-      calculateHomeWidgetQuoteZar({
+  const price = useMemo(() => {
+    if (!catalog) return null;
+    return calculateHomeWidgetQuoteZar(
+      {
         service,
         bedrooms,
         bathrooms: Math.min(3, bathrooms),
         extraRooms: 0,
         extras,
-      }),
-    [service, bedrooms, bathrooms, extras],
-  );
+      },
+      catalog,
+    );
+  }, [catalog, service, bedrooms, bathrooms, extras]);
 
   function toggleExtra(id: string) {
     setExtras((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -67,7 +71,7 @@ export function HeroBookingWidgetCard() {
       time,
       extras,
       location: "",
-      quotedPriceZar: price,
+      quotedPriceZar: price ?? 0,
       savedAt: new Date().toISOString(),
     };
     try {
@@ -162,7 +166,9 @@ export function HeroBookingWidgetCard() {
 
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Estimated total</p>
-          <p className="mt-1 text-3xl font-bold tabular-nums text-blue-600">R{price}</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums text-blue-600">
+            {price != null ? `R ${price.toLocaleString("en-ZA")}` : "—"}
+          </p>
           <p className="mt-1 text-xs text-gray-600">Final price confirmed at checkout after you choose your slot.</p>
         </div>
 

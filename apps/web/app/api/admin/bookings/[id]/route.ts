@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyCustomerCleanerAssigned } from "@/lib/notifications/customerUserNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,16 +97,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   } = await pub.auth.getUser(token);
   if (!user?.email || !isAdmin(user.email)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
 
-  let body: { status?: string; date?: string; time?: string };
+  let body: { status?: string; date?: string; time?: string; cleaner_id?: string | null };
   try {
-    body = (await request.json()) as { status?: string; date?: string; time?: string };
+    body = (await request.json()) as { status?: string; date?: string; time?: string; cleaner_id?: string | null };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
   const updates: Record<string, unknown> = {};
 
   if (body.status != null) {
-    const status = String(body.status).trim().toLowerCase();
+    let status = String(body.status).trim().toLowerCase();
+    if (status === "confirmed") status = "assigned";
     const allowed = new Set(["pending", "assigned", "in_progress", "completed", "cancelled", "failed"]);
     if (!allowed.has(status)) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     updates.status = status;
@@ -120,6 +122,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (!/^\d{2}:\d{2}(:\d{2})?$/.test(time)) return NextResponse.json({ error: "Invalid time format." }, { status: 400 });
     updates.time = time.length === 5 ? `${time}:00` : time;
   }
+  if ("cleaner_id" in body) {
+    if (body.cleaner_id === null || body.cleaner_id === "") {
+      updates.cleaner_id = null;
+    } else if (typeof body.cleaner_id === "string") {
+      const cid = body.cleaner_id.trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cid)) {
+        return NextResponse.json({ error: "Invalid cleaner_id." }, { status: 400 });
+      }
+      updates.cleaner_id = cid;
+    }
+  }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields provided." }, { status: 400 });
   }
@@ -127,8 +140,24 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
+  const { data: before } = await admin.from("bookings").select("user_id, cleaner_id").eq("id", id).maybeSingle();
+
   const { error } = await admin.from("bookings").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const newCleaner =
+    "cleaner_id" in updates && typeof updates.cleaner_id === "string" && updates.cleaner_id.trim().length > 0
+      ? updates.cleaner_id.trim()
+      : null;
+  const oldCleaner =
+    before && typeof before === "object"
+      ? String((before as { cleaner_id?: string | null }).cleaner_id ?? "").trim() || null
+      : null;
+  const uid =
+    before && typeof before === "object" ? String((before as { user_id?: string | null }).user_id ?? "").trim() : "";
+  if (newCleaner && uid && newCleaner !== oldCleaner) {
+    void notifyCustomerCleanerAssigned(admin, id);
+  }
 
   return NextResponse.json({ ok: true });
 }

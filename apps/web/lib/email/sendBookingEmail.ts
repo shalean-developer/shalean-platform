@@ -71,7 +71,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   const from = getDefaultFromAddress();
   const total = payload.totalPaidZar.toLocaleString("en-ZA");
   const appUrl = getPublicAppUrlBase();
-  const accountBookingsUrl = `${appUrl}/account/bookings`;
+  const accountBookingsUrl = `${appUrl}/dashboard/bookings`;
   const bookAgainUrl = `${appUrl}/booking?step=details`;
 
   const service = escapeHtml(payload.serviceLabel);

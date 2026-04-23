@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, Fragment } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { emitAdminToast } from "@/lib/admin/toastBus";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import BookingDetailsSheet from "@/components/admin/BookingDetailsSheet";
 
 type BookingRow = {
   id: string;
+  customer_name: string | null;
   customer_email: string | null;
   service: string | null;
   date: string | null;
@@ -393,6 +395,9 @@ export default function AdminBookingsPage() {
   const [routeMetrics, setRouteMetrics] = useState<{ travelTimeSavedMinutes: number; jobsPerCleanerPerDay: number } | null>(
     null,
   );
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const today = useMemo(() => todayYmdJohannesburg(), []);
 
@@ -439,6 +444,9 @@ export default function AdminBookingsPage() {
     const qs = new URLSearchParams();
     if (filter !== "all") qs.set("filter", filter);
     if (selectedCityId !== "all") qs.set("cityId", selectedCityId);
+    if (bookingStatusFilter !== "all") qs.set("bookingStatus", bookingStatusFilter);
+    if (dateFrom.trim()) qs.set("from", dateFrom.trim());
+    if (dateTo.trim()) qs.set("to", dateTo.trim());
     const q = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/admin/bookings${q}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -506,11 +514,54 @@ export default function AdminBookingsPage() {
     }
 
     setLoading(false);
-  }, [filter, today, selectedCityId]);
+  }, [filter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function patchBookingStatus(id: string, nextStatus: string) {
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      emitAdminToast("Session expired.", "error");
+      return;
+    }
+    const bodyStatus = nextStatus === "confirmed" ? "assigned" : nextStatus;
+    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status: bodyStatus }),
+    });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      emitAdminToast(j.error ?? "Could not update status", "error");
+      return;
+    }
+    emitAdminToast("Status updated", "success");
+    setRows((cur) => cur.map((row) => (row.id === id ? { ...row, status: bodyStatus } : row)));
+  }
+
+  async function patchBookingCleaner(id: string, cleanerId: string | null) {
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      emitAdminToast("Session expired.", "error");
+      return;
+    }
+    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ cleaner_id: cleanerId }),
+    });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      emitAdminToast(j.error ?? "Could not assign cleaner", "error");
+      return;
+    }
+    emitAdminToast("Cleaner updated", "success");
+    setRows((cur) => cur.map((row) => (row.id === id ? { ...row, cleaner_id: cleanerId } : row)));
+  }
 
   useEffect(() => {
     const bookingId = searchParams.get("bookingId");
@@ -866,6 +917,43 @@ export default function AdminBookingsPage() {
           ))}
         </div>
 
+        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Booking status</label>
+            <select
+              value={bookingStatusFilter}
+              onChange={(e) => setBookingStatusFilter(e.target.value)}
+              className="mt-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="assigned">Confirmed / assigned</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">From date</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="mt-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">To date</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="mt-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+            />
+          </div>
+        </div>
+
         <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
           Today ({today}) uses Africa/Johannesburg. Row tint: red = no payment, orange = past date but job still active
           (pending/assigned/in progress), amber = no user_id, rose = no email.
@@ -880,7 +968,7 @@ export default function AdminBookingsPage() {
                 <th className="px-3 py-3">When</th>
                 <th className="px-3 py-3">Starts in</th>
                 <th className="px-3 py-3">Price</th>
-                <th className="px-3 py-3">Status</th>
+                <th className="px-3 py-3">Workflow</th>
                 <th className="px-3 py-3">Cleaner</th>
                 <th className="px-3 py-3">Quick actions</th>
               </tr>
@@ -907,8 +995,9 @@ export default function AdminBookingsPage() {
                       role="link"
                       aria-label={`Open booking ${r.id}`}
                     >
-                      <td className="max-w-[180px] truncate px-3 py-2 text-zinc-800 dark:text-zinc-200">
-                        {r.customer_email ?? "—"}
+                      <td className="max-w-[200px] truncate px-3 py-2 text-zinc-800 dark:text-zinc-200">
+                        <span className="font-medium">{r.customer_name?.trim() || "—"}</span>
+                        <span className="mt-0.5 block truncate text-xs text-zinc-500">{r.customer_email ?? ""}</span>
                       </td>
                       <td className="px-3 py-2">{r.service ?? "—"}</td>
                       <td className="whitespace-nowrap px-3 py-2">{formatWhen(r.date, r.time)}</td>
@@ -916,25 +1005,52 @@ export default function AdminBookingsPage() {
                         {formatStartsIn(startMins)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 font-medium tabular-nums">R {zar(r).toLocaleString("en-ZA")}</td>
-                      <td className="px-3 py-2 text-xs">
-                        {dispatchStateLabel(r.dispatch_status, r.status)}
-                        {typeof r.surge_multiplier === "number" && r.surge_multiplier > 1 ? (
-                          <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
-                            Surge x{r.surge_multiplier.toFixed(1)}
-                          </span>
-                        ) : null}
+                      <td className="px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={(() => {
+                            const st = (r.status ?? "pending").toLowerCase();
+                            if (st === "assigned") return "confirmed";
+                            const allowed = new Set(["pending", "in_progress", "completed", "cancelled", "failed"]);
+                            return allowed.has(st) ? st : "pending";
+                          })()}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            void patchBookingStatus(r.id, v);
+                          }}
+                          className="mb-1 w-full max-w-[140px] rounded border border-zinc-200 bg-white px-1 py-1 text-[11px] dark:border-zinc-600 dark:bg-zinc-950"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="confirmed">Confirmed</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                        <div className="text-[11px] text-zinc-500">
+                          {dispatchStateLabel(r.dispatch_status, r.status)}
+                          {typeof r.surge_multiplier === "number" && r.surge_multiplier > 1 ? (
+                            <span className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                              Surge x{r.surge_multiplier.toFixed(1)}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="px-3 py-2 text-xs">
-                        {r.cleaner_id ? (
-                          <span className="inline-flex items-center gap-1 text-zinc-800 dark:text-zinc-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            {cleanerDisplayName(r.cleaner_id, cleaners)}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
-                            NO CLEANER
-                          </span>
-                        )}
+                      <td className="px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={r.cleaner_id ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            void patchBookingCleaner(r.id, v ? v : null);
+                          }}
+                          className="w-full max-w-[180px] rounded border border-zinc-200 bg-white px-1 py-1 text-[11px] dark:border-zinc-600 dark:bg-zinc-950"
+                        >
+                          <option value="">Unassigned</option>
+                          {sortedCleaners.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.full_name}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
                         <BookingActionsDropdown

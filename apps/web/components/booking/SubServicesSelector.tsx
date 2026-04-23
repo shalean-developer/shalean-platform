@@ -17,37 +17,37 @@ type Option = {
 const OPTIONS: Option[] = [
   {
     id: "standard_cleaning",
-    title: "Regular home cleaning",
-    titleMobile: "Regular",
-    subtitle: "Everyday upkeep for lived-in homes",
+    title: "Standard Cleaning",
+    titleMobile: "Standard",
+    subtitle: "Regular home cleaning & upkeep",
     Icon: House,
   },
   {
     id: "airbnb_cleaning",
-    title: "Quick turnover clean",
-    titleMobile: "Turnover",
-    subtitle: "Guest-ready between stays",
+    title: "Airbnb Cleaning",
+    titleMobile: "Airbnb",
+    subtitle: "Quick turnover between guests",
     Icon: BedDouble,
   },
   {
     id: "deep_cleaning",
-    title: "Heavy-duty clean",
+    title: "Deep Cleaning",
     titleMobile: "Deep",
-    subtitle: "Neglected or very thorough reset",
+    subtitle: "Thorough, detailed cleaning",
     Icon: Sparkles,
   },
   {
     id: "move_cleaning",
-    title: "Empty property clean",
+    title: "Move In / Move Out Cleaning",
     titleMobile: "Move",
-    subtitle: "Move in or move out",
+    subtitle: "Perfect for empty properties",
     Icon: BrushCleaning,
   },
   {
     id: "carpet_cleaning",
-    title: "Carpet care",
+    title: "Carpet Cleaning",
     titleMobile: "Carpet",
-    subtitle: "Focused carpet refresh",
+    subtitle: "Professional carpet refresh",
     Icon: Waves,
   },
 ];
@@ -57,11 +57,16 @@ export function SubServicesSelector({
   onSelect,
   popularId = "standard_cleaning",
   popularLabel = "Most popular",
+  recommendedId = "deep_cleaning",
+  recommendedLabel = "Recommended",
 }: {
   selectedService: BookingServiceTypeKey | null;
   onSelect: (next: BookingServiceTypeKey) => void;
   popularId?: BookingServiceTypeKey;
   popularLabel?: string;
+  /** Set to `null` to hide the secondary “Recommended” pill (e.g. Deep Cleaning). */
+  recommendedId?: BookingServiceTypeKey | null;
+  recommendedLabel?: string;
 }) {
   const count = OPTIONS.length;
 
@@ -71,6 +76,7 @@ export function SubServicesSelector({
         const active = selectedService === id;
         const isLastRemainder = index === count - 1 && count % 4 !== 0;
         const isPopular = id === popularId;
+        const isRecommended = recommendedId != null && id === recommendedId;
 
         return (
           <button
@@ -90,6 +96,10 @@ export function SubServicesSelector({
             {isPopular ? (
               <span className="absolute left-1/2 top-1 max-w-[calc(100%-0.5rem)] -translate-x-1/2 truncate rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-950/80 dark:text-amber-100 lg:top-1.5 lg:px-2 lg:text-[10px]">
                 ★ {popularLabel}
+              </span>
+            ) : isRecommended ? (
+              <span className="absolute left-1/2 top-1 max-w-[calc(100%-0.5rem)] -translate-x-1/2 truncate rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-950 dark:bg-sky-950/80 dark:text-sky-100 lg:top-1.5 lg:px-2 lg:text-[10px]">
+                {recommendedLabel}
               </span>
             ) : null}
             <Icon

@@ -9,7 +9,7 @@ import { signUp } from "@/lib/auth/authClient";
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect")?.trim() || "/account/bookings";
+  const redirect = searchParams.get("redirect")?.trim() || "/dashboard/bookings";
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,7 +39,7 @@ function SignupForm() {
         return;
       }
       if (session?.access_token && user) {
-        router.replace(redirect.startsWith("/") ? redirect : "/account/bookings");
+        router.replace(redirect.startsWith("/") ? redirect : "/dashboard/bookings");
         router.refresh();
         return;
       }

@@ -9,7 +9,7 @@ import { signIn } from "@/lib/auth/authClient";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect")?.trim() || "/account/bookings";
+  const redirect = searchParams.get("redirect")?.trim() || "/dashboard/bookings";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +31,7 @@ function LoginForm() {
         setError(err.message);
         return;
       }
-      router.replace(redirect.startsWith("/") ? redirect : "/account/bookings");
+      router.replace(redirect.startsWith("/") ? redirect : "/dashboard/bookings");
       router.refresh();
     } finally {
       setSubmitting(false);

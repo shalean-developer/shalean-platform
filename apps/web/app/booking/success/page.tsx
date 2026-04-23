@@ -428,7 +428,7 @@ function SuccessContent() {
           </button>
           <p className="mt-3 text-center text-sm">
             <Link
-              href={`/auth/signup?redirect=${encodeURIComponent("/account/bookings")}`}
+              href={`/auth/signup?redirect=${encodeURIComponent("/dashboard/bookings")}`}
               className="font-medium text-primary hover:underline"
             >
               Or sign up with email &amp; password
@@ -495,7 +495,7 @@ function SuccessContent() {
         </button>
         {hasSession ? (
           <Link
-            href="/account/bookings"
+            href="/dashboard/bookings"
             className="inline-flex w-full max-w-xs justify-center rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-800 dark:border-zinc-600 dark:text-zinc-100 sm:w-auto"
           >
             My bookings

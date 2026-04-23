@@ -2,7 +2,12 @@
 
 import { AppWindow, Boxes, BrickWall, Microwave, Refrigerator, Sprout } from "lucide-react";
 import { useMemo } from "react";
-import { BOOKING_OPTIONAL_EXTRAS_CATALOG, type BookingOptionalExtraDef, type BookingOptionalExtraIconKey } from "@/lib/booking/optionalExtrasCatalog";
+import {
+  buildBookingOptionalExtrasCatalog,
+  type BookingOptionalExtraDef,
+  type BookingOptionalExtraIconKey,
+} from "@/lib/booking/optionalExtrasCatalog";
+import type { WidgetOptionalExtraId } from "@/lib/pricing/calculatePrice";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<BookingOptionalExtraIconKey, typeof Refrigerator> = {
@@ -56,10 +61,18 @@ export type BookingOptionalExtrasSectionProps = {
   selectedIds: readonly string[];
   onToggle: (id: string) => void;
   className?: string;
+  /** ZAR per widget id — from `getWidgetOptionalExtraPrices(catalogSnapshot)`. */
+  widgetPrices: Record<WidgetOptionalExtraId, number>;
 };
 
-export function BookingOptionalExtrasSection({ selectedIds, onToggle, className }: BookingOptionalExtrasSectionProps) {
+export function BookingOptionalExtrasSection({
+  selectedIds,
+  onToggle,
+  className,
+  widgetPrices,
+}: BookingOptionalExtrasSectionProps) {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const rows = useMemo(() => buildBookingOptionalExtrasCatalog(widgetPrices), [widgetPrices]);
 
   return (
     <section className={cn("space-y-4", className)} aria-labelledby="extra-tasks-heading">
@@ -68,7 +81,7 @@ export function BookingOptionalExtrasSection({ selectedIds, onToggle, className 
       </h2>
 
       <div className="grid grid-cols-3 gap-x-2 gap-y-6 sm:gap-x-4 md:grid-cols-6">
-        {BOOKING_OPTIONAL_EXTRAS_CATALOG.map((ex) => (
+        {rows.map((ex) => (
           <ExtraTaskItem
             key={ex.id}
             extra={ex}

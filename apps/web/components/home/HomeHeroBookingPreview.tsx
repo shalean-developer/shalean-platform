@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { calculateHomeWidgetBaseEstimateZar } from "@/lib/pricing/calculatePrice";
+import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
 import {
   BOOKING_SLOT_END_HOUR,
   BOOKING_SLOT_END_MINUTE,
@@ -24,6 +25,7 @@ function formatNextAvailableLine(dateYmd: string, timeHm: string, now: Date): st
 }
 
 export function HomeHeroBookingPreview({ className }: { className?: string }) {
+  const { snapshot: catalog } = usePricingCatalogSnapshot();
   const { nextAvailable, price, serviceLabel, windowLabel } = useMemo(() => {
     const now = new Date();
     const ymd = todayBookingYmd(now);
@@ -32,11 +34,11 @@ export function HomeHeroBookingPreview({ className }: { className?: string }) {
     const end = `${String(BOOKING_SLOT_END_HOUR).padStart(2, "0")}:${String(BOOKING_SLOT_END_MINUTE).padStart(2, "0")}`;
     return {
       nextAvailable: formatNextAvailableLine(ymd, t, now),
-      price: calculateHomeWidgetBaseEstimateZar(PREVIEW_SERVICE),
+      price: catalog != null ? calculateHomeWidgetBaseEstimateZar(PREVIEW_SERVICE, catalog) : null,
       serviceLabel: widgetServiceLabel(PREVIEW_SERVICE),
       windowLabel: `${start} - ${end}`,
     };
-  }, []);
+  }, [catalog]);
 
   const cardBtnClass = cn(
     "inline-flex w-full min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-md transition",
@@ -73,7 +75,7 @@ export function HomeHeroBookingPreview({ className }: { className?: string }) {
         <div className="mb-6">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Starting from</p>
           <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-            R{price.toLocaleString("en-ZA")}
+            {price != null ? `R ${price.toLocaleString("en-ZA")}` : "—"}
           </p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Estimate — full form below refines your total.

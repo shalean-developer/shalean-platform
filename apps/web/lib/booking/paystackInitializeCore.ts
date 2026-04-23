@@ -1,3 +1,7 @@
+import "server-only";
+
+import crypto from "crypto";
+
 import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
@@ -6,6 +10,22 @@ import type { BookingCustomerAuthType } from "@/lib/booking/paystackChargeTypes"
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
 import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
+import {
+  deletePendingPaymentBooking,
+  deleteRecentPendingPaymentsForEmail,
+  insertPendingPaymentBookingRow,
+  updatePendingPaymentBookingForInit,
+} from "@/lib/booking/insertPendingPaymentBooking";
+import { metrics } from "@/lib/metrics/counters";
+import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
+import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
+import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
+import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
+import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackErrorCodes";
+
+export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -57,11 +77,11 @@ export type PaystackInitializeSuccess = {
   ok: true;
   authorizationUrl: string;
   reference: string;
+  /** Present when a `pending_payment` row was created for this Paystack `reference`. */
+  bookingId?: string | null;
 };
 
 /** Returned in JSON as `errorCode` for client UX (never show raw lock validation strings). */
-export const PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE = "TIME_SLOT_UNAVAILABLE" as const;
-
 export type PaystackInitializeFailure = {
   ok: false;
   status: number;
@@ -77,6 +97,7 @@ export type PaystackInitializeFailure = {
     | "SIGNATURE_INVALID"
     | "PRICE_MISMATCH"
     | "DURATION_MISMATCH"
+    | "PRICING_SNAPSHOT_MISSING"
     | "PAYSTACK_SECRET_MISSING";
 };
 
@@ -107,8 +128,61 @@ export async function processPaystackInitializeBody(
     };
   }
 
-  const checkout = validateLockForCheckout(locked);
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return {
+      ok: false,
+      status: 503,
+      errorCode: "PRICING_SNAPSHOT_MISSING",
+      error: "Checkout is temporarily unavailable. Please try again in a moment.",
+    };
+  }
+  const ratesSnapshot = await resolveRatesSnapshotForLockedBooking(admin, locked);
+  if (!ratesSnapshot) {
+    return {
+      ok: false,
+      status: 400,
+      errorCode: "PRICING_SNAPSHOT_MISSING",
+      error: "This quote’s pricing record is no longer available. Pick your time again to refresh.",
+    };
+  }
+
+  const email = normalizeEmail(typeof b.email === "string" ? b.email : "");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, status: 400, error: "A valid email address is required." };
+  }
+
+  const bookingIdFromBody =
+    typeof b.bookingId === "string" && b.bookingId.trim()
+      ? b.bookingId.trim()
+      : typeof b.booking_id === "string" && b.booking_id.trim()
+        ? b.booking_id.trim()
+        : null;
+
+  let createdPendingBookingId: string | null = null;
+  let paystackReferenceOverride: string | null = null;
+  if (!bookingIdFromBody) {
+    await deleteRecentPendingPaymentsForEmail(admin, email);
+    const paystackRef = crypto.randomUUID();
+    const ins = await insertPendingPaymentBookingRow(admin, {
+      paystackReference: paystackRef,
+      locked,
+      customerEmail: email,
+    });
+    if (ins.ok) {
+      createdPendingBookingId = ins.id;
+      paystackReferenceOverride = paystackRef;
+    }
+  }
+
+  const checkout = validateLockForCheckout(locked, Date.now(), {
+    ratesSnapshot,
+    bookingId: bookingIdFromBody ?? createdPendingBookingId,
+  });
   if (!checkout.ok) {
+    if (createdPendingBookingId) {
+      await deletePendingPaymentBooking(admin, createdPendingBookingId);
+    }
     const code = checkout.code;
     if (code === "LOCK_EXPIRED") {
       return {
@@ -126,6 +200,9 @@ export async function processPaystackInitializeBody(
     }
     if (code === "PRICE_MISMATCH" || code === "DURATION_MISMATCH") {
       return { ok: false, status: 400, errorCode: code, error: checkout.message };
+    }
+    if (code === "PRICING_SNAPSHOT_MISSING") {
+      return { ok: false, status: 400, errorCode: "PRICING_SNAPSHOT_MISSING", error: checkout.message };
     }
     return {
       ok: false,
@@ -158,11 +235,6 @@ export async function processPaystackInitializeBody(
   /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
   const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
   const amountCents = totalZar * 100;
-
-  const email = normalizeEmail(typeof b.email === "string" ? b.email : "");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, status: 400, error: "A valid email address is required." };
-  }
 
   const accessToken = typeof b.accessToken === "string" ? b.accessToken.trim() : "";
 
@@ -264,6 +336,48 @@ export async function processPaystackInitializeBody(
     subscriptionFrequency,
   });
 
+  if (createdPendingBookingId && checkout.serverQuote) {
+    const flat = buildSnapshotFlat(locked);
+    const bookingSnapshotMerged = mergeSnapshotWithFlat(snapshot, flat);
+    const locationContext = await resolveLocationContextFromLabel(admin, locked.location?.trim() ?? null);
+    const locationId = locationContext.locationId;
+    const cityId = locationContext.cityId;
+    const ds = await getDemandSupplySnapshotByCity(admin, cityId);
+    const lockedSurge = typeof locked.surge === "number" && Number.isFinite(locked.surge) ? locked.surge : ds.multiplier;
+    const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
+    const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
+    const extrasSnapshot = extrasLineItemsFromSnapshot(
+      ratesSnapshot,
+      locked.extras ?? [],
+      locked.service ?? null,
+    ).map(({ slug, name, price }) => ({ slug, name, price }));
+    const priceBreakdown = { ...checkout.serverQuote, job: checkout.jobSubtotalSplit };
+    const upd = await updatePendingPaymentBookingForInit(admin, {
+      bookingId: createdPendingBookingId,
+      bookingSnapshot: bookingSnapshotMerged,
+      priceBreakdown,
+      totalPriceZar: checkout.visitTotalZar,
+      totalPaidZar: totalZar,
+      customerName: customer.name.trim() || null,
+      customerPhone: customer.phone.trim() || null,
+      userId: customer.user_id,
+      locationId,
+      cityId,
+      surgeMultiplier,
+      surgeReason,
+      extrasSnapshot,
+    });
+    if (!upd.ok) {
+      await deletePendingPaymentBooking(admin, createdPendingBookingId);
+      return {
+        ok: false,
+        status: 503,
+        errorCode: "PRICING_SNAPSHOT_MISSING",
+        error: "Could not reserve your booking. Please try again in a moment.",
+      };
+    }
+  }
+
   const extraMetadata =
     b.metadata !== undefined && b.metadata !== null && typeof b.metadata === "object" && !Array.isArray(b.metadata)
       ? (b.metadata as Record<string, unknown>)
@@ -288,6 +402,9 @@ export async function processPaystackInitializeBody(
     customer_user_id: customer.user_id ?? "",
     customer_type: customer.type,
   };
+  if (createdPendingBookingId) {
+    paystackMetadata.shalean_booking_id = createdPendingBookingId;
+  }
 
   for (const [k, v] of Object.entries(extraMetadata)) {
     if (k === "booking_json") continue;
@@ -323,6 +440,7 @@ export async function processPaystackInitializeBody(
       email,
       amount: amountCents,
       currency: "ZAR",
+      ...(paystackReferenceOverride ? { reference: paystackReferenceOverride } : {}),
       ...(callbackUrl ? { callback_url: callbackUrl } : {}),
       metadata: metadataPayload,
     }),
@@ -335,8 +453,11 @@ export async function processPaystackInitializeBody(
   };
 
   const authUrl = json.data?.authorization_url;
-  const reference = json.data?.reference;
+  const reference = paystackReferenceOverride ?? json.data?.reference;
   if (!json.status || !authUrl || !reference) {
+    if (createdPendingBookingId) {
+      await deletePendingPaymentBooking(admin, createdPendingBookingId);
+    }
     return {
       ok: false,
       status: 502,
@@ -344,9 +465,17 @@ export async function processPaystackInitializeBody(
     };
   }
 
+  if (createdPendingBookingId) {
+    metrics.increment("checkout.paystack_reference_map", {
+      bookingId: createdPendingBookingId,
+      reference,
+    });
+  }
+
   return {
     ok: true,
     authorizationUrl: authUrl,
     reference,
+    bookingId: createdPendingBookingId,
   };
 }

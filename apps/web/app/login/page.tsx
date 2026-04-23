@@ -24,7 +24,7 @@ function RoleLoginRouterPageInner() {
       return;
     }
 
-    const customerRedirect = safeRedirect || "/account/bookings";
+    const customerRedirect = safeRedirect || "/dashboard/bookings";
     router.replace(`/auth/login?redirect=${encodeURIComponent(customerRedirect)}&role=customer`);
   }, [router, searchParams]);
 

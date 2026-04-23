@@ -5,9 +5,17 @@ import { getServiceLabel } from "@/components/booking/serviceCategories";
 import type { WidgetIntakePayload } from "@/lib/booking/bookingWidgetDraft";
 import { mapWidgetExtrasToStep1Ids, mapWidgetServiceToBookingServiceId } from "@/lib/booking/bookingWidgetDraft";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import { calculateHomeWidgetQuoteZar, type HomeWidgetQuoteInput } from "@/lib/pricing/calculatePrice";
 
-export function serverWidgetQuoteFromIntake(intake: WidgetIntakePayload): number {
+export async function serverWidgetQuoteFromIntake(
+  admin: SupabaseClient,
+  intake: WidgetIntakePayload,
+): Promise<number> {
+  const snapshot = await buildPricingRatesSnapshotFromDb(admin);
+  if (!snapshot) {
+    throw new Error("serverWidgetQuoteFromIntake: pricing catalog unavailable.");
+  }
   const input: HomeWidgetQuoteInput = {
     bedrooms: intake.bedrooms,
     bathrooms: intake.bathrooms,
@@ -15,7 +23,7 @@ export function serverWidgetQuoteFromIntake(intake: WidgetIntakePayload): number
     service: intake.service,
     extras: intake.extras,
   };
-  return calculateHomeWidgetQuoteZar(input);
+  return calculateHomeWidgetQuoteZar(input, snapshot);
 }
 
 export type InsertWidgetBookingResult =
@@ -26,7 +34,7 @@ export async function insertWidgetDraftBookingRow(
   admin: SupabaseClient,
   intake: WidgetIntakePayload,
 ): Promise<InsertWidgetBookingResult> {
-  const totalPaidZar = serverWidgetQuoteFromIntake(intake);
+  const totalPaidZar = await serverWidgetQuoteFromIntake(admin, intake);
   const serviceId = mapWidgetServiceToBookingServiceId(intake.service);
   const paystackReference = `widget_${crypto.randomUUID().replace(/-/g, "")}`;
   const extrasForRow = mapWidgetExtrasToStep1Ids(intake.extras);
