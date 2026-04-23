@@ -40,7 +40,7 @@ export function HomeDetails({ state, maxRooms, setState, omitLocation = false }:
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
       <StepperInput
-        label="Rooms"
+        label="Bedrooms"
         description={
           state.service === "quick"
             ? "Bedrooms, living areas — Quick Clean caps main rooms at 5."
@@ -65,7 +65,7 @@ export function HomeDetails({ state, maxRooms, setState, omitLocation = false }:
         onChange={(bathrooms) => setState((p) => ({ ...p, bathrooms }))}
       />
       <StepperInput
-        label="Extra Rooms"
+        label="Extra"
         description="Offices, garages, etc."
         value={state.extraRooms}
         min={0}

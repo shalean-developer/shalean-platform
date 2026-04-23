@@ -7,7 +7,7 @@ export const bookingCopy = {
     subtitle: "Takes less than 60 seconds • No payment required yet",
     cta: "Get Instant Price",
     addressPlaceholder: "Enter your address",
-    propertyOptions: ["Apartment", "House"] as const,
+    propertyOptions: ["Apartment", "House", "Studio", "Office"] as const,
     addressLabel: "Where should we come?",
     propertyLabel: "Property type",
   },
@@ -76,7 +76,7 @@ export const bookingCopy = {
   errors: {
     address: "Please enter your address to continue",
     addressShort: "Add a few more characters so we can price your area",
-    property: "Please choose apartment or house to continue",
+    property: "Please choose a property type to continue",
     time: "Select a time to secure your cleaner",
     selectTimeFirst: "Please select a time first",
   },

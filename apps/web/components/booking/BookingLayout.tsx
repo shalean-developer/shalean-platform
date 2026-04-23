@@ -78,6 +78,18 @@ export default function BookingLayout({
   summaryColumnFirst = false,
 }: BookingLayoutProps) {
   const showSummary = summaryOverride != null || summaryState != null;
+  const renderSummary = () => {
+    if (summaryOverride) return summaryOverride;
+    if (!summaryState) return null;
+    return (
+      <BookingSummary
+        state={summaryState}
+        ignoreLockedBooking={summaryIgnoreLockedBooking}
+        suppressEstimateUntilLocked={suppressEstimateUntilLocked}
+        amountToPayZar={summaryAmountToPayZar}
+      />
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
@@ -95,16 +107,7 @@ export default function BookingLayout({
           {progressSlot ? <div className="mb-2 max-w-lg lg:max-w-none">{progressSlot}</div> : null}
           {showSummary ? (
             <div className="mb-8 lg:hidden">
-              {summaryOverride ? (
-                summaryOverride
-              ) : summaryState ? (
-                <BookingSummary
-                  state={summaryState}
-                  ignoreLockedBooking={summaryIgnoreLockedBooking}
-                  suppressEstimateUntilLocked={suppressEstimateUntilLocked}
-                  amountToPayZar={summaryAmountToPayZar}
-                />
-              ) : null}
+              {renderSummary()}
             </div>
           ) : null}
 
@@ -120,20 +123,11 @@ export default function BookingLayout({
             {showSummary && summaryColumnFirst ? (
               <aside
                 className={[
-                  "sticky order-first hidden h-fit min-w-0 lg:order-none lg:block",
-                  "top-28",
+                  "sticky order-first hidden h-fit min-w-0 self-start lg:order-none lg:block",
+                  "top-24",
                 ].join(" ")}
               >
-                {summaryOverride ? (
-                  summaryOverride
-                ) : summaryState ? (
-                  <BookingSummary
-                    state={summaryState}
-                    ignoreLockedBooking={summaryIgnoreLockedBooking}
-                    suppressEstimateUntilLocked={suppressEstimateUntilLocked}
-                    amountToPayZar={summaryAmountToPayZar}
-                  />
-                ) : null}
+                {renderSummary()}
               </aside>
             ) : null}
 
@@ -144,20 +138,11 @@ export default function BookingLayout({
             {showSummary && !summaryColumnFirst ? (
               <aside
                 className={[
-                  "sticky hidden h-fit min-w-0 lg:block",
-                  "top-28",
+                  "sticky hidden h-fit min-w-0 self-start lg:block",
+                  "top-24",
                 ].join(" ")}
               >
-                {summaryOverride ? (
-                  summaryOverride
-                ) : summaryState ? (
-                  <BookingSummary
-                    state={summaryState}
-                    ignoreLockedBooking={summaryIgnoreLockedBooking}
-                    suppressEstimateUntilLocked={suppressEstimateUntilLocked}
-                    amountToPayZar={summaryAmountToPayZar}
-                  />
-                ) : null}
+                {renderSummary()}
               </aside>
             ) : null}
           </div>

@@ -3,10 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
-import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { CheckoutNoticeBanner } from "@/components/booking/CheckoutNoticeBanner";
 import { Step4Payment, type Step4Totals } from "@/components/booking/Step4Payment";
-import { Step3CleanerSelection } from "@/components/booking/Step3CleanerSelection";
 import { useCheckoutNotice } from "@/components/booking/useCheckoutNotice";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
@@ -21,29 +19,11 @@ import {
 } from "@/lib/booking/lockedBooking";
 import { bookingCopy } from "@/lib/booking/copy";
 
-function TrustCheckoutStrip() {
-  const lines = bookingCopy.checkout.trust;
-  return (
-    <ul className="grid gap-2 sm:grid-cols-2" aria-label="Why you can book with confidence">
-      {lines.map((text) => (
-        <li
-          key={text}
-          className="rounded-xl border border-zinc-200/80 bg-white/90 px-3 py-2.5 text-xs font-medium leading-snug text-zinc-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200"
-        >
-          {text}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function StepPayment() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preferRegisterTab = searchParams.get("register") === "1";
   const copy = bookingCopy.checkout;
-  const { handleResetBooking } = useBookingFlow();
-
   const locked = useLockedBooking();
   const selectedCleaner = useSelectedCleaner();
   const step1 = usePersistedBookingSummaryState();
@@ -81,16 +61,14 @@ export function StepPayment() {
   /** Require a lock so the footer never feels “dead”; `handlePay` validates the rest and shows notices. */
   const canPay = Boolean(locked);
   const readyForPaystack = Boolean(
-    locked && selectedCleaner && totals?.contactReady && totals.totalZar >= 1,
+    locked && totals?.contactReady && totals.totalZar >= 1,
   );
 
   const continueLabel = paying
     ? "Securing your cleaner…"
     : totals?.totalZar
       ? `${copy.cta} · R ${totals.totalZar.toLocaleString("en-ZA")}`
-      : selectedCleaner
-        ? "Enter your details below"
-        : "Choose your cleaner";
+      : "Enter your details below";
 
   const summaryState = useMemo(() => {
     if (locked) return lockedToStep1State(locked);
@@ -110,16 +88,6 @@ export function StepPayment() {
       return;
     }
 
-    if (!selectedCleaner) {
-      show({
-        tone: "danger",
-        title: "Choose a cleaner",
-        description: "Select the cleaner you’d like for this visit, then try again.",
-        autoDismissMs: 5000,
-      });
-      return;
-    }
-
     if (!totals?.contactReady || !Number.isFinite(totals.totalZar) || totals.totalZar < 1) {
       show({
         tone: "danger",
@@ -132,11 +100,12 @@ export function StepPayment() {
 
     setPaying(true);
     try {
-      mergeCleanerIdIntoLockedBooking(selectedCleaner.id);
+      const cleanerId = selectedCleaner?.id ?? null;
+      if (cleanerId) mergeCleanerIdIntoLockedBooking(cleanerId);
       const freshLock = readLockedBookingFromStorage();
       const lockedForValidate = freshLock
-        ? { ...freshLock, cleaner_id: selectedCleaner.id }
-        : { ...locked, cleaner_id: selectedCleaner.id };
+        ? { ...freshLock, cleaner_id: cleanerId ?? freshLock.cleaner_id ?? null }
+        : { ...locked, cleaner_id: cleanerId ?? locked.cleaner_id ?? null };
 
       console.log("LOCKED BOOKING:", lockedForValidate);
       console.log("LOCKED PRICE:", getLockedBookingDisplayPrice(lockedForValidate));
@@ -146,8 +115,8 @@ export function StepPayment() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locked: lockedForValidate,
-          cleaner_id: selectedCleaner.id,
-          cleanerId: selectedCleaner.id,
+          cleaner_id: cleanerId,
+          cleanerId,
           date: locked.date,
           time: locked.time,
           duration_minutes: Math.round(locked.finalHours * 60),
@@ -193,8 +162,8 @@ export function StepPayment() {
         locked: lockedForValidate,
         tip: totals.tipZar,
         promoCode: totals.promoCode ?? "",
-        cleanerId: selectedCleaner.id,
-        cleanerName: selectedCleaner.name,
+        cleanerId,
+        cleanerName: selectedCleaner?.name ?? "Auto-assigned cleaner",
         accessToken: totals.accessToken ?? "",
         customer: {
           name: totals.name,
@@ -246,12 +215,6 @@ export function StepPayment() {
 
   return (
     <BookingLayout
-      summaryColumnFirst
-      summaryState={summaryState ?? undefined}
-      suppressEstimateUntilLocked={!locked}
-      summaryAmountToPayZar={
-        locked && typeof totals?.totalZar === "number" && Number.isFinite(totals.totalZar) ? totals.totalZar : undefined
-      }
       canContinue={canPay}
       continueLoading={paying}
       continueLabel={continueLabel}
@@ -288,47 +251,24 @@ export function StepPayment() {
           </p>
         </div>
       ) : (
-        <div className="space-y-8 pb-4">
+        <div className="space-y-6 pb-4">
           <div
             className="rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
             role="status"
           >
-            <span>This booking is locked for checkout.</span>{" "}
-            <button
-              type="button"
-              onClick={handleResetBooking}
-              className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
-            >
-              Reset booking
-            </button>
+            <span>This booking is locked for checkout. Complete payment below to confirm your visit.</span>
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
           </div>
 
-          <section className="space-y-4" aria-labelledby="cleaner-heading">
-            <h2 id="cleaner-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              {copy.cleanerHeading}
-            </h2>
-            <Step3CleanerSelection slotTime={locked.time} />
-          </section>
-
-          {!selectedCleaner ? (
-            <p className="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/35 dark:text-amber-50">
-              {copy.cleanerHint}
-            </p>
-          ) : (
-            <div className="space-y-6">
-              <TrustCheckoutStrip />
-              <Step4Payment
-                locked={locked}
-                cleanerName={selectedCleaner.name}
-                preferRegisterTab={preferRegisterTab}
-                onTotalsChange={onTotalsChange}
-              />
-            </div>
-          )}
+          <Step4Payment
+            locked={locked}
+            cleanerName={selectedCleaner?.name ?? "Auto-assigned cleaner"}
+            preferRegisterTab={preferRegisterTab}
+            onTotalsChange={onTotalsChange}
+          />
         </div>
       )}
     </BookingLayout>

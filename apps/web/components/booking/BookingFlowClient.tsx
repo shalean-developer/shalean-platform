@@ -17,7 +17,7 @@ import { StepEntry } from "@/components/booking/steps/StepEntry";
 import { StepQuote } from "@/components/booking/steps/StepQuote";
 import { StepDetailsForm } from "@/components/booking/steps/StepDetailsForm";
 import { StepPayment } from "@/components/booking/steps/StepPayment";
-import { StepSchedule } from "@/components/booking/steps/StepSchedule";
+import { StepScheduleV2 } from "@/components/booking/steps/StepScheduleV2";
 import { ExitIntentModal } from "@/components/booking/ExitIntentModal";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 
@@ -148,7 +148,7 @@ export function BookingFlowClient() {
               {step === "quote" ? <StepQuote /> : null}
               {step === "details" ? <StepDetailsForm /> : null}
               {step === "when" ? (
-                <StepSchedule onNext={() => goTo("checkout")} onBack={() => goTo("details")} />
+                <StepScheduleV2 onNext={() => goTo("checkout")} onBack={() => goTo("details")} />
               ) : null}
               {step === "checkout" ? (
                 <Suspense

@@ -1,16 +1,15 @@
-import type { ReactNode } from "react";
 import {
   formatLockedAppointmentLabel,
   getLockedBookingDisplayPrice,
   type LockedBooking,
 } from "@/lib/booking/lockedBooking";
-import type { BookingStep1State, PropertyTypeKind } from "./useBookingStep1";
-import { BOOKING_EXTRA_LABELS } from "@/lib/booking/extraLabels";
+import type { BookingStep1State } from "./useBookingStep1";
 import { getBookingSummaryServiceLabel } from "./serviceCategories";
 import { getDemandPricingLabel } from "@/lib/pricing/slotSurge";
 import { bookingCopy } from "@/lib/booking/copy";
 import type { VipTier } from "@/lib/pricing/vipTier";
 import { normalizeVipTier, vipDiscountLabel, vipTierDisplayName } from "@/lib/pricing/vipTier";
+import { Bath, Bed, Clock3, DoorOpen, MapPin, Sparkles } from "lucide-react";
 
 type BookingSummaryCardProps = {
   state: BookingStep1State;
@@ -26,19 +25,48 @@ type BookingSummaryCardProps = {
   selectedCleanerName?: string | null;
 };
 
-function SummaryRow({ label, children }: { label: string; children: ReactNode }) {
+function formatHoursLabel(hours: number): string {
+  return hours % 1 === 0 ? `${hours}` : hours.toFixed(1).replace(/\.0$/, "");
+}
+
+function MetricTile({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: number;
+  icon: "bed" | "bath" | "door";
+}) {
+  const Icon = icon === "bed" ? Bed : icon === "bath" ? Bath : DoorOpen;
   return (
-    <div className="border-b border-zinc-200/70 px-3 py-3 last:border-b-0 dark:border-zinc-800/80">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        {label}
-      </p>
-      <div className="mt-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">{children}</div>
+    <div className="rounded-xl border border-zinc-200/70 bg-white/80 p-3 text-center dark:border-zinc-800/80 dark:bg-zinc-950/50">
+      <Icon className="mx-auto h-4 w-4 text-blue-600" aria-hidden />
+      <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{value}</p>
     </div>
   );
 }
 
-function formatHoursLabel(hours: number): string {
-  return hours % 1 === 0 ? `${hours}` : hours.toFixed(1).replace(/\.0$/, "");
+function CompactDetailRow({
+  label,
+  value,
+  icon,
+}: {
+  label: "What" | "Where" | "When";
+  value: string;
+  icon: "what" | "where" | "when";
+}) {
+  const Icon = icon === "what" ? Sparkles : icon === "where" ? MapPin : Clock3;
+  return (
+    <div className="grid grid-cols-[80px_1fr] items-center gap-x-3 text-sm">
+      <p className="flex items-center gap-1.5 font-medium text-zinc-500 dark:text-zinc-400">
+        <Icon className="h-4 w-4 text-blue-600" aria-hidden />
+        {label}:
+      </p>
+      <p className="font-semibold text-zinc-900 dark:text-zinc-100">{value}</p>
+    </div>
+  );
 }
 
 function VipBadge({ tier }: { tier: VipTier }) {
@@ -68,12 +96,6 @@ function VipBadge({ tier }: { tier: VipTier }) {
   return null;
 }
 
-function propertyLabel(t: PropertyTypeKind | null): string | null {
-  if (t === "apartment") return "Apartment";
-  if (t === "house") return "House";
-  return null;
-}
-
 export function BookingSummaryCard({
   state,
   suppressEstimateUntilLocked = false,
@@ -82,33 +104,10 @@ export function BookingSummaryCard({
   amountToPayZar,
   selectedCleanerName = null,
 }: BookingSummaryCardProps) {
-  const serviceLine =
-    state.service === null
-      ? "Not selected"
-      : `Service: ${getBookingSummaryServiceLabel(state.service, state.service_type)}`;
-
-  const extrasLabels = state.extras
-    .map((id) => BOOKING_EXTRA_LABELS[id] ?? id)
-    .filter(Boolean);
-
-  const extrasContent =
-    extrasLabels.length === 0 ? (
-      "No extras"
-    ) : extrasLabels.length <= 3 ? (
-      <ul className="list-inside list-disc space-y-1 text-zinc-700 dark:text-zinc-300">
-        {extrasLabels.map((line) => (
-          <li key={line} className="marker:text-primary">
-            {line}
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <span>
-        {extrasLabels.length === 1
-          ? "1 extra selected"
-          : `${extrasLabels.length} extras selected`}
-      </span>
-    );
+  const whatValue =
+    state.service === null ? "Not selected" : getBookingSummaryServiceLabel(state.service, state.service_type);
+  const whereValue = state.location.trim() || "Not set";
+  const whenValue = locked ? formatLockedAppointmentLabel(locked) : "Select in next step";
 
   const showSelectSlotHint = !locked && suppressEstimateUntilLocked;
 
@@ -128,49 +127,27 @@ export function BookingSummaryCard({
             : "Updates as you make changes."}
       </p>
 
-      {state.location.trim() || propertyLabel(state.propertyType) ? (
-        <div className="mt-3 rounded-xl border border-zinc-200/60 bg-white/60 px-3 py-2.5 text-sm dark:border-zinc-800/80 dark:bg-zinc-950/50">
-          {state.location.trim() ? (
-            <p className="font-medium text-zinc-900 dark:text-zinc-50">{state.location.trim()}</p>
-          ) : null}
-          {propertyLabel(state.propertyType) ? (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{propertyLabel(state.propertyType)}</p>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="mt-4 grid grid-cols-3 gap-4">
+        <MetricTile label="Bedrooms" value={state.rooms} icon="bed" />
+        <MetricTile label="Bathrooms" value={state.bathrooms} icon="bath" />
+        <MetricTile label="Extra" value={state.extraRooms} icon="door" />
+      </div>
 
-      <div className="mt-4 space-y-0 rounded-xl border border-zinc-200/60 bg-white/80 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-        <div className="border-b border-zinc-200/70 px-3 py-3 dark:border-zinc-800/80">
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{serviceLine}</p>
-        </div>
-        <div className="border-t border-b border-zinc-200/70 px-3 py-3 dark:border-zinc-800/80">
-          <p className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="text-zinc-500 dark:text-zinc-400">Rooms</span>
-            <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{state.rooms}</span>
-          </p>
-          <p className="mt-2 flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="text-zinc-500 dark:text-zinc-400">Bathrooms</span>
-            <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{state.bathrooms}</span>
-          </p>
-          <p className="mt-2 flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="text-zinc-500 dark:text-zinc-400">Extra rooms</span>
-            <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{state.extraRooms}</span>
-          </p>
-        </div>
-        <SummaryRow label="Extras">{extrasContent}</SummaryRow>
+      <div className="mt-3 space-y-2 rounded-xl border border-zinc-200/60 bg-white/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+        <CompactDetailRow label="What" value={whatValue} icon="what" />
+        <CompactDetailRow label="Where" value={whereValue} icon="where" />
+        <CompactDetailRow label="When" value={whenValue} icon="when" />
       </div>
 
       {!locked && estimateFromZar != null && !suppressEstimateUntilLocked ? (
-        <div className="mt-4 space-y-1 rounded-xl border border-dashed border-zinc-300/90 bg-white/70 px-3 py-3 dark:border-zinc-600 dark:bg-zinc-950/40">
+        <div className="mt-4 space-y-1 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/50 dark:bg-blue-950/35">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Estimated price
           </p>
           <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
             From R {estimateFromZar.toLocaleString("en-ZA")}
           </p>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">
-            Exact amount depends on the time you choose — shown on each slot in the next step.
-          </p>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">No payment required yet</p>
         </div>
       ) : null}
 

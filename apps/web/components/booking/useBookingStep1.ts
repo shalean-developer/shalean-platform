@@ -21,7 +21,7 @@ import {
   SERVICE_CATEGORIES,
 } from "./serviceCategories";
 
-export type PropertyTypeKind = "apartment" | "house";
+export type PropertyTypeKind = "apartment" | "house" | "studio" | "office";
 
 export type BookingStep1State = {
   selectedCategory: ServiceCategoryKind | null;
@@ -30,8 +30,12 @@ export type BookingStep1State = {
   service_type: BookingServiceTypeKey | null;
   /** Service address / area — shown on later steps, edited on step 1. */
   location: string;
-  /** Low-friction step 1 — apartment vs house (UX; does not change pricing today). */
+  /** Low-friction step 1 — property shape (UX; does not change pricing today). */
   propertyType: PropertyTypeKind | null;
+  /** Optional sub-services selected on quote step; first item is used as primary pricing service. */
+  subServices?: BookingServiceTypeKey[];
+  /** Optional booking notes captured on quote step. */
+  notes?: string;
   cleaningFrequency: "one_time" | "weekly" | "biweekly" | "monthly";
   rooms: number;
   bathrooms: number;
@@ -50,6 +54,8 @@ const initialState: BookingStep1State = {
   service_type: null,
   location: "",
   propertyType: null,
+  subServices: [],
+  notes: "",
   cleaningFrequency: "one_time",
   rooms: 1,
   bathrooms: 1,
@@ -82,7 +88,7 @@ function clampInt(n: unknown, min: number, max: number, fallback: number): numbe
 }
 
 function parsePropertyType(value: unknown): PropertyTypeKind | null {
-  if (value === "apartment" || value === "house") return value;
+  if (value === "apartment" || value === "house" || value === "studio" || value === "office") return value;
   return null;
 }
 
@@ -164,6 +170,9 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
     o.cleaningFrequency === "one_time"
       ? o.cleaningFrequency
       : "one_time";
+  const subServicesRaw = Array.isArray(o.subServices) ? o.subServices : [];
+  const subServices = subServicesRaw.filter((v): v is BookingServiceTypeKey => parseServiceType(v) !== null);
+  const notes = typeof o.notes === "string" ? o.notes.slice(0, 1200) : "";
 
   return syncStep1ServiceFields(
     normalizeStep1ForService({
@@ -173,6 +182,8 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
       service_type,
       location,
       propertyType,
+      subServices,
+      notes,
       cleaningFrequency,
       rooms,
       bathrooms,

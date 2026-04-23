@@ -39,7 +39,21 @@ export const EXTRAS_ZAR: Record<string, number> = {
   "inside-fridge": 30,
   "inside-oven": 50,
   "interior-windows": 60,
+  "interior-walls": 55,
+  "water-plants": 25,
   ironing: 40,
+};
+
+/** Short ids used by the homepage widget optional-extras catalog. */
+export type WidgetOptionalExtraId = "fridge" | "oven" | "cabinets" | "windows" | "walls" | "plants";
+
+export const WIDGET_OPTIONAL_EXTRA_PRICES: Record<WidgetOptionalExtraId, number> = {
+  fridge: EXTRAS_ZAR["inside-fridge"] ?? 0,
+  oven: EXTRAS_ZAR["inside-oven"] ?? 0,
+  cabinets: EXTRAS_ZAR["inside-cabinets"] ?? 0,
+  windows: EXTRAS_ZAR["interior-windows"] ?? 0,
+  walls: EXTRAS_ZAR["interior-walls"] ?? 0,
+  plants: EXTRAS_ZAR["water-plants"] ?? 0,
 };
 
 /** Pre–surge extras sum — used only to split the locked total for display (does not change `finalPrice`). */
@@ -142,4 +156,30 @@ export function calculateSmartQuote(
     demandLabel: getDemandPricingLabel(timeHm),
     surgeLabel: getSurgeLabel(surge),
   };
+}
+
+/** Homepage / live widget service keys (maps 1:1 to `BookingServiceId` except `quick`). */
+export type HomeWidgetServiceKey = "standard" | "airbnb" | "deep" | "move" | "carpet";
+
+export type HomeWidgetQuoteInput = {
+  service: HomeWidgetServiceKey;
+  bedrooms: number;
+  bathrooms: number;
+  extraRooms: number;
+  extras: string[];
+};
+
+export function calculateHomeWidgetQuoteZar(input: HomeWidgetQuoteInput): number {
+  const { total } = calculatePrice({
+    service: input.service,
+    rooms: input.bedrooms,
+    bathrooms: input.bathrooms,
+    extraRooms: input.extraRooms,
+    extras: input.extras,
+  });
+  return total;
+}
+
+export function calculateHomeWidgetBaseEstimateZar(service: HomeWidgetServiceKey): number {
+  return SERVICE_BASE_ZAR[service] ?? 0;
 }

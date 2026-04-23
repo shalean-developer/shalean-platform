@@ -41,7 +41,7 @@ export default function BookingSummary({
   }, [displayState, locked, suppressEstimateUntilLocked, tier]);
 
   return (
-    <div className="sticky top-20 z-10 min-w-0 self-start lg:static lg:self-stretch">
+    <div className="sticky top-24 z-10 min-w-0 self-start lg:static lg:self-stretch">
       <BookingSummaryCard
         state={displayState}
         suppressEstimateUntilLocked={suppressEstimateUntilLocked}

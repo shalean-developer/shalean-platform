@@ -108,7 +108,12 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
   }
 
   const propertyType =
-    data.propertyType === "apartment" || data.propertyType === "house" ? data.propertyType : null;
+    data.propertyType === "apartment" ||
+    data.propertyType === "house" ||
+    data.propertyType === "studio" ||
+    data.propertyType === "office"
+      ? data.propertyType
+      : null;
   const cleaningFrequency =
     data.cleaningFrequency === "weekly" ||
     data.cleaningFrequency === "biweekly" ||

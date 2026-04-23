@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, MapPin } from "lucide-react";
+import { Check } from "lucide-react";
 import { getPremiumTimeUpsellExtras, getSmartRecommendations, type BookingContext } from "@/lib/ai/bookingAssistant";
 import { usePastBookingHints } from "@/lib/booking/usePastBookingHints";
 import { trackAssistantEvent } from "@/lib/booking/trackAssistantEvent";
@@ -27,7 +27,6 @@ import {
   lockBookingSlot,
 } from "@/lib/booking/lockedBooking";
 import { calculatePrice } from "@/lib/pricing/calculatePrice";
-import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 
 type LiveSlot = {
@@ -51,6 +50,10 @@ function truncateText(s: string, max: number): string {
 function formatDurationLine(hours: number): string {
   const h = hours % 1 === 0 ? String(hours) : hours.toFixed(1).replace(/\.0$/, "");
   return `≈ ${h} hrs`;
+}
+
+function formatDurationNumber(hours: number): string {
+  return hours % 1 === 0 ? String(hours) : hours.toFixed(1).replace(/\.0$/, "");
 }
 
 function slotDemandPriceBand(price: number | null, avg: number | null): SlotDemandPriceBand | null {
@@ -107,7 +110,6 @@ function tomorrowYmd(allDateValues: string[]): string | null {
 }
 
 export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
-  const { handleResetBooking } = useBookingFlow();
   const step1 = usePersistedBookingSummaryState();
   const locked = useLockedBooking();
   const { tier: vipTier } = useBookingVipTier();
@@ -357,6 +359,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           total: getLockedBookingDisplayPrice(locked),
           surge: locked.surge > 0 ? locked.surge : 1,
           surgeLabel: locked.surgeLabel ?? "Standard",
+          hours: locked.finalHours,
         }
       : null;
 
@@ -394,13 +397,10 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     const slot = liveSlots.find((s) => s.time === time);
     const priceZar =
       slot && typeof slot.price === "number" && Number.isFinite(slot.price) ? slot.price : null;
-    const demand = assistantSlots.find((s) => s.time === time)?.demand;
-    const cleanersCount = liveSlots.find((s) => s.time === time)?.cleanersCount ?? 0;
     return {
       time,
       priceZar,
       priceDemandBand: slotDemandPriceBand(priceZar, averageSlotPrice),
-      durationLabel: durationLine,
       selected: selectedTime === time,
       dimUnselected: dimOtherSlots,
       onSelect: () => {
@@ -408,8 +408,6 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
       },
       assistantRecommended: recommendations ? time === recommendations.recommended.time : false,
       recommendedBadgeText: bookingCopy.when.recommended,
-      showFillsFastBadge: demand === "high",
-      availabilityHint: cleanersCount > 0 ? `⚡ ${cleanersCount} cleaners available` : null,
     };
   }
 
@@ -426,7 +424,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
         !locked ? <p className="text-center">{bookingCopy.errors.time}</p> : undefined
       }
     >
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             {bookingCopy.when.title}
@@ -467,37 +465,6 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           </p>
         ) : (
           <>
-            <SectionCard
-              title="Location"
-              description="Where should we send the cleaner?"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800/80">
-                    <MapPin className="h-5 w-5 text-zinc-500 dark:text-zinc-400" aria-hidden />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {locationDisplay || "No location selected"}
-                    </p>
-                    <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                      Tap edit to change your details
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearLockedBookingFromStorage();
-                    onBack();
-                  }}
-                  className="shrink-0 text-sm font-medium text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400"
-                >
-                  Edit
-                </button>
-              </div>
-            </SectionCard>
-
             <section className="space-y-3" aria-labelledby="date-heading">
               <h2 id="date-heading" className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                 {bookingCopy.when.dateHeading}
@@ -510,9 +477,6 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
 
             {lockBaseState ? (
               <div id="booking-time-slots" className="scroll-mt-28 space-y-8">
-                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                  {bookingCopy.when.availability}
-                </p>
                 {slotsLoading ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     {Array.from({ length: 6 }).map((_, i) => (
@@ -536,7 +500,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
                     </h2>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">{bookingCopy.when.morningHint}</p>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                     {allSlotTimes.filter((t) => Number(t.slice(0, 2)) < 12).map((time) => {
                       const p = slotCardProps(time);
                       return p ? <TimeSlotCard key={time} {...p} /> : null;
@@ -552,16 +516,6 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
                     return p ? <TimeSlotCard key={time} {...p} /> : null;
                   }}
                 />
-
-                {selectedQuote && selectedQuote.surge > 1 ? (
-                  <div className="rounded-xl border border-amber-200/90 bg-amber-50/95 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-50">
-                    <p className="font-semibold">⚡ {selectedQuote.surgeLabel} — busier window</p>
-                    <p className="mt-1 text-xs">
-                      Locked slot total: R {selectedQuote.total.toLocaleString("en-ZA")} (matches the price on the
-                      slot you selected).
-                    </p>
-                  </div>
-                ) : null}
 
                 {demandForSelected === "high" && premiumUpsell.length > 0 ? (
                   <div className="rounded-xl border border-violet-200/90 bg-violet-50/95 px-4 py-3 text-sm text-violet-950 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/35 dark:text-violet-50">
@@ -588,23 +542,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
                   >
                     <Check className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.25} aria-hidden />
                     <span>Price locked for this time.</span>
-                    <button
-                      type="button"
-                      onClick={handleResetBooking}
-                      className="text-sm font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
-                    >
-                      Reset booking
-                    </button>
                   </div>
                 ) : null}
+
               </div>
             ) : null}
-
-            <p className="text-xs text-zinc-500 dark:text-zinc-400" role="status">
-              {locked
-                ? "Change the time above if you need to — your summary stays in sync."
-                : "Tap a slot to lock this visit — your summary updates right away."}
-            </p>
           </>
         )}
       </div>

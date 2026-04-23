@@ -1,83 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import {
+  type BookingServiceTypeKey,
   bookingServiceIdFromType,
   normalizeStep1ForService,
 } from "@/components/booking/serviceCategories";
-import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
-import { estimateFromSmartQuoteMin } from "@/lib/booking/smartQuoteEstimate";
-
-function GroupCard({
-  title,
-  description,
-  selected,
-  onSelect,
-}: {
-  title: string;
-  description: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={[
-        "w-full rounded-2xl border p-4 text-left transition-all",
-        selected
-          ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/25 dark:bg-primary/10"
-          : "border-zinc-200/90 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/40 dark:hover:border-zinc-600",
-      ].join(" ")}
-    >
-      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</p>
-      <p className="mt-1.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{description}</p>
-    </button>
-  );
-}
-
-function MiniOption({
-  label,
-  description,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  description: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={[
-        "rounded-xl border px-3 py-2.5 text-left text-xs transition-all sm:text-sm",
-        selected
-          ? "border-primary bg-primary/10 font-semibold text-zinc-900 dark:text-zinc-50"
-          : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-200",
-      ].join(" ")}
-    >
-      <span className="font-semibold">{label}</span>
-      <span className="mt-0.5 block font-normal text-zinc-600 dark:text-zinc-400">{description}</span>
-    </button>
-  );
-}
+import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
 
 export function StepQuote() {
   const router = useRouter();
   const booking = useBookingStep1();
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
-  const { tier } = useBookingVipTier();
-
-  const estimateFrom = useMemo(() => estimateFromSmartQuoteMin(state, tier), [state, tier]);
 
   useEffect(() => {
     clearBookingPricePreviewFromStorage();
@@ -86,79 +27,37 @@ export function StepQuote() {
   /** Default funnel on quote when nothing chosen yet (e.g. deep-linked without step 1). */
   useEffect(() => {
     if (!hydrated) return;
-    if (state.service_group != null || state.service != null) return;
+    if ((state.subServices?.length ?? 0) > 0) return;
     setState((p) =>
       normalizeStep1ForService({
         ...p,
+        subServices: ["standard_cleaning"],
         selectedCategory: "regular",
         service_group: "regular",
         service_type: "standard_cleaning",
         service: bookingServiceIdFromType("standard_cleaning"),
       }),
     );
-  }, [hydrated, setState, state.service, state.service_group]);
+  }, [hydrated, setState, state.subServices]);
 
-  const pickRegularGroup = useCallback(() => {
-    setState((p) =>
-      normalizeStep1ForService({
-        ...p,
-        selectedCategory: "regular",
-        service_group: "regular",
-        service_type: "standard_cleaning",
-        service: bookingServiceIdFromType("standard_cleaning"),
-      }),
-    );
-  }, [setState]);
-
-  const pickRegularType = useCallback(
-    (t: "standard_cleaning" | "airbnb_cleaning") => {
+  const selectService = useCallback(
+    (primary: BookingServiceTypeKey) => {
+      const group = primary === "standard_cleaning" || primary === "airbnb_cleaning" ? "regular" : "specialised";
       setState((p) =>
         normalizeStep1ForService({
           ...p,
-          selectedCategory: "regular",
-          service_group: "regular",
-          service_type: t,
-          service: bookingServiceIdFromType(t),
+          subServices: [primary],
+          selectedCategory: group,
+          service_group: group,
+          service_type: primary,
+          service: bookingServiceIdFromType(primary),
         }),
       );
     },
     [setState],
   );
 
-  const pickSpecialisedGroup = useCallback(() => {
-    setState((p) => ({
-      ...p,
-      selectedCategory: "specialised",
-      service_group: "specialised",
-      service_type: null,
-      service: null,
-    }));
-  }, [setState]);
-
-  const pickSpecialisedType = useCallback(
-    (t: "deep_cleaning" | "move_cleaning" | "carpet_cleaning") => {
-      setState((p) =>
-        normalizeStep1ForService({
-          ...p,
-          selectedCategory: "specialised",
-          service_group: "specialised",
-          service_type: t,
-          service: bookingServiceIdFromType(t),
-        }),
-      );
-    },
-    [setState],
-  );
-
-  const isRegularGroup = state.service_group === "regular";
-  const isSpecialisedGroup = state.service_group === "specialised";
-  const st = state.service_type;
-
-  const hasRegularType = st === "standard_cleaning" || st === "airbnb_cleaning";
-  const hasSpecialisedType =
-    st === "deep_cleaning" || st === "move_cleaning" || st === "carpet_cleaning";
-
-  const canContinue = Boolean(state.service && state.service_type && (hasRegularType || hasSpecialisedType));
+  const canContinue = Boolean(state.service && state.service_type);
 
   return (
     <BookingLayout
@@ -167,19 +66,8 @@ export function StepQuote() {
       canContinue={canContinue}
       onContinue={() => router.push(bookingFlowHref("details"))}
       continueLabel={copy.cta}
-      stickyMobileBar={
-        estimateFrom != null
-          ? {
-              totalZar: estimateFrom,
-              totalCaption: "Estimated from",
-              subline: "Final price is set per time slot in the next step",
-              ctaShort: copy.cta,
-            }
-          : undefined
-      }
-      footerTotalZar={estimateFrom ?? undefined}
     >
-      <div className="mx-auto max-w-xl space-y-8 pb-6 lg:mx-0">
+      <div className="mx-auto max-w-2xl space-y-8 pb-6 lg:mx-0">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{copy.eyebrow}</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
@@ -187,100 +75,24 @@ export function StepQuote() {
           </h1>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-md dark:border-zinc-800 dark:bg-zinc-900/50">
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Estimated price
-          </p>
-          {estimateFrom != null ? (
-            <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
-              From R {estimateFrom.toLocaleString("en-ZA")}
-            </p>
-          ) : (
-            <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              Choose a cleaning type to see an estimate
-            </p>
-          )}
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            This is a guide only — each time slot shows the real price before you pay.
-          </p>
-          <p className="mt-4 text-sm font-semibold text-zinc-800 dark:text-zinc-100">{copy.earlyTrust}</p>
-          <p className="mt-3 text-sm font-medium text-emerald-800 dark:text-emerald-300">{copy.trust}</p>
-          <p className="mt-3 text-sm font-semibold text-amber-900 dark:text-amber-200/90">{copy.urgency}</p>
-        </div>
-
-        <section className="space-y-3" aria-labelledby="cleaning-type-heading">
-          <h2 id="cleaning-type-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            Choose your cleaning type
+        <section className="space-y-3" aria-labelledby="sub-services-heading">
+          <h2 id="sub-services-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Sub-services (optional)
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <GroupCard
-              title="Regular Cleaning"
-              description="Perfect for weekly or general home cleaning"
-              selected={isRegularGroup}
-              onSelect={pickRegularGroup}
-            />
-            <GroupCard
-              title="Specialised Cleaning"
-              description="For deep, moving or specialised cleaning needs"
-              selected={isSpecialisedGroup}
-              onSelect={pickSpecialisedGroup}
-            />
-          </div>
-
-          {isRegularGroup ? (
-            <div className="mt-2 space-y-2">
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">Choose a standard home cleaning option</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <MiniOption
-                  label="Standard Cleaning"
-                  description="Weekly or general home clean"
-                  selected={st === "standard_cleaning"}
-                  onSelect={() => pickRegularType("standard_cleaning")}
-                />
-                <MiniOption
-                  label="Airbnb Cleaning"
-                  description="Guest-ready turnovers"
-                  selected={st === "airbnb_cleaning"}
-                  onSelect={() => pickRegularType("airbnb_cleaning")}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {isSpecialisedGroup ? (
-            <div className="mt-2 space-y-2">
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">For deep, moving or specialised cleaning needs</p>
-              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Pick one:</p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <MiniOption
-                  label="Deep Cleaning"
-                  description="Intensive, high-traffic homes"
-                  selected={st === "deep_cleaning"}
-                  onSelect={() => pickSpecialisedType("deep_cleaning")}
-                />
-                <MiniOption
-                  label="Move In/Out Cleaning"
-                  description="Empty-home handover clean"
-                  selected={st === "move_cleaning"}
-                  onSelect={() => pickSpecialisedType("move_cleaning")}
-                />
-                <MiniOption
-                  label="Carpet Cleaning"
-                  description="Rugs and carpeted areas"
-                  selected={st === "carpet_cleaning"}
-                  onSelect={() => pickSpecialisedType("carpet_cleaning")}
-                />
-              </div>
-            </div>
-          ) : null}
+          <SubServicesSelector selectedService={state.service_type ?? null} onSelect={selectService} />
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Select one service</p>
         </section>
 
-        <section className="rounded-2xl border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-zinc-800 dark:bg-zinc-900/30">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">What&apos;s included</h2>
-          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{copy.supporting}</p>
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Anything else we should know?</h2>
+          <textarea
+            value={state.notes ?? ""}
+            onChange={(e) => setState((p) => ({ ...p, notes: e.target.value.slice(0, 1200) }))}
+            placeholder="Add notes (optional)"
+            rows={4}
+            className="w-full resize-y rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          />
         </section>
-
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.reassurance}</p>
       </div>
     </BookingLayout>
   );
