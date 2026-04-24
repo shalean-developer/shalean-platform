@@ -256,12 +256,24 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, stage: "payment_confirmed" },
       });
     }
+    const { data: bookingHead } = await supabase
+      .from("bookings")
+      .select("user_id, assignment_type, fallback_reason")
+      .eq("id", event.bookingId)
+      .maybeSingle();
+    const head =
+      bookingHead && typeof bookingHead === "object" ? (bookingHead as Record<string, unknown>) : null;
+    const assignmentType = head ? String(head.assignment_type ?? "").trim() || null : null;
+    const fallbackReason = head ? String(head.fallback_reason ?? "").trim() || null : null;
+
     const payload = buildBookingEmailPayload({
       paymentReference: event.paymentReference,
       amountCents: event.amountCents,
       customerEmail: event.customerEmail,
       snapshot: event.snapshot,
       bookingId: event.bookingId,
+      assignmentType,
+      fallbackReason,
     });
     const cust = await sendBookingConfirmationEmail(payload);
     if (!cust.sent && cust.error) {
@@ -287,7 +299,13 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       "payment_confirmed",
       { bookingId: event.bookingId },
       async () => {
-        const adminHtml = `<h2 style="font-family:system-ui">Payment confirmed</h2>${adminBaseBlock({
+        const adminAssignmentNote =
+          payload.showCleanerSubstitutionNotice && payload.fallbackReason
+            ? `<p style="font-family:system-ui,sans-serif;font-size:14px;color:#92400e"><strong>Checkout assignment:</strong> auto_fallback — ${escapeHtml(payload.fallbackReason)}</p>`
+            : payload.showCleanerSubstitutionNotice
+              ? `<p style="font-family:system-ui,sans-serif;font-size:14px;color:#92400e"><strong>Checkout assignment:</strong> auto_fallback</p>`
+              : "";
+        const adminHtml = `<h2 style="font-family:system-ui">Payment confirmed</h2>${adminAssignmentNote}${adminBaseBlock({
           bookingId: payFields.id,
           service: payFields.service,
           date: payFields.date,
@@ -304,8 +322,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       },
     );
 
-    const { data: row } = await supabase.from("bookings").select("user_id").eq("id", event.bookingId).maybeSingle();
-    const uid = row && typeof row === "object" ? String((row as { user_id?: string | null }).user_id ?? "").trim() : "";
+    const uid = head ? String(head.user_id ?? "").trim() : "";
     if (uid) {
       const locked = event.snapshot?.locked;
       await notifyCustomerBookingPlaced(supabase, {

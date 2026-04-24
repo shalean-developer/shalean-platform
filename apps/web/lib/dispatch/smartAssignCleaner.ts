@@ -35,6 +35,8 @@ export type SmartAssignOptions = {
   searchExpansion?: "none" | "city" | "broadcast";
   /** From retry queue / escalation (drives parallel count + broadcast). */
   retryTier?: number;
+  /** Exclude cleaners (e.g. customer’s pick that could not be honored at checkout). */
+  excludeCleanerIds?: readonly string[];
 };
 
 export type SmartAssignResult =
@@ -322,7 +324,12 @@ export async function findSmartDispatchCandidates(
     supplyRatioStricter?: boolean;
     retryTier?: number;
   },
-  options?: { randomFn?: () => number; travelProvider?: TravelTimeProvider; maxCandidates?: number },
+  options?: {
+    randomFn?: () => number;
+    travelProvider?: TravelTimeProvider;
+    maxCandidates?: number;
+    excludeCleanerIds?: readonly string[];
+  },
 ): Promise<SmartDispatchCandidate[]> {
   const { dateYmd, timeHm, locationId } = params;
   const cityId = params.cityId ?? null;
@@ -334,6 +341,7 @@ export async function findSmartDispatchCandidates(
   const rand = options?.randomFn ?? Math.random;
   const innerTravel = options?.travelProvider ?? getDefaultTravelTimeProvider();
   const maxCandidates = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
+  const excludeCleanerIds = new Set((options?.excludeCleanerIds ?? []).map((id) => String(id).trim()).filter(Boolean));
 
   const { data: jobLoc, error: locErr } = await supabase
     .from("locations")
@@ -448,7 +456,7 @@ export async function findSmartDispatchCandidates(
     acceptance_rate_recent?: number | null;
     avg_response_time_ms?: number | null;
     tier?: string | null;
-  })[]).filter((c) => c.id && !taken.has(c.id));
+  })[]).filter((c) => c.id && !taken.has(c.id) && !excludeCleanerIds.has(c.id));
 
   if (baseCleaners.length === 0) return [];
 
@@ -707,7 +715,7 @@ export async function smartAssignCleaner(
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, location_id, city_id, duration_minutes, surge_multiplier, demand_level",
+      "id, date, time, status, cleaner_id, location_id, city_id, duration_minutes, surge_multiplier, demand_level, dispatch_attempt_count",
     )
     .eq("id", params.bookingId)
     .maybeSingle();
@@ -798,6 +806,7 @@ export async function smartAssignCleaner(
     randomFn: options?.randomFn,
     travelProvider,
     maxCandidates,
+    excludeCleanerIds: options?.excludeCleanerIds,
   };
 
   let candidates = await findSmartDispatchCandidates(
@@ -959,6 +968,9 @@ export async function smartAssignCleaner(
       return { ok: true, cleanerId: cid, score: sc };
     }
 
+    const metricAttemptNumber =
+      Number((booking as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0) || 0;
+
     const winner = await runParallelDispatchOfferRace({
       supabase,
       bookingId: params.bookingId,
@@ -967,6 +979,7 @@ export async function smartAssignCleaner(
       offerTimeoutMs,
       ttlSeconds: OFFER_TTL_SECONDS,
       rankOffset,
+      metricAttemptNumber,
     });
     rankOffset += batch.length;
 

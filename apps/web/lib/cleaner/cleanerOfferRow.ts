@@ -6,6 +6,8 @@ export type CleanerOfferRow = {
   status: string;
   expires_at: string;
   created_at: string;
+  /** Server-assigned A/B cell; null on legacy rows. */
+  ux_variant?: string | null;
   booking: {
     id: string;
     service: string | null;

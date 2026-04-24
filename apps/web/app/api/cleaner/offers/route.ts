@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   const { data: offers, error } = await admin
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status, expires_at, created_at")
+    .select("id, booking_id, cleaner_id, status, expires_at, created_at, ux_variant")
     .eq("cleaner_id", cleanerId)
     .eq("status", "pending")
     .order("created_at", { ascending: false })

@@ -17,7 +17,30 @@ import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/dema
 import { createPendingCustomerReferral } from "@/lib/referrals/server";
 import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  checkoutDispatchOfferTtlSeconds,
+  resolveCheckoutCleanerSelection,
+} from "@/lib/booking/checkoutCleanerEligibility";
+import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackReason";
+import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { metrics } from "@/lib/metrics/counters";
 import { pickUserSelectedCleanerId } from "@/lib/booking/userSelectedCleanerFromSnapshot";
+
+function buildAutoAssignmentPatch(
+  autoAssignmentTag: "auto_dispatch" | "auto_fallback",
+  selectionInvalidatedCleaner: boolean,
+  pickedCleanerUuid: string | null,
+  fallbackReasonCode: string | null,
+): { assignment_type: string; fallback_reason?: string; attempted_cleaner_id?: string } {
+  const patch: { assignment_type: string; fallback_reason?: string; attempted_cleaner_id?: string } = {
+    assignment_type: autoAssignmentTag,
+  };
+  if (autoAssignmentTag === "auto_fallback" && selectionInvalidatedCleaner && pickedCleanerUuid && fallbackReasonCode) {
+    patch.fallback_reason = fallbackReasonCode;
+    patch.attempted_cleaner_id = pickedCleanerUuid;
+  }
+  return patch;
+}
 
 export type UpsertBookingInput = {
   paystackReference: string;
@@ -78,19 +101,17 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const lockedRow = parseLockedBookingFromUnknown(locked ?? null);
 
   const pickedCleanerUuid = pickUserSelectedCleanerId(lockedRow, input.snapshot);
-  let userConfirmedCleanerId: string | null = null;
-  if (pickedCleanerUuid) {
-    const { data: cleanerHit, error: cleanerLookupErr } = await supabase
-      .from("cleaners")
-      .select("id")
-      .eq("id", pickedCleanerUuid)
-      .maybeSingle();
-    if (!cleanerLookupErr && cleanerHit && typeof cleanerHit === "object" && "id" in cleanerHit) {
-      userConfirmedCleanerId = String((cleanerHit as { id: string }).id);
-    }
-  }
-  /** Customer had a UUID in snapshot/lock but it did not match a `cleaners` row — auto dispatch uses `auto_fallback`. */
-  const selectionInvalidatedCleaner = Boolean(pickedCleanerUuid && !userConfirmedCleanerId);
+  const checkoutResolution = await resolveCheckoutCleanerSelection(supabase, {
+    pickedCleanerUuid,
+    locked: lockedRow,
+  });
+  let userConfirmedCleanerId: string | null =
+    checkoutResolution.kind === "honor" ? checkoutResolution.cleanerId : null;
+  const selectionInvalidatedCleaner = checkoutResolution.kind === "fallback";
+  const checkoutFallbackReason =
+    checkoutResolution.kind === "fallback" ? checkoutResolution.reason : null;
+  const checkoutIntentRow =
+    checkoutResolution.kind === "fallback" ? { attempted_cleaner_id: checkoutResolution.attemptedId } : {};
 
   let price_breakdown: Record<string, unknown> | null = null;
   let total_price: number | null = null;
@@ -144,16 +165,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
   const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
 
-  const assignedAtIso = new Date().toISOString();
   const userSelectedRow =
     userConfirmedCleanerId != null
       ? {
-          cleaner_id: userConfirmedCleanerId,
           selected_cleaner_id: userConfirmedCleanerId,
+          attempted_cleaner_id: userConfirmedCleanerId,
           assignment_type: "user_selected",
-          status: "assigned",
-          dispatch_status: "assigned",
-          assigned_at: assignedAtIso,
+          status: "pending",
+          dispatch_status: "searching",
         }
       : {};
 
@@ -186,6 +205,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     pricing_version_id: pricing_version_id || null,
     price_breakdown: price_breakdown,
     total_price: total_price ?? null,
+    ...checkoutIntentRow,
     ...userSelectedRow,
   };
 
@@ -287,31 +307,103 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       });
     }
 
-    /** Customer-picked cleaner: already on row — notify only; skip smart dispatch. */
+    /** Customer-picked cleaner: dispatch offer first; assignment finalizes on accept (see `acceptDispatchOffer`). */
     if (userConfirmedCleanerId) {
-      try {
-        await notifyCleanerAssignedBooking(supabase, id, userConfirmedCleanerId);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await reportOperationalIssue("error", "upsertBookingFromPaystack", `notify assigned (user_selected): ${msg}`, {
+      const ttl = checkoutDispatchOfferTtlSeconds();
+      const offerRes = await createDispatchOfferRow({
+        supabase,
+        bookingId: id,
+        cleanerId: userConfirmedCleanerId,
+        rankIndex: 0,
+        ttlSeconds: ttl,
+      });
+      if (offerRes.ok) {
+        metrics.increment("booking.checkout_assignment", {
+          assignment_type: "user_selected",
           bookingId: id,
-          paystackReference: input.paystackReference,
+          selected_cleaner_id: userConfirmedCleanerId,
+          phase: "offered",
         });
+      } else {
+        const r = await ensureBookingAssignment(supabase, id, {
+          source: "paystack_checkout",
+          smartAssign: { excludeCleanerIds: [userConfirmedCleanerId] },
+        });
+        if (r.ok) {
+          const { error: tagErr } = await supabase
+            .from("bookings")
+            .update({
+              assignment_type: "auto_fallback",
+              fallback_reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE,
+              attempted_cleaner_id: userConfirmedCleanerId,
+            })
+            .eq("id", id);
+          if (tagErr) {
+            await reportOperationalIssue("warn", "upsertBookingFromPaystack", `fallback tag: ${tagErr.message}`, {
+              bookingId: id,
+            });
+          }
+          try {
+            await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            await reportOperationalIssue("error", "upsertBookingFromPaystack", `notify after offer insert fail: ${msg}`, {
+              bookingId: id,
+            });
+          }
+          metrics.increment("booking.checkout_assignment", {
+            assignment_type: "auto_fallback",
+            bookingId: id,
+            selected_cleaner_id: userConfirmedCleanerId,
+            assigned_cleaner_id: r.cleanerId,
+            fallback_reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE,
+          });
+        } else {
+          await reportOperationalIssue("warn", "upsertBookingFromPaystack", "user_selected offer failed and re-dispatch failed", {
+            bookingId: id,
+            paystackReference: input.paystackReference,
+            offerError: offerRes.error,
+            dispatchError: r.error,
+          });
+        }
       }
     } else {
       const autoAssignmentTag = selectionInvalidatedCleaner ? "auto_fallback" : "auto_dispatch";
+      const smartAssignOpts =
+        selectionInvalidatedCleaner && pickedCleanerUuid
+          ? { excludeCleanerIds: [pickedCleanerUuid] as const }
+          : undefined;
       /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
       const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
       const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
       if (autoDispatch) {
-        const r = await ensureBookingAssignment(supabase, id, { source: "paystack_checkout" });
+        const r = await ensureBookingAssignment(supabase, id, {
+          source: "paystack_checkout",
+          smartAssign: smartAssignOpts,
+        });
         if (r.ok) {
           await supabase
             .from("bookings")
-            .update({ assignment_type: autoAssignmentTag })
+            .update(
+              buildAutoAssignmentPatch(
+                autoAssignmentTag,
+                selectionInvalidatedCleaner,
+                pickedCleanerUuid,
+                checkoutFallbackReason,
+              ),
+            )
             .eq("id", id)
             .is("assignment_type", null);
           await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+          metrics.increment("booking.checkout_assignment", {
+            assignment_type: autoAssignmentTag,
+            bookingId: id,
+            selected_cleaner_id: pickedCleanerUuid,
+            assigned_cleaner_id: r.cleanerId,
+            ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
+              ? { fallback_reason: checkoutFallbackReason }
+              : {}),
+          });
         } else if (offerAssignFallback) {
           const smart = await runAdminAssignSmart(supabase, {
             bookingId: id,
@@ -323,10 +415,26 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           if (smart.ok) {
             await supabase
               .from("bookings")
-              .update({ assignment_type: autoAssignmentTag })
+              .update(
+                buildAutoAssignmentPatch(
+                  autoAssignmentTag,
+                  selectionInvalidatedCleaner,
+                  pickedCleanerUuid,
+                  checkoutFallbackReason,
+                ),
+              )
               .eq("id", id)
               .is("assignment_type", null);
             await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
+            metrics.increment("booking.checkout_assignment", {
+              assignment_type: autoAssignmentTag,
+              bookingId: id,
+              selected_cleaner_id: pickedCleanerUuid,
+              assigned_cleaner_id: smart.cleanerId,
+              ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
+                ? { fallback_reason: checkoutFallbackReason }
+                : {}),
+            });
           }
         }
       } else if (offerAssignFallback) {
@@ -340,10 +448,26 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         if (smart.ok) {
           await supabase
             .from("bookings")
-            .update({ assignment_type: autoAssignmentTag })
+            .update(
+              buildAutoAssignmentPatch(
+                autoAssignmentTag,
+                selectionInvalidatedCleaner,
+                pickedCleanerUuid,
+                checkoutFallbackReason,
+              ),
+            )
             .eq("id", id)
             .is("assignment_type", null);
           await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
+          metrics.increment("booking.checkout_assignment", {
+            assignment_type: autoAssignmentTag,
+            bookingId: id,
+            selected_cleaner_id: pickedCleanerUuid,
+            assigned_cleaner_id: smart.cleanerId,
+            ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
+              ? { fallback_reason: checkoutFallbackReason }
+              : {}),
+          });
         }
       }
     }

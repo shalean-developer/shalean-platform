@@ -34,7 +34,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const cleanerId = session.cleanerId;
 
   if (normalizedAction === "accept") {
-    const r = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
+    const r = await acceptDispatchOffer({
+      supabase: admin,
+      offerId,
+      cleanerId,
+    });
     if (!r.ok) {
       return NextResponse.json({ error: r.error }, { status: r.error.includes("Not your") ? 403 : 400 });
     }

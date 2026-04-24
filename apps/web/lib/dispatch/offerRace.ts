@@ -29,6 +29,8 @@ export async function runParallelDispatchOfferRace(params: {
   ttlSeconds: number;
   /** Base rank offset for dispatch_offers.rank_index */
   rankOffset: number;
+  /** Matches `bookings.dispatch_attempt_count` for this dispatch wave (metric alignment). */
+  metricAttemptNumber?: number;
 }): Promise<OfferRaceWinner | null> {
   const { supabase, bookingId, offerTimeoutMs, ttlSeconds, rankOffset } = params;
   const parallelCount = Math.max(1, Math.min(3, params.parallelCount));
@@ -43,6 +45,7 @@ export async function runParallelDispatchOfferRace(params: {
         cleanerId: c.id,
         rankIndex: rankOffset + i,
         ttlSeconds,
+        metricAttemptNumber: params.metricAttemptNumber,
       }),
     ),
   );

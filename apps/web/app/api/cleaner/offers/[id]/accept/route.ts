@@ -15,7 +15,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const session = await resolveCleanerIdFromRequest(request, admin);
   if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
 
-  const r = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId: session.cleanerId });
+  const r = await acceptDispatchOffer({
+    supabase: admin,
+    offerId,
+    cleanerId: session.cleanerId,
+  });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.error.includes("Not your") ? 403 : 400 });
 
   return NextResponse.json({ ok: true, status: "accepted" });

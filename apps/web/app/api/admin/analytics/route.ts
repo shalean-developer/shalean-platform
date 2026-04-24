@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { analyzeDispatchExperimentFromOffers } from "@/lib/admin/experimentSummaryFromOffers";
 import { isAdmin } from "@/lib/auth/admin";
 import { getDemandSupplySnapshot } from "@/lib/pricing/demandSupplySurge";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -18,11 +19,13 @@ type BookingRow = {
 };
 
 type OfferRow = {
+  id: string;
   booking_id: string | null;
   cleaner_id: string | null;
   status: string | null;
   created_at: string | null;
   responded_at: string | null;
+  ux_variant?: string | null;
 };
 
 type CleanerApplicationRow = {
@@ -86,7 +89,7 @@ export async function GET(request: Request) {
       .limit(8000),
     admin
       .from("dispatch_offers")
-      .select("booking_id, cleaner_id, status, created_at, responded_at")
+      .select("id, booking_id, cleaner_id, status, created_at, responded_at, ux_variant")
       .order("created_at", { ascending: false })
       .limit(12000),
     admin.from("cleaners").select("id, is_available").limit(4000),
@@ -199,6 +202,8 @@ export async function GET(request: Request) {
       ? `Low supply pressure: demand ${demandSupply.demand} vs supply ${demandSupply.supply}`
       : "Supply looks stable across current active demand";
 
+  const experiment = analyzeDispatchExperimentFromOffers(offers);
+
   return NextResponse.json({
     kpis: {
       revenueToday,
@@ -245,5 +250,12 @@ export async function GET(request: Request) {
       lowSupply,
       avgSurge > 1.2 ? "High surge periods are lifting revenue" : "Surge impact is currently modest",
     ],
+    experimentSummary: experiment.summary,
+    /** Only set when confidence is not low and there is a clear winner (safe for ⭐ in admin). */
+    experimentBestUxVariant: experiment.starWorthyBestUxVariant,
+    experimentLeaderUxVariant: experiment.bestUxVariant,
+    experimentConfidence: experiment.confidence,
+    experimentNoClearWinner: experiment.noClearWinner,
+    experimentResolvedOfferCount: experiment.resolvedOfferCount,
   });
 }

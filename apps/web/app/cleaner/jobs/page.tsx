@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
+import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { checkoutPriceLinesFromPersisted, priceZarFromPersisted } from "@/lib/dashboard/bookingUtils";
 
@@ -57,6 +59,7 @@ type OfferRow = {
   status: string;
   expires_at: string;
   created_at: string;
+  ux_variant?: string | null;
   booking: {
     id: string;
     service: string | null;
@@ -119,6 +122,17 @@ export default function CleanerJobsPage() {
     return () => window.clearInterval(t);
   }, []);
 
+  const topOfferId = offers[0]?.id;
+  useEffect(() => {
+    if (!topOfferId) return;
+    void (async () => {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) return;
+      reportDispatchOfferExposed(topOfferId, { Authorization: `Bearer ${token}` });
+    })();
+  }, [topOfferId]);
+
   useEffect(() => {
     const sb = getSupabaseBrowser();
     if (!sb) return;
@@ -165,7 +179,7 @@ export default function CleanerJobsPage() {
     if (res.ok) void load();
   }
 
-  async function respondToOffer(offerId: string, action: "accept" | "decline") {
+  async function respondToOffer(offerId: string, action: "accept" | "decline", uxVariant?: string | null) {
     setActingId(offerId);
     const sb = getSupabaseBrowser();
     const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
@@ -174,9 +188,11 @@ export default function CleanerJobsPage() {
       setActingId(null);
       return;
     }
+    const resolvedUx = uxVariant ?? offers.find((o) => o.id === offerId)?.ux_variant;
     const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(action === "accept" ? buildCleanerOfferAcceptBody(resolvedUx) : {}),
     });
     setActingId(null);
     if (res.ok) void load();
@@ -228,7 +244,7 @@ export default function CleanerJobsPage() {
             <button
               type="button"
               disabled={actingId === activeOffer.id}
-              onClick={() => void respondToOffer(activeOffer.id, "accept")}
+              onClick={() => void respondToOffer(activeOffer.id, "accept", activeOffer.ux_variant)}
               className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
             >
               {actingId === activeOffer.id ? "Saving..." : "Accept"}

@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
+import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type CleanerProfile = {
@@ -19,6 +21,7 @@ type OfferRow = {
   status: string;
   expires_at: string;
   created_at: string;
+  ux_variant?: string | null;
   booking: {
     id: string;
     service: string | null;
@@ -361,6 +364,13 @@ export default function CleanerHomePage() {
     return offers.find((o) => o.id === offerIdFromQuery) ?? offers[0] ?? null;
   }, [offerIdFromQuery, offers]);
 
+  useEffect(() => {
+    if (!highlightedOffer?.id) return;
+    const sid = cleanerId ?? (typeof window !== "undefined" ? localStorage.getItem("cleaner_id") : null);
+    if (!sid?.trim()) return;
+    reportDispatchOfferExposed(highlightedOffer.id, { "x-cleaner-id": sid.trim() });
+  }, [highlightedOffer?.id, cleanerId]);
+
   const secondsLeft = highlightedOffer
     ? Math.max(0, Math.floor((new Date(highlightedOffer.expires_at).getTime() - nowMs) / 1000))
     : 0;
@@ -416,7 +426,7 @@ export default function CleanerHomePage() {
     setToast({ kind: "success", text: next ? "You are now available" : "You are now offline" });
   }
 
-  async function respondToOffer(offerId: string, action: "accept" | "decline") {
+  async function respondToOffer(offerId: string, action: "accept" | "decline", uxVariant?: string | null) {
     setBusy(true);
     const headers = getCleanerHeaders();
     if (!headers) {
@@ -424,9 +434,12 @@ export default function CleanerHomePage() {
       setBusy(false);
       return;
     }
+    const resolvedUx =
+      uxVariant ?? offers.find((o) => o.id === offerId)?.ux_variant ?? highlightedOffer?.ux_variant;
     const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
       method: "POST",
-      headers,
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(action === "accept" ? buildCleanerOfferAcceptBody(resolvedUx) : {}),
     });
     const json = (await res.json()) as { error?: string };
     setBusy(false);
@@ -520,7 +533,7 @@ export default function CleanerHomePage() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void respondToOffer(highlightedOffer.id, "accept")}
+                onClick={() => void respondToOffer(highlightedOffer.id, "accept", highlightedOffer.ux_variant)}
                 className="min-h-12 flex-1 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
               >
                 Accept

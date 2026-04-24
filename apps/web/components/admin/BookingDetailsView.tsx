@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, MapPin, Pencil, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import { assignCleaner, fetchCleaners, updateBooking, updateBookingStatus, type AdminCleanerRow } from "@/lib/admin/dashboard";
+import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type BookingSeed = { id: string };
@@ -47,7 +48,35 @@ type UserProfile = {
   tier?: string | null;
 };
 
+type DispatchOfferAdminRow = {
+  id: string;
+  cleaner_id: string;
+  status: string | null;
+  rank_index: number | null;
+  expires_at: string | null;
+  created_at: string | null;
+  responded_at: string | null;
+  ux_variant?: string | null;
+};
+
 type ToastState = { kind: "success" | "error"; text: string } | null;
+
+type DispatchOfferUxFilter = "all" | CleanerUxVariant | "unknown";
+
+function isKnownDispatchUxVariant(raw: string): raw is CleanerUxVariant {
+  return (CLEANER_UX_VARIANTS as readonly string[]).includes(raw);
+}
+
+function dispatchOfferUxVariantKey(o: DispatchOfferAdminRow): CleanerUxVariant | "unknown" {
+  const u = String(o.ux_variant ?? "").trim().toLowerCase();
+  return isKnownDispatchUxVariant(u) ? u : "unknown";
+}
+
+function variantCountShareLabel(count: number, total: number): string {
+  if (total <= 0) return `${count}`;
+  const pct = Math.round((count / total) * 100);
+  return `${count}, ${pct}%`;
+}
 
 function money(booking: BookingDetails): number {
   if (typeof booking.total_paid_zar === "number") return booking.total_paid_zar;
@@ -122,6 +151,10 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [draftTime, setDraftTime] = useState("");
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [editingCleanerInline, setEditingCleanerInline] = useState(false);
+  const [dispatchOffers, setDispatchOffers] = useState<DispatchOfferAdminRow[]>([]);
+  const [dispatchOfferUxFilter, setDispatchOfferUxFilter] = useState<DispatchOfferUxFilter>("all");
+  /** Fleet-wide experiment leader from `/api/admin/analytics` (highlights the UX filter row). */
+  const [fleetBestUxVariant, setFleetBestUxVariant] = useState<CleanerUxVariant | "unknown" | null>(null);
 
   useEffect(() => {
     async function loadDetails() {
@@ -131,6 +164,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
         return;
       }
       setLoading(true);
+      setFleetBestUxVariant(null);
       const sb = getSupabaseBrowser();
       const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
       const token = sessionData.session?.access_token;
@@ -140,15 +174,35 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
         return;
       }
 
-      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = (await res.json()) as {
-        booking?: BookingDetails;
-        cleaner?: Cleaner | null;
-        userProfile?: UserProfile | null;
-        error?: string;
-      };
+      const [res, anRes] = await Promise.all([
+        fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch("/api/admin/analytics", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const [json, anJson] = await Promise.all([
+        res.json() as Promise<{
+          booking?: BookingDetails;
+          cleaner?: Cleaner | null;
+          userProfile?: UserProfile | null;
+          dispatch_offers?: DispatchOfferAdminRow[];
+          error?: string;
+        }>,
+        anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
+      ]);
+
+      if (anRes.ok) {
+        const raw = anJson.experimentBestUxVariant;
+        if (raw === "unknown") setFleetBestUxVariant("unknown");
+        else if (typeof raw === "string" && (CLEANER_UX_VARIANTS as readonly string[]).includes(raw)) {
+          setFleetBestUxVariant(raw as CleanerUxVariant);
+        } else {
+          setFleetBestUxVariant(null);
+        }
+      } else {
+        setFleetBestUxVariant(null);
+      }
       if (!res.ok) {
         setError(json.error ?? "Could not load booking.");
         setLoading(false);
@@ -157,6 +211,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setFullBooking(json.booking ?? null);
       setCleaner(json.cleaner ?? null);
       setUserProfile(json.userProfile ?? null);
+      setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
       setDraftDate(json.booking?.date ?? "");
       setDraftTime((json.booking?.time ?? "").slice(0, 5));
       setError(null);
@@ -166,6 +221,27 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   }, [bookingId]);
 
   const flags = useMemo(() => (fullBooking ? detailFlags(fullBooking, userProfile) : []), [fullBooking, userProfile]);
+
+  const filteredDispatchOffers = useMemo(() => {
+    if (dispatchOfferUxFilter === "all") return dispatchOffers;
+    if (dispatchOfferUxFilter === "unknown") {
+      return dispatchOffers.filter((o) => dispatchOfferUxVariantKey(o) === "unknown");
+    }
+    return dispatchOffers.filter(
+      (o) => String(o.ux_variant ?? "").trim().toLowerCase() === dispatchOfferUxFilter,
+    );
+  }, [dispatchOffers, dispatchOfferUxFilter]);
+
+  const dispatchOfferUxCounts = useMemo(() => {
+    const byVariant = Object.fromEntries(CLEANER_UX_VARIANTS.map((v) => [v, 0])) as Record<CleanerUxVariant, number>;
+    let unknown = 0;
+    for (const o of dispatchOffers) {
+      const u = String(o.ux_variant ?? "").trim().toLowerCase();
+      if (isKnownDispatchUxVariant(u)) byVariant[u]++;
+      else unknown++;
+    }
+    return { byVariant, unknown, total: dispatchOffers.length };
+  }, [dispatchOffers]);
   const startsInText = useMemo(() => {
     if (!fullBooking?.date || !fullBooking.time) return "—";
     const dt = new Date(`${fullBooking.date}T${fullBooking.time.slice(0, 5)}:00+02:00`);
@@ -484,6 +560,66 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 <MapPin size={14} />Open in maps
               </a>
             ) : null}
+          </DetailCard>
+          <DetailCard title="Dispatch offers">
+            {dispatchOffers.length === 0 ? (
+              <p className="text-sm text-zinc-500">No dispatch offers for this booking.</p>
+            ) : (
+              <div className="space-y-3">
+                <label className="flex flex-wrap items-center gap-2 text-sm text-zinc-600">
+                  <span className="font-medium text-zinc-700">Filter by UX variant</span>
+                  <select
+                    value={dispatchOfferUxFilter}
+                    onChange={(e) => setDispatchOfferUxFilter(e.target.value as DispatchOfferUxFilter)}
+                    className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+                  >
+                    <option value="all">All ({dispatchOfferUxCounts.total})</option>
+                    {CLEANER_UX_VARIANTS.map((v) => {
+                      const star = fleetBestUxVariant === v ? "⭐ " : "";
+                      return (
+                        <option key={v} value={v}>
+                          {star}
+                          {v} ({variantCountShareLabel(dispatchOfferUxCounts.byVariant[v], dispatchOfferUxCounts.total)})
+                        </option>
+                      );
+                    })}
+                    <option value="unknown">
+                      {fleetBestUxVariant === "unknown" ? "⭐ " : ""}unknown (
+                      {variantCountShareLabel(dispatchOfferUxCounts.unknown, dispatchOfferUxCounts.total)})
+                    </option>
+                  </select>
+                  {dispatchOfferUxFilter !== "all" && filteredDispatchOffers.length === 0 ? (
+                    <span className="text-xs text-amber-700">No rows for this variant.</span>
+                  ) : null}
+                </label>
+                <div className="overflow-x-auto rounded-lg border border-zinc-200">
+                <table className="w-full min-w-[32rem] text-left text-sm">
+                  <thead className="border-b border-zinc-200 bg-zinc-50 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                    <tr>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">UX variant</th>
+                      <th className="px-3 py-2">Cleaner</th>
+                      <th className="px-3 py-2">Rank</th>
+                      <th className="px-3 py-2">Created</th>
+                      <th className="px-3 py-2">Expires</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDispatchOffers.map((o) => (
+                      <tr key={o.id} className="border-b border-zinc-100 last:border-0">
+                        <td className="px-3 py-2 font-mono text-xs text-zinc-800">{(o.status ?? "—").toLowerCase()}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-zinc-800">{o.ux_variant?.trim() || "—"}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] text-zinc-600">{o.cleaner_id}</td>
+                        <td className="px-3 py-2 text-zinc-700">{o.rank_index ?? "—"}</td>
+                        <td className="px-3 py-2 text-xs text-zinc-600">{o.created_at ? new Date(o.created_at).toLocaleString("en-ZA") : "—"}</td>
+                        <td className="px-3 py-2 text-xs text-zinc-600">{o.expires_at ? new Date(o.expires_at).toLocaleString("en-ZA") : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            )}
           </DetailCard>
           <DetailCard title="Cleaner">
             {fullBooking.cleaner_id ? (

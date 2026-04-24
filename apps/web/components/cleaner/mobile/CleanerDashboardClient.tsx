@@ -61,9 +61,9 @@ export function CleanerDashboardClient() {
   );
 
   const onAcceptOffer = useCallback(
-    async (offerId: string) => {
+    async (offerId: string, uxVariant?: string | null) => {
       setOfferBanner(null);
-      const r = await respondToOffer(offerId, "accept");
+      const r = await respondToOffer(offerId, "accept", uxVariant);
       if (!r.ok) setOfferBanner(r.error ?? "Could not accept offer.");
     },
     [respondToOffer],

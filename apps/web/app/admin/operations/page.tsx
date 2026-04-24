@@ -45,6 +45,14 @@ type Analytics = {
     upcoming: number;
   };
   insights: string[];
+  /** Rolling dispatch-offers experiment headline when volume thresholds are met; otherwise omitted or null. */
+  experimentSummary?: string | null;
+  experimentBestUxVariant?: string | null;
+  /** Raw best cell by rate (may be low-confidence); use experimentBestUxVariant for UI stars. */
+  experimentLeaderUxVariant?: string | null;
+  experimentConfidence?: "low" | "medium" | "high" | null;
+  experimentNoClearWinner?: boolean;
+  experimentResolvedOfferCount?: number | null;
 };
 
 export default function AdminOperationsPage() {
@@ -238,6 +246,11 @@ export default function AdminOperationsPage() {
                   Failed dispatch %: <span className="font-semibold">{data.dispatch.failedDispatchPct}%</span>
                 </p>
               </div>
+              {data.experimentSummary ? (
+                <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+                  {data.experimentSummary}
+                </p>
+              ) : null}
             </div>
           </section>
 

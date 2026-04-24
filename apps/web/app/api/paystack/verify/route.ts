@@ -244,6 +244,29 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
   });
 
+  const adm = getSupabaseAdmin();
+  let assignmentType: string | null = null;
+  let fallbackReason: string | null = null;
+  let attemptedCleanerId: string | null = null;
+  let assignedCleanerId: string | null = null;
+  let selectedCleanerId: string | null = null;
+  if (result.bookingId && adm) {
+    const { data: ar } = await adm
+      .from("bookings")
+      .select("assignment_type, fallback_reason, cleaner_id, selected_cleaner_id, attempted_cleaner_id")
+      .eq("id", result.bookingId)
+      .maybeSingle();
+    if (ar && typeof ar === "object") {
+      assignmentType = String((ar as { assignment_type?: string | null }).assignment_type ?? "").trim() || null;
+      fallbackReason = String((ar as { fallback_reason?: string | null }).fallback_reason ?? "").trim() || null;
+      attemptedCleanerId =
+        String((ar as { attempted_cleaner_id?: string | null }).attempted_cleaner_id ?? "").trim() || null;
+      assignedCleanerId = String((ar as { cleaner_id?: string | null }).cleaner_id ?? "").trim() || null;
+      selectedCleanerId = String((ar as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim() || null;
+    }
+  }
+  const showCleanerSubstitutionNotice = assignmentType === "auto_fallback";
+
   if (result.error) {
     await reportOperationalIssue("error", "paystack/verify", `upsert failed: ${result.error}`, { reference: ref });
   }
@@ -262,7 +285,6 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     });
   }
 
-  const adm = getSupabaseAdmin();
   if (result.bookingId && email && !alreadyExists && adm) {
     try {
       await notifyBookingEvent({
@@ -314,6 +336,12 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       bookingId: null,
       alreadyExists: false,
       upsertError: result.error ?? "Could not save booking.",
+      assignmentType: null,
+      fallbackReason: null,
+      showCleanerSubstitutionNotice: false,
+      attemptedCleanerId: null,
+      assignedCleanerId: null,
+      selectedCleanerId: null,
     });
   }
 
@@ -332,5 +360,11 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     bookingId: result.bookingId,
     alreadyExists,
     upsertError: null,
+    assignmentType,
+    fallbackReason,
+    showCleanerSubstitutionNotice,
+    attemptedCleanerId,
+    assignedCleanerId,
+    selectedCleanerId,
   });
 }

@@ -100,6 +100,7 @@ export async function POST(request: Request) {
   }
 
   if (reply === "1" || reply === "accept") {
+    // `ux_variant` is read from `dispatch_offers` in `acceptDispatchOffer` (cross-channel parity).
     const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 });

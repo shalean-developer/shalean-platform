@@ -16,6 +16,7 @@ import {
   type AttentionQueueFilter,
 } from "@/lib/admin/opsSnapshot";
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
+import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
 
 type BookingRow = {
   id: string;
@@ -35,6 +36,8 @@ type BookingRow = {
   cleaner_id: string | null;
   selected_cleaner_id?: string | null;
   assignment_type?: string | null;
+  fallback_reason?: string | null;
+  attempted_cleaner_id?: string | null;
   became_pending_at?: string | null;
   assigned_at: string | null;
   en_route_at: string | null;
@@ -43,6 +46,7 @@ type BookingRow = {
   created_at: string;
   paystack_reference: string;
   duration_minutes?: number | null;
+  dispatch_attempt_count?: number | null;
 };
 
 function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], status: string | null): string {
@@ -273,6 +277,7 @@ export default function AdminBookingsPage() {
   const [failedJobs, setFailedJobs] = useState<FailedJob[]>([]);
   const [cleaners, setCleaners] = useState<CleanerOption[]>([]);
   const [assignBookingId, setAssignBookingId] = useState<string | null>(null);
+  const [retryDispatchBookingId, setRetryDispatchBookingId] = useState<string | null>(null);
   const openAssignHandledRef = useRef<string | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -462,6 +467,42 @@ export default function AdminBookingsPage() {
 
     setLoading(false);
   }, [filter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
+
+  const retryDispatchFailed = useCallback(
+    async (bookingId: string) => {
+      setRetryDispatchBookingId(bookingId);
+      try {
+        const sb = getSupabaseBrowser();
+        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        if (!token) {
+          emitAdminToast("Please sign in.", "error");
+          return;
+        }
+        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/retry-dispatch`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          message?: string | null;
+        };
+        if (!res.ok) {
+          emitAdminToast(json.error ?? "Retry dispatch failed.", "error");
+          return;
+        }
+        if (json.ok) {
+          emitAdminToast("Dispatch retried successfully.", "success");
+        } else {
+          emitAdminToast(json.message ?? json.error ?? "Dispatch could not complete.", "error");
+        }
+        await load();
+      } finally {
+        setRetryDispatchBookingId(null);
+      }
+    },
+    [load],
+  );
 
   const clearFailedInsertQueue = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -1076,6 +1117,56 @@ export default function AdminBookingsPage() {
                         {assignSourceLine ? (
                           <div className="mt-0.5 text-[10px] font-semibold leading-snug text-emerald-800 dark:text-emerald-300/90">
                             {assignSourceLine}
+                          </div>
+                        ) : null}
+                        {(r.status ?? "").toLowerCase() === "pending" &&
+                        !r.cleaner_id &&
+                        (r.dispatch_status ?? "").toLowerCase() === "failed" ? (
+                          <div
+                            className="mt-1.5 flex flex-wrap items-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            role="group"
+                            aria-label="Dispatch needs attention"
+                          >
+                            <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
+                              Needs attention
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded border border-zinc-300 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                              onClick={() => setAssignBookingId((id) => (id === r.id ? null : r.id))}
+                            >
+                              Manually assign
+                            </button>
+                            <button
+                              type="button"
+                              disabled={retryDispatchBookingId === r.id}
+                              className="rounded border border-emerald-600 bg-emerald-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50 dark:border-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                              onClick={() => void retryDispatchFailed(r.id)}
+                            >
+                              {retryDispatchBookingId === r.id ? "Retrying…" : "Retry now"}
+                            </button>
+                            <div className="w-full min-w-0 text-[10px] leading-snug text-zinc-600 dark:text-zinc-400">
+                              <span className="font-medium text-zinc-700 dark:text-zinc-300">Attempts:</span>{" "}
+                              {metricAttemptBucket(Number(r.dispatch_attempt_count ?? 0) || 0)}
+                              <span className="mx-1.5 text-zinc-400">·</span>
+                              <span className="font-medium text-zinc-700 dark:text-zinc-300">Fallback:</span>{" "}
+                              <span className="break-words" title={r.fallback_reason ?? undefined}>
+                                {r.fallback_reason?.trim() || "—"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+                        {r.attempted_cleaner_id?.trim() &&
+                        r.attempted_cleaner_id.trim() !== (r.cleaner_id ?? "").trim() ? (
+                          <div
+                            className="mt-0.5 text-[10px] leading-snug text-zinc-600 dark:text-zinc-400"
+                            title={r.attempted_cleaner_id}
+                          >
+                            Selected at checkout:{" "}
+                            {cleanerDisplayName(r.attempted_cleaner_id.trim(), sortedCleaners) ??
+                              `ID ${r.attempted_cleaner_id.slice(0, 8)}…`}
                           </div>
                         ) : null}
                       </td>

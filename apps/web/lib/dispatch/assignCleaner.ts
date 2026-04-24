@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
-import { smartAssignCleaner, type SmartAssignOptions } from "@/lib/dispatch/smartAssignCleaner";
+import { softDispatchPoolCapsFromAttemptCount } from "@/lib/dispatch/dispatchCandidatePoolCaps";
+import {
+  smartAssignCleaner,
+  type SmartAssignOptions,
+} from "@/lib/dispatch/smartAssignCleaner";
 
 export type { CleanerRow, AvailabilityRow } from "@/lib/dispatch/types";
 
@@ -26,7 +30,7 @@ export async function assignCleanerToBooking(
 ): Promise<AssignResult> {
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, date, time, status, cleaner_id, location_id, location, dispatch_status")
+    .select("id, date, time, status, cleaner_id, location_id, location, dispatch_status, dispatch_attempt_count")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -83,6 +87,15 @@ export async function assignCleanerToBooking(
   const retryEsc = options?.retryEscalation ?? 0;
   const searchExpansion =
     retryEsc >= 3 ? "broadcast" : retryEsc >= 1 ? "city" : "none";
+  const attemptCount =
+    Number((booking as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0) || 0;
+  const poolCaps = softDispatchPoolCapsFromAttemptCount(attemptCount);
+  const mergedSmart: SmartAssignOptions = {
+    ...poolCaps,
+    ...options?.smartAssign,
+    searchExpansion,
+    retryTier: retryEsc,
+  };
   const result = await smartAssignCleaner(
     supabase,
     {
@@ -91,11 +104,7 @@ export async function assignCleanerToBooking(
       time: timeHm,
       locationId,
     },
-    {
-      ...options?.smartAssign,
-      searchExpansion,
-      retryTier: retryEsc,
-    },
+    mergedSmart,
   );
 
   if (result.ok) {

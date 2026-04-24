@@ -239,6 +239,28 @@ export async function getAvailableCleaners(
 }
 
 /**
+ * True when `cleanerId` is in the same pool as `/api/booking/cleaners` for that slot
+ * (flags + `cleaner_availability` + booking conflicts). Used at Paystack upsert to honor or fall back.
+ */
+export async function isCleanerInAvailablePoolForSlot(
+  admin: SupabaseClient,
+  args: {
+    cleanerId: string;
+    selectedDate: string;
+    selectedTime: string;
+    durationMinutes?: number;
+  },
+): Promise<boolean> {
+  const pool = await getAvailableCleaners(admin, {
+    selectedDate: args.selectedDate,
+    selectedTime: args.selectedTime,
+    durationMinutes: args.durationMinutes ?? 120,
+    limit: 500,
+  });
+  return pool.some((c) => c.id === args.cleanerId);
+}
+
+/**
  * Slot grid for a day. `durationMinutes` must match the visit length from the pricing engine
  * (callers pass `duration` from `calculateBookingPrice` / `quoteJobDurationHours`).
  */

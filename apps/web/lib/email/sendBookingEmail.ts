@@ -19,6 +19,10 @@ export type BookingEmailPayload = {
   paymentReference: string;
   /** DB booking id for links / admin copy (optional). */
   bookingId?: string | null;
+  /** True when checkout cleaner choice was not honored and another cleaner was assigned. */
+  showCleanerSubstitutionNotice?: boolean;
+  /** Machine-readable reason when substitution applies (e.g. invalid_cleaner_id). */
+  fallbackReason?: string | null;
 };
 
 function getResend(): Resend | null {
@@ -99,6 +103,14 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   <p style="color:#6b7280; margin-bottom: 20px;">
     Your cleaning is scheduled. We&apos;ve got everything covered.
   </p>
+
+  ${
+    payload.showCleanerSubstitutionNotice
+      ? `<div style="border:1px solid #fcd34d; background:#fffbeb; border-radius:12px; padding:14px 16px; margin-bottom:18px; color:#78350f; font-size:14px; line-height:1.45;">
+    <strong>Cleaner update:</strong> Your selected cleaner isn&apos;t available at that time — we&apos;ve assigned a similar top-rated cleaner.
+  </div>`
+      : ""
+  }
 
   <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:20px;">
 
@@ -508,6 +520,10 @@ export function buildBookingEmailPayload(params: {
   customerEmail: string;
   snapshot: BookingSnapshotV1 | null;
   bookingId?: string | null;
+  /** From `bookings.assignment_type` after checkout upsert (optional). */
+  assignmentType?: string | null;
+  /** From `bookings.fallback_reason` when substitution occurred. */
+  fallbackReason?: string | null;
 }): BookingEmailPayload {
   const locked = params.snapshot?.locked;
   const custName = params.snapshot?.customer?.name?.trim();
@@ -535,6 +551,9 @@ export function buildBookingEmailPayload(params: {
 
   const emailNorm = params.customerEmail.trim() ? normalizeEmail(params.customerEmail) : params.customerEmail;
 
+  const at = String(params.assignmentType ?? "").toLowerCase();
+  const showCleanerSubstitutionNotice = at === "auto_fallback";
+
   return {
     customerEmail: emailNorm,
     customerName: custName || null,
@@ -546,6 +565,8 @@ export function buildBookingEmailPayload(params: {
     totalPaidZar,
     paymentReference: params.paymentReference,
     bookingId: params.bookingId?.trim() ?? null,
+    showCleanerSubstitutionNotice,
+    fallbackReason: params.fallbackReason?.trim() ? params.fallbackReason.trim() : null,
   };
 }
 

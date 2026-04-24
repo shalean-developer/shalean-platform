@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import {
   bookingRowToMobileView,
@@ -166,16 +167,18 @@ export function useCleanerMobileWorkspace() {
   }, [load]);
 
   const respondToOffer = useCallback(
-    async (offerId: string, action: "accept" | "decline") => {
+    async (offerId: string, action: "accept" | "decline", uxVariant?: string | null) => {
       const o = assertOnline();
       if (!o.ok) return o;
       const headers = getCleanerIdHeaders();
       if (!headers) return { ok: false as const, error: "Not signed in." };
       setOfferActingId(offerId);
+      const resolvedUx = uxVariant ?? offers.find((x) => x.id === offerId)?.ux_variant;
       try {
         const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
           method: "POST",
-          headers,
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify(action === "accept" ? buildCleanerOfferAcceptBody(resolvedUx) : {}),
         });
         const json = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok) return { ok: false as const, error: json.error ?? "Could not update offer." };
@@ -187,7 +190,7 @@ export function useCleanerMobileWorkspace() {
         setOfferActingId(null);
       }
     },
-    [load],
+    [load, offers],
   );
 
   const setAvailability = useCallback(async (next: boolean) => {

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
-import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
@@ -121,10 +120,11 @@ export async function POST(
 
     const auto = process.env.AUTO_DISPATCH_CLEANERS !== "false";
     if (auto) {
-      const r = await ensureBookingAssignment(admin, bookingId, { source: "cleaner_job_reject" });
-      if (r.ok) {
-        await notifyCleanerAssignedBooking(admin, bookingId, r.cleanerId);
-      } else {
+      const r = await ensureBookingAssignment(admin, bookingId, {
+        source: "cleaner_job_reject",
+        smartAssign: { excludeCleanerIds: [cleanerId] },
+      });
+      if (!r.ok) {
         await reportOperationalIssue("warn", "cleaner/reject", "Re-dispatch failed", {
           bookingId,
           reason: r.error,

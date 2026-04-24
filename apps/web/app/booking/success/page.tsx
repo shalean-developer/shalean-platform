@@ -37,6 +37,12 @@ type StatusPayload = {
   bookingId?: string | null;
   error?: string;
   upsertError?: string | null;
+  assignmentType?: string | null;
+  fallbackReason?: string | null;
+  showCleanerSubstitutionNotice?: boolean;
+  attemptedCleanerId?: string | null;
+  assignedCleanerId?: string | null;
+  selectedCleanerId?: string | null;
 };
 
 type Snapshot = {
@@ -64,6 +70,12 @@ function mapVerifySuccessToStatus(data: PaystackVerifyPostSuccess): StatusPayloa
     bookingInDatabase: data.bookingInDatabase,
     bookingId: data.bookingId,
     upsertError: data.upsertError,
+    assignmentType: data.assignmentType ?? null,
+    fallbackReason: data.fallbackReason ?? null,
+    showCleanerSubstitutionNotice: Boolean(data.showCleanerSubstitutionNotice),
+    attemptedCleanerId: data.attemptedCleanerId ?? null,
+    assignedCleanerId: data.assignedCleanerId ?? null,
+    selectedCleanerId: data.selectedCleanerId ?? null,
   };
 }
 
@@ -116,10 +128,20 @@ function SuccessContent() {
           trackGrowthEvent("complete_booking", {
             reference: data.reference ?? null,
             booking_id: data.bookingId ?? null,
+            assignment_type: data.assignmentType ?? null,
+            fallback_reason: data.fallbackReason ?? null,
+            attempted_cleaner_id: data.attemptedCleanerId ?? null,
+            assigned_cleaner_id: data.assignedCleanerId ?? null,
+            selected_cleaner_id: data.selectedCleanerId ?? null,
           });
           trackGrowthEvent("booking_completed", {
             reference: data.reference ?? null,
             booking_id: data.bookingId ?? null,
+            assignment_type: data.assignmentType ?? null,
+            fallback_reason: data.fallbackReason ?? null,
+            attempted_cleaner_id: data.attemptedCleanerId ?? null,
+            assigned_cleaner_id: data.assignedCleanerId ?? null,
+            selected_cleaner_id: data.selectedCleanerId ?? null,
           });
           setPhase("success");
           return true;
@@ -388,6 +410,11 @@ function SuccessContent() {
           Check your email for the receipt
           {statusData.customerEmail ? ` (${statusData.customerEmail})` : ""}.
         </p>
+        {statusData.showCleanerSubstitutionNotice ? (
+          <p className="mx-auto mt-4 max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Your selected cleaner isn&apos;t available at that time — we&apos;ve assigned a similar top-rated cleaner.
+          </p>
+        ) : null}
         {statusData.bookingInDatabase === false ? (
           <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
             Your payment succeeded. We&apos;re still saving your booking to our system — you should receive a

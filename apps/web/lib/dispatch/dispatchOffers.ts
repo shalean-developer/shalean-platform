@@ -6,9 +6,16 @@ import {
   notifyCleanerOfferDeclined,
 } from "@/lib/dispatch/offerNotifications";
 import { tryEmitDispatchOfferTimeoutMetric } from "@/lib/dispatch/offerTimeoutMetric";
+import {
+  compactDispatchMetricTags,
+  firstOfferMetricAnchorIso,
+  loadDispatchMetricSegmentation,
+} from "@/lib/dispatch/dispatchMetricContext";
+import { assignCleanerUxVariantForCleaner, sanitizeCleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
 
 const POLL_MS = 400;
 
@@ -26,8 +33,20 @@ export async function createDispatchOfferRow(params: {
   cleanerId: string;
   rankIndex: number;
   ttlSeconds: number;
+  /** Dispatch wave number for metrics (same row as `dispatch_attempt_count` after bump). */
+  metricAttemptNumber?: number;
 }): Promise<CreateDispatchOfferRowResult> {
+  const { count: priorOfferCount, error: priorCountErr } = await params.supabase
+    .from("dispatch_offers")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", params.bookingId);
+
+  if (priorCountErr && process.env.NODE_ENV !== "production") {
+    console.warn("[createDispatchOfferRow] prior offer count failed", priorCountErr.message);
+  }
+
   const expiresAt = new Date(Date.now() + params.ttlSeconds * 1000).toISOString();
+  const ux_variant = assignCleanerUxVariantForCleaner(params.cleanerId);
   const { data, error } = await params.supabase
     .from("dispatch_offers")
     .insert({
@@ -36,6 +55,7 @@ export async function createDispatchOfferRow(params: {
       status: "pending",
       rank_index: params.rankIndex,
       expires_at: expiresAt,
+      ux_variant,
     })
     .select("id")
     .single();
@@ -94,12 +114,52 @@ export async function createDispatchOfferRow(params: {
     },
   });
 
+  const seg = await loadDispatchMetricSegmentation(params.supabase, params.bookingId, {
+    includePendingAnchors: true,
+  });
+  const segFields = {
+    assignment_type: seg.assignment_type,
+    fallback_reason: seg.fallback_reason,
+    attempt_number:
+      typeof params.metricAttemptNumber === "number" && Number.isFinite(params.metricAttemptNumber)
+        ? Math.max(0, Math.floor(params.metricAttemptNumber))
+        : seg.attempt_number,
+    location: seg.location,
+    offer_cohort_tags: true as const,
+  };
+  const metricTags = compactDispatchMetricTags(segFields);
+
   metrics.increment("dispatch.offer.created", {
     bookingId: params.bookingId,
     cleanerId: params.cleanerId,
     offerId,
     rankIndex: params.rankIndex,
+    ux_variant,
+    ...metricTags,
   });
+
+  const prior = priorCountErr ? null : (priorOfferCount ?? 0);
+  if (prior === 0) {
+    const anchorIso = firstOfferMetricAnchorIso(seg);
+    if (anchorIso) {
+      const { data: kpiClaim } = await params.supabase
+        .from("bookings")
+        .update({ first_offer_kpi_logged_at: new Date().toISOString() })
+        .eq("id", params.bookingId)
+        .is("first_offer_kpi_logged_at", null)
+        .select("id")
+        .maybeSingle();
+      if ((kpiClaim as { id?: string } | null)?.id) {
+        const ms = Math.max(0, Date.now() - new Date(anchorIso).getTime());
+        metrics.increment("dispatch.kpi.time_to_first_offer_ms", {
+          bookingId: params.bookingId,
+          offerId,
+          ms,
+          ...metricTags,
+        });
+      }
+    }
+  }
 
   await notifyCleanerOfDispatchOffer({
     bookingId: params.bookingId,
@@ -228,12 +288,19 @@ export async function acceptDispatchOffer(params: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status, created_at")
+    .select("id, booking_id, cleaner_id, status, created_at, ux_variant")
     .eq("id", params.offerId)
     .maybeSingle();
 
   if (oErr || !offer) return { ok: false, error: "Offer not found." };
-  const row = offer as { booking_id?: string; cleaner_id?: string; status?: string; created_at?: string };
+  const row = offer as {
+    booking_id?: string;
+    cleaner_id?: string;
+    status?: string;
+    created_at?: string;
+    ux_variant?: string | null;
+  };
+  const ux_variant = sanitizeCleanerUxVariant(row.ux_variant);
   if (String(row.cleaner_id) !== params.cleanerId) return { ok: false, error: "Not your offer." };
   if (String(row.status) !== "pending") return { ok: false, error: "Offer is no longer pending." };
 
@@ -352,12 +419,47 @@ export async function acceptDispatchOffer(params: {
 
   void notifyCleanerAssignedBooking(params.supabase, bookingId, params.cleanerId);
 
+  const seg = await loadDispatchMetricSegmentation(params.supabase, bookingId);
+  const segFields = {
+    assignment_type: seg.assignment_type,
+    fallback_reason: seg.fallback_reason,
+    attempt_number: seg.attempt_number,
+    location: seg.location,
+    offer_cohort_tags: true as const,
+  };
+  const metricTags = compactDispatchMetricTags(segFields);
+
   metrics.increment("dispatch.offer.accepted", {
     bookingId,
     cleanerId: params.cleanerId,
     offerId: params.offerId,
     latency_ms: latencyMs,
+    ux_variant,
+    ...metricTags,
   });
+
+  metrics.increment("dispatch.kpi.time_to_accept_ms", {
+    bookingId,
+    cleanerId: params.cleanerId,
+    offerId: params.offerId,
+    ms: latencyMs,
+    ux_variant,
+    ...metricTags,
+  });
+
+  const { count: offersForBooking, error: offerCountErr } = await params.supabase
+    .from("dispatch_offers")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
+  if (!offerCountErr) {
+    metrics.increment("dispatch.kpi.offers_per_booking", {
+      bookingId,
+      cleanerId: params.cleanerId,
+      count: offersForBooking ?? 0,
+      ux_variant,
+      ...metricTags,
+    });
+  }
 
   return { ok: true };
 }
@@ -369,14 +471,23 @@ export async function rejectDispatchOffer(params: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, cleaner_id, status, booking_id, created_at")
+    .select("id, cleaner_id, status, booking_id, created_at, ux_variant")
     .eq("id", params.offerId)
     .maybeSingle();
 
   if (oErr || !offer) return { ok: false, error: "Offer not found." };
-  const row = offer as { cleaner_id?: string; status?: string; booking_id?: string; created_at?: string };
+  const row = offer as {
+    cleaner_id?: string;
+    status?: string;
+    booking_id?: string;
+    created_at?: string;
+    ux_variant?: string | null;
+  };
   if (String(row.cleaner_id) !== params.cleanerId) return { ok: false, error: "Not your offer." };
   if (String(row.status) !== "pending") return { ok: false, error: "Offer is no longer pending." };
+
+  const bookingId = String(row.booking_id ?? "");
+  if (!bookingId) return { ok: false, error: "Invalid offer." };
 
   const now = new Date().toISOString();
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : Date.now();
@@ -409,7 +520,7 @@ export async function rejectDispatchOffer(params: {
     source: "dispatch_offer_rejected",
     message: "Offer rejected (API)",
     context: {
-      bookingId: String(row.booking_id ?? ""),
+      bookingId,
       cleanerId: params.cleanerId,
       offerId: params.offerId,
       latency_ms: latencyMs,
@@ -418,15 +529,32 @@ export async function rejectDispatchOffer(params: {
 
   await notifyCleanerOfferDeclined({
     cleanerId: params.cleanerId,
-    bookingId: String(row.booking_id ?? ""),
+    bookingId,
     offerId: params.offerId,
   });
 
+  const segDecline = await loadDispatchMetricSegmentation(params.supabase, bookingId);
+  const declineTags = compactDispatchMetricTags({
+    assignment_type: segDecline.assignment_type,
+    fallback_reason: segDecline.fallback_reason,
+    attempt_number: segDecline.attempt_number,
+    location: segDecline.location,
+    offer_cohort_tags: true as const,
+  });
+  const ux_variant = sanitizeCleanerUxVariant(row.ux_variant);
   metrics.increment("dispatch.offer.declined", {
-    bookingId: String(row.booking_id ?? ""),
+    bookingId,
     cleanerId: params.cleanerId,
     offerId: params.offerId,
     latency_ms: latencyMs,
+    ux_variant,
+    ...declineTags,
+  });
+
+  await maybeRedispatchPendingBookingIfOffersExhausted(params.supabase, {
+    bookingId,
+    rejectedCleanerId: params.cleanerId,
+    skipBackoffScheduling: true,
   });
 
   return { ok: true };

@@ -7,6 +7,7 @@ import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaysta
 import { emitSqlExpiredOfferTimeoutMetrics } from "@/lib/dispatch/offerTimeoutMetric";
 import { reportPendingBookingSlaBreaches } from "@/lib/dispatch/dispatchSlaWatchdog";
 import { processDispatchRetryQueue } from "@/lib/dispatch/dispatchRetryQueue";
+import { runOfferExpiryMaintenance } from "@/lib/dispatch/processUserSelectedOfferExpiryRedispatch";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
@@ -24,6 +25,7 @@ const MAX_LIFECYCLE_RETRY = 20;
  * 3) Processes `dispatch_retry_queue` (auto-assign backoff).
  * 4) SLA: pending bookings without a cleaner past DISPATCH_SLA_BREACH_MINUTES → metric + retry enqueue.
  * 5) Offer timeout metrics parity: SQL-expired TTL offers → dispatch.offer.timeout (deduped).
+ * 6) SQL offer expiry RPC + user-selected bookings with drained offers → re-dispatch (same path as decline).
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -144,6 +146,7 @@ export async function POST(request: Request) {
     if (r === "terminal") lifecycleTerminal++;
   }
 
+  const offerExpiryMaintenance = await runOfferExpiryMaintenance(supabase);
   const dispatchRetry = await processDispatchRetryQueue(supabase);
   const dispatchSla = await reportPendingBookingSlaBreaches(supabase);
   const dispatchOfferTimeoutMetrics = await emitSqlExpiredOfferTimeoutMetrics(supabase);
@@ -159,6 +162,7 @@ export async function POST(request: Request) {
       lifecycleSent,
       lifecycleTerminal,
       dispatchRetry,
+      offerExpiryMaintenance,
       dispatchSla,
       dispatchOfferTimeoutMetrics,
     },
@@ -176,6 +180,7 @@ export async function POST(request: Request) {
       terminalFailures: lifecycleTerminal,
     },
     dispatchRetry,
+    offerExpiryMaintenance,
     dispatchSla,
     dispatchOfferTimeoutMetrics,
   });

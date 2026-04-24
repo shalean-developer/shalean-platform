@@ -70,12 +70,27 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
-  const [{ data: cleaner }, { data: userProfile }] = await Promise.all([cleanerPromise, userProfilePromise]);
+  const offersPromise = admin
+    .from("dispatch_offers")
+    .select("id, cleaner_id, status, rank_index, expires_at, created_at, responded_at, ux_variant")
+    .eq("booking_id", id)
+    .order("created_at", { ascending: false });
+
+  const [{ data: cleaner }, { data: userProfile }, { data: dispatchOffers, error: offersErr }] = await Promise.all([
+    cleanerPromise,
+    userProfilePromise,
+    offersPromise,
+  ]);
+
+  if (offersErr) {
+    return NextResponse.json({ error: offersErr.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     booking,
     cleaner: cleaner ?? null,
     userProfile: userProfile ?? null,
+    dispatch_offers: dispatchOffers ?? [],
   });
 }
 

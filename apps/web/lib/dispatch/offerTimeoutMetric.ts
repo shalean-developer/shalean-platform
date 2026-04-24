@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sanitizeCleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
+import { compactDispatchMetricTags, loadDispatchMetricSegmentation } from "@/lib/dispatch/dispatchMetricContext";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 
@@ -13,6 +15,8 @@ export async function tryEmitDispatchOfferTimeoutMetric(params: {
   cleanerId: string;
   latencyMs?: number;
   source: "poll_deadline" | "sql_ttl_reconcile";
+  /** When known (e.g. SQL reconcile batch); otherwise loaded from `dispatch_offers`. */
+  ux_variant?: string | null;
 }): Promise<boolean> {
   const { error } = await params.supabase.from("dispatch_offer_timeout_metric_emitted").insert({
     offer_id: params.offerId,
@@ -31,12 +35,33 @@ export async function tryEmitDispatchOfferTimeoutMetric(params: {
     return false;
   }
 
+  let rawUx = params.ux_variant;
+  if (rawUx === undefined) {
+    const { data: off } = await params.supabase
+      .from("dispatch_offers")
+      .select("ux_variant")
+      .eq("id", params.offerId)
+      .maybeSingle();
+    rawUx = (off as { ux_variant?: string | null } | null)?.ux_variant ?? null;
+  }
+  const ux_variant = sanitizeCleanerUxVariant(rawUx);
+  const seg = await loadDispatchMetricSegmentation(params.supabase, params.bookingId);
+  const metricTags = compactDispatchMetricTags({
+    assignment_type: seg.assignment_type,
+    fallback_reason: seg.fallback_reason,
+    attempt_number: seg.attempt_number,
+    location: seg.location,
+    offer_cohort_tags: true,
+  });
+
   metrics.increment("dispatch.offer.timeout", {
     bookingId: params.bookingId,
     offerId: params.offerId,
     cleanerId: params.cleanerId,
     latency_ms: params.latencyMs,
     source: params.source,
+    ux_variant,
+    ...metricTags,
   });
   return true;
 }
@@ -60,7 +85,7 @@ export async function emitSqlExpiredOfferTimeoutMetrics(
 
   const { data, error } = await supabase
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, expires_at, responded_at")
+    .select("id, booking_id, cleaner_id, expires_at, responded_at, ux_variant")
     .eq("status", "expired")
     .gte("responded_at", since)
     .not("expires_at", "is", null)
@@ -89,6 +114,7 @@ export async function emitSqlExpiredOfferTimeoutMetrics(
       cleaner_id?: string;
       expires_at?: string;
       responded_at?: string;
+      ux_variant?: string | null;
     };
     const expiresAt = row.expires_at ? new Date(row.expires_at).getTime() : NaN;
     const respondedAt = row.responded_at ? new Date(row.responded_at).getTime() : NaN;
@@ -104,6 +130,7 @@ export async function emitSqlExpiredOfferTimeoutMetrics(
       cleanerId: String(row.cleaner_id ?? ""),
       latencyMs: Math.max(0, respondedAt - expiresAt),
       source: "sql_ttl_reconcile",
+      ux_variant: row.ux_variant ?? null,
     });
     if (ok) emitted++;
     else skipped++;
