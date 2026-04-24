@@ -17,6 +17,7 @@ import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/dema
 import { createPendingCustomerReferral } from "@/lib/referrals/server";
 import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { pickUserSelectedCleanerId } from "@/lib/booking/userSelectedCleanerFromSnapshot";
 
 export type UpsertBookingInput = {
   paystackReference: string;
@@ -72,6 +73,19 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const locked = input.snapshot?.locked;
   const lockedRow = parseLockedBookingFromUnknown(locked ?? null);
 
+  const pickedCleanerUuid = pickUserSelectedCleanerId(lockedRow, input.snapshot);
+  let userConfirmedCleanerId: string | null = null;
+  if (pickedCleanerUuid) {
+    const { data: cleanerHit, error: cleanerLookupErr } = await supabase
+      .from("cleaners")
+      .select("id")
+      .eq("id", pickedCleanerUuid)
+      .maybeSingle();
+    if (!cleanerLookupErr && cleanerHit && typeof cleanerHit === "object" && "id" in cleanerHit) {
+      userConfirmedCleanerId = String((cleanerHit as { id: string }).id);
+    }
+  }
+
   let price_breakdown: Record<string, unknown> | null = null;
   let total_price: number | null = null;
   let pricing_version_id: string | null = null;
@@ -124,6 +138,19 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
   const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
 
+  const assignedAtIso = new Date().toISOString();
+  const userSelectedRow =
+    userConfirmedCleanerId != null
+      ? {
+          cleaner_id: userConfirmedCleanerId,
+          selected_cleaner_id: userConfirmedCleanerId,
+          assignment_type: "user_selected",
+          status: "assigned",
+          dispatch_status: "assigned",
+          assigned_at: assignedAtIso,
+        }
+      : {};
+
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -153,6 +180,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     pricing_version_id: pricing_version_id || null,
     price_breakdown: price_breakdown,
     total_price: total_price ?? null,
+    ...userSelectedRow,
   };
 
   type PersistedRow = { id: string; created_at?: string; user_id?: string | null };
@@ -253,16 +281,48 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       });
     }
 
-    /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
-    const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
-    const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
-    if (autoDispatch) {
-      void ensureBookingAssignment(supabase, id, { source: "paystack_checkout" }).then(async (r) => {
+    /** Customer-picked cleaner: already on row — notify only; skip smart dispatch. */
+    if (userConfirmedCleanerId) {
+      try {
+        await notifyCleanerAssignedBooking(supabase, id, userConfirmedCleanerId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await reportOperationalIssue("error", "upsertBookingFromPaystack", `notify assigned (user_selected): ${msg}`, {
+          bookingId: id,
+          paystackReference: input.paystackReference,
+        });
+      }
+    } else {
+      /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
+      const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
+      const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
+      if (autoDispatch) {
+        const r = await ensureBookingAssignment(supabase, id, { source: "paystack_checkout" });
         if (r.ok) {
-          void notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
-          return;
+          await supabase
+            .from("bookings")
+            .update({ assignment_type: "auto_dispatch" })
+            .eq("id", id)
+            .is("assignment_type", null);
+          await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+        } else if (offerAssignFallback) {
+          const smart = await runAdminAssignSmart(supabase, {
+            bookingId: id,
+            force: false,
+            maxAttempts: 25,
+            cleanerIds: null,
+            autoEscalateExtremeSla: null,
+          });
+          if (smart.ok) {
+            await supabase
+              .from("bookings")
+              .update({ assignment_type: "auto_dispatch" })
+              .eq("id", id)
+              .is("assignment_type", null);
+            await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
+          }
         }
-        if (!offerAssignFallback) return;
+      } else if (offerAssignFallback) {
         const smart = await runAdminAssignSmart(supabase, {
           bookingId: id,
           force: false,
@@ -270,19 +330,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           cleanerIds: null,
           autoEscalateExtremeSla: null,
         });
-        if (smart.ok) void notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
-      });
-    } else if (offerAssignFallback) {
-      /** Labs: primary auto-dispatch off, try offer-based admin cascade only. */
-      void runAdminAssignSmart(supabase, {
-        bookingId: id,
-        force: false,
-        maxAttempts: 25,
-        cleanerIds: null,
-        autoEscalateExtremeSla: null,
-      }).then((smart) => {
-        if (smart.ok) void notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
-      });
+        if (smart.ok) {
+          await supabase
+            .from("bookings")
+            .update({ assignment_type: "auto_dispatch" })
+            .eq("id", id)
+            .is("assignment_type", null);
+          await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
+        }
+      }
     }
     const createdAt =
       inserted && typeof inserted === "object" && "created_at" in inserted

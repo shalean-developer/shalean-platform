@@ -32,6 +32,8 @@ type BookingRow = {
   surge_reason?: string | null;
   user_id: string | null;
   cleaner_id: string | null;
+  selected_cleaner_id?: string | null;
+  assignment_type?: string | null;
   became_pending_at?: string | null;
   assigned_at: string | null;
   en_route_at: string | null;
@@ -62,6 +64,13 @@ function cleanerDisplayName(cleanerId: string | null, cleaners: CleanerOption[])
   if (!cleanerId) return null;
   const hit = cleaners.find((c) => c.id === cleanerId);
   return hit?.full_name ?? cleanerId;
+}
+
+function cleanerSelectEmptyLabel(r: BookingRow): string {
+  const st = (r.status ?? "").toLowerCase();
+  const ds = (r.dispatch_status ?? "").toLowerCase();
+  if (!r.cleaner_id && st === "pending" && ds === "searching") return "Assigning…";
+  return "Unassigned";
 }
 
 type FailedJob = {
@@ -1072,7 +1081,7 @@ export default function AdminBookingsPage() {
                           }}
                           className="w-full max-w-[180px] rounded border border-zinc-200 bg-white px-1 py-1 text-[11px] dark:border-zinc-600 dark:bg-zinc-950"
                         >
-                          <option value="">Unassigned</option>
+                          <option value="">{cleanerSelectEmptyLabel(r)}</option>
                           {sortedCleaners.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.full_name}

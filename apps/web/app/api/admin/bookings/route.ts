@@ -33,6 +33,8 @@ type Row = {
   surge_reason: string | null;
   user_id: string | null;
   cleaner_id: string | null;
+  selected_cleaner_id: string | null;
+  assignment_type: string | null;
   became_pending_at: string | null;
   assigned_at: string | null;
   en_route_at: string | null;
@@ -114,7 +116,7 @@ export async function GET(request: Request) {
   let bookingQuery = admin
     .from("bookings")
     .select(
-      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes",
+      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes",
     )
     .order("created_at", { ascending: false })
     .limit(4000);
