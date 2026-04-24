@@ -34,6 +34,10 @@ export type UpsertBookingInput = {
 
 /**
  * Idempotent insert by `paystack_reference`. Webhook is the source of truth for persistence.
+ *
+ * **Webhook + verify:** Paystack may deliver `charge.success` while the client also calls verify with the
+ * same reference. Second invocation loads the row (status is no longer `pending_payment`) and returns
+ * `{ skipped: true }` without duplicating inserts, dispatch, or side effects.
  */
 export async function upsertBookingFromPaystack(input: UpsertBookingInput): Promise<{
   skipped: boolean;
@@ -85,6 +89,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       userConfirmedCleanerId = String((cleanerHit as { id: string }).id);
     }
   }
+  /** Customer had a UUID in snapshot/lock but it did not match a `cleaners` row — auto dispatch uses `auto_fallback`. */
+  const selectionInvalidatedCleaner = Boolean(pickedCleanerUuid && !userConfirmedCleanerId);
 
   let price_breakdown: Record<string, unknown> | null = null;
   let total_price: number | null = null;
@@ -293,6 +299,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         });
       }
     } else {
+      const autoAssignmentTag = selectionInvalidatedCleaner ? "auto_fallback" : "auto_dispatch";
       /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
       const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
       const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
@@ -301,7 +308,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         if (r.ok) {
           await supabase
             .from("bookings")
-            .update({ assignment_type: "auto_dispatch" })
+            .update({ assignment_type: autoAssignmentTag })
             .eq("id", id)
             .is("assignment_type", null);
           await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
@@ -316,7 +323,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           if (smart.ok) {
             await supabase
               .from("bookings")
-              .update({ assignment_type: "auto_dispatch" })
+              .update({ assignment_type: autoAssignmentTag })
               .eq("id", id)
               .is("assignment_type", null);
             await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
@@ -333,7 +340,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         if (smart.ok) {
           await supabase
             .from("bookings")
-            .update({ assignment_type: "auto_dispatch" })
+            .update({ assignment_type: autoAssignmentTag })
             .eq("id", id)
             .is("assignment_type", null);
           await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);

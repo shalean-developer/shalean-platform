@@ -15,6 +15,7 @@ import {
   sortRowsForAttentionQueue,
   type AttentionQueueFilter,
 } from "@/lib/admin/opsSnapshot";
+import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 
 type BookingRow = {
   id: string;
@@ -1013,6 +1014,7 @@ export default function AdminBookingsPage() {
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {visibleRows.map((r, idx) => {
                 const startMins = startsInMinutes(r.date, r.time);
+                const assignSourceLine = assignmentSourceLabel(r);
                 return (
                   <Fragment key={r.id}>
                     <tr
@@ -1071,6 +1073,11 @@ export default function AdminBookingsPage() {
                             </span>
                           ) : null}
                         </div>
+                        {assignSourceLine ? (
+                          <div className="mt-0.5 text-[10px] font-semibold leading-snug text-emerald-800 dark:text-emerald-300/90">
+                            {assignSourceLine}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
                         <select
