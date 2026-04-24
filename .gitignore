@@ -1,0 +1,7 @@
+# Dependencies and tool caches at repo root (e.g. Vitest under node_modules/.vite)
+node_modules/
+
+# Local env
+.env
+.env.local
+.env.*.local
