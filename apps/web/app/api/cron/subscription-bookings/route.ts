@@ -143,6 +143,10 @@ export async function POST(request: Request) {
         customer_email: "",
         user_id: s.user_id,
         amount_paid_cents: amountZar * 100,
+        total_paid_cents: amountZar * 100,
+        base_amount_cents: amountZar * 100,
+        extras_amount_cents: 0,
+        service_fee_cents: 0,
         currency: "ZAR",
         booking_snapshot: {
           v: 1,

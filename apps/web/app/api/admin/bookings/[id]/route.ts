@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { logSystemEvent } from "@/lib/logging/systemLog";
+import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
+import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -156,22 +159,47 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const { data: before } = await admin.from("bookings").select("user_id, cleaner_id").eq("id", id).maybeSingle();
-
-  const { error } = await admin.from("bookings").update(updates).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const newCleaner =
-    "cleaner_id" in updates && typeof updates.cleaner_id === "string" && updates.cleaner_id.trim().length > 0
-      ? updates.cleaner_id.trim()
-      : null;
   const oldCleaner =
     before && typeof before === "object"
       ? String((before as { cleaner_id?: string | null }).cleaner_id ?? "").trim() || null
       : null;
-  const uid =
-    before && typeof before === "object" ? String((before as { user_id?: string | null }).user_id ?? "").trim() : "";
-  if (newCleaner && uid && newCleaner !== oldCleaner) {
-    void notifyCleanerAssignedBooking(admin, id, newCleaner);
+  const newCleaner =
+    "cleaner_id" in updates && typeof updates.cleaner_id === "string" && updates.cleaner_id.trim().length > 0
+      ? updates.cleaner_id.trim()
+      : null;
+  const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
+  if (cleanerWasChanged) {
+    Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
+    await logSystemEvent({
+      level: "info",
+      source: "admin_booking_reassignment",
+      message: "Reassignment triggers payout recalculation",
+      context: {
+      bookingId: id,
+      oldCleanerId: oldCleaner,
+      newCleanerId: newCleaner,
+      },
+    });
+  }
+
+  const { error } = await admin.from("bookings").update(updates).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (newCleaner && cleanerWasChanged) {
+    await notifyCleanerAssignedBooking(admin, id, newCleaner);
+  }
+  const completedViaPatch = updates.status === "completed";
+  const effectiveCleaner = newCleaner ?? oldCleaner;
+  if (completedViaPatch && effectiveCleaner) {
+    const payout = await persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId: effectiveCleaner });
+    if (!payout.ok) {
+      await logSystemEvent({
+        level: "error",
+        source: "admin_booking_completed",
+        message: `Payout missing after admin completion: ${payout.error}`,
+        context: { bookingId: id, cleanerId: effectiveCleaner },
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

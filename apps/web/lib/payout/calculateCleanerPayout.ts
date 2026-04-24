@@ -4,18 +4,20 @@ import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 const FIXED_SERVICE_IDS = new Set<BookingServiceId>(["deep", "move", "carpet"]);
 /** R250 in cents */
 export const MIN_PAYOUT_CENTS = 25_000;
-export const FIXED_SPECIAL_PAYOUT_CENTS = 25_000;
+/** R350 in cents: base payout cap; excess cleaner share is stored as bonus. */
+export const MAX_BASE_PAYOUT_CENTS = 35_000;
 
 const NEW_CLEANER_RATE = 0.6;
 const EXPERIENCED_CLEANER_RATE = 0.7;
 const EXPERIENCE_MONTHS_THRESHOLD = 4;
 
 export type CleanerPayoutResult = {
-  cleanerPayoutCents: number;
+  payoutCents: number;
+  bonusCents: number;
   companyRevenueCents: number;
-  payoutType: "fixed" | "percentage";
+  payoutType: "percentage";
   /** Decimal rate applied for percentage model, e.g. 0.7 */
-  payoutPercentage: number | null;
+  payoutPercentage: number;
   /** Subtotal cleaner payout was computed from (excludes platform service fee). */
   payoutBaseCents: number;
   /** Platform fee added to company revenue only. */
@@ -62,9 +64,7 @@ export function resolveTotalPaidCents(totalPaidZar: number | null | undefined, a
   return 0;
 }
 
-/**
- * Central payout rules: fixed specials vs hybrid % + minimum, always capped at total paid.
- */
+/** Central hybrid payout rules: percentage + minimum + base cap + bonus. */
 export function calculateCleanerPayout(params: {
   totalPaidCents: number;
   serviceId: BookingServiceId | null;
@@ -78,24 +78,12 @@ export function calculateCleanerPayout(params: {
 
   if (total === 0) {
     return {
-      cleanerPayoutCents: 0,
+      payoutCents: 0,
+      bonusCents: 0,
       companyRevenueCents: 0,
       payoutType: "percentage",
-      payoutPercentage: null,
+      payoutPercentage: NEW_CLEANER_RATE,
       payoutBaseCents: 0,
-      serviceFeeCents: 0,
-    };
-  }
-
-  if (isFixedPayoutSpecial(params.serviceId, params.serviceLabel)) {
-    const cleanerPayout = Math.min(FIXED_SPECIAL_PAYOUT_CENTS, total);
-    const companyRevenue = Math.max(0, total - cleanerPayout);
-    return {
-      cleanerPayoutCents: cleanerPayout,
-      companyRevenueCents: companyRevenue,
-      payoutType: "fixed",
-      payoutPercentage: null,
-      payoutBaseCents: total,
       serviceFeeCents: 0,
     };
   }
@@ -105,11 +93,15 @@ export function calculateCleanerPayout(params: {
   const isExperienced = monthsWorked >= EXPERIENCE_MONTHS_THRESHOLD;
   const percentage = isExperienced ? EXPERIENCED_CLEANER_RATE : NEW_CLEANER_RATE;
   const percentagePayout = Math.round(total * percentage);
-  const cleanerPayout = Math.min(Math.max(percentagePayout, MIN_PAYOUT_CENTS), total);
-  const companyRevenue = Math.max(0, total - cleanerPayout);
+  const baseBeforeTotalCap = Math.min(Math.max(percentagePayout, MIN_PAYOUT_CENTS), MAX_BASE_PAYOUT_CENTS);
+  const payoutCents = Math.min(baseBeforeTotalCap, total);
+  const rawBonusCents = Math.max(0, percentagePayout - MAX_BASE_PAYOUT_CENTS);
+  const bonusCents = Math.min(rawBonusCents, Math.max(0, total - payoutCents));
+  const companyRevenue = Math.max(0, total - payoutCents - bonusCents);
 
   return {
-    cleanerPayoutCents: cleanerPayout,
+    payoutCents,
+    bonusCents,
     companyRevenueCents: companyRevenue,
     payoutType: "percentage",
     payoutPercentage: percentage,

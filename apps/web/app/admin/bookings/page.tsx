@@ -28,6 +28,12 @@ type BookingRow = {
   location: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  cleaner_payout_cents?: number | null;
+  cleaner_bonus_cents?: number | null;
+  company_revenue_cents?: number | null;
+  payout_percentage?: number | null;
+  payout_type?: string | null;
+  is_test?: boolean | null;
   status: string | null;
   dispatch_status: "searching" | "offered" | "assigned" | "failed" | "no_cleaner" | "unassignable" | null;
   surge_multiplier?: number | null;
@@ -125,6 +131,11 @@ type AdminRouteRow = {
 function zar(r: BookingRow): number {
   if (typeof r.total_paid_zar === "number") return r.total_paid_zar;
   return Math.round((r.amount_paid_cents ?? 0) / 100);
+}
+
+function centsToZar(cents: number | null | undefined): number | null {
+  if (cents == null || !Number.isFinite(Number(cents))) return null;
+  return Math.round(Number(cents) / 100);
 }
 
 function formatWhen(date: string | null, time: string | null): string {
@@ -1056,6 +1067,10 @@ export default function AdminBookingsPage() {
               {visibleRows.map((r, idx) => {
                 const startMins = startsInMinutes(r.date, r.time);
                 const assignSourceLine = assignmentSourceLabel(r);
+                const cleanerPayoutZar = centsToZar(r.cleaner_payout_cents);
+                const cleanerBonusZar = centsToZar(r.cleaner_bonus_cents) ?? 0;
+                const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
+                const companyRevenueZar = centsToZar(r.company_revenue_cents);
                 return (
                   <Fragment key={r.id}>
                     <tr
@@ -1077,6 +1092,11 @@ export default function AdminBookingsPage() {
                     >
                       <td className="max-w-[200px] truncate px-3 py-2 text-zinc-800 dark:text-zinc-200">
                         <span className="font-medium">{r.customer_name?.trim() || "—"}</span>
+                        {r.is_test ? (
+                          <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:ring-amber-800">
+                            TEST BOOKING
+                          </span>
+                        ) : null}
                         <span className="mt-0.5 block truncate text-xs text-zinc-500">{r.customer_email ?? ""}</span>
                       </td>
                       <td className="px-3 py-2">{r.service ?? "—"}</td>
@@ -1084,7 +1104,26 @@ export default function AdminBookingsPage() {
                       <td className={["whitespace-nowrap px-3 py-2 tabular-nums", startsInClass(startMins)].join(" ")}>
                         {formatStartsIn(startMins)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2 font-medium tabular-nums">R {zar(r).toLocaleString("en-ZA")}</td>
+                      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                        <div className="font-medium">Customer R {zar(r).toLocaleString("en-ZA")}</div>
+                        <div className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                          Cleaner{" "}
+                          {cleanerTotalZar == null ? (
+                            <span className="font-medium text-amber-700 dark:text-amber-300">Pending payout calculation</span>
+                          ) : (
+                            <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                              R {cleanerTotalZar.toLocaleString("en-ZA")}
+                            </span>
+                          )}
+                        </div>
+                        {cleanerPayoutZar != null ? (
+                          <div className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                            Payout R {cleanerPayoutZar.toLocaleString("en-ZA")}
+                            {cleanerBonusZar > 0 ? ` + bonus R ${cleanerBonusZar.toLocaleString("en-ZA")}` : ""}
+                            {companyRevenueZar != null ? ` · company R ${companyRevenueZar.toLocaleString("en-ZA")}` : ""}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={(() => {

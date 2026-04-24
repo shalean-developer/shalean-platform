@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const { data: jobs, error } = await admin
     .from("bookings")
     .select(
-      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, cleaner_payout_cents, payout_id",
+      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_id",
     )
     .eq("cleaner_id", session.cleanerId)
     .not("status", "eq", "cancelled")

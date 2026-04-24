@@ -21,5 +21,7 @@ export type CleanerBookingRow = {
   created_at: string | null;
   booking_snapshot?: unknown | null;
   cleaner_payout_cents?: number | null;
+  cleaner_bonus_cents?: number | null;
+  company_revenue_cents?: number | null;
   payout_id?: string | null;
 };

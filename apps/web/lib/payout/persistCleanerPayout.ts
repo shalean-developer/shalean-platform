@@ -10,14 +10,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Call when a cleaner is assigned and payment total is known — e.g. from `notifyCleanerAssignedBooking`.
  */
 export async function persistCleanerPayoutIfUnset(
-  admin: SupabaseClient,
-  bookingId: string,
-  expectedCleanerId: string,
+  params: { admin: SupabaseClient; bookingId: string; cleanerId: string },
 ): Promise<{ ok: true; skipped: boolean; payout?: CleanerPayoutResult } | { ok: false; error: string }> {
+  const { admin, bookingId, cleanerId: expectedCleanerId } = params;
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(
-      "id, cleaner_id, total_paid_zar, amount_paid_cents, base_amount_cents, service_fee_cents, service, booking_snapshot, cleaner_payout_cents",
+      "id, cleaner_id, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, service, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -29,7 +28,10 @@ export async function persistCleanerPayoutIfUnset(
   const r = row as {
     cleaner_id?: string | null;
     cleaner_payout_cents?: number | null;
+    cleaner_bonus_cents?: number | null;
+    company_revenue_cents?: number | null;
     total_paid_zar?: number | null;
+    total_paid_cents?: number | null;
     amount_paid_cents?: number | null;
     base_amount_cents?: number | null;
     service_fee_cents?: number | null;
@@ -41,7 +43,14 @@ export async function persistCleanerPayoutIfUnset(
     return { ok: true, skipped: true };
   }
 
-  if (r.cleaner_payout_cents != null && Number.isFinite(Number(r.cleaner_payout_cents))) {
+  if (
+    r.cleaner_payout_cents != null &&
+    Number.isFinite(Number(r.cleaner_payout_cents)) &&
+    r.cleaner_bonus_cents != null &&
+    Number.isFinite(Number(r.cleaner_bonus_cents)) &&
+    r.company_revenue_cents != null &&
+    Number.isFinite(Number(r.company_revenue_cents))
+  ) {
     return { ok: true, skipped: true };
   }
 
@@ -62,7 +71,7 @@ export async function persistCleanerPayoutIfUnset(
 
   const payout = calculateCleanerPayoutFromBookingRow({
     totalPaidZar: r.total_paid_zar,
-    amountPaidCents: r.amount_paid_cents,
+    amountPaidCents: r.total_paid_cents ?? r.amount_paid_cents,
     baseAmountCents: r.base_amount_cents,
     serviceFeeCents: r.service_fee_cents,
     serviceLabel: r.service ?? null,
@@ -73,14 +82,15 @@ export async function persistCleanerPayoutIfUnset(
   const { data: updated, error: upErr } = await admin
     .from("bookings")
     .update({
-      cleaner_payout_cents: payout.cleanerPayoutCents,
+      cleaner_payout_cents: payout.payoutCents,
+      cleaner_bonus_cents: payout.bonusCents,
       company_revenue_cents: payout.companyRevenueCents,
       payout_percentage: payout.payoutPercentage,
       payout_type: payout.payoutType,
     })
     .eq("id", bookingId)
     .eq("cleaner_id", expectedCleanerId)
-    .is("cleaner_payout_cents", null)
+    .or("cleaner_payout_cents.is.null,cleaner_bonus_cents.is.null,company_revenue_cents.is.null")
     .select("id");
 
   if (upErr) {
@@ -94,7 +104,8 @@ export async function persistCleanerPayoutIfUnset(
 
   console.log("PAYOUT_CALCULATED", {
     bookingId,
-    cleanerPayout: payout.cleanerPayoutCents,
+    cleanerPayout: payout.payoutCents,
+    cleanerBonus: payout.bonusCents,
     companyRevenue: payout.companyRevenueCents,
     type: payout.payoutType,
     payoutBaseCents: payout.payoutBaseCents,
@@ -108,7 +119,8 @@ export async function persistCleanerPayoutIfUnset(
     context: {
       bookingId,
       cleanerId: expectedCleanerId,
-      cleanerPayoutCents: payout.cleanerPayoutCents,
+      cleanerPayoutCents: payout.payoutCents,
+      cleanerBonusCents: payout.bonusCents,
       companyRevenueCents: payout.companyRevenueCents,
       payoutType: payout.payoutType,
       payoutPercentage: payout.payoutPercentage,

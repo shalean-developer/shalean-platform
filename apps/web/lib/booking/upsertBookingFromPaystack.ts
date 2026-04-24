@@ -53,7 +53,14 @@ export type UpsertBookingInput = {
   paystackAuthorizationCode?: string | null;
   paystackCustomerCode?: string | null;
   paidAtIso?: string | null;
+  /** Explicit test-booking override for admin/dev tooling. */
+  isTest?: boolean;
 };
+
+function boolish(raw: string | undefined): boolean {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
+}
 
 /**
  * Idempotent insert by `paystack_reference`. Webhook is the source of truth for persistence.
@@ -164,6 +171,25 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const lockedSurge = typeof locked?.surge === "number" && Number.isFinite(locked.surge) ? locked.surge : ds.multiplier;
   const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
   const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
+  const baseAmountCents =
+    price_breakdown && typeof (price_breakdown as { subtotalZar?: unknown }).subtotalZar === "number"
+      ? Math.max(0, Math.round(Number((price_breakdown as { subtotalZar: number }).subtotalZar) * 100))
+      : null;
+  const extrasAmountCents =
+    price_breakdown &&
+    typeof (price_breakdown as { job?: { extrasZar?: unknown } }).job?.extrasZar === "number"
+      ? Math.max(0, Math.round(Number((price_breakdown as { job: { extrasZar: number } }).job.extrasZar) * 100))
+      : null;
+  const totalPaidCents = Math.max(0, Math.round(input.amountCents));
+  const serviceFeeCents =
+    baseAmountCents != null ? Math.max(0, totalPaidCents - baseAmountCents) : 0;
+  const isTest =
+    input.isTest === true ||
+    process.env.NODE_ENV !== "production" ||
+    input.paystackReference.trim().toUpperCase().startsWith("TEST-") ||
+    boolish(input.paystackMetadata?.is_test) ||
+    boolish(input.paystackMetadata?.test_booking) ||
+    boolish(input.paystackMetadata?.client_isTest);
 
   const userSelectedRow =
     userConfirmedCleanerId != null
@@ -183,10 +209,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     customer_phone: cust?.phone?.trim() || null,
     user_id: userIdResolved,
     amount_paid_cents: input.amountCents,
+    total_paid_cents: totalPaidCents,
+    base_amount_cents: baseAmountCents,
+    extras_amount_cents: extrasAmountCents,
+    service_fee_cents: serviceFeeCents,
     currency: input.currency || "ZAR",
     booking_snapshot: bookingSnapshotMerged,
     status: "pending",
     dispatch_status: "searching",
+    is_test: isTest,
     surge_multiplier: surgeMultiplier,
     surge_reason: surgeReason,
     service: locked?.service != null ? getServiceLabel(locked.service) : null,

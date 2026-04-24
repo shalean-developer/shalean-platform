@@ -12,21 +12,14 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const onLogin = pathname?.startsWith("/cleaner/login");
-    if (onLogin) {
+    const timer = window.setTimeout(() => {
+      const onLogin = pathname?.startsWith("/cleaner/login");
+      const cleanerId = localStorage.getItem("cleaner_id");
+      setIsLoggedIn(!onLogin && Boolean(cleanerId));
       setChecking(false);
-      setIsLoggedIn(false);
-      return;
-    }
+    }, 0);
 
-    const cleanerId = typeof window !== "undefined" ? localStorage.getItem("cleaner_id") : null;
-    if (!cleanerId) {
-      setIsLoggedIn(false);
-      setChecking(false);
-      return;
-    }
-    setIsLoggedIn(true);
-    setChecking(false);
+    return () => window.clearTimeout(timer);
   }, [pathname, router]);
 
   function handleCleanerLogout() {
@@ -76,10 +69,7 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Shalean cleaner</p>
           <nav className="flex gap-4 text-sm font-medium">
             <Link href="/cleaner/dashboard" className="text-blue-700 hover:underline dark:text-blue-400">
-              App
-            </Link>
-            <Link href="/cleaner" className="text-blue-700 hover:underline dark:text-blue-400">
-              Hub
+              Dashboard
             </Link>
             <Link href="/cleaner/jobs" className="text-blue-700 hover:underline dark:text-blue-400">
               Jobs

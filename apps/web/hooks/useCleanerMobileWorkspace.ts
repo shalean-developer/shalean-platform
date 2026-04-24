@@ -226,13 +226,18 @@ export function useCleanerMobileWorkspace() {
     return sorted.slice(0, 25).map((r) => {
       const view = bookingRowToMobileView(r);
       const c = r.cleaner_payout_cents;
-      const amount =
-        c != null && Number.isFinite(Number(c)) ? Math.round(Number(c) / 100) : Math.round(Number(r.total_paid_zar ?? 0));
+      const bonusCents =
+        r.cleaner_bonus_cents != null && Number.isFinite(Number(r.cleaner_bonus_cents))
+          ? Math.max(0, Math.round(Number(r.cleaner_bonus_cents)))
+          : 0;
+      const payoutZar = c != null && Number.isFinite(Number(c)) ? Math.round(Number(c) / 100) : null;
+      const bonusZar = Math.round(bonusCents / 100);
       return {
         id: r.id,
         serviceLabel: `${r.service ?? "Job"} · ${view.areaLabel}`,
-        amountZar: amount,
-        tipZar: 0,
+        payoutZar,
+        bonusZar,
+        totalEarningsZar: payoutZar != null ? payoutZar + bonusZar : null,
         payoutStatus: r.payout_id ? ("paid" as const) : ("pending" as const),
       };
     });

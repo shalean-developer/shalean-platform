@@ -4,9 +4,11 @@ export function BeforeAfterSection() {
       <div className="mx-auto max-w-7xl px-4">
         <div className="mx-auto max-w-2xl text-center">
           <h2 id="before-after-heading" className="text-3xl font-bold tracking-tight text-zinc-900">
-            Results you can see
+            Before and After Cleaning Results
           </h2>
-          <p className="mt-3 text-gray-600">Kitchens, bathrooms, and living spaces after a Shalean deep clean — polished surfaces, clear floors, reset counters.</p>
+          <p className="mt-3 text-gray-600">
+            Visual proof builds trust fast. Add real kitchen, bathroom, and living space photos here as soon as they are available.
+          </p>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">

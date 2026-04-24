@@ -16,7 +16,14 @@ export function CleanerEarningsTab({
   today: number;
   week: number;
   month: number;
-  rows: { id: string; serviceLabel: string; amountZar: number; tipZar: number; payoutStatus: "paid" | "pending" }[];
+  rows: {
+    id: string;
+    serviceLabel: string;
+    payoutZar: number | null;
+    bonusZar: number;
+    totalEarningsZar: number | null;
+    payoutStatus: "paid" | "pending";
+  }[];
 }) {
   if (loading) {
     return (
@@ -80,11 +87,22 @@ export function CleanerEarningsTab({
                   </Badge>
                 </div>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">R{row.amountZar.toLocaleString("en-ZA")}</span>
-                  {row.tipZar > 0 ? (
-                    <span className="text-zinc-600 dark:text-zinc-400">Tip R{row.tipZar.toLocaleString("en-ZA")}</span>
+                  {row.totalEarningsZar == null ? (
+                    <span className="font-semibold text-amber-700 dark:text-amber-300">Pending payout calculation</span>
                   ) : (
-                    <span className="text-zinc-400 dark:text-zinc-500">No tip</span>
+                    <>
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        Total R{row.totalEarningsZar.toLocaleString("en-ZA")}
+                      </span>
+                      <span className="text-zinc-600 dark:text-zinc-400">
+                        Payout R{(row.payoutZar ?? 0).toLocaleString("en-ZA")}
+                      </span>
+                      {row.bonusZar > 0 ? (
+                        <span className="text-emerald-700 dark:text-emerald-300">
+                          Bonus R{row.bonusZar.toLocaleString("en-ZA")}
+                        </span>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </CardContent>

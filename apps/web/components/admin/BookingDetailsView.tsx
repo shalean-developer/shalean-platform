@@ -20,6 +20,12 @@ type BookingDetails = {
   location: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  cleaner_payout_cents?: number | null;
+  cleaner_bonus_cents?: number | null;
+  company_revenue_cents?: number | null;
+  payout_percentage?: number | null;
+  payout_type?: string | null;
+  is_test?: boolean | null;
   status: string | null;
   user_id: string | null;
   cleaner_id: string | null;
@@ -61,6 +67,18 @@ type DispatchOfferAdminRow = {
 
 type ToastState = { kind: "success" | "error"; text: string } | null;
 
+type BookingNotificationLogRow = {
+  id: string;
+  channel: string;
+  template_key: string;
+  status: string;
+  role: string | null;
+  event_type: string | null;
+  provider: string;
+  created_at: string;
+  payload: Record<string, unknown> | null;
+};
+
 type DispatchOfferUxFilter = "all" | CleanerUxVariant | "unknown";
 
 function isKnownDispatchUxVariant(raw: string): raw is CleanerUxVariant {
@@ -81,6 +99,11 @@ function variantCountShareLabel(count: number, total: number): string {
 function money(booking: BookingDetails): number {
   if (typeof booking.total_paid_zar === "number") return booking.total_paid_zar;
   return Math.round((booking.amount_paid_cents ?? 0) / 100);
+}
+
+function centsToZar(cents: number | null | undefined): number | null {
+  if (cents == null || !Number.isFinite(Number(cents))) return null;
+  return Math.round(Number(cents) / 100);
 }
 
 function statusBadgeClass(status: string | null): string {
@@ -155,6 +178,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [dispatchOfferUxFilter, setDispatchOfferUxFilter] = useState<DispatchOfferUxFilter>("all");
   /** Fleet-wide experiment leader from `/api/admin/analytics` (highlights the UX filter row). */
   const [fleetBestUxVariant, setFleetBestUxVariant] = useState<CleanerUxVariant | "unknown" | null>(null);
+  const [notificationLogs, setNotificationLogs] = useState<BookingNotificationLogRow[]>([]);
+  const [notificationLogsLoading, setNotificationLogsLoading] = useState(false);
 
   useEffect(() => {
     async function loadDetails() {
@@ -219,6 +244,40 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     }
     void loadDetails();
   }, [bookingId]);
+
+  useEffect(() => {
+    if (!bookingId || !fullBooking) return;
+    let cancelled = false;
+    void (async () => {
+      setNotificationLogsLoading(true);
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setNotificationLogsLoading(false);
+        return;
+      }
+      const qs = new URLSearchParams({
+        booking_id: bookingId,
+        limit: "40",
+        offset: "0",
+      });
+      const res = await fetch(`/api/admin/notification-logs?${qs.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = (await res.json()) as { logs?: BookingNotificationLogRow[]; error?: string };
+      if (cancelled) return;
+      if (!res.ok) {
+        setNotificationLogs([]);
+      } else {
+        const rows = j.logs ?? [];
+        setNotificationLogs([...rows].reverse());
+      }
+      setNotificationLogsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId, fullBooking]);
 
   const flags = useMemo(() => (fullBooking ? detailFlags(fullBooking, userProfile) : []), [fullBooking, userProfile]);
 
@@ -300,6 +359,10 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const total = money(fullBooking);
   const basePrice = Math.round(total * 0.85);
   const extrasPrice = Math.max(total - basePrice, 0);
+  const cleanerPayoutZar = centsToZar(fullBooking.cleaner_payout_cents);
+  const cleanerBonusZar = centsToZar(fullBooking.cleaner_bonus_cents) ?? 0;
+  const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
+  const companyRevenueZar = centsToZar(fullBooking.company_revenue_cents);
   const isAssigned = !!fullBooking.cleaner_id;
   const startsInIsPast = startsInText.startsWith("Started");
   const startsInClass = startsInIsPast ? "text-rose-700" : "text-emerald-700";
@@ -437,6 +500,11 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               <span className={["rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide", statusBadgeClass(fullBooking.status)].join(" ")}>
                 {(fullBooking.status ?? "pending").toUpperCase()}
               </span>
+              {fullBooking.is_test ? (
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200">
+                  TEST BOOKING
+                </span>
+              ) : null}
               <button type="button" onClick={() => void openAssignModal()} className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
                 {isAssigned ? "Reassign" : "Assign cleaner"}
               </button>
@@ -560,6 +628,78 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 <MapPin size={14} />Open in maps
               </a>
             ) : null}
+          </DetailCard>
+          <DetailCard title="Notification timeline">
+            <p className="text-sm text-zinc-600">
+              Outbound delivery attempts for this booking (email, WhatsApp, SMS).{" "}
+              <Link
+                href="/admin/notification-logs"
+                className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+              >
+                Full logs
+              </Link>
+            </p>
+            {notificationLogsLoading ? (
+              <p className="text-sm text-zinc-500">Loading notification history…</p>
+            ) : notificationLogs.length === 0 ? (
+              <p className="text-sm text-zinc-500">No notification log rows for this booking yet.</p>
+            ) : (
+              <ul className="space-y-2 border-t border-zinc-100 pt-3">
+                {notificationLogs.map((row) => {
+                  const pl = row.payload && typeof row.payload === "object" ? row.payload : {};
+                  const retriedFrom = typeof pl.retried_from === "string" ? pl.retried_from : null;
+                  const fb = pl.automated_channel_fallback === true;
+                  return (
+                    <li
+                      key={row.id}
+                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium text-zinc-800">
+                          {row.channel} · {row.template_key}
+                        </span>
+                        {row.role ? (
+                          <span className="ml-2 text-xs text-zinc-500">({row.role})</span>
+                        ) : null}
+                        {row.event_type ? (
+                          <span className="ml-2 text-xs text-zinc-500">{row.event_type}</span>
+                        ) : null}
+                        {retriedFrom ? (
+                          <span className="mt-1 block font-mono text-[11px] text-zinc-500">
+                            ↳ retry of {retriedFrom.slice(0, 8)}…
+                          </span>
+                        ) : null}
+                        {fb ? (
+                          <span className="mt-1 block text-[11px] font-medium text-amber-800">Automated SMS after WhatsApp</span>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span
+                          className={
+                            row.status === "sent"
+                              ? "text-xs font-semibold text-emerald-700"
+                              : "text-xs font-semibold text-rose-700"
+                          }
+                        >
+                          {row.status}
+                        </span>
+                        <p className="text-[11px] text-zinc-500">
+                          {row.created_at
+                            ? new Date(row.created_at).toLocaleString("en-ZA", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: false,
+                              })
+                            : "—"}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </DetailCard>
           <DetailCard title="Dispatch offers">
             {dispatchOffers.length === 0 ? (
@@ -695,6 +835,31 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
             <DetailRow label="Extras total" value={`R ${extrasPrice.toLocaleString("en-ZA")}`} />
             <div className="my-2 border-t border-zinc-200" />
             <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">TOTAL</span><span className="text-2xl font-bold text-emerald-700">R {total.toLocaleString("en-ZA")}</span></div>
+          </DetailCard>
+          <DetailCard title="Cleaner payout">
+            {cleanerTotalZar == null ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                Pending payout calculation
+              </p>
+            ) : (
+              <>
+                <DetailRow label="Cleaner payout" value={`R ${cleanerPayoutZar!.toLocaleString("en-ZA")}`} />
+                <DetailRow label="Cleaner bonus" value={`R ${cleanerBonusZar.toLocaleString("en-ZA")}`} />
+                <DetailRow label="Total cleaner earnings" value={`R ${cleanerTotalZar.toLocaleString("en-ZA")}`} strong />
+                <DetailRow
+                  label="Company revenue"
+                  value={companyRevenueZar == null ? "—" : `R ${companyRevenueZar.toLocaleString("en-ZA")}`}
+                />
+                <DetailRow
+                  label="Payout model"
+                  value={`${fullBooking.payout_type ?? "percentage"}${
+                    typeof fullBooking.payout_percentage === "number"
+                      ? ` · ${Math.round(fullBooking.payout_percentage * 100)}%`
+                      : ""
+                  }`}
+                />
+              </>
+            )}
           </DetailCard>
         </section>
 

@@ -1,6 +1,7 @@
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { FadeInSection } from "@/components/home/FadeInSection";
 import { HomeMobileStickyCta } from "@/components/home/HomeMobileStickyCta";
+import { HomeStructuredData } from "@/components/home/HomeStructuredData";
 import { HomeWhatsAppFloat } from "@/components/home/HomeWhatsAppFloat";
 import { AreasWeServeSection } from "@/components/home/sections/AreasWeServeSection";
 import { BeforeAfterSection } from "@/components/home/sections/BeforeAfterSection";
@@ -18,8 +19,9 @@ import { WhyChooseUsSection } from "@/components/home/sections/WhyChooseUsSectio
 export function HomePage() {
   return (
     <>
+      <HomeStructuredData />
       <GrowthTracking event="page_view" payload={{ page_type: "home" }} />
-      <main className="min-h-screen bg-white pb-24 text-zinc-900 md:pb-0">
+      <main className="min-h-screen bg-white pb-24 text-zinc-900">
         <FadeInSection>
           <HeroSection />
         </FadeInSection>
@@ -30,13 +32,13 @@ export function HomePage() {
           <ServicesSection />
         </FadeInSection>
         <FadeInSection>
+          <PricingPreviewSection />
+        </FadeInSection>
+        <FadeInSection>
           <WhyChooseUsSection />
         </FadeInSection>
         <FadeInSection>
           <HowItWorksSection />
-        </FadeInSection>
-        <FadeInSection>
-          <PricingPreviewSection />
         </FadeInSection>
         <FadeInSection>
           <AreasWeServeSection />
@@ -48,10 +50,10 @@ export function HomePage() {
           <BeforeAfterSection />
         </FadeInSection>
         <FadeInSection>
-          <FinalCtaSection />
+          <FAQSection />
         </FadeInSection>
         <FadeInSection>
-          <FAQSection />
+          <FinalCtaSection />
         </FadeInSection>
         <FooterSection />
       </main>

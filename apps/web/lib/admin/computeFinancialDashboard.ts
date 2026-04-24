@@ -7,6 +7,7 @@ export type FinancialBookingInput = {
   total_paid_zar: number | null;
   amount_paid_cents?: number | null;
   cleaner_payout_cents: number | null;
+  cleaner_bonus_cents?: number | null;
   company_revenue_cents: number | null;
   service_fee_cents?: number | null;
   location: string | null;
@@ -118,11 +119,13 @@ export function computeFinancialDashboard(
     const prof = companyProfitCents(b);
     const sf = Number(b.service_fee_cents);
     const cp = Number(b.cleaner_payout_cents);
+    const cb = Number(b.cleaner_bonus_cents);
+    const cleanerEarned = (Number.isFinite(cp) && cp > 0 ? Math.round(cp) : 0) + (Number.isFinite(cb) && cb > 0 ? Math.round(cb) : 0);
 
     totalRevenueCents += rev;
     totalProfitCents += prof;
     if (Number.isFinite(sf) && sf > 0) totalServiceFeeCents += Math.round(sf);
-    if (Number.isFinite(cp) && cp > 0) totalCleanerPayoutCents += Math.round(cp);
+    if (cleanerEarned > 0) totalCleanerPayoutCents += cleanerEarned;
 
     const day = ymdFromCreatedAt(b.created_at);
     const d = byDay.get(day) ?? { revenue: 0, profit: 0, jobs: 0 };
@@ -135,7 +138,7 @@ export function computeFinancialDashboard(
     if (cid) {
       const c = byCleaner.get(cid) ?? { jobs: 0, earned: 0, profit: 0, revenue: 0 };
       c.jobs += 1;
-      if (Number.isFinite(cp) && cp > 0) c.earned += Math.round(cp);
+      c.earned += cleanerEarned;
       c.profit += prof;
       c.revenue += rev;
       byCleaner.set(cid, c);

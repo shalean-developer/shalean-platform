@@ -19,14 +19,17 @@ const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/admin" },
       { label: "Bookings", href: "/admin/bookings" },
+      { label: "Payouts", href: "/admin/payouts" },
       { label: "Pricing", href: "/admin/pricing" },
       { label: "Analytics", href: "/admin/analytics" },
     ],
   },
   {
     title: "Operations",
-    items: [
+      items: [
       { label: "Notifications", href: "/admin/notifications" },
+      { label: "Delivery logs", href: "/admin/notification-logs" },
+      { label: "Templates", href: "/admin/templates" },
       { label: "SLA Breaches", href: "/admin/ops/sla-breaches" },
       { label: "Cleaner Performance", href: "/admin/ops/cleaner-performance" },
       { label: "Operations", href: "/admin/operations" },

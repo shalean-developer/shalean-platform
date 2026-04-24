@@ -27,6 +27,12 @@ type Row = {
   location: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  cleaner_payout_cents: number | null;
+  cleaner_bonus_cents: number | null;
+  company_revenue_cents: number | null;
+  payout_percentage: number | null;
+  payout_type: string | null;
+  is_test: boolean | null;
   status: string | null;
   dispatch_status: string | null;
   surge_multiplier: number | null;
@@ -119,7 +125,7 @@ export async function GET(request: Request) {
   let bookingQuery = admin
     .from("bookings")
     .select(
-      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count",
+      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count",
     )
     .order("created_at", { ascending: false })
     .limit(4000);

@@ -1,14 +1,7 @@
 import Link from "next/link";
+import { getLocationsByCity } from "@/lib/locations";
 
-type Loc = { label: string; href: string };
-
-const locations: Loc[] = [
-  { label: "Cape Town", href: "/" },
-  { label: "Claremont", href: "/cleaning-services/claremont" },
-  { label: "Rondebosch", href: "/booking?step=entry&area=rondebosch" },
-  { label: "Landsdowne", href: "/booking?step=entry&area=landsdowne" },
-  { label: "Wynberg", href: "/booking?step=entry&area=wynberg" },
-];
+const locations = getLocationsByCity("cape-town");
 
 export function AreasWeServeSection() {
   return (
@@ -16,22 +9,23 @@ export function AreasWeServeSection() {
       <div className="mx-auto max-w-7xl px-4">
         <div className="max-w-2xl">
           <h2 id="locations-heading" className="text-3xl font-bold tracking-tight text-zinc-900">
-            Locations we serve
+            Cleaning Services Across Cape Town
           </h2>
           <p className="mt-3 text-gray-600">
-            Shalean dispatches teams across the Cape Town metro. Tap a suburb to explore local house cleaning — more neighbourhood pages are rolling out weekly.
+            Book cleaning services in Sea Point, Claremont, Gardens, Table View, Durbanville, and more Cape Town areas.
+            Tap a suburb to explore local cleaning pages.
           </p>
         </div>
 
         <nav className="mt-10" aria-label="Service areas">
-          <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {locations.map((loc) => (
-              <li key={loc.label}>
+              <li key={loc.slug}>
                 <Link
-                  href={loc.href}
+                  href={`/cleaning-services/${loc.slug}`}
                   className="block rounded-2xl border border-blue-100 bg-blue-50/40 px-4 py-4 text-center text-sm font-semibold text-zinc-900 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
-                  {loc.label}
+                  Cleaning services in {loc.name}
                 </Link>
               </li>
             ))}

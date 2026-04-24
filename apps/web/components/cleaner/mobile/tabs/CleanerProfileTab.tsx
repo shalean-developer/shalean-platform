@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { LogOut, MapPin, Phone, Star } from "lucide-react";
+import { useState } from "react";
+import { CreditCard, LogOut, MapPin, Phone, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -22,13 +22,8 @@ export function CleanerProfileTab({
   onSetAvailability: (next: boolean) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
-  const [available, setAvailable] = useState(profile?.isAvailable ?? true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (profile) setAvailable(profile.isAvailable);
-  }, [profile]);
 
   async function toggle(next: boolean) {
     setBusy(true);
@@ -39,7 +34,6 @@ export function CleanerProfileTab({
       setErr(r.error ?? "Could not update availability.");
       return;
     }
-    setAvailable(next);
   }
 
   function logout() {
@@ -59,6 +53,7 @@ export function CleanerProfileTab({
   }
 
   const tel = profile.phone.replace(/\s/g, "");
+  const available = profile.isAvailable;
 
   return (
     <div className="space-y-4">
@@ -129,6 +124,17 @@ export function CleanerProfileTab({
               </button>
             </div>
           </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="h-12 w-full rounded-xl text-base"
+            onClick={() => router.push("/cleaner/settings/payment")}
+          >
+            <CreditCard className="h-4 w-4" aria-hidden />
+            Payment details
+          </Button>
 
           <Button
             type="button"

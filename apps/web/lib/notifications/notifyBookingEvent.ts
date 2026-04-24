@@ -14,6 +14,17 @@ import {
   sendCustomerTwoHourReminderEmail,
   type BookingEmailPayload,
 } from "@/lib/email/sendBookingEmail";
+import { getCustomerContactHealthScore } from "@/lib/notifications/customerContactHealth";
+import {
+  inferCustomerCountryForNotifications,
+  preferWhatsappFirstForPaymentPhone,
+} from "@/lib/notifications/notificationRegionPolicy";
+import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
+import {
+  sendCustomerSmsFromTemplate,
+  sendCustomerWhatsAppFromTemplate,
+  type CustomerOutboundDecisionTrace,
+} from "@/lib/templates/customerOutbound";
 import { parseTrimmedBookingId } from "@/lib/booking/bookingIds";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -226,20 +237,12 @@ function adminBaseBlock(b: {
 </div>`;
 }
 
-function toE164Za(raw: string): string {
-  const d = raw.replace(/\D/g, "");
-  if (!d) return "";
-  if (d.startsWith("27") && d.length >= 11) return `+${d}`;
-  if (d.length === 9) return `+27${d}`;
-  if (d.length === 10 && d.startsWith("0")) return `+27${d.slice(1)}`;
-  if (raw.trim().startsWith("+")) return raw.trim();
-  return d.length >= 10 ? `+${d}` : "";
-}
-
 /**
  * Central orchestration for booking lifecycle notifications (customer email + in-app, cleaner WhatsApp + SMS fallback, admin email).
  * Admin mail: requires `ADMIN_NOTIFICATION_EMAIL` when an admin notification is sent — missing env throws `CRITICAL: ADMIN_NOTIFICATION_EMAIL not set`.
  * Optional `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to payment_confirmed, sla_breach, and cancelled.
+ *
+ * Channel fallbacks (WhatsApp → SMS) are documented in `notificationChannelRules.ts` (cleaner assigned/reminder; customer payment_confirmed).
  *
  * Idempotency: `reminder_2h_sent`, `assigned_sent`, `completed_sent`, `sla_breach_sent` claims use migration
  * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). Future: cleaner read receipts / opened tracking.
@@ -266,6 +269,26 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const assignmentType = head ? String(head.assignment_type ?? "").trim() || null : null;
     const fallbackReason = head ? String(head.fallback_reason ?? "").trim() || null : null;
 
+    let preferredNotificationChannel: "whatsapp" | "sms" | "email" | null = null;
+    const payUserId = head ? String(head.user_id ?? "").trim() : "";
+    if (payUserId) {
+      const { data: profRow, error: profErr } = await supabase
+        .from("user_profiles")
+        .select("preferred_notification_channel")
+        .eq("id", payUserId)
+        .maybeSingle();
+      if (!profErr && profRow && typeof profRow === "object") {
+        const raw = String(
+          (profRow as { preferred_notification_channel?: string | null }).preferred_notification_channel ?? "",
+        )
+          .trim()
+          .toLowerCase();
+        if (raw === "whatsapp" || raw === "sms" || raw === "email") {
+          preferredNotificationChannel = raw;
+        }
+      }
+    }
+
     const payload = buildBookingEmailPayload({
       paymentReference: event.paymentReference,
       amountCents: event.amountCents,
@@ -288,6 +311,120 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       error: cust.error,
       bookingId: event.bookingId,
     });
+
+    const custPhone = event.snapshot?.customer?.phone?.trim();
+    if (custPhone) {
+      const waCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_whatsapp" };
+      const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
+      const contactHealth = await getCustomerContactHealthScore({
+        bookingId: event.bookingId,
+        phoneHint: custPhone,
+      });
+      const forceSmsFromHealth =
+        contactHealth != null && contactHealth.sampleSize >= 3 && contactHealth.score < 0.5;
+      const healthFields: Pick<
+        CustomerOutboundDecisionTrace,
+        "contact_health_score" | "contact_health_sample_size"
+      > =
+        contactHealth != null
+          ? {
+              contact_health_score: Math.round(contactHealth.score * 1000) / 1000,
+              contact_health_sample_size: contactHealth.sampleSize,
+            }
+          : {};
+      const baseDecision: Pick<CustomerOutboundDecisionTrace, "country" | "preferred_channel"> = {
+        country,
+        preferred_channel: preferredNotificationChannel,
+      };
+      if (preferredNotificationChannel === "email") {
+        await logSystemEvent({
+          level: "info",
+          source: "customer_phone_channels_skipped",
+          message: "preferred_notification_channel=email — skipping WhatsApp/SMS for payment_confirmed",
+          context: { bookingId: event.bookingId },
+        });
+      } else if (preferredNotificationChannel === "sms" || forceSmsFromHealth) {
+        await sendCustomerSmsFromTemplate({
+          phone: custPhone,
+          templateKey: "booking_confirmed",
+          payload,
+          context: {
+            ...waCtx,
+            channel: forceSmsFromHealth ? "customer_sms_contact_health" : "customer_sms_preferred",
+          },
+          decisionTrace: {
+            decision: forceSmsFromHealth ? "sms_only_contact_health_low_score" : "sms_only_preferred_channel",
+            ...baseDecision,
+            ...healthFields,
+          },
+        });
+      } else {
+        const waFirst =
+          preferredNotificationChannel === "whatsapp"
+            ? true
+            : preferWhatsappFirstForPaymentPhone({
+                phone: custPhone,
+                snapshot: event.snapshot,
+              });
+        if (waFirst) {
+          const waOk = await sendCustomerWhatsAppFromTemplate({
+            phone: custPhone,
+            templateKey: "booking_confirmed",
+            payload,
+            context: waCtx,
+            decisionTrace: {
+              decision:
+                preferredNotificationChannel === "whatsapp"
+                  ? "whatsapp_primary_preferred_channel"
+                  : "whatsapp_primary_region",
+              ...baseDecision,
+              ...healthFields,
+            },
+          });
+          if (!waOk.ok) {
+            await sendCustomerSmsFromTemplate({
+              phone: custPhone,
+              templateKey: "booking_confirmed",
+              payload,
+              context: { ...waCtx, channel: "customer_sms_after_whatsapp_failed" },
+              channelFallbackFrom: "whatsapp",
+              decisionTrace: {
+                decision: "sms_fallback_after_whatsapp_failed",
+                ...baseDecision,
+                ...healthFields,
+              },
+            });
+          }
+        } else {
+          const smsOk = await sendCustomerSmsFromTemplate({
+            phone: custPhone,
+            templateKey: "booking_confirmed",
+            payload,
+            context: { ...waCtx, channel: "customer_sms_region_primary" },
+            decisionTrace: {
+              decision: "sms_primary_region",
+              ...baseDecision,
+              ...healthFields,
+            },
+          });
+          if (!smsOk.ok) {
+            await sendCustomerWhatsAppFromTemplate({
+              phone: custPhone,
+              templateKey: "booking_confirmed",
+              payload,
+              context: { ...waCtx, channel: "customer_whatsapp_after_sms_failed" },
+              channelFallbackFrom: "sms",
+              decisionTrace: {
+                decision: "whatsapp_fallback_after_sms_failed",
+                ...baseDecision,
+                ...healthFields,
+              },
+            });
+          }
+        }
+      }
+    }
+
     const payFields = buildBookingNotifyMessageFields({
       bookingId: event.bookingId,
       service: payload.serviceLabel,
@@ -443,6 +580,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       message: msg,
       source: "whatsapp_job_assigned",
       context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
+      deliveryLog: {
+        templateKey: "cleaner_assignment_direct",
+        eventType: "assigned",
+        role: "cleaner",
+      },
     });
     if (wa.ok) {
       await logCleanerWhatsAppSent(
@@ -458,14 +600,20 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         }),
         wa.reason ?? "WhatsApp send did not succeed",
       );
-      const e164 = toE164Za(phone);
+      const e164 = customerPhoneToE164(phone);
       if (e164) {
-        const smsOk = await sendSmsFallback({
+        const smsRes = await sendSmsFallback({
           toE164: e164,
           body: msg.slice(0, 1200),
           context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
+          deliveryLog: {
+            templateKey: "cleaner_assignment_sms_direct",
+            bookingId: event.bookingId,
+            eventType: "assigned",
+            role: "cleaner",
+          },
         });
-        if (smsOk) {
+        if (smsRes.sent) {
           await logCleanerSmsFallbackUsed(
             assignedDeliveryCtx({
               channel: "whatsapp_job_assigned",
@@ -766,6 +914,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         message: msg,
         source: "whatsapp_job_reminder_2h",
         context: { bookingId: event.bookingId, cleanerId },
+        deliveryLog: {
+          templateKey: "cleaner_reminder_2h_whatsapp",
+          eventType: "reminder_2h",
+          role: "cleaner",
+        },
       });
       if (wa.ok) {
         await logCleanerWhatsAppSent(
@@ -781,14 +934,20 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           }),
           wa.reason ?? "WhatsApp send did not succeed",
         );
-        const e164 = toE164Za(phone);
+        const e164 = customerPhoneToE164(phone);
         if (e164) {
-          const smsOk = await sendSmsFallback({
+          const smsRes = await sendSmsFallback({
             toE164: e164,
             body: msg.slice(0, 1200),
             context: { bookingId: event.bookingId, cleanerId },
+            deliveryLog: {
+              templateKey: "cleaner_reminder_2h_sms_direct",
+              bookingId: event.bookingId,
+              eventType: "reminder_2h",
+              role: "cleaner",
+            },
           });
-          if (smsOk) {
+          if (smsRes.sent) {
             await logCleanerSmsFallbackUsed(
               reminderDeliveryCtx({
                 channel: "whatsapp_job_reminder_2h",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { BookCleaningLink } from "@/components/home/BookCleaningLink";
 import { calculateHomeWidgetBaseEstimateZar, type HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
@@ -11,43 +12,49 @@ type ServiceCard = {
   description: string;
   icon: typeof Home;
   service: HomeWidgetServiceKey;
+  servicePage: string;
   source: string;
 };
 
 const services: ServiceCard[] = [
   {
     title: "Standard Cleaning",
-    description: "Recurring upkeep for busy households — dust, floors, kitchen, and baths refreshed.",
+    description: "Regular upkeep for busy homes: dusting, floors, kitchens, bathrooms, and general refreshes.",
     icon: Home,
     service: "standard",
+    servicePage: "/services/standard-cleaning",
     source: "home_services_standard",
   },
   {
     title: "Deep Cleaning",
-    description: "Detail pass for neglected corners, grout, and high-touch areas when you need a reset.",
+    description: "A detailed full clean for kitchens, bathrooms, build-up, high-touch areas, and hard-to-reach spots.",
     icon: Sparkles,
     service: "deep",
+    servicePage: "/services/deep-cleaning",
     source: "home_services_deep",
   },
   {
     title: "Airbnb Cleaning",
-    description: "Turnover-ready cleans between guests with checklist speed and photo-friendly finishes.",
+    description: "Fast turnovers for hosts who need bathrooms, kitchens, beds, floors, and guest-ready details handled.",
     icon: Building2,
     service: "airbnb",
+    servicePage: "/services/airbnb-cleaning",
     source: "home_services_airbnb",
   },
   {
     title: "Move-in / Move-out",
-    description: "Handover-ready shine for keys day — kitchens, bathrooms, and built-ins included.",
+    description: "End-of-lease and handover cleaning for tenants, landlords, agents, and moving day resets.",
     icon: Truck,
     service: "move",
+    servicePage: "/services/move-out-cleaning",
     source: "home_services_move",
   },
   {
     title: "Carpet Cleaning",
-    description: "Lift embedded dust and refresh high-traffic rugs without hauling equipment yourself.",
+    description: "Deep fabric cleaning support for rugs, carpets, bedrooms, lounges, and high-traffic areas.",
     icon: Layers,
     service: "carpet",
+    servicePage: "/services/carpet-cleaning",
     source: "home_services_carpet",
   },
 ];
@@ -67,7 +74,9 @@ export function ServicesSection() {
           <h2 id="services-heading" className="text-3xl font-bold tracking-tight text-zinc-900">
             Services for every home
           </h2>
-          <p className="mt-3 text-gray-600">Pick the clean that matches your space — pricing scales fairly with rooms and extras.</p>
+          <p className="mt-3 text-gray-600">
+            Choose the right clean quickly. Compare services, see a starting estimate, then get your exact price in the booking flow.
+          </p>
         </div>
 
         <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -81,11 +90,18 @@ export function ServicesSection() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                   <Icon className="h-6 w-6" aria-hidden />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-zinc-900">{s.title}</h3>
+                <h3 className="mt-4 text-lg font-semibold text-zinc-900">
+                  <Link href={s.servicePage} className="transition hover:text-blue-700">
+                    {s.title}
+                  </Link>
+                </h3>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{s.description}</p>
                 <p className="mt-4 text-sm font-semibold text-blue-600">
                   {s.from != null ? `From R ${s.from.toLocaleString("en-ZA")}` : "From —"}
                 </p>
+                <Link href={s.servicePage} className="mt-3 text-sm font-semibold text-blue-700 transition hover:text-blue-900">
+                  Learn more about {s.title}
+                </Link>
                 <BookCleaningLink
                   source={s.source}
                   className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"

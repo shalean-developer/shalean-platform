@@ -1,21 +1,16 @@
 import Link from "next/link";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
+import { getLocationsByCity } from "@/lib/locations";
+import { SERVICES } from "@/lib/services";
 
 const waHref = "https://wa.me/27215550123?text=Hi%20Shalean%20Cleaning%20Services";
 
-const footerServices = [
-  { label: "Standard cleaning", href: "/#services" },
-  { label: "Deep cleaning", href: "/#services" },
-  { label: "Airbnb turnovers", href: "/#services" },
-  { label: "Move cleans", href: "/#services" },
-] as const;
+const footerServices = SERVICES.slice(0, 4).map((service) => ({
+  label: service.name,
+  href: `/services/${service.slug}`,
+}));
 
-const footerLocations = [
-  { label: "Cape Town", href: "/#locations" },
-  { label: "Claremont", href: "/cleaning-services/claremont" },
-  { label: "Sea Point", href: "/cleaning-services/sea-point" },
-  { label: "Gardens", href: "/cleaning-services/gardens" },
-] as const;
+const footerLocations = getLocationsByCity("cape-town").slice(0, 6);
 
 export function FooterSection() {
   return (
@@ -54,9 +49,9 @@ export function FooterSection() {
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">Locations</p>
             <ul className="mt-3 space-y-2 text-sm">
               {footerLocations.map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="text-zinc-300 transition hover:text-white">
-                    {l.label}
+                <li key={l.slug}>
+                  <Link href={`/cleaning-services/${l.slug}`} className="text-zinc-300 transition hover:text-white">
+                    {l.name}
                   </Link>
                 </li>
               ))}

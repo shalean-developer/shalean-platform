@@ -43,6 +43,9 @@ export async function insertWidgetDraftBookingRow(
     paystack_reference: paystackReference,
     customer_email: null as string | null,
     amount_paid_cents: 0,
+    total_paid_cents: 0,
+    base_amount_cents: 0,
+    extras_amount_cents: 0,
     currency: "ZAR",
     booking_snapshot: {
       source: "homepage_widget",

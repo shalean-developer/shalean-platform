@@ -10,6 +10,8 @@ import {
   type DispatchMetricSegmentation,
 } from "@/lib/dispatch/dispatchMetricContext";
 import { metrics } from "@/lib/metrics/counters";
+import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 /** Call sites for dispatch.assignment.* metrics and tracing. */
 export type EnsureAssignmentSource =
@@ -64,6 +66,14 @@ export async function ensureBookingAssignment(
   const r = await assignCleanerToBooking(supabase, bookingId, { retryEscalation: retryEsc, smartAssign: mergedSmart });
 
   if (r.ok) {
+    const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: r.cleanerId });
+    if (!payout.ok) {
+      await reportOperationalIssue("error", "ensureBookingAssignment", `payout missing: ${payout.error}`, {
+        bookingId,
+        cleanerId: r.cleanerId,
+        source,
+      });
+    }
     metrics.increment("dispatch.assignment.success", {
       bookingId,
       source,

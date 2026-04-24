@@ -4,9 +4,19 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 
 const faqs = [
   {
+    id: "pricing",
+    q: "How much does cleaning cost in Cape Town?",
+    a: "Cleaning prices depend on your service type, bedrooms, bathrooms, extras, and available time slot. The booking widget gives you an instant price before checkout.",
+  },
+  {
     id: "duration",
     q: "How long does cleaning take?",
     a: "Most standard cleans for a two-bedroom home take two to three hours. Deep and move cleans run longer because we tackle build-up, fixtures, and hard-to-reach areas. Your quote shows an estimated duration before you pay.",
+  },
+  {
+    id: "availability",
+    q: "Can I book same-day cleaning?",
+    a: "Same-day cleaning may be available in Cape Town depending on cleaner availability and your selected service. Start a booking to see the soonest open slots.",
   },
   {
     id: "home",

@@ -396,9 +396,15 @@ export default function AdminNotificationsMonitoringPage() {
           slow pipeline). Alerts fire only with <span className="font-mono text-xs">?alerts=1</span> or{" "}
           <span className="font-mono text-xs">NOTIFICATION_METRICS_ALERTS=true</span>.
         </p>
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
           <Link href="/admin" className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
             ← Admin home
+          </Link>
+          <Link
+            href="/admin/notification-logs"
+            className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          >
+            Per-send delivery logs →
           </Link>
         </p>
         <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">

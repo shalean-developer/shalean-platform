@@ -7,6 +7,7 @@ import {
 } from "@/lib/admin/adminAssignEligibility";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
+import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 
 export type AdminAssignOneResult =
   | { ok: true; cleanerId: string; offerId: string; expiresAtIso: string }
@@ -134,6 +135,7 @@ export async function performAdminAssignToCleaner(
       status: "pending",
       dispatch_status: "offered",
       assigned_at: null,
+      ...BOOKING_PAYOUT_COLUMNS_CLEAR,
       ...(dispatchWasUnassignable ? { became_pending_at: nowIsoForPending } : {}),
     })
     .eq("id", bookingId);

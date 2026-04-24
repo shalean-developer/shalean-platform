@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCustomerBookingCancelled } from "@/lib/notifications/customerUserNotifications";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { logSystemEvent } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,7 +58,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Cannot cancel after the clean has started." }, { status: 400 });
   }
 
-  const { error: upErr } = await admin.from("bookings").update({ status: "cancelled" }).eq("id", bookingId).eq("user_id", userData.user.id);
+  const { error: upErr } = await admin
+    .from("bookings")
+    .update({
+      status: "cancelled",
+      cleaner_payout_cents: 0,
+      cleaner_bonus_cents: 0,
+      company_revenue_cents: 0,
+      payout_percentage: null,
+      payout_type: "cancelled_zero",
+    })
+    .eq("id", bookingId)
+    .eq("user_id", userData.user.id);
 
   if (upErr) {
     return NextResponse.json({ error: upErr.message }, { status: 500 });
@@ -68,6 +80,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     .update({ status: "cancelled", last_error: null })
     .eq("booking_id", bookingId)
     .is("sent_at", null);
+
+  void logSystemEvent({
+    level: "info",
+    source: "customer_booking_cancel",
+    message: "Cancelled booking payout set to zero",
+    context: { bookingId },
+  });
 
   const custEmail = String((row as { customer_email?: string | null }).customer_email ?? "").trim();
   void notifyBookingEvent({

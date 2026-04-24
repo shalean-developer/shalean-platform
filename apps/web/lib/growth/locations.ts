@@ -1,18 +1,11 @@
+import { LOCATIONS } from "@/lib/locations";
+
 export const SERVICE_CITIES = [
   { slug: "cape-town", name: "Cape Town" },
   { slug: "johannesburg", name: "Johannesburg" },
 ] as const;
 
-export const SERVICE_LOCATIONS = [
-  { citySlug: "cape-town", slug: "sea-point", name: "Sea Point" },
-  { citySlug: "cape-town", slug: "claremont", name: "Claremont" },
-  { citySlug: "cape-town", slug: "gardens", name: "Gardens" },
-  { citySlug: "cape-town", slug: "woodstock", name: "Woodstock" },
-  { citySlug: "cape-town", slug: "green-point", name: "Green Point" },
-  { citySlug: "johannesburg", slug: "sandton", name: "Sandton" },
-  { citySlug: "johannesburg", slug: "rosebank", name: "Rosebank" },
-  { citySlug: "johannesburg", slug: "randburg", name: "Randburg" },
-] as const;
+export const SERVICE_LOCATIONS = LOCATIONS;
 
 export function locationNameFromSlug(slug: string): string | null {
   const match = SERVICE_LOCATIONS.find((loc) => loc.slug === slug);

@@ -3,27 +3,27 @@ import { CalendarRange, Leaf, ShieldCheck, Sparkles, Star, Wallet } from "lucide
 const features = [
   {
     title: "Trusted & vetted cleaners",
-    body: "Every pro is reference-checked and reviewed by homeowners like you.",
+    body: "Every cleaner is checked, reviewed, and matched to real customer bookings.",
     icon: ShieldCheck,
   },
   {
     title: "Easy online booking",
-    body: "Choose service, rooms, and add-ons in one guided flow — no endless emails.",
+    body: "Choose your service, rooms, extras, and time in one guided flow.",
     icon: CalendarRange,
   },
   {
     title: "Flexible scheduling",
-    body: "Pick a slot that fits your calendar, including evenings where available.",
+    body: "Pick a slot that fits your day, with same-day availability when supply allows.",
     icon: Sparkles,
   },
   {
-    title: "Eco-friendly products",
-    body: "Teams arrive with effective, family-conscious supplies — or use yours on request.",
+    title: "Transparent pricing",
+    body: "Get your exact price before checkout, with no surprise cash handling on the day.",
     icon: Leaf,
   },
   {
     title: "Secure payments",
-    body: "Pay at checkout with trusted processing — no surprise cash handling on the day.",
+    body: "Pay online with trusted processing and clear booking records.",
     icon: Wallet,
   },
   {
@@ -39,9 +39,11 @@ export function WhyChooseUsSection() {
       <div className="mx-auto max-w-7xl px-4">
         <div className="mx-auto max-w-2xl text-center">
           <h2 id="why-heading" className="text-3xl font-bold tracking-tight text-zinc-900">
-            Why families choose Shalean
+            Why Choose Shalean?
           </h2>
-          <p className="mt-3 text-gray-600">A premium marketplace experience with the warmth of a local cleaning crew.</p>
+          <p className="mt-3 text-gray-600">
+            Built to remove the common doubts: trust, pricing, timing, payment, and what happens if something is missed.
+          </p>
         </div>
 
         <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

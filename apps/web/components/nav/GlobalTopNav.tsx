@@ -23,11 +23,15 @@ export function GlobalTopNav() {
   const [cleanerLoggedIn, setCleanerLoggedIn] = useState(false);
 
   useEffect(() => {
-    setCleanerLoggedIn(typeof window !== "undefined" && Boolean(localStorage.getItem("cleaner_id")));
+    const timer = window.setTimeout(() => {
+      setCleanerLoggedIn(Boolean(localStorage.getItem("cleaner_id")));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    setOpen(false);
+    const timer = window.setTimeout(() => setOpen(false), 0);
+    return () => window.clearTimeout(timer);
   }, [pathname]);
 
   /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. */
@@ -85,7 +89,7 @@ export function GlobalTopNav() {
           {loading ? null : user || cleanerLoggedIn ? (
             <>
               <Link
-                href={user ? "/dashboard" : "/cleaner"}
+                href={user ? "/dashboard" : "/cleaner/dashboard"}
                 className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-blue-200 hover:text-blue-700"
               >
                 Dashboard
@@ -156,7 +160,7 @@ export function GlobalTopNav() {
               </>
             ) : (
               <>
-                <Link href={user ? "/dashboard" : "/cleaner"} className={cn(navLinkClass, "w-full")}>
+                <Link href={user ? "/dashboard" : "/cleaner/dashboard"} className={cn(navLinkClass, "w-full")}>
                   Dashboard
                 </Link>
                 <button type="button" onClick={() => void handleLogout()} className={cn(navLinkClass, "w-full text-left")}>

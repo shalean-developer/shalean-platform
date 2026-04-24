@@ -16,8 +16,10 @@ export type CleanerMobileJobView = {
   phase: CleanerMobilePhase;
   phone: string;
   notes: string | null;
-  /** ZAR — cleaner share when known, else customer total as fallback. */
-  earningsZar: number;
+  /** ZAR — null until stored payout is available. */
+  earningsZar: number | null;
+  bonusZar: number;
+  totalEarningsZar: number | null;
   payoutStatus: "paid" | "pending";
 };
 
@@ -55,8 +57,10 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
   const st = String(row.status ?? "").toLowerCase();
   const phase = deriveMobilePhase(row);
   const payoutCents = row.cleaner_payout_cents != null && Number.isFinite(Number(row.cleaner_payout_cents)) ? Math.round(Number(row.cleaner_payout_cents)) : null;
-  const paidZar = row.total_paid_zar != null && Number.isFinite(Number(row.total_paid_zar)) ? Math.round(Number(row.total_paid_zar)) : 0;
-  const earningsZar = payoutCents != null ? Math.round(payoutCents / 100) : paidZar;
+  const bonusCents = row.cleaner_bonus_cents != null && Number.isFinite(Number(row.cleaner_bonus_cents)) ? Math.round(Number(row.cleaner_bonus_cents)) : 0;
+  const earningsZar = payoutCents != null ? Math.round(payoutCents / 100) : null;
+  const bonusZar = Math.round(Math.max(0, bonusCents) / 100);
+  const totalEarningsZar = earningsZar != null ? earningsZar + bonusZar : null;
   const payoutStatus: "paid" | "pending" = row.payout_id ? "paid" : "pending";
 
   return {
@@ -73,6 +77,8 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     phone: row.customer_phone?.trim() || "",
     notes: notesFromSnapshot(row.booking_snapshot),
     earningsZar,
+    bonusZar,
+    totalEarningsZar,
     payoutStatus: st === "completed" ? payoutStatus : "pending",
   };
 }
@@ -114,9 +120,10 @@ export function earningsSummaryFromRows(rows: CleanerBookingRow[], now: Date) {
 
   const zar = (r: CleanerBookingRow) => {
     const c = r.cleaner_payout_cents;
-    if (c != null && Number.isFinite(Number(c))) return Math.round(Number(c) / 100);
-    const z = r.total_paid_zar;
-    if (z != null && Number.isFinite(Number(z))) return Math.round(Number(z));
+    if (c != null && Number.isFinite(Number(c))) {
+      const bonus = r.cleaner_bonus_cents != null && Number.isFinite(Number(r.cleaner_bonus_cents)) ? Number(r.cleaner_bonus_cents) : 0;
+      return Math.round((Number(c) + Math.max(0, bonus)) / 100);
+    }
     return 0;
   };
 

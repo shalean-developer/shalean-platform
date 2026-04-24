@@ -1,10 +1,13 @@
-import { Resend } from "resend";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
+import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
+import { getVariableAllowlistFromRow, renderTemplate } from "@/lib/templates/render";
+import { getTemplate } from "@/lib/templates/store";
 
 export type BookingEmailPayload = {
   customerEmail: string;
@@ -25,54 +28,204 @@ export type BookingEmailPayload = {
   fallbackReason?: string | null;
 };
 
-function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  return new Resend(key);
+export { getDefaultFromAddress };
+
+/** String fields for `booking_confirmed` templates (email / WhatsApp / SMS). */
+function bookingIdForNotificationLog(payload: BookingEmailPayload): string | null {
+  const b = payload.bookingId?.trim();
+  return b || null;
 }
 
-const RESEND_FROM_FALLBACK = "Shalean Cleaning <onboarding@resend.dev>";
+const CUSTOMER_PAYMENT_EVENT = "payment_confirmed";
+const CUSTOMER_PAYMENT_STEP = "payment_confirmed";
 
-/**
- * Resend rejects invalid `from` (422) unless value is `email@domain` or `Name <email@domain>`.
- * Strips accidental outer quotes from env (common with Vercel / Windows .env).
- */
-function resolveResendFromAddress(): string {
-  const raw = process.env.RESEND_FROM;
-  if (raw == null || String(raw).trim() === "") return RESEND_FROM_FALLBACK;
-
-  let s = String(raw).trim();
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
-    s = s.slice(1, -1).trim();
-  }
-
-  const plainEmail = /^[^\s<>]+@[^\s<>]+$/;
-  const angleEmail = /<[^\s<>]+@[^\s<>]+>/;
-  if (plainEmail.test(s) || angleEmail.test(s)) {
-    return s;
-  }
-
-  void reportOperationalIssue("warn", "sendBookingEmail", "RESEND_FROM is not a valid Resend from address; using onboarding@resend.dev fallback", {
-    hint: "Use: you@verified.domain.com or Brand <you@verified.domain.com>",
-    preview: s.slice(0, 120),
-  });
-  return RESEND_FROM_FALLBACK;
+function customerPaymentPayload(extra: Record<string, unknown>): Record<string, unknown> {
+  return { ...extra, step: CUSTOMER_PAYMENT_STEP };
 }
 
-export function getDefaultFromAddress(): string {
-  return resolveResendFromAddress();
+export function buildBookingConfirmedTemplateData(payload: BookingEmailPayload): Record<string, string> {
+  const price = `R ${payload.totalPaidZar.toLocaleString("en-ZA")}`;
+  const bookingId = (payload.bookingId?.trim() || payload.paymentReference).trim();
+  const emailLocal = payload.customerEmail.includes("@")
+    ? payload.customerEmail.split("@")[0]?.replace(/[.+_]/g, " ").trim() ?? ""
+    : payload.customerEmail.trim();
+  const customerName = (payload.customerName?.trim() || emailLocal || "there").slice(0, 120);
+  return {
+    customer_name: customerName,
+    date: payload.dateLabel,
+    time: payload.timeLabel,
+    price,
+    booking_id: bookingId,
+    service: payload.serviceLabel,
+    location: (payload.location?.trim() || "—").slice(0, 500),
+  };
+}
+
+type DbTemplateAttempt = { usedRow: false } | { usedRow: true; sent: boolean; error?: string };
+
+async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: BookingEmailPayload): Promise<DbTemplateAttempt> {
+  const template = await getTemplate("booking_confirmed", "email");
+  if (!template) return { usedRow: false };
+
+  const resend = getResend();
+  const bid = bookingIdForNotificationLog(payload);
+  if (!resend) {
+    await reportOperationalIssue("warn", "sendBookingConfirmationFromDbTemplateIfConfigured", "RESEND_API_KEY not set", {
+      reference: payload.paymentReference,
+    });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "booking_confirmed",
+      recipient: payload.customerEmail,
+      status: "failed",
+      error: "resend_not_configured",
+      provider: "resend",
+      role: "customer",
+      event_type: CUSTOMER_PAYMENT_EVENT,
+      payload: customerPaymentPayload({ payment_reference: payload.paymentReference, phase: "db_template" }),
+    });
+    return { usedRow: true, sent: false, error: "Email not configured" };
+  }
+
+  const allow = getVariableAllowlistFromRow(template);
+  const data = buildBookingConfirmedTemplateData(payload) as Record<string, unknown>;
+  const renderOpts = { allowedKeys: allow.length ? allow : undefined, escapeHtmlValues: true as const };
+  const html = renderTemplate(template.content, data, renderOpts);
+  const subjectRaw =
+    template.subject?.trim() ? template.subject : "Booking confirmed — {{customer_name}}";
+  const subject = renderTemplate(subjectRaw, data, renderOpts);
+
+  const from = getDefaultFromAddress();
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to: payload.customerEmail,
+      subject,
+      html,
+    });
+    if (error) {
+      await reportOperationalIssue("error", "sendBookingConfirmationFromDbTemplateIfConfigured", error.message, {
+        reference: payload.paymentReference,
+        to: payload.customerEmail,
+      });
+      await writeNotificationLog({
+        booking_id: bid,
+        channel: "email",
+        template_key: "booking_confirmed",
+        recipient: payload.customerEmail,
+        status: "failed",
+        error: error.message,
+        provider: "resend",
+        role: "customer",
+        event_type: CUSTOMER_PAYMENT_EVENT,
+        payload: customerPaymentPayload({
+          subject,
+          html,
+          payment_reference: payload.paymentReference,
+          source: "db_template",
+        }),
+      });
+      return { usedRow: true, sent: false, error: error.message };
+    }
+    await logSystemEvent({
+      level: "info",
+      source: "email",
+      message: "Booking confirmation email sent (DB template)",
+      context: { reference: payload.paymentReference, to: payload.customerEmail },
+    });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "booking_confirmed",
+      recipient: payload.customerEmail,
+      status: "sent",
+      error: null,
+      provider: "resend",
+      role: "customer",
+      event_type: CUSTOMER_PAYMENT_EVENT,
+      payload: customerPaymentPayload({
+        subject,
+        html,
+        payment_reference: payload.paymentReference,
+        source: "db_template",
+      }),
+    });
+    return { usedRow: true, sent: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await reportOperationalIssue("error", "sendBookingConfirmationFromDbTemplateIfConfigured", msg, {
+      reference: payload.paymentReference,
+      to: payload.customerEmail,
+    });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "booking_confirmed",
+      recipient: payload.customerEmail,
+      status: "failed",
+      error: msg,
+      provider: "resend",
+      role: "customer",
+      event_type: CUSTOMER_PAYMENT_EVENT,
+      payload: customerPaymentPayload({
+        subject,
+        html,
+        payment_reference: payload.paymentReference,
+        source: "db_template",
+      }),
+    });
+    return { usedRow: true, sent: false, error: msg };
+  }
 }
 
 export async function sendBookingConfirmationEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
+  const dbAttempt = await sendBookingConfirmationFromDbTemplateIfConfigured(payload);
+  if (dbAttempt.usedRow && dbAttempt.sent) return { sent: true };
+
+  if (dbAttempt.usedRow && !dbAttempt.sent) {
+    await reportOperationalIssue("warn", "template_fallback", "Booking confirmation will use legacy HTML after DB template send failed", {
+      bookingId: bookingIdForNotificationLog(payload),
+      reference: payload.paymentReference,
+      priorError: dbAttempt.error,
+    });
+    await logSystemEvent({
+      level: "warn",
+      source: "email",
+      message: "Booking confirmation fell back to legacy HTML after DB template send failed",
+      context: {
+        reference: payload.paymentReference,
+        to: payload.customerEmail,
+        priorError: dbAttempt.error,
+      },
+    });
+  }
+
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", "sendBookingConfirmationEmail", "RESEND_API_KEY not set", {
       reference: payload.paymentReference,
     });
-    return { sent: false, error: "Email not configured" };
+    await writeNotificationLog({
+      booking_id: bookingIdForNotificationLog(payload),
+      channel: "email",
+      template_key: dbAttempt.usedRow ? "booking_confirmed" : "legacy_booking_confirmation_html",
+      recipient: payload.customerEmail,
+      status: "failed",
+      error: dbAttempt.usedRow ? dbAttempt.error ?? "resend_not_configured" : "resend_not_configured",
+      provider: "resend",
+      role: "customer",
+      event_type: CUSTOMER_PAYMENT_EVENT,
+      payload: customerPaymentPayload({
+        payment_reference: payload.paymentReference,
+        phase: "no_resend_client",
+        attempted_legacy_after_template: dbAttempt.usedRow && !dbAttempt.sent,
+      }),
+    });
+    return {
+      sent: false,
+      error: dbAttempt.usedRow ? dbAttempt.error ?? "Email not configured" : "Email not configured",
+    };
   }
 
   const from = getDefaultFromAddress();
@@ -158,11 +311,24 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
 </div>
 `;
 
+  const legacyBid = bookingIdForNotificationLog(payload);
+  const legacySubject = "Booking confirmed";
+  const legacyPayloadMeta: Record<string, unknown> = customerPaymentPayload({
+    subject: legacySubject,
+    html,
+    payment_reference: payload.paymentReference,
+    source: "legacy_html",
+  });
+  if (dbAttempt.usedRow && !dbAttempt.sent) {
+    legacyPayloadMeta.after_template_failure = true;
+    legacyPayloadMeta.prior_template_error = dbAttempt.error ?? null;
+  }
+
   try {
     const { error } = await resend.emails.send({
       from,
       to: payload.customerEmail,
-      subject: "Booking confirmed",
+      subject: legacySubject,
       html,
     });
 
@@ -170,6 +336,18 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       await reportOperationalIssue("error", "sendBookingConfirmationEmail", error.message, {
         reference: payload.paymentReference,
         to: payload.customerEmail,
+      });
+      await writeNotificationLog({
+        booking_id: legacyBid,
+        channel: "email",
+        template_key: "legacy_booking_confirmation_html",
+        recipient: payload.customerEmail,
+        status: "failed",
+        error: error.message,
+        provider: "resend",
+        role: "customer",
+        event_type: CUSTOMER_PAYMENT_EVENT,
+        payload: legacyPayloadMeta,
       });
       return { sent: false, error: error.message };
     }
@@ -179,6 +357,18 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       message: "Booking confirmation email sent",
       context: { reference: payload.paymentReference, to: payload.customerEmail },
     });
+    await writeNotificationLog({
+      booking_id: legacyBid,
+      channel: "email",
+      template_key: "legacy_booking_confirmation_html",
+      recipient: payload.customerEmail,
+      status: "sent",
+      error: null,
+      provider: "resend",
+      role: "customer",
+      event_type: CUSTOMER_PAYMENT_EVENT,
+      payload: legacyPayloadMeta,
+    });
     return { sent: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -186,6 +376,18 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       err: msg,
       reference: payload.paymentReference,
       to: payload.customerEmail,
+    });
+    await writeNotificationLog({
+      booking_id: legacyBid,
+      channel: "email",
+      template_key: "legacy_booking_confirmation_html",
+      recipient: payload.customerEmail,
+      status: "failed",
+      error: msg,
+      provider: "resend",
+      role: "customer",
+      event_type: CUSTOMER_PAYMENT_EVENT,
+      payload: legacyPayloadMeta,
     });
     return { sent: false, error: msg };
   }
@@ -219,6 +421,9 @@ export async function sendAdminHtmlEmail(params: {
   const bookingIds = rawIds.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
   const adminChannel = `admin:${String(ctx.type ?? "html")}`;
 
+  const adminTemplateKey = `admin_${String(ctx.type ?? "html")}`;
+  const adminEventType = String(ctx.type ?? "admin_html").trim().slice(0, 96) || "admin_html";
+
   let recipients: string[];
   try {
     recipients = getAdminNotificationRecipients();
@@ -232,8 +437,29 @@ export async function sendAdminHtmlEmail(params: {
       bookingId,
       bookingIds: bookingIds.length ? bookingIds : undefined,
     });
+    await writeNotificationLog({
+      booking_id: bookingId ?? null,
+      channel: "email",
+      template_key: adminTemplateKey,
+      recipient: "(admin_recipients_unresolved)",
+      status: "failed",
+      error: String(e),
+      provider: "resend",
+      role: "admin",
+      event_type: adminEventType,
+      payload: { subject: params.subject, html: params.html, step: adminEventType, ...ctx },
+    });
     return;
   }
+
+  const adminLogPayload = (): Record<string, unknown> => ({
+    subject: params.subject,
+    html: params.html,
+    bcc_count: Math.max(0, recipients.length - 1),
+    booking_ids: bookingIds.length ? bookingIds : undefined,
+    step: adminEventType,
+  });
+
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", "sendAdminHtmlEmail", "RESEND_API_KEY not set", ctx);
@@ -244,6 +470,18 @@ export async function sendAdminHtmlEmail(params: {
       error: "RESEND_API_KEY not set",
       bookingId,
       bookingIds: bookingIds.length ? bookingIds : undefined,
+    });
+    await writeNotificationLog({
+      booking_id: bookingId ?? null,
+      channel: "email",
+      template_key: adminTemplateKey,
+      recipient: recipients[0] ?? "(no_recipient)",
+      status: "failed",
+      error: "RESEND_API_KEY not set",
+      provider: "resend",
+      role: "admin",
+      event_type: adminEventType,
+      payload: adminLogPayload(),
     });
     return;
   }
@@ -268,6 +506,18 @@ export async function sendAdminHtmlEmail(params: {
         bookingId,
         bookingIds: bookingIds.length ? bookingIds : undefined,
       });
+      await writeNotificationLog({
+        booking_id: bookingId ?? null,
+        channel: "email",
+        template_key: adminTemplateKey,
+        recipient: to,
+        status: "failed",
+        error: error.message,
+        provider: "resend",
+        role: "admin",
+        event_type: adminEventType,
+        payload: adminLogPayload(),
+      });
       return;
     }
     await logPipelineEmailTelemetry({
@@ -276,6 +526,18 @@ export async function sendAdminHtmlEmail(params: {
       sent: true,
       bookingId,
       bookingIds: bookingIds.length ? bookingIds : undefined,
+    });
+    await writeNotificationLog({
+      booking_id: bookingId ?? null,
+      channel: "email",
+      template_key: adminTemplateKey,
+      recipient: to,
+      status: "sent",
+      error: null,
+      provider: "resend",
+      role: "admin",
+      event_type: adminEventType,
+      payload: adminLogPayload(),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -287,6 +549,18 @@ export async function sendAdminHtmlEmail(params: {
       error: msg,
       bookingId,
       bookingIds: bookingIds.length ? bookingIds : undefined,
+    });
+    await writeNotificationLog({
+      booking_id: bookingId ?? null,
+      channel: "email",
+      template_key: adminTemplateKey,
+      recipient: to,
+      status: "failed",
+      error: msg,
+      provider: "resend",
+      role: "admin",
+      event_type: adminEventType,
+      payload: adminLogPayload(),
     });
   }
 }

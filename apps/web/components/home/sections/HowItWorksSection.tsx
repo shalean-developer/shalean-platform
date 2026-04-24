@@ -1,10 +1,10 @@
 import { CalendarCheck, Laptop, PartyPopper, UserCheck } from "lucide-react";
 
 const steps = [
-  { title: "Book online", body: "Pick your service, rooms, and extras in a few taps.", icon: Laptop },
-  { title: "Choose time", body: "Lock a slot that fits — confirmations land in your inbox.", icon: CalendarCheck },
-  { title: "Cleaner arrives", body: "A vetted pro shows up on time with supplies in hand.", icon: UserCheck },
-  { title: "Enjoy your clean home", body: "Walk into calm, fresh spaces without lifting a finger.", icon: PartyPopper },
+  { title: "Enter your details", body: "Choose your service, rooms, bathrooms, and any extras.", icon: Laptop },
+  { title: "Get instant price", body: "See your live quote before checkout, with no surprise fees.", icon: CalendarCheck },
+  { title: "Book your cleaning", body: "Secure your slot and share access notes for the cleaner.", icon: UserCheck },
+  { title: "Enjoy a spotless home", body: "A vetted cleaner arrives and handles the clean.", icon: PartyPopper },
 ] as const;
 
 export function HowItWorksSection() {
@@ -15,7 +15,7 @@ export function HowItWorksSection() {
           <h2 id="how-heading" className="text-3xl font-bold tracking-tight text-zinc-900">
             How it works
           </h2>
-          <p className="mt-3 text-gray-600">From first click to spotless floors — a simple path every time.</p>
+          <p className="mt-3 text-gray-600">A simple booking flow that turns interest into a confirmed cleaning slot.</p>
         </div>
 
         <div className="relative mt-14">

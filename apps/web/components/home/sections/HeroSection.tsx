@@ -24,16 +24,21 @@ export function HeroSection() {
           <div className="max-w-xl">
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Shalean Cleaning Services</p>
             <h1 id="hero-heading" className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">
-              Professional Home Cleaning in Cape Town
+              Book Trusted Home Cleaning in Cape Town
             </h1>
-            <p className="mt-4 text-pretty text-lg text-gray-600">Trusted cleaners. Easy booking. Spotless results.</p>
+            <p className="mt-4 text-pretty text-lg leading-relaxed text-gray-600">
+              Get a reliable cleaner in minutes. Transparent pricing, vetted professionals, and spotless results every time.
+            </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <HomeBookingLink source="home_hero_primary" className={primaryBtn}>
-                Book a Cleaning
+                Get Instant Price
               </HomeBookingLink>
               <Link href="#hero-booking" className={cn(outlineBtn, "text-center")}>
-                Get Instant Price
+                Book a Cleaning
               </Link>
+            </div>
+            <div className="mt-5 rounded-2xl border border-blue-100 bg-white p-4 text-sm font-semibold text-zinc-700 shadow-sm">
+              <span className="text-blue-600">4.9 rating</span> • 500+ cleans completed • Trusted across Cape Town
             </div>
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
               <li className="flex items-center gap-2">

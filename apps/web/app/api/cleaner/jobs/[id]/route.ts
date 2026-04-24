@@ -5,12 +5,14 @@ import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
+import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, cleaner_payout_cents, payout_id";
+  "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_id";
 
 type Action = "accept" | "reject" | "en_route" | "start" | "complete";
 
@@ -109,6 +111,7 @@ export async function POST(
         en_route_at: null,
         started_at: null,
         assignment_attempts: attempts + 1,
+        ...BOOKING_PAYOUT_COLUMNS_CLEAR,
       })
       .eq("id", bookingId);
 
@@ -167,6 +170,14 @@ export async function POST(
       .eq("id", bookingId);
 
     if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+
+    const payout = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
+    if (!payout.ok) {
+      await reportOperationalIssue("error", "cleaner/jobs/complete", `payout missing after completion: ${payout.error}`, {
+        bookingId,
+        cleanerId,
+      });
+    }
 
     void notifyBookingEvent({ type: "completed", supabase: admin, bookingId });
 
