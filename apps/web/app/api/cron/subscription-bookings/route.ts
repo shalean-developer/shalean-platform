@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import {
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
       appointmentTimeHm: String(s.time_slot ?? ""),
     });
 
-    const assign = await assignCleanerToBooking(admin, booking.id);
+    const assign = await ensureBookingAssignment(admin, booking.id, { source: "subscription_autopay" });
     if (assign.ok) assigned++;
 
     const next = nextDateFrom(today, s.frequency as SubscriptionFrequency);

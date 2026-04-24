@@ -1,0 +1,24 @@
+-- Durable alert history for notification monitoring (audit + trends; distinct from ephemeral system_logs rows).
+
+create table if not exists public.notification_alerts (
+  id uuid primary key default gen_random_uuid(),
+  type text not null,
+  severity text not null check (severity in ('warn', 'error', 'critical')),
+  fired_at timestamptz not null default now(),
+  resolved_at timestamptz null,
+  context jsonb not null default '{}'::jsonb
+);
+
+create index if not exists notification_alerts_fired_idx
+  on public.notification_alerts (fired_at desc);
+
+create index if not exists notification_alerts_open_type_idx
+  on public.notification_alerts (type, fired_at desc)
+  where resolved_at is null;
+
+comment on table public.notification_alerts is
+  'Notification metric alerts (type = alert key). resolved_at set when ops marks cleared.';
+
+alter table public.notification_alerts enable row level security;
+
+grant select, insert, update, delete on public.notification_alerts to service_role;

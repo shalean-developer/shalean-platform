@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { Briefcase, Building2, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Briefcase, Building2, Home, Info, MapPin, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
@@ -50,23 +50,28 @@ export function StepEntry() {
   const [addressBlurred, setAddressBlurred] = useState(false);
   const [entryContinueGate, setEntryContinueGate] = useState(false);
   const [trustSheetOpen, setTrustSheetOpen] = useState(false);
-  const [cityOptions, setCityOptions] = useState<string[]>([]);
+  const [addressHelpOpen, setAddressHelpOpen] = useState(false);
+  const addressHelpRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setEntryContinueGate(true);
   }, []);
 
   useEffect(() => {
-    void fetch("/api/cities")
-      .then((r) => r.json())
-      .then((j: { cities?: { name?: string | null }[] }) => {
-        const names = (j.cities ?? [])
-          .map((c) => (typeof c.name === "string" ? c.name.trim() : ""))
-          .filter((n) => n.length > 0);
-        setCityOptions(names);
-      })
-      .catch(() => {});
-  }, []);
+    if (!addressHelpOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!addressHelpRef.current?.contains(e.target as Node)) setAddressHelpOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAddressHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [addressHelpOpen]);
 
   useEffect(() => {
     setLocDraft(state.location);
@@ -142,46 +147,53 @@ export function StepEntry() {
           <p className="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.socialProof}</p>
         </div>
 
-        <ul
-          className="grid gap-2 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 text-sm text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-200 lg:gap-1.5 lg:p-4"
-          aria-label="Why book with Shalean"
-        >
-          {copy.trustBullets.map((line) => (
-            <li key={line} className="flex gap-2 leading-snug">
-              <span className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden>
-                ✓
-              </span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-
         <div className="space-y-1.5 max-lg:space-y-1.5 lg:space-y-2">
-          <label htmlFor="entry-location" className="text-xs font-medium text-zinc-800 max-lg:text-xs dark:text-zinc-200 lg:text-sm">
-            {copy.addressLabel}
-          </label>
-          <input
-            id="entry-location"
-            type="text"
-            list="entry-city-hints"
-            autoComplete="street-address"
-            placeholder={copy.addressPlaceholder}
-            value={locDraft}
-            onChange={(e) => setLocDraft(e.target.value.slice(0, 500))}
-            onBlur={() => {
-              setAddressBlurred(true);
-              commitLocation(locDraft);
-            }}
-            suppressHydrationWarning
-            className="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-primary/80 lg:h-14 lg:rounded-2xl lg:text-base lg:leading-normal"
-          />
-          {cityOptions.length > 0 ? (
-            <datalist id="entry-city-hints">
-              {cityOptions.slice(0, 80).map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
-          ) : null}
+          <div ref={addressHelpRef} className="relative flex flex-wrap items-center gap-1.5">
+            <label htmlFor="entry-location" className="text-xs font-medium text-zinc-800 max-lg:text-xs dark:text-zinc-200 lg:text-sm">
+              {copy.addressLabel}
+            </label>
+            <button
+              type="button"
+              onClick={() => setAddressHelpOpen((o) => !o)}
+              className={cn(
+                "inline-flex shrink-0 rounded-md p-0.5 text-zinc-400 outline-none transition hover:text-zinc-600 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:text-zinc-500 dark:hover:text-zinc-300",
+                addressHelpOpen && "text-blue-600 dark:text-blue-400",
+              )}
+              aria-expanded={addressHelpOpen}
+              aria-controls="entry-address-help"
+              aria-label="Why we need your full address"
+            >
+              <Info className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            {addressHelpOpen ? (
+              <div
+                id="entry-address-help"
+                role="tooltip"
+                className="absolute left-0 top-full z-20 mt-1 w-[min(100%,20rem)] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs leading-snug text-zinc-600 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                {copy.addressHelper}
+              </div>
+            ) : null}
+          </div>
+          <div className="relative">
+            <input
+              id="entry-location"
+              type="text"
+              autoComplete="street-address"
+              placeholder={copy.addressPlaceholder}
+              value={locDraft}
+              onChange={(e) => setLocDraft(e.target.value.slice(0, 500))}
+              onBlur={() => {
+                setAddressBlurred(true);
+                commitLocation(locDraft);
+              }}
+              suppressHydrationWarning
+              className="h-14 w-full cursor-text rounded-xl border border-gray-200 bg-white pl-4 pr-10 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-blue-400 dark:focus:ring-blue-950/40 lg:rounded-2xl lg:text-base lg:leading-normal"
+            />
+            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-zinc-400" aria-hidden>
+              <MapPin className="h-5 w-5" strokeWidth={2} />
+            </div>
+          </div>
           {addressEmpty ? (
             <p className="text-xs font-medium text-amber-800 dark:text-amber-400/90" role="status">
               {bookingCopy.errors.address}

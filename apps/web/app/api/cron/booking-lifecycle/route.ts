@@ -6,6 +6,7 @@ import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/process
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { completeCleanerReferralOnFirstJob, completeCustomerReferralForBooking } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +54,8 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       });
       continue;
     }
+
+    void notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
 
     const { error: insEv } = await admin.from("user_events").insert({
       user_id: uid,

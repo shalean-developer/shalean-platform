@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   const { data: cleaner, error } = await admin
     .from("cleaners")
-    .select("id, full_name, phone, phone_number, email, status, is_available, rating, jobs_completed, created_at")
+    .select("id, full_name, phone, phone_number, email, status, is_available, rating, jobs_completed, created_at, location")
     .eq("id", session.cleanerId)
     .maybeSingle();
 
@@ -54,7 +54,7 @@ export async function PATCH(request: Request) {
     .from("cleaners")
     .update({ is_available: body.is_available, status })
     .eq("id", session.cleanerId)
-    .select("id, full_name, phone, email, status, is_available, rating, jobs_completed, created_at")
+    .select("id, full_name, phone, phone_number, email, status, is_available, rating, jobs_completed, created_at, location")
     .maybeSingle();
 
   if (error) {

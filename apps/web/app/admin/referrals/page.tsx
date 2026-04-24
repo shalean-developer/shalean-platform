@@ -53,7 +53,7 @@ export default function AdminReferralsPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
       <section>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Referrals</h1>
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Referrals</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Track who referred who and rewards status.</p>
       </section>
 

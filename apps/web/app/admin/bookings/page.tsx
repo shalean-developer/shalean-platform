@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent, Fragment } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { persistLastOpsFilter, readLastOpsFilter } from "@/lib/admin/lastOpsFilter";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
+import { AdminAssignForm, type CleanerOption } from "@/components/admin/AdminAssignForm";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import BookingDetailsSheet from "@/components/admin/BookingDetailsSheet";
+import {
+  rowMatchesAttentionFilter,
+  sortRowsForAttentionQueue,
+  type AttentionQueueFilter,
+} from "@/lib/admin/opsSnapshot";
 
 type BookingRow = {
   id: string;
@@ -20,17 +27,19 @@ type BookingRow = {
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   status: string | null;
-  dispatch_status: "searching" | "offered" | "assigned" | "failed" | null;
+  dispatch_status: "searching" | "offered" | "assigned" | "failed" | "no_cleaner" | "unassignable" | null;
   surge_multiplier?: number | null;
   surge_reason?: string | null;
   user_id: string | null;
   cleaner_id: string | null;
+  became_pending_at?: string | null;
   assigned_at: string | null;
   en_route_at: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
   paystack_reference: string;
+  duration_minutes?: number | null;
 };
 
 function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], status: string | null): string {
@@ -39,39 +48,15 @@ function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], statu
   if (ds === "offered") return "Dispatching to 3 cleaners...";
   if (ds === "assigned") return "Assigned";
   if (ds === "failed") return "Failed";
+  if (ds === "no_cleaner") return "No cleaner (area)";
+  if (ds === "unassignable") return "Unassignable — manual dispatch";
   const s = String(status ?? "").toLowerCase();
   if (s === "assigned") return "Assigned";
   return status ?? "—";
 }
 
-type CleanerOption = {
-  id: string;
-  full_name: string;
-  status: string | null;
-  is_available?: boolean | null;
-  rating?: number | null;
-  jobs_completed?: number | null;
-  distance_km?: number | null;
-};
-
 type ToastState = { kind: "success" | "error" | "info"; text: string } | null;
 type CityOption = { id: string; name: string; is_active: boolean };
-
-function getBestCleaner(_booking: BookingRow, cleaners: CleanerOption[]): CleanerOption | null {
-  const available = cleaners.filter(
-    (c) => c.is_available === true || String(c.status ?? "").toLowerCase() === "available",
-  );
-  if (available.length === 0) return null;
-  const ranked = [...available].sort((a, b) => {
-    const distanceA = typeof a.distance_km === "number" ? a.distance_km : Number.POSITIVE_INFINITY;
-    const distanceB = typeof b.distance_km === "number" ? b.distance_km : Number.POSITIVE_INFINITY;
-    if (distanceA !== distanceB) return distanceA - distanceB;
-    const ratingA = typeof a.rating === "number" ? a.rating : -1;
-    const ratingB = typeof b.rating === "number" ? b.rating : -1;
-    return ratingB - ratingA;
-  });
-  return ranked[0] ?? null;
-}
 
 function cleanerDisplayName(cleanerId: string | null, cleaners: CleanerOption[]): string | null {
   if (!cleanerId) return null;
@@ -106,6 +91,7 @@ type Metrics = {
   demandOpenBookings?: number;
   supplyAvailableCleaners?: number;
   liveSurgeMultiplier?: number;
+  slaBreachMinutes?: number;
 };
 
 type AdminRouteStop = {
@@ -168,6 +154,26 @@ function startsInClass(mins: number | null): string {
   return "text-zinc-700 dark:text-zinc-300";
 }
 
+function attentionKeyFromAction(
+  f:
+    | "all"
+    | "unassignable"
+    | "sla"
+    | "unassigned"
+    | "payment_failed"
+    | "starting_soon_without_cleaner",
+): AttentionQueueFilter | null {
+  if (f === "unassignable") return "unassignable";
+  if (f === "sla") return "sla";
+  if (f === "unassigned") return "unassigned";
+  if (f === "starting_soon_without_cleaner") return "starting-soon";
+  return null;
+}
+
+function attentionUrlValue(key: AttentionQueueFilter): string {
+  return key === "starting-soon" ? "starting-soon" : key;
+}
+
 function adminRowFlags(r: BookingRow, today: string) {
   const cents = r.amount_paid_cents ?? 0;
   const tzar = r.total_paid_zar ?? 0;
@@ -211,6 +217,10 @@ function VipDistributionCard({
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">VIP tiers</p>
+      <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+        Live from <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">user_profiles.tier</code> — all
+        profiles, not bookings. Clearing bookings does not change these counts.
+      </p>
       <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
         {total > 0
           ? entries.map((e) => (
@@ -235,156 +245,25 @@ function VipDistributionCard({
   );
 }
 
-function AdminAssignForm({
-  booking,
-  bookingId,
-  recommendedCleaner,
-  cleaners,
-  onDone,
-  onError,
-}: {
-  booking: BookingRow;
-  bookingId: string;
-  recommendedCleaner: CleanerOption | null;
-  cleaners: CleanerOption[];
-  onDone: (args: { cleanerId: string }) => void;
-  onError: (message: string) => void;
-}) {
-  const [cleanerId, setCleanerId] = useState("");
-  const [force, setForce] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!cleanerId.trim()) {
-      setMsg("Pick a cleaner.");
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    const sb = getSupabaseBrowser();
-    const { data: sessionData } = await sb?.auth.getSession() ?? { data: { session: null } };
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setMsg("Session expired.");
-      setBusy(false);
-      return;
-    }
-    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ cleanerId: cleanerId.trim(), force }),
-    });
-    const j = (await res.json()) as { error?: string };
-    if (!res.ok) {
-      const err = j.error ?? "Failed to assign cleaner";
-      setMsg(err);
-      onError(err);
-      setBusy(false);
-      return;
-    }
-    onDone({ cleanerId: cleanerId.trim() });
-    setBusy(false);
-  }
-
-  async function autoAssign() {
-    const best = getBestCleaner(booking, cleaners);
-    if (!best) {
-      setMsg("No available cleaners.");
-      return;
-    }
-    setCleanerId(best.id);
-    setBusy(true);
-    setMsg(null);
-    const sb = getSupabaseBrowser();
-    const { data: sessionData } = await sb?.auth.getSession() ?? { data: { session: null } };
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setMsg("Session expired.");
-      setBusy(false);
-      return;
-    }
-    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ cleanerId: best.id, force }),
-    });
-    const j = (await res.json()) as { error?: string };
-    if (!res.ok) {
-      const err = j.error ?? "Failed to assign cleaner";
-      setMsg(err);
-      onError(err);
-      setBusy(false);
-      return;
-    }
-    onDone({ cleanerId: best.id });
-    setBusy(false);
-  }
-
-  return (
-    <form onSubmit={submit} className="mt-2 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900/80">
-      {recommendedCleaner ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
-          <p className="font-semibold">Recommended cleaner</p>
-          <p>
-            {recommendedCleaner.full_name} · {typeof recommendedCleaner.rating === "number" ? `${recommendedCleaner.rating.toFixed(1)}★` : "—"}
-            {" · "}
-            {typeof recommendedCleaner.distance_km === "number" ? `${recommendedCleaner.distance_km.toFixed(1)} km` : "distance n/a"}
-          </p>
-        </div>
-      ) : null}
-      <select
-        value={cleanerId}
-        onChange={(e) => setCleanerId(e.target.value)}
-        className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-600 dark:bg-zinc-900"
-      >
-        <option value="">Select cleaner…</option>
-        {cleaners
-          .filter((c) => c.is_available === true || String(c.status ?? "").toLowerCase() === "available")
-          .map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.full_name} · {typeof c.rating === "number" ? `${c.rating.toFixed(1)}★` : "—"} · jobs {c.jobs_completed ?? 0} · Available
-          </option>
-          ))}
-      </select>
-      <label className="flex items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-400">
-        <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
-        Override availability
-      </label>
-      <button
-        type="submit"
-        disabled={busy}
-        className="w-full rounded-md bg-emerald-600 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-      >
-        {busy ? "Saving…" : "Apply assignment"}
-      </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void autoAssign()}
-        className="w-full rounded-md border border-zinc-300 bg-white py-1.5 text-xs font-semibold text-zinc-800 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
-      >
-        {busy ? "Working…" : "Auto Assign"}
-      </button>
-      {msg ? <p className="text-[11px] text-red-600 dark:text-red-400">{msg}</p> : null}
-    </form>
-  );
-}
-
 export default function AdminBookingsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [filter, setFilter] = useState<"all" | "today" | "upcoming" | "completed">("all");
   const [actionFilter, setActionFilter] = useState<
-    "all" | "unassigned" | "payment_failed" | "starting_soon_without_cleaner"
+    | "all"
+    | "unassignable"
+    | "sla"
+    | "unassigned"
+    | "payment_failed"
+    | "starting_soon_without_cleaner"
   >("all");
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [failedJobs, setFailedJobs] = useState<FailedJob[]>([]);
   const [cleaners, setCleaners] = useState<CleanerOption[]>([]);
   const [assignBookingId, setAssignBookingId] = useState<string | null>(null);
+  const openAssignHandledRef = useRef<string | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -398,6 +277,7 @@ export default function AdminBookingsPage() {
   const [bookingStatusFilter, setBookingStatusFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [clearingFailedJobs, setClearingFailedJobs] = useState(false);
 
   const today = useMemo(() => todayYmdJohannesburg(), []);
 
@@ -414,6 +294,63 @@ export default function AdminBookingsPage() {
       }),
     [cleaners],
   );
+
+  const setOpsAttentionFilter = useCallback(
+    (
+      next:
+        | "all"
+        | "unassignable"
+        | "sla"
+        | "unassigned"
+        | "payment_failed"
+        | "starting_soon_without_cleaner",
+    ) => {
+      setActionFilter(next);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("openAssign");
+      const key = attentionKeyFromAction(next);
+      const cur = params.get("filter");
+      const opsValues = new Set(["unassignable", "sla", "unassigned", "starting-soon"]);
+      if (key) {
+        const fv = attentionUrlValue(key);
+        params.set("filter", fv);
+        persistLastOpsFilter(fv);
+      } else if (cur && opsValues.has(cur)) {
+        params.delete("filter");
+        persistLastOpsFilter(null);
+      }
+      const q = params.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
+  /** When URL has no `filter`, re-apply last ops queue filter (other query params preserved). */
+  useEffect(() => {
+    if (searchParams.has("filter")) return;
+    const stored = readLastOpsFilter();
+    if (!stored) return;
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("filter", stored);
+    const q = p.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname);
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    const f = searchParams.get("filter");
+    if (!f) return;
+    const ops = new Set(["unassignable", "sla", "unassigned", "starting-soon"]);
+    const date = new Set(["today", "upcoming", "completed", "all"]);
+    if (ops.has(f)) {
+      if (f === "starting-soon") setActionFilter("starting_soon_without_cleaner");
+      else setActionFilter(f as "unassignable" | "sla" | "unassigned");
+      persistLastOpsFilter(f);
+      return;
+    }
+    if (date.has(f)) {
+      setFilter(f as "all" | "today" | "upcoming" | "completed");
+    }
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -515,6 +452,49 @@ export default function AdminBookingsPage() {
 
     setLoading(false);
   }, [filter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
+
+  const clearFailedInsertQueue = useCallback(async () => {
+    const sb = getSupabaseBrowser();
+    if (!sb) {
+      setToast({ kind: "error", text: "Supabase is not configured." });
+      return;
+    }
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setToast({ kind: "error", text: "Please sign in again." });
+      return;
+    }
+    setClearingFailedJobs(true);
+    try {
+      const res = await fetch("/api/admin/cleanup-logs", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ targets: ["failed_jobs_booking_insert"] }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        deleted?: { failed_jobs_booking_insert?: number };
+        errors?: Record<string, string>;
+      };
+      if (!res.ok) {
+        setToast({ kind: "error", text: json.error ?? "Could not clear failed insert queue." });
+        return;
+      }
+      if (json.errors?.failed_jobs_booking_insert) {
+        setToast({ kind: "error", text: json.errors.failed_jobs_booking_insert });
+        return;
+      }
+      const n = json.deleted?.failed_jobs_booking_insert ?? 0;
+      setToast({ kind: "success", text: n > 0 ? `Removed ${n} failed insert row(s).` : "Queue was already empty." });
+      await load();
+    } finally {
+      setClearingFailedJobs(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -638,37 +618,74 @@ export default function AdminBookingsPage() {
   };
 
   const actionRequiredCounts = useMemo(() => {
+    const slaM = metrics?.slaBreachMinutes ?? 10;
+    const now = Date.now();
+    let unassignable = 0;
+    let sla = 0;
     let unassigned = 0;
     let failedPayments = 0;
     let startingSoonWithoutCleaner = 0;
     for (const r of rows) {
-      const st = (r.status ?? "").toLowerCase();
-      const closed = st === "completed" || st === "cancelled" || st === "failed";
-      const noCleaner = !r.cleaner_id;
-      const startsIn = startsInMinutes(r.date, r.time);
+      if (rowMatchesAttentionFilter(r, "unassignable", now, slaM)) unassignable++;
+      if (rowMatchesAttentionFilter(r, "sla", now, slaM)) sla++;
+      if (rowMatchesAttentionFilter(r, "unassigned", now, slaM)) unassigned++;
+      if (rowMatchesAttentionFilter(r, "starting-soon", now, slaM)) startingSoonWithoutCleaner++;
       const f = adminRowFlags(r, today);
-      if (!closed && noCleaner) unassigned++;
       if (f.paymentMissing) failedPayments++;
-      if (!closed && noCleaner && startsIn != null && startsIn >= 0 && startsIn < 120) startingSoonWithoutCleaner++;
     }
-    return { unassigned, failedPayments, startingSoonWithoutCleaner };
-  }, [rows, today]);
+    return { unassignable, sla, unassigned, failedPayments, startingSoonWithoutCleaner };
+  }, [rows, today, metrics?.slaBreachMinutes]);
 
-  const visibleRows = useMemo(
-    () =>
-      rows.filter((r) => {
-        if (actionFilter === "all") return true;
-        const st = (r.status ?? "").toLowerCase();
-        const closed = st === "completed" || st === "cancelled" || st === "failed";
-        const noCleaner = !r.cleaner_id;
-        const startsIn = startsInMinutes(r.date, r.time);
-        const f = adminRowFlags(r, today);
-        if (actionFilter === "unassigned") return !closed && noCleaner;
-        if (actionFilter === "payment_failed") return f.paymentMissing;
-        return !closed && noCleaner && startsIn != null && startsIn >= 0 && startsIn < 120;
-      }),
-    [rows, actionFilter, today],
-  );
+  const visibleRows = useMemo(() => {
+    const slaM = metrics?.slaBreachMinutes ?? 10;
+    const now = Date.now();
+    const key = attentionKeyFromAction(actionFilter);
+    if (key) {
+      const filtered = rows.filter((r) => rowMatchesAttentionFilter(r, key, now, slaM));
+      return sortRowsForAttentionQueue(filtered, key, now, slaM);
+    }
+    if (actionFilter === "payment_failed") {
+      return rows.filter((r) => adminRowFlags(r, today).paymentMissing);
+    }
+    return rows;
+  }, [rows, actionFilter, today, metrics?.slaBreachMinutes]);
+
+  const firstAttentionRowId = useMemo(() => {
+    if (!attentionKeyFromAction(actionFilter)) return null;
+    return visibleRows[0]?.id ?? null;
+  }, [visibleRows, actionFilter]);
+
+  useEffect(() => {
+    if (searchParams.get("openAssign") !== "1") {
+      openAssignHandledRef.current = null;
+      return;
+    }
+    if (loading) return;
+
+    const stripOpenAssign = () => {
+      const p = new URLSearchParams(searchParams.toString());
+      if (!p.has("openAssign")) return;
+      p.delete("openAssign");
+      const q = p.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname);
+    };
+
+    if (!firstAttentionRowId) {
+      stripOpenAssign();
+      return;
+    }
+
+    const dedupeKey = `${firstAttentionRowId}:${searchParams.get("filter") ?? ""}`;
+    if (openAssignHandledRef.current === dedupeKey) return;
+    openAssignHandledRef.current = dedupeKey;
+
+    emitAdminToast("Opening assign…", "info");
+    setAssignBookingId(firstAttentionRowId);
+    stripOpenAssign();
+    window.setTimeout(() => {
+      emitAdminToast("Queue ready — pick a cleaner, then Apply", "success");
+    }, 380);
+  }, [loading, searchParams, firstAttentionRowId, pathname, router]);
 
   if (loading && !metrics) {
     return (
@@ -706,20 +723,8 @@ export default function AdminBookingsPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-zinc-100 dark:bg-zinc-950">
-      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Admin</p>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Bookings</h1>
-          </div>
-          <Link href="/" className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            Home
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
+    <div>
+      <main className="mx-auto max-w-6xl">
         {metrics ? (
           <>
             <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -792,14 +797,23 @@ export default function AdminBookingsPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
           <span>
             <strong>{metrics?.missingUserIdCount ?? 0}</strong> bookings missing user link ·{" "}
-            <strong>{metrics?.failedJobsCount ?? failedJobs.length}</strong> failed job(s) in queue
+            <strong>{metrics?.failedJobsCount ?? failedJobs.length}</strong> Paystack insert retry job(s) (
+            <code className="rounded bg-amber-100/80 px-1 font-mono text-[11px] dark:bg-amber-900/50">failed_jobs</code>)
           </span>
         </div>
 
         {failedJobs.length > 0 ? (
           <div className="mb-6 overflow-hidden rounded-xl border border-red-200 bg-white dark:border-red-900/50 dark:bg-zinc-900">
-            <div className="border-b border-red-100 bg-red-50 px-4 py-2 dark:border-red-900/40 dark:bg-red-950/50">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-red-100 bg-red-50 px-4 py-2 dark:border-red-900/40 dark:bg-red-950/50">
               <h2 className="text-sm font-semibold text-red-900 dark:text-red-100">Failed booking inserts</h2>
+              <button
+                type="button"
+                onClick={() => void clearFailedInsertQueue()}
+                disabled={clearingFailedJobs}
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-900 shadow-sm hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
+              >
+                {clearingFailedJobs ? "Clearing…" : "Clear queue"}
+              </button>
             </div>
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {failedJobs.map((j) => (
@@ -817,34 +831,48 @@ export default function AdminBookingsPage() {
             {actionFilter !== "all" ? (
               <button
                 type="button"
-                onClick={() => setActionFilter("all")}
+                onClick={() => setOpsAttentionFilter("all")}
                 className="text-xs font-medium text-emerald-700 dark:text-emerald-400"
               >
                 Clear filter
               </button>
             ) : null}
           </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <ActionCard
-              title="Unassigned bookings"
+              title="Unassignable"
+              count={actionRequiredCounts.unassignable}
+              tone="red"
+              active={actionFilter === "unassignable"}
+              onClick={() => setOpsAttentionFilter("unassignable")}
+            />
+            <ActionCard
+              title="SLA breach"
+              count={actionRequiredCounts.sla}
+              tone="red"
+              active={actionFilter === "sla"}
+              onClick={() => setOpsAttentionFilter("sla")}
+            />
+            <ActionCard
+              title="Unassigned (paid)"
               count={actionRequiredCounts.unassigned}
               tone="amber"
               active={actionFilter === "unassigned"}
-              onClick={() => setActionFilter("unassigned")}
-            />
-            <ActionCard
-              title="Failed payments"
-              count={actionRequiredCounts.failedPayments}
-              tone="red"
-              active={actionFilter === "payment_failed"}
-              onClick={() => setActionFilter("payment_failed")}
+              onClick={() => setOpsAttentionFilter("unassigned")}
             />
             <ActionCard
               title="Starts < 2h, no cleaner"
               count={actionRequiredCounts.startingSoonWithoutCleaner}
               tone="orange"
               active={actionFilter === "starting_soon_without_cleaner"}
-              onClick={() => setActionFilter("starting_soon_without_cleaner")}
+              onClick={() => setOpsAttentionFilter("starting_soon_without_cleaner")}
+            />
+            <ActionCard
+              title="Failed payments"
+              count={actionRequiredCounts.failedPayments}
+              tone="amber"
+              active={actionFilter === "payment_failed"}
+              onClick={() => setOpsAttentionFilter("payment_failed")}
             />
           </div>
         </div>
@@ -1083,9 +1111,8 @@ export default function AdminBookingsPage() {
                             <AdminAssignForm
                               booking={r}
                               bookingId={r.id}
-                              recommendedCleaner={getBestCleaner(r, sortedCleaners)}
                               cleaners={cleaners}
-                              onDone={({ cleanerId }) => {
+                              onDone={({ cleanerId: _assignedCleanerId, assignAttempts }) => {
                                 setRows((cur) =>
                                   cur.map((row) =>
                                     row.id === r.id
@@ -1100,10 +1127,15 @@ export default function AdminBookingsPage() {
                                   ),
                                 );
                                 setAssignBookingId(null);
-                                setToast({ kind: "success", text: "Offer sent to cleaner" });
+                                emitAdminToast(
+                                  typeof assignAttempts === "number" && assignAttempts > 1
+                                    ? `Offer sent ✓ (after ${assignAttempts} tries)`
+                                    : "Offer sent ✓",
+                                  "success",
+                                );
                               }}
                               onError={(message) => {
-                                setToast({ kind: "error", text: message || "Failed to assign cleaner" });
+                                emitAdminToast(message || "Failed to assign cleaner", "error");
                               }}
                             />
                           </div>
@@ -1178,33 +1210,146 @@ function ActionCard({
   );
 }
 
+type BookingFunnelApi = {
+  since?: string;
+  sessions?: number;
+  /** Sessions with at least one funnel `view` (matches other steps; `sessions` includes errors/next/exit). */
+  sessionsWithFunnelView?: number;
+  reachedPaymentSessions?: number;
+  viewsByStep?: { step: string; views: number }[];
+  message?: string;
+  error?: string;
+};
+
 function BookingFunnelCard() {
-  const steps = [
-    { label: "Started", count: 320 },
-    { label: "Price viewed", count: 274 },
-    { label: "Time selected", count: 211 },
-    { label: "Paid", count: 168 },
-  ];
-  const base = steps[0].count || 1;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [funnel, setFunnel] = useState<BookingFunnelApi | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  const loadFunnel = useCallback(async () => {
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      setError("Sign in to load funnel.");
+      setFunnel(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const res = await fetch("/api/admin/booking-funnel", { headers: { Authorization: `Bearer ${token}` } });
+    const json = (await res.json()) as BookingFunnelApi & { error?: string };
+    if (!res.ok) {
+      setError(json.error ?? "Could not load funnel.");
+      setFunnel(null);
+    } else {
+      setFunnel(json);
+      if (json.message) setError(json.message);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadFunnel();
+  }, [loadFunnel]);
+
+  const steps = useMemo(() => {
+    if (!funnel || funnel.message) return [];
+    const v = new Map((funnel.viewsByStep ?? []).map((r) => [r.step, r.views]));
+    const started =
+      typeof funnel.sessionsWithFunnelView === "number"
+        ? funnel.sessionsWithFunnelView
+        : typeof funnel.sessions === "number"
+          ? funnel.sessions
+          : 0;
+    return [
+      { label: "Started", count: started },
+      { label: "Price viewed", count: v.get("quote") ?? 0 },
+      { label: "Time selected", count: v.get("datetime") ?? 0 },
+      { label: "Paid", count: typeof funnel.reachedPaymentSessions === "number" ? funnel.reachedPaymentSessions : 0 },
+    ];
+  }, [funnel]);
+
+  const clearFunnelAnalytics = useCallback(async () => {
+    if (!window.confirm("Delete all rows in booking_events? Funnel counts will reset (last 30 days in the API).")) {
+      return;
+    }
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      emitAdminToast("Sign in again.", "error");
+      return;
+    }
+    setClearing(true);
+    try {
+      const res = await fetch("/api/admin/cleanup-logs", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ targets: ["booking_events"] }),
+      });
+      const json = (await res.json()) as { error?: string; deleted?: { booking_events?: number }; errors?: Record<string, string> };
+      if (!res.ok) {
+        emitAdminToast(json.error ?? "Cleanup failed.", "error");
+        return;
+      }
+      if (json.errors?.booking_events) {
+        emitAdminToast(json.errors.booking_events, "error");
+        return;
+      }
+      emitAdminToast(`Removed ${json.deleted?.booking_events ?? 0} funnel event row(s).`, "success");
+      await loadFunnel();
+    } finally {
+      setClearing(false);
+    }
+  }, [loadFunnel]);
+
+  const base = steps[0]?.count ? Math.max(steps[0].count, 1) : 1;
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Booking funnel</p>
-      <ul className="mt-3 space-y-2">
-        {steps.map((s, idx) => {
-          const conversion = Math.round((s.count / base) * 100);
-          return (
-            <li key={s.label} className="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  {idx + 1}. {s.label}
-                </p>
-                <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{s.count}</p>
-              </div>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{conversion}% of started</p>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Booking funnel</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            From <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">booking_events</code> · ~30 days ·
+            Started = sessions with a funnel <span className="font-medium">view</span> (entry→payment), same basis as
+            the steps below.
+          </p>
+        </div>
+        {!loading && !error && funnel && !funnel.message ? (
+          <button
+            type="button"
+            onClick={() => void clearFunnelAnalytics()}
+            disabled={clearing}
+            className="shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            {clearing ? "…" : "Reset counts"}
+          </button>
+        ) : null}
+      </div>
+      {loading ? (
+        <div className="mt-3 h-32 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+      ) : error ? (
+        <p className="mt-3 text-xs text-amber-800 dark:text-amber-200">{error}</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {steps.map((s, idx) => {
+            const conversion = Math.round((s.count / base) * 100);
+            return (
+              <li key={s.label} className="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    {idx + 1}. {s.label}
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{s.count}</p>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{conversion}% of started</p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

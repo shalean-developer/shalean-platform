@@ -1,4 +1,4 @@
-import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import {
@@ -136,7 +136,7 @@ export async function escalateBookingIfAckTimeout(
     return { ok: true, action: "reassigned", detail: "cleared_auto_dispatch_off" };
   }
 
-  const r = await assignCleanerToBooking(admin, bookingId);
+  const r = await ensureBookingAssignment(admin, bookingId, { source: "escalate_ack_timeout" });
   if (!r.ok) {
     if (r.error === "no_candidate") {
       void logSystemEvent({

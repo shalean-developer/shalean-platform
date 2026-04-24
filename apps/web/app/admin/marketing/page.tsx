@@ -143,7 +143,7 @@ export default function AdminMarketingPage() {
     <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
       <section className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Marketing Dashboard</h1>
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Marketing Dashboard</h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Track ads performance, conversion funnel, and ROI.</p>
         </div>
         <div className="flex gap-2">

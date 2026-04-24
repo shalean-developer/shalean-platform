@@ -245,3 +245,48 @@ export async function sendCleanerApprovedWhatsApp(params: {
     message,
   });
 }
+
+/**
+ * WhatsApp text to a cleaner phone (Meta Cloud API or dev log). Returns whether Meta send succeeded;
+ * missing phone / dev-mode log counts as ok=false with reason for SMS fallback.
+ */
+export async function trySendCleanerWhatsAppMessage(params: {
+  cleanerPhone: string;
+  message: string;
+  source: string;
+  context: Record<string, unknown>;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const phone = normalizePhone(params.cleanerPhone);
+  if (!phone) {
+    return { ok: false, reason: "missing_phone" };
+  }
+  const devMode = process.env.WHATSAPP_DEV_MODE === "true" || !process.env.WHATSAPP_API_TOKEN;
+  if (devMode) {
+    await sendWhatsAppText({
+      cleanerPhone: params.cleanerPhone,
+      source: params.source,
+      context: params.context,
+      message: params.message,
+    });
+    return { ok: true };
+  }
+  try {
+    await sendViaMetaWhatsApp({ phone, message: params.message });
+    await logSystemEvent({
+      level: "info",
+      source: `${params.source}_sent`,
+      message: "WhatsApp message sent",
+      context: { to: phone, ...params.context },
+    });
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await logSystemEvent({
+      level: "warn",
+      source: `${params.source}_failed`,
+      message: msg,
+      context: { to: phone, ...params.context },
+    });
+    return { ok: false, reason: msg };
+  }
+}

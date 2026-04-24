@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCustomerBookingCancelled } from "@/lib/notifications/customerUserNotifications";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const { data: row, error: fetchErr } = await admin
     .from("bookings")
-    .select("id, user_id, status, started_at, service, date, time")
+    .select("id, user_id, status, started_at, service, date, time, customer_email")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -61,6 +62,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (upErr) {
     return NextResponse.json({ error: upErr.message }, { status: 500 });
   }
+
+  await admin
+    .from("booking_lifecycle_jobs")
+    .update({ status: "cancelled", last_error: null })
+    .eq("booking_id", bookingId)
+    .is("sent_at", null);
+
+  const custEmail = String((row as { customer_email?: string | null }).customer_email ?? "").trim();
+  void notifyBookingEvent({
+    type: "cancelled",
+    supabase: admin,
+    bookingId,
+    customerEmail: custEmail,
+    serviceLabel: (row as { service?: string | null }).service ?? null,
+    dateYmd: (row as { date?: string | null }).date ?? null,
+    timeHm: (row as { time?: string | null }).time ?? null,
+  });
 
   const uid = String((row as { user_id?: string }).user_id ?? "");
   if (uid) {

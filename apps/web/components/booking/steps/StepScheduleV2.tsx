@@ -30,8 +30,9 @@ const AVAILABILITY_SLOT_CACHE_TTL_MS = 50_000;
 const availabilitySlotCache = new Map<string, { slots: RawAvailabilitySlot[]; at: number }>();
 
 const INITIAL_VISIBLE_SLOTS = 5;
+/** Must match `/api/booking/time-slots` (startHour 7, endHour 18, step 30). Was 12:30 — hid all afternoon slots. */
 const SLOT_START_MIN = 7 * 60;
-const SLOT_END_MIN = 12 * 60 + 30;
+const SLOT_END_MIN = 18 * 60;
 
 type StepScheduleProps = {
   onNext: () => void;
@@ -79,6 +80,14 @@ function dateChipLabel(ymd: string): { dow: string; day: string } {
 function formatDurationLine(hours: number): string {
   const h = hours % 1 === 0 ? String(hours) : hours.toFixed(1).replace(/\.0$/, "");
   return `≈ ${h} hrs`;
+}
+
+function formatScheduleDateHint(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return "";
+  const dt = new Date(y, m - 1, d);
+  const label = dt.toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "short" });
+  return `${label} — pick a time`;
 }
 
 export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
@@ -142,6 +151,8 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     if (canonicalDurationHours != null) return formatDurationLine(canonicalDurationHours);
     return "";
   }, [canonicalDurationHours]);
+
+  const scheduleDateHint = useMemo(() => formatScheduleDateHint(selectedDate), [selectedDate]);
 
   useEffect(() => {
     setShowAllTimes(false);
@@ -435,6 +446,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       summaryState={summaryState ?? undefined}
       summaryDesktopOnly
       suppressEstimateUntilLocked
+      scheduleDateHint={scheduleDateHint}
       canContinue={canContinue}
       onContinue={onNext}
       continueLabel={continueLabel}

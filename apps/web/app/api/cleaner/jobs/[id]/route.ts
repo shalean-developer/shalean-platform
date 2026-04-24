@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -9,7 +10,36 @@ import { reportOperationalIssue } from "@/lib/logging/systemLog";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const BOOKING_DETAIL_SELECT =
+  "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, cleaner_payout_cents, payout_id";
+
 type Action = "accept" | "reject" | "en_route" | "start" | "complete";
+
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id: bookingId } = await ctx.params;
+  if (!bookingId) {
+    return NextResponse.json({ error: "Missing booking id." }, { status: 400 });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+  const session = await resolveCleanerIdFromRequest(request, admin);
+  if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
+
+  const { data: row, error } = await admin
+    .from("bookings")
+    .select(BOOKING_DETAIL_SELECT)
+    .eq("id", bookingId)
+    .eq("cleaner_id", session.cleanerId)
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!row) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+
+  return NextResponse.json({ job: row });
+}
 
 export async function POST(
   request: Request,
@@ -91,7 +121,7 @@ export async function POST(
 
     const auto = process.env.AUTO_DISPATCH_CLEANERS !== "false";
     if (auto) {
-      const r = await assignCleanerToBooking(admin, bookingId);
+      const r = await ensureBookingAssignment(admin, bookingId, { source: "cleaner_job_reject" });
       if (r.ok) {
         await notifyCleanerAssignedBooking(admin, bookingId, r.cleanerId);
       } else {
@@ -137,6 +167,8 @@ export async function POST(
       .eq("id", bookingId);
 
     if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+
+    void notifyBookingEvent({ type: "completed", supabase: admin, bookingId });
 
     const { data: cj } = await admin.from("cleaners").select("jobs_completed").eq("id", cleanerId).maybeSingle();
     const prev = cj && typeof cj === "object" ? Number((cj as { jobs_completed?: number }).jobs_completed ?? 0) : 0;

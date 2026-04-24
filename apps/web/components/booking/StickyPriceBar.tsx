@@ -1,12 +1,21 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { bookingCopy } from "@/lib/booking/copy";
 import { cn } from "@/lib/utils";
+
+export type StickyPlanPriceBreakdown = {
+  baseZar: number;
+  discountedZar: number;
+  planLabel: string;
+};
 
 type StickyPriceBarProps = {
   totalZar: number;
   /** When set, replaces the formatted `R …` line (e.g. before a slot is locked). */
   amountDisplayOverride?: string | null;
+  /** List + plan preview (details step); canonical base stays visible. */
+  planPriceBreakdown?: StickyPlanPriceBreakdown | null;
   /** Shown above the amount (defaults to `bookingCopy.stickyBar.total`). */
   totalCaption?: string;
   /** Mobile sticky primary action (defaults to `bookingCopy.stickyBar.cta`). */
@@ -23,6 +32,8 @@ type StickyPriceBarProps = {
   onAmountClick?: () => void;
   /** When false, caption is not forced uppercase (e.g. “From”). */
   captionUppercase?: boolean;
+  /** Renders before the primary CTA column (e.g. back control). */
+  ctaStartSlot?: ReactNode;
 };
 
 export function StickyPriceBar({
@@ -38,8 +49,26 @@ export function StickyPriceBar({
   variant = "elevated",
   onAmountClick,
   captionUppercase = true,
+  ctaStartSlot,
+  planPriceBreakdown = null,
 }: StickyPriceBarProps) {
   const amountLine = amountDisplayOverride ?? `R ${totalZar.toLocaleString("en-ZA")}`;
+
+  const stackedPlanAmount =
+    planPriceBreakdown && !amountDisplayOverride ? (
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium tabular-nums text-zinc-600 dark:text-zinc-400">
+          R {planPriceBreakdown.baseZar.toLocaleString("en-ZA")}{" "}
+          <span className="font-normal text-zinc-500 dark:text-zinc-500">per visit</span>
+        </p>
+        <p className="mt-0.5 truncate text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+          R {planPriceBreakdown.discountedZar.toLocaleString("en-ZA")}{" "}
+          <span className="text-[11px] font-semibold leading-tight text-emerald-800 dark:text-emerald-300/95">
+            with {planPriceBreakdown.planLabel}
+          </span>
+        </p>
+      </div>
+    ) : null;
 
   const priceBlock = (
     <>
@@ -52,7 +81,11 @@ export function StickyPriceBar({
       >
         {totalCaption}
       </p>
-      <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
+      {stackedPlanAmount ? (
+        stackedPlanAmount
+      ) : (
+        <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
+      )}
       {subline && variant === "elevated" ? (
         <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{subline}</p>
       ) : null}
@@ -97,13 +130,16 @@ export function StickyPriceBar({
         ) : (
           <div className="min-w-0 flex-1">{priceBlock}</div>
         )}
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {ctaUrgency ? (
-            <p className="max-w-[9.5rem] text-right text-[10px] font-semibold leading-tight text-amber-800 dark:text-amber-300/95">
-              {ctaUrgency}
-            </p>
-          ) : null}
-          {ctaButton}
+        <div className="flex shrink-0 items-center gap-2">
+          {ctaStartSlot}
+          <div className="flex flex-col items-end gap-1">
+            {ctaUrgency ? (
+              <p className="max-w-[9.5rem] text-right text-[10px] font-semibold leading-tight text-amber-800 dark:text-amber-300/95">
+                {ctaUrgency}
+              </p>
+            ) : null}
+            {ctaButton}
+          </div>
         </div>
       </div>
     );
@@ -115,18 +151,25 @@ export function StickyPriceBar({
         <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           {totalCaption}
         </p>
-        <p className="truncate text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
+        {stackedPlanAmount ? (
+          stackedPlanAmount
+        ) : (
+          <p className="truncate text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
+        )}
         {subline ? (
           <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{subline}</p>
         ) : null}
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        {ctaUrgency ? (
-          <p className="max-w-[9.5rem] text-right text-[10px] font-semibold leading-tight text-amber-800 dark:text-amber-300/95">
-            {ctaUrgency}
-          </p>
-        ) : null}
-        {ctaButton}
+      <div className="flex shrink-0 items-center gap-2">
+        {ctaStartSlot}
+        <div className="flex flex-col items-end gap-1">
+          {ctaUrgency ? (
+            <p className="max-w-[9.5rem] text-right text-[10px] font-semibold leading-tight text-amber-800 dark:text-amber-300/95">
+              {ctaUrgency}
+            </p>
+          ) : null}
+          {ctaButton}
+        </div>
       </div>
     </div>
   );

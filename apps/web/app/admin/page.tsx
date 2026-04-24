@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { AttentionRequiredPanel } from "@/components/admin/AttentionRequiredPanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type DashboardStats = {
@@ -56,15 +57,34 @@ export default function AdminDashboardPage() {
 
   return (
     <main className="mx-auto max-w-6xl space-y-8">
+      <AttentionRequiredPanel />
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Dashboard</h1>
+        <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Overview</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Revenue and bookings from Supabase. Conversion uses <span className="font-medium">booking_events</span> (quote
           views → checkout) over the last 30 days.
         </p>
         <p className="mt-3 text-xs text-zinc-500">
+          <Link href="/admin/ops/sla-breaches" className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
+            SLA breach queue
+          </Link>
+          {" · "}
+          <Link
+            href="/admin/notifications"
+            className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          >
+            Notification monitoring
+          </Link>
+          {" · "}
+          <Link
+            href="/admin/ops/cleaner-performance"
+            className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          >
+            Cleaner performance
+          </Link>
+          {" · "}
           <Link href="/admin/operations" className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
-            Open operations analytics
+            Operations analytics
           </Link>{" "}
           (dispatch, supply, legacy funnel).
         </p>

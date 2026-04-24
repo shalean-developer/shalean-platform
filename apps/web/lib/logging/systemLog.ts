@@ -4,6 +4,9 @@ export type SystemLogLevel = "error" | "warn" | "info";
 
 /**
  * Persists a row to `system_logs` when Supabase is configured. Never throws.
+ *
+ * Optional `context` keys used by notification pipeline: `eventTriggeredAtIso`, `pipelineLatencyMs`
+ * (ms from trigger to log write; compare with row `created_at` for end-to-end delivery latency).
  */
 export async function logSystemEvent(params: {
   level: SystemLogLevel;

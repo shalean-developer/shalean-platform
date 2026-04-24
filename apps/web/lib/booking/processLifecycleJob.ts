@@ -84,7 +84,7 @@ export async function processLifecycleJob(
 
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, service, booking_snapshot, location")
+    .select("id, service, booking_snapshot, location, status")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -103,6 +103,15 @@ export async function processLifecycleJob(
       bookingId,
     });
     return terminal ? "terminal" : "retry";
+  }
+
+  const bookingStatus = String((booking as { status?: string | null }).status ?? "").toLowerCase();
+  if (bookingStatus === "cancelled") {
+    await supabase
+      .from("booking_lifecycle_jobs")
+      .update({ status: "cancelled", last_error: null })
+      .eq("id", jobId);
+    return "skipped";
   }
 
   const snap = booking.booking_snapshot as BookingSnapshotV1 | null;

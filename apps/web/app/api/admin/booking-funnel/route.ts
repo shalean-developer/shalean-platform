@@ -133,10 +133,14 @@ export async function GET(request: Request) {
     return { step, views: n };
   });
 
+  /** Distinct sessions with ≥1 `view` on a funnel step — aligns with `viewsByStep` (unlike `sessions`, which counts any event type). */
+  const sessionsWithFunnelView = viewedStepBySession.size;
+
   return NextResponse.json({
     since: since.toISOString(),
     rows: rows.length,
     sessions: sessionsAny.size,
+    sessionsWithFunnelView,
     funnelStartSessions: funnelStart,
     reachedPaymentSessions: paidOrCheckout,
     conversionRatePct,

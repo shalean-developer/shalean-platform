@@ -26,14 +26,19 @@ type CleanerLoginRow = {
   status: string | null;
 };
 
+/**
+ * `signInWithPassword` must use the email on the Supabase Auth user.
+ * `cleaners.email` can drift after manual DB edits or partial syncs — prefer Auth when linked.
+ */
 async function resolveLoginEmail(admin: SupabaseClient, row: CleanerLoginRow): Promise<string | null> {
-  const fromRow = String(row.email ?? "").trim().toLowerCase();
-  if (fromRow) return fromRow;
   const aid = String(row.auth_user_id ?? "").trim();
-  if (!aid) return null;
-  const { data, error } = await admin.auth.admin.getUserById(aid);
-  if (error || !data.user?.email) return null;
-  return String(data.user.email).trim().toLowerCase();
+  if (aid) {
+    const { data, error } = await admin.auth.admin.getUserById(aid);
+    const authEmail = !error && data.user?.email ? String(data.user.email).trim().toLowerCase() : "";
+    if (authEmail) return authEmail;
+  }
+  const fromRow = String(row.email ?? "").trim().toLowerCase();
+  return fromRow || null;
 }
 
 export async function POST(request: Request) {

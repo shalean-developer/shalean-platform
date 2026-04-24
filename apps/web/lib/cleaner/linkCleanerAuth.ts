@@ -34,7 +34,8 @@ export function resolveAuthEmailsForCleaner(row: {
   return out;
 }
 
-async function findAuthUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+/** Resolve an auth user id by exact email match (paginated listUsers). */
+export async function findAuthUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
   const needle = email.toLowerCase();
   for (let page = 1; page < 40; page += 1) {
     const res = await admin.auth.admin.listUsers({ page, perPage: 1000 });

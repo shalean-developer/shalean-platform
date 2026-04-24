@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import ActionMenu from "@/components/admin/ActionMenu";
-import AdminHeader from "@/components/admin/AdminHeader";
 import DataTable from "@/components/admin/DataTable";
 import MetricsGrid from "@/components/admin/MetricsGrid";
 import SlideOverPanel from "@/components/admin/SlideOverPanel";
@@ -353,36 +352,36 @@ export default function AdminCleanersPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      <AdminHeader
-        title="Cleaners"
-        subtitle="Manage your workforce and availability"
-        actions={
-          <>
-            <button
-              type="button"
-              disabled={backfillBusy || loading}
-              onClick={() => void runAuthBackfill()}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 disabled:opacity-50 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-            >
-              {backfillBusy ? "Repairing…" : "Fix Missing Auth Accounts"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCreateForm(DEFAULT_FORM);
-                setCreateError(null);
-                setCreateOpen(true);
-              }}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
-            >
-              + Add Cleaner
-            </button>
-          </>
-        }
-      />
+    <div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Cleaners</h2>
+          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">Manage your workforce and availability</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={backfillBusy || loading}
+            onClick={() => void runAuthBackfill()}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 disabled:opacity-50 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+          >
+            {backfillBusy ? "Repairing…" : "Fix Missing Auth Accounts"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCreateForm(DEFAULT_FORM);
+              setCreateError(null);
+              setCreateOpen(true);
+            }}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            + Add Cleaner
+          </button>
+        </div>
+      </div>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-6 py-6">
+      <main className="mx-auto grid max-w-7xl gap-6">
         <MetricsGrid items={metrics} />
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

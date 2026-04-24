@@ -8,6 +8,7 @@ type FunnelPayload = {
   since?: string;
   rows?: number;
   sessions?: number;
+  sessionsWithFunnelView?: number;
   funnelStartSessions?: number;
   reachedPaymentSessions?: number;
   conversionRatePct?: number;
@@ -97,7 +98,7 @@ export default function AdminAnalyticsPage() {
   return (
     <main className="mx-auto max-w-6xl space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Analytics</h1>
+        <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Analytics</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Revenue and booking volume (30 days) plus conversion funnel from <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">booking_events</code>.
         </p>
@@ -253,7 +254,8 @@ export default function AdminAnalyticsPage() {
           </div>
 
           <p className="text-xs text-zinc-500">
-            Funnel rows: {funnel?.rows ?? 0} · Sessions: {funnel?.sessions ?? 0} · Quote→checkout conversion:{" "}
+            Funnel rows: {funnel?.rows ?? 0} · Funnel view sessions:{" "}
+            {funnel?.sessionsWithFunnelView ?? funnel?.sessions ?? 0} · Quote→checkout conversion:{" "}
             {funnel?.conversionRatePct ?? 0}%
           </p>
         </>

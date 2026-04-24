@@ -119,15 +119,15 @@ export default function AdminCleanerApplicationsPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-5 px-4 py-6 md:px-6">
-      <header className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Cleaner Applications</h1>
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Cleaner Applications</h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Apply → Approve → Receive jobs → Earn</p>
         </div>
-        <Link href="/admin" className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+        <Link href="/admin" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           Back to Overview
         </Link>
-      </header>
+      </div>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Pending applications" value={String(stats.pendingCount)} />

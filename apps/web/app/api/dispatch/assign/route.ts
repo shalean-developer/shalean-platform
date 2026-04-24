@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  const result = await assignCleanerToBooking(admin, bookingId);
+  const result = await ensureBookingAssignment(admin, bookingId, { source: "admin_dispatch_api" });
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.error, message: result.message },

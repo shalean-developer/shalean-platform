@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -12,8 +12,8 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const onLoginPage = pathname?.startsWith("/cleaner/login");
-    if (onLoginPage) {
+    const onLogin = pathname?.startsWith("/cleaner/login");
+    if (onLogin) {
       setChecking(false);
       setIsLoggedIn(false);
       return;
@@ -44,8 +44,11 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
   }
 
   const onLoginPage = pathname?.startsWith("/cleaner/login");
+  const mobileShell =
+    Boolean(pathname?.startsWith("/cleaner/dashboard") || pathname?.startsWith("/cleaner/job/"));
+
   if (!isLoggedIn && !onLoginPage) {
-    const redirectPath = pathname || "/cleaner";
+    const redirectPath = pathname || "/cleaner/dashboard";
     return (
       <main className="mx-auto flex min-h-[55vh] w-full max-w-md items-center justify-center px-4">
         <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -53,7 +56,7 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Login to continue.</p>
           <Link
             href={`/cleaner/login?redirect=${encodeURIComponent(redirectPath)}`}
-            className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             Login
           </Link>
@@ -62,16 +65,23 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  if (mobileShell || onLoginPage) {
+    return <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">{children}</div>;
+  }
+
   return (
     <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Shalean cleaner</p>
           <nav className="flex gap-4 text-sm font-medium">
-            <Link href="/cleaner/dashboard" className="text-emerald-700 dark:text-emerald-400">
-              Dashboard
+            <Link href="/cleaner/dashboard" className="text-blue-700 hover:underline dark:text-blue-400">
+              App
             </Link>
-            <Link href="/cleaner/jobs" className="text-emerald-700 dark:text-emerald-400">
+            <Link href="/cleaner" className="text-blue-700 hover:underline dark:text-blue-400">
+              Hub
+            </Link>
+            <Link href="/cleaner/jobs" className="text-blue-700 hover:underline dark:text-blue-400">
               Jobs
             </Link>
             <Link href="/" className="text-zinc-600 dark:text-zinc-400">

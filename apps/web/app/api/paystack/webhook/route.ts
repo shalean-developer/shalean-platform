@@ -13,11 +13,7 @@ import {
   recordPaystackPricingMismatch,
 } from "@/lib/metrics/pricingMismatch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import {
-  buildBookingEmailPayload,
-  sendAdminNewBookingEmail,
-  sendBookingConfirmationEmail,
-} from "@/lib/email/sendBookingEmail";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
@@ -162,20 +158,23 @@ export async function POST(request: Request) {
     });
   }
 
-  if (!result.skipped && email) {
-    const payload = buildBookingEmailPayload({
-      paymentReference: reference,
-      amountCents: amount,
-      customerEmail: email,
-      snapshot,
-    });
-    const cust = await sendBookingConfirmationEmail(payload);
-    if (!cust.sent && cust.error) {
-      await reportOperationalIssue("error", "paystack/webhook", `confirmation email not sent: ${cust.error}`, {
+  if (!result.skipped && email && result.bookingId && supabase) {
+    try {
+      await notifyBookingEvent({
+        type: "payment_confirmed",
+        supabase,
+        bookingId: result.bookingId,
+        snapshot,
+        customerEmail: email,
+        amountCents: amount,
+        paymentReference: reference,
+      });
+    } catch (e) {
+      await reportOperationalIssue("error", "paystack/webhook/notifyBookingEvent", String(e), {
         reference,
+        bookingId: result.bookingId,
       });
     }
-    await sendAdminNewBookingEmail(payload);
   }
 
   return NextResponse.json({ received: true });

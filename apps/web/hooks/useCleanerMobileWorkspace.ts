@@ -1,0 +1,271 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
+import {
+  bookingRowToMobileView,
+  earningsSummaryFromRows,
+  getActiveMobileJob,
+  getNextUpcomingMobileJob,
+} from "@/lib/cleaner/cleanerMobileBookingMap";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
+
+type MeCleaner = {
+  id: string;
+  full_name: string | null;
+  phone?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+  status?: string | null;
+  is_available?: boolean | null;
+  rating?: number | null;
+  jobs_completed?: number | null;
+  location?: string | null;
+};
+
+export type CleanerJobAction = "en_route" | "start" | "complete";
+
+function assertOnline(): { ok: true } | { ok: false; error: string } {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return { ok: false, error: "You appear offline. Reconnect, then try again." };
+  }
+  return { ok: true };
+}
+
+export function useCleanerMobileWorkspace() {
+  const [rows, setRows] = useState<CleanerBookingRow[]>([]);
+  const [offers, setOffers] = useState<CleanerOfferRow[]>([]);
+  const [cleaner, setCleaner] = useState<MeCleaner | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [offerActingId, setOfferActingId] = useState<string | null>(null);
+  const [realtimeOk, setRealtimeOk] = useState(false);
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  const loadSeq = useRef(0);
+
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+
+  const load = useCallback(async () => {
+    const headers = getCleanerIdHeaders();
+    if (!headers) {
+      setError("Not signed in.");
+      setRows([]);
+      setOffers([]);
+      setCleaner(null);
+      setLoading(false);
+      return;
+    }
+    const seq = ++loadSeq.current;
+    const [jobsRes, meRes, offersRes] = await Promise.all([
+      fetch("/api/cleaner/jobs", { headers }),
+      fetch("/api/cleaner/me", { headers }),
+      fetch("/api/cleaner/offers", { headers }),
+    ]);
+    if (seq !== loadSeq.current) return;
+
+    const j = (await jobsRes.json()) as { jobs?: CleanerBookingRow[]; error?: string };
+    const m = (await meRes.json()) as { cleaner?: MeCleaner | null; error?: string };
+    const o = (await offersRes.json()) as { offers?: CleanerOfferRow[]; error?: string };
+
+    if (!jobsRes.ok) {
+      setError(j.error ?? "Could not load jobs.");
+      setRows([]);
+    } else {
+      setError(null);
+      setRows(j.jobs ?? []);
+    }
+    setOffers(offersRes.ok ? (o.offers ?? []) : []);
+    if (meRes.ok && m.cleaner) setCleaner(m.cleaner);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => void load(), 22_000);
+    return () => window.clearInterval(t);
+  }, [load]);
+
+  useEffect(() => {
+    const sb = getSupabaseBrowser();
+    const id = typeof window !== "undefined" ? localStorage.getItem("cleaner_id")?.trim() : "";
+    if (!sb || !id) return;
+
+    let cancelled = false;
+    let chBookings: ReturnType<typeof sb.channel> | null = null;
+    let chOffers: ReturnType<typeof sb.channel> | null = null;
+
+    void sb.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled || !session?.user) return;
+
+      chBookings = sb
+        .channel(`cleaner-mobile-bookings-${id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${id}` },
+          () => void load(),
+        )
+        .subscribe((status) => {
+          if (!cancelled) setRealtimeOk(status === "SUBSCRIBED");
+        });
+
+      chOffers = sb
+        .channel(`cleaner-mobile-offers-${id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${id}` },
+          () => void load(),
+        )
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (chBookings) void sb.removeChannel(chBookings);
+      if (chOffers) void sb.removeChannel(chOffers);
+    };
+  }, [load]);
+
+  const postJobAction = useCallback(async (bookingId: string, action: CleanerJobAction) => {
+    const o = assertOnline();
+    if (!o.ok) return o;
+    const headers = getCleanerIdHeaders();
+    if (!headers) return { ok: false as const, error: "Not signed in." };
+    setActingId(bookingId);
+    try {
+      const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) return { ok: false as const, error: json.error ?? "Action failed." };
+      await load();
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, error: "Network error." };
+    } finally {
+      setActingId(null);
+    }
+  }, [load]);
+
+  const respondToOffer = useCallback(
+    async (offerId: string, action: "accept" | "decline") => {
+      const o = assertOnline();
+      if (!o.ok) return o;
+      const headers = getCleanerIdHeaders();
+      if (!headers) return { ok: false as const, error: "Not signed in." };
+      setOfferActingId(offerId);
+      try {
+        const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
+          method: "POST",
+          headers,
+        });
+        const json = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok) return { ok: false as const, error: json.error ?? "Could not update offer." };
+        await load();
+        return { ok: true as const };
+      } catch {
+        return { ok: false as const, error: "Network error." };
+      } finally {
+        setOfferActingId(null);
+      }
+    },
+    [load],
+  );
+
+  const setAvailability = useCallback(async (next: boolean) => {
+    const o = assertOnline();
+    if (!o.ok) return o;
+    const headers = getCleanerIdHeaders();
+    if (!headers) return { ok: false as const, error: "Not signed in." };
+    try {
+      const res = await fetch("/api/cleaner/me", {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ is_available: next }),
+      });
+      const json = (await res.json()) as { cleaner?: MeCleaner; error?: string };
+      if (!res.ok) return { ok: false as const, error: json.error ?? "Update failed." };
+      if (json.cleaner) setCleaner(json.cleaner);
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, error: "Network error." };
+    }
+  }, []);
+
+  const activeJob = useMemo(() => getActiveMobileJob(rows), [rows]);
+  const nextJob = useMemo(() => getNextUpcomingMobileJob(rows), [rows]);
+  const earnings = useMemo(() => earningsSummaryFromRows(rows, new Date()), [rows]);
+  const topOffer = useMemo(() => offers[0] ?? null, [offers]);
+
+  const earningsRows = useMemo(() => {
+    const completed = rows.filter((r) => String(r.status ?? "").toLowerCase() === "completed");
+    const sorted = [...completed].sort((a, b) =>
+      String(b.completed_at ?? b.date ?? "").localeCompare(String(a.completed_at ?? a.date ?? "")),
+    );
+    return sorted.slice(0, 25).map((r) => {
+      const view = bookingRowToMobileView(r);
+      const c = r.cleaner_payout_cents;
+      const amount =
+        c != null && Number.isFinite(Number(c)) ? Math.round(Number(c) / 100) : Math.round(Number(r.total_paid_zar ?? 0));
+      return {
+        id: r.id,
+        serviceLabel: `${r.service ?? "Job"} · ${view.areaLabel}`,
+        amountZar: amount,
+        tipZar: 0,
+        payoutStatus: r.payout_id ? ("paid" as const) : ("pending" as const),
+      };
+    });
+  }, [rows]);
+
+  const profile = useMemo(() => {
+    if (!cleaner) return null;
+    const phone = String(cleaner.phone_number ?? cleaner.phone ?? "").trim() || "—";
+    const areas = cleaner.location?.trim() ? [cleaner.location.trim()] : ["Areas not set"];
+    return {
+      name: cleaner.full_name?.trim() || "Cleaner",
+      phone,
+      areas,
+      rating: typeof cleaner.rating === "number" && Number.isFinite(cleaner.rating) ? cleaner.rating : 5,
+      isAvailable: cleaner.is_available === true || String(cleaner.status ?? "").toLowerCase() === "available",
+    };
+  }, [cleaner]);
+
+  return {
+    rows,
+    offers,
+    topOffer,
+    loading,
+    error,
+    reload: load,
+    actingId,
+    offerActingId,
+    postJobAction,
+    respondToOffer,
+    setAvailability,
+    activeJob,
+    nextJob,
+    earnings,
+    earningsRows,
+    profile,
+    realtimeOk,
+    online,
+  };
+}

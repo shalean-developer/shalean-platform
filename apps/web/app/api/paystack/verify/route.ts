@@ -19,6 +19,7 @@ import {
   sendAdminNewBookingEmail,
   sendBookingConfirmationEmail,
 } from "@/lib/email/sendBookingEmail";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
@@ -261,13 +262,25 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     });
   }
 
-  const sendEmails =
-    email &&
-    (bookingSaved
-      ? !alreadyExists
-      : true /** failsafe: payment succeeded but row not saved — still notify */);
-
-  if (sendEmails) {
+  const adm = getSupabaseAdmin();
+  if (result.bookingId && email && !alreadyExists && adm) {
+    try {
+      await notifyBookingEvent({
+        type: "payment_confirmed",
+        supabase: adm,
+        bookingId: result.bookingId,
+        snapshot,
+        customerEmail: email,
+        amountCents: amount,
+        paymentReference: ref,
+      });
+    } catch (e) {
+      await reportOperationalIssue("error", "paystack/verify/notifyBookingEvent", String(e), {
+        reference: ref,
+        bookingId: result.bookingId,
+      });
+    }
+  } else if (email && !result.bookingId) {
     const payload = buildBookingEmailPayload({
       paymentReference: ref,
       amountCents: amount,

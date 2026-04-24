@@ -96,18 +96,15 @@ export function StepQuote() {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             {copy.title}
           </h1>
-          {estimateZar != null ? (
-            <p className="mt-3 text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-              From R {estimateZar.toLocaleString("en-ZA")}
-              <span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">
-                — same engine as checkout; updates when rooms or extras change
-              </span>
-            </p>
-          ) : (
-            <p className="mt-3 text-sm font-medium text-zinc-600 dark:text-zinc-400">Pick a clean type to see pricing</p>
-          )}
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.reassurance}</p>
-          <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.urgency}</p>
+          {estimateZar == null ? (
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Pick a clean type to continue.</p>
+          ) : null}
+          <p
+            className={`text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 ${estimateZar == null ? "mt-2" : "mt-3"}`}
+          >
+            {copy.reassurance}
+          </p>
+          <p className="mt-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.urgency}</p>
         </div>
 
         <section className="space-y-3" aria-labelledby="sub-services-heading">

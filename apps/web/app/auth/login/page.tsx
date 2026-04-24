@@ -44,7 +44,8 @@ function LoginForm() {
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Log in</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Welcome back to Shalean Cleaning.</p>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">
+        {/* suppressHydrationWarning: extensions (e.g. password managers) inject attrs like fdprocessedid before hydrate */}
+        <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4" suppressHydrationWarning>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Email
@@ -59,6 +60,7 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
               placeholder="you@example.com"
+              suppressHydrationWarning
             />
           </div>
           <div>
@@ -74,6 +76,7 @@ function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+              suppressHydrationWarning
             />
           </div>
 
@@ -87,6 +90,7 @@ function LoginForm() {
             type="submit"
             disabled={submitting}
             className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
+            suppressHydrationWarning
           >
             {submitting ? "Signing in…" : "Login"}
           </button>

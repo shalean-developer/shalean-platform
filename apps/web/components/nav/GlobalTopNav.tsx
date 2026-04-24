@@ -30,9 +30,16 @@ export function GlobalTopNav() {
     setOpen(false);
   }, [pathname]);
 
-  /** Booking flow uses its own header (`BookingHeader`); avoid duplicate sticky navs. */
+  /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. */
   const hideMarketingNav =
-    pathname === "/booking" || pathname.startsWith("/booking/") || pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+    pathname.startsWith("/admin") ||
+    pathname === "/booking" ||
+    pathname.startsWith("/booking/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname.startsWith("/cleaner/dashboard") ||
+    pathname.startsWith("/cleaner/job/") ||
+    pathname.startsWith("/cleaner/login");
 
   async function handleLogout() {
     if (user) {

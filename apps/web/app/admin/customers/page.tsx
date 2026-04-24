@@ -34,17 +34,16 @@ export default function AdminCustomersPage() {
   }, [customers]);
 
   return (
-    <div className="min-h-dvh bg-zinc-100 dark:bg-zinc-950">
-      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Admin</p>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Customers</h1>
-          </div>
-          <Link href="/admin/bookings" className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Bookings</Link>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+    <div>
+      <div className="mb-4 flex justify-end">
+        <Link
+          href="/admin/bookings"
+          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+        >
+          Bookings
+        </Link>
+      </div>
+      <main className="mx-auto max-w-6xl">
         <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
           <StatCard label="Total customers" value={String(stats.total)} />
           <StatCard label="Repeat rate" value={`${stats.repeatRate}%`} />

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function CleanerLoginPage() {
@@ -52,40 +55,62 @@ export default function CleanerLoginPage() {
     }
     localStorage.setItem("cleaner_id", json.cleanerId);
     const redirect = searchParams.get("redirect")?.trim();
-    router.replace(redirect && redirect.startsWith("/") ? redirect : "/cleaner");
+    const target =
+      redirect && redirect.startsWith("/") && redirect.startsWith("/cleaner") ? redirect : "/cleaner/dashboard";
+    router.replace(target);
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 py-10">
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Cleaner Login</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Sign in with phone number and password.</p>
-        <form onSubmit={submit} className="mt-4 space-y-3">
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            required
-            placeholder="Phone number"
-            className="h-11 w-full rounded-lg border border-zinc-300 px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            placeholder="Password"
-            className="h-11 w-full rounded-lg border border-zinc-300 px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="min-h-11 w-full rounded-lg bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {busy ? "Signing in..." : "Login"}
-          </button>
-          {error ? <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p> : null}
-        </form>
-      </section>
-    </main>
+    <div className="flex min-h-[100dvh] flex-col bg-zinc-50 dark:bg-zinc-950">
+      <div className="flex flex-1 flex-col justify-center p-4">
+        <div className="mx-auto w-full max-w-md">
+          <div className="mb-6 flex flex-col items-center text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
+              <Sparkles className="h-7 w-7" aria-hidden />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Cleaner sign in</h1>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Shalean field app — phone and password.</p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <form onSubmit={submit} className="space-y-3">
+              <div>
+                <label htmlFor="cleaner-phone" className="sr-only">
+                  Phone number
+                </label>
+                <Input
+                  id="cleaner-phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                  placeholder="Phone number"
+                  autoComplete="tel"
+                  className="h-12 rounded-xl text-base"
+                />
+              </div>
+              <div>
+                <label htmlFor="cleaner-password" className="sr-only">
+                  Password
+                </label>
+                <Input
+                  id="cleaner-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="h-12 rounded-xl text-base"
+                />
+              </div>
+              <Button type="submit" disabled={busy} size="lg" className="h-12 w-full rounded-xl text-base">
+                {busy ? "Signing in…" : "Log in"}
+              </Button>
+              {error ? <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p> : null}
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

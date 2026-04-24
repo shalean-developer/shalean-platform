@@ -26,7 +26,7 @@ export async function assignCleanerToBooking(
 ): Promise<AssignResult> {
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, date, time, status, cleaner_id, location_id, location")
+    .select("id, date, time, status, cleaner_id, location_id, location, dispatch_status")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -40,6 +40,14 @@ export async function assignCleanerToBooking(
   }
   if ((booking as { cleaner_id?: string | null }).cleaner_id) {
     return { ok: false, error: "booking_not_pending", message: "Already assigned" };
+  }
+  const ds = String((booking as { dispatch_status?: string | null }).dispatch_status ?? "").toLowerCase();
+  if (ds === "unassignable") {
+    return {
+      ok: false,
+      error: "booking_not_pending",
+      message: "Dispatch marked unassignable — reset in admin or assign manually.",
+    };
   }
 
   let locationId = (booking as { location_id?: string | null }).location_id ?? null;

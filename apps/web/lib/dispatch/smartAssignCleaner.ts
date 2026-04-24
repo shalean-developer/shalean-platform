@@ -9,7 +9,7 @@ import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
 import { isBookingTimeInWindow } from "@/lib/dispatch/timeWindow";
 import type { AvailabilityRow, CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
-import { notifyCustomerCleanerAssigned } from "@/lib/notifications/customerUserNotifications";
+import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 
 export type { SmartDispatchCandidate } from "@/lib/dispatch/types";
 
@@ -920,7 +920,7 @@ export async function smartAssignCleaner(
       },
     });
 
-    void notifyCustomerCleanerAssigned(supabase, params.bookingId);
+    void notifyCleanerAssignedBooking(supabase, params.bookingId, top.id);
 
     return { ok: true, cleanerId: top.id, score: top.score };
   }

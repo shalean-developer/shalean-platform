@@ -14,12 +14,18 @@ import { Bath, Bed, Clock3, DoorOpen, MapPin, Sparkles } from "lucide-react";
 
 type BookingSummaryCardProps = {
   state: BookingStep1State;
+  /** Step 4: shown in “When” before a slot is locked (e.g. selected date + “pick a time”). */
+  scheduleDateHint?: string | null;
   /** Step 4: no sidebar total until a slot is locked — show selection hint instead. */
   suppressEstimateUntilLocked?: boolean;
   /** When set, price and appointment are fixed — from `booking_locked` only. */
   locked?: LockedBooking | null;
   /** Steps 2–3: “From R …” smart-quote floor (not the slot total). */
   estimateFromZar?: number | null;
+  /** Details step: plan preview total (UI discount on `estimateFromZar`). */
+  estimatePlanDiscountedZar?: number | null;
+  /** e.g. `weekly plan (10% off)` — paired with `estimatePlanDiscountedZar`. */
+  estimatePlanLabel?: string | null;
   /** Step 5: total due after discounts (matches pay footer). */
   amountToPayZar?: number;
   /** Step 3+ — from `booking_cleaner`; does not affect pricing. */
@@ -99,16 +105,23 @@ function VipBadge({ tier }: { tier: VipTier }) {
 
 export function BookingSummaryCard({
   state,
+  scheduleDateHint = null,
   suppressEstimateUntilLocked = false,
   locked = null,
   estimateFromZar = null,
+  estimatePlanDiscountedZar = null,
+  estimatePlanLabel = null,
   amountToPayZar,
   selectedCleanerName = null,
 }: BookingSummaryCardProps) {
   const whatValue =
     state.service === null ? "Not selected" : getBookingSummaryServiceLabel(state.service, state.service_type);
   const whereValue = state.location.trim() || "Not set";
-  const whenValue = locked ? formatLockedAppointmentLabel(locked) : "Select in next step";
+  const whenValue = locked
+    ? formatLockedAppointmentLabel(locked)
+    : scheduleDateHint?.trim()
+      ? scheduleDateHint.trim()
+      : "Select in next step";
 
   const showSelectSlotHint = !locked && suppressEstimateUntilLocked;
 
@@ -141,13 +154,30 @@ export function BookingSummaryCard({
       </div>
 
       {!locked && estimateFromZar != null && !suppressEstimateUntilLocked ? (
-        <div className="mt-4 space-y-1 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/50 dark:bg-blue-950/35">
+        <div className="mt-4 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/50 dark:bg-blue-950/35">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Estimated price
           </p>
-          <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
-            From R {estimateFromZar.toLocaleString("en-ZA")}
-          </p>
+          {estimatePlanDiscountedZar != null &&
+          estimatePlanLabel &&
+          estimatePlanDiscountedZar !== estimateFromZar ? (
+            <>
+              <p className="text-sm font-medium tabular-nums text-zinc-700 dark:text-zinc-300">
+                R {estimateFromZar.toLocaleString("en-ZA")}{" "}
+                <span className="font-normal text-zinc-500 dark:text-zinc-400">per visit (list)</span>
+              </p>
+              <p className="text-2xl font-bold tabular-nums text-emerald-800 dark:text-emerald-300">
+                R {estimatePlanDiscountedZar.toLocaleString("en-ZA")}{" "}
+                <span className="block text-sm font-semibold leading-snug text-emerald-900/90 dark:text-emerald-200/90 sm:inline sm:pl-1">
+                  with {estimatePlanLabel}
+                </span>
+              </p>
+            </>
+          ) : (
+            <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+              From R {estimateFromZar.toLocaleString("en-ZA")}
+            </p>
+          )}
           <p className="text-xs text-zinc-600 dark:text-zinc-400">No payment required yet</p>
         </div>
       ) : null}

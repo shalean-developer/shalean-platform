@@ -10,6 +10,7 @@ export function bookingPricingFingerprint(state: BookingStep1State, tier: VipTie
     state.bathrooms,
     state.extraRooms,
     state.extras.join("\u0001"),
+    state.cleaningFrequency,
     tier,
   ].join("|");
 }

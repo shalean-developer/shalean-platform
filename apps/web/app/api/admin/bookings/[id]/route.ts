@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { notifyCustomerCleanerAssigned } from "@/lib/notifications/customerUserNotifications";
+import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -156,7 +156,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const uid =
     before && typeof before === "object" ? String((before as { user_id?: string | null }).user_id ?? "").trim() : "";
   if (newCleaner && uid && newCleaner !== oldCleaner) {
-    void notifyCustomerCleanerAssigned(admin, id);
+    void notifyCleanerAssignedBooking(admin, id, newCleaner);
   }
 
   return NextResponse.json({ ok: true });

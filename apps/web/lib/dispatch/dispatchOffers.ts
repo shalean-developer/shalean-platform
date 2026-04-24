@@ -5,8 +5,10 @@ import {
   notifyCleanerOfferAccepted,
   notifyCleanerOfferDeclined,
 } from "@/lib/dispatch/offerNotifications";
+import { tryEmitDispatchOfferTimeoutMetric } from "@/lib/dispatch/offerTimeoutMetric";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { notifyCustomerCleanerAssigned } from "@/lib/notifications/customerUserNotifications";
+import { metrics } from "@/lib/metrics/counters";
+import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 
 const POLL_MS = 400;
 
@@ -90,6 +92,13 @@ export async function createDispatchOfferRow(params: {
       rankIndex: params.rankIndex,
       latency_ms: Date.now() - t0,
     },
+  });
+
+  metrics.increment("dispatch.offer.created", {
+    bookingId: params.bookingId,
+    cleanerId: params.cleanerId,
+    offerId,
+    rankIndex: params.rankIndex,
   });
 
   await notifyCleanerOfDispatchOffer({
@@ -198,6 +207,15 @@ export async function waitForDispatchOfferResolution(params: {
       cleanerId: params.cleanerId,
       latency_ms: Date.now() - t0,
     },
+  });
+
+  await tryEmitDispatchOfferTimeoutMetric({
+    supabase: params.supabase,
+    offerId: params.offerId,
+    bookingId: params.bookingId,
+    cleanerId: params.cleanerId,
+    latencyMs: Date.now() - t0,
+    source: "poll_deadline",
   });
 
   return "expired";
@@ -332,7 +350,14 @@ export async function acceptDispatchOffer(params: {
     offerId: params.offerId,
   });
 
-  void notifyCustomerCleanerAssigned(params.supabase, bookingId);
+  void notifyCleanerAssignedBooking(params.supabase, bookingId, params.cleanerId);
+
+  metrics.increment("dispatch.offer.accepted", {
+    bookingId,
+    cleanerId: params.cleanerId,
+    offerId: params.offerId,
+    latency_ms: latencyMs,
+  });
 
   return { ok: true };
 }
@@ -395,6 +420,13 @@ export async function rejectDispatchOffer(params: {
     cleanerId: params.cleanerId,
     bookingId: String(row.booking_id ?? ""),
     offerId: params.offerId,
+  });
+
+  metrics.increment("dispatch.offer.declined", {
+    bookingId: String(row.booking_id ?? ""),
+    cleanerId: params.cleanerId,
+    offerId: params.offerId,
+    latency_ms: latencyMs,
   });
 
   return { ok: true };

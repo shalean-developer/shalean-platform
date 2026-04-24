@@ -92,7 +92,7 @@ export default function AdminOperationsPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-6">
       <section className="space-y-1">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Operations analytics</h1>
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Operations analytics</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           Dispatch, supply, subscriptions, and legacy funnel metrics from{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">/api/admin/analytics</code>.
@@ -120,7 +120,10 @@ export default function AdminOperationsPage() {
           <section className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Legacy user_events funnel</h2>
-              <p className="mt-1 text-xs text-zinc-500">Started → Viewed price → Selected time → Completed payment</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Counts <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">user_events</code> types
+                (booking_started, quote_viewed, …). No synthetic fill — zeros if those events were never emitted.
+              </p>
               <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
                 <FunnelStep label="Started" value={data.funnel.started} pct={100} />
                 <FunnelStep label="Price" value={data.funnel.viewedPrice} pct={pct(data.funnel.viewedPrice, data.funnel.started)} />

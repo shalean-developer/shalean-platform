@@ -46,13 +46,15 @@ function SlotHoldCountdown({ lockedAt }: { lockedAt: string }) {
 
   if (endMs == null) {
     return (
-      <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">{bookingCopy.checkout.slotHeldLine}</p>
+      <p className="text-center text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+        {bookingCopy.checkout.slotHeldFallback}
+      </p>
     );
   }
 
   if (remainingSec <= 0) {
     return (
-      <p className="text-center text-xs text-amber-800 dark:text-amber-200">
+      <p className="text-center text-[11px] leading-snug text-amber-800 dark:text-amber-200">
         If payment does not go through, choose your time again to refresh your quote.
       </p>
     );
@@ -60,11 +62,12 @@ function SlotHoldCountdown({ lockedAt }: { lockedAt: string }) {
 
   const minutes = Math.max(1, Math.ceil(remainingSec / 60));
   return (
-    <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">
+    <p className="text-center text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
       <span className="font-semibold text-zinc-800 dark:text-zinc-100">
-        This slot is held — about {minutes} minute{minutes === 1 ? "" : "s"} left at this price.
-      </span>{" "}
-      {bookingCopy.checkout.slotHeldLine}
+        ~{minutes} min left at this price
+      </span>
+      <span className="text-zinc-500 dark:text-zinc-500"> · </span>
+      <span>Checkout usually under 1 minute</span>
     </p>
   );
 }
@@ -331,24 +334,12 @@ export function StepPayment() {
         ctaShort: "Confirm →",
       }}
       footerTotalZar={totals?.totalZar}
-      footerPreCta={
-        locked && readyForPaystack ? (
-          <div className="mx-auto max-w-md space-y-1.5">
-            <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">{copy.speedBeforePay}</p>
-            <SlotHoldCountdown lockedAt={locked.lockedAt} />
-          </div>
-        ) : undefined
-      }
+      footerPreCta={locked && readyForPaystack ? <SlotHoldCountdown lockedAt={locked.lockedAt} /> : undefined}
       footerSubcopy={
         readyForPaystack ? (
-          <div className="mx-auto max-w-md space-y-2 text-center">
-            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
-            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200/90">{copy.paystackBadge}</p>
-            <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-              {copy.trustBadges.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
+          <div className="mx-auto max-w-md space-y-1 text-center">
+            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
+            <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">{copy.payFooterTrustLine}</p>
           </div>
         ) : undefined
       }

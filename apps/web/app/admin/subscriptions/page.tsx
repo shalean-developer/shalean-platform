@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ActionMenu from "@/components/admin/ActionMenu";
-import AdminHeader from "@/components/admin/AdminHeader";
 import DataTable from "@/components/admin/DataTable";
 import MetricsGrid from "@/components/admin/MetricsGrid";
 import SlideOverPanel from "@/components/admin/SlideOverPanel";
@@ -138,10 +137,13 @@ export default function AdminSubscriptionsPage() {
   }, [rows]);
 
   return (
-    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      <AdminHeader title="Subscriptions" subtitle="Recurring cleaning plans and revenue" />
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Subscriptions</h2>
+        <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">Recurring cleaning plans and revenue</p>
+      </div>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-6 py-6">
+      <main className="mx-auto grid max-w-7xl gap-6">
         <MetricsGrid items={metrics} />
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

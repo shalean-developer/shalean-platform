@@ -4,7 +4,8 @@ import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRates
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
-import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
+import { runAdminAssignSmart } from "@/lib/admin/runAdminAssignSmart";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -16,7 +17,6 @@ import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/dema
 import { createPendingCustomerReferral } from "@/lib/referrals/server";
 import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { notifyCustomerBookingPlaced } from "@/lib/notifications/customerUserNotifications";
 
 export type UpsertBookingInput = {
   paystackReference: string;
@@ -255,18 +255,35 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
     /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
     const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
+    const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
     if (autoDispatch) {
-      void assignCleanerToBooking(supabase, id).then((r) => {
-        if (r.ok) void notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+      void ensureBookingAssignment(supabase, id, { source: "paystack_checkout" }).then(async (r) => {
+        if (r.ok) {
+          void notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+          return;
+        }
+        if (!offerAssignFallback) return;
+        const smart = await runAdminAssignSmart(supabase, {
+          bookingId: id,
+          force: false,
+          maxAttempts: 25,
+          cleanerIds: null,
+          autoEscalateExtremeSla: null,
+        });
+        if (smart.ok) void notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
+      });
+    } else if (offerAssignFallback) {
+      /** Labs: primary auto-dispatch off, try offer-based admin cascade only. */
+      void runAdminAssignSmart(supabase, {
+        bookingId: id,
+        force: false,
+        maxAttempts: 25,
+        cleanerIds: null,
+        autoEscalateExtremeSla: null,
+      }).then((smart) => {
+        if (smart.ok) void notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
       });
     }
-    void notifyCustomerBookingPlaced(supabase, {
-      bookingId: id,
-      userId: userIdForEffects,
-      serviceLabel: row.service,
-      dateYmd: locked?.date ?? null,
-      timeHm: locked?.time ?? null,
-    });
     const createdAt =
       inserted && typeof inserted === "object" && "created_at" in inserted
         ? String((inserted as { created_at?: string }).created_at ?? "")

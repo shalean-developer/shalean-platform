@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyDispatchEscalationAdmin } from "@/lib/dispatch/dispatchEscalation";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { metrics } from "@/lib/metrics/counters";
 
 /** Minutes after failure before each retry wave (cron-compatible). */
 export const DISPATCH_RETRY_DELAYS_MIN = [2, 5, 10, 15] as const;
@@ -44,7 +45,7 @@ export async function enqueueDispatchRetry(
 type ProcessResult = { picked: number; assigned: number; abandoned: number; errors: number };
 
 /**
- * Invoked from cron: process due rows, call assignCleanerToBooking, reschedule or close.
+ * Invoked from cron: process due rows, call ensureBookingAssignment, reschedule or close.
  */
 export async function processDispatchRetryQueue(supabase: SupabaseClient): Promise<ProcessResult> {
   const out: ProcessResult = { picked: 0, assigned: 0, abandoned: 0, errors: 0 };
@@ -64,7 +65,7 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
     return out;
   }
 
-  const { assignCleanerToBooking } = await import("@/lib/dispatch/assignCleaner");
+  const { ensureBookingAssignment } = await import("@/lib/dispatch/ensureBookingAssignment");
 
   for (const row of rows ?? []) {
     const id = typeof row.id === "string" ? row.id : null;
@@ -87,7 +88,10 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
       });
     }
 
-    const result = await assignCleanerToBooking(supabase, bookingId, { retryEscalation: retriesDone });
+    const result = await ensureBookingAssignment(supabase, bookingId, {
+      source: "dispatch_retry_queue",
+      retryEscalation: retriesDone,
+    });
 
     if (result.ok) {
       await supabase
@@ -120,10 +124,31 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
         })
         .eq("id", id);
       out.abandoned++;
+
+      await supabase
+        .from("bookings")
+        .update({ dispatch_status: "unassignable" })
+        .eq("id", bookingId)
+        .eq("status", "pending")
+        .is("cleaner_id", null);
+
+      metrics.increment("dispatch.unassignable", {
+        bookingId,
+        error: result.error,
+        message: result.message ?? null,
+      });
+
+      await notifyDispatchEscalationAdmin({
+        bookingId,
+        retriesDone,
+        lastReason: result.message ?? result.error,
+        phase: "terminal_unassignable",
+      });
+
       await logSystemEvent({
         level: "warn",
         source: "dispatch_retry_abandoned",
-        message: "Dispatch retries exhausted (v4 escalation)",
+        message: "Dispatch retries exhausted — booking dispatch_status=unassignable",
         context: { bookingId, error: result.error },
       });
       continue;

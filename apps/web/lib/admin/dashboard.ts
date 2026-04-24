@@ -11,7 +11,7 @@ export type AdminBookingRow = {
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   status: string | null;
-  dispatch_status?: "searching" | "offered" | "assigned" | "failed" | null;
+  dispatch_status?: "searching" | "offered" | "assigned" | "failed" | "no_cleaner" | "unassignable" | null;
   cleaner_id: string | null;
 };
 

@@ -4,9 +4,12 @@ import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { emitSqlExpiredOfferTimeoutMetrics } from "@/lib/dispatch/offerTimeoutMetric";
+import { reportPendingBookingSlaBreaches } from "@/lib/dispatch/dispatchSlaWatchdog";
 import { processDispatchRetryQueue } from "@/lib/dispatch/dispatchRetryQueue";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +22,8 @@ const MAX_LIFECYCLE_RETRY = 20;
  * 1) Retries Paystack booking inserts (`failed_jobs`).
  * 2) Retries lifecycle emails stuck in `failed` with attempts &lt; 5.
  * 3) Processes `dispatch_retry_queue` (auto-assign backoff).
+ * 4) SLA: pending bookings without a cleaner past DISPATCH_SLA_BREACH_MINUTES → metric + retry enqueue.
+ * 5) Offer timeout metrics parity: SQL-expired TTL offers → dispatch.offer.timeout (deduped).
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -89,6 +94,27 @@ export async function POST(request: Request) {
     if (result.bookingId && !result.error) {
       await supabase.from("failed_jobs").delete().eq("id", id);
       bookingInsertSucceeded++;
+      if (!result.skipped) {
+        const em =
+          typeof payload.customerEmail === "string" ? normalizeEmail(payload.customerEmail) : "";
+        if (em) {
+          try {
+            await notifyBookingEvent({
+              type: "payment_confirmed",
+              supabase,
+              bookingId: result.bookingId,
+              snapshot,
+              customerEmail: em,
+              amountCents: payload.amountCents,
+              paymentReference: payload.paystackReference,
+            });
+          } catch (e) {
+            await reportOperationalIssue("error", "cron/retry-failed-jobs/notifyBookingEvent", String(e), {
+              bookingId: result.bookingId,
+            });
+          }
+        }
+      }
     } else {
       await supabase.from("failed_jobs").update({ attempts: attempts + 1 }).eq("id", id);
     }
@@ -119,6 +145,8 @@ export async function POST(request: Request) {
   }
 
   const dispatchRetry = await processDispatchRetryQueue(supabase);
+  const dispatchSla = await reportPendingBookingSlaBreaches(supabase);
+  const dispatchOfferTimeoutMetrics = await emitSqlExpiredOfferTimeoutMetrics(supabase);
 
   await logSystemEvent({
     level: "info",
@@ -131,6 +159,8 @@ export async function POST(request: Request) {
       lifecycleSent,
       lifecycleTerminal,
       dispatchRetry,
+      dispatchSla,
+      dispatchOfferTimeoutMetrics,
     },
   });
 
@@ -146,6 +176,8 @@ export async function POST(request: Request) {
       terminalFailures: lifecycleTerminal,
     },
     dispatchRetry,
+    dispatchSla,
+    dispatchOfferTimeoutMetrics,
   });
 }
 

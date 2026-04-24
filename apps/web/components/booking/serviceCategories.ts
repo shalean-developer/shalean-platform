@@ -223,11 +223,23 @@ export function getBlockedExtraIds(service: BookingServiceId | null): Set<string
   return blocked ? new Set(blocked) : new Set();
 }
 
+/** Recurring visit plans (weekly / biweekly discounts) apply only to Standard and Airbnb services. */
+export function serviceSupportsCleaningFrequencyPlan(
+  service: BookingServiceId | null,
+  serviceType: BookingServiceTypeKey | null,
+): boolean {
+  if (service === "standard" || service === "airbnb") return true;
+  if (serviceType === "standard_cleaning" || serviceType === "airbnb_cleaning") return true;
+  return false;
+}
+
 export function normalizeStep1ForService<
   T extends {
     service: BookingServiceId | null;
     rooms: number;
     extras: string[];
+    service_type?: BookingServiceTypeKey | null;
+    cleaningFrequency?: "one_time" | "weekly" | "biweekly" | "monthly";
   },
 >(prev: T): T {
   if (prev.service === null) return prev;
@@ -235,8 +247,28 @@ export function normalizeStep1ForService<
   const blocked = getBlockedExtraIds(prev.service);
   const rooms = Math.min(prev.rooms, maxRooms);
   const extras = prev.extras.filter((e) => !blocked.has(e));
-  if (rooms === prev.rooms && extras.length === prev.extras.length) return prev;
-  return { ...prev, rooms, extras };
+
+  const svcType = "service_type" in prev ? (prev.service_type ?? null) : null;
+  const supportsPlan = serviceSupportsCleaningFrequencyPlan(prev.service, svcType);
+  const hasFreq =
+    "cleaningFrequency" in prev && prev.cleaningFrequency !== undefined && prev.cleaningFrequency !== null;
+  const nextFrequency = hasFreq
+    ? supportsPlan
+      ? prev.cleaningFrequency
+      : ("one_time" as const)
+    : undefined;
+  const freqSame = !hasFreq || prev.cleaningFrequency === nextFrequency;
+
+  const roomsSame = rooms === prev.rooms;
+  const extrasSame = extras.length === prev.extras.length;
+  if (roomsSame && extrasSame && freqSame) return prev;
+
+  return {
+    ...prev,
+    ...(!roomsSame ? { rooms } : {}),
+    ...(!extrasSame ? { extras } : {}),
+    ...(hasFreq && !freqSame ? { cleaningFrequency: nextFrequency } : {}),
+  } as T;
 }
 
 /** Updates `service` plus funnel fields after picking a catalog service (e.g. legacy BookingStep1). */

@@ -1,11 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { BookingHeader } from "@/components/booking/BookingHeader";
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import BookingSummary from "./BookingSummary";
-import { StickyPriceBar } from "@/components/booking/StickyPriceBar";
+import { StickyPriceBar, type StickyPlanPriceBreakdown } from "@/components/booking/StickyPriceBar";
 import { bookingCopy } from "@/lib/booking/copy";
 import type { BookingStep1State } from "./useBookingStep1";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,8 @@ type BookingLayoutProps = {
   summaryIgnoreLockedBooking?: boolean;
   /** Step 4: hide sidebar totals until a slot is locked — show “select a time” instead. */
   suppressEstimateUntilLocked?: boolean;
+  /** Step 4: “When” summary line before lock (e.g. selected weekday + date). */
+  scheduleDateHint?: string | null;
   /** Checkout: amount due (after discounts); sidebar matches footer when set. */
   summaryAmountToPayZar?: number;
   canContinue?: boolean;
@@ -55,6 +60,8 @@ type BookingLayoutProps = {
     ctaUrgency?: string;
     /** Quote mobile: tap price to open a bottom sheet with the booking summary. */
     openSummarySheetOnAmountTap?: boolean;
+    /** Details step: list + plan-discounted preview (UI only). */
+    planPriceBreakdown?: StickyPlanPriceBreakdown | null;
   };
   /** Desktop: summary column first (checkout trust layout). */
   summaryColumnFirst?: boolean;
@@ -70,6 +77,7 @@ export default function BookingLayout({
   summaryOverride,
   summaryIgnoreLockedBooking = false,
   suppressEstimateUntilLocked = false,
+  scheduleDateHint = null,
   summaryAmountToPayZar,
   canContinue = false,
   onContinue,
@@ -87,6 +95,33 @@ export default function BookingLayout({
   summaryDesktopOnly = false,
   mobileEntryFooter = false,
 }: BookingLayoutProps) {
+  const router = useRouter();
+  const { step, handleBack } = useBookingFlow();
+  const onFooterBack = useCallback(() => {
+    if (step === "entry") {
+      router.push("/");
+      return;
+    }
+    handleBack();
+  }, [step, handleBack, router]);
+
+  const footerBackButton = useMemo(
+    () => (
+      <button
+        type="button"
+        onClick={onFooterBack}
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-900",
+          continueVariant === "pay" ? "min-h-14 min-w-14" : "h-12 w-12",
+        )}
+        aria-label={step === "entry" ? "Back to home" : "Go back"}
+      >
+        <ArrowLeft className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+      </button>
+    ),
+    [onFooterBack, step, continueVariant],
+  );
+
   const showSummary = summaryOverride != null || summaryState != null;
   const sheetFromPrice = Boolean(stickyMobileBar?.openSummarySheetOnAmountTap && showSummary);
   const [summarySheetOpen, setSummarySheetOpen] = useState(false);
@@ -111,6 +146,7 @@ export default function BookingLayout({
     return (
       <BookingSummary
         state={summaryState}
+        scheduleDateHint={scheduleDateHint}
         ignoreLockedBooking={summaryIgnoreLockedBooking}
         suppressEstimateUntilLocked={suppressEstimateUntilLocked}
         amountToPayZar={summaryAmountToPayZar}
@@ -202,7 +238,7 @@ export default function BookingLayout({
           )}
         >
           {footerPreCta ? (
-            <div className="mb-2 text-center text-[11px] text-zinc-600 dark:text-zinc-400">{footerPreCta}</div>
+            <div className="mb-1.5 text-center text-[11px] text-zinc-600 dark:text-zinc-400">{footerPreCta}</div>
           ) : null}
 
           {stickyMobileBar ? (
@@ -210,6 +246,7 @@ export default function BookingLayout({
               <StickyPriceBar
                 totalZar={stickyMobileBar.totalZar}
                 amountDisplayOverride={stickyMobileBar.amountDisplayOverride}
+                planPriceBreakdown={stickyMobileBar.planPriceBreakdown ?? null}
                 totalCaption={stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total}
                 subline={stickyMobileBar.subline}
                 ctaLabel={stickyMobileBar.ctaShort ?? bookingCopy.stickyBar.cta}
@@ -222,6 +259,7 @@ export default function BookingLayout({
                   stickyMobileBar.openSummarySheetOnAmountTap ? () => setSummarySheetOpen(true) : undefined
                 }
                 captionUppercase={!stickyMobileBar.openSummarySheetOnAmountTap}
+                ctaStartSlot={footerBackButton}
               />
             </div>
           ) : null}
@@ -234,41 +272,59 @@ export default function BookingLayout({
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total}
                     </p>
-                    <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-                      {(() => {
-                        if (stickyMobileBar.amountDisplayOverride) {
-                          return stickyMobileBar.amountDisplayOverride;
-                        }
-                        const z =
-                          typeof footerTotalZar === "number"
-                            ? footerTotalZar
-                            : stickyMobileBar.totalZar;
-                        return Number.isFinite(z) ? `R ${z.toLocaleString("en-ZA")}` : "—";
-                      })()}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    {stickyMobileBar.ctaUrgency ? (
-                      <p className="text-right text-[10px] font-semibold leading-tight text-amber-800 dark:text-amber-300/95">
-                        {stickyMobileBar.ctaUrgency}
+                    {stickyMobileBar.planPriceBreakdown && !stickyMobileBar.amountDisplayOverride ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium tabular-nums text-zinc-600 dark:text-zinc-400">
+                          R {stickyMobileBar.planPriceBreakdown.baseZar.toLocaleString("en-ZA")}{" "}
+                          <span className="font-normal text-zinc-500 dark:text-zinc-500">per visit</span>
+                        </p>
+                        <p className="mt-0.5 truncate text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                          R {stickyMobileBar.planPriceBreakdown.discountedZar.toLocaleString("en-ZA")}{" "}
+                          <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300/95">
+                            with {stickyMobileBar.planPriceBreakdown.planLabel}
+                          </span>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                        {(() => {
+                          if (stickyMobileBar.amountDisplayOverride) {
+                            return stickyMobileBar.amountDisplayOverride;
+                          }
+                          const z =
+                            typeof footerTotalZar === "number"
+                              ? footerTotalZar
+                              : stickyMobileBar.totalZar;
+                          return Number.isFinite(z) ? `R ${z.toLocaleString("en-ZA")}` : "—";
+                        })()}
                       </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => onContinue?.()}
-                      disabled={!canContinue || continueLoading}
-                      className={[
-                        "rounded-xl px-6 py-3 text-sm font-semibold tracking-tight transition-all",
-                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                        canContinue
-                          ? continueLoading
-                            ? "cursor-wait bg-primary text-primary-foreground opacity-95"
-                            : "bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 active:scale-[0.99]"
-                          : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
-                      ].join(" ")}
-                    >
-                      {continueLoading ? "Redirecting…" : continueLabel}
-                    </button>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {footerBackButton}
+                    <div className="flex flex-col items-end gap-1">
+                      {stickyMobileBar.ctaUrgency ? (
+                        <p className="text-right text-[10px] font-semibold leading-tight text-amber-800 dark:text-amber-300/95">
+                          {stickyMobileBar.ctaUrgency}
+                        </p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => onContinue?.()}
+                        disabled={!canContinue || continueLoading}
+                        className={[
+                          "rounded-xl px-6 py-3 text-sm font-semibold tracking-tight transition-all",
+                          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                          canContinue
+                            ? continueLoading
+                              ? "cursor-wait bg-primary text-primary-foreground opacity-95"
+                              : "bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 active:scale-[0.99]"
+                            : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
+                        ].join(" ")}
+                      >
+                        {continueLoading ? "Redirecting…" : continueLabel}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -285,63 +341,69 @@ export default function BookingLayout({
                     : "—"}
                 </p>
               </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {footerBackButton}
+                <button
+                  type="button"
+                  onClick={() => onContinue?.()}
+                  disabled={!canContinue || continueLoading}
+                  className={[
+                    "shrink-0 rounded-xl px-6 py-3 text-sm font-semibold tracking-tight transition-all",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                    canContinue
+                      ? continueLoading
+                        ? "cursor-wait bg-primary text-primary-foreground opacity-95"
+                        : "bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 active:scale-[0.99]"
+                      : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
+                  ].join(" ")}
+                >
+                  {continueLoading ? "Redirecting…" : continueLabel}
+                </button>
+              </div>
+            </div>
+          ) : !stickyMobileBar ? (
+            <div className="flex w-full items-stretch gap-2 sm:gap-3">
+              {footerBackButton}
               <button
                 type="button"
                 onClick={() => onContinue?.()}
                 disabled={!canContinue || continueLoading}
                 className={[
-                  "shrink-0 rounded-xl px-6 py-3 text-sm font-semibold tracking-tight transition-all",
+                  "min-w-0 flex-1 rounded-xl font-semibold tracking-tight transition-all",
+                  continueVariant === "pay"
+                    ? "min-h-14 px-4 text-base"
+                    : mobileEntryFooter
+                      ? "h-12 max-lg:h-12 text-[15px] max-lg:text-base"
+                      : "h-12 text-[15px]",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                   canContinue
                     ? continueLoading
-                      ? "cursor-wait bg-primary text-primary-foreground opacity-95"
-                      : "bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 active:scale-[0.99]"
-                    : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
+                      ? continueVariant === "pay"
+                        ? "cursor-wait bg-primary text-primary-foreground opacity-95"
+                        : mobileEntryFooter
+                          ? "cursor-wait max-lg:bg-zinc-800 max-lg:text-white lg:cursor-wait lg:bg-zinc-900 lg:text-white lg:opacity-95 dark:lg:bg-white dark:lg:text-zinc-950"
+                          : "cursor-wait bg-zinc-900 text-white opacity-95 dark:bg-white dark:text-zinc-950"
+                      : continueVariant === "pay"
+                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.99] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                        : mobileEntryFooter
+                          ? "max-lg:bg-black max-lg:text-white max-lg:hover:bg-zinc-900 max-lg:active:scale-[0.99] lg:bg-zinc-900 lg:text-white lg:shadow-lg lg:shadow-zinc-900/20 lg:hover:bg-zinc-800 dark:lg:bg-white dark:lg:text-zinc-950 dark:lg:hover:bg-zinc-100"
+                          : "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
+                    : mobileEntryFooter
+                      ? "cursor-not-allowed max-lg:bg-zinc-200 max-lg:text-zinc-500 lg:cursor-not-allowed lg:bg-zinc-200 lg:text-zinc-500 dark:max-lg:bg-zinc-800 dark:max-lg:text-zinc-500 dark:lg:bg-zinc-800 dark:lg:text-zinc-500"
+                      : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
                 ].join(" ")}
               >
-                {continueLoading ? "Redirecting…" : continueLabel}
+                {continueLoading
+                  ? continueVariant === "pay"
+                    ? "Redirecting..."
+                    : "Redirecting to Paystack…"
+                  : continueLabel}
+                {!continueLoading && showContinueArrow ? " →" : ""}
               </button>
             </div>
-          ) : !stickyMobileBar ? (
-            <button
-              type="button"
-              onClick={() => onContinue?.()}
-              disabled={!canContinue || continueLoading}
-              className={[
-                "w-full rounded-xl font-semibold tracking-tight transition-all",
-                continueVariant === "pay"
-                  ? "min-h-14 px-4 text-base"
-                  : mobileEntryFooter
-                    ? "h-12 max-lg:h-12 text-[15px] max-lg:text-base"
-                    : "h-12 text-[15px]",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                canContinue
-                  ? continueLoading
-                    ? continueVariant === "pay"
-                      ? "cursor-wait bg-primary text-primary-foreground opacity-95"
-                      : mobileEntryFooter
-                        ? "cursor-wait max-lg:bg-zinc-800 max-lg:text-white lg:cursor-wait lg:bg-zinc-900 lg:text-white lg:opacity-95 dark:lg:bg-white dark:lg:text-zinc-950"
-                        : "cursor-wait bg-zinc-900 text-white opacity-95 dark:bg-white dark:text-zinc-950"
-                    : continueVariant === "pay"
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.99] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                      : mobileEntryFooter
-                        ? "max-lg:bg-black max-lg:text-white max-lg:hover:bg-zinc-900 max-lg:active:scale-[0.99] lg:bg-zinc-900 lg:text-white lg:shadow-lg lg:shadow-zinc-900/20 lg:hover:bg-zinc-800 dark:lg:bg-white dark:lg:text-zinc-950 dark:lg:hover:bg-zinc-100"
-                        : "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
-                  : mobileEntryFooter
-                    ? "cursor-not-allowed max-lg:bg-zinc-200 max-lg:text-zinc-500 lg:cursor-not-allowed lg:bg-zinc-200 lg:text-zinc-500 dark:max-lg:bg-zinc-800 dark:max-lg:text-zinc-500 dark:lg:bg-zinc-800 dark:lg:text-zinc-500"
-                    : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
-              ].join(" ")}
-            >
-              {continueLoading
-                ? continueVariant === "pay"
-                  ? "Redirecting..."
-                  : "Redirecting to Paystack…"
-                : continueLabel}
-              {!continueLoading && showContinueArrow ? " →" : ""}
-            </button>
           ) : null}
           {footerSubcopy && !stickyMobileBar?.openSummarySheetOnAmountTap ? (
-            <div className="mt-3 text-center text-xs text-zinc-500 dark:text-zinc-400">{footerSubcopy}</div>
+            <div className="mt-2 text-center text-[11px] text-zinc-500 dark:text-zinc-400">{footerSubcopy}</div>
           ) : null}
         </div>
       </footer>

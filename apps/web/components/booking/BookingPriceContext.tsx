@@ -81,14 +81,26 @@ export function BookingPriceProvider({ children }: { children: ReactNode }) {
 
   const fingerprint = useMemo(
     () => bookingPricingFingerprint(state, tier),
-    [state.service, state.service_type, state.rooms, state.bathrooms, state.extraRooms, extrasKey, tier],
+    [
+      state.service,
+      state.service_type,
+      state.rooms,
+      state.bathrooms,
+      state.extraRooms,
+      extrasKey,
+      state.cleaningFrequency,
+      tier,
+    ],
   );
 
   const canon = useMemo(() => buildCanon(state, tier, catalog), [fingerprint, tier, catalog]);
 
   const priceRawSlots = useCallback(
     (raw: RawAvailabilitySlot[]): PricedAvailabilitySlot[] => {
-      if (!canon?.job || !catalog) return [];
+      if (!canon?.job || !catalog) {
+        // Keep the availability grid while catalog hydrates (was `[]`, which blanked every slot until ready).
+        return raw.map((s) => ({ ...s }));
+      }
       return enrichAvailabilitySlotsWithPricing(raw, canon.job, tier, catalog);
     },
     [canon, tier, catalog],

@@ -14,6 +14,7 @@ import {
 import { clearLockedBookingFromStorage, readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { BookingFlowProvider } from "@/components/booking/BookingFlowContext";
 import { BookingPriceProvider } from "@/components/booking/BookingPriceContext";
+import { BookingStep1Provider } from "@/components/booking/useBookingStep1";
 import { StepEntry } from "@/components/booking/steps/StepEntry";
 import { StepQuote } from "@/components/booking/steps/StepQuote";
 import { StepDetailsForm } from "@/components/booking/steps/StepDetailsForm";
@@ -190,13 +191,14 @@ export function BookingFlowClient() {
 
   return (
     <BookingFlowProvider step={step}>
-      <BookingPriceProvider>
-      <div
-        className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950"
-        data-booking-funnel
-        data-booking-route-step={step}
-        data-booking-funnel-step={bookingRouteToFunnelStep(step)}
-      >
+      <BookingStep1Provider>
+        <BookingPriceProvider>
+          <div
+            className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950"
+            data-booking-funnel
+            data-booking-route-step={step}
+            data-booking-funnel-step={bookingRouteToFunnelStep(step)}
+          >
         <div className="flex min-h-0 flex-1 flex-col">
           <AnimatePresence mode="wait">
             <motion.div
@@ -233,13 +235,14 @@ export function BookingFlowClient() {
             </motion.div>
           </AnimatePresence>
         </div>
-        <ExitIntentModal
-          open={exitIntentOpen}
-          onOpenChange={setExitIntentOpen}
-          onCompleteBooking={handleExitIntentComplete}
-        />
-      </div>
-      </BookingPriceProvider>
+            <ExitIntentModal
+              open={exitIntentOpen}
+              onOpenChange={setExitIntentOpen}
+              onCompleteBooking={handleExitIntentComplete}
+            />
+          </div>
+        </BookingPriceProvider>
+      </BookingStep1Provider>
     </BookingFlowProvider>
   );
 }

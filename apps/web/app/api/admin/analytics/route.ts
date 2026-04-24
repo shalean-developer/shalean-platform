@@ -130,11 +130,13 @@ export async function GET(request: Request) {
   const funnelPrice = events.filter((e) => String(e.event_type ?? "") === "quote_viewed").length;
   const funnelTime = events.filter((e) => String(e.event_type ?? "") === "slot_selected").length;
   const funnelPaid = events.filter((e) => String(e.event_type ?? "") === "payment_completed").length;
-  const fallbackStarted = bookings.length;
-  const started = funnelStarted || fallbackStarted;
-  const viewedPrice = funnelPrice || Math.round(started * 0.72);
-  const selectedTime = funnelTime || Math.round(viewedPrice * 0.62);
-  const completed = funnelPaid || bookings.filter((b) => safeRevenue(b) > 0).length;
+  const paidBookingsCount = bookings.filter((b) => safeRevenue(b) > 0).length;
+  /** Raw `user_events` counts only — no synthetic ratios. */
+  const started = funnelStarted;
+  const viewedPrice = funnelPrice;
+  const selectedTime = funnelTime;
+  /** Prefer explicit payment events; else paid rows in the loaded bookings window (real DB, not estimated). */
+  const completed = funnelPaid > 0 ? funnelPaid : paidBookingsCount;
 
   const days = 14;
   const trendMap = new Map<string, number>();

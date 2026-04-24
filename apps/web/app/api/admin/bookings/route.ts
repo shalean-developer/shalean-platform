@@ -1,6 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { fetchSlaDispatchLastActions } from "@/lib/admin/slaDispatchLastAction";
+import {
+  getDispatchSlaBreachMinutes,
+  rowMatchesAttentionFilter,
+  slaBreachOverdueMinutes,
+  sortRowsForAttentionQueue,
+  type OpsSnapshotRow,
+} from "@/lib/admin/opsSnapshot";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
@@ -25,6 +33,7 @@ type Row = {
   surge_reason: string | null;
   user_id: string | null;
   cleaner_id: string | null;
+  became_pending_at: string | null;
   assigned_at: string | null;
   en_route_at: string | null;
   started_at: string | null;
@@ -32,7 +41,23 @@ type Row = {
   created_at: string;
   paystack_reference: string;
   city_id: string | null;
+  duration_minutes: number | null;
 };
+
+function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
+  return {
+    id: r.id,
+    status: r.status,
+    date: r.date,
+    time: r.time,
+    cleaner_id: r.cleaner_id,
+    dispatch_status: r.dispatch_status,
+    became_pending_at: r.became_pending_at,
+    created_at: r.created_at,
+    total_paid_zar: r.total_paid_zar,
+    amount_paid_cents: r.amount_paid_cents,
+  };
+}
 
 function classifyBooking(row: Row, today: string): "today" | "upcoming" | "completed" {
   const st = row.status?.toLowerCase();
@@ -89,7 +114,7 @@ export async function GET(request: Request) {
   let bookingQuery = admin
     .from("bookings")
     .select(
-      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id",
+      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes",
     )
     .order("created_at", { ascending: false })
     .limit(4000);
@@ -120,6 +145,27 @@ export async function GET(request: Request) {
     filtered = rows.filter((r) => classifyBooking(r, today) === "upcoming");
   } else if (filter === "completed") {
     filtered = rows.filter((r) => classifyBooking(r, today) === "completed");
+  } else if (filter === "sla") {
+    const slaM = getDispatchSlaBreachMinutes();
+    const nowMs = Date.now();
+    const breachRows = rows.filter((r) => rowMatchesAttentionFilter(toOpsSnapshotRow(r), "sla", nowMs, slaM));
+    const enriched = breachRows.map((r) => {
+      const op = toOpsSnapshotRow(r);
+      return {
+        ...r,
+        slaBreachMinutes: slaBreachOverdueMinutes(op, nowMs, slaM) ?? 0,
+      };
+    });
+    const sorted = sortRowsForAttentionQueue(enriched, "sla", nowMs, slaM);
+    const actions = await fetchSlaDispatchLastActions(admin, sorted.map((r) => r.id));
+    filtered = sorted.map((r) => {
+      const act = actions.get(r.id);
+      return {
+        ...r,
+        dispatchLastAction: act?.displayText ?? "—",
+        lastActionMinutesAgo: act?.lastActionMinutesAgo ?? null,
+      };
+    });
   }
 
   const zar = (r: Row) =>
@@ -199,6 +245,7 @@ export async function GET(request: Request) {
       demandOpenBookings: demandSupply.demand,
       supplyAvailableCleaners: demandSupply.supply,
       liveSurgeMultiplier: demandSupply.multiplier,
+      slaBreachMinutes: getDispatchSlaBreachMinutes(),
     },
     failedJobs: failedJobs ?? [],
     cities: cityRows ?? [],

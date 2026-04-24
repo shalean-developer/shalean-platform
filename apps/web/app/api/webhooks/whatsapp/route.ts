@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { acceptDispatchOffer, rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
-import { assignCleanerToBooking } from "@/lib/dispatch/assignCleaner";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -113,7 +113,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
     }
     if (bookingId) {
-      await assignCleanerToBooking(admin, bookingId, { retryEscalation: 1 });
+      await ensureBookingAssignment(admin, bookingId, {
+        source: "whatsapp_offer_decline",
+        retryEscalation: 1,
+      });
     }
     return NextResponse.json({ ok: true, action: "declined", offerId });
   }

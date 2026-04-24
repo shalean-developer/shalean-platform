@@ -4,18 +4,14 @@
 export const bookingCopy = {
   entry: {
     title: "Book your clean in 60 seconds",
-    subtitle: "Your address is all we need to start — adjust home type if it’s not an apartment.",
+    subtitle: "Add your address to see your quote.",
     cta: "Continue",
-    addressPlaceholder: "Street, suburb, or area",
+    addressPlaceholder: "Enter full address (street, suburb, city)",
+    addressHelper: "Please include street name, suburb, and city for accurate booking.",
     propertyOptions: ["Apartment", "House", "Studio", "Office"] as const,
     addressLabel: "Your address",
     propertyLabel: "Home type",
-    propertyHint: "Apartment is selected by default — tap another if needed.",
-    trustBullets: [
-      "No payment until you confirm your slot",
-      "Trusted, background-checked cleaners",
-      "100% satisfaction — we’ll make it right",
-    ] as const,
+    propertyHint: "Apartment is pre-selected. Update if it doesn't match your home.",
     socialProof: "Trusted by 500+ homes in Cape Town",
   },
 
@@ -38,8 +34,6 @@ export const bookingCopy = {
 
   details: {
     title: "Tell us about your home",
-    /** Shown under the title — aligns with funnel analytics (home + add-ons before schedule). */
-    funnelProgress: "Step 2 of 4 · Home size & add-ons",
     subtitle: "We’ve pre-filled this for you — adjust if needed",
     extrasTitle: "Add extras (optional)",
     reassurance: "You can change this until you pick a time — then add-ons lock with your visit total.",
@@ -85,16 +79,16 @@ export const bookingCopy = {
     subtitle: "Review your visit, then pay securely to confirm.",
     cleanerHeading: "Your cleaner",
     cleanerHint: "Select a cleaner above to continue — your price stays the same.",
-    speedBeforePay: "⏱ Takes less than 1 minute to complete",
     summaryWhat: "What",
     summaryWhere: "Where",
     summaryWhen: "When",
     addOnsLabel: "Add-ons (in visit total)",
     /** Shown at checkout — extras are persisted on the booking and sent to the cleaner. */
     extrasGuarantee: "✔ All selected extras are included and guaranteed for this visit.",
-    slotHeldLine: "This price is held while you complete checkout — finish within a few minutes.",
-    paystackBadge: "Secure payment via Paystack · PCI-DSS certified processing",
-    trustBadges: ["256-bit encryption", "Instant confirmation", "Paystack protected checkout"] as const,
+    /** Footer (step 5): when lock time can’t be parsed — keep to one line. */
+    slotHeldFallback: "Price reserved for this visit — complete checkout soon.",
+    /** Footer trust strip under the CTA (single line). */
+    payFooterTrustLine: "Paystack · PCI-DSS · 256-bit encryption · Instant email confirmation",
   },
 
   progress: {

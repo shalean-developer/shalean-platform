@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { notifyCustomerBookingReminderSoon } from "@/lib/notifications/customerUserNotifications";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -55,8 +56,15 @@ export async function POST(request: Request) {
       continue;
     }
     const ok = await notifyCustomerBookingReminderSoon(admin, id);
-    if (ok) sent++;
-    else skipped++;
+    if (ok) {
+      sent++;
+      void notifyBookingEvent({
+        type: "reminder_2h",
+        supabase: admin,
+        bookingId: id,
+        includeCustomerEmail: true,
+      });
+    } else skipped++;
   }
 
   await logSystemEvent({

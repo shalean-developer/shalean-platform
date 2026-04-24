@@ -7,9 +7,17 @@ import { BookingSummaryCard } from "./BookingSummaryCard";
 import { useLockedBooking } from "./useLockedBooking";
 import { useSelectedCleaner } from "./useSelectedCleaner";
 import type { BookingStep1State } from "./useBookingStep1";
+import { serviceSupportsCleaningFrequencyPlan } from "@/components/booking/serviceCategories";
+import {
+  applyCleaningFrequencyDisplayDiscount,
+  cleaningFrequencyDiscountFraction,
+  cleaningFrequencyPlanDisplayLabel,
+} from "@/lib/booking/cleaningFrequencyDisplayDiscount";
 
 type BookingSummaryProps = {
   state: BookingStep1State;
+  /** Step 4: “When” line before lock (selected date). */
+  scheduleDateHint?: string | null;
   /** Step 2: ignore `booking_locked` so the sidebar never shows a stale slot total. */
   ignoreLockedBooking?: boolean;
   /** When true and not locked, hide totals and prompt for a time slot (schedule step). */
@@ -26,6 +34,7 @@ type BookingSummaryProps = {
  */
 export default function BookingSummary({
   state,
+  scheduleDateHint = null,
   ignoreLockedBooking = false,
   suppressEstimateUntilLocked = false,
   amountToPayZar,
@@ -42,6 +51,22 @@ export default function BookingSummary({
     return canonicalTotalZar;
   }, [locked, suppressEstimateUntilLocked, canonicalTotalZar]);
 
+  const frequencyForPlan = useMemo(() => {
+    if (!serviceSupportsCleaningFrequencyPlan(state.service, state.service_type)) return "one_time" as const;
+    return state.cleaningFrequency;
+  }, [state.service, state.service_type, state.cleaningFrequency]);
+
+  const estimatePlanDiscountedZar = useMemo(() => {
+    if (estimateFromZar == null) return null;
+    if (cleaningFrequencyDiscountFraction(frequencyForPlan) <= 0) return null;
+    return applyCleaningFrequencyDisplayDiscount(estimateFromZar, frequencyForPlan);
+  }, [estimateFromZar, frequencyForPlan]);
+
+  const estimatePlanLabel = useMemo(() => {
+    if (estimatePlanDiscountedZar == null) return null;
+    return cleaningFrequencyPlanDisplayLabel(frequencyForPlan);
+  }, [estimatePlanDiscountedZar, frequencyForPlan]);
+
   return (
     <div
       className={
@@ -52,10 +77,13 @@ export default function BookingSummary({
     >
       <BookingSummaryCard
         state={displayState}
+        scheduleDateHint={scheduleDateHint}
         suppressEstimateUntilLocked={suppressEstimateUntilLocked}
         locked={locked}
         selectedCleanerName={selectedCleaner?.name ?? null}
         estimateFromZar={estimateFromZar}
+        estimatePlanDiscountedZar={estimatePlanDiscountedZar}
+        estimatePlanLabel={estimatePlanLabel}
         amountToPayZar={amountToPayZar}
       />
     </div>

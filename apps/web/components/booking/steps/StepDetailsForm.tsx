@@ -12,6 +12,7 @@ import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { usePastBookingHints } from "@/lib/booking/usePastBookingHints";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
+import { serviceSupportsCleaningFrequencyPlan } from "@/components/booking/serviceCategories";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
@@ -20,6 +21,11 @@ import { CleaningFrequencySelector } from "@/components/booking/CleaningFrequenc
 import { MobileFullWidth } from "@/components/booking/MobileFullWidth";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import {
+  applyCleaningFrequencyDisplayDiscount,
+  cleaningFrequencyDiscountFraction,
+  cleaningFrequencyPlanDisplayLabel,
+} from "@/lib/booking/cleaningFrequencyDisplayDiscount";
 
 const ExtrasSection = lazy(() =>
   import("@/components/booking/ExtrasSection").then((m) => ({ default: m.ExtrasSection })),
@@ -38,7 +44,25 @@ export function StepDetailsForm() {
   const isLocked = locked != null;
   const skipLockClearOnMount = useRef(true);
 
+  /** Canonical list price per visit (engine) — passed to upsells / bundles. */
   const estimateZar = canonicalTotalZar;
+  const planEligible = serviceSupportsCleaningFrequencyPlan(state.service, state.service_type);
+  const frequencyForPlan = planEligible ? state.cleaningFrequency : "one_time";
+  const discountFrac = cleaningFrequencyDiscountFraction(frequencyForPlan);
+  const planLabel = cleaningFrequencyPlanDisplayLabel(frequencyForPlan);
+  const discountedDisplayZar =
+    canonicalTotalZar != null && discountFrac > 0
+      ? applyCleaningFrequencyDisplayDiscount(canonicalTotalZar, frequencyForPlan)
+      : null;
+  const planPriceBreakdown =
+    planEligible &&
+    !isLocked &&
+    canonicalTotalZar != null &&
+    discountedDisplayZar != null &&
+    planLabel &&
+    discountFrac > 0
+      ? { baseZar: canonicalTotalZar, discountedZar: discountedDisplayZar, planLabel }
+      : null;
 
   useEffect(() => {
     if (skipLockClearOnMount.current) {
@@ -59,8 +83,7 @@ export function StepDetailsForm() {
     state.service,
   ]);
 
-  const recurringDiscountPct =
-    state.cleaningFrequency === "weekly" ? 0.1 : state.cleaningFrequency === "biweekly" ? 0.05 : 0;
+  const recurringDiscountPct = discountFrac;
 
   const goWhen = () => {
     if (!canContinue) return;
@@ -74,8 +97,9 @@ export function StepDetailsForm() {
       summaryDesktopOnly
       summaryState={state}
       stickyMobileBar={{
-        totalZar: estimateZar ?? 0,
+        totalZar: (planEligible ? discountedDisplayZar : null) ?? estimateZar ?? 0,
         amountDisplayOverride: estimateZar == null ? "—" : null,
+        planPriceBreakdown,
         totalCaption: "From",
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
@@ -98,7 +122,6 @@ export function StepDetailsForm() {
 
         <div className="w-full max-w-none">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
-          <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-primary">{copy.funnelProgress}</p>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
           <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.priceLiveHint}</p>
         </div>
@@ -124,21 +147,23 @@ export function StepDetailsForm() {
             </MobileFullWidth>
           ) : null}
 
-          <SectionCard title="Choose cleaning frequency">
-            <MobileFullWidth insideSectionCard>
-              <CleaningFrequencySelector
-                value={state.cleaningFrequency}
-                onChange={(next) => setState((p) => ({ ...p, cleaningFrequency: next }))}
-              />
-            </MobileFullWidth>
-            {recurringDiscountPct > 0 ? (
-              <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-950/30 dark:text-blue-300 max-lg:mt-2 lg:mt-3">
-                {state.cleaningFrequency === "weekly"
-                  ? "Weekly plan: 10% off each visit — applied at checkout after your time is locked."
-                  : "Every 2 weeks: 5% off each visit — applied at checkout after your time is locked."}
-              </p>
-            ) : null}
-          </SectionCard>
+          {planEligible ? (
+            <SectionCard title="Choose cleaning frequency">
+              <MobileFullWidth insideSectionCard>
+                <CleaningFrequencySelector
+                  value={state.cleaningFrequency}
+                  onChange={(next) => setState((p) => ({ ...p, cleaningFrequency: next }))}
+                />
+              </MobileFullWidth>
+              {recurringDiscountPct > 0 ? (
+                <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-950/30 dark:text-blue-300 max-lg:mt-2 lg:mt-3">
+                  {state.cleaningFrequency === "weekly"
+                    ? "Weekly plan: 10% off each visit — preview above; final total is confirmed at checkout after you pick a time."
+                    : "Every 2 weeks: 5% off each visit — preview above; final total is confirmed at checkout after you pick a time."}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
 
           <Suspense
             fallback={

@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,7 +58,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: row, error: fetchErr } = await admin
     .from("bookings")
-    .select("id, user_id, status, started_at, en_route_at")
+    .select("id, user_id, status, started_at, en_route_at, date, time, customer_email, service, cleaner_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -77,6 +79,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Cannot reschedule after the cleaner is on the way or started." }, { status: 400 });
   }
 
+  const prevDate = String((row as { date?: string | null }).date ?? "");
+  const prevTimeRaw = String((row as { time?: string | null }).time ?? "");
+  const prevTime = prevTimeRaw.length >= 5 ? prevTimeRaw.slice(0, 5) : prevTimeRaw;
+
   const { error: upErr } = await admin
     .from("bookings")
     .update({ date, time })
@@ -85,6 +91,25 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (upErr) {
     return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
+
+  const custEmail = String((row as { customer_email?: string | null }).customer_email ?? "").trim();
+  void notifyBookingEvent({
+    type: "rescheduled",
+    supabase: admin,
+    bookingId,
+    customerEmail: custEmail,
+    previousDate: prevDate,
+    previousTime: prevTime,
+    newDate: date,
+    newTime: time,
+    serviceLabel: (row as { service?: string | null }).service ?? null,
+  });
+
+  const cleanerId = (row as { cleaner_id?: string | null }).cleaner_id;
+  const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
+  if (status === "pending" && !cleanerId && autoDispatch) {
+    void ensureBookingAssignment(admin, bookingId, { source: "customer_reschedule" });
   }
 
   return NextResponse.json({ ok: true });

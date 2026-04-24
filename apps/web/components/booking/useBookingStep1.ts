@@ -1,8 +1,8 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
@@ -232,7 +232,15 @@ export type UseBookingStep1Return = {
   mainTransitionKey: string;
 };
 
-export function useBookingStep1(): UseBookingStep1Return {
+const BookingStep1Context = createContext<UseBookingStep1Return | null>(null);
+
+/** Single source of truth for funnel step-1 state — must wrap {@link BookingPriceProvider} and all booking steps. */
+export function BookingStep1Provider({ children }: { children: ReactNode }) {
+  const value = useBookingStep1Store();
+  return createElement(BookingStep1Context.Provider, { value }, children);
+}
+
+function useBookingStep1Store(): UseBookingStep1Return {
   const router = useRouter();
   const [state, setState] = useState<BookingStep1State>(initialState);
   const [hydrated, setHydrated] = useState(false);
@@ -337,4 +345,14 @@ export function useBookingStep1(): UseBookingStep1Return {
     handleContinue,
     mainTransitionKey,
   };
+}
+
+export function useBookingStep1(): UseBookingStep1Return {
+  const ctx = useContext(BookingStep1Context);
+  if (!ctx) {
+    throw new Error(
+      "useBookingStep1 must be used within <BookingStep1Provider> (wrap the /booking funnel tree).",
+    );
+  }
+  return ctx;
 }

@@ -110,7 +110,7 @@ export default function AdminPricingPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-10">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Pricing</h1>
+        <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Pricing</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Edit service and add-on catalog in Supabase. Checkout still uses in-app pricing until wired to these tables.
         </p>
