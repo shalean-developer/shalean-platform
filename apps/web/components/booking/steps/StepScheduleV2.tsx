@@ -298,8 +298,10 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const handleSelectSlot = useCallback(
     async (time: string, opts?: { fromAutoPick?: boolean }) => {
       if (!lockBaseState) return;
-      const slot = liveSlots.find((s) => s.time === time);
-      if (!slot) return;
+      /** Prefer roster row from availability API — `liveSlots` can lag pricing recomputation and make `find` miss briefly. */
+      const rawSlot = rawSlots.find((s) => s.time === time);
+      if (!rawSlot?.available) return;
+      const cleanersCount = Math.max(0, Math.round(rawSlot.cleanersCount));
       const body = JSON.stringify({
         service: lockBaseState.service,
         service_type: lockBaseState.service_type,
@@ -309,7 +311,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
         extras: lockBaseState.extras,
         date: selectedDate,
         time,
-        cleanersCount: slot.cleanersCount,
+        cleanersCount,
         vipTier,
       });
       let lastErr = "Could not lock this time.";
@@ -350,27 +352,32 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
           json.lockExpiresAt.trim()
         ) {
           const b = json.breakdown;
-          lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
-            vipTier,
-            lockedQuote: {
-              total: json.total,
-              hours: json.hours,
-              surge: Number(json.surgeMultiplier ?? 1),
-              surgeLabel: json.surgeLabel ?? (json.surgeApplied ? "High demand" : "Standard"),
-              cleanersCount: slot.cleanersCount,
-              quoteSubtotalZar: typeof b?.subtotalZar === "number" ? b.subtotalZar : undefined,
-              quoteAfterVipSubtotalZar: typeof b?.afterVipSubtotalZar === "number" ? b.afterVipSubtotalZar : undefined,
-              quoteVipSavingsZar: typeof b?.vipSavingsZar === "number" ? b.vipSavingsZar : undefined,
-              quoteSignature: json.signature,
-              lockExpiresAt: json.lockExpiresAt,
-              pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
-              pricing_version_id:
-                typeof json.pricing_version_id === "string" && json.pricing_version_id.trim()
-                  ? json.pricing_version_id.trim()
-                  : undefined,
-              extras_line_items: Array.isArray(json.extras_line_items) ? json.extras_line_items : undefined,
-            },
-          });
+          try {
+            lockBookingSlot(lockBaseState, { date: selectedDate, time }, {
+              vipTier,
+              lockedQuote: {
+                total: json.total,
+                hours: json.hours,
+                surge: Number(json.surgeMultiplier ?? 1),
+                surgeLabel: json.surgeLabel ?? (json.surgeApplied ? "High demand" : "Standard"),
+                cleanersCount,
+                quoteSubtotalZar: typeof b?.subtotalZar === "number" ? b.subtotalZar : undefined,
+                quoteAfterVipSubtotalZar: typeof b?.afterVipSubtotalZar === "number" ? b.afterVipSubtotalZar : undefined,
+                quoteVipSavingsZar: typeof b?.vipSavingsZar === "number" ? b.vipSavingsZar : undefined,
+                quoteSignature: json.signature,
+                lockExpiresAt: json.lockExpiresAt,
+                pricingVersion: typeof json.pricingVersion === "number" ? json.pricingVersion : undefined,
+                pricing_version_id:
+                  typeof json.pricing_version_id === "string" && json.pricing_version_id.trim()
+                    ? json.pricing_version_id.trim()
+                    : undefined,
+                extras_line_items: Array.isArray(json.extras_line_items) ? json.extras_line_items : undefined,
+              },
+            });
+          } catch {
+            setSlotHint("We couldn’t save your slot. Check that site data is allowed, then try again.");
+            return;
+          }
           return;
         }
         if (attempt < 3) await sleep(400 * (attempt + 1));
@@ -386,7 +393,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       setSlotHint("That time may have just been taken — we refreshed the list. Pick another slot below.");
       forceAvailabilityRefresh();
     },
-    [lockBaseState, liveSlots, selectedDate, vipTier, forceAvailabilityRefresh],
+    [lockBaseState, rawSlots, selectedDate, vipTier, forceAvailabilityRefresh],
   );
 
   useEffect(() => {
