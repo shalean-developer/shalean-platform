@@ -23,6 +23,7 @@ import {
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
 
 type LiveSlot = PricedAvailabilitySlot;
 
@@ -324,6 +325,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
         const json = (await res.json()) as {
           ok?: boolean;
           error?: string;
+          errorCode?: string;
           pricingVersion?: number;
           pricing_version_id?: string;
           total?: number;
@@ -341,6 +343,10 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
           };
         };
         lastErr = typeof json.error === "string" ? json.error : lastErr;
+        if (json.errorCode === CONFIG_MISSING_BOOKING_LOCK_HMAC) {
+          lastErr = CONFIG_MISSING_BOOKING_LOCK_HMAC;
+          break;
+        }
         if (
           res.ok &&
           json.ok === true &&
@@ -390,6 +396,12 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       });
       if (opts?.fromAutoPick) lockFailedTimeKeysRef.current.add(`${selectedDate}|${time}`);
       autoLockRunRef.current = "";
+      if (lastErr === CONFIG_MISSING_BOOKING_LOCK_HMAC) {
+        setSlotHint(
+          "Booking confirmation is temporarily unavailable. Please try again in a few minutes, or contact us if this keeps happening.",
+        );
+        return;
+      }
       setSlotHint("That time may have just been taken — we refreshed the list. Pick another slot below.");
       forceAvailabilityRefresh();
     },
