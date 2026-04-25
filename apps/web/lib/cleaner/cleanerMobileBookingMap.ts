@@ -19,6 +19,10 @@ export type CleanerMobileJobView = {
   /** ZAR — null until stored display earnings is available. */
   earningsZar: number | null;
   payoutStatus: "paid" | "pending";
+  /** Team-assigned booking (cleaner_id may be null on server). */
+  isTeamJob: boolean;
+  /** Active cleaners on roster for booking date; null if unknown or not a team job. */
+  teamMemberCount: number | null;
 };
 
 function durationHoursFromSnapshot(snap: unknown): number {
@@ -60,6 +64,11 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
       : null;
   const earningsZar = displayCents != null ? Math.round(displayCents / 100) : null;
   const payoutStatus: "paid" | "pending" = row.payout_id ? "paid" : "pending";
+  const teamMemberCountRaw = row.teamMemberCount;
+  const teamMemberCount =
+    typeof teamMemberCountRaw === "number" && Number.isFinite(teamMemberCountRaw) && teamMemberCountRaw > 0
+      ? Math.floor(teamMemberCountRaw)
+      : null;
 
   return {
     id: row.id,
@@ -76,6 +85,8 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     notes: notesFromSnapshot(row.booking_snapshot),
     earningsZar,
     payoutStatus: st === "completed" ? payoutStatus : "pending",
+    isTeamJob: row.is_team_job === true,
+    teamMemberCount,
   };
 }
 

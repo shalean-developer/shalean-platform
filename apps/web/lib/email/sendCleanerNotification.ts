@@ -61,7 +61,7 @@ export async function sendCleanerNewJobEmail(params: {
       <li><strong>Location:</strong> ${escapeHtml(params.location || "—")}</li>
       ${extrasBlock}
     </ul>
-    <p><a href="${jobsUrl}">Open your jobs</a> to accept, start, and complete the visit.</p>
+    <p><a href="${jobsUrl}">Open My Jobs</a> in the cleaner app to view details, confirm availability when you are on a team, and update progress on the visit.</p>
     <p style="color:#666;font-size:12px">Booking ID: ${escapeHtml(params.bookingId)}</p>
   `;
 

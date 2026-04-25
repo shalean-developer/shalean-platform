@@ -19,5 +19,7 @@ export type CleanerOfferRow = {
     customer_phone: string | null;
     status: string | null;
     total_paid_zar?: number | null;
+    is_team_job?: boolean;
+    team_id?: string | null;
   } | null;
 };

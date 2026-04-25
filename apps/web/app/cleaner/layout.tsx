@@ -72,7 +72,7 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
               Dashboard
             </Link>
             <Link href="/cleaner/jobs" className="text-blue-700 hover:underline dark:text-blue-400">
-              Jobs
+              My Jobs
             </Link>
             <Link href="/" className="text-zinc-600 dark:text-zinc-400">
               Site

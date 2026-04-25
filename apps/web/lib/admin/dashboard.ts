@@ -98,6 +98,17 @@ export async function assignCleaner(bookingId: string, cleanerId: string, force 
   if (!res.ok) throw new Error(json.error ?? "Failed to assign cleaner.");
 }
 
+export async function assignTeamToBookingAdmin(bookingId: string, teamId: string) {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ teamId }),
+  });
+  const json = (await res.json()) as { error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Failed to assign team.");
+}
+
 export async function updateBookingStatus(id: string, status: string) {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {

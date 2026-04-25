@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { bookingRowToMobileView, ymdLocal } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
 
 type RouteStop = {
   id: string;
@@ -196,6 +197,13 @@ export function CleanerScheduleTab({
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
                           {v.service} · {formatDuration(v.durationHours)}
                         </p>
+                        {row.is_team_job === true ? (
+                          <p className="mt-2 text-xs font-medium leading-snug text-blue-800 dark:text-blue-200">
+                            {teamJobAssignmentHeadline(
+                              typeof row.teamMemberCount === "number" ? row.teamMemberCount : null,
+                            )}
+                          </p>
+                        ) : null}
                       </Link>
                       <a
                         href={mapsUrl}

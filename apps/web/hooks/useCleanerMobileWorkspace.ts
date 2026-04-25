@@ -26,7 +26,7 @@ type MeCleaner = {
   location?: string | null;
 };
 
-export type CleanerJobAction = "en_route" | "start" | "complete";
+export type CleanerJobAction = "accept" | "en_route" | "start" | "complete";
 
 function assertOnline(): { ok: true } | { ok: false; error: string } {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -44,6 +44,7 @@ export function useCleanerMobileWorkspace() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [offerActingId, setOfferActingId] = useState<string | null>(null);
   const [realtimeOk, setRealtimeOk] = useState(false);
+  const [teamIdsForRealtime, setTeamIdsForRealtime] = useState<string[]>([]);
   const [online, setOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
@@ -79,7 +80,7 @@ export function useCleanerMobileWorkspace() {
     if (seq !== loadSeq.current) return;
 
     const j = (await jobsRes.json()) as { jobs?: CleanerBookingRow[]; error?: string };
-    const m = (await meRes.json()) as { cleaner?: MeCleaner | null; error?: string };
+    const m = (await meRes.json()) as { cleaner?: MeCleaner | null; teamIds?: string[]; error?: string };
     const o = (await offersRes.json()) as { offers?: CleanerOfferRow[]; error?: string };
 
     if (!jobsRes.ok) {
@@ -91,6 +92,7 @@ export function useCleanerMobileWorkspace() {
     }
     setOffers(offersRes.ok ? (o.offers ?? []) : []);
     if (meRes.ok && m.cleaner) setCleaner(m.cleaner);
+    setTeamIdsForRealtime(meRes.ok && Array.isArray(m.teamIds) ? m.teamIds.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : []);
     setLoading(false);
   }, []);
 
@@ -111,20 +113,28 @@ export function useCleanerMobileWorkspace() {
     let cancelled = false;
     let chBookings: ReturnType<typeof sb.channel> | null = null;
     let chOffers: ReturnType<typeof sb.channel> | null = null;
+    let chTeamMembers: ReturnType<typeof sb.channel> | null = null;
 
     void sb.auth.getSession().then(({ data: { session } }) => {
       if (cancelled || !session?.user) return;
 
-      chBookings = sb
-        .channel(`cleaner-mobile-bookings-${id}`)
-        .on(
+      chBookings = sb.channel(`cleaner-mobile-bookings-${id}`);
+      chBookings.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${id}` },
+        () => void load(),
+      );
+      for (const tid of teamIdsForRealtime) {
+        if (!tid.trim()) continue;
+        chBookings.on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${id}` },
+          { event: "*", schema: "public", table: "bookings", filter: `team_id=eq.${tid}` },
           () => void load(),
-        )
-        .subscribe((status) => {
-          if (!cancelled) setRealtimeOk(status === "SUBSCRIBED");
-        });
+        );
+      }
+      chBookings.subscribe((status) => {
+        if (!cancelled) setRealtimeOk(status === "SUBSCRIBED");
+      });
 
       chOffers = sb
         .channel(`cleaner-mobile-offers-${id}`)
@@ -134,14 +144,24 @@ export function useCleanerMobileWorkspace() {
           () => void load(),
         )
         .subscribe();
+
+      chTeamMembers = sb
+        .channel(`cleaner-mobile-team-members-${id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${id}` },
+          () => void load(),
+        )
+        .subscribe();
     });
 
     return () => {
       cancelled = true;
       if (chBookings) void sb.removeChannel(chBookings);
       if (chOffers) void sb.removeChannel(chOffers);
+      if (chTeamMembers) void sb.removeChannel(chTeamMembers);
     };
-  }, [load]);
+  }, [load, teamIdsForRealtime]);
 
   const postJobAction = useCallback(async (bookingId: string, action: CleanerJobAction) => {
     const o = assertOnline();
@@ -216,7 +236,12 @@ export function useCleanerMobileWorkspace() {
   const activeJob = useMemo(() => getActiveMobileJob(rows), [rows]);
   const nextJob = useMemo(() => getNextUpcomingMobileJob(rows), [rows]);
   const earnings = useMemo(() => earningsSummaryFromRows(rows, new Date()), [rows]);
-  const topOffer = useMemo(() => offers[0] ?? null, [offers]);
+  /** Dispatch offers only — team-assigned jobs never appear here (they live under My Jobs). */
+  const availableOffers = useMemo(
+    () => offers.filter((o) => o.booking == null || o.booking.is_team_job !== true),
+    [offers],
+  );
+  const topOffer = useMemo(() => availableOffers[0] ?? null, [availableOffers]);
 
   const earningsRows = useMemo(() => {
     const completed = rows.filter((r) => String(r.status ?? "").toLowerCase() === "completed");

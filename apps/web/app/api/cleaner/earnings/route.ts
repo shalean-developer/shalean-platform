@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  bookingsVisibilityOrFilter,
+  fetchCleanerTeamIds,
+} from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
@@ -58,11 +62,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
 
+  const teamIds = await fetchCleanerTeamIds(admin, session.cleanerId);
+  const visibilityOr = bookingsVisibilityOrFilter(session.cleanerId, teamIds);
+
   const [{ data: bookings, error }, { data: paymentDetails, error: paymentDetailsError }] = await Promise.all([
     admin
       .from("bookings")
       .select("id, service, date, time, status, completed_at, is_team_job, display_earnings_cents, cleaner_payout_cents, payout_id")
-      .eq("cleaner_id", session.cleanerId)
+      .or(visibilityOr)
       .eq("status", "completed")
       .order("date", { ascending: false })
       .order("time", { ascending: false })

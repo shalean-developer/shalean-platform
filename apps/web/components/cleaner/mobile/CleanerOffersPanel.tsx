@@ -13,6 +13,7 @@ import {
 } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
+import { AvailableJobsEmptyState } from "@/components/cleaner/AvailableJobsEmptyState";
 
 function playOfferPing(): void {
   try {
@@ -45,7 +46,7 @@ export function CleanerOffersPanel({
   onAccept,
   onDecline,
 }: {
-  offer: CleanerOfferRow | null;
+  offer: CleanerOfferRow | null | undefined;
   busy: boolean;
   onAccept: (offerId: string, uxVariant?: string | null) => Promise<void>;
   onDecline: (offerId: string) => Promise<void>;
@@ -85,7 +86,17 @@ export function CleanerOffersPanel({
     return () => window.clearInterval(id);
   }, [offer?.expires_at, offer?.id]);
 
-  if (!offer?.booking) return null;
+  if (!offer) {
+    return (
+      <div className="mb-4 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Available Jobs</p>
+        <AvailableJobsEmptyState />
+      </div>
+    );
+  }
+
+  if (!offer.booking) return null;
+  if (offer.booking.is_team_job === true) return null;
 
   const b = offer.booking;
   const displayEarningsCents =
@@ -102,17 +113,19 @@ export function CleanerOffersPanel({
         : "";
 
   return (
-    <Card
-      className={[
-        "mb-4 rounded-2xl border-amber-200 bg-amber-50/90 shadow-sm transition-shadow duration-300 dark:border-amber-900/50 dark:bg-amber-950/35",
-        urgencyRing,
-      ].join(" ")}
-    >
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-center justify-between gap-2">
+    <div className="mb-4 space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Available Jobs</p>
+      <Card
+        className={[
+          "rounded-2xl border-amber-200 bg-amber-50/90 shadow-sm transition-shadow duration-300 dark:border-amber-900/50 dark:bg-amber-950/35",
+          urgencyRing,
+        ].join(" ")}
+      >
+        <CardContent className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-2">
           <Badge variant="warning" className="gap-1 font-semibold">
             <Zap className="h-3 w-3" aria-hidden />
-            New job
+            New offer
           </Badge>
           <span
             className={[
@@ -168,5 +181,6 @@ export function CleanerOffersPanel({
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }

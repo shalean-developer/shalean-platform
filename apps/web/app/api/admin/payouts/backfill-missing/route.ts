@@ -95,7 +95,15 @@ export async function POST(request: Request) {
       skipped += 1;
       continue;
     }
-    const result = await persistCleanerPayoutIfUnset({ admin, bookingId: row.id, cleanerId });
+    let result: Awaited<ReturnType<typeof persistCleanerPayoutIfUnset>>;
+    try {
+      result = await persistCleanerPayoutIfUnset({ admin, bookingId: row.id, cleanerId });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("backfill-missing persistCleanerPayoutIfUnset", { bookingId: row.id, cleanerId, error: msg });
+      failed.push({ bookingId: row.id, error: msg });
+      continue;
+    }
     if (!result.ok) {
       failed.push({ bookingId: row.id, error: result.error });
       continue;

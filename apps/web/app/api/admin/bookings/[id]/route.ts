@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isAdmin } from "@/lib/auth/admin";
+import { isTeamService } from "@/lib/dispatch/assignBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { logSystemEvent } from "@/lib/logging/systemLog";
@@ -89,11 +91,42 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ error: offersErr.message }, { status: 500 });
   }
 
+  const b = booking as Record<string, unknown>;
+  const supports_team_assignment = isTeamService({
+    service: typeof b.service === "string" ? b.service : null,
+    booking_snapshot: b.booking_snapshot,
+  });
+
+  let team_summary: { id: string; name: string; member_count: number | null } | null = null;
+  const teamId = typeof b.team_id === "string" && b.team_id.trim() ? b.team_id.trim() : null;
+  const dateYmd = typeof b.date === "string" ? b.date.trim().slice(0, 10) : "";
+  if (teamId) {
+    const { data: teamRow } = await admin.from("teams").select("id, name").eq("id", teamId).maybeSingle();
+    if (teamRow && typeof teamRow === "object" && "id" in teamRow && "name" in teamRow) {
+      let member_count: number | null = null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
+        const { data: mem } = await admin
+          .from("team_members")
+          .select("cleaner_id, active_from, active_to")
+          .eq("team_id", teamId)
+          .not("cleaner_id", "is", null);
+        member_count = countActiveTeamMembersOnDate(mem ?? [], dateYmd);
+      }
+      team_summary = {
+        id: String((teamRow as { id: string }).id),
+        name: String((teamRow as { name: string }).name),
+        member_count,
+      };
+    }
+  }
+
   return NextResponse.json({
     booking,
     cleaner: cleaner ?? null,
     userProfile: userProfile ?? null,
     dispatch_offers: dispatchOffers ?? [],
+    supports_team_assignment,
+    team_summary,
   });
 }
 
@@ -191,12 +224,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const completedViaPatch = updates.status === "completed";
   const effectiveCleaner = newCleaner ?? oldCleaner;
   if (completedViaPatch && effectiveCleaner) {
-    const payout = await persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId: effectiveCleaner });
-    if (!payout.ok) {
+    try {
+      const payout = await persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId: effectiveCleaner });
+      if (!payout.ok) {
+        await logSystemEvent({
+          level: "error",
+          source: "admin_booking_completed",
+          message: `Payout missing after admin completion: ${payout.error}`,
+          context: { bookingId: id, cleanerId: effectiveCleaner },
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("admin bookings PATCH persistCleanerPayoutIfUnset", { bookingId: id, cleanerId: effectiveCleaner, error: msg });
       await logSystemEvent({
         level: "error",
         source: "admin_booking_completed",
-        message: `Payout missing after admin completion: ${payout.error}`,
+        message: `Payout persist threw after admin completion: ${msg}`,
         context: { bookingId: id, cleanerId: effectiveCleaner },
       });
     }

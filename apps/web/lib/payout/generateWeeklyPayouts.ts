@@ -43,7 +43,18 @@ async function ensureNoMissingCompletedPayouts(
     const bookingId = String((row as { id?: string }).id ?? "");
     const cleanerId = String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
     if (!bookingId || !cleanerId) continue;
-    const result = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
+    let result: Awaited<ReturnType<typeof persistCleanerPayoutIfUnset>>;
+    try {
+      result = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("generateWeeklyPayouts persistCleanerPayoutIfUnset", { bookingId, cleanerId, error: msg });
+      await reportOperationalIssue("error", "generateWeeklyPayouts", `preflight payout backfill threw: ${msg}`, {
+        bookingId,
+        cleanerId,
+      });
+      continue;
+    }
     if (!result.ok) {
       await reportOperationalIssue("error", "generateWeeklyPayouts", `preflight payout backfill failed: ${result.error}`, {
         bookingId,
@@ -152,7 +163,18 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
           bookingId: booking.id,
           cleanerId,
         });
-        const persisted = await persistCleanerPayoutIfUnset({ admin, bookingId: booking.id, cleanerId });
+        let persisted: Awaited<ReturnType<typeof persistCleanerPayoutIfUnset>>;
+        try {
+          persisted = await persistCleanerPayoutIfUnset({ admin, bookingId: booking.id, cleanerId });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("generateWeeklyPayouts persistCleanerPayoutIfUnset", { bookingId: booking.id, cleanerId, error: msg });
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `payout backfill threw: ${msg}`, {
+            bookingId: booking.id,
+            cleanerId,
+          });
+          continue;
+        }
         if (!persisted.ok) {
           await reportOperationalIssue("error", "generateWeeklyPayouts", `payout backfill failed: ${persisted.error}`, {
             bookingId: booking.id,

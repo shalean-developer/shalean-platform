@@ -9,7 +9,7 @@ export type AssignBookingResult =
   | { ok: true; assignmentKind: "team"; teamId: string }
   | { ok: false; error: "no_candidate" | "booking_not_pending" | "db_error"; message?: string };
 
-function isTeamService(booking: { service?: string | null; booking_snapshot?: unknown }): boolean {
+export function isTeamService(booking: { service?: string | null; booking_snapshot?: unknown }): boolean {
   const snap = booking.booking_snapshot;
   if (snap && typeof snap === "object" && !Array.isArray(snap)) {
     const locked = (snap as { locked?: unknown }).locked;
@@ -22,7 +22,7 @@ function isTeamService(booking: { service?: string | null; booking_snapshot?: un
   return s.includes("deep") || s.includes("move");
 }
 
-function teamServiceType(booking: { service?: string | null; booking_snapshot?: unknown }): "deep_cleaning" | "move_cleaning" {
+export function teamServiceType(booking: { service?: string | null; booking_snapshot?: unknown }): "deep_cleaning" | "move_cleaning" {
   const snap = booking.booking_snapshot;
   if (snap && typeof snap === "object" && !Array.isArray(snap)) {
     const locked = (snap as { locked?: unknown }).locked;
@@ -44,7 +44,7 @@ export async function assignBooking(
 
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, status, cleaner_id, date, service, location, booking_snapshot")
+    .select("id, status, cleaner_id, date, time, service, location, booking_snapshot")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr || !booking) return { ok: false, error: "db_error", message: bErr?.message ?? "Booking not found" };
@@ -54,6 +54,7 @@ export async function assignBooking(
     status: string | null;
     cleaner_id: string | null;
     date: string | null;
+    time: string | null;
     service: string | null;
     location: string | null;
     booking_snapshot?: unknown;
@@ -81,7 +82,7 @@ export async function assignBooking(
   const serviceType = teamServiceType(b);
   const team = await assignTeamToBooking(
     supabase,
-    { id: b.id, status: b.status, cleaner_id: b.cleaner_id, date: b.date },
+    { id: b.id, status: b.status, cleaner_id: b.cleaner_id, date: b.date, time: b.time },
     serviceType,
   );
   if (!team.ok) return team;

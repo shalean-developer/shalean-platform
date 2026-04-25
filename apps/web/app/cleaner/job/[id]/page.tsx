@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { bookingRowToMobileView, deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
 
 export default function CleanerJobDetailPage() {
   const params = useParams();
@@ -105,7 +106,24 @@ export default function CleanerJobDetailPage() {
       <div className="flex-1 overflow-y-auto p-4">
         <Card className="rounded-2xl shadow-sm">
           <CardContent className="space-y-4 p-4">
-            <Badge variant="default">{statusLabel}</Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="default">{statusLabel}</Badge>
+              {row.is_team_job ? (
+                <Badge variant="outline" className="font-normal">
+                  Team job
+                </Badge>
+              ) : null}
+            </div>
+            {row.is_team_job ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/90 px-3 py-2.5 text-sm dark:border-blue-900/50 dark:bg-blue-950/35">
+                <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                  {teamJobAssignmentHeadline(
+                    typeof row.teamMemberCount === "number" ? row.teamMemberCount : null,
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{TEAM_JOB_ROLE_SUBTEXT}</p>
+              </div>
+            ) : null}
             <div>
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{view.customerName}</h2>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{view.service}</p>

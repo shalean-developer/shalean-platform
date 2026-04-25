@@ -88,13 +88,24 @@ async function getServiceCap(serviceId: string, bookingDate: string): Promise<Se
     .limit(50);
 
   if (error) {
-    throw new Error(`Failed loading service cap for serviceId=${serviceId}: ${error.message}`);
+    console.error("EARNINGS_CAP_MISSING", {
+      serviceId,
+      bookingDate,
+      reason: "query_error",
+      message: error.message,
+    });
+    return null;
   }
   if (!data?.length) return null;
 
   const bookingAt = new Date(bookingDate).getTime();
   if (Number.isNaN(bookingAt)) {
-    throw new Error(`Invalid bookingDate passed to getServiceCap: ${bookingDate}`);
+    console.error("EARNINGS_CAP_MISSING", {
+      serviceId,
+      bookingDate,
+      reason: "invalid_booking_date",
+    });
+    return null;
   }
 
   const activeRow = (data as Array<{ cap_cents?: number; effective_from?: string | null; effective_to?: string | null }>).find(
@@ -143,11 +154,27 @@ export async function computeBookingEarnings({
   const percentage = tenureMonths < 4 ? 0.6 : 0.7;
 
   const cap = await getServiceCap(serviceId, bookingDate);
+  const percentageEarnings = Math.round(normalizedServicePriceCents * percentage);
+
   if (!cap) {
-    throw new Error(`Missing service cap for serviceId=${serviceId}`);
+    console.error("EARNINGS_CAP_MISSING", {
+      serviceId,
+      bookingDate,
+      reason: "no_active_cap",
+      percentageEarningsUncapped: percentageEarnings,
+    });
+    const displayUncapped = percentageEarnings;
+    return {
+      display_earnings_cents: displayUncapped,
+      payout_earnings_cents: displayUncapped,
+      internal_earnings_cents: percentageEarnings,
+      earnings_model_version: EARNINGS_MODEL_VERSION,
+      earnings_percentage_applied: percentage,
+      earnings_cap_cents_applied: undefined,
+      earnings_tenure_months_at_assignment: tenureMonths,
+    };
   }
 
-  const percentageEarnings = Math.round(normalizedServicePriceCents * percentage);
   const displayEarnings = Math.min(percentageEarnings, cap.cap_cents);
   const internalEarnings = percentageEarnings;
 

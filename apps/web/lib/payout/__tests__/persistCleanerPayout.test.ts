@@ -332,7 +332,7 @@ describe("persistCleanerPayoutIfUnset", () => {
     expect(Number(booking.payout_earnings_cents)).toBe(Number(booking.display_earnings_cents));
   });
 
-  it("fails loudly when service cap is missing and performs no writes", async () => {
+  it("missing cap still writes display earnings", async () => {
     const admin = new MockSupabaseClient({
       bookings: [
         {
@@ -359,21 +359,24 @@ describe("persistCleanerPayoutIfUnset", () => {
       service_earning_caps: [],
     });
     mockState.admin = admin;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
-    await expect(
-      persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b5", cleanerId: "c1" }),
-    ).rejects.toThrow("Missing service cap");
+    const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b5", cleanerId: "c1" });
 
-    expect(admin.updateCount.bookings ?? 0).toBe(0);
-    expect(admin.insertCount.team_job_member_payouts ?? 0).toBe(0);
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(false);
+    expect(admin.updateCount.bookings ?? 0).toBeGreaterThanOrEqual(1);
 
     const booking = admin.tables.bookings[0]!;
-    expect(booking.display_earnings_cents).toBeNull();
-    expect(booking.payout_earnings_cents).toBeUndefined();
-    expect(booking.internal_earnings_cents).toBeUndefined();
-    expect(booking.cleaner_payout_cents).toBeNull();
-    expect(booking.cleaner_bonus_cents).toBeNull();
-    expect(booking.company_revenue_cents).toBeNull();
+    expect(booking.display_earnings_cents).toBe(24_000);
+    expect(booking.payout_earnings_cents).toBe(24_000);
+    expect(booking.internal_earnings_cents).toBe(24_000);
+    expect(booking.earnings_cap_cents_applied).toBeNull();
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      "EARNINGS_CAP_MISSING",
+      expect.objectContaining({ serviceId: "standard", reason: "no_active_cap" }),
+    );
   });
 });

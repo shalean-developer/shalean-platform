@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
 import type { CleanerMobileJobView } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { formatCleanerAvailabilityConfirmedMessage } from "@/lib/cleaner/cleanerAvailabilityConfirmedCopy";
+import { teamSelfAvailabilityChip } from "@/lib/cleaner/teamAvailabilityUi";
+import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
 
 function formatDuration(hours: number) {
   if (hours % 1 === 0) return `${hours}h`;
@@ -22,12 +25,18 @@ function JobHeroCard({
   job,
   variant,
   actingId,
+  availabilityAcked,
   onJobAction,
 }: {
   job: CleanerMobileJobView;
   variant: "active" | "next";
   actingId: string | null;
-  onJobAction: (bookingId: string, action: CleanerJobAction) => Promise<void>;
+  availabilityAcked: boolean;
+  onJobAction: (
+    bookingId: string,
+    action: CleanerJobAction,
+    opts?: { teamAvailabilityConfirm?: boolean; scheduleSummary?: string },
+  ) => Promise<void>;
 }) {
   const isActive = variant === "active";
   const busy = actingId === job.id;
@@ -61,6 +70,29 @@ function JobHeroCard({
           <Sparkles className="h-8 w-8 shrink-0 text-blue-500/90" aria-hidden />
         </div>
 
+        {job.isTeamJob ? (
+          <div className="rounded-xl border border-blue-200 bg-blue-50/90 px-3 py-2.5 text-sm dark:border-blue-900/50 dark:bg-blue-950/35">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-zinc-900 dark:text-zinc-50">{teamJobAssignmentHeadline(job.teamMemberCount)}</p>
+              {(() => {
+                const chip = teamSelfAvailabilityChip(job.phase, availabilityAcked);
+                const cls =
+                  chip.variant === "confirmed"
+                    ? "border-emerald-300/80 bg-emerald-100/90 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+                    : chip.variant === "on_job"
+                      ? "border-sky-300/80 bg-sky-100/90 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                      : "border-amber-300/80 bg-amber-100/90 text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100";
+                return (
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>
+                    {chip.label}
+                  </span>
+                );
+              })()}
+            </div>
+            <p className="mt-1 text-xs leading-snug text-zinc-600 dark:text-zinc-400">{TEAM_JOB_ROLE_SUBTEXT}</p>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-800/80">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Time</p>
@@ -93,6 +125,21 @@ function JobHeroCard({
             </Button>
           ) : (
             <>
+              {job.isTeamJob && job.phase === "assigned" ? (
+                <Button
+                  size="lg"
+                  className="h-12 w-full rounded-xl text-base"
+                  disabled={busy || availabilityAcked}
+                  onClick={() =>
+                    void onJobAction(job.id, "accept", {
+                      teamAvailabilityConfirm: true,
+                      scheduleSummary: formatCleanerAvailabilityConfirmedMessage(job.date, job.time),
+                    })
+                  }
+                >
+                  {busy ? "Saving…" : availabilityAcked ? "Availability saved" : "Confirm availability"}
+                </Button>
+              ) : null}
               {job.phase === "assigned" ? (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button
@@ -164,6 +211,7 @@ export function CleanerHomeTab({
   nextJob,
   hasAnyJob,
   actingId,
+  teamAvailabilityAckIds,
   onJobAction,
 }: {
   loading: boolean;
@@ -172,7 +220,12 @@ export function CleanerHomeTab({
   nextJob: CleanerMobileJobView | null;
   hasAnyJob: boolean;
   actingId: string | null;
-  onJobAction: (bookingId: string, action: CleanerJobAction) => Promise<void>;
+  teamAvailabilityAckIds: Set<string>;
+  onJobAction: (
+    bookingId: string,
+    action: CleanerJobAction,
+    opts?: { teamAvailabilityConfirm?: boolean; scheduleSummary?: string },
+  ) => Promise<void>;
 }) {
   if (loading) {
     return (
@@ -192,10 +245,26 @@ export function CleanerHomeTab({
   }
 
   if (activeJob) {
-    return <JobHeroCard job={activeJob} variant="active" actingId={actingId} onJobAction={onJobAction} />;
+    return (
+      <JobHeroCard
+        job={activeJob}
+        variant="active"
+        actingId={actingId}
+        availabilityAcked={teamAvailabilityAckIds.has(activeJob.id)}
+        onJobAction={onJobAction}
+      />
+    );
   }
   if (nextJob) {
-    return <JobHeroCard job={nextJob} variant="next" actingId={actingId} onJobAction={onJobAction} />;
+    return (
+      <JobHeroCard
+        job={nextJob}
+        variant="next"
+        actingId={actingId}
+        availabilityAcked={teamAvailabilityAckIds.has(nextJob.id)}
+        onJobAction={onJobAction}
+      />
+    );
   }
   if (!hasAnyJob) {
     return (

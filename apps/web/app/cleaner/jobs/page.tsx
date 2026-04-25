@@ -6,6 +6,13 @@ import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant
 import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { checkoutPriceLinesFromPersisted, priceZarFromPersisted } from "@/lib/dashboard/bookingUtils";
+import { AvailableJobsEmptyState } from "@/components/cleaner/AvailableJobsEmptyState";
+import { formatCleanerAvailabilityConfirmedMessage } from "@/lib/cleaner/cleanerAvailabilityConfirmedCopy";
+import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
+import { teamSelfAvailabilityChip } from "@/lib/cleaner/teamAvailabilityUi";
+import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
 
 type JobRow = {
   id: string;
@@ -23,8 +30,13 @@ type JobRow = {
   amount_paid_cents?: number | null;
   extras?: unknown[] | null;
   assigned_at: string | null;
+  en_route_at?: string | null;
+  started_at?: string | null;
   is_team_job?: boolean | null;
+  team_id?: string | null;
+  cleaner_id?: string | null;
   displayEarningsCents?: number | null;
+  teamMemberCount?: number | null;
 };
 
 function formatZar(zar: number): string {
@@ -72,6 +84,8 @@ type OfferRow = {
     customer_name: string | null;
     customer_phone: string | null;
     status: string | null;
+    is_team_job?: boolean;
+    team_id?: string | null;
   } | null;
 };
 
@@ -83,6 +97,9 @@ export default function CleanerJobsPage() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [offers, setOffers] = useState<OfferRow[]>([]);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [realtimeCtx, setRealtimeCtx] = useState<{ cleanerId: string; teamIds: string[] } | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [teamAvailabilityAckIds, setTeamAvailabilityAckIds] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -97,28 +114,51 @@ export default function CleanerJobsPage() {
       router.replace("/auth/login?next=/cleaner/jobs");
       return;
     }
-    const [jobsRes, offersRes] = await Promise.all([
+    const [jobsRes, offersRes, meRes] = await Promise.all([
       fetch("/api/cleaner/jobs", { headers: { Authorization: `Bearer ${token}` } }),
       fetch("/api/cleaner/offers", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/cleaner/me", { headers: { Authorization: `Bearer ${token}` } }),
     ]);
     const j = (await jobsRes.json()) as { jobs?: JobRow[]; error?: string };
     const o = (await offersRes.json()) as { offers?: OfferRow[]; error?: string };
+    const me = (await meRes.json()) as { cleaner?: { id?: string }; teamIds?: string[] };
     if (!jobsRes.ok) {
       setError(j.error ?? "Could not load jobs.");
       setJobs([]);
       setOffers([]);
+      setRealtimeCtx(null);
       setLoading(false);
       return;
     }
     setError(null);
     setJobs(j.jobs ?? []);
     setOffers(offersRes.ok ? (o.offers ?? []) : []);
+    if (meRes.ok && me.cleaner?.id) {
+      setRealtimeCtx({
+        cleanerId: String(me.cleaner.id),
+        teamIds: Array.isArray(me.teamIds)
+          ? me.teamIds.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+          : [],
+      });
+    } else {
+      setRealtimeCtx(null);
+    }
     setLoading(false);
   }, [router]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!actionNotice) return;
+    const t = window.setTimeout(() => setActionNotice(null), 5200);
+    return () => window.clearTimeout(t);
+  }, [actionNotice]);
+
+  useEffect(() => {
+    setTeamAvailabilityAckIds(readTeamAvailabilityAckSet());
+  }, []);
 
   useEffect(() => {
     const t = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -138,33 +178,45 @@ export default function CleanerJobsPage() {
 
   useEffect(() => {
     const sb = getSupabaseBrowser();
-    if (!sb) return;
+    if (!sb || !realtimeCtx?.cleanerId) return;
 
     let cancelled = false;
     let ch: ReturnType<typeof sb.channel> | null = null;
     void sb.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      const uid = data.session?.user?.id;
-      if (!uid) return;
-      ch = sb
-        .channel(`cleaner-bookings-${uid}`)
-        .on(
+      if (cancelled || !data.session) return;
+      const cid = realtimeCtx.cleanerId;
+      ch = sb.channel(`cleaner-bookings-${cid}`);
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${cid}` },
+        () => {
+          void load();
+        },
+      );
+      for (const tid of realtimeCtx.teamIds) {
+        if (!tid.trim()) continue;
+        ch.on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${uid}` },
+          { event: "*", schema: "public", table: "bookings", filter: `team_id=eq.${tid}` },
           () => {
             void load();
           },
-        )
-        .subscribe();
+        );
+      }
+      ch.subscribe();
     });
 
     return () => {
       cancelled = true;
       if (ch) void sb.removeChannel(ch);
     };
-  }, [load]);
+  }, [load, realtimeCtx]);
 
-  async function runAction(bookingId: string, action: string) {
+  async function runAction(
+    bookingId: string,
+    action: string,
+    meta?: { teamAvailabilityConfirm?: boolean; date?: string | null; time?: string | null },
+  ) {
     setActingId(bookingId);
     const sb = getSupabaseBrowser();
     const { data: sessionData } = await sb?.auth.getSession() ?? { data: { session: null } };
@@ -179,7 +231,14 @@ export default function CleanerJobsPage() {
       body: JSON.stringify({ action }),
     });
     setActingId(null);
-    if (res.ok) void load();
+    if (res.ok) {
+      if (meta?.teamAvailabilityConfirm === true && action === "accept") {
+        addTeamAvailabilityAck(bookingId);
+        setTeamAvailabilityAckIds(readTeamAvailabilityAckSet());
+        setActionNotice(formatCleanerAvailabilityConfirmedMessage(meta.date, meta.time));
+      }
+      void load();
+    }
   }
 
   async function respondToOffer(offerId: string, action: "accept" | "decline", uxVariant?: string | null) {
@@ -220,7 +279,8 @@ export default function CleanerJobsPage() {
   }
 
   const list = jobs ?? [];
-  const activeOffer = offers[0] ?? null;
+  const availableOffers = offers.filter((o) => o.booking == null || o.booking.is_team_job !== true);
+  const activeOffer = availableOffers[0] ?? null;
   const activeOfferDisplayZar =
     activeOffer?.displayEarningsCents != null && Number.isFinite(Number(activeOffer.displayEarningsCents))
       ? Math.round(Number(activeOffer.displayEarningsCents) / 100)
@@ -231,14 +291,23 @@ export default function CleanerJobsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Your jobs</h1>
+      <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">My Jobs</h1>
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
         Updates appear automatically when operations assigns work.
       </p>
 
+      {actionNotice ? (
+        <p
+          className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100"
+          role="status"
+        >
+          {actionNotice}
+        </p>
+      ) : null}
+
       {activeOffer ? (
         <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/30">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Active offer</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Available Jobs</p>
           <p className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-50">
             {activeOffer.booking?.service ?? "Cleaning job"}
           </p>
@@ -271,15 +340,24 @@ export default function CleanerJobsPage() {
             </button>
           </div>
         </section>
-      ) : null}
+      ) : (
+        <div className="mt-5 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Available Jobs</p>
+          <AvailableJobsEmptyState />
+        </div>
+      )}
 
       {list.length === 0 ? (
         <p className="mt-8 text-center text-sm text-zinc-500">No jobs yet — stay available to receive assignments.</p>
       ) : (
-        <ul className="mt-6 space-y-4">
+        <ul className="mt-6 space-y-4" aria-label="My jobs list">
           {list.map((j) => {
             const st = (j.status ?? "").toLowerCase();
             const busy = actingId === j.id;
+            const isTeam = j.is_team_job === true;
+            const phase = deriveMobilePhase(j as CleanerBookingRow);
+            const teamAcked = teamAvailabilityAckIds.has(j.id);
+            const availChip = isTeam ? teamSelfAvailabilityChip(phase, teamAcked) : null;
             const extrasLines = cleanerExtrasRequiredLines(j.extras);
             const priceLines = checkoutPriceLinesFromPersisted({
               total_price: j.total_price ?? null,
@@ -355,6 +433,30 @@ export default function CleanerJobsPage() {
                         ? `You will earn R${displayZar.toLocaleString("en-ZA")}`
                         : "Earnings unavailable"}
                     </p>
+                    {isTeam && availChip ? (
+                      <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/90 px-3 py-2 text-sm dark:border-blue-900/50 dark:bg-blue-950/35">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                            {teamJobAssignmentHeadline(
+                              typeof j.teamMemberCount === "number" ? j.teamMemberCount : null,
+                            )}
+                          </p>
+                          <span
+                            className={[
+                              "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                              availChip.variant === "confirmed"
+                                ? "border-emerald-300/80 bg-emerald-100/90 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+                                : availChip.variant === "on_job"
+                                  ? "border-sky-300/80 bg-sky-100/90 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                                  : "border-amber-300/80 bg-amber-100/90 text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100",
+                            ].join(" ")}
+                          >
+                            {availChip.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{TEAM_JOB_ROLE_SUBTEXT}</p>
+                      </div>
+                    ) : null}
                   </div>
                   <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold uppercase text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                     {j.status ?? "—"}
@@ -365,12 +467,19 @@ export default function CleanerJobsPage() {
                     <>
                       <button
                         type="button"
-                        disabled={busy}
-                        onClick={() => void runAction(j.id, "accept")}
+                        disabled={busy || (isTeam && teamAcked)}
+                        onClick={() =>
+                          void runAction(j.id, "accept", {
+                            teamAvailabilityConfirm: isTeam,
+                            date: j.date,
+                            time: j.time,
+                          })
+                        }
                         className="rounded-lg bg-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
                       >
-                        Acknowledge
+                        {isTeam ? (teamAcked ? "Availability saved" : "Confirm availability") : "Acknowledge"}
                       </button>
+                      {!isTeam ? (
                       <button
                         type="button"
                         disabled={busy}
@@ -379,6 +488,7 @@ export default function CleanerJobsPage() {
                       >
                         Reject
                       </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={busy}

@@ -65,15 +65,58 @@ export async function ensureBookingAssignment(
   const r = await assignBooking(supabase, bookingId, { retryEscalation: retryEsc, smartAssign: mergedSmart });
 
   if (r.ok) {
-    if (r.assignmentKind === "individual") {
-      const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: r.cleanerId });
-      if (!payout.ok) {
-        await reportOperationalIssue("error", "ensureBookingAssignment", `payout missing: ${payout.error}`, {
-          bookingId,
-          cleanerId: r.cleanerId,
-          source,
-        });
+    try {
+      if (r.assignmentKind === "individual") {
+        const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: r.cleanerId });
+        if (!payout.ok) {
+          await reportOperationalIssue("error", "ensureBookingAssignment", `payout missing: ${payout.error}`, {
+            bookingId,
+            cleanerId: r.cleanerId,
+            source,
+          });
+        }
+      } else if (r.assignmentKind === "team") {
+        const { data: teamMemberRow, error: tmErr } = await supabase
+          .from("team_members")
+          .select("cleaner_id")
+          .eq("team_id", r.teamId)
+          .not("cleaner_id", "is", null)
+          .limit(1)
+          .maybeSingle();
+        if (tmErr) {
+          await reportOperationalIssue("error", "ensureBookingAssignment", `team member lookup: ${tmErr.message}`, {
+            bookingId,
+            teamId: r.teamId,
+            source,
+          });
+        } else {
+          const cid = teamMemberRow != null ? String((teamMemberRow as { cleaner_id?: string | null }).cleaner_id ?? "").trim() : "";
+          if (cid) {
+            const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: cid });
+            if (!payout.ok) {
+              await reportOperationalIssue("error", "ensureBookingAssignment", `team payout missing: ${payout.error}`, {
+                bookingId,
+                teamId: r.teamId,
+                cleanerId: cid,
+                source,
+              });
+            }
+          } else {
+            await reportOperationalIssue("warn", "ensureBookingAssignment", "team assignment has no member row for payout persist", {
+              bookingId,
+              teamId: r.teamId,
+              source,
+            });
+          }
+        }
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("ensureBookingAssignment persistCleanerPayoutIfUnset", { bookingId, source, error: msg });
+      await reportOperationalIssue("error", "ensureBookingAssignment", `payout persist threw: ${msg}`, {
+        bookingId,
+        source,
+      });
     }
     metrics.increment("dispatch.assignment.success", {
       bookingId,

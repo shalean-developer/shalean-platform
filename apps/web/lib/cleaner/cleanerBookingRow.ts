@@ -21,6 +21,15 @@ export type CleanerBookingRow = {
   created_at: string | null;
   booking_snapshot?: unknown | null;
   is_team_job?: boolean | null;
+  /** Present for team jobs; individual jobs may still set this when assigned. */
+  team_id?: string | null;
+  /**
+   * For team jobs: usually from `team_member_count_snapshot` (count at assignment — may drift if roster changes).
+   * Otherwise computed from `team_members` when snapshot is missing.
+   */
+  teamMemberCount?: number | null;
+  /** Null for team-assigned bookings; UI must not assume a cleaner id exists. */
+  cleaner_id?: string | null;
   displayEarningsCents?: number | null;
   payout_id?: string | null;
 };

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchCleanerTeamIds } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -24,10 +25,11 @@ export async function GET(request: Request) {
   }
 
   if (!cleaner) {
-    return NextResponse.json({ cleaner: null, isCleaner: false });
+    return NextResponse.json({ cleaner: null, isCleaner: false, teamIds: [] as string[] });
   }
 
-  return NextResponse.json({ cleaner, isCleaner: true });
+  const teamIds = await fetchCleanerTeamIds(admin, session.cleanerId);
+  return NextResponse.json({ cleaner, isCleaner: true, teamIds });
 }
 
 export async function PATCH(request: Request) {
@@ -65,5 +67,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Cleaner not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ cleaner, isCleaner: true });
+  const teamIds = await fetchCleanerTeamIds(admin, session.cleanerId);
+  return NextResponse.json({ cleaner, isCleaner: true, teamIds });
 }

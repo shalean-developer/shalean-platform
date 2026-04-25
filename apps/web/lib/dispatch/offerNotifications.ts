@@ -28,17 +28,17 @@ function buildOfferMessage(params: {
   priceText: string;
 }): string {
   return [
-    "🧹 New Cleaning Job Available",
+    "🧹 Available cleaning job",
     "",
     `📍 Location: ${params.location}`,
     `🕒 Time: ${params.timeText}`,
     `💰 Pay: ${params.priceText}`,
     "",
-    "You have 60 seconds to accept.",
+    "You have 60 seconds to respond.",
     "",
     "Reply:",
-    "1 -> Accept",
-    "2 -> Decline",
+    "1 → Accept",
+    "2 → Decline",
     "",
     `Offer ID: ${params.offerId}`,
   ].join("\n");
@@ -210,8 +210,8 @@ export async function notifyCleanerOfferAccepted(params: {
   const { data: cleaner } = await admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle();
   const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
   const message = [
-    "✅ Job accepted.",
-    "You have been assigned this booking.",
+    "✅ You accepted the job.",
+    "It is now listed under My Jobs in the cleaner app.",
     "",
     `Booking ID: ${params.bookingId}`,
     `Offer ID: ${params.offerId}`,
@@ -234,8 +234,8 @@ export async function notifyCleanerOfferDeclined(params: {
   const { data: cleaner } = await admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle();
   const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
   const message = [
-    "✋ Offer declined.",
-    "No action needed. We will offer this booking to another cleaner.",
+    "✋ You declined this available job.",
+    "No action needed — we will offer this booking to another cleaner.",
     "",
     `Offer ID: ${params.offerId}`,
   ].join("\n");
@@ -254,7 +254,7 @@ export async function sendCleanerOnboardingWhatsApp(params: {
   const message = [
     "Welcome to Shalean 👋",
     "",
-    "You will receive cleaning jobs here.",
+    "You will receive available jobs and team assignments here.",
     "Reply 1 to accept, 2 to decline.",
   ].join("\n");
   await sendWhatsAppText({

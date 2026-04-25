@@ -11,9 +11,18 @@ export async function notifyCleanerAssignedBooking(
   bookingId: string,
   cleanerId: string,
 ): Promise<void> {
-  const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId });
-  if (!payout.ok) {
-    await reportOperationalIssue("error", "notifyCleanerAssignedBooking", `payout missing: ${payout.error}`, {
+  try {
+    const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId });
+    if (!payout.ok) {
+      await reportOperationalIssue("error", "notifyCleanerAssignedBooking", `payout missing: ${payout.error}`, {
+        bookingId,
+        cleanerId,
+      });
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("notifyCleanerAssignedBooking persistCleanerPayoutIfUnset", { bookingId, cleanerId, error: msg });
+    await reportOperationalIssue("error", "notifyCleanerAssignedBooking", `payout persist threw: ${msg}`, {
       bookingId,
       cleanerId,
     });

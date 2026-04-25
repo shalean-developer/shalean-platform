@@ -15,15 +15,33 @@ vi.mock("@/lib/cleaner/session", () => ({
   resolveCleanerIdFromRequest: async () => ({ cleanerId: mockState.cleanerId, status: 200 }),
 }));
 
+function matchesBookingsVisibilityOr(row: Row, expr: string): boolean {
+  const head = /^cleaner_id\.eq\.([^,]+)/.exec(expr);
+  if (head && String(row.cleaner_id ?? "") === head[1]) return true;
+  if (!expr.includes("team_id.in.")) return false;
+  const inMatch = /team_id\.in\.\(([^)]*)\)/.exec(expr);
+  if (!inMatch) return false;
+  const list = inMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+  const hasTeamPred = expr.includes("is_team_job.is.true") || expr.includes("is_team_job.eq.true");
+  if (!hasTeamPred) return false;
+  return row.is_team_job === true && list.includes(String(row.team_id ?? ""));
+}
+
 class QueryBuilder {
   private filters: Array<{ kind: "eq" | "in" | "not_eq"; column: string; value: unknown }> = [];
   private single = false;
   private selectedColumns: string[] | null = null;
+  private orExpr: string | null = null;
 
   constructor(
     private table: string,
     private db: MockSupabaseClient,
   ) {}
+
+  or(expr: string) {
+    this.orExpr = expr;
+    return this;
+  }
 
   select(columns?: string) {
     if (typeof columns === "string" && columns.trim()) {
@@ -77,6 +95,9 @@ class QueryBuilder {
   }
 
   private matches(row: Row): boolean {
+    if (this.table === "bookings" && this.orExpr) {
+      if (!matchesBookingsVisibilityOr(row, this.orExpr)) return false;
+    }
     for (const f of this.filters) {
       if (f.kind === "eq" && row[f.column] !== f.value) return false;
       if (f.kind === "not_eq" && row[f.column] === f.value) return false;
@@ -107,6 +128,7 @@ class MockSupabaseClient {
       cleaners: [],
       bookings: [],
       dispatch_offers: [],
+      team_members: [],
       ...(seed ?? {}),
     };
   }

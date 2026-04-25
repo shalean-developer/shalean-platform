@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, MapPin, Pencil, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
-import { assignCleaner, fetchCleaners, updateBooking, updateBookingStatus, type AdminCleanerRow } from "@/lib/admin/dashboard";
+import {
+  assignCleaner,
+  assignTeamToBookingAdmin,
+  fetchCleaners,
+  updateBooking,
+  updateBookingStatus,
+  type AdminCleanerRow,
+} from "@/lib/admin/dashboard";
 import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
@@ -29,11 +36,26 @@ type BookingDetails = {
   status: string | null;
   user_id: string | null;
   cleaner_id: string | null;
+  team_id?: string | null;
+  is_team_job?: boolean | null;
+  booking_snapshot?: unknown;
   duration_hours?: number | null;
   /** Legacy string slugs or persisted `{ slug, name, price }` rows from checkout. */
   extras?: unknown[] | null;
   created_at: string;
   phone?: string | null;
+};
+
+type TeamSummary = { id: string; name: string; member_count: number | null };
+
+type TeamAssignCandidate = {
+  id: string;
+  name: string;
+  capacity_per_day: number;
+  member_count: number;
+  used_slots_today: number;
+  remaining_slots_today: number;
+  assignable: boolean;
 };
 
 type Cleaner = {
@@ -180,6 +202,12 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [fleetBestUxVariant, setFleetBestUxVariant] = useState<CleanerUxVariant | "unknown" | null>(null);
   const [notificationLogs, setNotificationLogs] = useState<BookingNotificationLogRow[]>([]);
   const [notificationLogsLoading, setNotificationLogsLoading] = useState(false);
+  const [supportsTeamAssignment, setSupportsTeamAssignment] = useState(false);
+  const [teamSummary, setTeamSummary] = useState<TeamSummary | null>(null);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [teamCandidates, setTeamCandidates] = useState<TeamAssignCandidate[]>([]);
+  const [teamPickId, setTeamPickId] = useState<string | null>(null);
+  const [assigningTeam, setAssigningTeam] = useState(false);
 
   useEffect(() => {
     async function loadDetails() {
@@ -212,6 +240,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           cleaner?: Cleaner | null;
           userProfile?: UserProfile | null;
           dispatch_offers?: DispatchOfferAdminRow[];
+          supports_team_assignment?: boolean;
+          team_summary?: TeamSummary | null;
           error?: string;
         }>,
         anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
@@ -237,6 +267,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setCleaner(json.cleaner ?? null);
       setUserProfile(json.userProfile ?? null);
       setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
+      setSupportsTeamAssignment(json.supports_team_assignment === true);
+      setTeamSummary(json.team_summary ?? null);
       setDraftDate(json.booking?.date ?? "");
       setDraftTime((json.booking?.time ?? "").slice(0, 5));
       setError(null);
@@ -403,6 +435,71 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setCleanerOptions(list);
     } catch (e) {
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Something went wrong" });
+    }
+  };
+
+  const openTeamModal = async () => {
+    if (!bookingId) return;
+    setTeamModalOpen(true);
+    setTeamPickId(null);
+    setTeamCandidates([]);
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      setToast({ kind: "error", text: "Please sign in as an admin." });
+      setTeamModalOpen(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = (await res.json()) as { teams?: TeamAssignCandidate[]; error?: string };
+      if (!res.ok) throw new Error(j.error ?? "Could not load teams.");
+      setTeamCandidates(Array.isArray(j.teams) ? j.teams : []);
+    } catch (e) {
+      setToast({ kind: "error", text: e instanceof Error ? e.message : "Could not load teams." });
+      setTeamModalOpen(false);
+    }
+  };
+
+  const handleAssignTeam = async () => {
+    if (!fullBooking?.id || !teamPickId) {
+      setToast({ kind: "error", text: "Select a team." });
+      return;
+    }
+    const picked = teamCandidates.find((t) => t.id === teamPickId);
+    if (!picked?.assignable) {
+      setToast({ kind: "error", text: "That team cannot take this booking (capacity or empty roster)." });
+      return;
+    }
+    setAssigningTeam(true);
+    try {
+      await assignTeamToBookingAdmin(fullBooking.id, teamPickId);
+      setTeamModalOpen(false);
+      setTeamPickId(null);
+      setToast({ kind: "success", text: "Team assigned" });
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (token) {
+        const refresh = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const jr = (await refresh.json()) as {
+          booking?: BookingDetails;
+          team_summary?: TeamSummary | null;
+          supports_team_assignment?: boolean;
+        };
+        if (refresh.ok && jr.booking) {
+          setFullBooking(jr.booking);
+          setTeamSummary(jr.team_summary ?? null);
+          setSupportsTeamAssignment(jr.supports_team_assignment === true);
+        }
+      }
+    } catch (e) {
+      setToast({ kind: "error", text: e instanceof Error ? e.message : "Team assignment failed" });
+    } finally {
+      setAssigningTeam(false);
     }
   };
 
@@ -825,6 +922,29 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               </div>
             ) : null}
           </DetailCard>
+          {supportsTeamAssignment ? (
+            <DetailCard title="Team assignment">
+              {fullBooking.team_id && teamSummary ? (
+                <div className="space-y-2">
+                  <DetailRow label="Team" value={teamSummary.name} />
+                  <DetailRow
+                    label="Members (on job date)"
+                    value={teamSummary.member_count == null ? "—" : String(teamSummary.member_count)}
+                  />
+                  <DetailRow label="Team job" value={fullBooking.is_team_job ? "Yes" : "No"} />
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-600">No team assigned yet.</p>
+              )}
+              <button
+                type="button"
+                onClick={() => void openTeamModal()}
+                className="mt-3 w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
+              >
+                Change team
+              </button>
+            </DetailCard>
+          ) : null}
           <DetailCard title="Flags">
             <div className="flex flex-wrap gap-2">
               {flags.length ? flags.map((flag) => <FlagPill key={flag} flag={flag} />) : <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">No issues</span>}
@@ -882,6 +1002,58 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           </div>
         </aside>
       </main>
+
+      {teamModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-zinc-900">Assign team</h3>
+            <p className="mt-2 text-sm text-zinc-600">
+              Overrides auto-dispatch for this booking. Per-member payouts are reset to the standard team rate.
+            </p>
+            <div className="mt-4 space-y-2">
+              <label htmlFor="admin-team-pick" className="text-xs font-medium text-zinc-500">
+                Team
+              </label>
+              <select
+                id="admin-team-pick"
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
+                value={teamPickId ?? ""}
+                onChange={(e) => setTeamPickId(e.target.value || null)}
+                disabled={assigningTeam}
+              >
+                <option value="">Select a team…</option>
+                {teamCandidates.map((t) => (
+                  <option key={t.id} value={t.id} disabled={!t.assignable}>
+                    {t.name} · {t.member_count} members · {t.used_slots_today}/{t.capacity_per_day} today
+                    {!t.assignable ? " (unavailable)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={assigningTeam}
+                onClick={() => {
+                  setTeamModalOpen(false);
+                  setTeamPickId(null);
+                }}
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={assigningTeam || !teamPickId}
+                onClick={() => void handleAssignTeam()}
+                className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {assigningTeam ? "Assigning…" : "Assign team"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {assignModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

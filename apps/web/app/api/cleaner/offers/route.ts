@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   if (bookingIds.length > 0) {
     const { data: rows } = await admin
       .from("bookings")
-      .select("id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, is_team_job, display_earnings_cents, cleaner_payout_cents")
+      .select("id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, is_team_job, team_id, display_earnings_cents, cleaner_payout_cents")
       .in("id", bookingIds);
     bookingById = new Map((rows ?? []).map((r) => [String((r as { id: string }).id), r as Record<string, unknown>]));
   }
@@ -62,6 +62,8 @@ export async function GET(request: Request) {
               customer_phone: booking.customer_phone ?? null,
               status: booking.status ?? null,
               total_paid_zar: booking.total_paid_zar ?? null,
+              is_team_job: booking.is_team_job === true,
+              team_id: (booking.team_id as string | null | undefined) ?? null,
             };
       return {
         ...o,
