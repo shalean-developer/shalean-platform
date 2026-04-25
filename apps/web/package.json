@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ops:smoke": "node scripts/ops-smoke-checklist.mjs"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",

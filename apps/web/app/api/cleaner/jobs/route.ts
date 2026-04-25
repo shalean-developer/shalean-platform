@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   const { data: jobs, error } = await admin
     .from("bookings")
     .select(
-      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_id",
+      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, display_earnings_cents, cleaner_payout_cents, payout_id",
     )
     .eq("cleaner_id", session.cleanerId)
     .not("status", "eq", "cancelled")
@@ -35,5 +36,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ jobs: jobs ?? [] });
+  const mappedJobs = (jobs ?? []).map((raw) => {
+    const row = raw as Record<string, unknown>;
+    const displayEarningsCents = resolveDisplayEarningsCents(
+      {
+        id: typeof row.id === "string" ? row.id : null,
+        is_team_job: row.is_team_job === true,
+        display_earnings_cents: typeof row.display_earnings_cents === "number" ? row.display_earnings_cents : null,
+        cleaner_payout_cents: typeof row.cleaner_payout_cents === "number" ? row.cleaner_payout_cents : null,
+      },
+      "api/cleaner/jobs",
+    );
+    const { cleaner_payout_cents: _legacyPayout, display_earnings_cents: _displayRaw, ...safe } = row;
+    return {
+      ...safe,
+      displayEarningsCents,
+    };
+  });
+
+  return NextResponse.json({ jobs: mappedJobs });
 }

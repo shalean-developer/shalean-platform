@@ -42,6 +42,11 @@ type StepScheduleProps = {
   onBack: () => void;
 };
 
+function isTeamServiceType(serviceType?: string | null): boolean {
+  const value = String(serviceType ?? "").toLowerCase();
+  return value.includes("deep") || value.includes("move");
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -283,15 +288,25 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     prevTrackedPriceRef.current = nextPrice;
   }, [locked, selectedDate, selectedTime]);
 
+  const isTeamService =
+    isTeamServiceType(lockBaseState?.service_type) || isTeamServiceType(lockBaseState?.service);
+
   const cleanerSlotTime = selectedTime ?? strategyRecommendedTime ?? "09:00";
   const { cleaners: cleanerPool, recommendedCleaner, loading: cleanersLoading, error: cleanersError } = useCleaners({
     selectedDate,
     selectedTime: cleanerSlotTime,
     durationMinutes: durationMinutesForApi,
+    enabled: !isTeamService,
   });
 
+  useEffect(() => {
+    if (!isTeamService) return;
+    setAutoAssignCleaner(true);
+    clearSelectedCleanerFromStorage();
+  }, [isTeamService, selectedDate, selectedTime]);
+
   const continueLabel = locked ? bookingCopy.when.cta : "Select a time";
-  const canContinue = locked != null && (autoAssignCleaner || !!selectedCleaner);
+  const canContinue = isTeamService ? locked != null : locked != null && (autoAssignCleaner || !!selectedCleaner);
 
   const stickyBar = useMemo(() => {
     if (!lockBaseState) return undefined;
@@ -664,9 +679,13 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                           <div className="min-w-0">
                             <div className="text-base font-medium tabular-nums">{p.time}</div>
                             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                              {p.cleanersCount > 0
-                                ? `${p.cleanersCount} cleaner${p.cleanersCount === 1 ? "" : "s"} available`
-                                : "Limited availability"}
+                              {isTeamService
+                                ? p.cleanersCount > 0
+                                  ? "Team scheduling available for this time"
+                                  : "Limited availability"
+                                : p.cleanersCount > 0
+                                  ? `${p.cleanersCount} cleaner${p.cleanersCount === 1 ? "" : "s"} available`
+                                  : "Limited availability"}
                             </p>
                           </div>
                           <div className="text-right">
@@ -728,7 +747,23 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 </p>
               ) : null}
 
-              {selectedTime ? (
+              {selectedTime && isTeamService ? (
+                <section className="space-y-3" aria-labelledby="team-assignment-heading">
+                  <h2 id="team-assignment-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                    Your cleaning team
+                  </h2>
+                  <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">A professional team will be assigned automatically.</p>
+                    <ul className="mt-2 space-y-1">
+                      <li>✓ Trained for deep and move cleaning jobs</li>
+                      <li>✓ Fully equipped for full-service cleaning</li>
+                      <li>✓ Selected based on availability and performance</li>
+                    </ul>
+                  </div>
+                </section>
+              ) : null}
+
+              {selectedTime && !isTeamService ? (
                 <section className="space-y-3" aria-labelledby="cleaner-heading">
                   <h2 id="cleaner-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Choose your cleaner</h2>
                   <div className="relative">

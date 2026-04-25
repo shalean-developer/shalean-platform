@@ -126,7 +126,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       bookingId,
       source: "admin_retry_dispatch",
     });
-    return NextResponse.json({ ok: true, cleanerId: result.cleanerId });
+    if (result.assignmentKind === "individual") {
+      return NextResponse.json({ ok: true, assignmentKind: "individual", cleanerId: result.cleanerId });
+    }
+    return NextResponse.json({ ok: true, assignmentKind: "team", teamId: result.teamId });
   }
 
   return NextResponse.json(

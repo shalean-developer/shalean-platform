@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,15 +28,46 @@ export async function GET(request: Request) {
   if (bookingIds.length > 0) {
     const { data: rows } = await admin
       .from("bookings")
-      .select("id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar")
+      .select("id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, is_team_job, display_earnings_cents, cleaner_payout_cents")
       .in("id", bookingIds);
     bookingById = new Map((rows ?? []).map((r) => [String((r as { id: string }).id), r as Record<string, unknown>]));
   }
 
   return NextResponse.json({
-    offers: (offers ?? []).map((o) => ({
-      ...o,
-      booking: bookingById.get(String(o.booking_id)) ?? null,
-    })),
+    offers: (offers ?? []).map((o) => {
+      const booking = bookingById.get(String(o.booking_id)) ?? null;
+      const displayEarningsCents =
+        booking == null
+          ? null
+          : resolveDisplayEarningsCents(
+              {
+                id: typeof booking.id === "string" ? booking.id : null,
+                is_team_job: booking.is_team_job === true,
+                display_earnings_cents:
+                  typeof booking.display_earnings_cents === "number" ? booking.display_earnings_cents : null,
+                cleaner_payout_cents: typeof booking.cleaner_payout_cents === "number" ? booking.cleaner_payout_cents : null,
+              },
+              "api/cleaner/offers",
+            );
+      const safeBooking =
+        booking == null
+          ? null
+          : {
+              id: booking.id,
+              service: booking.service ?? null,
+              date: booking.date ?? null,
+              time: booking.time ?? null,
+              location: booking.location ?? null,
+              customer_name: booking.customer_name ?? null,
+              customer_phone: booking.customer_phone ?? null,
+              status: booking.status ?? null,
+              total_paid_zar: booking.total_paid_zar ?? null,
+            };
+      return {
+        ...o,
+        displayEarningsCents,
+        booking: safeBooking,
+      };
+    }),
   });
 }

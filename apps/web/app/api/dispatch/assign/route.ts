@@ -13,7 +13,11 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   const cronSecret = process.env.CRON_SECRET?.trim();
-  const authCron = request.headers.get("authorization") === `Bearer ${cronSecret}` && !!cronSecret;
+  const authorizationHeader = request.headers.get("authorization");
+  const bearerToken = authorizationHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
+  const headerCronSecret = request.headers.get("x-cron-secret")?.trim() ?? "";
+  const providedCronToken = bearerToken || headerCronSecret;
+  const authCron = !!cronSecret && providedCronToken === cronSecret;
 
   let bookingId: string | null = null;
   try {
@@ -29,8 +33,7 @@ export async function POST(request: Request) {
 
   let allowed = authCron;
   if (!allowed) {
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
+    const token = bearerToken;
     if (!token) {
       return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
     }
@@ -66,7 +69,9 @@ export async function POST(request: Request) {
     );
   }
 
-  await notifyCleanerAssignedBooking(admin, bookingId, result.cleanerId);
-
-  return NextResponse.json({ ok: true, cleanerId: result.cleanerId });
+  if (result.assignmentKind === "individual") {
+    await notifyCleanerAssignedBooking(admin, bookingId, result.cleanerId);
+    return NextResponse.json({ ok: true, assignmentKind: "individual", cleanerId: result.cleanerId });
+  }
+  return NextResponse.json({ ok: true, assignmentKind: "team", teamId: result.teamId });
 }

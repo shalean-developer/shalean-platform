@@ -155,17 +155,21 @@ export async function escalateBookingIfAckTimeout(
   }
 
   try {
-    await verifyBookingAssignmentExpectsCleaner(admin, bookingId, r.cleanerId);
-    await verifyCleanerJobRowVisibleWithRetry(admin, bookingId, r.cleanerId);
-    logAssignmentSuccess({ bookingId, cleanerId: r.cleanerId, source: "dispatch/escalate:reassign" });
+    if (r.assignmentKind === "individual") {
+      await verifyBookingAssignmentExpectsCleaner(admin, bookingId, r.cleanerId);
+      await verifyCleanerJobRowVisibleWithRetry(admin, bookingId, r.cleanerId);
+      logAssignmentSuccess({ bookingId, cleanerId: r.cleanerId, source: "dispatch/escalate:reassign" });
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await reportOperationalIssue("error", "dispatch/escalate", `post-reassign verify: ${msg}`, {
       bookingId,
-      cleanerId: r.cleanerId,
+      cleanerId: r.assignmentKind === "individual" ? r.cleanerId : null,
     });
   }
 
-  await notifyCleanerAssignedBooking(admin, bookingId, r.cleanerId);
+  if (r.assignmentKind === "individual") {
+    await notifyCleanerAssignedBooking(admin, bookingId, r.cleanerId);
+  }
   return { ok: true, action: "reassigned" };
 }

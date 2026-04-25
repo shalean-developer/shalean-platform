@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +13,9 @@ type BookingRow = {
   time: string | null;
   status: string | null;
   completed_at: string | null;
+  is_team_job: boolean | null;
+  display_earnings_cents: number | null;
   cleaner_payout_cents: number | null;
-  cleaner_bonus_cents: number | null;
   payout_id: string | null;
 };
 
@@ -31,11 +33,6 @@ type PaymentDetailsRow = {
 
 function centsOrNull(value: unknown): number | null {
   if (value == null || !Number.isFinite(Number(value))) return null;
-  return Math.max(0, Math.round(Number(value)));
-}
-
-function centsOrZero(value: unknown): number {
-  if (value == null || !Number.isFinite(Number(value))) return 0;
   return Math.max(0, Math.round(Number(value)));
 }
 
@@ -64,7 +61,7 @@ export async function GET(request: Request) {
   const [{ data: bookings, error }, { data: paymentDetails, error: paymentDetailsError }] = await Promise.all([
     admin
       .from("bookings")
-      .select("id, service, date, time, status, completed_at, cleaner_payout_cents, cleaner_bonus_cents, payout_id")
+      .select("id, service, date, time, status, completed_at, is_team_job, display_earnings_cents, cleaner_payout_cents, payout_id")
       .eq("cleaner_id", session.cleanerId)
       .eq("status", "completed")
       .order("date", { ascending: false })
@@ -100,28 +97,25 @@ export async function GET(request: Request) {
   }
 
   const jobs = rows.map((booking) => {
-    const payout = centsOrNull(booking.cleaner_payout_cents);
-    const bonus = centsOrZero(booking.cleaner_bonus_cents);
+    const displayEarningsCents = resolveDisplayEarningsCents(booking, "api/cleaner/earnings");
     const payoutBatch = booking.payout_id ? payoutsById.get(booking.payout_id) : null;
-    const status: EarningsStatus = payout == null ? "pending_calculation" : normalizePayoutStatus(payoutBatch?.status);
-    const total = payout == null ? null : payout + bonus;
+    const status: EarningsStatus =
+      displayEarningsCents == null ? "pending_calculation" : normalizePayoutStatus(payoutBatch?.status);
 
     return {
       bookingId: booking.id,
       date: booking.completed_at ?? (booking.date ? `${booking.date}${booking.time ? `T${booking.time}` : "T12:00:00"}` : null),
       service: booking.service?.trim() || "Cleaning",
-      payout,
-      bonus,
-      total,
+      displayEarningsCents,
       status,
       paidAt: status === "paid" ? (payoutBatch?.paid_at ?? null) : null,
     };
   });
 
-  const totalEarned = jobs.reduce((sum, job) => sum + (job.total ?? 0), 0);
+  const totalEarned = jobs.reduce((sum, job) => sum + (job.displayEarningsCents ?? 0), 0);
   const totalPaid = jobs
     .filter((job) => job.status === "paid")
-    .reduce((sum, job) => sum + (job.total ?? 0), 0);
+    .reduce((sum, job) => sum + (job.displayEarningsCents ?? 0), 0);
 
   return NextResponse.json({
     summary: {

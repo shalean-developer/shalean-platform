@@ -11,9 +11,7 @@ type EarningsJob = {
   bookingId: string;
   date: string | null;
   service: string;
-  payout: number | null;
-  bonus: number;
-  total: number | null;
+  displayEarningsCents: number | null;
   status: EarningsStatus;
   paidAt: string | null;
 };
@@ -125,11 +123,11 @@ function sortByPayoutRelevance(jobs: EarningsJob[]): EarningsJob[] {
 function buildWeeklyTotals(jobs: EarningsJob[]): { key: string; label: string; total: number }[] {
   const totals = new Map<string, number>();
   for (const job of jobs) {
-    if (job.total == null || !job.date) continue;
+    if (job.displayEarningsCents == null || !job.date) continue;
     const date = new Date(job.date);
     if (Number.isNaN(date.getTime())) continue;
     const key = weekKey(date);
-    totals.set(key, (totals.get(key) ?? 0) + job.total);
+    totals.set(key, (totals.get(key) ?? 0) + job.displayEarningsCents);
   }
 
   return [...totals.entries()]
@@ -141,10 +139,10 @@ function buildWeeklyTotals(jobs: EarningsJob[]): { key: string; label: string; t
 function totalForWeek(jobs: EarningsJob[], date: Date): number {
   const targetKey = weekKey(date);
   return jobs.reduce((sum, job) => {
-    if (job.total == null || !job.date) return sum;
+    if (job.displayEarningsCents == null || !job.date) return sum;
     const parsed = new Date(job.date);
     if (Number.isNaN(parsed.getTime()) || weekKey(parsed) !== targetKey) return sum;
-    return sum + job.total;
+    return sum + job.displayEarningsCents;
   }, 0);
 }
 
@@ -222,7 +220,7 @@ export default function CleanerEarningsPage() {
   const weeklyTotals = buildWeeklyTotals(rawJobs);
   const approvedNextPayout = rawJobs
     .filter((job) => job.status === "approved")
-    .reduce((sum, job) => sum + (job.total ?? 0), 0);
+    .reduce((sum, job) => sum + (job.displayEarningsCents ?? 0), 0);
   const thisWeekTotal = totalForWeek(rawJobs, new Date());
   const lastWeekDate = new Date();
   lastWeekDate.setDate(lastWeekDate.getDate() - 7);
@@ -356,18 +354,15 @@ function JobRow({ job }: { job: EarningsJob }) {
               ⚠️ Needs review
             </div>
           ) : null}
-          {job.bonus > 0 && job.total != null ? (
-            <div className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-              + {formatCents(job.bonus)} bonus
-            </div>
-          ) : null}
         </div>
 
         <div className="text-right">
-          {job.total == null ? (
+          {job.displayEarningsCents == null ? (
             <div className="font-semibold text-amber-700 dark:text-amber-300">Pending calculation</div>
           ) : (
-            <div className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{formatCents(job.total)}</div>
+            <div className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+              {formatCents(job.displayEarningsCents)}
+            </div>
           )}
           <StatusBadge status={job.status} />
           {job.status === "paid" && job.paidAt ? (

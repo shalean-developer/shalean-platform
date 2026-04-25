@@ -23,6 +23,8 @@ export function useCleaners(args: {
   selectedTime?: string | null;
   /** Must match slot grid / lock job length (minutes). */
   durationMinutes?: number;
+  /** When false, skips fetch and clears state (e.g. team-assigned services). */
+  enabled?: boolean;
 }) {
   const [cleaners, setCleaners] = useState<LiveCleaner[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +47,14 @@ export function useCleaners(args: {
   );
 
   useEffect(() => {
+    if (args.enabled === false) {
+      queueMicrotask(() => {
+        setCleaners([]);
+        setError(null);
+        setLoading(false);
+      });
+      return;
+    }
     if (!args.selectedDate || !args.selectedTime) {
       queueMicrotask(() => {
         setCleaners([]);
@@ -101,7 +111,7 @@ export function useCleaners(args: {
       active = false;
       window.clearTimeout(t);
     };
-  }, [args.selectedDate, args.selectedTime, args.userLat, args.userLng, durationMinutes, key]);
+  }, [args.enabled, args.selectedDate, args.selectedTime, args.userLat, args.userLng, durationMinutes, key]);
 
   const recommendedCleaner = cleaners[0] ?? null;
   return { cleaners, recommendedCleaner, loading, error };

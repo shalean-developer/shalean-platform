@@ -374,19 +374,22 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
               bookingId: id,
             });
           }
-          try {
-            await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            await reportOperationalIssue("error", "upsertBookingFromPaystack", `notify after offer insert fail: ${msg}`, {
-              bookingId: id,
-            });
+          if (r.assignmentKind === "individual") {
+            try {
+              await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              await reportOperationalIssue("error", "upsertBookingFromPaystack", `notify after offer insert fail: ${msg}`, {
+                bookingId: id,
+              });
+            }
           }
           metrics.increment("booking.checkout_assignment", {
             assignment_type: "auto_fallback",
             bookingId: id,
             selected_cleaner_id: userConfirmedCleanerId,
-            assigned_cleaner_id: r.cleanerId,
+            assigned_cleaner_id: r.assignmentKind === "individual" ? r.cleanerId : null,
+            assigned_team_id: r.assignmentKind === "team" ? r.teamId : null,
             fallback_reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE,
           });
         } else {
@@ -425,12 +428,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             )
             .eq("id", id)
             .is("assignment_type", null);
-          await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+          if (r.assignmentKind === "individual") {
+            await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+          }
           metrics.increment("booking.checkout_assignment", {
             assignment_type: autoAssignmentTag,
             bookingId: id,
             selected_cleaner_id: pickedCleanerUuid,
-            assigned_cleaner_id: r.cleanerId,
+            assigned_cleaner_id: r.assignmentKind === "individual" ? r.cleanerId : null,
+            assigned_team_id: r.assignmentKind === "team" ? r.teamId : null,
             ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
               ? { fallback_reason: checkoutFallbackReason }
               : {}),

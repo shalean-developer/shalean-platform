@@ -88,6 +88,11 @@ export function CleanerOffersPanel({
   if (!offer?.booking) return null;
 
   const b = offer.booking;
+  const displayEarningsCents =
+    offer.displayEarningsCents != null && Number.isFinite(Number(offer.displayEarningsCents))
+      ? Math.max(0, Math.round(Number(offer.displayEarningsCents)))
+      : null;
+  const displayEarningsZar = displayEarningsCents != null ? Math.round(displayEarningsCents / 100) : null;
 
   const urgencyRing =
     secLeft > 0 && secLeft <= ux.urgencyHighSec
@@ -136,12 +141,17 @@ export function CleanerOffersPanel({
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {b.date ?? "—"} {b.time ?? ""}
           </p>
+          <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {displayEarningsZar != null
+              ? `You will earn R${displayEarningsZar.toLocaleString("en-ZA")}`
+              : "Earnings unavailable"}
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Button
             size="lg"
             className="h-12 rounded-xl text-base font-bold shadow-sm"
-            disabled={busy || secLeft <= 0}
+            disabled={busy || secLeft <= 0 || displayEarningsCents == null}
             onClick={() => void onAccept(offer.id, offer.ux_variant ?? null)}
           >
             {cleanerOfferAcceptCta(ux)}

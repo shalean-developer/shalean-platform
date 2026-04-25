@@ -23,6 +23,8 @@ type JobRow = {
   amount_paid_cents?: number | null;
   extras?: unknown[] | null;
   assigned_at: string | null;
+  is_team_job?: boolean | null;
+  displayEarningsCents?: number | null;
 };
 
 function formatZar(zar: number): string {
@@ -60,6 +62,7 @@ type OfferRow = {
   expires_at: string;
   created_at: string;
   ux_variant?: string | null;
+  displayEarningsCents?: number | null;
   booking: {
     id: string;
     service: string | null;
@@ -218,6 +221,10 @@ export default function CleanerJobsPage() {
 
   const list = jobs ?? [];
   const activeOffer = offers[0] ?? null;
+  const activeOfferDisplayZar =
+    activeOffer?.displayEarningsCents != null && Number.isFinite(Number(activeOffer.displayEarningsCents))
+      ? Math.round(Number(activeOffer.displayEarningsCents) / 100)
+      : null;
   const secondsLeft = activeOffer
     ? Math.max(0, Math.floor((new Date(activeOffer.expires_at).getTime() - nowMs) / 1000))
     : 0;
@@ -240,10 +247,15 @@ export default function CleanerJobsPage() {
             {activeOffer.booking?.location ? ` · ${activeOffer.booking.location}` : ""}
           </p>
           <p className="mt-2 text-sm font-medium text-amber-900 dark:text-amber-100">Respond in {secondsLeft}s</p>
+          <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {activeOfferDisplayZar != null
+              ? `You will earn R${activeOfferDisplayZar.toLocaleString("en-ZA")}`
+              : "Earnings unavailable"}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={actingId === activeOffer.id}
+              disabled={actingId === activeOffer.id || activeOfferDisplayZar == null}
               onClick={() => void respondToOffer(activeOffer.id, "accept", activeOffer.ux_variant)}
               className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
             >
@@ -282,6 +294,10 @@ export default function CleanerJobsPage() {
               total_paid_zar: j.total_paid_zar ?? null,
               amount_paid_cents: j.amount_paid_cents ?? null,
             });
+            const displayZar =
+              j.displayEarningsCents != null && Number.isFinite(Number(j.displayEarningsCents))
+                ? Math.round(Number(j.displayEarningsCents) / 100)
+                : null;
             return (
               <li
                 key={j.id}
@@ -333,6 +349,11 @@ export default function CleanerJobsPage() {
                     )}
                     <p className="mt-2 text-xs text-zinc-500">
                       {j.customer_name ?? "Customer"} · {j.customer_phone ?? "—"}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                      {displayZar != null
+                        ? `You will earn R${displayZar.toLocaleString("en-ZA")}`
+                        : "Earnings unavailable"}
                     </p>
                   </div>
                   <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold uppercase text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">

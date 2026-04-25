@@ -1,9 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  assignCleanerToBooking,
   type AssignCleanerOptions,
-  type AssignResult,
 } from "@/lib/dispatch/assignCleaner";
+import { assignBooking, type AssignBookingResult } from "@/lib/dispatch/assignBooking";
 import {
   compactDispatchMetricTags,
   loadDispatchMetricSegmentation,
@@ -41,7 +40,7 @@ export async function ensureBookingAssignment(
   supabase: SupabaseClient,
   bookingId: string,
   options: EnsureBookingAssignmentOptions,
-): Promise<AssignResult> {
+): Promise<AssignBookingResult> {
   const { source, retryEscalation, smartAssign, metricSegmentationOverrides } = options;
   const retryEsc = retryEscalation ?? 0;
   const seg = await loadDispatchMetricSegmentation(supabase, bookingId);
@@ -63,21 +62,25 @@ export async function ensureBookingAssignment(
   const mergedSmart =
     source === "paystack_checkout" ? { ...(smartAssign ?? {}), assignmentMode: "soft" as const } : smartAssign;
 
-  const r = await assignCleanerToBooking(supabase, bookingId, { retryEscalation: retryEsc, smartAssign: mergedSmart });
+  const r = await assignBooking(supabase, bookingId, { retryEscalation: retryEsc, smartAssign: mergedSmart });
 
   if (r.ok) {
-    const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: r.cleanerId });
-    if (!payout.ok) {
-      await reportOperationalIssue("error", "ensureBookingAssignment", `payout missing: ${payout.error}`, {
-        bookingId,
-        cleanerId: r.cleanerId,
-        source,
-      });
+    if (r.assignmentKind === "individual") {
+      const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: r.cleanerId });
+      if (!payout.ok) {
+        await reportOperationalIssue("error", "ensureBookingAssignment", `payout missing: ${payout.error}`, {
+          bookingId,
+          cleanerId: r.cleanerId,
+          source,
+        });
+      }
     }
     metrics.increment("dispatch.assignment.success", {
       bookingId,
       source,
-      cleanerId: r.cleanerId,
+      cleanerId: r.assignmentKind === "individual" ? r.cleanerId : null,
+      teamId: r.assignmentKind === "team" ? r.teamId : null,
+      assignmentKind: r.assignmentKind,
       ...metricTags,
     });
   } else {
