@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/booking/lockedBooking";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
+import { cn } from "@/lib/utils";
 
 type ExitIntentModalProps = {
   open: boolean;
@@ -37,34 +38,20 @@ export function ExitIntentModal({ open, onOpenChange, onCompleteBooking }: ExitI
   const primaryRef = useRef<HTMLButtonElement>(null);
 
   const estimateZar = canonicalTotalZar;
-
   const svcLabel = useMemo(() => serviceLine(lockedBooking, step1), [lockedBooking, step1]);
-
   const lockedWhenLabel = useMemo(
     () => (lockedBooking ? formatLockedAppointmentLabel(lockedBooking) : null),
     [lockedBooking],
   );
-
   const lockedPriceZar = useMemo(
     () => (lockedBooking ? getLockedBookingDisplayPrice(lockedBooking) : null),
     [lockedBooking],
   );
 
-  /** Service + date/time only (price shown separately, highlighted). */
-  const lockedSummarySansPrice = useMemo(() => {
+  const lockedSummaryOneLine = useMemo(() => {
     if (!lockedBooking || !svcLabel || !lockedWhenLabel) return null;
     return `${svcLabel} · ${lockedWhenLabel}`;
   }, [lockedBooking, svcLabel, lockedWhenLabel]);
-
-  const unlockedSummaryLine = useMemo(() => {
-    if (lockedBooking) return null;
-    if (svcLabel && estimateZar != null) {
-      return { beforePrice: `${svcLabel} · `, price: Math.round(estimateZar) };
-    }
-    if (svcLabel) return { beforePrice: `${svcLabel}`, price: null as number | null };
-    if (estimateZar != null) return { beforePrice: "", price: Math.round(estimateZar) };
-    return null;
-  }, [lockedBooking, svcLabel, estimateZar]);
 
   const showUrgencyBadge = step === "when" || step === "checkout";
 
@@ -96,120 +83,90 @@ export function ExitIntentModal({ open, onOpenChange, onCompleteBooking }: ExitI
     >
       <button
         type="button"
-        className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-zinc-950/50 backdrop-blur-[2px]"
         aria-label="Close"
         onClick={dismiss}
       />
-      <div className="relative z-[101] w-full max-w-lg rounded-xl border border-zinc-200/90 bg-white p-5 shadow-xl shadow-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 sm:p-6">
-        <div className="flex gap-4">
-          <div
-            className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex"
-            aria-hidden
+      <div
+        className={cn(
+          "relative z-[101] w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-xl shadow-zinc-900/10",
+          "dark:border dark:border-zinc-700/80 dark:bg-zinc-900",
+        )}
+      >
+        <button
+          type="button"
+          onClick={dismiss}
+          className="absolute right-4 top-4 rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" strokeWidth={2} />
+        </button>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 pr-8">
+          {showUrgencyBadge ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-200">
+              <span aria-hidden>✨</span>
+              Slots filling fast
+            </span>
+          ) : null}
+        </div>
+
+        <h2
+          id="exit-intent-title"
+          className="text-xl font-semibold leading-snug tracking-tight text-zinc-900 dark:text-zinc-50"
+        >
+          Almost done 🎉
+        </h2>
+
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          {lockedBooking
+            ? "Your cleaner is still available at this time. Complete your booking now before the slot is taken."
+            : "You’re so close. Finish your booking to hold your service — popular times go quickly."}
+        </p>
+
+        {lockedBooking && lockedSummaryOneLine && lockedPriceZar != null ? (
+          <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
+            <p className="leading-snug">{lockedSummaryOneLine}</p>
+            <p className="mt-1.5 text-lg font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">
+              R {lockedPriceZar.toLocaleString("en-ZA")}
+            </p>
+          </div>
+        ) : !lockedBooking && (svcLabel != null || estimateZar != null) ? (
+          <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
+            {svcLabel ? <p className="leading-snug">{svcLabel}</p> : null}
+            {estimateZar != null ? (
+              <p className="mt-1.5 text-lg font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">
+                From R {Math.round(estimateZar).toLocaleString("en-ZA")}
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Pick a time on the next step to lock this in.</p>
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <span>✔ No payment yet</span>
+          <span>✔ Free reschedule</span>
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={dismiss}
+            className="flex-1 rounded-lg border border-zinc-200 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
           >
-            <Sparkles className="h-6 w-6" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {showUrgencyBadge ? (
-                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950/80 dark:text-amber-100">
-                  Slots filling fast
-                </span>
-              ) : null}
-            </div>
-            <h2
-              id="exit-intent-title"
-              className="text-xl font-bold leading-snug tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl"
-            >
-              Wait! Your booking is almost secured
-            </h2>
-            <div className="space-y-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-              {lockedBooking ? (
-                <>
-                  <p>Your cleaner is still available for your selected time.</p>
-                  <p>Complete your booking now before the slot is taken.</p>
-                </>
-              ) : (
-                <>
-                  <p>You&apos;re almost there — lock your slot while cleaners are still available.</p>
-                  <p>Complete your booking to secure your chosen service and time.</p>
-                </>
-              )}
-            </div>
-
-            {/* Booking summary: service · date/time · highlighted price */}
-            {lockedBooking && lockedSummarySansPrice != null && lockedPriceZar != null ? (
-              <>
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100 sm:hidden">
-                  {lockedSummarySansPrice}
-                </p>
-                <p className="text-sm sm:hidden">
-                  <span className="font-semibold text-primary">
-                    From R {lockedPriceZar.toLocaleString("en-ZA")}
-                  </span>
-                  <span className="text-zinc-500 dark:text-zinc-400"> · No payment yet</span>
-                </p>
-                <p className="hidden text-sm font-medium text-zinc-800 dark:text-zinc-100 sm:block">
-                  <span>{lockedSummarySansPrice} · </span>
-                  <span className="font-semibold text-primary">
-                    R {lockedPriceZar.toLocaleString("en-ZA")}
-                  </span>
-                </p>
-              </>
-            ) : unlockedSummaryLine ? (
-              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                {unlockedSummaryLine.beforePrice ? (
-                  <span>{unlockedSummaryLine.beforePrice}</span>
-                ) : null}
-                {unlockedSummaryLine.price != null ? (
-                  <span className="font-semibold text-primary">
-                    From R {unlockedSummaryLine.price.toLocaleString("en-ZA")}
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-
-            {!lockedBooking ? (
-              <p className="text-sm text-zinc-600 dark:text-zinc-400 sm:hidden">
-                Pick a time next to lock your slot and price.
-              </p>
-            ) : null}
-
-            <ul className="flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400 sm:flex-row sm:flex-wrap sm:gap-x-4">
-              <li className="flex items-center gap-1.5">
-                <span className="text-emerald-600 dark:text-emerald-400" aria-hidden>
-                  ✓
-                </span>
-                No payment required yet
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="text-emerald-600 dark:text-emerald-400" aria-hidden>
-                  ✓
-                </span>
-                Free reschedule if needed
-              </li>
-            </ul>
-
-            <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:pt-2">
-              <button
-                type="button"
-                ref={primaryRef}
-                onClick={() => {
-                  onCompleteBooking();
-                  onOpenChange(false);
-                }}
-                className="order-1 w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/25 transition hover:bg-primary/90 sm:order-2 sm:w-auto sm:px-6"
-              >
-                Complete booking →
-              </button>
-              <button
-                type="button"
-                onClick={dismiss}
-                className="order-2 text-center text-sm font-semibold text-zinc-600 underline decoration-zinc-400 underline-offset-4 transition hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 sm:order-1 sm:text-left sm:no-underline sm:rounded-xl sm:border sm:border-zinc-200 sm:px-4 sm:py-3 sm:text-zinc-700 sm:dark:border-zinc-600 sm:dark:text-zinc-200 sm:dark:hover:bg-zinc-800"
-              >
-                Continue later
-              </button>
-            </div>
-          </div>
+            Continue later
+          </button>
+          <button
+            type="button"
+            ref={primaryRef}
+            onClick={() => {
+              onCompleteBooking();
+              onOpenChange(false);
+            }}
+            className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
+          >
+            Complete booking →
+          </button>
         </div>
       </div>
     </div>

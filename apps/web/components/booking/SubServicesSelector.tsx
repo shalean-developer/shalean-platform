@@ -52,6 +52,10 @@ export function SubServicesSelector({
   popularLabel = "Most popular",
   recommendedId = "deep_cleaning",
   recommendedLabel = "Recommended",
+  /** Marketing-only: dynamic pricing can vary by time — not a live savings calculation. */
+  showPricingSaveSignal = true,
+  /** When set, that option shows a “High demand” badge instead of the save signal. */
+  highDemandServiceId = null,
 }: {
   selectedService: BookingServiceTypeKey | null;
   onSelect: (next: BookingServiceTypeKey) => void;
@@ -60,6 +64,8 @@ export function SubServicesSelector({
   /** Set to `null` to hide the secondary “Recommended” pill. */
   recommendedId?: BookingServiceTypeKey | null;
   recommendedLabel?: string;
+  showPricingSaveSignal?: boolean;
+  highDemandServiceId?: BookingServiceTypeKey | null;
 }) {
   const count = OPTIONS.length;
 
@@ -71,6 +77,8 @@ export function SubServicesSelector({
         const isPopular = id === popularId;
         const isRecommended = recommendedId != null && id === recommendedId;
         const hasBadge = isPopular || isRecommended;
+        const showHighDemand = highDemandServiceId === id;
+        const showSavePill = showPricingSaveSignal && !showHighDemand;
 
         return (
           <button
@@ -80,7 +88,7 @@ export function SubServicesSelector({
             className={cn(
               "relative flex min-w-0 flex-col items-center justify-center border text-center transition",
               "max-lg:min-h-[78px] max-lg:rounded-lg max-lg:px-1 max-lg:pb-2 max-lg:text-[11px] max-lg:font-medium max-lg:leading-tight",
-              "lg:min-h-[112px] lg:rounded-xl lg:px-3 lg:pb-4 lg:text-sm lg:font-semibold",
+              "lg:min-h-[120px] lg:rounded-xl lg:px-3 lg:pb-3 lg:text-sm lg:font-semibold",
               hasBadge ? "max-lg:pt-5 lg:pt-6" : "max-lg:pt-4 lg:pt-4",
               isLastRemainder && "max-lg:col-span-4 max-lg:mx-auto max-lg:max-w-[140px] max-lg:w-full",
               active
@@ -106,6 +114,15 @@ export function SubServicesSelector({
             />
             <span className="max-w-full truncate">{title}</span>
             <span className="mt-0.5 hidden max-w-full text-xs font-normal leading-snug text-zinc-500 dark:text-zinc-400 lg:inline">{subtitle}</span>
+            {showSavePill ? (
+              <span className="mt-1.5 max-w-full truncate rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 lg:mt-2 lg:px-2 lg:text-[9px]">
+                Save up to 15%
+              </span>
+            ) : showHighDemand ? (
+              <span className="mt-1.5 max-w-full truncate rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-semibold text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 lg:mt-2 lg:px-2 lg:text-[9px]">
+                High demand
+              </span>
+            ) : null}
           </button>
         );
       })}

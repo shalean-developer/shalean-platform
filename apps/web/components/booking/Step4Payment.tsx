@@ -33,6 +33,7 @@ export type Step4Totals = {
   name: string;
   phone: string;
   contactReady: boolean;
+  authenticated: boolean;
   userId: string | null;
   accessToken: string | null;
   referralCode: string | null;
@@ -58,6 +59,13 @@ type Step4PaymentProps = {
   cleanerName: string | null;
   /** When `register=1` in URL — open Create account tab (e.g. after guest checkout). */
   preferRegisterTab?: boolean;
+  authOverride?: {
+    id: string;
+    accessToken: string;
+    email?: string;
+    name?: string;
+    phone?: string;
+  } | null;
   onTotalsChange: (totals: Step4Totals) => void;
 };
 
@@ -65,9 +73,10 @@ export function Step4Payment({
   locked,
   cleanerName,
   preferRegisterTab,
+  authOverride,
   onTotalsChange,
 }: Step4PaymentProps) {
-  const { catalog } = useBookingPrice();
+  const { catalog, canonicalTotalZar } = useBookingPrice();
   const [tip, setTip] = useState(0);
   const [customMode, setCustomMode] = useState(false);
   const [customTipDraft, setCustomTipDraft] = useState("");
@@ -104,6 +113,14 @@ export function Step4Payment({
   const [authError, setAuthError] = useState<string | null>(null);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (!authOverride) return;
+    setSessionUser({ id: authOverride.id, accessToken: authOverride.accessToken });
+    if (authOverride.email?.trim()) setEmail(authOverride.email.trim());
+    if (authOverride.name?.trim()) setName(authOverride.name.trim());
+    if (authOverride.phone?.trim()) setPhone(authOverride.phone.trim());
+  }, [authOverride]);
 
   useEffect(() => {
     if (!preferRegisterTab) return;
@@ -252,10 +269,11 @@ export function Step4Payment({
       promoCode: promoApplied?.code ?? null,
       email: email.trim(),
       emailValid,
-      authMode,
+      authMode: sessionUser ? "login" : "guest",
       name: name.trim(),
       phone: phone.trim(),
-      contactReady: payReadyForMode,
+      contactReady,
+      authenticated: Boolean(sessionUser?.accessToken && sessionUser.id),
       userId,
       accessToken,
       referralCode: referralDiscount?.code ?? null,
@@ -273,10 +291,9 @@ export function Step4Payment({
     promoApplied,
     email,
     emailValid,
-    authMode,
     name,
     phone,
-    payReadyForMode,
+    contactReady,
     sessionUser,
     onTotalsChange,
     referralDiscount?.code,
@@ -480,6 +497,15 @@ export function Step4Payment({
   );
 
   const checkoutMicro = bookingCopy.checkout;
+  const visitTotalZar = locked.finalPrice;
+  const extrasTotalZar = Math.max(0, extrasBundledZar);
+  const serviceSubtotalZar = Math.max(0, visitTotalZar - extrasTotalZar);
+  const anchorPrice = canonicalTotalZar != null && Number.isFinite(canonicalTotalZar) && canonicalTotalZar > 0
+    ? canonicalTotalZar
+    : null;
+  const pricingDeltaZar = anchorPrice != null ? Math.round(anchorPrice - visitTotalZar) : null;
+  const pricingDeltaPercent =
+    anchorPrice != null ? Math.round(((anchorPrice - visitTotalZar) / anchorPrice) * 100) : null;
 
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -528,9 +554,7 @@ export function Step4Payment({
 
       <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Price breakdown</h2>
-        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Visit total was locked when you chose your time; discounts and tips apply below.
-        </p>
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">Clear summary of what you are paying for.</p>
         {typeof locked.quoteSubtotalZar === "number" &&
         Number.isFinite(locked.quoteSubtotalZar) &&
         typeof locked.quoteVipSavingsZar === "number" &&
@@ -538,7 +562,7 @@ export function Step4Payment({
         locked.quoteVipSavingsZar > 0 ? (
           <>
             <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-              <span>Subtotal</span>
+              <span>Service</span>
               <span className="tabular-nums">R {formatZar(locked.quoteSubtotalZar)}</span>
             </div>
             <div className="mt-1 flex items-center justify-between text-sm text-emerald-800 dark:text-emerald-300">
@@ -548,12 +572,41 @@ export function Step4Payment({
             {typeof locked.quoteAfterVipSubtotalZar === "number" &&
             Number.isFinite(locked.quoteAfterVipSubtotalZar) ? (
               <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                After loyalty: R {formatZar(locked.quoteAfterVipSubtotalZar)} — visit total below includes time and
-                availability.
+                After loyalty: R {formatZar(locked.quoteAfterVipSubtotalZar)}
               </p>
             ) : null}
           </>
         ) : null}
+        <div className="mt-3 space-y-1 rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/40">
+          <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
+            <span>
+              Service ({locked.rooms} bed, {locked.bathrooms} bath)
+            </span>
+            <span className="tabular-nums">R {formatZar(serviceSubtotalZar)}</span>
+          </div>
+          <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
+            <span>Extras</span>
+            <span className="tabular-nums">R {formatZar(extrasTotalZar)}</span>
+          </div>
+          {pricingDeltaZar != null && pricingDeltaZar > 0 ? (
+            <div className="flex items-center justify-between text-green-600 dark:text-green-400">
+              <span>Savings (better time)</span>
+              <span className="tabular-nums">-R {formatZar(Math.abs(pricingDeltaZar))}</span>
+            </div>
+          ) : null}
+          {pricingDeltaZar != null && pricingDeltaZar < 0 ? (
+            <div className="flex items-center justify-between text-orange-600 dark:text-orange-400">
+              <span>High demand</span>
+              <span className="tabular-nums">+R {formatZar(Math.abs(pricingDeltaZar))}</span>
+            </div>
+          ) : null}
+          <div className="border-t border-zinc-200 pt-2 dark:border-zinc-700">
+            <div className="flex items-center justify-between font-semibold">
+              <span className="text-zinc-900 dark:text-zinc-50">Visit total</span>
+              <span className="tabular-nums text-zinc-900 dark:text-zinc-50">R {formatZar(visitTotalZar)}</span>
+            </div>
+          </div>
+        </div>
         {extrasLineItems.length > 0 ? (
           <div className="mt-2 space-y-1">
             <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Extras</p>
@@ -572,25 +625,6 @@ export function Step4Payment({
             ) : null}
           </div>
         ) : null}
-        {extrasBundledZar > 0 ? (
-          <div className="mt-2 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-            <span>{checkoutMicro.addOnsLabel}</span>
-            <span className="tabular-nums">R {formatZar(extrasBundledZar)}</span>
-          </div>
-        ) : null}
-        <div
-          className={[
-            "flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400",
-            typeof locked.quoteSubtotalZar === "number" && (locked.quoteVipSavingsZar ?? 0) > 0
-              ? "mt-2 border-t border-zinc-200/80 pt-2 dark:border-zinc-700"
-              : extrasBundledZar > 0
-                ? "mt-2 border-t border-zinc-200/80 pt-2 dark:border-zinc-700"
-                : "",
-          ].join(" ")}
-        >
-          <span>Visit total (locked)</span>
-          <span className="tabular-nums">R {formatZar(locked.finalPrice)}</span>
-        </div>
         {tip > 0 ? (
           <div className="mt-1 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
             <span>Tip</span>
@@ -604,9 +638,30 @@ export function Step4Payment({
           </div>
         ))}
         <div className="mt-2 flex items-center justify-between text-lg font-semibold">
-          <span className="text-zinc-900 dark:text-zinc-50">Total</span>
+          <span className="text-zinc-900 dark:text-zinc-50">
+            {checkoutDiscountLines.length > 0 || tip > 0 ? "Final total" : "Total"}
+          </span>
           <span className="tabular-nums text-emerald-600 dark:text-emerald-400">R {formatZar(totalZar)}</span>
         </div>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Includes all selected extras • Price locked for your selected time
+        </p>
+        {pricingDeltaZar != null && pricingDeltaPercent != null && pricingDeltaZar > 0 ? (
+          <p className="text-xs text-green-600 dark:text-green-400">
+            ✔ You saved R{formatZar(Math.abs(pricingDeltaZar))} ({Math.abs(pricingDeltaPercent)}%) by choosing this time
+          </p>
+        ) : null}
+        {pricingDeltaZar != null && pricingDeltaZar < 0 ? (
+          <p className="text-xs text-orange-600 dark:text-orange-400">
+            ⚡ Higher price due to demand at this time
+          </p>
+        ) : null}
+        {pricingDeltaZar === 0 ? (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Standard pricing applied</p>
+        ) : null}
+        {anchorPrice != null ? (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Compared to standard time price</p>
+        ) : null}
         <p className="mt-3 rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 text-xs font-medium leading-snug text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
           {checkoutMicro.extrasGuarantee}
         </p>
@@ -751,166 +806,51 @@ export function Step4Payment({
       </section>
 
       <section
-        aria-labelledby="account-heading"
+        aria-labelledby="contact-heading"
         className="rounded-xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950/60"
       >
-        <h2 id="account-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Account &amp; contact</h2>
-        <ol
-          className="mt-2 flex flex-wrap gap-2 text-[10px] font-semibold text-zinc-600 dark:text-zinc-400"
-          aria-label="Checkout steps"
-        >
-          <li className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">1 · Booked</li>
-          <li className="rounded-full bg-primary px-2 py-1 text-primary-foreground">2 · Your details</li>
-          <li className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">3 · Pay</li>
-        </ol>
-        {user ? (
-          <div className="mt-3 space-y-3">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Signed in. Confirm your details below.</p>
-            <input
-              type="text"
-              required
-              autoComplete="name"
-              placeholder="Full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={persistGuest}
-              className={inputClass}
-            />
-            <input
-              type="tel"
-              required
-              autoComplete="tel"
-              inputMode="tel"
-              placeholder="Phone number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              onBlur={persistGuest}
-              className={inputClass}
-            />
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              inputMode="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={persistGuest}
-              className={inputClass}
-            />
-          </div>
-        ) : (
-          <div className="mt-3 space-y-3">
-            <div role="tablist" aria-label="Auth mode" className="flex gap-1.5 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800/80">
-              {(["login", "register"] as const).map((mode) => {
-                const active = authMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => selectAuthMode(mode)}
-                    className={[
-                      "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-[13px]",
-                      active
-                        ? "bg-white text-primary shadow dark:bg-zinc-950"
-                        : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
-                    ].join(" ")}
-                  >
-                    {mode === "login" ? "Login" : "Sign up"}
-                  </button>
-                );
-              })}
-            </div>
-            {!supabaseConfigured ? (
-              <p className="text-xs text-amber-800 dark:text-amber-400/90">Sign-in is currently unavailable.</p>
-            ) : (
-              <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="space-y-3">
-                {authMode === "register" ? (
-                  <>
-                    <input
-                      type="text"
-                      required
-                      autoComplete="name"
-                      placeholder="Full name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={inputClass}
-                    />
-                    <input
-                      type="tel"
-                      required
-                      autoComplete="tel"
-                      inputMode="tel"
-                      placeholder="Phone number"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className={inputClass}
-                    />
-                    <input
-                      type="email"
-                      required
-                      autoComplete="email"
-                      inputMode="email"
-                      placeholder="Email address"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={inputClass}
-                    />
-                  </>
-                ) : (
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    inputMode="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputClass}
-                  />
-                )}
-                <input
-                  type="password"
-                  required
-                  autoComplete={authMode === "login" ? "current-password" : "new-password"}
-                  placeholder="Password"
-                  value={authMode === "login" ? loginPassword : registerPassword}
-                  onChange={(e) => {
-                    if (authMode === "login") setLoginPassword(e.target.value);
-                    else setRegisterPassword(e.target.value);
-                  }}
-                  className={inputClass}
-                />
-                <button
-                  type="submit"
-                  disabled={authBusy}
-                  className="h-10 w-full rounded-lg bg-zinc-900 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-zinc-950"
-                >
-                  {authBusy ? "Please wait…" : authMode === "login" ? "Login" : "Create account"}
-                </button>
-                {authMode === "login" ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleForgotPassword()}
-                    disabled={authBusy}
-                    className="text-xs font-medium text-primary underline-offset-2 hover:underline disabled:opacity-50"
-                  >
-                    Forgot password?
-                  </button>
-                ) : null}
-              </form>
-            )}
-          </div>
-        )}
-        {authError ? (
-          <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
-            {authError}
-          </p>
-        ) : null}
-        {authInfo ? (
-          <p className="mt-3 text-sm text-emerald-800 dark:text-emerald-400/90">{authInfo}</p>
+        <h2 id="contact-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Contact details</h2>
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          {sessionUser
+            ? "Signed in. Confirm your details before payment."
+            : "You’ll be asked to login or sign up after tapping Confirm."}
+        </p>
+        <div className="mt-3 space-y-3">
+          <input
+            type="text"
+            required
+            autoComplete="name"
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={persistGuest}
+            className={inputClass}
+          />
+          <input
+            type="tel"
+            required
+            autoComplete="tel"
+            inputMode="tel"
+            placeholder="Phone number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            onBlur={persistGuest}
+            className={inputClass}
+          />
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            inputMode="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onBlur={persistGuest}
+            className={inputClass}
+          />
+        </div>
+        {!supabaseConfigured ? (
+          <p className="mt-2 text-xs text-amber-800 dark:text-amber-400/90">Sign-in is currently unavailable.</p>
         ) : null}
       </section>
 

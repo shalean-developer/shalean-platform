@@ -5,6 +5,7 @@ import {
   normalizeStep1ForService,
 } from "@/components/booking/serviceCategories";
 import type { BookingStep1State } from "@/components/booking/useBookingStep1";
+import { defaultBookingTimeForDate, todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 
 /** Primary key (user spec); legacy widget key still read once. */
@@ -54,6 +55,9 @@ const WIDGET_EXTRA_TO_STEP1: Record<string, string> = {
   windows: "interior-windows",
   walls: "interior-walls",
   plants: "water-plants",
+  ironing: "ironing",
+  laundry: "laundry",
+  flatlet: "small-flatlet",
 };
 
 export function mapWidgetExtrasToStep1Ids(extras: string[]): string[] {
@@ -88,15 +92,17 @@ export function parseWidgetIntakeFromUnknown(raw: unknown): WidgetIntakePayload 
   const serviceRaw = typeof o.service === "string" ? o.service : "";
   if (!isHomeWidgetServiceKey(serviceRaw)) return null;
 
-  const date = typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) ? o.date : "";
-  const time = typeof o.time === "string" && o.time.trim() ? o.time.trim() : "";
+  let date = typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) ? o.date : "";
+  let time = typeof o.time === "string" && o.time.trim() ? o.time.trim() : "";
+  if (estimateOnly) {
+    if (!date) date = todayBookingYmd();
+    if (!time) time = defaultBookingTimeForDate(date);
+  }
   if (!date || !time) return null;
 
-  const extras = estimateOnly
-    ? []
-    : Array.isArray(o.extras)
-      ? o.extras.filter((x): x is string => typeof x === "string")
-      : [];
+  const extras = Array.isArray(o.extras)
+    ? o.extras.filter((x): x is string => typeof x === "string")
+    : [];
   const location = typeof o.location === "string" ? o.location.trim().slice(0, 500) : "";
 
   const extraRoomsRaw =
@@ -114,7 +120,7 @@ export function parseWidgetIntakeFromUnknown(raw: unknown): WidgetIntakePayload 
   return {
     bedrooms,
     bathrooms,
-    extraRooms: estimateOnly ? 0 : extraRooms,
+    extraRooms,
     service: serviceRaw,
     date,
     time,

@@ -113,8 +113,8 @@ export const bookingCopy = {
   },
 
   exitIntent: {
-    title: "Wait! Your booking is almost secured",
-    offer: "Complete your booking now before the slot is taken.",
+    title: "Almost done 🎉",
+    offer: "Your cleaner is still available at this time. Complete your booking now before the slot is taken.",
     cta: "Complete booking →",
     dismiss: "Continue later",
   },

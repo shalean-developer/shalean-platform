@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
+import { AuthModal } from "@/components/booking/AuthModal";
 import { CheckoutNoticeBanner } from "@/components/booking/CheckoutNoticeBanner";
 import { Step4Payment, type Step4Totals } from "@/components/booking/Step4Payment";
 import { useCheckoutNotice } from "@/components/booking/useCheckoutNotice";
@@ -84,6 +85,15 @@ export function StepPayment() {
 
   const [totals, setTotals] = useState<Step4Totals | null>(null);
   const [paying, setPaying] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [continueAfterAuth, setContinueAfterAuth] = useState(false);
+  const [authOverride, setAuthOverride] = useState<{
+    id: string;
+    accessToken: string;
+    email?: string;
+    name?: string;
+    phone?: string;
+  } | null>(null);
   const checkoutRedirected = useRef(false);
   /** Blocks double-clicks before React re-renders `paying`. Cleared in `finally`. */
   const payInitInFlight = useRef(false);
@@ -113,9 +123,7 @@ export function StepPayment() {
     setTotals(next);
   }, []);
 
-  const readyForPaystack = Boolean(
-    locked && totals?.contactReady && totals.totalZar >= 1,
-  );
+  const readyForPaystack = Boolean(locked && totals?.contactReady && totals.totalZar >= 1);
   /** Enable CTA only when payment data is truly ready. */
   const canPay = Boolean(locked && readyForPaystack && !paying);
 
@@ -148,6 +156,12 @@ export function StepPayment() {
         description: "Enter your contact details above so we can complete secure payment.",
         autoDismissMs: 5000,
       });
+      return;
+    }
+
+    if (!totals.authenticated || !totals.accessToken || !totals.userId) {
+      setContinueAfterAuth(true);
+      setAuthModalOpen(true);
       return;
     }
 
@@ -319,6 +333,13 @@ export function StepPayment() {
     }
   }
 
+  useEffect(() => {
+    if (!continueAfterAuth) return;
+    if (!totals?.authenticated || !totals.userId || !totals.accessToken) return;
+    setContinueAfterAuth(false);
+    void handlePay();
+  }, [continueAfterAuth, totals]);
+
   return (
     <BookingLayout
       canContinue={canPay}
@@ -377,10 +398,23 @@ export function StepPayment() {
             locked={locked}
             cleanerName={selectedCleaner?.name ?? "Auto-assigned cleaner"}
             preferRegisterTab={preferRegisterTab}
+            authOverride={authOverride}
             onTotalsChange={onTotalsChange}
           />
         </div>
       )}
+      <AuthModal
+        open={authModalOpen}
+        onOpenChange={setAuthModalOpen}
+        defaultTab={preferRegisterTab ? "signup" : "login"}
+        prefillEmail={totals?.email ?? ""}
+        prefillName={totals?.name ?? ""}
+        prefillPhone={totals?.phone ?? ""}
+        onAuthenticated={(session) => {
+          setAuthOverride(session);
+          setAuthModalOpen(false);
+        }}
+      />
     </BookingLayout>
   );
 }

@@ -1,14 +1,14 @@
 import { format, parse } from "date-fns";
 
-/** Morning window for same-day booking widget (local time). */
+/** Same-day booking window for quote widgets (local time). */
 export const BOOKING_SLOT_START_HOUR = 7;
-export const BOOKING_SLOT_END_HOUR = 11;
+export const BOOKING_SLOT_END_HOUR = 18;
 export const BOOKING_SLOT_END_MINUTE = 30;
 export const BOOKING_SLOT_INTERVAL_MIN = 30;
 
 const SLOT_END_TOTAL_MIN = BOOKING_SLOT_END_HOUR * 60 + BOOKING_SLOT_END_MINUTE;
 
-/** All slots from 07:00 … 11:30 in 30-minute steps (independent of date). */
+/** All slots from 07:00 … 18:30 in 30-minute steps (independent of date). */
 export function generateBookingTimeSlots(): string[] {
   const slots: string[] = [];
   let totalM = BOOKING_SLOT_START_HOUR * 60;

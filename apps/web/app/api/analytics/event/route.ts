@@ -9,6 +9,13 @@ const ALLOWED = new Set([
   "view_price",
   "select_time",
   "complete_booking",
+  "homepage_continue_booking",
+  "homepage_cta_click",
+  "homepage_service_select",
+  "pricing_loaded",
+  "homepage_abandon",
+  "homepage_scroll",
+  "price_updated",
 ]);
 
 export async function POST(request: Request) {
@@ -34,7 +41,7 @@ export async function POST(request: Request) {
     user_id: null,
     booking_id: null,
     event_type: eventType,
-    payload: { ...payload, source: "growth_engine" },
+    payload: { ...payload, ingest_source: "growth_engine" },
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

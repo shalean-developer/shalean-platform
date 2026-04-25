@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
+  BOOKING_NODRAFT_QUERY,
   BOOKING_STEP_LS_KEY,
   BOOKING_STEP_QUERY,
   bookingFlowHref,
@@ -33,6 +34,7 @@ export function BookingFlowClient() {
   const searchParams = useSearchParams();
   const rawStep = searchParams.get(BOOKING_STEP_QUERY);
   const step = normalizeBookingStepParam(rawStep);
+  const [showNoDraftBanner] = useState(() => searchParams.get(BOOKING_NODRAFT_QUERY) === "true");
   const [exitIntentOpen, setExitIntentOpen] = useState(false);
   const lastExitIntentAt = useRef(0);
   const trackedViewRef = useRef(false);
@@ -45,6 +47,12 @@ export function BookingFlowClient() {
       router.replace(bookingFlowHref(normalizeBookingStepParam(rawStep)));
     }
   }, [rawStep, router]);
+
+  /** Strip `noDraft` after first paint so the URL stays shareable; banner stays via local state. */
+  useEffect(() => {
+    if (!showNoDraftBanner) return;
+    router.replace(bookingFlowHref("entry"));
+  }, [router, showNoDraftBanner]);
 
   /** If user opens `/booking` with no `step` query, restore last step from localStorage when allowed. */
   useEffect(() => {
@@ -199,6 +207,14 @@ export function BookingFlowClient() {
             data-booking-route-step={step}
             data-booking-funnel-step={bookingRouteToFunnelStep(step)}
           >
+        {step === "entry" && showNoDraftBanner ? (
+          <div
+            role="status"
+            className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
+          >
+            We couldn&apos;t save your selections, but you can continue your booking below.
+          </div>
+        ) : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <AnimatePresence mode="wait">
             <motion.div

@@ -49,6 +49,7 @@ type BookingLayoutProps = {
   /** Mobile-first fixed bottom bar (split total + CTA). Desktop keeps standard footer. */
   stickyMobileBar?: {
     totalZar: number;
+    compareFromZar?: number | null;
     /** Replaces the currency line when no numeric total should appear yet. */
     amountDisplayOverride?: string | null;
     subline?: string;
@@ -245,6 +246,7 @@ export default function BookingLayout({
             <div className="lg:hidden">
               <StickyPriceBar
                 totalZar={stickyMobileBar.totalZar}
+                compareFromZar={stickyMobileBar.compareFromZar ?? null}
                 amountDisplayOverride={stickyMobileBar.amountDisplayOverride}
                 planPriceBreakdown={stickyMobileBar.planPriceBreakdown ?? null}
                 totalCaption={stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total}
@@ -286,18 +288,28 @@ export default function BookingLayout({
                         </p>
                       </div>
                     ) : (
-                      <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-                        {(() => {
-                          if (stickyMobileBar.amountDisplayOverride) {
-                            return stickyMobileBar.amountDisplayOverride;
-                          }
-                          const z =
-                            typeof footerTotalZar === "number"
-                              ? footerTotalZar
-                              : stickyMobileBar.totalZar;
-                          return Number.isFinite(z) ? `R ${z.toLocaleString("en-ZA")}` : "—";
-                        })()}
-                      </p>
+                      <div className="min-w-0">
+                        {stickyMobileBar.compareFromZar != null &&
+                        Number.isFinite(stickyMobileBar.compareFromZar) &&
+                        stickyMobileBar.compareFromZar > stickyMobileBar.totalZar &&
+                        !stickyMobileBar.amountDisplayOverride ? (
+                          <p className="truncate text-xs tabular-nums text-zinc-400 line-through dark:text-zinc-500">
+                            R {stickyMobileBar.compareFromZar.toLocaleString("en-ZA")}
+                          </p>
+                        ) : null}
+                        <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                          {(() => {
+                            if (stickyMobileBar.amountDisplayOverride) {
+                              return stickyMobileBar.amountDisplayOverride;
+                            }
+                            const z =
+                              typeof footerTotalZar === "number"
+                                ? footerTotalZar
+                                : stickyMobileBar.totalZar;
+                            return Number.isFinite(z) ? `R ${z.toLocaleString("en-ZA")}` : "—";
+                          })()}
+                        </p>
+                      </div>
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

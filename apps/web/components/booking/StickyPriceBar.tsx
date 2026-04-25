@@ -12,6 +12,8 @@ export type StickyPlanPriceBreakdown = {
 
 type StickyPriceBarProps = {
   totalZar: number;
+  /** Optional crossed-out anchor estimate for compact “R499 → R439” messaging on mobile. */
+  compareFromZar?: number | null;
   /** When set, replaces the formatted `R …` line (e.g. before a slot is locked). */
   amountDisplayOverride?: string | null;
   /** List + plan preview (details step); canonical base stays visible. */
@@ -38,6 +40,7 @@ type StickyPriceBarProps = {
 
 export function StickyPriceBar({
   totalZar,
+  compareFromZar = null,
   amountDisplayOverride = null,
   totalCaption = bookingCopy.stickyBar.total,
   ctaLabel = bookingCopy.stickyBar.cta,
@@ -53,6 +56,12 @@ export function StickyPriceBar({
   planPriceBreakdown = null,
 }: StickyPriceBarProps) {
   const amountLine = amountDisplayOverride ?? `R ${totalZar.toLocaleString("en-ZA")}`;
+  const showCompareFrom =
+    compareFromZar != null &&
+    Number.isFinite(compareFromZar) &&
+    compareFromZar > totalZar &&
+    !amountDisplayOverride &&
+    !planPriceBreakdown;
 
   const stackedPlanAmount =
     planPriceBreakdown && !amountDisplayOverride ? (
@@ -84,7 +93,14 @@ export function StickyPriceBar({
       {stackedPlanAmount ? (
         stackedPlanAmount
       ) : (
-        <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
+        <div className="min-w-0">
+          {showCompareFrom ? (
+            <p className="truncate text-xs tabular-nums text-zinc-400 line-through dark:text-zinc-500">
+              R {compareFromZar.toLocaleString("en-ZA")}
+            </p>
+          ) : null}
+          <p className="truncate text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
+        </div>
       )}
       {subline && variant === "elevated" ? (
         <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{subline}</p>

@@ -156,7 +156,7 @@ export function BookingSummaryCard({
       {!locked && estimateFromZar != null && !suppressEstimateUntilLocked ? (
         <div className="mt-4 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/50 dark:bg-blue-950/35">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Estimated price
+            Estimated price (before time selection)
           </p>
           {estimatePlanDiscountedZar != null &&
           estimatePlanLabel &&
@@ -178,7 +178,10 @@ export function BookingSummaryCard({
               From R {estimateFromZar.toLocaleString("en-ZA")}
             </p>
           )}
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">No payment required yet</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Final price may change based on your selected time</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400/90">
+            You may get a lower price by choosing a flexible time
+          </p>
         </div>
       ) : null}
 
@@ -273,6 +276,9 @@ export function BookingSummaryCard({
               </span>
             </p>
           )}
+          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            Best available price applied
+          </p>
         </div>
       ) : null}
 

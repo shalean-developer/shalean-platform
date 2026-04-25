@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
+import { AvailabilityMessage } from "@/components/booking/AvailabilityMessage";
 import { BOOKING_CALENDAR_DAYS, generateNextDates } from "@/components/booking/BookingDateStrip";
 import { useCleaners } from "@/components/booking/useCleaners";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
@@ -24,6 +25,7 @@ import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
+import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 type LiveSlot = PricedAvailabilitySlot;
 
@@ -62,11 +64,11 @@ function tomorrowYmd(allDateValues: string[]): string | null {
 function nextAvailableHint(allDateValues: string[], selectedDate: string): string {
   const next = allDateValues.find((d) => d > selectedDate);
   const ymd = next ?? (allDateValues.length > 1 ? allDateValues[1]! : null);
-  if (!ymd) return "Next available: tomorrow from 09:00 — pick another date above.";
+  if (!ymd) return "Slots available on upcoming dates — pick another date above.";
   const [y, m, d] = ymd.split("-").map(Number);
   const when = new Date(y, m - 1, d);
   const label = when.toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "short" });
-  return `Next available: ${label} from 09:00 — pick that date above.`;
+  return `Slots available on ${label} — pick that date above.`;
 }
 
 function dateChipLabel(ymd: string): { dow: string; day: string } {
@@ -115,6 +117,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const [autoAssignCleaner, setAutoAssignCleaner] = useState(true);
   const cleanerCarouselRef = useRef<HTMLDivElement | null>(null);
   const autoLockRunRef = useRef<string>("");
+  const prevTrackedPriceRef = useRef<number | null>(null);
   const skipAvailabilityCacheOnceRef = useRef(false);
   const lockFailedTimeKeysRef = useRef<Set<string>>(new Set());
 
@@ -266,6 +269,20 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   );
   const selectedTime = useMemo(() => (locked && locked.date === selectedDate ? locked.time : null), [locked, selectedDate]);
 
+  useEffect(() => {
+    if (!locked || locked.date !== selectedDate || !selectedTime) return;
+    const nextPrice = getLockedBookingDisplayPrice(locked);
+    const prevPrice = prevTrackedPriceRef.current;
+    if (prevPrice != null && prevPrice !== nextPrice) {
+      trackGrowthEvent("price_updated", {
+        from: prevPrice,
+        to: nextPrice,
+        reason: "time_selection",
+      });
+    }
+    prevTrackedPriceRef.current = nextPrice;
+  }, [locked, selectedDate, selectedTime]);
+
   const cleanerSlotTime = selectedTime ?? strategyRecommendedTime ?? "09:00";
   const { cleaners: cleanerPool, recommendedCleaner, loading: cleanersLoading, error: cleanersError } = useCleaners({
     selectedDate,
@@ -282,14 +299,15 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       const totalZar = getLockedBookingDisplayPrice(locked);
       return {
         totalZar,
-        totalCaption: "Price confirmed",
+        compareFromZar: canonicalTotalZar != null && canonicalTotalZar > totalZar ? canonicalTotalZar : null,
+        totalCaption: "Final price",
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       };
     }
     return {
       totalZar: canonicalTotalZar ?? 0,
-      totalCaption: "Your visit",
+      totalCaption: "Estimated price (before time selection)",
       amountDisplayOverride: canonicalTotalZar == null ? "Select a time" : null,
       ctaShort: "Continue →",
       openSummarySheetOnAmountTap: true,
@@ -437,6 +455,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     return {
       time,
       priceZar,
+      cleanersCount: row?.cleanersCount ?? 0,
       strategyBadge,
       selected: selectedTime === time,
     };
@@ -464,7 +483,6 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     <BookingLayout
       summaryState={summaryState ?? undefined}
       summaryDesktopOnly
-      suppressEstimateUntilLocked
       scheduleDateHint={scheduleDateHint}
       canContinue={canContinue}
       onContinue={onNext}
@@ -530,12 +548,21 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               {slotsLoading ? (
                 <div className="space-y-2" role="status" aria-live="polite">
                   <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Checking availability…</p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Calculating best available price...</p>
+                  {canonicalTotalZar != null ? (
+                    <p className="text-sm font-medium tabular-nums text-zinc-500 opacity-70 dark:text-zinc-400">
+                      Current estimate: R {canonicalTotalZar.toLocaleString("en-ZA")}
+                    </p>
+                  ) : null}
                   <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div key={i} className="h-20 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
                     ))}
                   </div>
                 </div>
+              ) : null}
+              {!slotsLoading && orderedDisplayTimes.length > 0 ? (
+                <AvailabilityMessage slots={slotPickRows.map((s) => ({ time: s.time }))} showExactTime />
               ) : null}
               {slotHint ? (
                 <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/95 p-3 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100">
@@ -589,6 +616,14 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 <div className="flex flex-col gap-3">
                   {visibleSlotTimes.map((time) => {
                     const p = slotCardProps(time);
+                    const slotPrice = p.priceZar;
+                    const anchorPrice =
+                      canonicalTotalZar != null && Number.isFinite(canonicalTotalZar) && canonicalTotalZar > 0
+                        ? canonicalTotalZar
+                        : null;
+                    const hasComparison = anchorPrice != null && slotPrice != null;
+                    const diff = hasComparison ? anchorPrice - slotPrice : 0;
+                    const percent = hasComparison ? Math.round((diff / anchorPrice) * 100) : 0;
                     const badge =
                       p.strategyBadge === "recommended"
                         ? "Recommended"
@@ -619,36 +654,58 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                         type="button"
                         onClick={() => void handleSelectSlot(time)}
                         className={[
-                          "w-full rounded-xl border p-4 transition",
-                          "flex items-center justify-between text-left",
+                          "w-full rounded-xl border p-4 transition text-left",
                           p.selected
-                            ? "border-blue-500 bg-blue-50 text-blue-900 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
+                            ? "border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-500 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
                             : "border-zinc-200 bg-white text-zinc-800 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
                         ].join(" ")}
                       >
-                        <div className="min-w-0">
-                          <div className="text-base font-medium tabular-nums">{p.time}</div>
-                          <div className={["mt-1 min-h-[1rem] text-sm font-medium", badgeClass].join(" ")}>
-                            {badge ?? "—"}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-base font-medium tabular-nums">{p.time}</div>
+                            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                              {p.cleanersCount > 0
+                                ? `${p.cleanersCount} cleaner${p.cleanersCount === 1 ? "" : "s"} available`
+                                : "Limited availability"}
+                            </p>
                           </div>
-                          {badgeHint ? (
-                            <p className="mt-0.5 text-[11px] font-normal leading-snug text-zinc-500 dark:text-zinc-400">
-                              {badgeHint}
+                          <div className="text-right">
+                            {hasComparison ? (
+                              <p className="text-xs tabular-nums text-zinc-400 line-through dark:text-zinc-500">
+                                R {anchorPrice.toLocaleString("en-ZA")}
+                              </p>
+                            ) : null}
+                            <div className="text-lg font-semibold tabular-nums">
+                              {p.priceZar != null ? `R ${p.priceZar.toLocaleString("en-ZA")}` : "—"}
+                            </div>
+                            {p.selected ? (
+                              <p className="mt-0.5 text-xs font-medium text-blue-600 dark:text-blue-300">Selected</p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="mt-1 min-h-[1rem]">
+                          {hasComparison && diff > 0 ? (
+                            <p className="text-xs font-medium text-green-600 dark:text-green-400">
+                              ✔ Save R {Math.abs(diff).toLocaleString("en-ZA")} ({Math.abs(percent)}%)
+                            </p>
+                          ) : hasComparison && diff < 0 ? (
+                            <p className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                              ⚡ Peak time pricing (+{Math.abs(percent)}%)
                             </p>
                           ) : (
-                            <div className="mt-0.5 min-h-[0.875rem]" aria-hidden />
+                            <div className={["text-xs font-medium", badgeClass].join(" ")}>{badge ?? "—"}</div>
                           )}
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-semibold tabular-nums">
-                            {p.priceZar != null ? `R ${p.priceZar.toLocaleString("en-ZA")}` : "—"}
-                          </div>
-                          {vipTier !== "regular" && p.priceZar != null ? (
-                            <p className="mt-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                              Member price applied
-                            </p>
-                          ) : null}
-                        </div>
+                        {badgeHint ? (
+                          <p className="mt-0.5 text-[11px] font-normal leading-snug text-zinc-500 dark:text-zinc-400">
+                            {badgeHint}
+                          </p>
+                        ) : null}
+                        {vipTier !== "regular" && p.priceZar != null ? (
+                          <p className="mt-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                            Member price applied
+                          </p>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -666,10 +723,9 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               ) : null}
 
               {locked && locked.date === selectedDate && selectedTime ? (
-                <div className="flex items-center gap-2 rounded-xl border border-emerald-200/90 bg-emerald-50/95 px-4 py-3 text-sm font-medium text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/45 dark:text-emerald-50">
-                  <Check className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.25} aria-hidden />
-                  <span>Price locked for this time.</span>
-                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  Final price and savings are shown directly on each slot card for easier comparison.
+                </p>
               ) : null}
 
               {selectedTime ? (

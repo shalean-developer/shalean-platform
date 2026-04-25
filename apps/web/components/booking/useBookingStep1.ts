@@ -7,6 +7,7 @@ import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection"
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
+import { consumeWidgetDraftForHydration } from "@/lib/booking/bookingWidgetDraft";
 import type { ServiceCategoryKind } from "./CategoryPicker";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import {
@@ -272,10 +273,17 @@ function useBookingStep1Store(): UseBookingStep1Return {
   useEffect(() => {
     queueMicrotask(() => {
       try {
-        const raw = localStorage.getItem(BOOKING_STEP1_KEY);
-        if (raw) {
-          const parsed = parseStoredStep1(raw);
-          if (parsed) setState(parsed);
+        const widgetState = consumeWidgetDraftForHydration();
+        if (widgetState) {
+          setState(widgetState);
+          localStorage.setItem(BOOKING_STEP1_KEY, JSON.stringify(widgetState));
+          window.dispatchEvent(new Event("booking-storage-sync"));
+        } else {
+          const raw = localStorage.getItem(BOOKING_STEP1_KEY);
+          if (raw) {
+            const parsed = parseStoredStep1(raw);
+            if (parsed) setState(parsed);
+          }
         }
       } catch {
         /* ignore corrupt storage */

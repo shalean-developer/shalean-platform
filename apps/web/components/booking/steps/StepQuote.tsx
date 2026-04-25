@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
+import { AvailabilityMessage } from "@/components/booking/AvailabilityMessage";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
@@ -12,6 +13,8 @@ import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import {
   type BookingServiceTypeKey,
   bookingServiceIdFromType,
+  inferServiceGroupFromServiceId,
+  inferServiceTypeFromServiceId,
   normalizeStep1ForService,
 } from "@/components/booking/serviceCategories";
 import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
@@ -40,7 +43,28 @@ export function StepQuote() {
   /** Default funnel on quote when nothing chosen yet (e.g. deep-linked without step 1). */
   useEffect(() => {
     if (!hydrated) return;
-    if ((state.subServices?.length ?? 0) > 0) return;
+    const hasSubServices = (state.subServices?.length ?? 0) > 0;
+    const hasService = state.service != null || hasSubServices;
+    if (hasSubServices) return;
+
+    // Preserve homepage-hydrated service; only backfill subServices for selector UX.
+    if (state.service) {
+      const inferredType = state.service_type ?? inferServiceTypeFromServiceId(state.service);
+      const inferredGroup = inferServiceGroupFromServiceId(state.service);
+      if (!inferredType) return;
+      setState((p) =>
+        normalizeStep1ForService({
+          ...p,
+          subServices: [inferredType],
+          selectedCategory: p.selectedCategory ?? inferredGroup,
+          service_group: p.service_group ?? inferredGroup,
+          service_type: inferredType,
+        }),
+      );
+      return;
+    }
+
+    if (hasService) return;
     setState((p) =>
       normalizeStep1ForService({
         ...p,
@@ -51,7 +75,7 @@ export function StepQuote() {
         service: bookingServiceIdFromType("standard_cleaning"),
       }),
     );
-  }, [hydrated, setState, state.subServices]);
+  }, [hydrated, setState, state.service, state.service_type, state.subServices]);
 
   const selectService = useCallback(
     (primary: BookingServiceTypeKey) => {
@@ -104,7 +128,9 @@ export function StepQuote() {
           >
             {copy.reassurance}
           </p>
-          <p className="mt-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.urgency}</p>
+          <div className="mt-1.5">
+            <AvailabilityMessage />
+          </div>
         </div>
 
         <section className="space-y-3" aria-labelledby="sub-services-heading">

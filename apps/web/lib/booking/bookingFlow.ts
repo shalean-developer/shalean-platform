@@ -3,6 +3,8 @@ import { readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 
 export const BOOKING_STEP_QUERY = "step";
 export const BOOKING_STEP_LS_KEY = "booking_step";
+/** Set when homepage draft could not be written (e.g. private mode). Booking UI shows a gentle notice. */
+export const BOOKING_NODRAFT_QUERY = "noDraft";
 
 /** Five-step conversion flow (URL `?step=`). */
 export const BOOKING_FLOW_STEPS = ["entry", "quote", "details", "when", "checkout"] as const;
@@ -84,7 +86,13 @@ export function getBookingStepGateRedirect(step: BookingFlowStep): BookingFlowSt
   return null;
 }
 
-export function bookingFlowHref(step: BookingFlowStep): string {
+export function bookingFlowHref(step: BookingFlowStep, extra?: Record<string, string>): string {
   const q = step === "when" ? BOOKING_STEP_SCHEDULE_ALIAS : step;
-  return `/booking?${BOOKING_STEP_QUERY}=${q}`;
+  const params = new URLSearchParams({ [BOOKING_STEP_QUERY]: q });
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v) params.set(k, v);
+    }
+  }
+  return `/booking?${params.toString()}`;
 }
