@@ -1,7 +1,11 @@
+import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { isWhatsappOutboundPaused } from "@/lib/notifications/notificationRuntimeFlags";
+import { abortWhatsAppQueueJob, enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
+
+export { sendViaMetaWhatsApp };
 
 function bookingIdFromContext(ctx: Record<string, unknown>): string | null {
   const b = ctx.bookingId;
@@ -19,6 +23,17 @@ function normalizePhone(value: string | null | undefined): string {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
   return raw.replace(/[^\d+]/g, "");
+}
+
+function hasWhatsappMetaConfigured(): boolean {
+  return Boolean(process.env.WHATSAPP_API_TOKEN?.trim() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
+}
+
+/** Dev-style log-only sends: explicit flag, or local/staging without credentials. Never treats production misconfig as success. */
+function isWhatsappDevLogOnly(): boolean {
+  if (process.env.WHATSAPP_DEV_MODE === "true") return true;
+  if (process.env.NODE_ENV === "production") return false;
+  return !hasWhatsappMetaConfigured();
 }
 
 function buildOfferMessage(params: {
@@ -44,63 +59,15 @@ function buildOfferMessage(params: {
   ].join("\n");
 }
 
-/**
- * Meta Cloud API text send (digits-only `to`, no `+`).
- * Treats HTTP 200 with Graph `error` object or per-message `errors` as failure (not merely "queued").
- * Exported for admin retry of logged deliveries.
- */
-export async function sendViaMetaWhatsApp(params: { phone: string; message: string }): Promise<{ messageId: string }> {
-  const token = process.env.WHATSAPP_API_TOKEN?.trim();
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
-  if (!token || !phoneNumberId) {
-    throw new Error("Missing WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID");
-  }
-  const res = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: params.phone,
-      type: "text",
-      text: { body: params.message },
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  const rawText = await res.text();
-  let json: Record<string, unknown> | null = null;
-  try {
-    json = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : null;
-  } catch {
-    json = null;
-  }
-  if (!res.ok) {
-    throw new Error(`WhatsApp send failed (${res.status}): ${rawText.slice(0, 1200)}`);
-  }
-  if (json && typeof json.error === "object" && json.error !== null) {
-    const err = json.error as { message?: string; code?: number };
-    throw new Error(`Meta API error: ${err.message ?? JSON.stringify(json.error)}`);
-  }
-  const messages = Array.isArray(json?.messages) ? (json!.messages as unknown[]) : [];
-  const first = (messages[0] ?? null) as Record<string, unknown> | null;
-  if (!first || typeof first.id !== "string" || !first.id.trim()) {
-    throw new Error(`Meta API: missing message id in success response: ${rawText.slice(0, 800)}`);
-  }
-  const nestedErrs = first.errors;
-  if (Array.isArray(nestedErrs) && nestedErrs.length) {
-    throw new Error(`Meta message errors: ${JSON.stringify(nestedErrs).slice(0, 800)}`);
-  }
-  return { messageId: first.id.trim() };
-}
-
 async function sendWhatsAppText(params: {
   cleanerPhone: string;
   source: string;
   context: Record<string, unknown>;
   message: string;
-}): Promise<void> {
+  idempotencyKey?: string | null;
+  /** Higher = worker dequeues sooner (default 0). */
+  priority?: number;
+}): Promise<string | null> {
   const phone = normalizePhone(params.cleanerPhone);
   if (!phone) {
     await logSystemEvent({
@@ -109,11 +76,20 @@ async function sendWhatsAppText(params: {
       message: "Cleaner has no phone_number configured",
       context: params.context,
     });
-    return;
+    return null;
   }
 
-  const devMode = process.env.WHATSAPP_DEV_MODE === "true" || !process.env.WHATSAPP_API_TOKEN;
-  if (devMode) {
+  if (process.env.NODE_ENV === "production" && !hasWhatsappMetaConfigured()) {
+    await logSystemEvent({
+      level: "error",
+      source: `${params.source}_prod_misconfig`,
+      message: "CRITICAL: WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID missing in production — outbound skipped",
+      context: { ...params.context, payload_preview: params.message.slice(0, 120) },
+    });
+    return null;
+  }
+
+  if (isWhatsappDevLogOnly()) {
     console.log("[whatsapp:dev]", { to: phone, message: params.message, ...params.context });
     await logSystemEvent({
       level: "info",
@@ -121,16 +97,51 @@ async function sendWhatsAppText(params: {
       message: "WhatsApp dev-mode message logged",
       context: { to: phone, ...params.context },
     });
-    return;
+    return null;
   }
 
-  await sendViaMetaWhatsApp({ phone, message: params.message });
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    await logSystemEvent({
+      level: "warn",
+      source: `${params.source}_queue_skip`,
+      message: "Supabase admin not configured — WhatsApp queue skipped",
+      context: params.context,
+    });
+    return null;
+  }
+
+  const enq = await enqueueWhatsApp({
+    admin,
+    phone,
+    phoneRaw: params.cleanerPhone,
+    type: "text",
+    payload: { kind: "text", text: params.message },
+    context: {
+      source: params.source,
+      ...params.context,
+      terminal_sms_in_worker_only: true,
+      sms_body: params.message,
+    },
+    idempotencyKey: params.idempotencyKey ?? null,
+    priority: params.priority ?? 0,
+  });
+  if (enq.id === null) {
+    await logSystemEvent({
+      level: "warn",
+      source: `${params.source}_enqueue_failed`,
+      message: enq.error,
+      context: { to: phone, ...params.context },
+    });
+    return null;
+  }
   await logSystemEvent({
     level: "info",
-    source: `${params.source}_sent`,
-    message: "WhatsApp message sent",
-    context: { to: phone, ...params.context },
+    source: `${params.source}_queued`,
+    message: "WhatsApp message enqueued for delivery",
+    context: { to: phone, queue_id: enq.id, ...params.context },
   });
+  return enq.id;
 }
 
 export async function sendWhatsAppOffer(params: {
@@ -140,18 +151,20 @@ export async function sendWhatsAppOffer(params: {
   time: string;
   location: string;
   price: string;
-}): Promise<void> {
+}): Promise<string | null> {
   const message = buildOfferMessage({
     offerId: params.offerId,
     location: params.location,
     timeText: params.time,
     priceText: params.price,
   });
-  await sendWhatsAppText({
+  return sendWhatsAppText({
     cleanerPhone: params.cleanerPhone,
     source: "whatsapp_offer",
     context: { bookingId: params.bookingId, offerId: params.offerId },
     message,
+    idempotencyKey: `dispatch_offer:${params.bookingId}:${params.offerId}`,
+    priority: 100,
   });
 }
 
@@ -182,7 +195,7 @@ export async function notifyCleanerOfDispatchOffer(params: NotifyParams): Promis
   const price = `R ${Number.isFinite(amountZar) ? amountZar.toLocaleString("en-ZA") : "0"}`;
 
   try {
-    await sendWhatsAppOffer({
+    const jobId = await sendWhatsAppOffer({
       cleanerPhone: phone,
       bookingId: params.bookingId,
       offerId: params.offerId,
@@ -190,6 +203,46 @@ export async function notifyCleanerOfDispatchOffer(params: NotifyParams): Promis
       location,
       price,
     });
+    if (jobId) {
+      const { data: preFlushRow } = await admin
+        .from("whatsapp_queue")
+        .select("status,attempts")
+        .eq("id", jobId)
+        .maybeSingle();
+      const statusBeforeFlush = String((preFlushRow as { status?: string } | null)?.status ?? "unknown");
+      const attemptsBeforeFlush = Number((preFlushRow as { attempts?: number } | null)?.attempts ?? 0);
+
+      let flush: Awaited<ReturnType<typeof flushWhatsAppJobById>> = { ok: true };
+      try {
+        flush = await flushWhatsAppJobById(admin, jobId);
+      } catch (e) {
+        flush = { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+      if (!flush.ok) {
+        const err = flush.error ?? "unknown_flush_error";
+        await logSystemEvent({
+          level: "error",
+          source: "whatsapp_offer_flush_failed",
+          message: err,
+          context: {
+            job_id: jobId,
+            error: err,
+            bookingId: params.bookingId,
+            offerId: params.offerId,
+            cleanerId: params.cleanerId,
+            attempts: attemptsBeforeFlush,
+            status_before_flush: statusBeforeFlush,
+          },
+        });
+        const jitterMs = Math.random() * 5000;
+        const bumpIso = new Date(Date.now() + jitterMs).toISOString();
+        await admin
+          .from("whatsapp_queue")
+          .update({ next_attempt_at: bumpIso, updated_at: bumpIso })
+          .eq("id", jobId)
+          .eq("status", "pending");
+      }
+    }
   } catch (e) {
     await logSystemEvent({
       level: "warn",
@@ -205,23 +258,34 @@ export async function notifyCleanerOfferAccepted(params: {
   bookingId: string;
   offerId: string;
 }): Promise<void> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return;
-  const { data: cleaner } = await admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle();
-  const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
-  const message = [
-    "✅ You accepted the job.",
-    "It is now listed under My Jobs in the cleaner app.",
-    "",
-    `Booking ID: ${params.bookingId}`,
-    `Offer ID: ${params.offerId}`,
-  ].join("\n");
-  await sendWhatsAppText({
-    cleanerPhone: phone,
-    source: "whatsapp_offer_accept_confirmation",
-    context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
-    message,
-  });
+  try {
+    const admin = getSupabaseAdmin();
+    if (!admin) return;
+    const { data: cleaner } = await admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle();
+    const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
+    const message = [
+      "✅ You accepted the job.",
+      "It is now listed under My Jobs in the cleaner app.",
+      "",
+      `Booking ID: ${params.bookingId}`,
+      `Offer ID: ${params.offerId}`,
+    ].join("\n");
+    await sendWhatsAppText({
+      cleanerPhone: phone,
+      source: "whatsapp_offer_accept_confirmation",
+      context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
+      message,
+      idempotencyKey: `offer_accept:${params.bookingId}:${params.offerId}`,
+      priority: 60,
+    });
+  } catch (e) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_offer_accept_confirmation_error",
+      message: e instanceof Error ? e.message : String(e),
+      context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
+    });
+  }
 }
 
 export async function notifyCleanerOfferDeclined(params: {
@@ -229,53 +293,90 @@ export async function notifyCleanerOfferDeclined(params: {
   bookingId: string;
   offerId: string;
 }): Promise<void> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return;
-  const { data: cleaner } = await admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle();
-  const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
-  const message = [
-    "✋ You declined this available job.",
-    "No action needed — we will offer this booking to another cleaner.",
-    "",
-    `Offer ID: ${params.offerId}`,
-  ].join("\n");
-  await sendWhatsAppText({
-    cleanerPhone: phone,
-    source: "whatsapp_offer_decline_confirmation",
-    context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
-    message,
-  });
+  try {
+    const admin = getSupabaseAdmin();
+    if (!admin) return;
+    const { data: cleaner } = await admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle();
+    const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
+    const message = [
+      "✋ You declined this available job.",
+      "No action needed — we will offer this booking to another cleaner.",
+      "",
+      `Offer ID: ${params.offerId}`,
+    ].join("\n");
+    await sendWhatsAppText({
+      cleanerPhone: phone,
+      source: "whatsapp_offer_decline_confirmation",
+      context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
+      message,
+      idempotencyKey: `offer_decline:${params.bookingId}:${params.offerId}`,
+      priority: 60,
+    });
+  } catch (e) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_offer_decline_confirmation_error",
+      message: e instanceof Error ? e.message : String(e),
+      context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
+    });
+  }
 }
 
 export async function sendCleanerOnboardingWhatsApp(params: {
   cleanerPhone: string;
   cleanerId?: string;
 }): Promise<void> {
-  const message = [
-    "Welcome to Shalean 👋",
-    "",
-    "You will receive available jobs and team assignments here.",
-    "Reply 1 to accept, 2 to decline.",
-  ].join("\n");
-  await sendWhatsAppText({
-    cleanerPhone: params.cleanerPhone,
-    source: "whatsapp_cleaner_onboarding",
-    context: { cleanerId: params.cleanerId ?? "unknown" },
-    message,
-  });
+  try {
+    const message = [
+      "Welcome to Shalean 👋",
+      "",
+      "You will receive available jobs and team assignments here.",
+      "Reply 1 to accept, 2 to decline.",
+    ].join("\n");
+    await sendWhatsAppText({
+      cleanerPhone: params.cleanerPhone,
+      source: "whatsapp_cleaner_onboarding",
+      context: { cleanerId: params.cleanerId ?? "unknown" },
+      message,
+      idempotencyKey: params.cleanerId
+        ? `cleaner_onboard:${params.cleanerId}`
+        : `cleaner_onboard_phone:${normalizePhone(params.cleanerPhone).replace(/\D/g, "").slice(-12)}`,
+      priority: 10,
+    });
+  } catch (e) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_cleaner_onboarding_error",
+      message: e instanceof Error ? e.message : String(e),
+      context: { cleanerId: params.cleanerId ?? "unknown" },
+    });
+  }
 }
 
 export async function sendCleanerApprovedWhatsApp(params: {
   cleanerPhone: string;
   cleanerId?: string;
 }): Promise<void> {
-  const message = ["You're approved 🎉", "You will now start receiving cleaning jobs."].join("\n");
-  await sendWhatsAppText({
-    cleanerPhone: params.cleanerPhone,
-    source: "whatsapp_cleaner_approved",
-    context: { cleanerId: params.cleanerId ?? "unknown" },
-    message,
-  });
+  try {
+    const message = ["You're approved 🎉", "You will now start receiving cleaning jobs."].join("\n");
+    await sendWhatsAppText({
+      cleanerPhone: params.cleanerPhone,
+      source: "whatsapp_cleaner_approved",
+      context: { cleanerId: params.cleanerId ?? "unknown" },
+      message,
+      idempotencyKey: params.cleanerId
+        ? `cleaner_approved:${params.cleanerId}`
+        : `cleaner_approved_phone:${normalizePhone(params.cleanerPhone).replace(/\D/g, "").slice(-12)}`,
+      priority: 10,
+    });
+  } catch (e) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_cleaner_approved_error",
+      message: e instanceof Error ? e.message : String(e),
+      context: { cleanerId: params.cleanerId ?? "unknown" },
+    });
+  }
 }
 
 async function writeCleanerWhatsAppDeliveryLog(params: {
@@ -344,8 +445,27 @@ export async function trySendCleanerWhatsAppMessage(params: {
     });
     return { ok: false, reason: "whatsapp_channel_paused" };
   }
-  const devMode = process.env.WHATSAPP_DEV_MODE === "true" || !process.env.WHATSAPP_API_TOKEN;
-  if (devMode) {
+
+  if (process.env.NODE_ENV === "production" && !hasWhatsappMetaConfigured()) {
+    await logSystemEvent({
+      level: "error",
+      source: "whatsapp_prod_misconfig",
+      message: "CRITICAL: WhatsApp Meta credentials missing in production — outbound treated as failure",
+      context: params.context,
+    });
+    await writeCleanerWhatsAppDeliveryLog({
+      deliveryLog: params.deliveryLog,
+      context: params.context,
+      source: params.source,
+      message: params.message,
+      recipient: phone,
+      status: "failed",
+      error: "whatsapp_not_configured",
+    });
+    return { ok: false, reason: "whatsapp_not_configured" };
+  }
+
+  if (isWhatsappDevLogOnly()) {
     await sendWhatsAppText({
       cleanerPhone: params.cleanerPhone,
       source: params.source,
@@ -363,31 +483,60 @@ export async function trySendCleanerWhatsAppMessage(params: {
     });
     return { ok: true };
   }
-  try {
-    await sendViaMetaWhatsApp({ phone, message: params.message });
-    await logSystemEvent({
-      level: "info",
-      source: `${params.source}_sent`,
-      message: "WhatsApp message sent",
-      context: { to: phone, ...params.context },
-    });
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
     await writeCleanerWhatsAppDeliveryLog({
       deliveryLog: params.deliveryLog,
       context: params.context,
       source: params.source,
       message: params.message,
       recipient: phone,
-      status: "sent",
-      error: null,
+      status: "failed",
+      error: "supabase_admin_not_configured",
     });
-    return { ok: true };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, reason: "supabase_admin_not_configured" };
+  }
+
+  const bid = bookingIdFromContext(params.context);
+  const idempotencyKey =
+    bid != null
+      ? `${bid}:${params.source}:${params.deliveryLog?.eventType ?? "cleaner"}`
+      : `${params.source}:${phone.replace(/\D/g, "").slice(-12)}`;
+
+  const queuePriority = params.source === "whatsapp_job_reminder_2h" ? 55 : 80;
+  const enq = await enqueueWhatsApp({
+    admin,
+    phone,
+    phoneRaw: params.cleanerPhone,
+    type: "text",
+    payload: { kind: "text", text: params.message },
+    context: { source: params.source, ...params.context, skip_terminal_worker_sms: true },
+    idempotencyKey,
+    priority: queuePriority,
+  });
+  if (enq.id === null) {
+    await writeCleanerWhatsAppDeliveryLog({
+      deliveryLog: params.deliveryLog,
+      context: params.context,
+      source: params.source,
+      message: params.message,
+      recipient: phone,
+      status: "failed",
+      error: enq.error,
+    });
+    return { ok: false, reason: enq.error };
+  }
+
+  const flush = await flushWhatsAppJobById(admin, enq.id);
+  if (!flush.ok) {
+    const msg = flush.error ?? "whatsapp_queue_flush_failed";
+    await abortWhatsAppQueueJob(admin, enq.id, `sms_fallback_abort:${msg}`);
     await logSystemEvent({
       level: "warn",
       source: `${params.source}_failed`,
       message: msg,
-      context: { to: phone, ...params.context },
+      context: { to: phone, queue_id: enq.id, ...params.context, payload_preview: params.message.slice(0, 200) },
     });
     await writeCleanerWhatsAppDeliveryLog({
       deliveryLog: params.deliveryLog,
@@ -400,4 +549,21 @@ export async function trySendCleanerWhatsAppMessage(params: {
     });
     return { ok: false, reason: msg };
   }
+
+  await logSystemEvent({
+    level: "info",
+    source: `${params.source}_sent`,
+    message: "WhatsApp message sent (queue flush)",
+    context: { to: phone, queue_id: enq.id, ...params.context },
+  });
+  await writeCleanerWhatsAppDeliveryLog({
+    deliveryLog: params.deliveryLog,
+    context: params.context,
+    source: params.source,
+    message: params.message,
+    recipient: phone,
+    status: "sent",
+    error: null,
+  });
+  return { ok: true };
 }

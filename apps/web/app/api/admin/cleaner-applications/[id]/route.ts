@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/auth/admin";
 import { createCleaner } from "@/lib/cleaner/createCleaner";
 import { sendCleanerApprovedWhatsApp, sendCleanerOnboardingWhatsApp } from "@/lib/dispatch/offerNotifications";
 import { linkCleanerReferralOnApproval } from "@/lib/referrals/server";
+import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -90,8 +91,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     cleanerPhone: phone,
   });
   if (phone) {
-    await sendCleanerApprovedWhatsApp({ cleanerPhone: phone, cleanerId: createdCleaner.id });
-    await sendCleanerOnboardingWhatsApp({ cleanerPhone: phone, cleanerId: createdCleaner.id });
+    try {
+      await sendCleanerApprovedWhatsApp({ cleanerPhone: phone, cleanerId: createdCleaner.id });
+      await sendCleanerOnboardingWhatsApp({ cleanerPhone: phone, cleanerId: createdCleaner.id });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await logSystemEvent({
+        level: "warn",
+        source: "cleaner_approve_whatsapp_error",
+        message: msg.slice(0, 2000),
+        context: { cleanerId: createdCleaner.id, applicationId: id },
+      });
+    }
   }
 
   return NextResponse.json({ ok: true, status: "approved", cleanerId: createdCleaner.id });

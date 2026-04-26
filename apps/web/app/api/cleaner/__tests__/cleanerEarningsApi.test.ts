@@ -220,6 +220,7 @@ describe("cleaner API earnings contracts", () => {
     const json = (await res.json()) as { offers: Array<Record<string, unknown>> };
 
     expect(json.offers[0]!.displayEarningsCents).toBe(25_000);
+    expect(json.offers[0]!.displayEarningsIsEstimate).toBe(true);
   });
 
   it("uses fallback when display earnings missing and logs warning", async () => {
@@ -243,8 +244,34 @@ describe("cleaner API earnings contracts", () => {
     const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
 
     expect(json.jobs[0]!.displayEarningsCents).toBe(19_000);
+    expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith("Fallback earnings used", "b4", "api/cleaner/jobs");
+  });
+
+  it("team job without stored display earnings marks estimate flag", async () => {
+    mockState.admin = new MockSupabaseClient({
+      cleaners: [{ id: "cleaner-1" }],
+      bookings: [
+        {
+          id: "b-team",
+          cleaner_id: "cleaner-1",
+          service: "Deep Cleaning",
+          status: "assigned",
+          is_team_job: true,
+          team_id: "team-1",
+          display_earnings_cents: null,
+          cleaner_payout_cents: null,
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/jobs/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/jobs"));
+    const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
+
+    expect(json.jobs[0]!.displayEarningsCents).toBe(25_000);
+    expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(true);
   });
 });
 

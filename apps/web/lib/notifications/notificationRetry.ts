@@ -1,7 +1,8 @@
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
-import { sendViaMetaWhatsApp } from "@/lib/dispatch/offerNotifications";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { abortWhatsAppQueueJob, enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
 
 export type NotificationLogRowForRetry = {
   id: string;
@@ -161,8 +162,21 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
     if (digits.length < 10) {
       return { ok: false, error: "Invalid WhatsApp recipient on log row.", httpStatus: 400 };
     }
-    const devMode = process.env.WHATSAPP_DEV_MODE === "true" || !process.env.WHATSAPP_API_TOKEN;
-    if (devMode) {
+    const hasWa = Boolean(process.env.WHATSAPP_API_TOKEN?.trim() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
+    if (process.env.NODE_ENV === "production" && !hasWa) {
+      await writeNotificationLog({
+        ...baseLog,
+        channel: "whatsapp",
+        status: "failed",
+        error: "whatsapp_not_configured",
+        provider: "meta",
+      });
+      return { ok: false, error: "WhatsApp is not configured.", httpStatus: 503 };
+    }
+    const devSkip =
+      process.env.NODE_ENV !== "production" &&
+      (process.env.WHATSAPP_DEV_MODE === "true" || !hasWa);
+    if (devSkip) {
       await logSystemEvent({
         level: "info",
         source: "admin_notification_retry_whatsapp_dev",
@@ -178,18 +192,41 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
       });
       return { ok: true };
     }
-    try {
-      await sendViaMetaWhatsApp({ phone: digits, message: text });
+    const admin = getSupabaseAdmin();
+    if (!admin) {
       await writeNotificationLog({
         ...baseLog,
         channel: "whatsapp",
-        status: "sent",
-        error: null,
+        status: "failed",
+        error: "supabase_admin_not_configured",
         provider: "meta",
       });
-      return { ok: true };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: "Supabase is not configured.", httpStatus: 503 };
+    }
+    const enq = await enqueueWhatsApp({
+      admin,
+      phone: digits,
+      phoneRaw: row.recipient,
+      type: "text",
+      payload: { kind: "text", text },
+      context: { retried_from: row.id, source: "admin_notification_retry" },
+      idempotencyKey: `admin_retry:${row.id}`,
+      priority: 40,
+    });
+    if (enq.id === null) {
+      await writeNotificationLog({
+        ...baseLog,
+        channel: "whatsapp",
+        status: "failed",
+        error: enq.error,
+        provider: "meta",
+      });
+      return { ok: false, error: enq.error, httpStatus: 502 };
+    }
+    const flush = await flushWhatsAppJobById(admin, enq.id);
+    if (!flush.ok) {
+      const msg = flush.error ?? "whatsapp_flush_failed";
+      await abortWhatsAppQueueJob(admin, enq.id, `admin_retry_abort:${msg}`);
       await writeNotificationLog({
         ...baseLog,
         channel: "whatsapp",
@@ -199,6 +236,14 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
       });
       return { ok: false, error: msg, httpStatus: 502 };
     }
+    await writeNotificationLog({
+      ...baseLog,
+      channel: "whatsapp",
+      status: "sent",
+      error: null,
+      provider: "meta",
+    });
+    return { ok: true };
   }
 
   if (row.channel === "sms" && row.provider === "twilio") {

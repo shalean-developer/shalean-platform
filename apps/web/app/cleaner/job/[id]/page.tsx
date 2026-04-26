@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, MapPin, Navigation, Phone } from "lucide-react";
+import { ArrowLeft, MapPin, Navigation } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { bookingRowToMobileView, deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
+import { CleanerJobEarningsRow } from "@/components/cleaner/mobile/CleanerJobEarningsRow";
 
 export default function CleanerJobDetailPage() {
   const params = useParams();
@@ -87,7 +88,9 @@ export default function CleanerJobDetailPage() {
           ? "On the way"
           : "Assigned";
 
-  const tel = view.phone.replace(/\s/g, "");
+  const telDigits = view.phone.replace(/\s/g, "");
+  const telHref = telDigits ? `tel:${telDigits}` : null;
+  const phoneDisplay = view.phone?.trim() || "";
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(view.address)}`;
 
   return (
@@ -114,24 +117,54 @@ export default function CleanerJobDetailPage() {
                 </Badge>
               ) : null}
             </div>
-            {row.is_team_job ? (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/90 px-3 py-2.5 text-sm dark:border-blue-900/50 dark:bg-blue-950/35">
-                <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                  {teamJobAssignmentHeadline(
-                    typeof row.teamMemberCount === "number" ? row.teamMemberCount : null,
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{TEAM_JOB_ROLE_SUBTEXT}</p>
-              </div>
-            ) : null}
             <div>
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{view.customerName}</h2>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{view.service}</p>
+              {phoneDisplay ? (
+                <p className="mt-1.5 text-sm">
+                  {telHref ? (
+                    <a
+                      href={telHref}
+                      className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                    >
+                      {phoneDisplay}
+                    </a>
+                  ) : (
+                    <span className="font-medium text-zinc-800 dark:text-zinc-200">{phoneDisplay}</span>
+                  )}
+                </p>
+              ) : null}
+              <CleanerJobEarningsRow
+                className="mt-3"
+                service={view.service}
+                earningsZar={view.earningsZar}
+                earningsIsEstimate={view.earningsIsEstimate}
+                durationHours={view.durationHours}
+                isTeamJob={view.isTeamJob}
+                teamMemberCount={view.teamMemberCount}
+                showServiceColumn={false}
+                teamStatusSlot={
+                  row.is_team_job ? (
+                    <>
+                      <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                        {teamJobAssignmentHeadline(
+                          typeof row.teamMemberCount === "number" ? row.teamMemberCount : null,
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{TEAM_JOB_ROLE_SUBTEXT}</p>
+                    </>
+                  ) : null
+                }
+              />
             </div>
             <div className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-200">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
               <span>{view.address}</span>
             </div>
+            {view.service?.trim() ? (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="font-semibold uppercase tracking-wide">Service</span> · {view.service.trim()}
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-800/80">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Date</p>
@@ -149,14 +182,6 @@ export default function CleanerJobDetailPage() {
               </div>
             ) : null}
             <div className="flex flex-col gap-2 pt-2">
-              {tel ? (
-                <Button size="lg" className="h-12 w-full rounded-xl text-base" asChild>
-                  <a href={`tel:${tel}`}>
-                    <Phone className="h-4 w-4" aria-hidden />
-                    Call customer
-                  </a>
-                </Button>
-              ) : null}
               <Button variant="outline" size="lg" className="h-12 w-full rounded-xl text-base" asChild>
                 <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
                   <Navigation className="h-4 w-4" aria-hidden />

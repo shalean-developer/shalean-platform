@@ -8,7 +8,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
-import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
+import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { devOrSampledConsoleLog } from "@/lib/logging/devOrSampledConsole";
 
@@ -57,7 +57,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       0.02,
     );
   }
-  const displayEarningsCents = resolveDisplayEarningsCents(
+  const resolved = resolveDisplayEarnings(
     {
       id: typeof record.id === "string" ? record.id : null,
       is_team_job: record.is_team_job === true,
@@ -66,6 +66,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     },
     "api/cleaner/jobs/[id]",
   );
+  const displayEarningsCents = resolved.cents;
+  const displayEarningsIsEstimate = resolved.isEstimate;
   const snapRaw = record.team_member_count_snapshot;
   const snapCount =
     typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
@@ -93,7 +95,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }
   }
 
-  return NextResponse.json({ job: { ...safe, displayEarningsCents, teamMemberCount } });
+  return NextResponse.json({
+    job: { ...safe, displayEarningsCents, displayEarningsIsEstimate, teamMemberCount },
+  });
 }
 
 export async function POST(

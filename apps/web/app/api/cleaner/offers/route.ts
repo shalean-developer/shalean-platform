@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
+import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +28,9 @@ export async function GET(request: Request) {
   if (bookingIds.length > 0) {
     const { data: rows } = await admin
       .from("bookings")
-      .select("id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, is_team_job, team_id, display_earnings_cents, cleaner_payout_cents")
+      .select(
+        "id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_payout_cents, booking_snapshot",
+      )
       .in("id", bookingIds);
     bookingById = new Map((rows ?? []).map((r) => [String((r as { id: string }).id), r as Record<string, unknown>]));
   }
@@ -36,10 +38,10 @@ export async function GET(request: Request) {
   return NextResponse.json({
     offers: (offers ?? []).map((o) => {
       const booking = bookingById.get(String(o.booking_id)) ?? null;
-      const displayEarningsCents =
+      const resolved =
         booking == null
           ? null
-          : resolveDisplayEarningsCents(
+          : resolveDisplayEarnings(
               {
                 id: typeof booking.id === "string" ? booking.id : null,
                 is_team_job: booking.is_team_job === true,
@@ -49,6 +51,8 @@ export async function GET(request: Request) {
               },
               "api/cleaner/offers",
             );
+      const displayEarningsCents = resolved?.cents ?? null;
+      const displayEarningsIsEstimate = resolved?.isEstimate ?? false;
       const safeBooking =
         booking == null
           ? null
@@ -64,10 +68,18 @@ export async function GET(request: Request) {
               total_paid_zar: booking.total_paid_zar ?? null,
               is_team_job: booking.is_team_job === true,
               team_id: (booking.team_id as string | null | undefined) ?? null,
+              teamMemberCount:
+                typeof booking.team_member_count_snapshot === "number" &&
+                Number.isFinite(booking.team_member_count_snapshot) &&
+                booking.team_member_count_snapshot > 0
+                  ? Math.floor(booking.team_member_count_snapshot)
+                  : null,
+              booking_snapshot: booking.booking_snapshot ?? null,
             };
       return {
         ...o,
         displayEarningsCents,
+        displayEarningsIsEstimate,
         booking: safeBooking,
       };
     }),

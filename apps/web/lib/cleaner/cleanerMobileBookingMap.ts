@@ -18,6 +18,8 @@ export type CleanerMobileJobView = {
   notes: string | null;
   /** ZAR — null until stored display earnings is available. */
   earningsZar: number | null;
+  /** Team placeholder (fixed member amount) vs confirmed stored earnings. */
+  earningsIsEstimate: boolean;
   payoutStatus: "paid" | "pending";
   /** Team-assigned booking (cleaner_id may be null on server). */
   isTeamJob: boolean;
@@ -25,11 +27,20 @@ export type CleanerMobileJobView = {
   teamMemberCount: number | null;
 };
 
-function durationHoursFromSnapshot(snap: unknown): number {
+/** Hours from `booking_snapshot.locked.finalHours`, default 2 when missing. */
+export function durationHoursFromBookingSnapshot(snap: unknown): number {
   const o = snap as { locked?: { finalHours?: number } } | null;
   const h = o?.locked?.finalHours;
   if (typeof h === "number" && Number.isFinite(h) && h > 0) return h;
   return 2;
+}
+
+/** Approximate hourly rate for cleaner-facing pay display. */
+export function formatApproxEarningsPerHourZar(earningsZar: number, durationHours: number): string | null {
+  if (!Number.isFinite(earningsZar) || !Number.isFinite(durationHours) || durationHours <= 0) return null;
+  const per = Math.round(earningsZar / durationHours);
+  if (!Number.isFinite(per) || per < 0) return null;
+  return `≈ R${per.toLocaleString("en-ZA")}/hr`;
 }
 
 function notesFromSnapshot(snap: unknown): string | null {
@@ -63,6 +74,7 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
       ? Math.round(Number(row.displayEarningsCents))
       : null;
   const earningsZar = displayCents != null ? Math.round(displayCents / 100) : null;
+  const earningsIsEstimate = row.displayEarningsIsEstimate === true;
   const payoutStatus: "paid" | "pending" = row.payout_id ? "paid" : "pending";
   const teamMemberCountRaw = row.teamMemberCount;
   const teamMemberCount =
@@ -76,7 +88,7 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     areaLabel: shortArea(row.location),
     address: row.location?.trim() || "Address on file",
     time: row.time?.trim() || "—",
-    durationHours: durationHoursFromSnapshot(row.booking_snapshot),
+    durationHours: durationHoursFromBookingSnapshot(row.booking_snapshot),
     date: row.date?.trim() || "",
     service: row.service?.trim() || "Cleaning",
     statusRaw: st,
@@ -84,6 +96,7 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     phone: row.customer_phone?.trim() || "",
     notes: notesFromSnapshot(row.booking_snapshot),
     earningsZar,
+    earningsIsEstimate,
     payoutStatus: st === "completed" ? payoutStatus : "pending",
     isTeamJob: row.is_team_job === true,
     teamMemberCount,
@@ -146,4 +159,81 @@ export function earningsSummaryFromRows(rows: CleanerBookingRow[], now: Date) {
     if (d.slice(0, 7) === monthKey) month += z;
   }
   return { today, week, month };
+}
+
+/** Minutes since last completed job (for offer fairness). No completions → 24h nominal idle. */
+export function idleMinutesSinceLastCompletedJob(rows: CleanerBookingRow[], now: Date): number {
+  let maxMs = 0;
+  for (const r of rows) {
+    if (String(r.status ?? "").toLowerCase() !== "completed") continue;
+    const raw = r.completed_at;
+    if (!raw) continue;
+    const t = new Date(raw).getTime();
+    if (!Number.isNaN(t) && t > maxMs) maxMs = t;
+  }
+  if (maxMs === 0) return 24 * 60;
+  return Math.max(0, (now.getTime() - maxMs) / 60000);
+}
+
+/**
+ * Weekly earnings goal: at least R1000, or 1.2× completed ZAR in the trailing 7 days (stretch target).
+ */
+export function adaptiveWeeklyEarningsGoalZar(rows: CleanerBookingRow[], now: Date): number {
+  const cutoff = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  let sum = 0;
+  for (const r of rows) {
+    if (String(r.status ?? "").toLowerCase() !== "completed") continue;
+    const raw = r.completed_at ?? r.date;
+    if (!raw) continue;
+    const t = new Date(raw).getTime();
+    if (Number.isNaN(t) || t < cutoff) continue;
+    const c = r.displayEarningsCents;
+    if (c == null || !Number.isFinite(Number(c))) continue;
+    sum += Math.round(Number(c) / 100);
+  }
+  return Math.max(1000, Math.round(sum * 1.2));
+}
+
+/** Dispatch offer shape (avoid importing full row type). */
+type TodayOfferHint = {
+  booking_id: string;
+  displayEarningsCents?: number | null;
+  booking: { date?: string | null; is_team_job?: boolean | null } | null;
+} | null;
+
+/**
+ * Sum known display earnings (ZAR) for today’s open pipeline: assigned/pending/in-progress
+ * bookings dated today, plus a pending solo offer dated today if that booking is not already in `rows`.
+ */
+export function todayPotentialEarningsZar(params: {
+  rows: CleanerBookingRow[];
+  topOffer: TodayOfferHint;
+  now: Date;
+}): { zar: number; hasGap: boolean } {
+  const todayY = ymdLocal(params.now);
+  let zar = 0;
+  let hasGap = false;
+  const rowIds = new Set(params.rows.map((r) => String(r.id)));
+
+  for (const r of params.rows) {
+    const d = String(r.date ?? "").slice(0, 10);
+    if (d !== todayY) continue;
+    const st = String(r.status ?? "").toLowerCase();
+    if (st === "completed") continue;
+    const view = bookingRowToMobileView(r);
+    if (view.earningsZar != null) zar += view.earningsZar;
+    else hasGap = true;
+  }
+
+  const o = params.topOffer;
+  if (o?.booking && o.booking.is_team_job !== true) {
+    const od = String(o.booking.date ?? "").slice(0, 10);
+    if (od === todayY && !rowIds.has(String(o.booking_id))) {
+      const c = o.displayEarningsCents;
+      if (c != null && Number.isFinite(Number(c))) zar += Math.max(0, Math.round(Number(c) / 100));
+      else hasGap = true;
+    }
+  }
+
+  return { zar, hasGap };
 }

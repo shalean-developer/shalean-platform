@@ -1,5 +1,6 @@
 "use client";
 
+import { TEAM_MEMBER_ADD_CODE } from "./teamMemberAddCodes";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export type AdminBookingRow = {
@@ -77,6 +78,155 @@ export async function fetchCleaners(search?: string) {
   const json = (await res.json()) as { cleaners?: AdminCleanerRow[]; error?: string };
   if (!res.ok) throw new Error(json.error ?? "Failed to fetch cleaners.");
   return json.cleaners ?? [];
+}
+
+/** Matches `GET /api/admin/teams` row shape (extends minimal `Team` with dispatch fields). */
+export type AdminTeamRow = {
+  id: string;
+  name: string;
+  capacity_per_day: number;
+  service_type: string;
+  is_active: boolean | null;
+  created_at?: string | null;
+  /** Roster size (rows in team_members with non-null cleaner_id). */
+  member_count?: number;
+};
+
+export type AdminTeamMemberRow = {
+  cleaner_id: string;
+  name: string;
+  phone: string | null;
+  joined_at: string | null;
+};
+
+export async function fetchAdminTeams(): Promise<AdminTeamRow[]> {
+  const token = await getAdminToken();
+  const res = await fetch("/api/admin/teams", { headers: { Authorization: `Bearer ${token}` } });
+  const json = (await res.json()) as { teams?: AdminTeamRow[]; error?: string };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch teams.");
+  return json.teams ?? [];
+}
+
+export async function createAdminTeam(payload: {
+  name: string;
+  capacity_per_day: number;
+  service_type: "deep_cleaning" | "move_cleaning";
+  is_active?: boolean;
+}): Promise<AdminTeamRow> {
+  const token = await getAdminToken();
+  const res = await fetch("/api/admin/teams", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = (await res.json()) as { ok?: boolean; team?: AdminTeamRow; error?: string };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to create team.");
+  if (!json.team) throw new Error("Team created but response was incomplete.");
+  return json.team;
+}
+
+const TEAM_BUSY_MESSAGE = "Team is busy, try again.";
+
+export async function fetchAdminTeamMembers(
+  teamId: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<AdminTeamMemberRow[]> {
+  const token = await getAdminToken();
+  const params = new URLSearchParams();
+  if (opts?.limit != null) {
+    params.set("limit", String(opts.limit));
+    params.set("offset", String(opts.offset ?? 0));
+  }
+  const q = params.toString();
+  const url = `/api/admin/teams/${encodeURIComponent(teamId)}/members${q ? `?${q}` : ""}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const json = (await res.json()) as { members?: AdminTeamMemberRow[]; error?: string };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch team members.");
+  return Array.isArray(json.members) ? json.members : [];
+}
+
+export async function addAdminTeamMembers(
+  teamId: string,
+  cleanerIds: string[],
+  opts?: { idempotencyKey?: string },
+): Promise<number> {
+  const token = await getAdminToken();
+  const url = `/api/admin/teams/${encodeURIComponent(teamId)}/members`;
+  const idem = opts?.idempotencyKey?.trim();
+  const baseHeaders: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  if (idem && idem.length <= 128) {
+    baseHeaders["Idempotency-Key"] = idem;
+  }
+
+  const postOnce = async (retryAfterBusy: boolean) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...baseHeaders,
+        ...(retryAfterBusy ? { "X-Shalean-Retry-After-Busy": "1" } : {}),
+      },
+      body: JSON.stringify({ cleanerIds }),
+    });
+    const json = (await res.json()) as {
+      ok?: boolean;
+      inserted?: number;
+      error?: string;
+      code?: string;
+      skippedDuplicates?: number;
+    };
+    return { res, json };
+  };
+
+  let { res, json } = await postOnce(false);
+  const busyByCode = res.status === 409 && json.code === TEAM_MEMBER_ADD_CODE.TEAM_BUSY;
+  const busyLegacy = res.status === 409 && json.error === TEAM_BUSY_MESSAGE;
+  if (busyByCode || busyLegacy) {
+    await new Promise((r) => setTimeout(r, 80 + Math.random() * 80));
+    ({ res, json } = await postOnce(true));
+  }
+
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (res.status === 409) throw new Error(json.error ?? "Exceeds team capacity.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to add team members.");
+  return typeof json.inserted === "number" ? json.inserted : 0;
+}
+
+export async function removeAdminTeamMember(teamId: string, cleanerId: string): Promise<void> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}/members`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ cleanerId }),
+  });
+  const json = (await res.json()) as { error?: string };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to remove team member.");
+}
+
+export async function patchAdminTeamIsActive(teamId: string, is_active: boolean): Promise<AdminTeamRow> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active }),
+  });
+  const json = (await res.json()) as { ok?: boolean; team?: AdminTeamRow; error?: string };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to update team.");
+  if (!json.team) throw new Error("Update response incomplete.");
+  return json.team;
 }
 
 export async function fetchCustomers() {

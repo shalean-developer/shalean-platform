@@ -5,7 +5,7 @@ import {
 } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { resolveDisplayEarningsCents } from "@/lib/cleaner/displayEarnings";
+import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { devOrSampledConsoleLog } from "@/lib/logging/devOrSampledConsole";
 
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
   const mappedJobs = (jobs ?? []).map((raw) => {
     const row = raw as Record<string, unknown>;
-    const displayEarningsCents = resolveDisplayEarningsCents(
+    const resolved = resolveDisplayEarnings(
       {
         id: typeof row.id === "string" ? row.id : null,
         is_team_job: row.is_team_job === true,
@@ -56,6 +56,8 @@ export async function GET(request: Request) {
       },
       "api/cleaner/jobs",
     );
+    const displayEarningsCents = resolved.cents;
+    const displayEarningsIsEstimate = resolved.isEstimate;
     const snapRaw = row.team_member_count_snapshot;
     const teamSnap =
       typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
@@ -63,6 +65,7 @@ export async function GET(request: Request) {
     return {
       ...safe,
       displayEarningsCents,
+      displayEarningsIsEstimate,
       __teamSnap: teamSnap as number | null,
     };
   });

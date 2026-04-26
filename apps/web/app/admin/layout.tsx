@@ -32,6 +32,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
       { label: "Templates", href: "/admin/templates" },
       { label: "SLA Breaches", href: "/admin/ops/sla-breaches" },
       { label: "Cleaner Performance", href: "/admin/ops/cleaner-performance" },
+      { label: "Dispatch metrics", href: "/admin/metrics" },
       { label: "Operations", href: "/admin/operations" },
     ],
   },
@@ -47,6 +48,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
     title: "Workforce",
     items: [
       { label: "Cleaners", href: "/admin/cleaners" },
+      { label: "Teams", href: "/admin/teams" },
       { label: "Cleaner Applications", href: "/admin/cleaner-applications" },
     ],
   },

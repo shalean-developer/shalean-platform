@@ -31,5 +31,7 @@ export type CleanerBookingRow = {
   /** Null for team-assigned bookings; UI must not assume a cleaner id exists. */
   cleaner_id?: string | null;
   displayEarningsCents?: number | null;
+  /** True when pay is the team-job placeholder until stored display earnings exist. */
+  displayEarningsIsEstimate?: boolean;
   payout_id?: string | null;
 };

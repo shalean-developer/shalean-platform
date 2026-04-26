@@ -34,7 +34,27 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ teams: data ?? [] });
+  const teams = data ?? [];
+  const ids = teams.map((t) => String((t as { id?: string }).id ?? "").trim()).filter(Boolean);
+  const countByTeam = new Map<string, number>();
+  if (ids.length > 0) {
+    const { data: memberRows, error: mErr } = await admin
+      .from("team_members")
+      .select("team_id")
+      .in("team_id", ids)
+      .not("cleaner_id", "is", null);
+    if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+    for (const r of memberRows ?? []) {
+      const tid = String((r as { team_id?: string }).team_id ?? "").trim();
+      if (!tid) continue;
+      countByTeam.set(tid, (countByTeam.get(tid) ?? 0) + 1);
+    }
+  }
+  const teamsWithCounts = teams.map((t) => {
+    const id = String((t as { id?: string }).id ?? "").trim();
+    return { ...(t as Record<string, unknown>), member_count: countByTeam.get(id) ?? 0 };
+  });
+  return NextResponse.json({ teams: teamsWithCounts });
 }
 
 export async function POST(request: Request) {

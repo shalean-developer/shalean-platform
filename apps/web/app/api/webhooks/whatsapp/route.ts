@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { verifyMetaWebhookSignature } from "@/lib/dispatch/metaWhatsAppSend";
 import { acceptDispatchOffer, rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { recordWhatsAppDeliveryStatuses } from "@/lib/whatsapp/deliveryWebhook";
+import { southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +14,16 @@ function normalizePhone(value: string | null | undefined): string {
   return String(value ?? "")
     .trim()
     .replace(/[^\d+]/g, "");
+}
+
+/** All stored / inbound variants to match Meta `from` vs DB `+27…` / `0…` / digits. */
+function uniquePhoneMatchValues(senderNormalized: string): string[] {
+  const set = new Set<string>();
+  for (const v of southAfricaPhoneLookupVariants(senderNormalized)) {
+    if (v) set.add(v);
+  }
+  if (senderNormalized) set.add(senderNormalized);
+  return [...set];
 }
 
 function extractFromAndBody(payload: unknown): { from: string; body: string } {
@@ -45,20 +58,30 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
+  if (process.env.NODE_ENV === "production" && !process.env.WHATSAPP_APP_SECRET?.trim()) {
+    return NextResponse.json(
+      { error: "WHATSAPP_APP_SECRET is required in production for webhook verification." },
+      { status: 503 },
+    );
+  }
+
+  const rawBody = await request.text();
+  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
+  if (appSecret) {
+    const sig = request.headers.get("x-hub-signature-256");
+    if (!verifyMetaWebhookSignature(rawBody, sig, appSecret)) {
+      return NextResponse.json({ error: "Invalid signature." }, { status: 403 });
+    }
+  }
+
   let payload: unknown;
   try {
-    payload = await request.json();
+    payload = rawBody ? JSON.parse(rawBody) : null;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const expectedSecret = process.env.WHATSAPP_WEBHOOK_SECRET?.trim();
-  if (expectedSecret) {
-    const got = request.headers.get("x-webhook-secret")?.trim() ?? "";
-    if (got !== expectedSecret) {
-      return NextResponse.json({ error: "Unauthorized webhook." }, { status: 401 });
-    }
-  }
+  await recordWhatsAppDeliveryStatuses(admin, payload);
 
   const { from, body } = extractFromAndBody(payload);
   const senderPhone = normalizePhone(from);
@@ -68,18 +91,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: "missing phone or body" });
   }
 
-  const { data: cleaner } = await admin
-    .from("cleaners")
-    .select("id, phone_number")
-    .eq("phone_number", senderPhone)
-    .maybeSingle();
-  const cleanerId = String((cleaner as { id?: string } | null)?.id ?? "");
+  const variants = uniquePhoneMatchValues(senderPhone);
+  let cleanerId = "";
+  for (const col of ["phone_number", "phone"] as const) {
+    const { data: cleaner, error } = await admin
+      .from("cleaners")
+      .select("id, phone_number")
+      .in(col, variants)
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      await logSystemEvent({
+        level: "warn",
+        source: "whatsapp_webhook_lookup_error",
+        message: error.message,
+        context: { column: col, variant_count: variants.length },
+      });
+      continue;
+    }
+    const id = String((cleaner as { id?: string } | null)?.id ?? "");
+    if (id) {
+      cleanerId = id;
+      break;
+    }
+  }
+
   if (!cleanerId) {
     await logSystemEvent({
       level: "warn",
       source: "whatsapp_webhook_unknown_sender",
       message: "Inbound WhatsApp from unknown cleaner phone",
-      context: { senderPhone },
+      context: { senderPhone, variants_tried: variants.slice(0, 8) },
     });
     return NextResponse.json({ ok: true, ignored: "unknown sender" });
   }
@@ -100,7 +142,6 @@ export async function POST(request: Request) {
   }
 
   if (reply === "1" || reply === "accept") {
-    // `ux_variant` is read from `dispatch_offers` in `acceptDispatchOffer` (cross-channel parity).
     const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 });

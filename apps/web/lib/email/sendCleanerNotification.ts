@@ -26,6 +26,9 @@ export async function sendCleanerNewJobEmail(params: {
   dateLabel: string;
   timeLabel: string;
   location: string;
+  /** Cleaner-facing pay (ZAR) when known — improves subject and opening line. */
+  earningsZar?: number | null;
+  earningsIsEstimate?: boolean;
   /** Human-readable lines, e.g. `Inside Oven (R59)` — from `bookings.extras` jsonb. */
   extrasRequired?: string[];
 }): Promise<{ sent: boolean; error?: string }> {
@@ -52,9 +55,17 @@ export async function sendCleanerNewJobEmail(params: {
           .join("")}</ul></li>`
       : "";
 
+  const zar = params.earningsZar != null && Number.isFinite(params.earningsZar) ? Math.round(params.earningsZar) : null;
+  const payLead =
+    zar != null
+      ? params.earningsIsEstimate
+        ? `<p><strong>New job:</strong> estimated pay <strong>R${zar.toLocaleString("en-ZA")}</strong> (final amount confirmed after completion).</p>`
+        : `<p><strong>New job:</strong> earn <strong>R${zar.toLocaleString("en-ZA")}</strong> on this visit.</p>`
+      : `<p><strong>New job assigned</strong> — you have a cleaning booking.</p>`;
+
   const html = `
     <p>Hi ${escapeHtml(params.cleanerName)},</p>
-    <p><strong>New job assigned</strong> — you have a cleaning booking.</p>
+    ${payLead}
     <ul>
       <li><strong>Service:</strong> ${escapeHtml(params.service)}</li>
       <li><strong>When:</strong> ${escapeHtml(params.dateLabel)} ${escapeHtml(params.timeLabel)}</li>
@@ -68,7 +79,12 @@ export async function sendCleanerNewJobEmail(params: {
   const { error } = await resend.emails.send({
     from: getDefaultFromAddress(),
     to: [to],
-    subject: `New Shalean job — ${params.dateLabel}`,
+    subject:
+      zar != null
+        ? params.earningsIsEstimate
+          ? `New Shalean job: ~R${zar.toLocaleString("en-ZA")} (est.) — ${params.dateLabel}`
+          : `New Shalean job: Earn R${zar.toLocaleString("en-ZA")} — ${params.dateLabel}`
+        : `New Shalean job — ${params.dateLabel}`,
     html,
   });
 

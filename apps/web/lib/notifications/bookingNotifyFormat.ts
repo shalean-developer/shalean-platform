@@ -31,6 +31,52 @@ export function buildBookingNotifyMessageFields(input: {
   };
 }
 
+export type CleanerAssignedHeadlineContext = {
+  service?: string | null;
+  /** One-line area (e.g. suburb); keep short for SMS. */
+  areaShort?: string | null;
+};
+
+function headlineService(ctx?: CleanerAssignedHeadlineContext): string {
+  const s = String(ctx?.service ?? "").trim();
+  return s || "Job";
+}
+
+function headlineArea(ctx?: CleanerAssignedHeadlineContext): string {
+  const a = String(ctx?.areaShort ?? "").trim();
+  if (!a || a === "—") return "";
+  return a.length > 32 ? `${a.slice(0, 29)}…` : a;
+}
+
+/** First line of address / area suitable for SMS subject lines. */
+export function notifyAreaShortForHeadline(location: string | null | undefined): string {
+  const line = String(location ?? "")
+    .split(/\r?\n/)[0]
+    ?.trim();
+  if (!line) return "";
+  return line.length > 36 ? `${line.slice(0, 33)}…` : line;
+}
+
+/** WhatsApp/SMS headline when a cleaner is assigned (amount + job context). */
+export function buildCleanerAssignedNotifyHeadline(
+  zar: number | null,
+  isEstimate: boolean,
+  ctx?: CleanerAssignedHeadlineContext,
+): string {
+  if (zar == null || !Number.isFinite(zar)) return "✅ New job assigned to you";
+  const r = `R${Math.round(zar).toLocaleString("en-ZA")}`;
+  const svc = headlineService(ctx);
+  const area = headlineArea(ctx);
+  const place = area ? (area.includes(",") ? area : `in ${area}`) : "";
+
+  if (isEstimate) {
+    const tail = place ? ` ${place}` : "";
+    return `✅ ~${r} (est.) — ${svc}${tail}`.replace(/\s+/g, " ").trim();
+  }
+  if (place) return `✅ Earn ${r} — ${svc} ${place}`.replace(/\s+/g, " ").trim();
+  return `✅ Earn ${r} — ${svc}`;
+}
+
 /** Plain lines for SMS / WhatsApp (no HTML). */
 export function formatBookingNotifyPlainLines(
   m: BookingNotifyMessageFields,

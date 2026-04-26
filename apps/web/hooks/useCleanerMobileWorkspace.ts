@@ -6,11 +6,20 @@ import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import {
+  adaptiveWeeklyEarningsGoalZar,
   bookingRowToMobileView,
   earningsSummaryFromRows,
   getActiveMobileJob,
   getNextUpcomingMobileJob,
+  idleMinutesSinceLastCompletedJob,
+  ymdLocal,
 } from "@/lib/cleaner/cleanerMobileBookingMap";
+import {
+  drivingEtaMinutesFromOfferSnapshot,
+  medianOfferValueScore,
+  offerValueScoreCentsPerHour,
+  sortCleanerOffersByAdjustedValue,
+} from "@/lib/cleaner/cleanerOfferValue";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type MeCleaner = {
@@ -241,7 +250,39 @@ export function useCleanerMobileWorkspace() {
     () => offers.filter((o) => o.booking == null || o.booking.is_team_job !== true),
     [offers],
   );
-  const topOffer = useMemo(() => availableOffers[0] ?? null, [availableOffers]);
+  const idleMinutesSinceLastCompleted = useMemo(
+    () => idleMinutesSinceLastCompletedJob(rows, new Date()),
+    [rows],
+  );
+  const weeklyEarningsGoalZar = useMemo(() => adaptiveWeeklyEarningsGoalZar(rows, new Date()), [rows]);
+  const offerSortCtx = useMemo(
+    () => ({ now: new Date(), idleMinutesSinceLastCompleted: idleMinutesSinceLastCompleted }),
+    [availableOffers, idleMinutesSinceLastCompleted],
+  );
+  const sortedAvailableOffers = useMemo(
+    () => sortCleanerOffersByAdjustedValue(availableOffers, offerSortCtx),
+    [availableOffers, offerSortCtx],
+  );
+  const topOffer = sortedAvailableOffers[0] ?? null;
+  const medianValueScore = useMemo(() => medianOfferValueScore(availableOffers), [availableOffers]);
+  /** Single badge: best value wins over “recommended” when both apply. */
+  const topOfferPrimaryBadge = useMemo((): "best_value" | "recommended" | null => {
+    if (!topOffer) return null;
+    const isBestValue = sortedAvailableOffers.length > 1;
+    if (isBestValue) return "best_value";
+    const eta = drivingEtaMinutesFromOfferSnapshot(topOffer);
+    const score = offerValueScoreCentsPerHour(topOffer);
+    const isRecommended =
+      sortedAvailableOffers.length === 1
+        ? eta != null && eta <= 15 && score > 0
+        : eta != null && eta <= 15 && score >= medianValueScore;
+    return isRecommended ? "recommended" : null;
+  }, [topOffer, medianValueScore, sortedAvailableOffers.length]);
+  const extraSoloOffersTodayCount = useMemo(() => {
+    const y = ymdLocal(new Date());
+    const n = sortedAvailableOffers.filter((o) => String(o.booking?.date ?? "").slice(0, 10) === y).length;
+    return Math.max(0, n - 1);
+  }, [sortedAvailableOffers]);
 
   const earningsRows = useMemo(() => {
     const completed = rows.filter((r) => String(r.status ?? "").toLowerCase() === "completed");
@@ -279,6 +320,9 @@ export function useCleanerMobileWorkspace() {
     rows,
     offers,
     topOffer,
+    topOfferPrimaryBadge,
+    weeklyEarningsGoalZar,
+    extraSoloOffersTodayCount,
     loading,
     error,
     reload: load,

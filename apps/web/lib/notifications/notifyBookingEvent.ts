@@ -2,7 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { trySendCleanerWhatsAppMessage } from "@/lib/dispatch/offerNotifications";
 import { sendCleanerNewJobEmail } from "@/lib/email/sendCleanerNotification";
-import { buildBookingNotifyMessageFields, formatBookingNotifyPlainLines } from "@/lib/notifications/bookingNotifyFormat";
+import {
+  buildBookingNotifyMessageFields,
+  buildCleanerAssignedNotifyHeadline,
+  formatBookingNotifyPlainLines,
+  notifyAreaShortForHeadline,
+} from "@/lib/notifications/bookingNotifyFormat";
+import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
 import {
   buildBookingEmailPayload,
   sendAdminHtmlEmail,
@@ -495,7 +501,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: b } = await supabase
       .from("bookings")
       .select(
-        "id, paystack_reference, customer_email, user_id, service, date, time, location, booking_snapshot, amount_paid_cents, total_paid_zar, cleaner_id",
+        "id, paystack_reference, customer_email, user_id, service, date, time, location, booking_snapshot, amount_paid_cents, total_paid_zar, cleaner_id, is_team_job, display_earnings_cents, cleaner_payout_cents",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
@@ -547,6 +553,28 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       location: (b as { location?: string | null }).location,
     });
 
+    const payResolved = resolveDisplayEarnings(
+      {
+        id: event.bookingId,
+        is_team_job: (b as { is_team_job?: boolean | null }).is_team_job === true,
+        display_earnings_cents:
+          typeof (b as { display_earnings_cents?: unknown }).display_earnings_cents === "number"
+            ? (b as { display_earnings_cents: number }).display_earnings_cents
+            : null,
+        cleaner_payout_cents:
+          typeof (b as { cleaner_payout_cents?: unknown }).cleaner_payout_cents === "number"
+            ? (b as { cleaner_payout_cents: number }).cleaner_payout_cents
+            : null,
+      },
+      "notifyBookingEvent/assigned",
+    );
+    const cleanerPayZar =
+      payResolved.cents != null && Number.isFinite(payResolved.cents) ? Math.round(payResolved.cents / 100) : null;
+    const assignedHeadline = buildCleanerAssignedNotifyHeadline(cleanerPayZar, payResolved.isEstimate, {
+      service: msgFields.service,
+      areaShort: notifyAreaShortForHeadline(msgFields.address),
+    });
+
     await sendAdminIfConfigured(
       "assigned",
       { bookingId: event.bookingId, cleanerId: event.cleanerId },
@@ -571,7 +599,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       cRow && typeof cRow === "object" ? String((cRow as { phone_number?: string | null }).phone_number ?? "") : "";
     const name = cleanerName || "Cleaner";
     const msg = `${formatBookingNotifyPlainLines(msgFields, {
-      headline: "✅ New job assigned to you",
+      headline: assignedHeadline,
       footerLines: ["", "Open the Shalean cleaner app for details."],
     })}`;
 
@@ -642,6 +670,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           dateLabel: msgFields.date,
           timeLabel: msgFields.time,
           location: msgFields.address,
+          earningsZar: cleanerPayZar,
+          earningsIsEstimate: payResolved.isEstimate,
         });
       }
     }
