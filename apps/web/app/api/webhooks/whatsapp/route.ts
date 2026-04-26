@@ -42,6 +42,10 @@ export async function GET(request: Request) {
 
   const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() ?? "";
 
+  // TEMP: remove after Meta webhook verification is confirmed
+  console.log("ENV TOKEN:", process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);
+  console.log("META TOKEN:", token);
+
   if (
     mode === "subscribe" &&
     expected.length > 0 &&
