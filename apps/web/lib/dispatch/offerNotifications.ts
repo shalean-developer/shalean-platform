@@ -418,6 +418,7 @@ export async function trySendCleanerWhatsAppMessage(params: {
   context: Record<string, unknown>;
   deliveryLog?: { templateKey: string; eventType: string; role: "cleaner" };
 }): Promise<{ ok: boolean; reason?: string }> {
+  // DEPRECATED: replaced by triggerWhatsAppNotification (template-based) for job-assigned; still used for e.g. 2h reminders.
   const phone = normalizePhone(params.cleanerPhone);
   const recipientRaw = String(params.cleanerPhone ?? "").trim().slice(0, 64) || "(no_phone)";
   if (!phone) {

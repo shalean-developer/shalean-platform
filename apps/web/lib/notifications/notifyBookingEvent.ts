@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
+import {
+  triggerWhatsAppNotification,
+  type CreatedBookingRecord,
+} from "@/lib/booking/triggerWhatsAppNotification";
 import { trySendCleanerWhatsAppMessage } from "@/lib/dispatch/offerNotifications";
 import { sendCleanerNewJobEmail } from "@/lib/email/sendCleanerNotification";
 import {
@@ -501,7 +505,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: b } = await supabase
       .from("bookings")
       .select(
-        "id, paystack_reference, customer_email, user_id, service, date, time, location, booking_snapshot, amount_paid_cents, total_paid_zar, cleaner_id, is_team_job, display_earnings_cents, cleaner_payout_cents",
+        "id, paystack_reference, customer_email, customer_name, customer_phone, user_id, service, date, time, location, booking_snapshot, amount_paid_cents, total_paid_zar, cleaner_id, is_team_job, display_earnings_cents, cleaner_payout_cents, status, created_at",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
@@ -595,66 +599,107 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       },
     );
 
-    const phone =
-      cRow && typeof cRow === "object" ? String((cRow as { phone_number?: string | null }).phone_number ?? "") : "";
+    const cleanerPhoneRaw =
+      cRow && typeof cRow === "object" ? String((cRow as { phone_number?: string | null }).phone_number ?? "").trim() : "";
     const name = cleanerName || "Cleaner";
     const msg = `${formatBookingNotifyPlainLines(msgFields, {
       headline: assignedHeadline,
       footerLines: ["", "Open the Shalean cleaner app for details."],
     })}`;
 
-    const wa = await trySendCleanerWhatsAppMessage({
-      cleanerPhone: phone,
-      message: msg,
-      source: "whatsapp_job_assigned",
-      context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
-      deliveryLog: {
-        templateKey: "cleaner_assignment_direct",
-        eventType: "assigned",
-        role: "cleaner",
-      },
-    });
-    if (wa.ok) {
-      await logCleanerWhatsAppSent(
-        assignedDeliveryCtx({
-          channel: "whatsapp_job_assigned",
-        }),
-      );
-    } else {
+    const bookingRow = b as {
+      id: string;
+      customer_name?: string | null;
+      customer_phone?: string | null;
+      location?: string | null;
+      service?: string | null;
+      date?: string | null;
+      time?: string | null;
+      status?: string | null;
+      created_at?: string | null;
+    };
+    const bookingRecord: CreatedBookingRecord = {
+      id: bookingRow.id,
+      customer_name: bookingRow.customer_name ?? null,
+      customer_phone: bookingRow.customer_phone ?? null,
+      location: bookingRow.location ?? null,
+      service: bookingRow.service ?? null,
+      date: bookingRow.date ?? null,
+      time: bookingRow.time ?? null,
+      status: bookingRow.status ?? null,
+      created_at: bookingRow.created_at?.trim() ? bookingRow.created_at.trim() : new Date().toISOString(),
+    };
+
+    if (!cleanerPhoneRaw) {
       await logCleanerWhatsAppFailed(
         assignedDeliveryCtx({
           channel: "whatsapp_job_assigned",
-          reason: wa.reason ?? "unknown",
         }),
-        wa.reason ?? "WhatsApp send did not succeed",
+        "missing_phone",
       );
-      const e164 = customerPhoneToE164(phone);
-      if (e164) {
-        const smsRes = await sendSmsFallback({
-          toE164: e164,
-          body: msg.slice(0, 1200),
-          context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
-          deliveryLog: {
-            templateKey: "cleaner_assignment_sms_direct",
-            bookingId: event.bookingId,
-            eventType: "assigned",
-            role: "cleaner",
-          },
-        });
-        if (smsRes.sent) {
-          await logCleanerSmsFallbackUsed(
-            assignedDeliveryCtx({
-              channel: "whatsapp_job_assigned",
-            }),
-          );
-        }
+      await logSystemEvent({
+        level: "warn",
+        source: "notifyBookingEvent/assigned",
+        message: "No cleaner phone for WhatsApp/SMS",
+        context: assignedDeliveryCtx({}),
+      });
+    } else {
+      const cleanerFullNameForLog =
+        cRow && typeof cRow === "object"
+          ? String((cRow as { full_name?: string | null }).full_name ?? "").trim()
+          : "";
+      console.log("[Cleaner WhatsApp] Sending via template", {
+        bookingId: bookingRecord.id,
+        cleanerPhone: cleanerPhoneRaw,
+        cleanerName: cleanerFullNameForLog || cleanerName,
+      });
+      const waOk = await triggerWhatsAppNotification(bookingRecord, {
+        recipientPhone: cleanerPhoneRaw,
+        cleanerDisplayName: cleanerName ?? undefined,
+        variant: "cleaner_job_assigned",
+      });
+      if (waOk) {
+        await logCleanerWhatsAppSent(
+          assignedDeliveryCtx({
+            channel: "whatsapp_job_assigned",
+          }),
+        );
       } else {
-        await logSystemEvent({
-          level: "warn",
-          source: "notifyBookingEvent/assigned",
-          message: "No cleaner phone for WhatsApp/SMS",
-          context: assignedDeliveryCtx({}),
-        });
+        await logCleanerWhatsAppFailed(
+          assignedDeliveryCtx({
+            channel: "whatsapp_job_assigned",
+            reason: "triggerWhatsAppNotification_failed",
+          }),
+          "triggerWhatsAppNotification did not complete a successful WhatsApp send",
+        );
+        const e164 = customerPhoneToE164(cleanerPhoneRaw);
+        if (e164) {
+          const smsRes = await sendSmsFallback({
+            toE164: e164,
+            body: msg.slice(0, 1200),
+            context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
+            deliveryLog: {
+              templateKey: "cleaner_assignment_sms_direct",
+              bookingId: event.bookingId,
+              eventType: "assigned",
+              role: "cleaner",
+            },
+          });
+          if (smsRes.sent) {
+            await logCleanerSmsFallbackUsed(
+              assignedDeliveryCtx({
+                channel: "whatsapp_job_assigned",
+              }),
+            );
+          }
+        } else {
+          await logSystemEvent({
+            level: "warn",
+            source: "notifyBookingEvent/assigned",
+            message: "No cleaner phone for WhatsApp/SMS",
+            context: assignedDeliveryCtx({}),
+          });
+        }
       }
     }
 

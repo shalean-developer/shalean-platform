@@ -412,11 +412,13 @@ function buildCleanerJobAssignedTemplatePayload(
  * Sends transactional WhatsApp via Meta Cloud API.
  * **Cleaner job assigned:** sends template `cleaner_job_assigned` first ({{1}}–{{4}}; {{5}} when `WHATSAPP_CLEANER_JOB_INCLUDE_LOCATION=1`). Location value is first comma segment, ≤60 chars, or a clear empty fallback. on failure, falls back to text + `WHATSAPP_TEMPLATE_NAME` like before.
  * **Customer paths:** text first, then optional `WHATSAPP_TEMPLATE_NAME` template on session errors.
+ *
+ * @returns `true` if any WhatsApp send succeeded (template or text or fallback template); `false` if skipped or all attempts failed.
  */
 export async function triggerWhatsAppNotification(
   booking: CreatedBookingRecord,
   options?: TriggerWhatsAppNotificationOptions,
-): Promise<void> {
+): Promise<boolean> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   const accessToken = resolveWhatsAppBearerToken();
 
@@ -424,7 +426,7 @@ export async function triggerWhatsAppNotification(
     console.error(
       "[triggerWhatsAppNotification] Missing WHATSAPP_PHONE_NUMBER_ID or bearer token — set WHATSAPP_ACCESS_TOKEN or WHATSAPP_API_TOKEN — skipping WhatsApp send",
     );
-    return;
+    return false;
   }
 
   const variant = options?.variant ?? "customer_new_booking";
@@ -434,7 +436,7 @@ export async function triggerWhatsAppNotification(
       bookingId: booking.id,
       variant,
     });
-    return;
+    return false;
   }
 
   const graphVersion = getWhatsAppGraphApiVersion();
@@ -461,7 +463,7 @@ export async function triggerWhatsAppNotification(
         result: cleanerTemplateResult,
       });
       if (cleanerTemplateResult.ok) {
-        return;
+        return true;
       }
       console.error("[triggerWhatsAppNotification] cleaner_job_assigned template failed; falling back to text path", {
         bookingId: booking.id,
@@ -498,7 +500,7 @@ export async function triggerWhatsAppNotification(
     });
 
     if (textResult.ok) {
-      return;
+      return true;
     }
 
     console.error("[triggerWhatsAppNotification] Meta WhatsApp text message failed", {
@@ -510,7 +512,7 @@ export async function triggerWhatsAppNotification(
     });
 
     if (!shouldRetryWithTemplate(textResult)) {
-      return;
+      return false;
     }
 
     const templateName = process.env.WHATSAPP_TEMPLATE_NAME?.trim();
@@ -519,7 +521,7 @@ export async function triggerWhatsAppNotification(
         "[triggerWhatsAppNotification] Text failed with session/delivery restriction but WHATSAPP_TEMPLATE_NAME is unset — template retry skipped",
         { bookingId: booking.id },
       );
-      return;
+      return false;
     }
 
     const templatePayload = buildTemplatePayload(booking, to, templateName);
@@ -537,7 +539,7 @@ export async function triggerWhatsAppNotification(
     });
 
     if (templateResult.ok) {
-      return;
+      return true;
     }
 
     console.error("[triggerWhatsAppNotification] Template fallback failed after text session error", {
@@ -548,10 +550,12 @@ export async function triggerWhatsAppNotification(
       responsePreview: templateResult.rawText.slice(0, 500),
       templateName,
     });
+    return false;
   } catch (err) {
     console.error("[triggerWhatsAppNotification] Unexpected error during WhatsApp send", {
       bookingId: booking.id,
       error: err instanceof Error ? err.message : String(err),
     });
+    return false;
   }
 }
