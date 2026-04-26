@@ -3,10 +3,11 @@ import { computeAssignEligibility, effectiveJobDurationMinutes } from "@/lib/adm
 import { rankCleanersForAutoAssign, type CleanerOption, type SlotEligibilityForRank } from "@/lib/admin/assignRanking";
 import { emitSlaBreachManualEscalation } from "@/lib/admin/slaBreachEscalate";
 import { performAdminAssignToCleaner } from "@/lib/admin/performAdminAssignToCleaner";
+import { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart.constants";
 
 const DEFAULT_MAX = 40;
 
-export const EXTREME_SLA_AUTO_ESCALATE_MINUTES = 60;
+export { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart.constants";
 
 export type RunAdminAssignSmartParams = {
   bookingId: string;

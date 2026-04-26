@@ -15,7 +15,7 @@ import {
   SLA_SPEED_FIRST_MINUTES,
   type CleanerOption,
 } from "@/lib/admin/assignRanking";
-import { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart";
+import { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart.constants";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export type { CleanerOption } from "@/lib/admin/assignRanking";
