@@ -2,10 +2,22 @@ import "server-only";
 
 import { triggerWhatsAppNotification, type CreatedBookingRecord } from "@/lib/booking/triggerWhatsAppNotification";
 import { pickAvailableCleaner } from "@/lib/booking/pickAvailableCleaner";
+import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BOOKING_ROW_SELECT =
   "id, customer_name, customer_phone, location, service, date, time, status, created_at, cleaner_id, dispatch_status";
+
+/**
+ * After a dispatch offer is declined on WhatsApp: try to assign another cleaner via the standard dispatch path.
+ * Safe when the booking is already assigned or not dispatchable (no-op / no harmful side effects beyond metrics).
+ */
+export async function reassignBookingAfterDecline(admin: SupabaseClient, bookingId: string): Promise<void> {
+  await ensureBookingAssignment(admin, bookingId, {
+    source: "whatsapp_offer_decline",
+    retryEscalation: 1,
+  });
+}
 
 /**
  * One immediate reassignment attempt after a cleaner declines (excludes decliner).

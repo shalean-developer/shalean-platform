@@ -7,9 +7,26 @@ export type InboundTextMessage = {
   contextMessageId?: string;
 };
 
+function pushMessageMeta(
+  m: Record<string, unknown>,
+  from: string,
+  body: string,
+  out: InboundTextMessage[],
+): void {
+  const mid = m.id;
+  const messageId = typeof mid === "string" && mid.trim() ? mid.trim() : undefined;
+  const ctx = m.context;
+  let contextMessageId: string | undefined;
+  if (ctx && typeof ctx === "object") {
+    const cid = (ctx as { id?: unknown }).id;
+    if (typeof cid === "string" && cid.trim()) contextMessageId = cid.trim();
+  }
+  if (from || body) out.push({ from, body, messageId, contextMessageId });
+}
+
 /**
- * Collects inbound WhatsApp text messages from a Meta Cloud webhook JSON body.
- * Path: `entry[].changes[].value.messages[]` (type `text`).
+ * Collects inbound WhatsApp cleaner reply messages from a Meta Cloud webhook JSON body.
+ * Path: `entry[].changes[].value.messages[]` — only `text` and `button` (quick reply / CTA).
  */
 export function extractInboundWhatsAppTextMessages(payload: unknown): InboundTextMessage[] {
   const out: InboundTextMessage[] = [];
@@ -26,18 +43,17 @@ export function extractInboundWhatsAppTextMessages(payload: unknown): InboundTex
       for (const msg of messages) {
         if (!msg || typeof msg !== "object") continue;
         const m = msg as Record<string, unknown>;
-        if (String(m.type ?? "") !== "text") continue;
+        const t = String(m.type ?? "");
         const from = String(m.from ?? "");
-        const body = String((m.text as { body?: string } | undefined)?.body ?? "");
-        const mid = m.id;
-        const messageId = typeof mid === "string" && mid.trim() ? mid.trim() : undefined;
-        const ctx = m.context;
-        let contextMessageId: string | undefined;
-        if (ctx && typeof ctx === "object") {
-          const cid = (ctx as { id?: unknown }).id;
-          if (typeof cid === "string" && cid.trim()) contextMessageId = cid.trim();
+        if (t === "text") {
+          const body = String((m.text as { body?: string } | undefined)?.body ?? "");
+          pushMessageMeta(m, from, body, out);
+          continue;
         }
-        if (from || body) out.push({ from, body, messageId, contextMessageId });
+        if (t === "button") {
+          const body = String((m.button as { text?: string } | undefined)?.text ?? "");
+          pushMessageMeta(m, from, body, out);
+        }
       }
     }
   }
@@ -64,7 +80,11 @@ function extractFromAndBodyLegacy(payload: unknown): InboundTextMessage {
     change0 && typeof change0 === "object" ? (change0 as { value?: Record<string, unknown> }).value : undefined;
   const msg0 = Array.isArray(value?.messages) ? (value?.messages?.[0] as Record<string, unknown> | undefined) : undefined;
   const from = String(msg0?.from ?? "");
-  const body = String(((msg0?.text as { body?: string } | undefined)?.body ?? ""));
+  const typ = String(msg0?.type ?? "");
+  const body =
+    typ === "button"
+      ? String((msg0?.button as { text?: string } | undefined)?.text ?? "")
+      : String(((msg0?.text as { body?: string } | undefined)?.body ?? ""));
   const mid0 = msg0?.id;
   const messageId = typeof mid0 === "string" && mid0.trim() ? mid0.trim() : undefined;
   const ctx = msg0?.context;

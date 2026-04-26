@@ -161,12 +161,27 @@ export async function createDispatchOfferRow(params: {
     }
   }
 
-  await notifyCleanerOfDispatchOffer({
+  console.log("[Dispatch] Sending offer WhatsApp", {
     bookingId: params.bookingId,
-    offerId,
     cleanerId: params.cleanerId,
-    expiresAtIso: expiresAt,
+    offerId,
   });
+  try {
+    await notifyCleanerOfDispatchOffer({
+      bookingId: params.bookingId,
+      offerId,
+      cleanerId: params.cleanerId,
+      expiresAtIso: expiresAt,
+    });
+  } catch (err) {
+    console.error("[Dispatch Offer WhatsApp Error]", err);
+    await logSystemEvent({
+      level: "error",
+      source: "dispatch_offer_whatsapp_notify",
+      message: err instanceof Error ? err.message : String(err),
+      context: { bookingId: params.bookingId, cleanerId: params.cleanerId, offerId },
+    });
+  }
 
   await params.supabase
     .from("bookings")

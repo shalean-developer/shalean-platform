@@ -161,20 +161,6 @@ export function bookingJobDisplayRef(bookingId: string): string {
   return compact.length >= 6 ? `#${compact}` : `#${String(bookingId).slice(0, 6).toUpperCase()}`;
 }
 
-function buildCleanerAssignmentTextBody(booking: CreatedBookingRecord): string {
-  const jobTag = bookingJobDisplayRef(booking.id);
-  return `New cleaning job assigned:
-Job: ${jobTag}
-Customer: ${booking.customer_name ?? ""}
-Service: ${booking.service ?? ""}
-Date: ${booking.date ?? ""}
-Time: ${booking.time ?? ""}
-Location: ${booking.location ?? ""}
-
-Job ID: ${booking.id}
-Reply YES to accept or NO to decline.`;
-}
-
 export type TriggerWhatsAppNotificationOptions = {
   /** When set, send to this number instead of `booking.customer_phone`. */
   recipientPhone?: string;
@@ -183,7 +169,7 @@ export type TriggerWhatsAppNotificationOptions = {
    * Should match `cleaners.full_name`; pass from assignment flow when `variant === "cleaner_job_assigned"`.
    */
   cleanerDisplayName?: string;
-  /** Message copy variant for text + template fallback. */
+  /** Message copy variant. `cleaner_job_assigned` is template-only (no session text). */
   variant?: "customer_new_booking" | "cleaner_job_assigned" | "customer_booking_confirmed";
 };
 
@@ -193,9 +179,8 @@ function buildCustomerBookingConfirmedBody(): string {
 
 function buildTextBodyForVariant(
   booking: CreatedBookingRecord,
-  variant: TriggerWhatsAppNotificationOptions["variant"],
+  variant: "customer_new_booking" | "customer_booking_confirmed",
 ): string {
-  if (variant === "cleaner_job_assigned") return buildCleanerAssignmentTextBody(booking);
   if (variant === "customer_booking_confirmed") return buildCustomerBookingConfirmedBody();
   return buildTextMessageBody(booking);
 }
@@ -410,10 +395,10 @@ function buildCleanerJobAssignedTemplatePayload(
 
 /**
  * Sends transactional WhatsApp via Meta Cloud API.
- * **Cleaner job assigned:** sends template `cleaner_job_assigned` first ({{1}}–{{4}}; {{5}} when `WHATSAPP_CLEANER_JOB_INCLUDE_LOCATION=1`). Location value is first comma segment, ≤60 chars, or a clear empty fallback. on failure, falls back to text + `WHATSAPP_TEMPLATE_NAME` like before.
+ * **Cleaner job assigned:** sends **only** the approved Meta template `cleaner_job_assigned` ({{1}}–{{4}}; optional {{5}}). No plain `text` sends and no fallback chain — new cleaner conversations require a template.
  * **Customer paths:** text first, then optional `WHATSAPP_TEMPLATE_NAME` template on session errors.
  *
- * @returns `true` if any WhatsApp send succeeded (template or text or fallback template); `false` if skipped or all attempts failed.
+ * @returns `true` if a WhatsApp send succeeded; `false` if skipped or all attempts failed.
  */
 export async function triggerWhatsAppNotification(
   booking: CreatedBookingRecord,
@@ -465,18 +450,22 @@ export async function triggerWhatsAppNotification(
       if (cleanerTemplateResult.ok) {
         return true;
       }
-      console.error("[triggerWhatsAppNotification] cleaner_job_assigned template failed; falling back to text path", {
-        bookingId: booking.id,
-        httpStatus: cleanerTemplateResult.httpStatus,
-        graphMessage: cleanerTemplateResult.graphMessage,
-        graphCode: cleanerTemplateResult.graphCode,
-      });
+      console.error(
+        "[triggerWhatsAppNotification] cleaner_job_assigned template failed (template-only path; no text fallback)",
+        {
+          bookingId: booking.id,
+          httpStatus: cleanerTemplateResult.httpStatus,
+          graphMessage: cleanerTemplateResult.graphMessage,
+          graphCode: cleanerTemplateResult.graphCode,
+        },
+      );
+      return false;
     }
 
-    const textBody =
-      variant === "cleaner_job_assigned"
-        ? buildCleanerAssignmentTextBody(booking)
-        : buildTextBodyForVariant(booking, variant);
+    const textBody = buildTextBodyForVariant(
+      booking,
+      variant === "customer_booking_confirmed" ? "customer_booking_confirmed" : "customer_new_booking",
+    );
     const textPayload: GraphPayload = {
       messaging_product: "whatsapp",
       to,

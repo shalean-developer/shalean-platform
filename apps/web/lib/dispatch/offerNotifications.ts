@@ -1,4 +1,10 @@
-import { resolveWhatsAppBearerToken, sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
+import { format, isValid, parseISO } from "date-fns";
+import {
+  metaWhatsAppToDigits,
+  resolveWhatsAppBearerToken,
+  sendViaMetaWhatsApp,
+  sendViaMetaWhatsAppTemplateBody,
+} from "@/lib/dispatch/metaWhatsAppSend";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
@@ -29,34 +35,56 @@ function hasWhatsappMetaConfigured(): boolean {
   return Boolean(resolveWhatsAppBearerToken() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
 }
 
+const CLEANER_JOB_OFFER_TEMPLATE_DEFAULT = "cleaner_job_offer";
+const OFFER_TEMPLATE_SERVICE_MAX = 60;
+const OFFER_TEMPLATE_DATE_MAX = 30;
+const OFFER_TEMPLATE_TIME_MAX = 30;
+const OFFER_TEMPLATE_LOCATION_MAX = 60;
+
+/** Aligns with `cleaner_job_assigned` display helpers for Meta body variables. */
+function formatOfferTemplateService(raw: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  return s
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatOfferTemplateDate(raw: string): string {
+  const d = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return (d || "Scheduled date").slice(0, OFFER_TEMPLATE_DATE_MAX);
+  const dt = parseISO(d);
+  if (!isValid(dt)) return d.slice(0, OFFER_TEMPLATE_DATE_MAX);
+  return format(dt, "d MMMM yyyy").slice(0, OFFER_TEMPLATE_DATE_MAX);
+}
+
+function formatOfferTemplateTime(raw: string): string {
+  const t = raw.trim();
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (!m) return (t || "Scheduled time").slice(0, OFFER_TEMPLATE_TIME_MAX);
+  let h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mi) || h > 23 || mi > 59) return t.slice(0, OFFER_TEMPLATE_TIME_MAX);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const hh = String(h12).padStart(2, "0");
+  const mm = String(mi).padStart(2, "0");
+  return `${hh}:${mm} ${ampm}`.slice(0, OFFER_TEMPLATE_TIME_MAX);
+}
+
+function formatOfferTemplateLocationPrimary(raw: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "TBD";
+  const primary = s.split(",")[0]?.trim() ?? s;
+  return primary.slice(0, OFFER_TEMPLATE_LOCATION_MAX);
+}
+
 /** Dev-style log-only sends: explicit flag, or local/staging without credentials. Never treats production misconfig as success. */
 function isWhatsappDevLogOnly(): boolean {
   if (process.env.WHATSAPP_DEV_MODE === "true") return true;
   if (process.env.NODE_ENV === "production") return false;
   return !hasWhatsappMetaConfigured();
-}
-
-function buildOfferMessage(params: {
-  offerId: string;
-  location: string;
-  timeText: string;
-  priceText: string;
-}): string {
-  return [
-    "🧹 Available cleaning job",
-    "",
-    `📍 Location: ${params.location}`,
-    `🕒 Time: ${params.timeText}`,
-    `💰 Pay: ${params.priceText}`,
-    "",
-    "You have 60 seconds to respond.",
-    "",
-    "Reply:",
-    "1 → Accept",
-    "2 → Decline",
-    "",
-    `Offer ID: ${params.offerId}`,
-  ].join("\n");
 }
 
 async function sendWhatsAppText(params: {
@@ -144,27 +172,125 @@ async function sendWhatsAppText(params: {
   return enq.id;
 }
 
+/**
+ * Sends dispatch-offer WhatsApp via **Meta template only** (`cleaner_job_offer` by default).
+ * No text payloads or queue jobs — required for Meta compliance outside the 24h session window.
+ */
 export async function sendWhatsAppOffer(params: {
   cleanerPhone: string;
   bookingId: string;
   offerId: string;
-  time: string;
+  cleanerName: string;
+  serviceName: string;
+  bookingDate: string;
+  bookingTime: string;
   location: string;
-  price: string;
-}): Promise<string | null> {
-  const message = buildOfferMessage({
-    offerId: params.offerId,
-    location: params.location,
-    timeText: params.time,
-    priceText: params.price,
+}): Promise<void> {
+  const phone = normalizePhone(params.cleanerPhone);
+  if (!phone) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_offer_missing_phone",
+      message: "Cleaner has no phone_number configured",
+      context: { bookingId: params.bookingId, offerId: params.offerId },
+    });
+    return;
+  }
+
+  const paused = await isWhatsappOutboundPaused();
+  if (paused.paused) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_offer_channel_paused",
+      message: "WhatsApp outbound paused — dispatch offer template skipped",
+      context: { bookingId: params.bookingId, offerId: params.offerId, untilIso: paused.untilIso },
+    });
+    return;
+  }
+
+  if (process.env.NODE_ENV === "production" && !hasWhatsappMetaConfigured()) {
+    await logSystemEvent({
+      level: "error",
+      source: "whatsapp_offer_prod_misconfig",
+      message: "CRITICAL: Meta WhatsApp credentials missing — dispatch offer template skipped",
+      context: { bookingId: params.bookingId, offerId: params.offerId },
+    });
+    return;
+  }
+
+  if (isWhatsappDevLogOnly()) {
+    console.log("[whatsapp:offer:template:dev]", {
+      to: phone,
+      bookingId: params.bookingId,
+      offerId: params.offerId,
+      cleanerName: params.cleanerName,
+      serviceName: params.serviceName,
+      bookingDate: params.bookingDate,
+      bookingTime: params.bookingTime,
+      location: params.location,
+    });
+    await logSystemEvent({
+      level: "info",
+      source: "whatsapp_offer_dev_logged",
+      message: "Dispatch offer template (dev mode — not sent to Meta)",
+      context: { bookingId: params.bookingId, offerId: params.offerId },
+    });
+    return;
+  }
+
+  const templateName =
+    process.env.WHATSAPP_CLEANER_JOB_OFFER_TEMPLATE?.trim() || CLEANER_JOB_OFFER_TEMPLATE_DEFAULT;
+  const languageCode =
+    process.env.WHATSAPP_CLEANER_JOB_OFFER_LANG?.trim() ||
+    process.env.WHATSAPP_TEMPLATE_LANGUAGE?.trim() ||
+    "en";
+
+  const safeService = (params.serviceName || "Cleaning").trim().slice(0, OFFER_TEMPLATE_SERVICE_MAX);
+  const bodyParameters = [
+    (params.cleanerName || "Cleaner").trim().slice(0, 60),
+    safeService,
+    params.bookingDate.trim().slice(0, OFFER_TEMPLATE_DATE_MAX),
+    params.bookingTime.trim().slice(0, OFFER_TEMPLATE_TIME_MAX),
+    params.location.trim().slice(0, OFFER_TEMPLATE_LOCATION_MAX),
+  ];
+
+  const { messageId } = await sendViaMetaWhatsAppTemplateBody({
+    phone: params.cleanerPhone,
+    templateName,
+    languageCode,
+    bodyParameters,
   });
-  return sendWhatsAppText({
-    cleanerPhone: params.cleanerPhone,
-    source: "whatsapp_offer",
-    context: { bookingId: params.bookingId, offerId: params.offerId },
-    message,
-    idempotencyKey: `dispatch_offer:${params.bookingId}:${params.offerId}`,
-    priority: 100,
+
+  const recipientDigits = metaWhatsAppToDigits(params.cleanerPhone);
+  await writeNotificationLog({
+    booking_id: params.bookingId,
+    channel: "whatsapp",
+    template_key: "cleaner_job_offer",
+    recipient: recipientDigits || phone.slice(0, 64),
+    status: "sent",
+    error: null,
+    provider: "meta",
+    role: "cleaner",
+    event_type: "dispatch_offer",
+    payload: {
+      source: "whatsapp_offer",
+      offerId: params.offerId,
+      template: templateName,
+      message_id: messageId,
+      body_parameters: bodyParameters,
+    },
+  });
+
+  await logSystemEvent({
+    level: "info",
+    source: "whatsapp_offer_template_sent",
+    message: "Dispatch offer WhatsApp template sent",
+    context: {
+      bookingId: params.bookingId,
+      offerId: params.offerId,
+      template: templateName,
+      message_id: messageId,
+    },
   });
 }
 
@@ -172,82 +298,71 @@ export async function sendWhatsAppOffer(params: {
  * Outbound offer alert hook.
  */
 export async function notifyCleanerOfDispatchOffer(params: NotifyParams): Promise<void> {
+  console.log("[Offer WhatsApp Triggered]", {
+    bookingId: params.bookingId,
+    cleanerId: params.cleanerId,
+    offerId: params.offerId,
+  });
   const admin = getSupabaseAdmin();
   if (!admin) return;
 
   const [{ data: cleaner }, { data: booking }] = await Promise.all([
-    admin.from("cleaners").select("phone_number").eq("id", params.cleanerId).maybeSingle(),
+    admin.from("cleaners").select("phone_number, full_name").eq("id", params.cleanerId).maybeSingle(),
     admin
       .from("bookings")
-      .select("id, location, date, time, total_paid_zar, amount_paid_cents")
+      .select("id, location, date, time, service, total_paid_zar, amount_paid_cents")
       .eq("id", params.bookingId)
       .maybeSingle(),
   ]);
 
   const phone = String((cleaner as { phone_number?: string | null } | null)?.phone_number ?? "");
-  const location = String((booking as { location?: string | null } | null)?.location ?? "TBD");
+  const cleanerName =
+    String((cleaner as { full_name?: string | null } | null)?.full_name ?? "").trim() || "Cleaner";
+  const rawService = String((booking as { service?: string | null } | null)?.service ?? "").trim();
+  const serviceName = formatOfferTemplateService(rawService) || "Cleaning";
+  const locationRaw = String((booking as { location?: string | null } | null)?.location ?? "");
+  const location = formatOfferTemplateLocationPrimary(locationRaw);
   const date = String((booking as { date?: string | null } | null)?.date ?? "");
-  const time = String((booking as { time?: string | null } | null)?.time ?? "");
-  const amountZar =
-    Number((booking as { total_paid_zar?: number | null } | null)?.total_paid_zar ?? 0) ||
-    Math.round(Number((booking as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0) / 100);
-  const timeText = [date, time].filter(Boolean).join(" ").trim() || "TBD";
-  const price = `R ${Number.isFinite(amountZar) ? amountZar.toLocaleString("en-ZA") : "0"}`;
+  const time = String((booking as { time?: string | null } | null)?.time ?? "").trim();
+  const timeHm = time.length >= 5 ? time.slice(0, 5) : time;
+  const bookingDate = formatOfferTemplateDate(date);
+  const bookingTime = formatOfferTemplateTime(timeHm);
+
+  const recipientDigits = metaWhatsAppToDigits(phone);
 
   try {
-    const jobId = await sendWhatsAppOffer({
+    await sendWhatsAppOffer({
       cleanerPhone: phone,
       bookingId: params.bookingId,
       offerId: params.offerId,
-      time: timeText,
+      cleanerName,
+      serviceName,
+      bookingDate,
+      bookingTime,
       location,
-      price,
     });
-    if (jobId) {
-      const { data: preFlushRow } = await admin
-        .from("whatsapp_queue")
-        .select("status,attempts")
-        .eq("id", jobId)
-        .maybeSingle();
-      const statusBeforeFlush = String((preFlushRow as { status?: string } | null)?.status ?? "unknown");
-      const attemptsBeforeFlush = Number((preFlushRow as { attempts?: number } | null)?.attempts ?? 0);
-
-      let flush: Awaited<ReturnType<typeof flushWhatsAppJobById>> = { ok: true };
-      try {
-        flush = await flushWhatsAppJobById(admin, jobId);
-      } catch (e) {
-        flush = { ok: false, error: e instanceof Error ? e.message : String(e) };
-      }
-      if (!flush.ok) {
-        const err = flush.error ?? "unknown_flush_error";
-        await logSystemEvent({
-          level: "error",
-          source: "whatsapp_offer_flush_failed",
-          message: err,
-          context: {
-            job_id: jobId,
-            error: err,
-            bookingId: params.bookingId,
-            offerId: params.offerId,
-            cleanerId: params.cleanerId,
-            attempts: attemptsBeforeFlush,
-            status_before_flush: statusBeforeFlush,
-          },
-        });
-        const jitterMs = Math.random() * 5000;
-        const bumpIso = new Date(Date.now() + jitterMs).toISOString();
-        await admin
-          .from("whatsapp_queue")
-          .update({ next_attempt_at: bumpIso, updated_at: bumpIso })
-          .eq("id", jobId)
-          .eq("status", "pending");
-      }
-    }
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const recipientForLog =
+      recipientDigits.length >= 8
+        ? recipientDigits
+        : phone.trim().slice(0, 64) || `cleaner:${params.cleanerId.slice(0, 8)}`;
+    await writeNotificationLog({
+      booking_id: params.bookingId,
+      channel: "whatsapp",
+      template_key: "cleaner_job_offer",
+      recipient: recipientForLog,
+      status: "failed",
+      error: msg.slice(0, 2000),
+      provider: "meta",
+      role: "cleaner",
+      event_type: "dispatch_offer",
+      payload: { source: "whatsapp_offer", offerId: params.offerId, cleanerId: params.cleanerId },
+    });
     await logSystemEvent({
       level: "warn",
       source: "whatsapp_offer_send_failed",
-      message: e instanceof Error ? e.message : "Unknown WhatsApp send error",
+      message: msg,
       context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
     });
   }

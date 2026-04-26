@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyMetaWebhookSignature } from "@/lib/dispatch/metaWhatsAppSend";
 import { acceptDispatchOffer, rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
-import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { reassignBookingAfterDecline } from "@/lib/booking/reassignBookingAfterDecline";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordWhatsAppDeliveryStatuses } from "@/lib/whatsapp/deliveryWebhook";
@@ -33,16 +33,34 @@ function uniquePhoneMatchValues(senderNormalized: string): string[] {
   return [...set];
 }
 
+/** Meta WhatsApp Cloud API webhook verification (GET). Plain-text challenge only — not JSON. */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mode = url.searchParams.get("hub.mode");
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return new Response(challenge ?? "ok", { status: 200 });
+  const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() ?? "";
+
+  if (
+    mode === "subscribe" &&
+    expected.length > 0 &&
+    token === expected &&
+    challenge != null
+  ) {
+    return new Response(challenge, {
+      status: 200,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
-  return new Response("forbidden", { status: 403 });
+
+  return new Response("Forbidden", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+}
+
+function offerReplyIntent(actionLower: string): "ACCEPT" | "DECLINE" | null {
+  if (actionLower.includes("accept")) return "ACCEPT";
+  if (actionLower.includes("decline")) return "DECLINE";
+  return null;
 }
 
 /**
@@ -58,7 +76,7 @@ export async function POST(request: Request) {
       source: "whatsapp_webhook",
       message: "WHATSAPP_APP_SECRET missing in production — webhook processing skipped",
     });
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json({ received: true });
   }
 
   let rawBody = "";
@@ -71,7 +89,7 @@ export async function POST(request: Request) {
       message: "Failed to read webhook body",
       context: { error: err instanceof Error ? err.message : String(err) },
     });
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json({ received: true });
   }
 
   if (appSecret) {
@@ -91,25 +109,30 @@ export async function POST(request: Request) {
         source: "whatsapp_webhook",
         message: "Invalid JSON webhook body",
       });
-      return NextResponse.json({ ok: true }, { status: 200 });
+      return NextResponse.json({ received: true });
     }
 
     const admin = getSupabaseAdmin();
     await recordWhatsAppDeliveryStatuses(admin, payload);
 
     if (!admin) {
-      return NextResponse.json({ ok: true }, { status: 200 });
+      return NextResponse.json({ received: true });
     }
 
     const inbound = extractPrimaryInboundWhatsAppMessage(payload);
-    const senderPhone = normalizePhone(inbound.from);
+    const from = normalizePhone(inbound.from);
+    const text = String(inbound.body ?? "").trim().toLowerCase();
+    const action = text;
+
+    console.log("[WhatsApp Incoming]", { from, action });
+
     const reply = normalizeCleanerReplyText(inbound.body);
 
-    if (!senderPhone || !reply) {
-      return NextResponse.json({ ok: true, ignored: "missing phone or body" }, { status: 200 });
+    if (!from || !reply) {
+      return NextResponse.json({ received: true });
     }
 
-    const variants = uniquePhoneMatchValues(senderPhone);
+    const variants = uniquePhoneMatchValues(from);
     let cleanerId = "";
     for (const col of ["phone_number", "phone"] as const) {
       const { data: cleaner, error } = await admin
@@ -139,9 +162,9 @@ export async function POST(request: Request) {
         level: "warn",
         source: "whatsapp_webhook_unknown_sender",
         message: "Inbound WhatsApp from unknown cleaner phone",
-        context: { senderPhone, variants_tried: variants.slice(0, 8) },
+        context: { senderPhone: from, variants_tried: variants.slice(0, 8) },
       });
-      return NextResponse.json({ ok: true, ignored: "unknown sender" }, { status: 200 });
+      return NextResponse.json({ received: true });
     }
 
     const assignedBookingReply = await tryHandleCleanerAssignedBookingWhatsAppReply(
@@ -151,22 +174,11 @@ export async function POST(request: Request) {
       {
         contextMessageId: inbound.contextMessageId,
         inboundMessageId: inbound.messageId,
-        cleanerPhoneDigits: senderPhone,
+        cleanerPhoneDigits: from,
       },
     );
     if (assignedBookingReply.handled) {
-      return NextResponse.json(
-        {
-          ok: true,
-          flow: "assigned_booking",
-          action: assignedBookingReply.action,
-          ...(assignedBookingReply.action === "booking_accepted" ||
-          assignedBookingReply.action === "booking_declined"
-            ? { bookingId: assignedBookingReply.bookingId }
-            : {}),
-        },
-        { status: 200 },
-      );
+      return NextResponse.json({ received: true });
     }
 
     const { data: offer } = await admin
@@ -181,32 +193,43 @@ export async function POST(request: Request) {
     const offerId = String((offer as { id?: string } | null)?.id ?? "");
     const bookingId = String((offer as { booking_id?: string } | null)?.booking_id ?? "");
     if (!offerId) {
-      return NextResponse.json({ ok: true, ignored: "no pending offer" }, { status: 200 });
+      return NextResponse.json({ received: true });
     }
 
-    if (isAssignedBookingDeclineReply(reply)) {
+    const wantsDecline = offerReplyIntent(action) === "DECLINE" || isAssignedBookingDeclineReply(reply);
+    const wantsAccept = offerReplyIntent(action) === "ACCEPT" || isAssignedBookingAcceptReply(reply);
+    if (!wantsDecline && !wantsAccept) {
+      return NextResponse.json({ received: true });
+    }
+
+    if (wantsDecline) {
       const result = await rejectDispatchOffer({ supabase: admin, offerId, cleanerId });
       if (!result.ok) {
-        return NextResponse.json({ ok: false, error: result.error }, { status: 200 });
+        return NextResponse.json({ received: true });
       }
       if (bookingId) {
-        await ensureBookingAssignment(admin, bookingId, {
-          source: "whatsapp_offer_decline",
-          retryEscalation: 1,
-        });
+        await reassignBookingAfterDecline(admin, bookingId);
       }
-      return NextResponse.json({ ok: true, action: "declined", offerId }, { status: 200 });
+      await logSystemEvent({
+        level: "info",
+        source: "cleaner_offer_declined",
+        message: "Cleaner declined dispatch offer via WhatsApp",
+        context: { bookingId, offerId, cleanerId, from, action },
+      });
+      return NextResponse.json({ received: true });
     }
 
-    if (isAssignedBookingAcceptReply(reply)) {
-      const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
-      if (!result.ok) {
-        return NextResponse.json({ ok: false, error: result.error }, { status: 200 });
-      }
-      return NextResponse.json({ ok: true, action: "accepted", offerId }, { status: 200 });
+    const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
+    if (!result.ok) {
+      return NextResponse.json({ received: true });
     }
-
-    return NextResponse.json({ ok: true, ignored: "unsupported reply" }, { status: 200 });
+    await logSystemEvent({
+      level: "info",
+      source: "cleaner_offer_accepted",
+      message: "Cleaner accepted dispatch offer via WhatsApp",
+      context: { bookingId, offerId, cleanerId, from, action },
+    });
+    return NextResponse.json({ received: true });
   } catch (err) {
     await logSystemEvent({
       level: "error",
@@ -214,6 +237,6 @@ export async function POST(request: Request) {
       message: "Unhandled webhook POST error",
       context: { error: err instanceof Error ? err.message : String(err) },
     });
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json({ received: true });
   }
 }
