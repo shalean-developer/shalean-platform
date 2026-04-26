@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Supabase CLI linked-project + .temp (from `supabase link` run inside apps/web — not the repo root `supabase/migrations`)
+/supabase/
