@@ -1,4 +1,4 @@
-import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
+import { resolveWhatsAppBearerToken, sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
@@ -26,7 +26,7 @@ function normalizePhone(value: string | null | undefined): string {
 }
 
 function hasWhatsappMetaConfigured(): boolean {
-  return Boolean(process.env.WHATSAPP_API_TOKEN?.trim() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
+  return Boolean(resolveWhatsAppBearerToken() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
 }
 
 /** Dev-style log-only sends: explicit flag, or local/staging without credentials. Never treats production misconfig as success. */
@@ -83,7 +83,7 @@ async function sendWhatsAppText(params: {
     await logSystemEvent({
       level: "error",
       source: `${params.source}_prod_misconfig`,
-      message: "CRITICAL: WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID missing in production — outbound skipped",
+      message: "CRITICAL: WHATSAPP_ACCESS_TOKEN / WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID missing in production — outbound skipped",
       context: { ...params.context, payload_preview: params.message.slice(0, 120) },
     });
     return null;

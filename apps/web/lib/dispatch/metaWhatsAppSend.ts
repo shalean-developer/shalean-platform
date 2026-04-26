@@ -25,6 +25,16 @@ export function getWhatsAppGraphApiVersion(): string {
   return process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v22.0";
 }
 
+/**
+ * Permanent system-user token for Cloud API.
+ * `WHATSAPP_ACCESS_TOKEN` is preferred (matches Meta dashboard naming); `WHATSAPP_API_TOKEN` is a legacy alias used elsewhere in the repo.
+ */
+export function resolveWhatsAppBearerToken(): string | undefined {
+  const a = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+  const b = process.env.WHATSAPP_API_TOKEN?.trim();
+  return a || b || undefined;
+}
+
 function graphMessagesUrl(phoneNumberId: string): string {
   return `https://graph.facebook.com/${getWhatsAppGraphApiVersion()}/${phoneNumberId}/messages`;
 }
@@ -107,6 +117,32 @@ async function postMetaMessage(params: {
     signal: AbortSignal.timeout(META_SEND_TIMEOUT_MS),
   });
   const rawText = await res.text();
+  let parsedPreview: Record<string, unknown> | null = null;
+  try {
+    parsedPreview = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : null;
+  } catch {
+    parsedPreview = null;
+  }
+  const graphErr = parsedPreview?.error as { code?: number; message?: string } | undefined;
+  const graphBodyError =
+    graphErr != null && typeof graphErr === "object" && (graphErr.code != null || Boolean(graphErr.message));
+  if (!res.ok || graphBodyError) {
+    console.error("[WhatsApp Meta] POST /messages error", {
+      httpStatus: res.status,
+      graphCode: graphErr?.code,
+      graphMessage: graphErr?.message,
+      payloadType: params.body.type,
+      toDigitsTail: String(params.body.to ?? "").slice(-4),
+      rawPreview: rawText.slice(0, 1200),
+    });
+  } else {
+    console.log("[WhatsApp Meta] POST /messages ok", {
+      httpStatus: res.status,
+      payloadType: params.body.type,
+      toDigitsTail: String(params.body.to ?? "").slice(-4),
+      responsePreview: rawText.slice(0, 400),
+    });
+  }
   await logSystemEvent({
     level: res.ok ? "info" : "warn",
     source: "whatsapp_meta_http",
@@ -163,10 +199,10 @@ async function sendTemplateSingleBodyVar(params: {
  * Meta Cloud API outbound send: digits-only `to`, 429 retries, optional template fallback outside 24h window.
  */
 export async function sendViaMetaWhatsApp(params: { phone: string; message: string }): Promise<{ messageId: string }> {
-  const token = process.env.WHATSAPP_API_TOKEN?.trim();
+  const token = resolveWhatsAppBearerToken();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!token || !phoneNumberId) {
-    throw new Error("Missing WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID");
+    throw new Error("Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_API_TOKEN (or WHATSAPP_PHONE_NUMBER_ID)");
   }
 
   const toDigits = metaWhatsAppToDigits(params.phone);
@@ -330,10 +366,10 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
   languageCode: string;
   bodyParameters: string[];
 }): Promise<{ messageId: string }> {
-  const token = process.env.WHATSAPP_API_TOKEN?.trim();
+  const token = resolveWhatsAppBearerToken();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!token || !phoneNumberId) {
-    throw new Error("Missing WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID");
+    throw new Error("Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_API_TOKEN (or WHATSAPP_PHONE_NUMBER_ID)");
   }
 
   const toDigits = metaWhatsAppToDigits(params.phone);

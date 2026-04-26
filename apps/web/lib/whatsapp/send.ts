@@ -1,4 +1,8 @@
-import { getWhatsAppGraphApiVersion, metaWhatsAppToDigits } from "@/lib/dispatch/metaWhatsAppSend";
+import {
+  getWhatsAppGraphApiVersion,
+  metaWhatsAppToDigits,
+  resolveWhatsAppBearerToken,
+} from "@/lib/dispatch/metaWhatsAppSend";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 /**
@@ -6,10 +10,10 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
  * Prefer {@link sendViaMetaWhatsApp} / {@link sendViaMetaWhatsAppTemplateBody} or the queue helpers.
  */
 export async function sendWhatsAppGraphPayload(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const token = process.env.WHATSAPP_API_TOKEN?.trim();
+  const token = resolveWhatsAppBearerToken();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!token || !phoneNumberId) {
-    throw new Error("Missing WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID");
+    throw new Error("Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_API_TOKEN (or WHATSAPP_PHONE_NUMBER_ID)");
   }
 
   const toRaw = body.to;

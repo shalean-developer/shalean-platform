@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type CleanerPick = { id: string; phone: string };
+export type CleanerPick = { id: string; phone: string; /** `cleaners.full_name` for WhatsApp template {{1}} */ fullName: string };
 
 /** Booking statuses that occupy a cleaner for this date+time slot (avoid double-booking). */
 export const SLOT_BUSY_STATUSES = [
@@ -40,6 +40,7 @@ type CleanerRow = {
   id: string;
   phone: string | null;
   phone_number: string | null;
+  full_name?: string | null;
   acceptance_rate?: number | null;
   avg_response_time_ms?: number | null;
   total_offers?: number | null;
@@ -461,7 +462,7 @@ export async function pickAvailableCleaner(
 
   const { data: cleaners, error } = await admin
     .from("cleaners")
-    .select("id, phone, phone_number, acceptance_rate, avg_response_time_ms, total_offers")
+    .select("id, phone, phone_number, full_name, acceptance_rate, avg_response_time_ms, total_offers")
     .eq("is_available", true)
     .limit(MAX_CLEANER_CANDIDATES);
 
@@ -565,7 +566,8 @@ export async function pickAvailableCleaner(
       assignedRecentlyAny: chosen.assignedRecentlyAny,
       acceptStreak: chosen.acceptStreak,
     });
-    return { id: chosen.id, phone };
+    const fullName = String(chosen.full_name ?? "").trim() || "Cleaner";
+    return { id: chosen.id, phone, fullName };
   }
 
   try {

@@ -1,4 +1,5 @@
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { resolveWhatsAppBearerToken } from "@/lib/dispatch/metaWhatsAppSend";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -162,7 +163,7 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
     if (digits.length < 10) {
       return { ok: false, error: "Invalid WhatsApp recipient on log row.", httpStatus: 400 };
     }
-    const hasWa = Boolean(process.env.WHATSAPP_API_TOKEN?.trim() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
+    const hasWa = Boolean(resolveWhatsAppBearerToken() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
     if (process.env.NODE_ENV === "production" && !hasWa) {
       await writeNotificationLog({
         ...baseLog,

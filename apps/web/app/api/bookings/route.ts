@@ -238,6 +238,7 @@ export async function POST(req: Request) {
         bookingRow = assigned;
         void triggerWhatsAppNotification(assigned as CreatedBookingRecord, {
           recipientPhone: cleaner.phone,
+          cleanerDisplayName: cleaner.fullName,
           variant: "cleaner_job_assigned",
         });
       } else {
@@ -247,6 +248,7 @@ export async function POST(req: Request) {
           if (reread.cleaner_id === cleaner.id) {
             void triggerWhatsAppNotification(reread as CreatedBookingRecord, {
               recipientPhone: cleaner.phone,
+              cleanerDisplayName: cleaner.fullName,
               variant: "cleaner_job_assigned",
             });
           }

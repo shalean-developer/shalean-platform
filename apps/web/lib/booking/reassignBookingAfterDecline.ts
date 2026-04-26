@@ -54,6 +54,7 @@ export async function tryOnceReassignAfterDecline(
 
     void triggerWhatsAppNotification(data as CreatedBookingRecord, {
       recipientPhone: cleaner.phone,
+      cleanerDisplayName: cleaner.fullName,
       variant: "cleaner_job_assigned",
     });
   } catch (err) {
