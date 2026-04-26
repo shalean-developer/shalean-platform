@@ -9,6 +9,63 @@ type MetaStatus = {
   errors?: unknown;
 };
 
+const WHATSAPP_LOG_WEBHOOK_ERR_MAX = 4000;
+
+/** Map Meta message status webhook values to `whatsapp_logs.status`. */
+function mapMetaStatusToWhatsappLogStatus(metaStatus: string): "sent" | "failed_delivery" | null {
+  const st = metaStatus.toLowerCase();
+  if (st === "sent" || st === "delivered" || st === "read") return "sent";
+  if (st === "failed") return "failed_delivery";
+  return null;
+}
+
+/**
+ * Updates `whatsapp_logs` for outbound booking notifications by Meta `wamid`.
+ * Never throws.
+ */
+async function updateWhatsappLogFromMetaDelivery(
+  admin: SupabaseClient,
+  waMessageId: string,
+  metaStatus: string,
+  statusEntry: MetaStatus,
+): Promise<void> {
+  try {
+    const nextStatus = mapMetaStatusToWhatsappLogStatus(metaStatus);
+    if (!nextStatus) return;
+
+    const stLower = metaStatus.toLowerCase();
+    const webhook_payload = JSON.parse(JSON.stringify(statusEntry)) as Record<string, unknown>;
+
+    const error_message =
+      stLower === "failed"
+        ? JSON.stringify(statusEntry.errors ?? {}).slice(0, WHATSAPP_LOG_WEBHOOK_ERR_MAX)
+        : null;
+
+    const { error } = await admin
+      .from("whatsapp_logs")
+      .update({
+        status: nextStatus,
+        webhook_payload,
+        ...(stLower === "failed" ? { error_message } : { error_message: null }),
+      })
+      .eq("meta_message_id", waMessageId);
+
+    if (error) {
+      console.error("[whatsapp_logs] Meta delivery webhook update failed", {
+        waMessageId,
+        metaStatus,
+        message: error.message,
+      });
+    }
+  } catch (err) {
+    console.error("[whatsapp_logs] Meta delivery webhook update threw", {
+      waMessageId,
+      metaStatus,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 function collectStatuses(payload: unknown): MetaStatus[] {
   const out: MetaStatus[] = [];
   const p = payload as {
@@ -32,8 +89,9 @@ export async function recordWhatsAppDeliveryStatuses(
   admin: SupabaseClient | null,
   payload: unknown,
 ): Promise<void> {
-  const statuses = collectStatuses(payload);
-  for (const s of statuses) {
+  try {
+    const statuses = collectStatuses(payload);
+    for (const s of statuses) {
     const waId = typeof s.id === "string" ? s.id : "";
     const st = typeof s.status === "string" ? s.status : "";
     await logSystemEvent({
@@ -47,6 +105,10 @@ export async function recordWhatsAppDeliveryStatuses(
         errors: s.errors,
       },
     });
+
+    if (admin && waId && st) {
+      await updateWhatsappLogFromMetaDelivery(admin, waId, st, s);
+    }
 
     if (admin && waId && st) {
       const now = new Date().toISOString();
@@ -94,5 +156,10 @@ export async function recordWhatsAppDeliveryStatuses(
           .eq("status", "sent");
       }
     }
+  }
+  } catch (err) {
+    console.error("[recordWhatsAppDeliveryStatuses] unexpected error", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }

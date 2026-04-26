@@ -5,6 +5,13 @@ import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment"
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordWhatsAppDeliveryStatuses } from "@/lib/whatsapp/deliveryWebhook";
+import {
+  isAssignedBookingAcceptReply,
+  isAssignedBookingDeclineReply,
+  normalizeCleanerReplyText,
+} from "@/lib/booking/cleanerReplyIntent";
+import { extractPrimaryInboundWhatsAppMessage } from "@/lib/whatsapp/inboundMetaPayload";
+import { tryHandleCleanerAssignedBookingWhatsAppReply } from "@/lib/whatsapp/handleCleanerAssignedBookingReply";
 import { southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
 export const runtime = "nodejs";
@@ -26,22 +33,6 @@ function uniquePhoneMatchValues(senderNormalized: string): string[] {
   return [...set];
 }
 
-function extractFromAndBody(payload: unknown): { from: string; body: string } {
-  const p = (payload ?? {}) as Record<string, unknown>;
-  const fromTop = String(p.from ?? "");
-  const bodyTop = String(p.body ?? p.message ?? "");
-  if (fromTop || bodyTop) return { from: fromTop, body: bodyTop };
-
-  const entry = Array.isArray((p as { entry?: unknown[] }).entry) ? (p as { entry: unknown[] }).entry[0] : undefined;
-  const changes = entry && typeof entry === "object" ? (entry as { changes?: unknown[] }).changes : undefined;
-  const change0 = Array.isArray(changes) ? changes[0] : undefined;
-  const value = change0 && typeof change0 === "object" ? (change0 as { value?: Record<string, unknown> }).value : undefined;
-  const msg0 = Array.isArray(value?.messages) ? (value?.messages?.[0] as Record<string, unknown> | undefined) : undefined;
-  const from = String(msg0?.from ?? "");
-  const body = String(((msg0?.text as { body?: string } | undefined)?.body ?? ""));
-  return { from, body };
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mode = url.searchParams.get("hub.mode");
@@ -54,114 +45,175 @@ export async function GET(request: Request) {
   return new Response("forbidden", { status: 403 });
 }
 
+/**
+ * Meta WhatsApp Cloud webhook: delivery status updates (`whatsapp_logs`, `whatsapp_queue`) + inbound cleaner replies.
+ * Returns **200** for valid/signed payloads so Meta does not retry; **403** only for invalid signature when secret is configured.
+ */
 export async function POST(request: Request) {
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
 
-  if (process.env.NODE_ENV === "production" && !process.env.WHATSAPP_APP_SECRET?.trim()) {
-    return NextResponse.json(
-      { error: "WHATSAPP_APP_SECRET is required in production for webhook verification." },
-      { status: 503 },
-    );
+  if (process.env.NODE_ENV === "production" && !appSecret) {
+    await logSystemEvent({
+      level: "error",
+      source: "whatsapp_webhook",
+      message: "WHATSAPP_APP_SECRET missing in production — webhook processing skipped",
+    });
+    return NextResponse.json({ ok: true }, { status: 200 });
   }
 
-  const rawBody = await request.text();
-  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
+  let rawBody = "";
+  try {
+    rawBody = await request.text();
+  } catch (err) {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_webhook",
+      message: "Failed to read webhook body",
+      context: { error: err instanceof Error ? err.message : String(err) },
+    });
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
   if (appSecret) {
     const sig = request.headers.get("x-hub-signature-256");
     if (!verifyMetaWebhookSignature(rawBody, sig, appSecret)) {
-      return NextResponse.json({ error: "Invalid signature." }, { status: 403 });
+      return new Response("forbidden", { status: 403 });
     }
   }
 
-  let payload: unknown;
   try {
-    payload = rawBody ? JSON.parse(rawBody) : null;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-
-  await recordWhatsAppDeliveryStatuses(admin, payload);
-
-  const { from, body } = extractFromAndBody(payload);
-  const senderPhone = normalizePhone(from);
-  const reply = body.trim().toLowerCase();
-
-  if (!senderPhone || !reply) {
-    return NextResponse.json({ ok: true, ignored: "missing phone or body" });
-  }
-
-  const variants = uniquePhoneMatchValues(senderPhone);
-  let cleanerId = "";
-  for (const col of ["phone_number", "phone"] as const) {
-    const { data: cleaner, error } = await admin
-      .from("cleaners")
-      .select("id, phone_number")
-      .in(col, variants)
-      .limit(1)
-      .maybeSingle();
-    if (error) {
+    let payload: unknown = null;
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
       await logSystemEvent({
         level: "warn",
-        source: "whatsapp_webhook_lookup_error",
-        message: error.message,
-        context: { column: col, variant_count: variants.length },
+        source: "whatsapp_webhook",
+        message: "Invalid JSON webhook body",
       });
-      continue;
+      return NextResponse.json({ ok: true }, { status: 200 });
     }
-    const id = String((cleaner as { id?: string } | null)?.id ?? "");
-    if (id) {
-      cleanerId = id;
-      break;
-    }
-  }
 
-  if (!cleanerId) {
+    const admin = getSupabaseAdmin();
+    await recordWhatsAppDeliveryStatuses(admin, payload);
+
+    if (!admin) {
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    const inbound = extractPrimaryInboundWhatsAppMessage(payload);
+    const senderPhone = normalizePhone(inbound.from);
+    const reply = normalizeCleanerReplyText(inbound.body);
+
+    if (!senderPhone || !reply) {
+      return NextResponse.json({ ok: true, ignored: "missing phone or body" }, { status: 200 });
+    }
+
+    const variants = uniquePhoneMatchValues(senderPhone);
+    let cleanerId = "";
+    for (const col of ["phone_number", "phone"] as const) {
+      const { data: cleaner, error } = await admin
+        .from("cleaners")
+        .select("id, phone_number")
+        .in(col, variants)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        await logSystemEvent({
+          level: "warn",
+          source: "whatsapp_webhook_lookup_error",
+          message: error.message,
+          context: { column: col, variant_count: variants.length },
+        });
+        continue;
+      }
+      const id = String((cleaner as { id?: string } | null)?.id ?? "");
+      if (id) {
+        cleanerId = id;
+        break;
+      }
+    }
+
+    if (!cleanerId) {
+      await logSystemEvent({
+        level: "warn",
+        source: "whatsapp_webhook_unknown_sender",
+        message: "Inbound WhatsApp from unknown cleaner phone",
+        context: { senderPhone, variants_tried: variants.slice(0, 8) },
+      });
+      return NextResponse.json({ ok: true, ignored: "unknown sender" }, { status: 200 });
+    }
+
+    const assignedBookingReply = await tryHandleCleanerAssignedBookingWhatsAppReply(
+      admin,
+      cleanerId,
+      inbound.body,
+      {
+        contextMessageId: inbound.contextMessageId,
+        inboundMessageId: inbound.messageId,
+        cleanerPhoneDigits: senderPhone,
+      },
+    );
+    if (assignedBookingReply.handled) {
+      return NextResponse.json(
+        {
+          ok: true,
+          flow: "assigned_booking",
+          action: assignedBookingReply.action,
+          ...(assignedBookingReply.action === "booking_accepted" ||
+          assignedBookingReply.action === "booking_declined"
+            ? { bookingId: assignedBookingReply.bookingId }
+            : {}),
+        },
+        { status: 200 },
+      );
+    }
+
+    const { data: offer } = await admin
+      .from("dispatch_offers")
+      .select("id, booking_id, cleaner_id, status")
+      .eq("cleaner_id", cleanerId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const offerId = String((offer as { id?: string } | null)?.id ?? "");
+    const bookingId = String((offer as { booking_id?: string } | null)?.booking_id ?? "");
+    if (!offerId) {
+      return NextResponse.json({ ok: true, ignored: "no pending offer" }, { status: 200 });
+    }
+
+    if (isAssignedBookingDeclineReply(reply)) {
+      const result = await rejectDispatchOffer({ supabase: admin, offerId, cleanerId });
+      if (!result.ok) {
+        return NextResponse.json({ ok: false, error: result.error }, { status: 200 });
+      }
+      if (bookingId) {
+        await ensureBookingAssignment(admin, bookingId, {
+          source: "whatsapp_offer_decline",
+          retryEscalation: 1,
+        });
+      }
+      return NextResponse.json({ ok: true, action: "declined", offerId }, { status: 200 });
+    }
+
+    if (isAssignedBookingAcceptReply(reply)) {
+      const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
+      if (!result.ok) {
+        return NextResponse.json({ ok: false, error: result.error }, { status: 200 });
+      }
+      return NextResponse.json({ ok: true, action: "accepted", offerId }, { status: 200 });
+    }
+
+    return NextResponse.json({ ok: true, ignored: "unsupported reply" }, { status: 200 });
+  } catch (err) {
     await logSystemEvent({
-      level: "warn",
-      source: "whatsapp_webhook_unknown_sender",
-      message: "Inbound WhatsApp from unknown cleaner phone",
-      context: { senderPhone, variants_tried: variants.slice(0, 8) },
+      level: "error",
+      source: "whatsapp_webhook_post",
+      message: "Unhandled webhook POST error",
+      context: { error: err instanceof Error ? err.message : String(err) },
     });
-    return NextResponse.json({ ok: true, ignored: "unknown sender" });
+    return NextResponse.json({ ok: true }, { status: 200 });
   }
-
-  const { data: offer } = await admin
-    .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status")
-    .eq("cleaner_id", cleanerId)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const offerId = String((offer as { id?: string } | null)?.id ?? "");
-  const bookingId = String((offer as { booking_id?: string } | null)?.booking_id ?? "");
-  if (!offerId) {
-    return NextResponse.json({ ok: true, ignored: "no pending offer" });
-  }
-
-  if (reply === "1" || reply === "accept") {
-    const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
-    }
-    return NextResponse.json({ ok: true, action: "accepted", offerId });
-  }
-
-  if (reply === "2" || reply === "decline" || reply === "reject") {
-    const result = await rejectDispatchOffer({ supabase: admin, offerId, cleanerId });
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
-    }
-    if (bookingId) {
-      await ensureBookingAssignment(admin, bookingId, {
-        source: "whatsapp_offer_decline",
-        retryEscalation: 1,
-      });
-    }
-    return NextResponse.json({ ok: true, action: "declined", offerId });
-  }
-
-  return NextResponse.json({ ok: true, ignored: "unsupported reply" });
 }
