@@ -124,6 +124,77 @@ export async function enqueueDispatchRetry(
   return true;
 }
 
+/** Matches `public.enqueue_stranded_pending_bookings` scan window (SQL caps `p_limit` at 200). */
+const STRANDED_SCAN_LIMIT = 200;
+/** Matches default `p_limit` in `public.enqueue_stranded_pending_bookings(50)`. */
+const STRANDED_ENQUEUE_CAP = 50;
+
+/**
+ * Port of `public.enqueue_stranded_pending_bookings`: pending paid bookings with no cleaner, no pending
+ * offer, no pending retry row — enqueue `dispatch_retry_queue` with `last_reason = stranded_pending`
+ * so `processDispatchRetryQueue` can assign. Idempotent via {@link enqueueDispatchRetry}.
+ */
+export async function enqueueStrandedBookings(supabase: SupabaseClient): Promise<number> {
+  const { data: candidates, error } = await supabase
+    .from("bookings")
+    .select("id, created_at")
+    .eq("status", "pending")
+    .is("cleaner_id", null)
+    .not("location_id", "is", null)
+    .in("dispatch_status", ["searching", "offered", "failed"])
+    .order("created_at", { ascending: true })
+    .limit(STRANDED_SCAN_LIMIT);
+
+  if (error) {
+    await reportOperationalIssue("warn", "enqueueStrandedBookings/select", error.message, {});
+    return 0;
+  }
+
+  const rows = candidates ?? [];
+  if (rows.length === 0) return 0;
+
+  const ids = rows.map((r) => String((r as { id: string }).id)).filter(Boolean);
+  if (ids.length === 0) return 0;
+
+  const [{ data: pendingOffers }, { data: pendingRetries }] = await Promise.all([
+    supabase.from("dispatch_offers").select("booking_id").eq("status", "pending").in("booking_id", ids),
+    supabase.from("dispatch_retry_queue").select("booking_id").eq("status", "pending").in("booking_id", ids),
+  ]);
+
+  const offerBusy = new Set(
+    (pendingOffers ?? []).map((o) => String((o as { booking_id?: string }).booking_id ?? "")).filter(Boolean),
+  );
+  const retryBusy = new Set(
+    (pendingRetries ?? []).map((q) => String((q as { booking_id?: string }).booking_id ?? "")).filter(Boolean),
+  );
+
+  const sorted = [...rows].sort((a, b) => {
+    const ta = new Date(String((a as { created_at?: string }).created_at ?? "")).getTime();
+    const tb = new Date(String((b as { created_at?: string }).created_at ?? "")).getTime();
+    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+  });
+
+  let enqueued = 0;
+  for (const row of sorted) {
+    if (enqueued >= STRANDED_ENQUEUE_CAP) break;
+    const bookingId = String((row as { id: string }).id);
+    if (!bookingId || offerBusy.has(bookingId) || retryBusy.has(bookingId)) continue;
+
+    const inserted = await enqueueDispatchRetry(supabase, bookingId, "stranded_pending", { firstDelaySeconds: 1 });
+    if (inserted) {
+      enqueued++;
+      retryBusy.add(bookingId);
+    }
+  }
+
+  if (enqueued > 0) {
+    metrics.increment("dispatch.stranded.enqueued", { count: enqueued });
+    console.log("[Dispatch] stranded bookings enqueued", enqueued);
+  }
+
+  return enqueued;
+}
+
 type ProcessResult = { picked: number; assigned: number; abandoned: number; errors: number };
 
 /**

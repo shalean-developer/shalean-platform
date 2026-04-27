@@ -58,6 +58,7 @@
  *
  * --- Dispatch queue / caps (`[metric]` JSON logs → wire to dashboards) ---
  * - `dispatch.retry_queue.assigned` — assign succeeded from `dispatch_retry_queue` (fields: `retriesDone`).
+ * - `dispatch.stranded.enqueued` — batch from `enqueueStrandedBookings` (`count` = rows inserted this run).
  * - `dispatch.retry_queue.rescheduled` — failed wave rescheduled (`delaySec`, `retriesDone`).
  * - `dispatch.offer_cap_exceeded` — offer rows exceeded per-booking cap (`totalOffers`, `offerCap`).
  * - `dispatch.admin_terminal_reset` — admin reset terminal dispatch (`from` = prior `dispatch_status`).
