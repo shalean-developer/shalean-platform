@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { maxDispatchOffersPerBooking } from "@/lib/dispatch/dispatchAttemptLimits";
 import { notifyDispatchEscalationAdmin } from "@/lib/dispatch/dispatchEscalation";
-import { enqueueDispatchRetry } from "@/lib/dispatch/dispatchRetryQueue";
+import { enqueueDispatchRetry, enqueueStrandedBookings } from "@/lib/dispatch/dispatchRetryQueue";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 
@@ -13,6 +13,8 @@ export type RunDispatchTimeoutsResult = {
   reassignmentQueued: number;
   offerCapHits: number;
   errors: number;
+  /** Bookings re-injected via `enqueueStrandedBookings` (parity with SQL `enqueue_stranded_pending_bookings`). */
+  strandedEnqueued: number;
 };
 
 /** Jittered 30–60s before reassignment after TTL expiry (reduces back-to-back cleaner pings). */
@@ -38,6 +40,22 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
     reassignmentQueued: 0,
     offerCapHits: 0,
     errors: 0,
+    strandedEnqueued: 0,
+  };
+
+  const runStrandedPass = async () => {
+    try {
+      out.strandedEnqueued = await enqueueStrandedBookings(supabase);
+    } catch (e) {
+      out.errors++;
+      const msg = e instanceof Error ? e.message : String(e);
+      await logSystemEvent({
+        level: "error",
+        source: "runDispatchTimeouts",
+        message: msg,
+        context: { step: "enqueue_stranded" },
+      });
+    }
   };
 
   const { data: expiredOffers, error } = await supabase
@@ -56,6 +74,7 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
       message: error.message,
       context: { step: "select_expired" },
     });
+    await runStrandedPass();
     return out;
   }
 
@@ -230,5 +249,6 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
     }
   }
 
+  await runStrandedPass();
   return out;
 }
