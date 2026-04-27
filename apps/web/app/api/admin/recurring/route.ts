@@ -8,6 +8,94 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function previewFromBookingTemplate(template: unknown): {
+  customerEmail: string | null;
+  customerName: string | null;
+  visitDate: string | null;
+  visitTime: string | null;
+  location: string | null;
+} {
+  if (!template || typeof template !== "object" || Array.isArray(template)) {
+    return { customerEmail: null, customerName: null, visitDate: null, visitTime: null, location: null };
+  }
+  const t = template as Record<string, unknown>;
+  const cust = t.customer && typeof t.customer === "object" && !Array.isArray(t.customer) ? (t.customer as Record<string, unknown>) : null;
+  const email = typeof cust?.email === "string" ? cust.email.trim() : null;
+  const name = typeof cust?.name === "string" ? cust.name.trim() : null;
+  const flat =
+    t.flat && typeof t.flat === "object" && !Array.isArray(t.flat) ? (t.flat as Record<string, unknown>) : null;
+  const locked =
+    t.locked && typeof t.locked === "object" && !Array.isArray(t.locked) ? (t.locked as Record<string, unknown>) : null;
+  const visitDate =
+    (typeof flat?.date === "string" && flat.date) || (typeof locked?.date === "string" && locked.date) || null;
+  const visitTime =
+    (typeof flat?.time === "string" && flat.time) || (typeof locked?.time === "string" && locked.time) || null;
+  const locRaw =
+    (typeof flat?.location === "string" && flat.location) ||
+    (typeof locked?.location === "string" && locked.location) ||
+    "";
+  const location = locRaw ? locRaw.trim().slice(0, 160) : null;
+  return {
+    customerEmail: email || null,
+    customerName: name || null,
+    visitDate: visitDate || null,
+    visitTime: visitTime || null,
+    location,
+  };
+}
+
+/**
+ * Admin: list recurring plans (slim rows + snapshot preview; omits full `booking_snapshot_template` blob).
+ */
+export async function GET(request: Request) {
+  const auth = await requireAdminSession(request);
+  if (!auth.ok) return auth.response;
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+  const { data, error } = await admin
+    .from("recurring_bookings")
+    .select(
+      "id, customer_id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, created_at, updated_at, booking_snapshot_template",
+    )
+    .order("updated_at", { ascending: false })
+    .limit(300);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const recurring = (data ?? []).map((raw) => {
+    const row = raw as Record<string, unknown>;
+    const template = row.booking_snapshot_template;
+    const p = previewFromBookingTemplate(template);
+    return {
+      id: String(row.id ?? ""),
+      customer_id: String(row.customer_id ?? ""),
+      address_id: row.address_id != null ? String(row.address_id) : null,
+      frequency: String(row.frequency ?? ""),
+      days_of_week: Array.isArray(row.days_of_week) ? (row.days_of_week as number[]) : [],
+      start_date: row.start_date != null ? String(row.start_date) : null,
+      end_date: row.end_date != null ? String(row.end_date) : null,
+      price: typeof row.price === "number" ? row.price : Number(row.price) || 0,
+      status: String(row.status ?? ""),
+      next_run_date: row.next_run_date != null ? String(row.next_run_date) : "",
+      last_generated_at: row.last_generated_at != null ? String(row.last_generated_at) : null,
+      skip_next_occurrence_date: row.skip_next_occurrence_date != null ? String(row.skip_next_occurrence_date) : null,
+      monthly_pattern: String(row.monthly_pattern ?? ""),
+      monthly_nth: row.monthly_nth != null ? Number(row.monthly_nth) : null,
+      created_at: row.created_at != null ? String(row.created_at) : null,
+      updated_at: row.updated_at != null ? String(row.updated_at) : null,
+      customer_email: p.customerEmail,
+      customer_name: p.customerName,
+      template_visit_date: p.visitDate,
+      template_visit_time: p.visitTime,
+      template_location: p.location,
+    };
+  });
+
+  return NextResponse.json({ recurring });
+}
+
 function isIntArrayDays(v: unknown): v is number[] {
   return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "number" && x >= 1 && x <= 7);
 }

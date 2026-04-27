@@ -19,6 +19,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/admin" },
       { label: "Bookings", href: "/admin/bookings" },
+      { label: "Recurring", href: "/admin/recurring" },
       { label: "Payouts", href: "/admin/payouts" },
       { label: "Pricing", href: "/admin/pricing" },
       { label: "Analytics", href: "/admin/analytics" },
