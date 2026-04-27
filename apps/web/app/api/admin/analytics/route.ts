@@ -33,11 +33,6 @@ type CleanerApplicationRow = {
   created_at: string | null;
 };
 
-type SubscriptionRow = {
-  status: string | null;
-  next_booking_date: string | null;
-};
-
 function ymd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -81,7 +76,7 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const [bookingsRes, offersRes, cleanersRes, eventsRes, appsRes, subsRes, demandSupply] = await Promise.all([
+  const [bookingsRes, offersRes, cleanersRes, eventsRes, appsRes, demandSupply] = await Promise.all([
     admin
       .from("bookings")
       .select("id, created_at, status, dispatch_status, total_paid_zar, amount_paid_cents, surge_multiplier")
@@ -95,7 +90,6 @@ export async function GET(request: Request) {
     admin.from("cleaners").select("id, is_available").limit(4000),
     admin.from("user_events").select("event_type, created_at").order("created_at", { ascending: false }).limit(12000),
     admin.from("cleaner_applications").select("status, created_at").order("created_at", { ascending: false }).limit(12000),
-    admin.from("subscriptions").select("status, next_booking_date").limit(12000),
     getDemandSupplySnapshot(admin),
   ]);
 
@@ -103,14 +97,11 @@ export async function GET(request: Request) {
   if (offersRes.error) return NextResponse.json({ error: offersRes.error.message }, { status: 500 });
   if (cleanersRes.error) return NextResponse.json({ error: cleanersRes.error.message }, { status: 500 });
   if (appsRes.error) return NextResponse.json({ error: appsRes.error.message }, { status: 500 });
-  if (subsRes.error) return NextResponse.json({ error: subsRes.error.message }, { status: 500 });
 
   const bookings = (bookingsRes.data ?? []) as BookingRow[];
   const offers = (offersRes.data ?? []) as OfferRow[];
   const events = (eventsRes.data ?? []) as Array<{ event_type?: string | null; created_at?: string | null }>;
   const applications = (appsRes.data ?? []) as CleanerApplicationRow[];
-  const subscriptions = (subsRes.data ?? []) as SubscriptionRow[];
-
   const today = todayYmd();
   const bookingsToday = bookings.filter((b) => String(b.created_at ?? "").slice(0, 10) === today);
   const revenueToday = bookingsToday.reduce((s, b) => s + safeRevenue(b), 0);
@@ -118,10 +109,9 @@ export async function GET(request: Request) {
   const newApplicantsToday = applications.filter((a) => String(a.created_at ?? "").slice(0, 10) === today).length;
   const approvedCleaners = applications.filter((a) => String(a.status ?? "").toLowerCase() === "approved").length;
   const activeCleaners = (cleanersRes.data ?? []).filter((c) => c.is_available === true).length;
-  const activeSubscriptions = subscriptions.filter((s) => String(s.status ?? "").toLowerCase() === "active").length;
-  const upcomingSubscriptions = subscriptions.filter(
-    (s) => String(s.status ?? "").toLowerCase() === "active" && String(s.next_booking_date ?? "") >= today,
-  ).length;
+  /** Phase 2A: legacy `subscriptions` table no longer queried — recurring plans use `recurring_bookings`. */
+  const activeSubscriptions = 0;
+  const upcomingSubscriptions = 0;
 
   const assignedToday = bookingsToday.filter((b) => String(b.dispatch_status ?? "").toLowerCase() === "assigned").length;
   const dispatchAttemptedToday = bookingsToday.filter((b) =>

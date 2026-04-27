@@ -41,14 +41,8 @@ export async function loadCustomerGrowthContext(
     }
   }
 
-  const { data: sub } = await admin
-    .from("subscriptions")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-  const hasActiveSubscription = Boolean(sub?.id);
+  // Phase 2A: legacy `subscriptions` removed — use `recurring_bookings` for active plans when wiring LTV/retention.
+  const hasActiveSubscription = false;
 
   let email: string | null = null;
   try {

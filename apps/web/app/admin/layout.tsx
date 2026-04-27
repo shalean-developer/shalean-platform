@@ -42,7 +42,6 @@ const NAV_GROUPS: readonly NavGroup[] = [
       { label: "Marketing", href: "/admin/marketing" },
       { label: "Conversion", href: "/admin/conversion" },
       { label: "Referrals", href: "/admin/referrals" },
-      { label: "Subscriptions", href: "/admin/subscriptions" },
     ],
   },
   {

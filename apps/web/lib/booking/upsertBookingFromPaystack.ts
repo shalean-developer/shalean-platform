@@ -21,7 +21,6 @@ import { loadCustomerGrowthContext, persistCustomerSegmentRow } from "@/lib/grow
 import { logPostBookingGrowthDecision } from "@/lib/growth/postBookingGrowthHint";
 import { syncUserPrimaryCityFromBooking } from "@/lib/growth/syncPrimaryCity";
 import { createPendingCustomerReferral, processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/server";
-import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   checkoutDispatchOfferTtlSeconds,
@@ -393,23 +392,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       subscriptionFrequencyRaw === "weekly" ||
       subscriptionFrequencyRaw === "biweekly" ||
       subscriptionFrequencyRaw === "monthly"
-        ? (subscriptionFrequencyRaw as SubscriptionFrequency)
+        ? subscriptionFrequencyRaw
         : null;
-    if (subscriptionFrequency && userIdResolved && locked?.date && locked.time) {
-      await createSubscriptionFromBooking({
-        admin: supabase,
-        userId: userIdResolved,
-        serviceType: String(row.service ?? "cleaning"),
-        frequency: subscriptionFrequency,
-        dateYmd: locked.date,
-        timeSlot: locked.time,
-        address: String(row.location ?? ""),
-        pricePerVisit: Number(row.total_paid_zar ?? Math.round(input.amountCents / 100)),
-        cityId,
-        paystackCustomerCode: input.paystackCustomerCode ?? null,
-        authorizationCode: input.paystackAuthorizationCode ?? null,
-        paymentDate: input.paidAtIso ?? null,
-      });
+    // Phase 2A: legacy `subscriptions` table deprecated — use `recurring_bookings` only.
+    if (subscriptionFrequency) {
+      console.warn("Subscriptions deprecated — ignoring subscriptionFrequency", { subscriptionFrequency });
     }
 
     /** Customer-picked cleaner: dispatch offer first; assignment finalizes on accept (see `acceptDispatchOffer`). */

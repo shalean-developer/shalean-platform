@@ -102,7 +102,7 @@ export default function AdminOperationsPage() {
       <section className="space-y-1">
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Operations analytics</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Dispatch, supply, subscriptions, and legacy funnel metrics from{" "}
+          Dispatch, supply, recurring (legacy subscription counts retired), and funnel metrics from{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">/api/admin/analytics</code>.
         </p>
       </section>
@@ -167,13 +167,17 @@ export default function AdminOperationsPage() {
 
           <section className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Subscription plans</h2>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Legacy subscriptions (retired)</h2>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Phase 2A: canonical recurring is <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">recurring_bookings</code>{" "}
+                (admin UI next). Counts here stay zero.
+              </p>
               <div className="mt-3 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                 <p>
-                  Total active subscriptions: <span className="font-semibold">{data.subscriptions.active}</span>
+                  Total active (legacy table): <span className="font-semibold">{data.subscriptions.active}</span>
                 </p>
                 <p>
-                  Upcoming subscription bookings: <span className="font-semibold">{data.subscriptions.upcoming}</span>
+                  Upcoming (legacy table): <span className="font-semibold">{data.subscriptions.upcoming}</span>
                 </p>
               </div>
             </div>

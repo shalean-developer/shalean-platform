@@ -114,7 +114,7 @@ export function BookingHeader() {
           <Link href="/dashboard/bookings">My Bookings</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href="/account/subscriptions">Profile</Link>
+          <Link href="/dashboard/profile">Profile</Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

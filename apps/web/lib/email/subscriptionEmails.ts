@@ -19,7 +19,7 @@ export async function sendSubscriptionPrechargeReminderEmail(params: {
   serviceLabel: string;
   dateYmd: string;
 }): Promise<void> {
-  const url = `${getPublicAppUrlBase()}/account/subscriptions`;
+  const url = `${getPublicAppUrlBase()}/account/recurring`;
   await send(
     params.to,
     "Your cleaning is scheduled for tomorrow",
@@ -58,7 +58,7 @@ export async function sendSubscriptionChargeFailedEmail(params: {
   to: string;
   serviceLabel: string;
 }): Promise<void> {
-  const url = `${getPublicAppUrlBase()}/account/subscriptions`;
+  const url = `${getPublicAppUrlBase()}/account/recurring`;
   await send(
     params.to,
     "Payment failed, please update your card",
