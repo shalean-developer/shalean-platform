@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, MapPin, Navigation } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ChevronRight, MapPin, Navigation } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,8 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { bookingRowToMobileView, deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
+import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
+import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
 import { CleanerJobEarningsRow } from "@/components/cleaner/mobile/CleanerJobEarningsRow";
 
 export default function CleanerJobDetailPage() {
@@ -19,6 +21,9 @@ export default function CleanerJobDetailPage() {
   const [row, setRow] = useState<CleanerBookingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [ackTick, setAckTick] = useState(0);
 
   const load = useCallback(async () => {
     const headers = getCleanerIdHeaders();
@@ -42,8 +47,48 @@ export default function CleanerJobDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    void load();
+    const tid = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(tid);
   }, [load]);
+
+  const availabilityAcked = useMemo(() => {
+    void ackTick;
+    return id ? readTeamAvailabilityAckSet().has(id) : false;
+  }, [id, ackTick]);
+
+  const postJobAction = useCallback(
+    async (action: CleanerJobAction) => {
+      const headers = getCleanerIdHeaders();
+      if (!headers || !id) {
+        setActionMsg("Not signed in.");
+        return;
+      }
+      setActionMsg(null);
+      setActing(true);
+      try {
+        const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const json = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok) {
+          setActionMsg(json.error ?? "Could not update job.");
+          return;
+        }
+        if (action === "accept" && row?.is_team_job === true) {
+          addTeamAvailabilityAck(id);
+          setAckTick((t) => t + 1);
+        }
+        await load();
+      } catch {
+        setActionMsg("Network error.");
+      } finally {
+        setActing(false);
+      }
+    },
+    [id, load, row],
+  );
 
   if (loading) {
     return (
@@ -87,6 +132,9 @@ export default function CleanerJobDetailPage() {
         : phase === "en_route"
           ? "On the way"
           : "Assigned";
+
+  const showLifecycleActions = phase !== "completed";
+  const isTeam = row.is_team_job === true;
 
   const telDigits = view.phone.replace(/\s/g, "");
   const telHref = telDigits ? `tel:${telDigits}` : null;
@@ -181,7 +229,70 @@ export default function CleanerJobDetailPage() {
                 <p className="mt-1 text-zinc-800 dark:text-zinc-100">{view.notes}</p>
               </div>
             ) : null}
-            <div className="flex flex-col gap-2 pt-2">
+            {actionMsg ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/35 dark:text-amber-100">
+                {actionMsg}
+              </p>
+            ) : null}
+
+            {phase === "completed" ? (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100">
+                {row.payout_id
+                  ? "Job completed — your earnings are recorded for payout."
+                  : "Job completed — payout will appear in earnings once processed."}
+              </p>
+            ) : null}
+
+            <div className="flex flex-col gap-2.5 pt-2">
+              {showLifecycleActions && phase === "in_progress" ? (
+                <Button
+                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                  disabled={acting}
+                  onClick={() => void postJobAction("complete")}
+                >
+                  <span className="flex w-full items-center justify-center gap-1">
+                    {acting ? "Saving…" : "Complete job"}
+                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                  </span>
+                </Button>
+              ) : null}
+              {showLifecycleActions && isTeam && phase === "assigned" && !availabilityAcked ? (
+                <Button
+                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                  disabled={acting}
+                  onClick={() => void postJobAction("accept")}
+                >
+                  <span className="flex w-full items-center justify-center gap-1">
+                    {acting ? "Saving…" : "Confirm availability"}
+                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                  </span>
+                </Button>
+              ) : null}
+              {showLifecycleActions && phase === "assigned" && (!isTeam || availabilityAcked) ? (
+                <Button
+                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                  disabled={acting}
+                  onClick={() => void postJobAction("en_route")}
+                >
+                  <span className="flex w-full items-center justify-center gap-1">
+                    {acting ? "Saving…" : "On the way"}
+                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                  </span>
+                </Button>
+              ) : null}
+              {showLifecycleActions && phase === "en_route" ? (
+                <Button
+                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                  disabled={acting}
+                  onClick={() => void postJobAction("start")}
+                >
+                  <span className="flex w-full items-center justify-center gap-1">
+                    {acting ? "Saving…" : "Start job"}
+                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                  </span>
+                </Button>
+              ) : null}
+
               <Button variant="outline" size="lg" className="h-12 w-full rounded-xl text-base" asChild>
                 <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
                   <Navigation className="h-4 w-4" aria-hidden />
