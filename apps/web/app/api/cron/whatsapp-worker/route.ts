@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       succeeded: result.ok,
       failed: result.failed,
       queue_metrics: result.queue_metrics,
+      worker_meta: result.worker_meta,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

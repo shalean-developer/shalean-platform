@@ -5,7 +5,8 @@ export type SegmentKey = "new" | "repeat" | "loyal" | "churned";
 
 /** Mirrors {@link GrowthAction} / {@link GrowthChannel} without importing server-only growth modules into shared types. */
 export type GrowthActionKey = "offer_discount" | "upsell" | "do_nothing";
-export type GrowthChannelKey = "whatsapp" | "email";
+/** Growth outbound: email-first; SMS only when there is no email or as post-email fallback (orchestrated in cron, not WhatsApp). */
+export type GrowthChannelKey = "email" | "sms";
 
 export type AiDecisionScope = "pricing" | "assignment" | "growth";
 

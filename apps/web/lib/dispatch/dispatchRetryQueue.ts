@@ -11,6 +11,30 @@ function addMinutesIso(minutes: number): string {
 }
 
 /**
+ * Phase 8E: first retry delay from recent cleaner response latencies (bounded).
+ * Set `DISPATCH_ADAPTIVE_RETRY=false` to always use {@link DISPATCH_RETRY_DELAYS_MIN}[0].
+ */
+export async function resolveAdaptiveFirstRetryDelayMin(supabase: SupabaseClient): Promise<number> {
+  const base = DISPATCH_RETRY_DELAYS_MIN[0] ?? 2;
+  if (String(process.env.DISPATCH_ADAPTIVE_RETRY ?? "").toLowerCase() === "false") return base;
+
+  const { data } = await supabase
+    .from("dispatch_offers")
+    .select("response_latency_ms")
+    .not("response_latency_ms", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  const arr = (data ?? [])
+    .map((r) => Number((r as { response_latency_ms?: number | null }).response_latency_ms))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (arr.length < 10) return base;
+
+  const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+  return Math.min(8, Math.max(2, Math.round(avg / 120_000)));
+}
+
+/**
  * Queue a paid booking for a later auto-assign attempt (no duplicate pending rows).
  */
 export async function enqueueDispatchRetry(
@@ -27,7 +51,7 @@ export async function enqueueDispatchRetry(
 
   if (pending) return;
 
-  const firstDelay = DISPATCH_RETRY_DELAYS_MIN[0] ?? 2;
+  const firstDelay = await resolveAdaptiveFirstRetryDelayMin(supabase);
   const { error } = await supabase.from("dispatch_retry_queue").insert({
     booking_id: bookingId,
     retries_done: 0,

@@ -7,6 +7,8 @@ import {
 } from "@/lib/pay/paymentLinkDeliveryEvents";
 
 function result(by: AdminPaymentLinkDeliveryResult["byChannel"]): AdminPaymentLinkDeliveryResult {
+  const email = by.email === "sent" ? "sent" : by.email === "failed" ? "failed" : "skipped";
+  const sms = by.sms === "sent" ? "sent" : by.sms === "failed" ? "failed" : "skipped";
   return {
     whatsappOk: null,
     smsOk: null,
@@ -14,6 +16,8 @@ function result(by: AdminPaymentLinkDeliveryResult["byChannel"]): AdminPaymentLi
     primaryChannel: "none",
     fallbackTrace: "",
     byChannel: by,
+    smsDeliveryRole: "none",
+    delivery: { email, sms },
   };
 }
 

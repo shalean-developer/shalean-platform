@@ -14,8 +14,75 @@ import type { GrowthRoiCandidate } from "@/lib/ai-autonomy/types";
 import { logAiDecision } from "@/lib/ai-autonomy/decisionLog";
 import { assignExperimentVariant } from "@/lib/ai-autonomy/experiments";
 
+function hasEmailFlag(input: DecideGrowthActionInput): boolean {
+  return input.hasEmail !== false;
+}
+
+function hasPhoneFlag(input: DecideGrowthActionInput): boolean {
+  return input.hasPhone === true;
+}
+
+function buildGrowthRoiCandidates(
+  input: DecideGrowthActionInput,
+  w: Awaited<ReturnType<typeof getGrowthWeights>>,
+  baseConvEmail: { probability: number },
+  baseConvSms: { probability: number },
+): GrowthRoiCandidate[] {
+  const hasEmail = hasEmailFlag(input);
+  const hasPhone = hasPhoneFlag(input);
+
+  if (!hasEmail && !hasPhone) {
+    return [{ action: "do_nothing", channel: "email", predictedRoi: w.nothingRoiPrior, reason: "roi_no_contact" }];
+  }
+
+  if (!hasEmail && hasPhone) {
+    return [
+      {
+        action: "offer_discount",
+        channel: "sms",
+        predictedRoi: w.discountRoiPrior * baseConvSms.probability * (input.retention === "churned" ? 1.15 : 1),
+        reason: "roi_model_discount_sms",
+      },
+      {
+        action: "upsell",
+        channel: "sms",
+        predictedRoi: w.upsellRoiPrior * baseConvSms.probability * (input.ltv.ltv_score === "high" ? 1.12 : 1),
+        reason: "roi_model_upsell_sms",
+      },
+      {
+        action: "do_nothing",
+        channel: "sms",
+        predictedRoi: w.nothingRoiPrior,
+        reason: "roi_model_hold_sms",
+      },
+    ];
+  }
+
+  return [
+    {
+      action: "offer_discount",
+      channel: "email",
+      predictedRoi: w.discountRoiPrior * baseConvEmail.probability * (input.retention === "churned" ? 1.25 : 1),
+      reason: "roi_model_discount_email",
+    },
+    {
+      action: "upsell",
+      channel: "email",
+      predictedRoi: w.upsellRoiPrior * baseConvEmail.probability * (input.ltv.ltv_score === "high" ? 1.2 : 1),
+      reason: "roi_model_upsell_email",
+    },
+    {
+      action: "do_nothing",
+      channel: "email",
+      predictedRoi: w.nothingRoiPrior,
+      reason: "roi_model_hold_email",
+    },
+  ];
+}
+
 /**
  * Rule-based growth decision first; optional ROI ranking using lightweight conversion priors + stored weights.
+ * AI may only choose among **email** candidates when email exists; **SMS** candidates exist only when there is no email (phone-only).
  */
 export async function decideGrowthActionWithAi(
   admin: SupabaseClient | null | undefined,
@@ -43,7 +110,7 @@ export async function decideGrowthActionWithAi(
     const w = await getGrowthWeights(admin);
     const hour = new Date().getUTCHours();
     const dow = new Date().getUTCDay();
-    const baseConv = await predictConversionProbability(
+    const baseConvEmail = await predictConversionProbability(
       {
         segment: input.segment,
         price: 1200,
@@ -53,39 +120,18 @@ export async function decideGrowthActionWithAi(
       },
       admin,
     );
+    const baseConvSms = await predictConversionProbability(
+      {
+        segment: input.segment,
+        price: 1200,
+        hourOfDay: hour,
+        dayOfWeek: dow,
+        channel: "sms",
+      },
+      admin,
+    );
 
-    const candidates: GrowthRoiCandidate[] = [
-      {
-        action: "offer_discount",
-        channel: "email",
-        predictedRoi: w.discountRoiPrior * baseConv.probability * (input.retention === "churned" ? 1.25 : 1),
-        reason: "roi_model_discount",
-      },
-      {
-        action: "offer_discount",
-        channel: "whatsapp",
-        predictedRoi: w.discountRoiPrior * baseConv.probability * 0.92,
-        reason: "roi_model_discount_wa",
-      },
-      {
-        action: "upsell",
-        channel: "email",
-        predictedRoi: w.upsellRoiPrior * baseConv.probability * (input.ltv.ltv_score === "high" ? 1.2 : 1),
-        reason: "roi_model_upsell",
-      },
-      {
-        action: "upsell",
-        channel: "whatsapp",
-        predictedRoi: w.upsellRoiPrior * baseConv.probability * (input.retention === "at_risk" ? 1.08 : 0.95),
-        reason: "roi_model_upsell_wa",
-      },
-      {
-        action: "do_nothing",
-        channel: "email",
-        predictedRoi: w.nothingRoiPrior,
-        reason: "roi_model_hold",
-      },
-    ];
+    let candidates = buildGrowthRoiCandidates(input, w, baseConvEmail, baseConvSms);
 
     if (input.discountBudgetOk === false) {
       for (const c of candidates) {
@@ -101,7 +147,14 @@ export async function decideGrowthActionWithAi(
 
     await logAiDecision(admin, {
       decision_type: "growth",
-      context: { segment: input.segment, retention: input.retention, ltv: input.ltv.ltv_score, experiment: exp },
+      context: {
+        segment: input.segment,
+        retention: input.retention,
+        ltv: input.ltv.ltv_score,
+        experiment: exp,
+        channel: opt.chosen.channel,
+        growth_policy: "email_first_sms_fallback",
+      },
       prediction: opt.predictions,
       chosen_action: opt.chosen,
     });

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
+import { type MetaWhatsAppDeliveryResult, sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 
 /**
  * Direct Meta Cloud API text send (same path as dispatch `sendViaMetaWhatsApp`).
@@ -9,6 +9,6 @@ import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 export async function sendTestWhatsApp(
   phone: string,
   message = `Shalean WhatsApp test ${new Date().toISOString()}`,
-): Promise<{ messageId: string }> {
+): Promise<MetaWhatsAppDeliveryResult> {
   return sendViaMetaWhatsApp({ phone, message, recipientRole: "cleaner" });
 }

@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 type Row = {
   id: string;
+  user_id: string | null;
   status: string | null;
   payment_link: string | null;
   payment_link_expires_at: string | null;
@@ -91,7 +92,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const { data: row, error } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
+      "id, user_id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
     )
     .eq("id", bookingId.trim())
     .maybeSingle();
@@ -204,6 +205,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     phone: phone || null,
     email: email || null,
     mode: notificationMode,
+    supabaseAdmin: admin,
+    bookingId: r.id,
+    userId: r.user_id,
     phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
     emailPayload: {
       customerEmail: email,

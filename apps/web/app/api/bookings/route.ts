@@ -1,7 +1,7 @@
 import {
-  triggerWhatsAppNotification,
   type CreatedBookingRecord,
-} from "@/lib/booking/triggerWhatsAppNotification";
+  sendCleanerJobAssignedWhatsApp,
+} from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { pickAvailableCleaner } from "@/lib/booking/pickAvailableCleaner";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -236,20 +236,20 @@ export async function POST(req: Request) {
 
       if (assigned && isDbBookingRow(assigned)) {
         bookingRow = assigned;
-        void triggerWhatsAppNotification(assigned as CreatedBookingRecord, {
+        void sendCleanerJobAssignedWhatsApp(assigned as CreatedBookingRecord, {
           recipientPhone: cleaner.phone,
           cleanerDisplayName: cleaner.fullName,
-          variant: "cleaner_job_assigned",
+          cleanerId: cleaner.id,
         });
       } else {
         const reread = await fetchBookingRow(admin, data.id);
         if (reread && isDbBookingRow(reread) && reread.cleaner_id) {
           bookingRow = reread;
           if (reread.cleaner_id === cleaner.id) {
-            void triggerWhatsAppNotification(reread as CreatedBookingRecord, {
+            void sendCleanerJobAssignedWhatsApp(reread as CreatedBookingRecord, {
               recipientPhone: cleaner.phone,
               cleanerDisplayName: cleaner.fullName,
-              variant: "cleaner_job_assigned",
+              cleanerId: cleaner.id,
             });
           }
         } else {

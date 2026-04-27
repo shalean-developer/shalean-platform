@@ -1,9 +1,15 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { learnFromGrowthConversion } from "@/lib/ai-autonomy/learningLoop";
+import {
+  learnConversionExperimentPerformance,
+  type ConversionExperimentPerformanceRow,
+} from "@/lib/conversion/conversionExperimentAnalytics";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
-export type GrowthOutcomeChannel = "email" | "whatsapp" | "sms";
+/** Growth attribution channel — matches `growth_action_outcomes.channel` check constraint. */
+export type GrowthOutcomeChannel = "email" | "sms" | "whatsapp";
 
 export function growthAttributionWindowDays(): number {
   const raw = Number(process.env.GROWTH_OUTCOME_ATTRIBUTION_DAYS ?? "90");
@@ -73,7 +79,7 @@ export async function attributePaidBookingToGrowthOutcomes(params: {
 
   const { data: candidate, error } = await params.admin
     .from("growth_action_outcomes")
-    .select("id")
+    .select("id, action_type, channel")
     .eq("user_id", uid)
     .eq("converted", false)
     .lte("sent_at", params.paidAtIso)
@@ -101,6 +107,9 @@ export async function attributePaidBookingToGrowthOutcomes(params: {
       bookingId: params.bookingId,
       outcomeId: (candidate as { id: string }).id,
     });
+  } else {
+    const act = String((candidate as { action_type?: string }).action_type ?? "unknown");
+    void learnFromGrowthConversion(params.admin, { userId: uid, actionType: act });
   }
 }
 
@@ -122,13 +131,20 @@ export type LearnGrowthEffectivenessParams = {
   channel?: GrowthOutcomeChannel;
 };
 
+export type LearnGrowthEffectivenessResult = {
+  growth_rows: GrowthEffectivenessRow[];
+  /** Payment / comms conversion experiments (exposures + paid outcomes). */
+  conversion_experiments: ConversionExperimentPerformanceRow[];
+};
+
 /**
- * Aggregates growth sends vs conversions for campaign review and future auto-optimization.
+ * Aggregates growth sends vs conversions for campaign review and future auto-optimization,
+ * plus conversion A/B performance (Phase 6).
  */
 export async function learnGrowthEffectiveness(
   admin: SupabaseClient,
   params?: LearnGrowthEffectivenessParams,
-): Promise<GrowthEffectivenessRow[]> {
+): Promise<LearnGrowthEffectivenessResult> {
   const since =
     params?.sinceIso ??
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -145,37 +161,41 @@ export async function learnGrowthEffectiveness(
     q = q.eq("channel", params.channel);
   }
 
-  const { data, error } = await q;
-  if (error || !data?.length) {
-    if (error) {
-      await reportOperationalIssue("warn", "growthActionOutcomes/learn", error.message, { since });
-    }
-    return [];
+  const [growthRes, conversion_experiments] = await Promise.all([
+    q,
+    learnConversionExperimentPerformance(admin, { sinceIso: since }),
+  ]);
+
+  const { data, error } = growthRes;
+  if (error) {
+    await reportOperationalIssue("warn", "growthActionOutcomes/learn", error.message, { since });
   }
 
-  type Row = { action_type: string; channel: string; converted: boolean; revenue_generated: number | null };
   const byKey = new Map<string, { sends: number; conversions: number; totalRevenue: number }>();
 
-  for (const raw of data as Row[]) {
-    const action_type = String(raw.action_type ?? "unknown");
-    const channel = String(raw.channel ?? "unknown");
-    const key = `${action_type}\t${channel}`;
-    const cur = byKey.get(key) ?? { sends: 0, conversions: 0, totalRevenue: 0 };
-    cur.sends += 1;
-    if (raw.converted) {
-      cur.conversions += 1;
-      cur.totalRevenue += Math.max(0, Math.round(Number(raw.revenue_generated ?? 0)));
+  if (data?.length) {
+    type Row = { action_type: string; channel: string; converted: boolean; revenue_generated: number | null };
+    for (const raw of data as Row[]) {
+      const action_type = String(raw.action_type ?? "unknown");
+      const channel = String(raw.channel ?? "unknown");
+      const key = `${action_type}\t${channel}`;
+      const cur = byKey.get(key) ?? { sends: 0, conversions: 0, totalRevenue: 0 };
+      cur.sends += 1;
+      if (raw.converted) {
+        cur.conversions += 1;
+        cur.totalRevenue += Math.max(0, Math.round(Number(raw.revenue_generated ?? 0)));
+      }
+      byKey.set(key, cur);
     }
-    byKey.set(key, cur);
   }
 
-  const out: GrowthEffectivenessRow[] = [];
+  const growth_rows: GrowthEffectivenessRow[] = [];
   for (const [key, v] of byKey) {
     const [action_type, channel] = key.split("\t");
     const conversion_rate = v.sends > 0 ? v.conversions / v.sends : 0;
     const avg_revenue_per_conversion_cents =
       v.conversions > 0 ? Math.round(v.totalRevenue / v.conversions) : null;
-    out.push({
+    growth_rows.push({
       action_type,
       channel,
       sends: v.sends,
@@ -186,6 +206,6 @@ export async function learnGrowthEffectiveness(
     });
   }
 
-  out.sort((a, b) => b.total_revenue_cents - a.total_revenue_cents || b.conversions - a.conversions);
-  return out;
+  growth_rows.sort((a, b) => b.total_revenue_cents - a.total_revenue_cents || b.conversions - a.conversions);
+  return { growth_rows, conversion_experiments };
 }

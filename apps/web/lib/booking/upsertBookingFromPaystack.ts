@@ -14,6 +14,8 @@ import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
+import { learnFromPaymentSuccess } from "@/lib/ai-autonomy/learningLoop";
+import { recordConversionExperimentResultsOnPayment } from "@/lib/conversion/conversionExperimentOutcomes";
 import { attributePaidBookingToGrowthOutcomes } from "@/lib/growth/growthActionOutcomes";
 import { loadCustomerGrowthContext, persistCustomerSegmentRow } from "@/lib/growth/loadCustomerGrowthContext";
 import { logPostBookingGrowthDecision } from "@/lib/growth/postBookingGrowthHint";
@@ -620,6 +622,17 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       bookingId: id,
       amountCents: input.amountCents,
       paidAtIso: paidMoment,
+    });
+    void recordConversionExperimentResultsOnPayment(supabase, {
+      bookingId: id,
+      userId: userIdForEffects,
+      revenueCents: input.amountCents,
+      paidAtIso: paidMoment,
+    });
+    void learnFromPaymentSuccess(supabase, {
+      userId: userIdForEffects,
+      bookingId: id,
+      amountCents: input.amountCents,
     });
     if (userIdForEffects) {
       const uid = userIdForEffects;

@@ -67,6 +67,8 @@ export async function sendTerminalQueueFailureSmsIfEligible(
       channel: "whatsapp_queue_terminal_fallback",
       queue_terminal_failure: true,
     },
+    smsRole: "fallback",
+    recipientKind: "cleaner",
   });
 
   await logSystemEvent({

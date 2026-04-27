@@ -56,23 +56,20 @@ export async function POST(request: Request) {
     text_len: message.length,
   };
 
-  try {
-    const { messageId } = await sendTestWhatsApp(phone, message);
+  const result = await sendTestWhatsApp(phone, message);
+  if (result.ok) {
     return NextResponse.json({
       ok: true,
-      messageId,
+      messageId: result.messageId,
       requestPayloadPreview: payloadPreview,
-      note: "Check server logs for [WhatsApp Meta] POST /messages ok|error and full Graph response preview.",
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: msg,
-        requestPayloadPreview: payloadPreview,
-      },
-      { status: 502 },
-    );
   }
+  return NextResponse.json(
+    {
+      ok: false,
+      error: result.error ?? "send failed",
+      requestPayloadPreview: payloadPreview,
+    },
+    { status: 502 },
+  );
 }

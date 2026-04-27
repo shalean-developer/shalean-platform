@@ -14,8 +14,12 @@ export type PaymentLinkDecisionIntent = "initial_send" | "reminder" | "admin_res
 
 export type PaymentLinkDeliveryChannelState = "sent" | "failed" | "skipped" | null;
 
+/** Who receives the outbound message — drives channel policy before cost/risk tuning. */
+export type MessageTarget = "cleaner" | "customer" | "admin";
+
 export type PaymentLinkDecision = {
-  /** Phone + email channels relevant to this wave (email only when it may be sent per mode). */
+  target: MessageTarget;
+  /** Channels allowed for this target (policy order: email → SMS for customers, WA → SMS for cleaners, email-only for admin). */
   channels: ("whatsapp" | "sms" | "email")[];
   phoneTryOrder: ("whatsapp" | "sms")[];
   send_now: boolean;
@@ -58,7 +62,7 @@ export function minutesSinceIso(iso: string | null | undefined, nowMs: number): 
   return Math.max(0, (nowMs - t) / 60_000);
 }
 
-/** Ensures both phone channels appear once, preserving preferred order first. */
+/** Ensures both phone channels appear once, preserving preferred order first (cleaner path). */
 export function normalizePhoneTryOrder(order: ("whatsapp" | "sms")[]): ("whatsapp" | "sms")[] {
   const seen = new Set<"whatsapp" | "sms">();
   const out: ("whatsapp" | "sms")[] = [];
@@ -74,18 +78,36 @@ export function normalizePhoneTryOrder(order: ("whatsapp" | "sms")[]): ("whatsap
   return out;
 }
 
+/**
+ * Customer phone leg is SMS-only (no WhatsApp). Never appends WhatsApp.
+ * Cost/risk logic may still reorder timing via `decidePaymentLinkAction`; order here is SMS attempts only.
+ */
+export function normalizePhoneTryOrderForCustomer(order: ("whatsapp" | "sms")[]): ("whatsapp" | "sms")[] {
+  const out: ("whatsapp" | "sms")[] = [];
+  for (const c of order) {
+    if (c === "sms" && !out.includes("sms")) out.push("sms");
+  }
+  return out;
+}
+
 const DEFAULT_WA = 0.88;
 const DEFAULT_SMS_RESCUE = 0.38;
 
 /**
- * Cost-aware ordering of phone channels. Always returns a permutation of WhatsApp + SMS;
- * delivery layer appends missing fallbacks so nothing is dropped.
+ * Cost-aware ordering of **phone** channels (WhatsApp vs SMS). Used for `target === "cleaner"` only.
+ * For customers, returns `["sms"]` (WhatsApp is not a customer channel). Admins get no phone channels.
  */
 export function selectOptimalChannelStrategy(input: {
   channelStats: PaymentLinkChannelStats;
   priorPaymentConversionBucket: PaymentConversionBucket | null;
   paymentLastTouchChannel?: string | null;
+  target: MessageTarget;
 }): ("whatsapp" | "sms")[] {
+  if (input.target === "admin") return [];
+  if (input.target === "customer") {
+    return ["sms"];
+  }
+
   const wa = input.channelStats.whatsapp_success_rate ?? DEFAULT_WA;
   const smsRescue = input.channelStats.sms_fallback_rate ?? DEFAULT_SMS_RESCUE;
   const lowSample = input.channelStats.sample_size < 20;
@@ -168,11 +190,34 @@ export function predictPaymentRisk(input: {
   return { risk_level: "low", reasons };
 }
 
+function customerSmsTimingHint(
+  ctx: {
+    intent: PaymentLinkDecisionIntent;
+    hasEmail: boolean;
+    hasPhone: boolean;
+    priorPaymentConversionBucket: PaymentConversionBucket | null;
+    channelStats: PaymentLinkChannelStats;
+  },
+  risk: { risk_level: PaymentRiskLevel },
+): string | null {
+  if (ctx.intent !== "reminder" || !ctx.hasEmail || !ctx.hasPhone) return null;
+  if (risk.risk_level === "high") return "sms_timing:parallel_with_email_high_risk";
+  if (ctx.priorPaymentConversionBucket === "slow" || ctx.priorPaymentConversionBucket === "medium") {
+    return "sms_timing:after_email_slow_profile";
+  }
+  if (ctx.channelStats.sample_size < 20) {
+    return "sms_timing:default_low_sample";
+  }
+  return "sms_timing:default";
+}
+
 export function decidePaymentLinkAction(ctx: {
   intent: PaymentLinkDecisionIntent;
   notificationMode: "chain" | "chain_plus_email";
   hasPhone: boolean;
   hasEmail: boolean;
+  /** Defaults to `customer` (payment-link flows are customer-facing). */
+  target?: MessageTarget;
   priorPaymentConversionBucket: PaymentConversionBucket | null;
   channelStats: PaymentLinkChannelStats;
   booking: {
@@ -184,15 +229,8 @@ export function decidePaymentLinkAction(ctx: {
   };
   nowMs: number;
 }): PaymentLinkDecision {
+  const target = ctx.target ?? "customer";
   const disabled = paymentDecisionEngineDisabled();
-  const rawOrder = disabled
-    ? (["whatsapp", "sms"] as ("whatsapp" | "sms")[])
-    : selectOptimalChannelStrategy({
-        channelStats: ctx.channelStats,
-        priorPaymentConversionBucket: ctx.priorPaymentConversionBucket,
-        paymentLastTouchChannel: ctx.booking.payment_last_touch_channel,
-      });
-  const phoneTryOrder = ctx.hasPhone ? normalizePhoneTryOrder(rawOrder) : [];
 
   const risk = predictPaymentRisk({
     payment_link_send_count: Number(ctx.booking.payment_link_send_count ?? 0),
@@ -203,33 +241,77 @@ export function decidePaymentLinkAction(ctx: {
     nowMs: ctx.nowMs,
   });
 
-  const emailMaySend =
-    ctx.hasEmail &&
-    (ctx.notificationMode === "chain_plus_email" ||
-      !ctx.hasPhone ||
-      ctx.notificationMode === "chain");
-  const channels: ("whatsapp" | "sms" | "email")[] = [...phoneTryOrder];
-  if (emailMaySend && !channels.includes("email")) channels.push("email");
+  let phoneTryOrder: ("whatsapp" | "sms")[] = [];
+  let channels: ("whatsapp" | "sms" | "email")[] = [];
+  let policyReason: string;
+
+  if (target === "admin") {
+    policyReason = "policy_admin_email_only";
+    phoneTryOrder = [];
+    if (ctx.hasEmail) channels = ["email"];
+  } else if (target === "cleaner") {
+    policyReason = "policy_cleaner_whatsapp";
+    const rawOrder = disabled
+      ? (["whatsapp", "sms"] as ("whatsapp" | "sms")[])
+      : selectOptimalChannelStrategy({
+          channelStats: ctx.channelStats,
+          priorPaymentConversionBucket: ctx.priorPaymentConversionBucket,
+          paymentLastTouchChannel: ctx.booking.payment_last_touch_channel,
+          target: "cleaner",
+        });
+    phoneTryOrder = ctx.hasPhone ? normalizePhoneTryOrder(rawOrder) : [];
+    channels = [...phoneTryOrder];
+  } else {
+    policyReason = "policy_customer_email_first";
+    const rawOrder = disabled
+      ? (["sms"] as ("whatsapp" | "sms")[])
+      : selectOptimalChannelStrategy({
+          channelStats: ctx.channelStats,
+          priorPaymentConversionBucket: ctx.priorPaymentConversionBucket,
+          paymentLastTouchChannel: ctx.booking.payment_last_touch_channel,
+          target: "customer",
+        });
+    phoneTryOrder = ctx.hasPhone ? normalizePhoneTryOrderForCustomer(rawOrder) : [];
+    if (ctx.hasEmail) channels.push("email");
+    if (ctx.hasPhone) channels.push("sms");
+  }
 
   const escalate = risk.risk_level === "high";
   let send_now = true;
   let delay_minutes: number | undefined;
 
-  if (ctx.intent === "reminder" && risk.risk_level === "low" && ctx.priorPaymentConversionBucket === "fast") {
+  if (target === "customer" && ctx.intent === "reminder" && risk.risk_level === "low" && ctx.priorPaymentConversionBucket === "fast") {
     send_now = true;
     delay_minutes = 0;
   }
 
   const reasonParts = [
+    policyReason,
     `intent=${ctx.intent}`,
+    `target=${target}`,
     `risk=${risk.risk_level}`,
-    `phone=${phoneTryOrder.join("→")}`,
+    `phone_order=${phoneTryOrder.length ? phoneTryOrder.join("→") : "none"}`,
     `mode=${ctx.notificationMode}`,
     ...risk.reasons.map((r) => `risk_rule:${r}`),
   ];
   if (disabled) reasonParts.push("engine_disabled");
 
+  if (target === "customer") {
+    const tune = customerSmsTimingHint(
+      {
+        intent: ctx.intent,
+        hasEmail: ctx.hasEmail,
+        hasPhone: ctx.hasPhone,
+        priorPaymentConversionBucket: ctx.priorPaymentConversionBucket,
+        channelStats: ctx.channelStats,
+      },
+      risk,
+    );
+    if (tune) reasonParts.push(tune);
+  }
+
   return {
+    target,
     channels,
     phoneTryOrder,
     send_now,

@@ -1,5 +1,8 @@
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
+import type { SmsRole } from "@/lib/notifications/smsPolicy";
+
+export type { SmsRole } from "@/lib/notifications/smsPolicy";
 
 export type SmsFallbackResult = {
   sent: boolean;
@@ -34,6 +37,7 @@ async function writeSmsDeliveryLog(params: {
 }): Promise<void> {
   if (!params.deliveryLog) return;
   const step = params.deliveryLog.eventType;
+  const smsRole = params.context.sms_role;
   await writeNotificationLog({
     booking_id: bookingIdForSmsLog(params.deliveryLog, params.context),
     channel: "sms",
@@ -44,7 +48,11 @@ async function writeSmsDeliveryLog(params: {
     provider: "twilio",
     role: params.deliveryLog.role,
     event_type: params.deliveryLog.eventType,
-    payload: { text: params.body.slice(0, 1400), step },
+    payload: {
+      text: params.body.slice(0, 1400),
+      step,
+      ...(smsRole === "fallback" || smsRole === "primary" ? { sms_role: smsRole } : {}),
+    },
   });
 }
 
@@ -60,7 +68,26 @@ export async function sendSmsFallback(params: {
   body: string;
   context: Record<string, unknown>;
   deliveryLog?: SmsFallbackDeliveryLog;
+  /** When set, merged into `context` for logs / notification payload. */
+  smsRole?: SmsRole;
+  /** Blocks SMS entirely for admin recipients (email-only policy). */
+  recipientKind?: "customer" | "cleaner" | "admin";
 }): Promise<SmsFallbackResult> {
+  if (params.recipientKind === "admin") {
+    await logSystemEvent({
+      level: "warn",
+      source: "sms_fallback_blocked",
+      message: "admin_sms_disabled_by_policy",
+      context: { ...params.context },
+    });
+    return { sent: false, error: "admin_sms_disabled_by_policy" };
+  }
+
+  const context: Record<string, unknown> = {
+    ...params.context,
+    ...(params.smsRole ? { sms_role: params.smsRole } : {}),
+  };
+
   const sid = process.env.TWILIO_ACCOUNT_SID?.trim();
   const token = process.env.TWILIO_AUTH_TOKEN?.trim();
   const from = process.env.TWILIO_FROM_NUMBER?.trim();
@@ -72,12 +99,12 @@ export async function sendSmsFallback(params: {
       level: "warn",
       source: "sms_fallback_invalid_to",
       message: "Invalid SMS destination",
-      context: { ...params.context, to: params.toE164 },
+      context: { ...context, to: params.toE164 },
     });
     const result = { sent: false, error: "invalid_sms_destination" } as const;
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
-      context: params.context,
+      context,
       body: params.body,
       recipient: recipientForLog,
       result,
@@ -89,12 +116,12 @@ export async function sendSmsFallback(params: {
       level: "info",
       source: "sms_fallback_disabled",
       message: "Twilio not configured — SMS skipped",
-      context: params.context,
+      context,
     });
     const result = { sent: false, error: "twilio_not_configured" } as const;
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
-      context: params.context,
+      context,
       body: params.body,
       recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
       result,
@@ -121,11 +148,11 @@ export async function sendSmsFallback(params: {
     if (!res.ok) {
       const t = await res.text();
       const err = `twilio_${res.status}: ${t.slice(0, 400)}`;
-      await reportOperationalIssue("warn", "sms_fallback", err, params.context);
+      await reportOperationalIssue("warn", "sms_fallback", err, context);
       const result = { sent: false, error: err };
       await writeSmsDeliveryLog({
         deliveryLog: params.deliveryLog,
-        context: params.context,
+        context,
         body: params.body,
         recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
         result,
@@ -136,12 +163,12 @@ export async function sendSmsFallback(params: {
       level: "info",
       source: "sms_fallback_sent",
       message: "SMS sent",
-      context: params.context,
+      context,
     });
     const ok = { sent: true, error: null } as const;
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
-      context: params.context,
+      context,
       body: params.body,
       recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
       result: ok,
@@ -149,11 +176,11 @@ export async function sendSmsFallback(params: {
     return ok;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await reportOperationalIssue("warn", "sms_fallback", msg, params.context);
+    await reportOperationalIssue("warn", "sms_fallback", msg, context);
     const result = { sent: false, error: msg };
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
-      context: params.context,
+      context,
       body: params.body,
       recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
       result,

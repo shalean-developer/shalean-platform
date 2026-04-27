@@ -168,6 +168,8 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
       phone: String(head.customer_phone ?? "").trim() || null,
       email: String(head.customer_email ?? "").trim() || null,
       mode: "chain_plus_email",
+      supabaseAdmin: admin,
+      bookingId: head.id,
       phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
       emailPayload: {
         customerEmail: String(head.customer_email ?? "").trim(),

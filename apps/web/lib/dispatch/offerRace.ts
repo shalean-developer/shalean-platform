@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { MAX_PARALLEL_OFFERS_PEAK } from "@/lib/dispatch/dispatchConstants";
 import type { SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
@@ -9,12 +10,86 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function envMs(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 5_000 ? n : fallback;
+}
+
+/** Delivered but no read after this → expire offer (Phase 8E). */
+const ESC_DELIVERED_NO_READ_MS = () => envMs("DISPATCH_ESCALATE_DELIVERED_NO_READ_MS", 120_000);
+/** Read but still pending (no reply) after this → expire offer. */
+const ESC_READ_NO_REPLY_MS = () => envMs("DISPATCH_ESCALATE_READ_NO_REPLY_MS", 240_000);
 export type OfferRaceWinner = {
   cleanerId: string;
   offerId: string;
   score: number;
   distance_km: number;
 };
+
+type OfferWatchRow = {
+  id: string;
+  status?: string | null;
+  first_read_at?: string | null;
+  first_delivered_at?: string | null;
+  expires_at?: string | null;
+};
+
+async function maybeEscalateStalePendingOffers(params: {
+  supabase: SupabaseClient;
+  offerIds: string[];
+  nowMs: number;
+}): Promise<void> {
+  if (!params.offerIds.length) return;
+  const { data, error } = await params.supabase
+    .from("dispatch_offers")
+    .select("id, status, first_read_at, first_delivered_at, expires_at")
+    .in("id", params.offerIds)
+    .eq("status", "pending");
+
+  if (error || !data?.length) return;
+
+  const nowIso = new Date(params.nowMs).toISOString();
+  const dDeliveredNoRead = ESC_DELIVERED_NO_READ_MS();
+  const dReadNoReply = ESC_READ_NO_REPLY_MS();
+
+  for (const raw of data as OfferWatchRow[]) {
+    const id = String(raw.id ?? "");
+    if (!id) continue;
+
+    const expMs = raw.expires_at ? new Date(raw.expires_at).getTime() : NaN;
+    if (Number.isFinite(expMs) && params.nowMs > expMs) continue;
+
+    const fd = raw.first_delivered_at ? new Date(raw.first_delivered_at).getTime() : NaN;
+    const fr = raw.first_read_at ? new Date(raw.first_read_at).getTime() : NaN;
+
+    let shouldExpire = false;
+
+    if (Number.isFinite(fd) && !Number.isFinite(fr) && params.nowMs - fd >= dDeliveredNoRead) {
+      shouldExpire = true;
+    } else if (Number.isFinite(fr) && params.nowMs - fr >= dReadNoReply) {
+      shouldExpire = true;
+    }
+
+    if (!shouldExpire) continue;
+
+    const { error: upErr } = await params.supabase
+      .from("dispatch_offers")
+      .update({ status: "expired", responded_at: nowIso })
+      .eq("id", id)
+      .eq("status", "pending");
+
+    if (!upErr) {
+      await logSystemEvent({
+        level: "info",
+        source: "dispatch_offer_escalated",
+        message: "Expired pending dispatch offer (read/delivery escalation)",
+        context: { offerId: id },
+      });
+    }
+  }
+}
 
 /**
  * Parallel offers: first acceptance wins; losers expired via DB RPC on accept path.
@@ -33,22 +108,31 @@ export async function runParallelDispatchOfferRace(params: {
   metricAttemptNumber?: number;
 }): Promise<OfferRaceWinner | null> {
   const { supabase, bookingId, offerTimeoutMs, ttlSeconds, rankOffset } = params;
-  const parallelCount = Math.max(1, Math.min(3, params.parallelCount));
+  const parallelCount = Math.max(1, Math.min(MAX_PARALLEL_OFFERS_PEAK, params.parallelCount));
   const slice = params.batch.slice(0, parallelCount);
 
   const tStart = Date.now();
-  const created = await Promise.all(
-    slice.map((c, i) =>
-      createDispatchOfferRow({
-        supabase,
-        bookingId,
-        cleanerId: c.id,
-        rankIndex: rankOffset + i,
-        ttlSeconds,
-        metricAttemptNumber: params.metricAttemptNumber,
-      }),
-    ),
-  );
+  /** Spread row creation + per-offer WhatsApp over ~1–2s to avoid Meta/DB bursts (Phase 8F). */
+  const spreadMsRaw = process.env.DISPATCH_OFFER_CREATE_SPREAD_MS?.trim();
+  const spreadMs = (() => {
+    const n = spreadMsRaw ? Number(spreadMsRaw) : 1500;
+    return Math.min(2000, Math.max(600, Number.isFinite(n) ? n : 1500));
+  })();
+  const gapCount = Math.max(0, slice.length - 1);
+  const gapMs = gapCount > 0 ? Math.max(80, Math.floor(spreadMs / gapCount)) : 0;
+  const created: Awaited<ReturnType<typeof createDispatchOfferRow>>[] = [];
+  for (let i = 0; i < slice.length; i++) {
+    if (i > 0 && gapMs > 0) await sleep(gapMs);
+    const row = await createDispatchOfferRow({
+      supabase,
+      bookingId,
+      cleanerId: slice[i]!.id,
+      rankIndex: rankOffset + i,
+      ttlSeconds,
+      metricAttemptNumber: params.metricAttemptNumber,
+    });
+    created.push(row);
+  }
 
   const joined: Array<{ c: SmartDispatchCandidate; offerId: string }> = [];
   for (let i = 0; i < slice.length; i++) {
@@ -135,6 +219,12 @@ export async function runParallelDispatchOfferRace(params: {
       });
       return null;
     }
+
+    await maybeEscalateStalePendingOffers({
+      supabase,
+      offerIds: joined.map((j) => j.offerId),
+      nowMs: Date.now(),
+    });
 
     const { data: offs } = await supabase
       .from("dispatch_offers")

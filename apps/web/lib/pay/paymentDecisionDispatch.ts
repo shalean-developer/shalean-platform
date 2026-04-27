@@ -6,12 +6,15 @@ import { priorPaymentConversionBucketForCustomer } from "@/lib/pay/priorPaymentC
 import {
   decidePaymentLinkAction,
   paymentDecisionEngineDisabled,
+  type MessageTarget,
   type PaymentLinkDecision,
   type PaymentLinkDecisionIntent,
   type PaymentRiskLevel,
 } from "@/lib/pay/paymentDecisionEngine";
 import { aggregatePaymentLinkDeliveryStats, type PaymentLinkChannelStats } from "@/lib/pay/paymentLinkDeliveryStats";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+export type { MessageTarget } from "@/lib/pay/paymentDecisionEngine";
 
 export type PaymentDecisionBookingRow = {
   id: string;
@@ -47,6 +50,8 @@ export async function resolvePaymentLinkDispatchDecision(
   opts: {
     intent: PaymentLinkDecisionIntent;
     notificationMode: "chain" | "chain_plus_email";
+    /** Payment-link dispatch is customer-facing; override only for non-customer experiments. */
+    target?: MessageTarget;
     channelStats?: PaymentLinkChannelStats | null;
     priorCache?: Map<string, PaymentConversionBucket | null>;
   },
@@ -63,6 +68,7 @@ export async function resolvePaymentLinkDispatchDecision(
     notificationMode: opts.notificationMode,
     hasPhone: Boolean(String(row.customer_phone ?? "").trim()),
     hasEmail: Boolean(String(row.customer_email ?? "").trim()),
+    target: opts.target ?? "customer",
     priorPaymentConversionBucket,
     channelStats,
     booking: {
@@ -78,6 +84,7 @@ export async function resolvePaymentLinkDispatchDecision(
 
 export type PaymentDecisionEngineLogPayload = {
   booking_id: string;
+  message_target: MessageTarget;
   chosen_channels: ("whatsapp" | "sms" | "email")[];
   phone_try_order: ("whatsapp" | "sms")[];
   risk_level: PaymentRiskLevel;
@@ -127,6 +134,7 @@ export async function recordPaymentLinkDecision(
 ): Promise<void> {
   await logPaymentDecisionEngineEvent({
     booking_id: row.id,
+    message_target: decision.target,
     chosen_channels: decision.channels,
     phone_try_order: decision.phoneTryOrder,
     risk_level: decision.risk_level,
@@ -142,6 +150,7 @@ export async function recordPaymentLinkDecision(
     {
       at: new Date().toISOString(),
       intent,
+      target: decision.target,
       channels: decision.channels,
       phone_try_order: decision.phoneTryOrder,
       risk_level: decision.risk_level,

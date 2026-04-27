@@ -44,7 +44,7 @@ export async function hasGrowthCooldown(
 
 export async function insertGrowthTouch(
   admin: SupabaseClient,
-  row: { user_id: string; touch_type: string; channel: "whatsapp" | "email" | "sms" },
+  row: { user_id: string; touch_type: string; channel: "email" | "sms" },
 ): Promise<void> {
   await admin.from("growth_customer_touch").insert(row);
 }

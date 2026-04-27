@@ -1,6 +1,6 @@
 import "server-only";
 
-import { triggerWhatsAppNotification, type CreatedBookingRecord } from "@/lib/booking/triggerWhatsAppNotification";
+import { type CreatedBookingRecord, sendCleanerJobAssignedWhatsApp } from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { pickAvailableCleaner } from "@/lib/booking/pickAvailableCleaner";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -64,10 +64,10 @@ export async function tryOnceReassignAfterDecline(
       return;
     }
 
-    void triggerWhatsAppNotification(data as CreatedBookingRecord, {
+    void sendCleanerJobAssignedWhatsApp(data as CreatedBookingRecord, {
       recipientPhone: cleaner.phone,
       cleanerDisplayName: cleaner.fullName,
-      variant: "cleaner_job_assigned",
+      cleanerId: cleaner.id,
     });
   } catch (err) {
     console.error("[reassignAfterDecline] unexpected error", {

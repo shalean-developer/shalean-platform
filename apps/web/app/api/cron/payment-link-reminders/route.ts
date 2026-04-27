@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
+import { assignConversionExperimentVariant } from "@/lib/conversion/assignConversionExperiment";
 import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
 import type { PaymentConversionBucket } from "@/lib/booking/paymentConversionBucket";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
+  adjustReminderScheduleForConversionExperiment,
   escalateReminderSchedule,
   reminderScheduleForPriorBucket,
 } from "@/lib/pay/paymentLinkDeliveryStats";
@@ -32,6 +34,7 @@ function isoPlusMinutes(baseMs: number, min: number): string {
 
 type Row = {
   id: string;
+  user_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   customer_email: string | null;
@@ -53,7 +56,7 @@ type Row = {
 };
 
 /**
- * Adaptive reminders before `payment_link_expires_at` (WhatsApp → SMS; no email).
+ * Adaptive reminders before `payment_link_expires_at` (email first, SMS if email missing/fails; customer WhatsApp disabled).
  * Uses last `payment_conversion_bucket` for the customer (email, else phone digits): instant → skip nudges;
  * slow/medium → earlier windows; default otherwise. Vercel Cron ~15m + `Authorization: Bearer CRON_SECRET`.
  */
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
   const { data: candidates, error } = await admin
     .from("bookings")
     .select(
-      "id, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link, paystack_reference, payment_link_expires_at, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
+      "id, user_id, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link, paystack_reference, payment_link_expires_at, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
     )
     .eq("status", "pending_payment")
     .not("payment_link_expires_at", "is", null)
@@ -129,7 +132,12 @@ export async function POST(request: Request) {
       payment_link_delivery: row.payment_link_delivery,
       nowMs: now,
     });
-    const schedule = escalateReminderSchedule(reminderScheduleForPriorBucket(priorBucket), risk.risk_level);
+    let schedule = escalateReminderSchedule(reminderScheduleForPriorBucket(priorBucket), risk.risk_level);
+    const reminderVariant = await assignConversionExperimentVariant(admin, {
+      subjectId: row.id,
+      experimentKey: "payment_reminder_timing",
+    });
+    schedule = adjustReminderScheduleForConversionExperiment(schedule, reminderVariant.variant);
     if (schedule.skipReminders) {
       skippedAdaptiveInstant++;
       skipped++;
@@ -221,6 +229,9 @@ export async function POST(request: Request) {
         phone: phone || null,
         email: email || null,
         mode: "chain",
+        supabaseAdmin: admin,
+        bookingId: row.id,
+        userId: row.user_id,
         phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
         emailPayload: {
           customerEmail: email,

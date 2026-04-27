@@ -12,6 +12,7 @@ import {
   loadDispatchMetricSegmentation,
 } from "@/lib/dispatch/dispatchMetricContext";
 import { assignCleanerUxVariantForCleaner, sanitizeCleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
+import { learnFromCleanerAcceptance } from "@/lib/ai-autonomy/learningLoop";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
@@ -310,35 +311,63 @@ export async function waitForDispatchOfferResolution(params: {
   return "expired";
 }
 
+export type AcceptDispatchOfferFailure =
+  | "not_found"
+  | "wrong_cleaner"
+  | "not_pending"
+  | "expired"
+  | "booking_taken"
+  | "assigned_other"
+  | "db";
+
+export type AcceptDispatchOfferResult =
+  | { ok: true }
+  | { ok: false; error: string; failure: AcceptDispatchOfferFailure };
+
 export async function acceptDispatchOffer(params: {
   supabase: SupabaseClient;
   offerId: string;
   cleanerId: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<AcceptDispatchOfferResult> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status, created_at, ux_variant")
+    .select("id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at")
     .eq("id", params.offerId)
     .maybeSingle();
 
-  if (oErr || !offer) return { ok: false, error: "Offer not found." };
+  if (oErr || !offer) return { ok: false, error: "Offer not found.", failure: "not_found" };
   const row = offer as {
     booking_id?: string;
     cleaner_id?: string;
     status?: string;
     created_at?: string;
     ux_variant?: string | null;
+    expires_at?: string;
+    whatsapp_sent_at?: string | null;
   };
   const ux_variant = sanitizeCleanerUxVariant(row.ux_variant);
-  if (String(row.cleaner_id) !== params.cleanerId) return { ok: false, error: "Not your offer." };
-  if (String(row.status) !== "pending") return { ok: false, error: "Offer is no longer pending." };
+  if (String(row.cleaner_id) !== params.cleanerId) {
+    return { ok: false, error: "Not your offer.", failure: "wrong_cleaner" };
+  }
+  if (String(row.status) !== "pending") {
+    return { ok: false, error: "Offer is no longer pending.", failure: "not_pending" };
+  }
+  const expRaw = row.expires_at;
+  const expMs = expRaw ? new Date(expRaw).getTime() : NaN;
+  if (Number.isFinite(expMs) && Date.now() >= expMs) {
+    return { ok: false, error: "Offer expired.", failure: "expired" };
+  }
 
   const bookingId = String(row.booking_id ?? "");
-  if (!bookingId) return { ok: false, error: "Invalid offer." };
+  if (!bookingId) return { ok: false, error: "Invalid offer.", failure: "not_found" };
 
   const now = new Date().toISOString();
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : Date.now();
-  const latencyMs = Math.max(0, Date.now() - createdAt);
+  const anchorForLatency = row.whatsapp_sent_at
+    ? new Date(row.whatsapp_sent_at).getTime()
+    : createdAt;
+  const responseLatencyMs = Math.max(0, Date.now() - (Number.isFinite(anchorForLatency) ? anchorForLatency : Date.now()));
+  const latencyMs = responseLatencyMs;
 
   const { data: bookingBefore } = await params.supabase
     .from("bookings")
@@ -349,10 +378,10 @@ export async function acceptDispatchOffer(params: {
   if (bs && String(bs.status ?? "").toLowerCase() === "assigned" && String(bs.cleaner_id ?? "") !== params.cleanerId) {
     await params.supabase
       .from("dispatch_offers")
-      .update({ status: "expired", responded_at: now })
+      .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
       .eq("id", params.offerId)
       .eq("status", "pending");
-    return { ok: false, error: "Another cleaner was assigned." };
+    return { ok: false, error: "Another cleaner was assigned.", failure: "assigned_other" };
   }
 
   const bsMeta = bookingBefore as {
@@ -380,20 +409,20 @@ export async function acceptDispatchOffer(params: {
       ...assignMeta,
     })
     .eq("id", bookingId)
-    .eq("status", "pending")
+    .in("status", ["pending", "pending_assignment"])
     .neq("dispatch_status", "assigned")
     .select("id");
 
   if (uBook) {
-    return { ok: false, error: uBook.message };
+    return { ok: false, error: uBook.message, failure: "db" };
   }
   if (!updatedRows?.length) {
     await params.supabase
       .from("dispatch_offers")
-      .update({ status: "expired", responded_at: now })
+      .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
       .eq("id", params.offerId)
       .eq("status", "pending");
-    return { ok: false, error: "Booking was already assigned." };
+    return { ok: false, error: "Booking was already assigned.", failure: "booking_taken" };
   }
 
   const { error: exErr } = await params.supabase.rpc("dispatch_expire_peer_offers", {
@@ -411,7 +440,7 @@ export async function acceptDispatchOffer(params: {
 
   await params.supabase
     .from("dispatch_offers")
-    .update({ status: "accepted", responded_at: now })
+    .update({ status: "accepted", responded_at: now, response_latency_ms: responseLatencyMs })
     .eq("id", params.offerId)
     .eq("status", "pending");
 
@@ -506,45 +535,76 @@ export async function acceptDispatchOffer(params: {
     });
   }
 
+  void learnFromCleanerAcceptance(params.supabase, {
+    cleanerId: params.cleanerId,
+    bookingId,
+  });
+
   return { ok: true };
 }
+
+export type RejectDispatchOfferFailure =
+  | "not_found"
+  | "wrong_cleaner"
+  | "not_pending"
+  | "expired"
+  | "db";
+
+export type RejectDispatchOfferResult =
+  | { ok: true }
+  | { ok: false; error: string; failure: RejectDispatchOfferFailure };
 
 export async function rejectDispatchOffer(params: {
   supabase: SupabaseClient;
   offerId: string;
   cleanerId: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<RejectDispatchOfferResult> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, cleaner_id, status, booking_id, created_at, ux_variant")
+    .select("id, cleaner_id, status, booking_id, created_at, ux_variant, expires_at, whatsapp_sent_at")
     .eq("id", params.offerId)
     .maybeSingle();
 
-  if (oErr || !offer) return { ok: false, error: "Offer not found." };
+  if (oErr || !offer) return { ok: false, error: "Offer not found.", failure: "not_found" };
   const row = offer as {
     cleaner_id?: string;
     status?: string;
     booking_id?: string;
     created_at?: string;
     ux_variant?: string | null;
+    expires_at?: string;
+    whatsapp_sent_at?: string | null;
   };
-  if (String(row.cleaner_id) !== params.cleanerId) return { ok: false, error: "Not your offer." };
-  if (String(row.status) !== "pending") return { ok: false, error: "Offer is no longer pending." };
+  if (String(row.cleaner_id) !== params.cleanerId) {
+    return { ok: false, error: "Not your offer.", failure: "wrong_cleaner" };
+  }
+  if (String(row.status) !== "pending") {
+    return { ok: false, error: "Offer is no longer pending.", failure: "not_pending" };
+  }
+  const expRaw = row.expires_at;
+  const expMs = expRaw ? new Date(expRaw).getTime() : NaN;
+  if (Number.isFinite(expMs) && Date.now() >= expMs) {
+    return { ok: false, error: "Offer expired.", failure: "expired" };
+  }
 
   const bookingId = String(row.booking_id ?? "");
-  if (!bookingId) return { ok: false, error: "Invalid offer." };
+  if (!bookingId) return { ok: false, error: "Invalid offer.", failure: "not_found" };
 
   const now = new Date().toISOString();
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : Date.now();
-  const latencyMs = Math.max(0, Date.now() - createdAt);
+  const anchorForLatency = row.whatsapp_sent_at
+    ? new Date(row.whatsapp_sent_at).getTime()
+    : createdAt;
+  const responseLatencyMs = Math.max(0, Date.now() - (Number.isFinite(anchorForLatency) ? anchorForLatency : Date.now()));
+  const latencyMs = responseLatencyMs;
 
   const { error } = await params.supabase
     .from("dispatch_offers")
-    .update({ status: "rejected", responded_at: now })
+    .update({ status: "rejected", responded_at: now, response_latency_ms: responseLatencyMs })
     .eq("id", params.offerId)
     .eq("status", "pending");
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: error.message, failure: "db" };
 
   const { error: metErr } = await params.supabase.rpc("dispatch_record_offer_response", {
     p_cleaner_id: params.cleanerId,

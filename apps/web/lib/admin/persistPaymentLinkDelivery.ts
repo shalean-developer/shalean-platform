@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AdminPaymentLinkDeliveryResult } from "@/lib/admin/adminPaymentLinkDelivery";
+import type { SmsRole } from "@/lib/notifications/smsPolicy";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   insertPaymentLinkDeliveryEvents,
@@ -13,9 +14,13 @@ export type PaymentLinkDeliveryJson = {
   whatsapp?: "sent" | "failed" | "skipped";
   sms?: "sent" | "failed" | "skipped";
   email?: "sent" | "failed" | "skipped";
+  /** SMS after failed/missing email vs phone-only send; `null` clears a previous value on merge. */
+  sms_role?: SmsRole | null;
   updated_at?: string;
   /** Optional cron / reminder pass marker */
   pass?: string;
+  /** Queued payment-link email (conversion experiment async delay). */
+  email_deferred_until?: string | null;
 };
 
 function toChannelMap(r: AdminPaymentLinkDeliveryResult): PaymentLinkDeliveryJson {
@@ -24,6 +29,11 @@ function toChannelMap(r: AdminPaymentLinkDeliveryResult): PaymentLinkDeliveryJso
     sms: r.byChannel.sms,
     email: r.byChannel.email,
     updated_at: new Date().toISOString(),
+    sms_role:
+      r.smsDeliveryRole === "fallback" || r.smsDeliveryRole === "primary" ? r.smsDeliveryRole : null,
+    ...(r.emailDeferredUntilIso
+      ? { email_deferred_until: r.emailDeferredUntilIso }
+      : { email_deferred_until: null }),
   };
 }
 

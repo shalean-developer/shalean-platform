@@ -23,7 +23,13 @@ export async function logPostBookingGrowthDecision(admin: SupabaseClient, userId
   });
   const segment = segmentCustomer({ bookingCount: ctx.bookingCount, retentionState: retention });
   const budgetOk = await discountBudgetOk(admin, userId);
-  const d = await decideGrowthActionWithAi(admin, { segment, ltv, retention, discountBudgetOk: budgetOk }, { userId });
+  const hasEmail = Boolean(ctx.email?.trim());
+  const hasPhone = Boolean(ctx.phone?.trim());
+  const d = await decideGrowthActionWithAi(
+    admin,
+    { segment, ltv, retention, discountBudgetOk: budgetOk, hasEmail, hasPhone },
+    { userId },
+  );
   await logSystemEvent({
     level: "info",
     source: "growth_engine",
@@ -34,7 +40,10 @@ export async function logPostBookingGrowthDecision(admin: SupabaseClient, userId
       retention,
       ltv: ltv.ltv_score,
       action: d.action,
-      channel: d.channel,
+      channel: "email",
+      fallback: "sms",
+      growth_channel: d.channel,
+      growth_policy: "email_first_sms_fallback",
     },
   });
 }

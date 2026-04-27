@@ -4,6 +4,7 @@ import {
   sendViaMetaWhatsApp,
   sendViaMetaWhatsAppTemplateBody,
 } from "@/lib/dispatch/metaWhatsAppSend";
+import { metaCircuitOpenRemainingMs } from "@/lib/whatsapp/whatsappMetaSafeguards";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { sendTerminalQueueFailureSmsIfEligible } from "@/lib/whatsapp/queueTerminalSms";
@@ -106,6 +107,26 @@ export function whatsappQueueRetryDelayMs(attemptsAfterFailure: number): number 
   const a = Math.max(1, Math.floor(attemptsAfterFailure));
   const jitter = 0.9 + Math.random() * 0.2;
   return Math.round(base * 1000 * 2 ** a * jitter);
+}
+
+function isMetaCircuitPauseQueueError(msg: string): boolean {
+  return /circuit_open|send paused \(circuit|Meta WhatsApp send paused/i.test(msg);
+}
+
+function queueSuccessLogSampleRate(): number {
+  const raw = process.env.WHATSAPP_QUEUE_SUCCESS_LOG_SAMPLE_RATE?.trim();
+  if (raw === "1" || raw === "") return 1;
+  const n = raw ? Number(raw) : 0.1;
+  if (!Number.isFinite(n)) return 0.1;
+  return Math.min(1, Math.max(0, n));
+}
+
+function shouldLogQueueDeliveredSuccess(): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  const r = queueSuccessLogSampleRate();
+  if (r >= 1) return true;
+  if (r <= 0) return false;
+  return Math.random() < r;
 }
 
 /** Prefer DB RPC {@link get_pending_whatsapp_jobs}; falls back if migration not applied. */
@@ -300,7 +321,7 @@ export async function enqueueWhatsApp(params: {
 export async function flushWhatsAppJobById(
   admin: SupabaseClient,
   jobId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; meta_circuit_retry_scheduled?: boolean }> {
   const { data: row0, error: readErr } = await admin.from("whatsapp_queue").select("*").eq("id", jobId).maybeSingle();
   if (readErr || !row0) {
     return { ok: false, error: "job_not_found" };
@@ -379,10 +400,16 @@ export async function flushWhatsAppJobById(
         bodyParameters: payload.bodyParams,
         recipientRole: "cleaner",
       });
-      messageId = r.messageId;
+      if (!r.ok) {
+        throw new Error(r.error ?? "whatsapp_template_send_failed");
+      }
+      messageId = r.messageId!;
     } else {
       const r = await sendViaMetaWhatsApp({ phone: job.phone, message: payload.text, recipientRole: "cleaner" });
-      messageId = r.messageId;
+      if (!r.ok) {
+        throw new Error(r.error ?? "whatsapp_text_send_failed");
+      }
+      messageId = r.messageId!;
     }
 
     await admin
@@ -402,19 +429,29 @@ export async function flushWhatsAppJobById(
       typeof job.context === "object" && job.context !== null && !Array.isArray(job.context)
         ? (job.context as Record<string, unknown>)
         : {};
-    await logSystemEvent({
-      level: "info",
-      source: "whatsapp_queue_delivered",
-      message: "WhatsApp queue job sent",
-      context: { job_id: jobId, meta_message_id: messageId, ...jobContext },
-    });
+    if (shouldLogQueueDeliveredSuccess()) {
+      await logSystemEvent({
+        level: "info",
+        source: "whatsapp_queue_delivered",
+        message: "WhatsApp queue job sent",
+        context: { job_id: jobId, meta_message_id: messageId, ...jobContext },
+      });
+    }
     return { ok: true };
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).slice(0, 2000);
     const attempts = job.attempts + 1;
     const isDead = attempts >= MAX_WHATSAPP_QUEUE_DELIVERY_ATTEMPTS;
     const nextStatus = isDead ? "dead" : "pending";
-    const nextAttemptAt = isDead ? null : new Date(Date.now() + whatsappQueueRetryDelayMs(attempts)).toISOString();
+    const circuitSoft = !isDead && isMetaCircuitPauseQueueError(msg);
+    const circuitCap = Number(process.env.WHATSAPP_QUEUE_CIRCUIT_RETRY_MAX_MS ?? "25000");
+    const capMs = Number.isFinite(circuitCap) && circuitCap >= 5000 ? circuitCap : 25_000;
+    const backoffMs = !isDead ? whatsappQueueRetryDelayMs(attempts) : 0;
+    const nextAttemptAt = isDead
+      ? null
+      : new Date(
+          Date.now() + (circuitSoft ? Math.min(backoffMs, capMs) : backoffMs),
+        ).toISOString();
 
     await admin
       .from("whatsapp_queue")
@@ -459,7 +496,7 @@ export async function flushWhatsAppJobById(
       await sendTerminalQueueFailureSmsIfEligible(admin, job);
     }
 
-    return { ok: false, error: msg };
+    return { ok: false, error: msg, meta_circuit_retry_scheduled: circuitSoft };
   }
 }
 
@@ -558,10 +595,30 @@ export async function processWhatsAppPendingBatch(params: {
   ok: number;
   failed: number;
   queue_metrics?: WhatsAppQueueStatusCounts;
+  worker_meta?: {
+    batch_limit_requested: number;
+    batch_limit_effective: number;
+    queue_depth_proxy: number;
+    duration_ms: number;
+    meta_circuit_open_remaining_ms: number;
+    circuit_retry_scheduled: number;
+  };
 }> {
-  const limit = Math.min(50, Math.max(1, params.limit ?? 15));
+  const t0 = Date.now();
+  const limitRequested = Math.min(50, Math.max(1, params.limit ?? 15));
 
   await recoverStaleProcessingWhatsAppJobs(params.admin);
+
+  const counts0 = await getWhatsAppQueueStatusCounts(params.admin);
+  const depth = counts0.pending + counts0.processing;
+  const backThresh = Number(process.env.WHATSAPP_QUEUE_BACKPRESSURE_THRESHOLD ?? "1000");
+  let limitEffective = limitRequested;
+  if (Number.isFinite(backThresh) && backThresh > 0 && depth > backThresh) {
+    limitEffective = Math.max(3, Math.floor(limitRequested / 2));
+  } else if (depth > 500) {
+    limitEffective = Math.max(3, limitRequested - 3);
+  }
+  const limit = Math.min(limitRequested, limitEffective);
 
   const { ids, rpc_error } = await listPendingWhatsAppJobIds(params.admin, limit);
   if (!ids.length && rpc_error) {
@@ -580,17 +637,47 @@ export async function processWhatsAppPendingBatch(params: {
     });
   }
   if (!ids.length) {
-    const queue_metrics = params.includeQueueMetrics ? await getWhatsAppQueueStatusCounts(params.admin) : undefined;
-    return { processed: 0, ok: 0, failed: 0, queue_metrics };
+    const queue_metrics = params.includeQueueMetrics ? counts0 : undefined;
+    return {
+      processed: 0,
+      ok: 0,
+      failed: 0,
+      queue_metrics,
+      worker_meta: {
+        batch_limit_requested: limitRequested,
+        batch_limit_effective: limit,
+        queue_depth_proxy: depth,
+        duration_ms: Date.now() - t0,
+        meta_circuit_open_remaining_ms: metaCircuitOpenRemainingMs(),
+        circuit_retry_scheduled: 0,
+      },
+    };
   }
 
   let ok = 0;
   let failed = 0;
+  let circuitRetryScheduled = 0;
   for (const id of ids) {
     const out = await flushWhatsAppJobById(params.admin, id);
     if (out.ok) ok++;
-    else failed++;
+    else {
+      failed++;
+      if (out.meta_circuit_retry_scheduled) circuitRetryScheduled++;
+    }
   }
   const queue_metrics = params.includeQueueMetrics ? await getWhatsAppQueueStatusCounts(params.admin) : undefined;
-  return { processed: ids.length, ok, failed, queue_metrics };
+  return {
+    processed: ids.length,
+    ok,
+    failed,
+    queue_metrics,
+    worker_meta: {
+      batch_limit_requested: limitRequested,
+      batch_limit_effective: limit,
+      queue_depth_proxy: depth,
+      duration_ms: Date.now() - t0,
+      meta_circuit_open_remaining_ms: metaCircuitOpenRemainingMs(),
+      circuit_retry_scheduled: circuitRetryScheduled,
+    },
+  };
 }

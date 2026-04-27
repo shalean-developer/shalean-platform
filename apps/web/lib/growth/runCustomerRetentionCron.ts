@@ -5,25 +5,23 @@ import { decideGrowthActionWithAi } from "@/lib/growth/decideGrowthActionWithAi"
 import { calculateCustomerLTV } from "@/lib/growth/customerLTV";
 import { evaluateCustomerRetentionState } from "@/lib/growth/customerRetention";
 import { segmentCustomer } from "@/lib/growth/customerSegment";
-import { sendGrowthRetentionReminderEmail, sendGrowthWinBackEmail } from "@/lib/growth/growthEmails";
-import { recordGrowthActionOutcomeSent } from "@/lib/growth/growthActionOutcomes";
 import {
-  DUMMY_BOOKING_FOR_PRIOR,
-  discountBudgetOk,
-  hasGrowthCooldown,
-  insertGrowthTouch,
-} from "@/lib/growth/growthTouchCooldown";
+  sendGrowthRetentionReminderEmail,
+  sendGrowthTouchSms,
+  sendGrowthWinBackEmail,
+} from "@/lib/growth/growthEmails";
+import { recordGrowthActionOutcomeSent } from "@/lib/growth/growthActionOutcomes";
+import { discountBudgetOk, hasGrowthCooldown, insertGrowthTouch } from "@/lib/growth/growthTouchCooldown";
 import { loadCustomerGrowthContext, persistCustomerSegmentRow } from "@/lib/growth/loadCustomerGrowthContext";
+import { applySendDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { decidePaymentLinkAction } from "@/lib/pay/paymentDecisionEngine";
-import { fetchRecentPaymentLinkChannelStats } from "@/lib/pay/paymentDecisionDispatch";
-import { priorPaymentConversionBucketForCustomer } from "@/lib/pay/priorPaymentConversionBucket";
 
 const MAX_USERS = 120;
 
 export type RetentionCronSummary = {
   scanned: number;
   emailsSent: number;
+  smsFallbackSent: number;
   skippedCooldown: number;
   skippedInactiveCity: number;
   skippedNoContact: number;
@@ -32,12 +30,13 @@ export type RetentionCronSummary = {
 
 /**
  * Retention + win-back automation. Respects growth touch cooldowns (separate from payment-link sends).
- * Uses the payment decision engine only for channel ordering / risk context — does not mutate booking rows.
+ * Policy: **email first**, SMS only if email is missing or the email send failed (no WhatsApp).
  */
 export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Promise<RetentionCronSummary> {
   const out: RetentionCronSummary = {
     scanned: 0,
     emailsSent: 0,
+    smsFallbackSent: 0,
     skippedCooldown: 0,
     skippedInactiveCity: 0,
     skippedNoContact: 0,
@@ -52,9 +51,6 @@ export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Prom
     .limit(MAX_USERS);
 
   if (error || !profiles?.length) return out;
-
-  const channelStats = await fetchRecentPaymentLinkChannelStats(admin);
-  const priorCache = new Map();
 
   for (const row of profiles) {
     const userId = typeof row.id === "string" ? row.id : "";
@@ -87,34 +83,14 @@ export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Prom
     });
     const segment = segmentCustomer({ bookingCount: ctx.bookingCount, retentionState: retention });
     const budgetOk = await discountBudgetOk(admin, userId);
-    const decision = await decideGrowthActionWithAi(admin, { segment, ltv, retention, discountBudgetOk: budgetOk }, { userId });
+    const hasEmail = Boolean(ctx.email?.trim());
+    const hasPhone = Boolean(ctx.phone?.trim());
 
-    const priorBucket = await priorPaymentConversionBucketForCustomer(
+    const decision = await decideGrowthActionWithAi(
       admin,
-      {
-        emailRaw: ctx.email,
-        phoneRaw: ctx.phone,
-        excludeBookingId: DUMMY_BOOKING_FOR_PRIOR,
-      },
-      priorCache,
+      { segment, ltv, retention, discountBudgetOk: budgetOk, hasEmail, hasPhone },
+      { userId },
     );
-
-    const channelDecision = decidePaymentLinkAction({
-      intent: "reminder",
-      notificationMode: "chain_plus_email",
-      hasPhone: Boolean(ctx.phone?.trim()),
-      hasEmail: Boolean(ctx.email?.trim()),
-      priorPaymentConversionBucket: priorBucket,
-      channelStats,
-      booking: {
-        payment_link_send_count: 0,
-        payment_conversion_bucket: null,
-        payment_link_first_sent_at: null,
-        payment_link_delivery: {},
-        payment_last_touch_channel: null,
-      },
-      nowMs: Date.now(),
-    });
 
     await logSystemEvent({
       level: "info",
@@ -126,8 +102,10 @@ export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Prom
         segment,
         ltv_score: ltv.ltv_score,
         growth_action: decision.action,
-        payment_engine_channels: channelDecision.channels,
-        send_now: channelDecision.send_now,
+        channel: "email",
+        fallback: "sms",
+        growth_channel: decision.channel,
+        growth_policy: "email_first_sms_fallback",
       },
     });
 
@@ -136,52 +114,85 @@ export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Prom
       continue;
     }
 
-    if (!channelDecision.send_now) {
-      out.skippedChannel++;
-      continue;
-    }
-
-    const preferEmail =
-      decision.channel === "email" ||
-      !ctx.phone?.trim() ||
-      !channelDecision.channels.some((c) => c === "whatsapp" || c === "sms");
-
-    if (!ctx.email?.trim()) {
+    if (!hasEmail && !hasPhone) {
       out.skippedNoContact++;
       continue;
     }
 
-    if (!preferEmail) {
-      /** WhatsApp growth templates are not wired yet; avoid silent failures and do not spam SMS here. */
+    const smsVariant = retention === "churned" ? "win_back" : "retention_reminder";
+
+    let deliveredEmail = false;
+    let deliveredSms = false;
+
+    if (hasEmail) {
+      {
+        const segKey = String(segment) as "new" | "repeat" | "loyal" | "churned" | "unknown";
+        await applySendDelayIfNeeded(
+          admin,
+          userId,
+          "growth_email",
+          segKey === "new" || segKey === "repeat" || segKey === "loyal" || segKey === "churned" ? segKey : "unknown",
+          undefined,
+        );
+      }
+      deliveredEmail =
+        retention === "churned"
+          ? await sendGrowthWinBackEmail({ to: ctx.email!.trim(), userId, supabaseAdmin: admin })
+          : await sendGrowthRetentionReminderEmail({ to: ctx.email!.trim(), userId, supabaseAdmin: admin });
+
+      if (!deliveredEmail && hasPhone) {
+        deliveredSms = await sendGrowthTouchSms({
+          phone: ctx.phone!.trim(),
+          userId,
+          variant: smsVariant,
+          smsRole: "fallback",
+        });
+      }
+    } else if (hasPhone && decision.channel === "sms") {
+      deliveredSms = await sendGrowthTouchSms({
+        phone: ctx.phone!.trim(),
+        userId,
+        variant: smsVariant,
+        smsRole: "primary",
+      });
+    } else {
+      out.skippedNoContact++;
+      continue;
+    }
+
+    if (!deliveredEmail && !deliveredSms) {
       out.skippedChannel++;
       continue;
     }
 
-    const ok =
-      retention === "churned"
-        ? await sendGrowthWinBackEmail({ to: ctx.email.trim(), userId })
-        : await sendGrowthRetentionReminderEmail({ to: ctx.email.trim(), userId });
+    if (deliveredEmail) out.emailsSent++;
+    if (deliveredSms) out.smsFallbackSent++;
 
-    if (ok) {
-      out.emailsSent++;
-      await insertGrowthTouch(admin, {
-        user_id: userId,
-        touch_type: touchType,
-        channel: "email",
-      });
-      await recordGrowthActionOutcomeSent({
-        admin,
-        userId,
-        actionType: touchType,
-        channel: "email",
-      });
-      await admin.from("user_events").insert({
-        user_id: userId,
-        event_type: retention === "churned" ? "growth_win_back" : "growth_retention_reminder",
-        booking_id: null,
-        payload: { segment, ltv: ltv.ltv_score, action: decision.action },
-      });
-    }
+    const touchChannel: "email" | "sms" = deliveredEmail ? "email" : "sms";
+    await insertGrowthTouch(admin, {
+      user_id: userId,
+      touch_type: touchType,
+      channel: touchChannel,
+    });
+    await recordGrowthActionOutcomeSent({
+      admin,
+      userId,
+      actionType: touchType,
+      channel: touchChannel,
+    });
+    await admin.from("user_events").insert({
+      user_id: userId,
+      event_type: retention === "churned" ? "growth_win_back" : "growth_retention_reminder",
+      booking_id: null,
+      payload: {
+        segment,
+        ltv: ltv.ltv_score,
+        action: decision.action,
+        channel: touchChannel,
+        email_attempted: hasEmail,
+        sms_used: deliveredSms,
+      },
+    });
   }
 
   return out;

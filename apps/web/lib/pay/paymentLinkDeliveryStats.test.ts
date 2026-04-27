@@ -12,6 +12,9 @@ describe("aggregatePaymentLinkDeliveryStats", () => {
     expect(s.whatsapp_success_rate).toBeNull();
     expect(s.sms_fallback_rate).toBeNull();
     expect(s.email_only_rate).toBeNull();
+    expect(s.email_attempted).toBe(0);
+    expect(s.email_success_rate).toBeNull();
+    expect(s.sms_fallback_after_email_failed_rate).toBeNull();
   });
 
   it("computes WA success among attempts", () => {
@@ -24,6 +27,19 @@ describe("aggregatePaymentLinkDeliveryStats", () => {
     expect(s.whatsapp_success_rate).toBeCloseTo(1 / 3, 4);
     expect(s.sms_fallback_rate).toBeCloseTo(0.5, 4);
     expect(s.email_only_rate).toBeCloseTo(1 / 3, 4);
+    expect(s.email_attempted).toBe(1);
+    expect(s.email_success_rate).toBe(1);
+    expect(s.sms_fallback_after_email_failed_rate).toBeNull();
+  });
+
+  it("computes SMS recovery after email failure", () => {
+    const s = aggregatePaymentLinkDeliveryStats([
+      { payment_link_delivery: { whatsapp: "skipped", sms: "skipped", email: "failed" } },
+      { payment_link_delivery: { whatsapp: "skipped", sms: "sent", email: "failed" } },
+    ]);
+    expect(s.email_attempted).toBe(2);
+    expect(s.email_success_rate).toBe(0);
+    expect(s.sms_fallback_after_email_failed_rate).toBe(0.5);
   });
 });
 

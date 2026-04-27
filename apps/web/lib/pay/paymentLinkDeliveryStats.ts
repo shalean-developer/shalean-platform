@@ -9,6 +9,12 @@ export type PaymentLinkChannelStats = {
   sms_fallback_rate: number | null;
   /** Share of sampled rows where only email succeeded (no WA/SMS success). */
   email_only_rate: number | null;
+  /** Rows where email was `sent` or `failed` (attempted). */
+  email_attempted: number;
+  /** Share of email attempts that succeeded (`sent`). */
+  email_success_rate: number | null;
+  /** Among rows where email failed, share where SMS then delivered (payment-link fallback). */
+  sms_fallback_after_email_failed_rate: number | null;
 };
 
 type ChannelOutcome = "sent" | "failed" | "skipped" | "" | undefined;
@@ -31,6 +37,10 @@ export function aggregatePaymentLinkDeliveryStats(
   let waFailed = 0;
   let smsAfterWaFail = 0;
   let emailOnly = 0;
+  let emailAttempted = 0;
+  let emailSent = 0;
+  let emailFailed = 0;
+  let emailFailedSmsOk = 0;
 
   for (const r of rows) {
     const raw = r.payment_link_delivery;
@@ -53,6 +63,14 @@ export function aggregatePaymentLinkDeliveryStats(
     if (e === "sent" && w !== "sent" && s !== "sent") {
       emailOnly++;
     }
+    if (e === "sent" || e === "failed") {
+      emailAttempted++;
+      if (e === "sent") emailSent++;
+      if (e === "failed") {
+        emailFailed++;
+        if (s === "sent") emailFailedSmsOk++;
+      }
+    }
   }
 
   return {
@@ -60,6 +78,11 @@ export function aggregatePaymentLinkDeliveryStats(
     whatsapp_success_rate: waAttempted > 0 ? Math.round((1e4 * waSent) / waAttempted) / 1e4 : null,
     sms_fallback_rate: waFailed > 0 ? Math.round((1e4 * smsAfterWaFail) / waFailed) / 1e4 : null,
     email_only_rate: sample > 0 ? Math.round((1e4 * emailOnly) / sample) / 1e4 : null,
+    email_attempted: emailAttempted,
+    email_success_rate:
+      emailAttempted > 0 ? Math.round((1e4 * emailSent) / emailAttempted) / 1e4 : null,
+    sms_fallback_after_email_failed_rate:
+      emailFailed > 0 ? Math.round((1e4 * emailFailedSmsOk) / emailFailed) / 1e4 : null,
   };
 }
 
@@ -118,5 +141,23 @@ export function escalateReminderSchedule(
     window1hMax: Math.min(base.window1hMax + 24, 130),
     window15mMin: Math.min(base.window15mMin + 12, 38),
     window15mMax: Math.min(base.window15mMax + 16, 52),
+  };
+}
+
+/**
+ * `payment_reminder_timing` A/B: variant_a targets an earlier first nudge (~30m before expiry vs ~60m).
+ * Applied after adaptive + risk escalation so we only shift windows when reminders still run.
+ */
+export function adjustReminderScheduleForConversionExperiment(
+  schedule: ReminderSchedule,
+  variant: "control" | "variant_a" | "variant_b",
+): ReminderSchedule {
+  if (variant !== "variant_a" || schedule.skipReminders) return schedule;
+  return {
+    ...schedule,
+    window1hMin: 22,
+    window1hMax: 38,
+    window15mMin: Math.min(schedule.window15mMin, 10),
+    window15mMax: Math.min(schedule.window15mMax, 22),
   };
 }

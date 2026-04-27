@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
- * Evaluates retention states and sends win-back / reminder emails within growth cooldowns.
+ * Evaluates retention states and sends win-back / reminder messages (email first, SMS fallback) within growth cooldowns.
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();

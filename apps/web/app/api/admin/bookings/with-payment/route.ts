@@ -23,6 +23,7 @@ export const dynamic = "force-dynamic";
 
 type BookingHead = {
   id: string;
+  user_id: string | null;
   status: string | null;
   payment_link: string | null;
   payment_link_expires_at: string | null;
@@ -49,7 +50,7 @@ function boolish(v: unknown): boolean {
 }
 
 const HEAD_SELECT =
-  "id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
+  "id, user_id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
 
 /**
  * Admin-only: same pipeline as customer checkout (`processPaystackInitializeBody`).
@@ -57,9 +58,9 @@ const HEAD_SELECT =
  *
  * Idempotency: pass `bookingId` for an existing `pending_payment` row with a **non-expired** link
  * to return the stored URL without a new Paystack initialize (unless `forceNewCheckout` is true).
- * Set `resendNotifications: true` to re-run WhatsApp → SMS → email on a reused link (rate-limited).
+ * Set `resendNotifications: true` to re-send notifications on a reused link (rate-limited). Customer delivery is **email first**, SMS only if email is missing or fails (no customer WhatsApp).
  *
- * `notificationMode`: `chain_plus_email` (default) or `chain` (email only if phone channels fail).
+ * `notificationMode`: legacy; both `chain` and `chain_plus_email` use the same email-first delivery order.
  */
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -353,6 +354,9 @@ async function sendDeliveryForRow(
       phone: phone || null,
       email: email || null,
       mode: notificationMode,
+      supabaseAdmin: admin,
+      bookingId: row.id,
+      userId: row.user_id,
       phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
       emailPayload: {
         customerEmail: email,

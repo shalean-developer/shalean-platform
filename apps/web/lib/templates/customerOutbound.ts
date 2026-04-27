@@ -4,6 +4,9 @@ import { estimatedNotificationCostUsd, NOTIFICATION_COST_CURRENCY } from "@/lib/
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
+import type { SmsRole } from "@/lib/notifications/smsPolicy";
+
+export type { SmsRole } from "@/lib/notifications/smsPolicy";
 import { getVariableAllowlistFromRow, renderTemplate } from "@/lib/templates/render";
 import { getTemplate } from "@/lib/templates/store";
 
@@ -74,8 +77,8 @@ export async function sendCustomerSmsFromTemplate(params: {
   templateKey: "booking_confirmed";
   payload: BookingEmailPayload;
   context: Record<string, unknown>;
-  /** When set, this channel is an automated fallback after the other channel did not succeed. */
-  channelFallbackFrom?: "whatsapp";
+  /** `primary` = no customer email; `fallback` = email was attempted and failed. */
+  smsRole: SmsRole;
   decisionTrace?: CustomerOutboundDecisionTrace | null;
 }): Promise<{ ok: boolean }> {
   const template = await getTemplate(params.templateKey, "sms");
@@ -93,7 +96,7 @@ export async function sendCustomerSmsFromTemplate(params: {
       provider: "twilio",
       role: CUSTOMER_NOTIFY_ROLE,
       event_type: CUSTOMER_PAYMENT_EVENT,
-      payload: buildCustomerOutboundPayload("sms", { source: "customer_template" }, trace),
+      payload: buildCustomerOutboundPayload("sms", { source: "customer_template", sms_role: params.smsRole }, trace),
     });
     return { ok: false };
   }
@@ -117,7 +120,7 @@ export async function sendCustomerSmsFromTemplate(params: {
       provider: "twilio",
       role: CUSTOMER_NOTIFY_ROLE,
       event_type: CUSTOMER_PAYMENT_EVENT,
-      payload: buildCustomerOutboundPayload("sms", { text: body }, trace),
+      payload: buildCustomerOutboundPayload("sms", { text: body, sms_role: params.smsRole }, trace),
     });
     return { ok: false };
   }
@@ -126,9 +129,10 @@ export async function sendCustomerSmsFromTemplate(params: {
     toE164: e164,
     body,
     context: { ...params.context, channel: "customer_template_sms", templateKey: params.templateKey },
+    smsRole: params.smsRole,
+    recipientKind: "customer",
   });
 
-  const fb = params.channelFallbackFrom;
   await writeNotificationLog({
     booking_id: bid,
     channel: "sms",
@@ -144,9 +148,7 @@ export async function sendCustomerSmsFromTemplate(params: {
       {
         text: body,
         source: `customer_${params.templateKey}_sms`,
-        ...(fb
-          ? { primary_channel_failed: true, failed_primary_channel: fb, automated_channel_fallback: true }
-          : {}),
+        sms_role: params.smsRole,
       },
       trace,
     ),
@@ -184,6 +186,7 @@ export async function sendCustomerSmsPaymentLink(params: {
   phone: string;
   payload: CustomerPaymentLinkWhatsAppPayload;
   context: Record<string, unknown>;
+  smsRole: SmsRole;
 }): Promise<{ ok: boolean }> {
   const templateKey = "payment_request";
   const template = await getTemplate(templateKey, "sms");
@@ -201,7 +204,7 @@ export async function sendCustomerSmsPaymentLink(params: {
       provider: "twilio",
       role: CUSTOMER_NOTIFY_ROLE,
       event_type: PAYMENT_LINK_SENT_EVENT,
-      payload: customerPaymentLinkPayload({ source: "customer_template" }),
+      payload: customerPaymentLinkPayload({ source: "customer_template", sms_role: params.smsRole }),
     });
     return { ok: false };
   }
@@ -229,7 +232,7 @@ export async function sendCustomerSmsPaymentLink(params: {
       provider: "twilio",
       role: CUSTOMER_NOTIFY_ROLE,
       event_type: PAYMENT_LINK_SENT_EVENT,
-      payload: customerPaymentLinkPayload({ text: body }),
+      payload: customerPaymentLinkPayload({ text: body, sms_role: params.smsRole }),
     });
     return { ok: false };
   }
@@ -238,6 +241,8 @@ export async function sendCustomerSmsPaymentLink(params: {
     toE164: e164,
     body,
     context: { ...params.context, channel: "customer_template_sms", templateKey },
+    smsRole: params.smsRole,
+    recipientKind: "customer",
   });
 
   await writeNotificationLog({
@@ -253,6 +258,7 @@ export async function sendCustomerSmsPaymentLink(params: {
     payload: customerPaymentLinkPayload({
       text: body,
       source: `customer_${templateKey}_sms`,
+      sms_role: params.smsRole,
     }),
   });
   return { ok: smsRes.sent };

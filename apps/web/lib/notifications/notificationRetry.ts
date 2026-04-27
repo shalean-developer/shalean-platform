@@ -255,6 +255,13 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
   }
 
   if (row.channel === "sms" && row.provider === "twilio") {
+    if (String(row.role ?? "").toLowerCase() === "admin") {
+      return {
+        ok: false,
+        error: "Admin SMS retry is disabled by communication policy.",
+        httpStatus: 400,
+      };
+    }
     const text =
       typeof payload.text === "string"
         ? payload.text

@@ -38,11 +38,15 @@ export async function GET(request: Request) {
       ? channel
       : undefined;
 
-  const rows = await learnGrowthEffectiveness(admin, {
+  const { growth_rows, conversion_experiments } = await learnGrowthEffectiveness(admin, {
     sinceIso,
     actionType,
     channel: ch,
   });
 
-  return NextResponse.json({ since: sinceIso, rows });
+  return NextResponse.json({
+    since: sinceIso,
+    rows: growth_rows,
+    conversion_experiments,
+  });
 }

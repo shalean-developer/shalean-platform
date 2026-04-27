@@ -28,3 +28,13 @@ export function isAssignedBookingDeclineReply(normalized: string): boolean {
   if (/\breject\b/.test(t)) return true;
   return false;
 }
+
+/** Dispatch **offer** reply: `1` first, then yes / accept / ok (template CTA). */
+export function isDispatchOfferAcceptReply(normalized: string): boolean {
+  return isAssignedBookingAcceptReply(normalized);
+}
+
+/** Dispatch **offer** reply: `2` first, then no / decline (template CTA). */
+export function isDispatchOfferDeclineReply(normalized: string): boolean {
+  return isAssignedBookingDeclineReply(normalized);
+}

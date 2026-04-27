@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import {
-  triggerWhatsAppNotification,
   type CreatedBookingRecord,
-} from "@/lib/booking/triggerWhatsAppNotification";
-import { trySendCleanerWhatsAppMessage } from "@/lib/dispatch/offerNotifications";
+  sendCleanerJobAssignedWhatsApp,
+  sendCleanerJobReminderWhatsApp,
+} from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { sendCleanerNewJobEmail } from "@/lib/email/sendCleanerNotification";
 import {
   buildBookingNotifyMessageFields,
@@ -27,7 +27,11 @@ import {
 import { getCustomerContactHealthScore } from "@/lib/notifications/customerContactHealth";
 import { inferCustomerCountryForNotifications } from "@/lib/notifications/notificationRegionPolicy";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
-import { sendCustomerSmsFromTemplate, type CustomerOutboundDecisionTrace } from "@/lib/templates/customerOutbound";
+import {
+  sendCustomerSmsFromTemplate,
+  type CustomerOutboundDecisionTrace,
+  type SmsRole,
+} from "@/lib/templates/customerOutbound";
 import { parseTrimmedBookingId } from "@/lib/booking/bookingIds";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -38,6 +42,7 @@ import {
 } from "@/lib/notifications/customerUserNotifications";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
+import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 
 export type NotifyBookingEventInput =
@@ -245,7 +250,7 @@ function adminBaseBlock(b: {
  * Admin mail: requires `ADMIN_NOTIFICATION_EMAIL` when an admin notification is sent — missing env throws `CRITICAL: ADMIN_NOTIFICATION_EMAIL not set`.
  * Optional `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to payment_confirmed, sla_breach, and cancelled.
  *
- * Channel fallbacks are documented in `notificationChannelRules.ts` (cleaner: WhatsApp → SMS; customer payment_confirmed: email + optional SMS, no WhatsApp).
+ * Channel fallbacks are documented in `notificationChannelRules.ts` (cleaner: WhatsApp → SMS; customer payment_confirmed: email first, SMS only if email missing or failed; no customer WhatsApp).
  *
  * Idempotency: `reminder_2h_sent`, `assigned_sent`, `completed_sent`, `sla_breach_sent` claims use migration
  * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). Future: cleaner read receipts / opened tracking.
@@ -254,7 +259,18 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   const { supabase } = event;
 
   if (event.type === "payment_confirmed") {
-    if (!event.customerEmail.trim()) {
+    const hasEmail = Boolean(event.customerEmail.trim());
+    const custPhone = event.snapshot?.customer?.phone?.trim();
+
+    if (!hasEmail && !custPhone) {
+      await logSystemEvent({
+        level: "warn",
+        source: "notifyBookingEvent/payment_confirmed",
+        message: "No delivery channel available",
+        context: { bookingId: event.bookingId, stage: "payment_confirmed" },
+      });
+    }
+    if (!hasEmail) {
       await logSystemEvent({
         level: "warn",
         source: "missing_customer_email",
@@ -301,22 +317,25 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       assignmentType,
       fallbackReason,
     });
-    const cust = await sendBookingConfirmationEmail(payload);
-    if (!cust.sent && cust.error) {
-      await reportOperationalIssue("error", "notifyBookingEvent/payment_confirmed", cust.error, {
+    let cust: { sent: boolean; error?: string } = { sent: false };
+    if (hasEmail) {
+      cust = await sendBookingConfirmationEmail(payload);
+      if (!cust.sent && cust.error) {
+        await reportOperationalIssue("error", "notifyBookingEvent/payment_confirmed", cust.error, {
+          bookingId: event.bookingId,
+        });
+      }
+      await logPipelineEmailTelemetry({
+        role: "customer",
+        channel: "payment_confirmation",
+        sent: cust.sent,
+        error: cust.error,
         bookingId: event.bookingId,
       });
     }
-    await logPipelineEmailTelemetry({
-      role: "customer",
-      channel: "payment_confirmation",
-      sent: cust.sent,
-      error: cust.error,
-      bookingId: event.bookingId,
-    });
 
-    const custPhone = event.snapshot?.customer?.phone?.trim();
-    if (custPhone) {
+    const emailSent = hasEmail && cust.sent;
+    if (custPhone && (!hasEmail || !cust.sent)) {
       const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
       const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
       const contactHealth = await getCustomerContactHealthScore({
@@ -339,45 +358,41 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         country,
         preferred_channel: preferredNotificationChannel,
       };
-      if (preferredNotificationChannel === "email") {
-        await logSystemEvent({
-          level: "info",
-          source: "customer_phone_channels_skipped",
-          message: "preferred_notification_channel=email — skipping SMS for payment_confirmed",
-          context: { bookingId: event.bookingId },
-        });
-      } else if (preferredNotificationChannel === "sms" || forceSmsFromHealth) {
-        await sendCustomerSmsFromTemplate({
-          phone: custPhone,
-          templateKey: "booking_confirmed",
-          payload,
-          context: {
-            ...phoneNotifyCtx,
-            channel: forceSmsFromHealth ? "customer_sms_contact_health" : "customer_sms_preferred",
-          },
-          decisionTrace: {
-            decision: forceSmsFromHealth ? "sms_only_contact_health_low_score" : "sms_only_preferred_channel",
-            ...baseDecision,
-            ...healthFields,
-          },
-        });
-      } else {
-        // Customer WhatsApp disabled — SMS only supplements email for payment_confirmed.
-        await sendCustomerSmsFromTemplate({
-          phone: custPhone,
-          templateKey: "booking_confirmed",
-          payload,
-          context: { ...phoneNotifyCtx, channel: "customer_sms_payment_confirmed_phone_copy" },
-          decisionTrace: {
-            decision:
-              preferredNotificationChannel === "whatsapp"
-                ? "sms_only_whatsapp_disabled_by_policy"
-                : "sms_only_phone_copy",
-            ...baseDecision,
-            ...healthFields,
-          },
-        });
-      }
+      const decision: CustomerOutboundDecisionTrace["decision"] = !hasEmail
+        ? "sms_primary_no_customer_email"
+        : forceSmsFromHealth
+          ? "email_failed_sms_fallback_contact_health"
+          : "email_failed_sms_fallback";
+
+      const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
+      await applyFallbackDelayIfNeeded(supabase, {
+        userId: payUserId || null,
+        bookingId: event.bookingId,
+        priceHint: event.amountCents / 100,
+        flow: "payment",
+      });
+      await sendCustomerSmsFromTemplate({
+        phone: custPhone,
+        templateKey: "booking_confirmed",
+        payload,
+        smsRole: paymentSmsRole,
+        context: {
+          ...phoneNotifyCtx,
+          channel: hasEmail ? "customer_sms_email_fallback" : "customer_sms_phone_only",
+        },
+        decisionTrace: {
+          decision,
+          ...baseDecision,
+          ...healthFields,
+        },
+      });
+    } else if (custPhone && emailSent) {
+      await logSystemEvent({
+        level: "info",
+        source: "customer_sms_skipped",
+        message: "email_confirmed_ok — SMS skipped (email-first policy)",
+        context: { bookingId: event.bookingId, preferred_channel: preferredNotificationChannel },
+      });
     }
 
     const payFields = buildBookingNotifyMessageFields({
@@ -593,17 +608,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         cRow && typeof cRow === "object"
           ? String((cRow as { full_name?: string | null }).full_name ?? "").trim()
           : "";
-      console.log("[Cleaner WhatsApp] Sending via template", {
-        bookingId: bookingRecord.id,
-        cleanerPhone: cleanerPhoneRaw,
-        cleanerName: cleanerFullNameForLog || cleanerName,
-      });
-      const waOk = await triggerWhatsAppNotification(bookingRecord, {
+      const waRes = await sendCleanerJobAssignedWhatsApp(bookingRecord, {
         recipientPhone: cleanerPhoneRaw,
         cleanerDisplayName: cleanerName ?? undefined,
-        variant: "cleaner_job_assigned",
+        cleanerId: event.cleanerId,
       });
-      if (waOk) {
+      if (waRes.ok) {
         await logCleanerWhatsAppSent(
           assignedDeliveryCtx({
             channel: "whatsapp_job_assigned",
@@ -613,9 +623,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         await logCleanerWhatsAppFailed(
           assignedDeliveryCtx({
             channel: "whatsapp_job_assigned",
-            reason: "triggerWhatsAppNotification_failed",
+            reason: "sendCleanerJobAssignedWhatsApp_failed",
           }),
-          "triggerWhatsAppNotification did not complete a successful WhatsApp send",
+          waRes.error ?? "WhatsApp send did not complete successfully",
         );
         const e164 = customerPhoneToE164(cleanerPhoneRaw);
         if (e164) {
@@ -623,6 +633,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             toE164: e164,
             body: msg.slice(0, 1200),
             context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
+            smsRole: "fallback",
+            recipientKind: "cleaner",
             deliveryLog: {
               templateKey: "cleaner_assignment_sms_direct",
               bookingId: event.bookingId,
@@ -929,16 +941,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         location,
       });
       const msg = formatBookingNotifyPlainLines(remFields, { headline: "⏰ Reminder: cleaning job soon" });
-      const wa = await trySendCleanerWhatsAppMessage({
-        cleanerPhone: phone,
-        message: msg,
-        source: "whatsapp_job_reminder_2h",
-        context: { bookingId: event.bookingId, cleanerId },
-        deliveryLog: {
-          templateKey: "cleaner_reminder_2h_whatsapp",
-          eventType: "reminder_2h",
-          role: "cleaner",
-        },
+      const wa = await sendCleanerJobReminderWhatsApp({
+        phone,
+        bookingId: event.bookingId,
+        cleanerId,
+        location: remFields.address,
+        timeForCleaner: remFields.time,
       });
       if (wa.ok) {
         await logCleanerWhatsAppSent(
@@ -950,9 +958,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         await logCleanerWhatsAppFailed(
           reminderDeliveryCtx({
             channel: "whatsapp_job_reminder_2h",
-            reason: wa.reason ?? "unknown",
+            reason: wa.error ?? "unknown",
           }),
-          wa.reason ?? "WhatsApp send did not succeed",
+          wa.error ?? "WhatsApp send did not succeed",
         );
         const e164 = customerPhoneToE164(phone);
         if (e164) {
@@ -960,6 +968,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             toE164: e164,
             body: msg.slice(0, 1200),
             context: { bookingId: event.bookingId, cleanerId },
+            smsRole: "fallback",
+            recipientKind: "cleaner",
             deliveryLog: {
               templateKey: "cleaner_reminder_2h_sms_direct",
               bookingId: event.bookingId,

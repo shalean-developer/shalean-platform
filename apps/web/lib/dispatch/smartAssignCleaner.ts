@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enqueueDispatchRetry } from "@/lib/dispatch/dispatchRetryQueue";
+import { MAX_PARALLEL_OFFERS, MAX_PARALLEL_OFFERS_PEAK } from "@/lib/dispatch/dispatchConstants";
+import { loadCleanerDispatchPerformanceScores } from "@/lib/dispatch/cleanerDispatchPerformance";
 import { haversineDistanceKm } from "@/lib/dispatch/distance";
 import { runParallelDispatchOfferRace } from "@/lib/dispatch/offerRace";
 import { getDistanceKm } from "@/lib/dispatch/routeOptimization";
@@ -17,8 +19,20 @@ import { predictCleanerAcceptanceSync } from "@/lib/ai-autonomy/predictions";
 import { computeAiDispatchDelta } from "@/lib/ai-autonomy/assignmentBlend";
 import { getAiAutonomyFlags } from "@/lib/ai-autonomy/flags";
 import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
+import { getWhatsAppQueueStatusCounts } from "@/lib/whatsapp/queue";
 
 export type { SmartDispatchCandidate } from "@/lib/dispatch/types";
+
+/** High-volume "cleaner passed filter" logs: sample to reduce DB noise (Phase 8F). Exclusions always log. */
+function shouldLogDispatchFilterDebug(included: boolean): boolean {
+  if (!included) return true;
+  const raw = process.env.DISPATCH_FILTER_DEBUG_LOG_SAMPLE_RATE?.trim();
+  if (raw === "0" || raw?.toLowerCase() === "off") return false;
+  const r = raw != null && raw !== "" ? Number(raw) : 0.1;
+  if (!Number.isFinite(r) || r >= 1) return true;
+  if (r <= 0) return false;
+  return Math.random() < r;
+}
 
 export type AssignParams = {
   bookingId: string;
@@ -93,8 +107,9 @@ const DEFAULT_MAX_CANDIDATES = 10;
 const DEFAULT_MAX_SOFT_OFFERS = 9;
 const DEFAULT_OFFER_TIMEOUT_MS = 60_000;
 const OFFER_TTL_SECONDS = 60;
-export const MAX_PARALLEL_OFFERS = 3;
-const MAX_PARALLEL_OFFERS_PEAK = 5;
+
+export { MAX_PARALLEL_OFFERS, MAX_PARALLEL_OFFERS_PEAK };
+
 const FORCED_PRIORITY_CLEANER_ID = "abe30dda-a927-4f75-b204-c7165f6eadd0";
 
 function defaultAssignmentMode(): "instant" | "soft" {
@@ -481,29 +496,31 @@ export async function findSmartDispatchCandidates(
   const since1h = new Date(Date.now() - 3600_000).toISOString();
   const minWeekDate = dateYmdDaysAgo(7);
 
-  const [{ data: dayRows }, { data: weekRows }, { data: offerFatigueRows }, { data: declineRows }] = await Promise.all([
-    supabase
-      .from("bookings")
-      .select("cleaner_id, time, location_id, duration_minutes, status")
-      .eq("date", dateYmd)
-      .in("cleaner_id", ids)
-      .in("status", ["assigned", "in_progress", "completed"]),
-    supabase
-      .from("bookings")
-      .select("cleaner_id")
-      .in("cleaner_id", ids)
-      .gte("date", minWeekDate)
-      .in("status", ["completed", "assigned", "in_progress"]),
-    supabase.from("dispatch_offers").select("cleaner_id").gte("created_at", since1h).in("cleaner_id", ids),
-    ids.length
-      ? supabase
-          .from("dispatch_offers")
-          .select("cleaner_id")
-          .in("cleaner_id", ids)
-          .eq("status", "rejected")
-          .gte("created_at", since7d)
-      : Promise.resolve({ data: [] as { cleaner_id?: string }[], error: null }),
-  ]);
+  const [{ data: dayRows }, { data: weekRows }, { data: offerFatigueRows }, { data: declineRows }, perfByCleaner] =
+    await Promise.all([
+      supabase
+        .from("bookings")
+        .select("cleaner_id, time, location_id, duration_minutes, status")
+        .eq("date", dateYmd)
+        .in("cleaner_id", ids)
+        .in("status", ["assigned", "in_progress", "completed"]),
+      supabase
+        .from("bookings")
+        .select("cleaner_id")
+        .in("cleaner_id", ids)
+        .gte("date", minWeekDate)
+        .in("status", ["completed", "assigned", "in_progress"]),
+      supabase.from("dispatch_offers").select("cleaner_id").gte("created_at", since1h).in("cleaner_id", ids),
+      ids.length
+        ? supabase
+            .from("dispatch_offers")
+            .select("cleaner_id")
+            .in("cleaner_id", ids)
+            .eq("status", "rejected")
+            .gte("created_at", since7d)
+        : Promise.resolve({ data: [] as { cleaner_id?: string }[], error: null }),
+      loadCleanerDispatchPerformanceScores(supabase, ids),
+    ]);
 
   for (const row of declineRows ?? []) {
     if (!row || typeof row !== "object" || !("cleaner_id" in row)) continue;
@@ -676,6 +693,7 @@ export async function findSmartDispatchCandidates(
     const learnBoost = (Number(ema ?? 0.5) - 0.5) * 3.5;
     const cn = clusterAffinityCounts.get(c.id) ?? 0;
     const clusterBoost = cn <= 0 ? 0 : Math.min(2.2, 0.85 + cn * 0.4);
+    const perf01 = perfByCleaner.get(c.id) ?? 0.5;
     let score =
       computeDispatchScoreV4(
       {
@@ -701,6 +719,8 @@ export async function findSmartDispatchCandidates(
       acceptP * 2.4 +
       learnBoost +
       clusterBoost;
+
+    score += (perf01 - 0.5) * 6;
 
     if (aiW) {
       const workloadToday = (dayByCleaner.get(c.id) ?? []).length;
@@ -740,21 +760,23 @@ export async function findSmartDispatchCandidates(
       score += computeAiDispatchDelta(mi.score, acc, aiW);
     }
 
-    await logSystemEvent({
-      level: "info",
-      source: "dispatch_filter_debug",
-      message: "Cleaner evaluated for dispatch scoring",
-      context: {
-        cleanerId: c.id,
-        passesCity: cityId ? String(c.city_id ?? "") === cityId : true,
-        passesService: true,
-        passesAvailability: true,
-        distance: Math.round(distanceKm * 100) / 100,
-        included: true,
-        priorityScore,
-        forcedCleanerBoost,
-      },
-    });
+    if (shouldLogDispatchFilterDebug(true)) {
+      await logSystemEvent({
+        level: "info",
+        source: "dispatch_filter_debug",
+        message: "Cleaner evaluated for dispatch scoring",
+        context: {
+          cleanerId: c.id,
+          passesCity: cityId ? String(c.city_id ?? "") === cityId : true,
+          passesService: true,
+          passesAvailability: true,
+          distance: Math.round(distanceKm * 100) / 100,
+          included: true,
+          priorityScore,
+          forcedCleanerBoost,
+        },
+      });
+    }
 
     scored.push({
       ...c,
@@ -808,6 +830,24 @@ export async function findSmartDispatchCandidates(
   return out;
 }
 
+async function fetchDispatchWaveMetrics(
+  supabase: SupabaseClient,
+  bookingId: string,
+): Promise<{ offers_for_booking: number; time_to_assign_ms: number | null }> {
+  const [{ count }, { data: row }] = await Promise.all([
+    supabase.from("dispatch_offers").select("id", { count: "exact", head: true }).eq("booking_id", bookingId),
+    supabase.from("bookings").select("created_at, assigned_at").eq("id", bookingId).maybeSingle(),
+  ]);
+  const r = row as { created_at?: string; assigned_at?: string | null } | null;
+  let time_to_assign_ms: number | null = null;
+  if (r?.created_at && r?.assigned_at) {
+    const a = new Date(r.assigned_at).getTime();
+    const c = new Date(r.created_at).getTime();
+    if (Number.isFinite(a) && Number.isFinite(c)) time_to_assign_ms = Math.max(0, a - c);
+  }
+  return { offers_for_booking: count ?? 0, time_to_assign_ms };
+}
+
 async function readAssignedCleanerScore(supabase: SupabaseClient, cleanerId: string): Promise<number> {
   const { data: row } = await supabase
     .from("cleaners")
@@ -837,17 +877,40 @@ async function readAssignedCleanerScore(supabase: SupabaseClient, cleanerId: str
   });
 }
 
+function hoursUntilBookingStartUtc(dateYmd: string, timeHm: string): number | null {
+  const iso = `${dateYmd}T${normalizeHm(timeHm)}:00.000Z`;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return (t - Date.now()) / 3_600_000;
+}
+
 function resolveParallelCount(params: {
   supplyRatio: number;
   demandLevel: DemandLevel;
   retryTier: number;
   surgeMultiplier?: number;
+  /** Hours until job start (negative = past). */
+  hoursUntilJob?: number | null;
+  /** 0–1 recent acceptance proxy for the candidate pool (Phase 8E). */
+  areaAcceptBlend?: number | null;
 }): number {
   let n = 2;
   if (params.supplyRatio < 1 || params.demandLevel === "peak") n = 3;
   if (params.supplyRatio > 3) n = 2;
   if (params.retryTier >= 2) n = Math.min(MAX_PARALLEL_OFFERS, n + 1);
   if (params.supplyRatio > 3) n = Math.min(n, 2);
+
+  const hu = params.hoursUntilJob;
+  if (hu != null && Number.isFinite(hu)) {
+    if (hu <= 1 && hu > -0.25) n += 2;
+    else if (hu <= 3 && hu > -0.25) n += 1;
+  }
+
+  const acc = params.areaAcceptBlend;
+  if (acc != null && Number.isFinite(acc) && acc < 0.45 && params.supplyRatio < 2) {
+    n += 1;
+  }
+
   const cap = (params.surgeMultiplier ?? 1) > 1.5 ? MAX_PARALLEL_OFFERS_PEAK : MAX_PARALLEL_OFFERS;
   return Math.min(cap, Math.max(1, n));
 }
@@ -1029,12 +1092,69 @@ export async function smartAssignCleaner(
     );
   }
 
-  const parallelCount = resolveParallelCount({
+  const hoursUntilJob = hoursUntilBookingStartUtc(dateYmd, normalizeHm(timeHm));
+  const acceptSamples = candidates.slice(0, 24);
+  const areaAcceptBlend =
+    acceptSamples.length > 0
+      ? acceptSamples.reduce((sum, c) => {
+          const life = Number((c as { acceptance_rate?: number | null }).acceptance_rate ?? 1);
+          const rec = Number((c as { acceptance_rate_recent?: number | null }).acceptance_rate_recent ?? 1);
+          return sum + (life + rec) / 2;
+        }, 0) / acceptSamples.length
+      : null;
+
+  let parallelCount = resolveParallelCount({
     supplyRatio,
     demandLevel,
     retryTier,
     surgeMultiplier,
+    hoursUntilJob,
+    areaAcceptBlend,
   });
+
+  try {
+    const q = await getWhatsAppQueueStatusCounts(supabase);
+    const qDepth = q.pending + q.processing;
+    const th = Number(process.env.WHATSAPP_QUEUE_BACKPRESSURE_THRESHOLD ?? "1000");
+    if (Number.isFinite(th) && th > 0 && qDepth > th) {
+      const before = parallelCount;
+      parallelCount = Math.max(1, Math.floor(parallelCount / 2));
+      if (parallelCount < before) {
+        await logSystemEvent({
+          level: "warn",
+          source: "dispatch_wa_queue_backpressure",
+          message: "Reduced parallel dispatch offers — WhatsApp queue depth high",
+          context: {
+            bookingId: params.bookingId,
+            queue_depth: qDepth,
+            parallel_before: before,
+            parallel_after: parallelCount,
+          },
+        });
+      }
+    } else if (qDepth > 500) {
+      const before = parallelCount;
+      parallelCount = Math.max(1, parallelCount - 1);
+      if (parallelCount < before) {
+        await logSystemEvent({
+          level: "info",
+          source: "dispatch_wa_queue_backpressure",
+          message: "Slightly reduced parallel dispatch offers — WhatsApp queue elevated",
+          context: {
+            bookingId: params.bookingId,
+            queue_depth: qDepth,
+            parallel_before: before,
+            parallel_after: parallelCount,
+          },
+        });
+      }
+    }
+  } catch {
+    /* non-fatal: assign without queue metrics */
+  }
+
+  const ttlSeconds = Math.min(180, Math.max(OFFER_TTL_SECONDS, parallelCount >= 3 ? 120 : parallelCount >= 2 ? 90 : OFFER_TTL_SECONDS));
+  const raceTimeoutMs = Math.max(offerTimeoutMs, ttlSeconds * 1000 + 12_000);
 
   if (mode === "instant") {
     const top = candidates[0];
@@ -1080,6 +1200,7 @@ export async function smartAssignCleaner(
       return { ok: false, error: "db_error", message: u1.message };
     }
 
+    const waveMetrics = await fetchDispatchWaveMetrics(supabase, params.bookingId);
     await logSystemEvent({
       level: "info",
       source: "dispatch_success",
@@ -1091,6 +1212,8 @@ export async function smartAssignCleaner(
         distance_km: top.distance_km,
         parallel_count: 1,
         supply_ratio: Math.round(supplyRatio * 1000) / 1000,
+        offers_for_booking: waveMetrics.offers_for_booking,
+        time_to_assign_ms: waveMetrics.time_to_assign_ms,
       },
     });
 
@@ -1141,14 +1264,15 @@ export async function smartAssignCleaner(
       bookingId: params.bookingId,
       batch,
       parallelCount,
-      offerTimeoutMs,
-      ttlSeconds: OFFER_TTL_SECONDS,
+      offerTimeoutMs: raceTimeoutMs,
+      ttlSeconds,
       rankOffset,
       metricAttemptNumber,
     });
     rankOffset += batch.length;
 
     if (winner) {
+      const waveMetrics = await fetchDispatchWaveMetrics(supabase, params.bookingId);
       await logSystemEvent({
         level: "info",
         source: "dispatch_success",
@@ -1160,6 +1284,8 @@ export async function smartAssignCleaner(
           distance_km: winner.distance_km,
           parallel_count: Math.min(parallelCount, batch.length),
           supply_ratio: Math.round(supplyRatio * 1000) / 1000,
+          offers_for_booking: waveMetrics.offers_for_booking,
+          time_to_assign_ms: waveMetrics.time_to_assign_ms,
         },
       });
       return { ok: true, cleanerId: winner.cleanerId, score: winner.score };

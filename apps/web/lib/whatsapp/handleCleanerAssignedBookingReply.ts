@@ -5,13 +5,12 @@ import {
   isAssignedBookingDeclineReply,
   normalizeCleanerReplyText,
 } from "@/lib/booking/cleanerReplyIntent";
-import {
-  triggerWhatsAppNotification,
-  type CreatedBookingRecord,
-} from "@/lib/booking/triggerWhatsAppNotification";
+import { type CreatedBookingRecord } from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { tryOnceReassignAfterDecline } from "@/lib/booking/reassignBookingAfterDecline";
-import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
+import { sendViaMetaWhatsAppTemplateBody } from "@/lib/dispatch/metaWhatsAppSend";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { logWhatsAppEvent } from "@/lib/whatsapp/logWhatsAppEvent";
+import { resolveMetaTemplateName } from "@/lib/whatsapp/cleanerWhatsappTemplates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BOOKING_ASSIGN_REPLY_SELECT =
@@ -213,10 +212,21 @@ function voidRecordUnmatchedIntentAndMaybeNotify(
         return;
       }
 
-      await sendViaMetaWhatsApp({
+      const w = await sendViaMetaWhatsAppTemplateBody({
         phone,
-        message: UNMATCHED_CLEANER_REPLY_HINT,
+        templateName: resolveMetaTemplateName("offer_ack"),
+        languageCode: process.env.WHATSAPP_TEMPLATE_LANGUAGE?.trim() || "en",
+        bodyParameters: [UNMATCHED_CLEANER_REPLY_HINT.slice(0, 1020)],
         recipientRole: "cleaner",
+      });
+      await logWhatsAppEvent(admin, {
+        cleaner_id: params.cleanerId,
+        template: "offer_ack",
+        status: w.ok ? "sent" : "failed",
+        error: w.error,
+        phone,
+        message_type: "template",
+        meta_message_id: w.messageId,
       });
     } catch (err) {
       await logSystemEvent({
@@ -361,16 +371,12 @@ export async function tryHandleCleanerAssignedBookingWhatsAppReply(
       return { handled: true, action: "booking_reply_stale" };
     }
 
-    const confirmed = acceptedRow as CreatedBookingRecord;
-
     await logSystemEvent({
       level: "info",
       source: "whatsapp_booking_reply",
-      message: "Cleaner accepted assigned booking via WhatsApp",
+      message: "Cleaner accepted assigned booking via WhatsApp (customer channel: email/SMS only — no customer WhatsApp)",
       context: { bookingId: row.id, cleanerId },
     });
-
-    void triggerWhatsAppNotification(confirmed, { variant: "customer_booking_confirmed" });
 
     return { handled: true, action: "booking_accepted", bookingId: row.id };
   } catch (err) {

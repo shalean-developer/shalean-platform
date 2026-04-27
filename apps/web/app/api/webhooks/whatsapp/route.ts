@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { verifyMetaWebhookSignature } from "@/lib/dispatch/metaWhatsAppSend";
-import { acceptDispatchOffer, rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
+import {
+  acceptDispatchOffer,
+  rejectDispatchOffer,
+  type AcceptDispatchOfferResult,
+} from "@/lib/dispatch/dispatchOffers";
+import { resolveDispatchOfferForCleanerReply } from "@/lib/dispatch/resolveDispatchOfferForCleanerReply";
+import { notifyCleanerJobAlreadyTaken } from "@/lib/dispatch/offerNotifications";
 import { reassignBookingAfterDecline } from "@/lib/booking/reassignBookingAfterDecline";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordWhatsAppDeliveryStatuses } from "@/lib/whatsapp/deliveryWebhook";
 import {
-  isAssignedBookingAcceptReply,
-  isAssignedBookingDeclineReply,
+  isDispatchOfferAcceptReply,
+  isDispatchOfferDeclineReply,
   normalizeCleanerReplyText,
 } from "@/lib/booking/cleanerReplyIntent";
 import { extractPrimaryInboundWhatsAppMessage } from "@/lib/whatsapp/inboundMetaPayload";
@@ -42,10 +48,6 @@ export async function GET(request: Request) {
 
   const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() ?? "";
 
-  // TEMP: remove after Meta webhook verification is confirmed
-  console.log("ENV TOKEN:", process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);
-  console.log("META TOKEN:", token);
-
   if (
     mode === "subscribe" &&
     expected.length > 0 &&
@@ -61,28 +63,12 @@ export async function GET(request: Request) {
   return new Response("Forbidden", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
 
-function offerReplyIntent(actionLower: string): "ACCEPT" | "DECLINE" | null {
-  if (actionLower.includes("accept")) return "ACCEPT";
-  if (actionLower.includes("decline")) return "DECLINE";
-  return null;
-}
-
 /**
  * Meta WhatsApp Cloud webhook: delivery status updates (`whatsapp_logs`, `whatsapp_queue`) + inbound cleaner replies.
- * Returns **200** for valid/signed payloads so Meta does not retry; **403** only for invalid signature when secret is configured.
+ * Production: requires `WHATSAPP_APP_SECRET` and valid signature. Non-production: missing secret → warn and skip verify (dev UX only).
+ * **403** = bad signature; **400** = unreadable/invalid body. **200** for successful processing.
  */
 export async function POST(request: Request) {
-  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
-
-  if (process.env.NODE_ENV === "production" && !appSecret) {
-    await logSystemEvent({
-      level: "error",
-      source: "whatsapp_webhook",
-      message: "WHATSAPP_APP_SECRET missing in production — webhook processing skipped",
-    });
-    return NextResponse.json({ received: true });
-  }
-
   let rawBody = "";
   try {
     rawBody = await request.text();
@@ -93,14 +79,24 @@ export async function POST(request: Request) {
       message: "Failed to read webhook body",
       context: { error: err instanceof Error ? err.message : String(err) },
     });
-    return NextResponse.json({ received: true });
+    return new Response("bad request", { status: 400 });
   }
 
+  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
   if (appSecret) {
     const sig = request.headers.get("x-hub-signature-256");
     if (!verifyMetaWebhookSignature(rawBody, sig, appSecret)) {
       return new Response("forbidden", { status: 403 });
     }
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error("WhatsApp webhook misconfigured: missing WHATSAPP_APP_SECRET");
+  } else {
+    await logSystemEvent({
+      level: "warn",
+      source: "whatsapp_webhook",
+      message:
+        "WHATSAPP_APP_SECRET not set (non-production) — processing webhook without signature verification; unsafe for real traffic",
+    });
   }
 
   try {
@@ -113,7 +109,7 @@ export async function POST(request: Request) {
         source: "whatsapp_webhook",
         message: "Invalid JSON webhook body",
       });
-      return NextResponse.json({ received: true });
+      return new Response("invalid json", { status: 400 });
     }
 
     const admin = getSupabaseAdmin();
@@ -125,10 +121,6 @@ export async function POST(request: Request) {
 
     const inbound = extractPrimaryInboundWhatsAppMessage(payload);
     const from = normalizePhone(inbound.from);
-    const text = String(inbound.body ?? "").trim().toLowerCase();
-    const action = text;
-
-    console.log("[WhatsApp Incoming]", { from, action });
 
     const reply = normalizeCleanerReplyText(inbound.body);
 
@@ -185,24 +177,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
-    const { data: offer } = await admin
-      .from("dispatch_offers")
-      .select("id, booking_id, cleaner_id, status")
-      .eq("cleaner_id", cleanerId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const offerId = String((offer as { id?: string } | null)?.id ?? "");
-    const bookingId = String((offer as { booking_id?: string } | null)?.booking_id ?? "");
-    if (!offerId) {
+    const wantsDecline = isDispatchOfferDeclineReply(reply);
+    const wantsAccept = isDispatchOfferAcceptReply(reply);
+    if (!wantsDecline && !wantsAccept) {
       return NextResponse.json({ received: true });
     }
 
-    const wantsDecline = offerReplyIntent(action) === "DECLINE" || isAssignedBookingDeclineReply(reply);
-    const wantsAccept = offerReplyIntent(action) === "ACCEPT" || isAssignedBookingAcceptReply(reply);
-    if (!wantsDecline && !wantsAccept) {
+    const resolved = await resolveDispatchOfferForCleanerReply({
+      supabase: admin,
+      cleanerId,
+      contextMessageId: inbound.contextMessageId,
+    });
+    const offerId = resolved?.offerId ?? "";
+    const bookingId = resolved?.bookingId ?? "";
+    if (!offerId) {
+      if (inbound.contextMessageId && (wantsAccept || wantsDecline)) {
+        await logSystemEvent({
+          level: "info",
+          source: "whatsapp_dispatch_offer_unresolved",
+          message: "No pending dispatch offer matched cleaner reply (expired, wrong thread, or ambiguous)",
+          context: {
+            cleanerId,
+            contextMessageId: inbound.contextMessageId,
+            reply,
+            wantsAccept,
+            wantsDecline,
+          },
+        });
+      }
       return NextResponse.json({ received: true });
     }
 
@@ -218,20 +220,23 @@ export async function POST(request: Request) {
         level: "info",
         source: "cleaner_offer_declined",
         message: "Cleaner declined dispatch offer via WhatsApp",
-        context: { bookingId, offerId, cleanerId, from, action },
+        context: { bookingId, offerId, cleanerId, from, reply },
       });
       return NextResponse.json({ received: true });
     }
 
-    const result = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
+    const result: AcceptDispatchOfferResult = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
     if (!result.ok) {
+      if (result.failure === "booking_taken" || result.failure === "assigned_other") {
+        await notifyCleanerJobAlreadyTaken({ cleanerId, bookingId: bookingId || undefined });
+      }
       return NextResponse.json({ received: true });
     }
     await logSystemEvent({
       level: "info",
       source: "cleaner_offer_accepted",
       message: "Cleaner accepted dispatch offer via WhatsApp",
-      context: { bookingId, offerId, cleanerId, from, action },
+      context: { bookingId, offerId, cleanerId, from, reply },
     });
     return NextResponse.json({ received: true });
   } catch (err) {

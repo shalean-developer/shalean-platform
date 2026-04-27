@@ -578,6 +578,8 @@ export type PaymentLinkEmailInput = {
   paymentUrl: string;
   bookingId: string;
   paystackReference: string;
+  /** Conversion experiment `email_copy_test` arm (default: control / long template). */
+  emailCopyVariant?: "control" | "variant_a";
 };
 
 /**
@@ -599,7 +601,7 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
       provider: "resend",
       role: "customer",
       event_type: PAYMENT_LINK_EMAIL_EVENT,
-      payload: { paystack_reference: input.paystackReference },
+      payload: { paystack_reference: input.paystackReference, email_copy_variant: input.emailCopyVariant ?? "control" },
     });
     return { sent: false, error: "Invalid email" };
   }
@@ -636,7 +638,19 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
       ? `${appUrl.replace(/\/$/, "")}/pay/${encodeURIComponent(input.bookingId.trim())}?ref=${encodeURIComponent(input.paystackReference.trim())}`
       : input.paymentUrl;
 
-  const html = `
+  const shortCopy = input.emailCopyVariant === "variant_a";
+  const html = shortCopy
+    ? `
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+  <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
+  <p style="font-size:18px;font-weight:600;margin:16px 0 8px;">Confirm your clean — pay now</p>
+  <p style="margin: 20px 0;">
+    <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700;">Pay securely</a>
+  </p>
+  <p style="font-size:12px;color:#6b7280;">Ref <span style="font-family:monospace;">${escapeHtml(input.paystackReference)}</span> · ${escapeHtml(input.serviceLabel)} · ${escapeHtml(input.dateLabel)}</p>
+</div>`
+    : `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <h1 style="font-size: 22px; margin: 0 0 12px;">Complete your booking payment</h1>
@@ -660,11 +674,14 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
 </div>`;
 
   const from = getDefaultFromAddress();
+  const subject = shortCopy
+    ? `Confirm & pay — ${input.serviceLabel}`
+    : `Complete payment — ${input.serviceLabel}`;
   try {
     const { error } = await resend.emails.send({
       from,
       to,
-      subject: `Complete payment — ${input.serviceLabel}`,
+      subject,
       html,
     });
     if (error) {
