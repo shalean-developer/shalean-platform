@@ -70,6 +70,14 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   if (!booking) return { ok: false, httpStatus: 404, error: "Booking not found." };
 
   const b = booking as BookingRow;
+  const stBooking = String(b.status ?? "").toLowerCase();
+  if (stBooking === "pending_payment" || stBooking === "payment_expired") {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: "Awaiting customer payment — assign a team after the customer has paid.",
+    };
+  }
   if (!isTeamService(b)) {
     return { ok: false, httpStatus: 400, error: "Booking service is not team-based (deep / move)." };
   }

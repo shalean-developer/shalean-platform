@@ -108,6 +108,25 @@ describe("assignBooking", () => {
     if (result.ok) expect(result.assignmentKind).toBe("individual");
   });
 
+  it("rejects assignment while payment is still pending", async () => {
+    vi.stubEnv("ENABLE_TEAM_ASSIGNMENT", "false");
+    const { assignBooking } = await import("@/lib/dispatch/assignBooking");
+    const result = await assignBooking(
+      new MockSupabase({
+        id: "b-unpaid",
+        status: "pending_payment",
+        cleaner_id: null,
+        date: "2026-04-25",
+        service: "Standard Cleaning",
+        location: "capetown",
+        booking_snapshot: null,
+      }) as unknown as never,
+      "b-unpaid",
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("booking_not_pending");
+  });
+
   it("falls back to individual when location is not allowed", async () => {
     vi.stubEnv("ENABLE_TEAM_ASSIGNMENT", "true");
     vi.stubEnv("TEAM_ASSIGN_ALLOWED_LOCATIONS", "capetown");

@@ -10,7 +10,10 @@ import {
   type OpsSnapshotRow,
 } from "@/lib/admin/opsSnapshot";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
+import type { AdminClientPaymentStatus } from "@/lib/booking/adminPaymentLinkState";
+import { deriveAdminClientPaymentStatus } from "@/lib/booking/adminPaymentLinkState";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { aggregatePaymentLinkDeliveryStats } from "@/lib/pay/paymentLinkDeliveryStats";
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -53,7 +56,28 @@ type Row = {
   city_id: string | null;
   duration_minutes: number | null;
   dispatch_attempt_count: number | null;
+  created_by_admin: boolean | null;
+  payment_link: string | null;
+  payment_link_expires_at: string | null;
+  payment_link_last_sent_at: string | null;
+  payment_link_delivery: Record<string, unknown> | null;
+  payment_link_reminder_1h_sent_at: string | null;
+  payment_link_reminder_15m_sent_at: string | null;
+  payment_link_send_count: number | null;
+  payment_link_first_sent_at: string | null;
+  payment_needs_follow_up: boolean | null;
+  payment_completed_at: string | null;
+  payment_conversion_seconds: number | null;
+  payment_conversion_bucket: string | null;
+  conversion_channel: string | null;
+  payment_first_touch_channel: string | null;
+  payment_last_touch_channel: string | null;
+  payment_assist_channels: unknown;
+  booking_priority: string | null;
+  last_decision_snapshot: unknown;
 };
+
+type RowWithPaymentStatus = Row & { payment_status: AdminClientPaymentStatus };
 
 function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
   return {
@@ -72,7 +96,7 @@ function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
 
 function classifyBooking(row: Row, today: string): "today" | "upcoming" | "completed" {
   const st = row.status?.toLowerCase();
-  if (st === "completed" || st === "cancelled" || st === "failed") return "completed";
+  if (st === "completed" || st === "cancelled" || st === "failed" || st === "payment_expired") return "completed";
   const d = row.date && /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? row.date : null;
   if (!d) return "upcoming";
   if (d === today) return "today";
@@ -122,13 +146,20 @@ export async function GET(request: Request) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
-  let bookingQuery = admin
-    .from("bookings")
-    .select(
-      "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count",
-    )
-    .order("created_at", { ascending: false })
-    .limit(4000);
+  const bookingSelect =
+    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot";
+
+  let bookingQuery = admin.from("bookings").select(bookingSelect);
+
+  if (filter === "follow-up") {
+    bookingQuery = bookingQuery
+      .eq("payment_needs_follow_up", true)
+      .order("payment_conversion_seconds", { ascending: false, nullsFirst: false })
+      .order("payment_link_send_count", { ascending: false })
+      .limit(2000);
+  } else {
+    bookingQuery = bookingQuery.order("created_at", { ascending: false }).limit(4000);
+  }
   if (cityId) bookingQuery = bookingQuery.eq("city_id", cityId);
   if (bookingStatus && bookingStatus !== "all") {
     bookingQuery = bookingQuery.eq("status", bookingStatus);
@@ -150,7 +181,9 @@ export async function GET(request: Request) {
   const today = todayYmdJohannesburg();
 
   let filtered = rows;
-  if (filter === "today") {
+  if (filter === "follow-up") {
+    filtered = rows;
+  } else if (filter === "today") {
     filtered = rows.filter((r) => classifyBooking(r, today) === "today");
   } else if (filter === "upcoming") {
     filtered = rows.filter((r) => classifyBooking(r, today) === "upcoming");
@@ -240,8 +273,15 @@ export async function GET(request: Request) {
     else vipDistribution.regular++;
   }
 
+  const withPaymentStatus: RowWithPaymentStatus[] = filtered.map((r) => ({
+    ...r,
+    payment_status: deriveAdminClientPaymentStatus(r),
+  }));
+
+  const paymentLinkChannelStats = aggregatePaymentLinkDeliveryStats(rows);
+
   return NextResponse.json({
-    bookings: filtered,
+    bookings: withPaymentStatus,
     metrics: {
       totalBookingsToday,
       revenueTodayZar,
@@ -257,6 +297,7 @@ export async function GET(request: Request) {
       supplyAvailableCleaners: demandSupply.supply,
       liveSurgeMultiplier: demandSupply.multiplier,
       slaBreachMinutes: getDispatchSlaBreachMinutes(),
+      paymentLinkChannelStats,
     },
     failedJobs: failedJobs ?? [],
     cities: cityRows ?? [],

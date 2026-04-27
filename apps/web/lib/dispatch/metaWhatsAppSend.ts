@@ -15,6 +15,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Outbound WhatsApp is restricted to cleaner operations only (enforced at runtime + call sites). */
+export type MetaWhatsAppRecipientRole = "cleaner";
+
+function assertMetaWhatsAppCleanerOnly(role: MetaWhatsAppRecipientRole): void {
+  if (role !== "cleaner") {
+    throw new Error("WhatsApp not allowed for customer communications");
+  }
+}
+
 /** Meta Cloud API `to` field: digits only, country code included, no `+`. */
 export function metaWhatsAppToDigits(phone: string): string {
   return String(phone ?? "").replace(/\D/g, "");
@@ -197,8 +206,14 @@ async function sendTemplateSingleBodyVar(params: {
 
 /**
  * Meta Cloud API outbound send: digits-only `to`, 429 retries, optional template fallback outside 24h window.
+ * `recipientRole` must be `"cleaner"` — customer/admin WhatsApp is not permitted.
  */
-export async function sendViaMetaWhatsApp(params: { phone: string; message: string }): Promise<{ messageId: string }> {
+export async function sendViaMetaWhatsApp(params: {
+  phone: string;
+  message: string;
+  recipientRole: MetaWhatsAppRecipientRole;
+}): Promise<{ messageId: string }> {
+  assertMetaWhatsAppCleanerOnly(params.recipientRole);
   const token = resolveWhatsAppBearerToken();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!token || !phoneNumberId) {
@@ -359,13 +374,16 @@ export async function sendViaMetaWhatsApp(params: { phone: string; message: stri
 
 /**
  * Approved Meta template with N body variables {{1}}..{{N}} — parameters map 1:1 in order.
+ * `recipientRole` must be `"cleaner"` — customer/admin WhatsApp is not permitted.
  */
 export async function sendViaMetaWhatsAppTemplateBody(params: {
   phone: string;
   templateName: string;
   languageCode: string;
   bodyParameters: string[];
+  recipientRole: MetaWhatsAppRecipientRole;
 }): Promise<{ messageId: string }> {
+  assertMetaWhatsAppCleanerOnly(params.recipientRole);
   const token = resolveWhatsAppBearerToken();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!token || !phoneNumberId) {
@@ -382,16 +400,28 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
     text: String(t ?? "").slice(0, WA_BODY_TEMPLATE_MAX),
   }));
 
+  const resolvedLang = (params.languageCode || "en").trim();
+  const resolvedName = params.templateName.trim();
+
   const templateBody: Record<string, unknown> = {
     messaging_product: "whatsapp",
     to: toDigits,
     type: "template",
     template: {
-      name: params.templateName.trim(),
-      language: { code: (params.languageCode || "en").trim() },
+      name: resolvedName,
+      language: { code: resolvedLang },
       components: [{ type: "body", parameters }],
     },
   };
+
+  console.log("TEMPLATE DEBUG", {
+    templateName: resolvedName,
+    language: resolvedLang,
+    phoneNumberId,
+    to: toDigits,
+    bodyParamCount: parameters.length,
+    graphVersion: getWhatsAppGraphApiVersion(),
+  });
 
   let lastFailure: ParsedFailure | null = null;
 
@@ -448,7 +478,12 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
     level: "error",
     source: "whatsapp_meta_template_send_failed",
     message: errMsg.slice(0, 2000),
-    context: { template: params.templateName, to_digits_tail: toDigits.slice(-4) },
+    context: {
+      template: resolvedName,
+      template_language: resolvedLang,
+      phone_number_id: phoneNumberId,
+      to_digits_tail: toDigits.slice(-4),
+    },
   });
   await logSystemEvent({
     level: "error",
@@ -458,7 +493,9 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
       messaging_product: "whatsapp",
       type: "template",
       graph_version: getWhatsAppGraphApiVersion(),
-      template: params.templateName,
+      template: resolvedName,
+      template_language: resolvedLang,
+      phone_number_id: phoneNumberId,
       to_digits_tail: toDigits.slice(-4),
       response_status: lastFailure?.status,
       graph_error: (lastFailure?.graphError ?? "").slice(0, 500),

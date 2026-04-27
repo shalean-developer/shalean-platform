@@ -18,6 +18,7 @@ export type CleanerRow = {
   last_response_at?: string | null;
   tier?: string | null;
   priority_score?: number | null;
+  marketplace_outcome_ema?: number | null;
 };
 
 export type SmartDispatchCandidate = CleanerRow & {

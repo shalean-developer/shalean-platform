@@ -4,8 +4,9 @@ import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
-import { completeCleanerReferralOnFirstJob, completeCustomerReferralForBooking } from "@/lib/referrals/server";
+import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export const runtime = "nodejs";
@@ -47,7 +48,11 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
     const cleanerId = typeof (b as { cleaner_id?: unknown }).cleaner_id === "string" ? String((b as { cleaner_id?: string }).cleaner_id) : null;
     const dateYmd = typeof b.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : null;
     const rawEmail = typeof b.customer_email === "string" ? b.customer_email : "";
-    const { error: upErr } = await admin.from("bookings").update({ status: "completed" }).eq("id", id);
+    const completedAt = new Date().toISOString();
+    const { error: upErr } = await admin
+      .from("bookings")
+      .update({ status: "completed", completed_at: completedAt })
+      .eq("id", id);
     if (upErr) {
       await reportOperationalIssue("error", "cron/booking-lifecycle", `mark completed failed: ${upErr.message}`, {
         bookingId: id,
@@ -56,6 +61,18 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
     }
 
     void notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
+
+    try {
+      const learn = await recordAssignmentOutcomeAndLearn(admin, id);
+      if (!learn.ok && process.env.NODE_ENV !== "production") {
+        console.warn("[booking-lifecycle] marketplace outcome learn skipped", { bookingId: id, ...learn });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue("warn", "cron/booking-lifecycle", `marketplace outcome learn: ${msg}`, {
+        bookingId: id,
+      });
+    }
 
     const { error: insEv } = await admin.from("user_events").insert({
       user_id: uid,
@@ -69,11 +86,6 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       });
     }
 
-    await completeCustomerReferralForBooking({
-      admin,
-      bookingUserId: uid,
-      customerEmail: rawEmail,
-    });
     await completeCleanerReferralOnFirstJob({
       admin,
       cleanerId,

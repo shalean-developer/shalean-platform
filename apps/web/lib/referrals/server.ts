@@ -1,10 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 function randDigits(len: number): string {
   let out = "";
   for (let i = 0; i < len; i++) out += Math.floor(Math.random() * 10);
   return out;
+}
+
+function referralMaxRewardedPerMonth(): number {
+  const raw = Number(process.env.REFERRAL_MAX_REWARDED_PER_REFERRER_MONTH ?? "25");
+  return Number.isFinite(raw) ? Math.min(500, Math.max(1, Math.round(raw))) : 25;
 }
 
 async function generateUniqueCode(
@@ -65,6 +71,27 @@ export async function resolveReferrerFromCode(
   return null;
 }
 
+async function logReferralUserEvent(params: {
+  admin: SupabaseClient;
+  userId: string | null;
+  eventType: "referral_created" | "referral_completed" | "referral_rewarded";
+  payload: Record<string, unknown>;
+}): Promise<void> {
+  if (!params.userId) return;
+  const { error } = await params.admin.from("user_events").insert({
+    user_id: params.userId,
+    event_type: params.eventType,
+    booking_id: null,
+    payload: params.payload,
+  });
+  if (error && error.code !== "23505") {
+    await reportOperationalIssue("warn", "referrals/logReferralUserEvent", error.message, {
+      eventType: params.eventType,
+      userId: params.userId,
+    });
+  }
+}
+
 export async function createPendingCustomerReferral(params: {
   admin: SupabaseClient;
   refCode: string;
@@ -78,14 +105,16 @@ export async function createPendingCustomerReferral(params: {
   const email = normalizeEmail(params.referredEmail || "");
   if (!email) return;
 
-  const { data: alreadyCompleted } = await params.admin
+  const codeSnapshot = params.refCode.trim().toUpperCase();
+
+  const { data: alreadyFinal } = await params.admin
     .from("referrals")
     .select("id")
     .eq("referrer_type", "customer")
     .eq("referred_email_or_phone", email)
-    .eq("status", "completed")
+    .in("status", ["completed", "rewarded"])
     .maybeSingle();
-  if (alreadyCompleted?.id) return;
+  if (alreadyFinal?.id) return;
 
   const { data: existing } = await params.admin
     .from("referrals")
@@ -103,32 +132,97 @@ export async function createPendingCustomerReferral(params: {
     return;
   }
 
-  await params.admin.from("referrals").insert({
+  const { error: insErr } = await params.admin.from("referrals").insert({
     referrer_id: referrer.referrerId,
     referrer_type: "customer",
     referred_email_or_phone: email,
     referred_user_id: params.referredUserId,
     reward_amount: 50,
     status: "pending",
+    code: codeSnapshot,
+  });
+  if (insErr) {
+    await reportOperationalIssue("warn", "referrals/createPendingCustomerReferral", insErr.message, {
+      referrerId: referrer.referrerId,
+    });
+    return;
+  }
+
+  await logReferralUserEvent({
+    admin: params.admin,
+    userId: referrer.referrerId,
+    eventType: "referral_created",
+    payload: { referred_email: email, code: codeSnapshot },
   });
 }
 
-export async function completeCustomerReferralForBooking(params: {
+async function countPaidBookingsForCustomer(
+  admin: SupabaseClient,
+  bookingUserId: string | null,
+  customerEmail: string,
+): Promise<number> {
+  const email = normalizeEmail(customerEmail || "");
+  if (bookingUserId) {
+    const { count, error } = await admin
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", bookingUserId)
+      .neq("status", "pending_payment")
+      .neq("status", "payment_expired");
+    if (error) return 0;
+    return count ?? 0;
+  }
+  if (!email) return 0;
+  const { count, error } = await admin
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("customer_email", email)
+    .neq("status", "pending_payment")
+    .neq("status", "payment_expired");
+  if (error) return 0;
+  return count ?? 0;
+}
+
+async function referrerRewardAbuseBlocked(admin: SupabaseClient, referrerId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("referrals")
+    .select("id", { count: "exact", head: true })
+    .eq("referrer_type", "customer")
+    .eq("referrer_id", referrerId)
+    .eq("status", "rewarded")
+    .gte("created_at", since);
+  if (error) return true;
+  return (count ?? 0) >= referralMaxRewardedPerMonth();
+}
+
+/**
+ * When a referred customer completes their **first paid** booking, finalize the referral and credit the referrer.
+ * Idempotent: only the first qualifying payment triggers a reward.
+ */
+export async function processCustomerReferralAfterFirstPaidBooking(params: {
   admin: SupabaseClient;
   bookingUserId: string | null;
   customerEmail: string;
+  /** Optional audit id (e.g. booking id on first successful payment). */
+  bookingId?: string | null;
 }): Promise<void> {
   const email = normalizeEmail(params.customerEmail || "");
-  const pendingQ = params.admin
+  if (!email) return;
+
+  const paidCount = await countPaidBookingsForCustomer(params.admin, params.bookingUserId, email);
+  if (paidCount !== 1) return;
+
+  const { data: pending } = await params.admin
     .from("referrals")
-    .select("id, referrer_id, referred_user_id")
+    .select("id, referrer_id, referred_user_id, reward_amount")
     .eq("referrer_type", "customer")
     .eq("status", "pending")
     .eq("referred_email_or_phone", email)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const { data: pending } = await pendingQ;
+
   if (!pending?.id) return;
   if (params.bookingUserId && String(pending.referrer_id) === params.bookingUserId) return;
 
@@ -137,30 +231,69 @@ export async function completeCustomerReferralForBooking(params: {
     .select("id")
     .eq("referrer_type", "customer")
     .eq("referred_email_or_phone", email)
-    .eq("status", "completed")
+    .in("status", ["completed", "rewarded"])
     .maybeSingle();
   if (dup?.id) return;
 
-  await params.admin.from("referrals").update({
-    status: "completed",
-    completed_at: new Date().toISOString(),
-    referred_user_id: params.bookingUserId ?? pending.referred_user_id ?? null,
-  }).eq("id", pending.id);
+  const referrerId = String(pending.referrer_id);
+  if (await referrerRewardAbuseBlocked(params.admin, referrerId)) {
+    await reportOperationalIssue("warn", "referrals/abuse_cap", "Monthly referrer reward cap reached", {
+      referrerId,
+      bookingId: params.bookingId ?? null,
+    });
+    return;
+  }
 
-  await params.admin
-    .from("user_profiles")
-    .upsert({ id: String(pending.referrer_id), credit_balance_zar: 0 }, { onConflict: "id" });
-  const { data: profile } = await params.admin
-    .from("user_profiles")
-    .select("credit_balance_zar")
-    .eq("id", String(pending.referrer_id))
-    .maybeSingle();
+  const reward = Number((pending as { reward_amount?: number }).reward_amount ?? 50);
+  const now = new Date().toISOString();
+
+  const { error: upErr } = await params.admin
+    .from("referrals")
+    .update({
+      status: "rewarded",
+      completed_at: now,
+      rewarded_at: now,
+      referred_user_id: params.bookingUserId ?? (pending as { referred_user_id?: string | null }).referred_user_id ?? null,
+    })
+    .eq("id", pending.id)
+    .eq("status", "pending");
+
+  if (upErr) {
+    await reportOperationalIssue("warn", "referrals/finalize", upErr.message, { referralId: pending.id });
+    return;
+  }
+
+  await logReferralUserEvent({
+    admin: params.admin,
+    userId: referrerId,
+    eventType: "referral_completed",
+    payload: { referral_id: pending.id, booking_id: params.bookingId ?? null, referred_email: email },
+  });
+
+  await params.admin.from("user_profiles").upsert({ id: referrerId, credit_balance_zar: 0 }, { onConflict: "id" });
+  const { data: profile } = await params.admin.from("user_profiles").select("credit_balance_zar").eq("id", referrerId).maybeSingle();
   const bal = Number((profile as { credit_balance_zar?: number } | null)?.credit_balance_zar ?? 0);
+  const credit = Math.max(0, reward);
   await params.admin
     .from("user_profiles")
-    .update({ credit_balance_zar: Math.max(0, bal) + 50 })
-    .eq("id", String(pending.referrer_id));
+    .update({ credit_balance_zar: Math.max(0, bal) + credit })
+    .eq("id", referrerId);
+
+  await logReferralUserEvent({
+    admin: params.admin,
+    userId: referrerId,
+    eventType: "referral_rewarded",
+    payload: {
+      referral_id: pending.id,
+      booking_id: params.bookingId ?? null,
+      reward_zar: credit,
+      kind: "wallet",
+    },
+  });
 }
+
+/** @deprecated Use processCustomerReferralAfterFirstPaidBooking (first paid booking). Kept for grep clarity. */
+export const completeCustomerReferralForBooking = processCustomerReferralAfterFirstPaidBooking;
 
 export async function createPendingCleanerReferral(params: {
   admin: SupabaseClient;
@@ -189,6 +322,7 @@ export async function createPendingCleanerReferral(params: {
     referred_email_or_phone: phone,
     reward_amount: 100,
     status: "pending",
+    code: params.refCode.trim().toUpperCase(),
   });
 }
 
@@ -248,10 +382,13 @@ export async function completeCleanerReferralOnFirstJob(params: {
     .maybeSingle();
   if (done?.id) return;
 
-  await params.admin.from("referrals").update({
-    status: "completed",
-    completed_at: new Date().toISOString(),
-  }).eq("id", pending.id);
+  await params.admin
+    .from("referrals")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", pending.id);
 
   const { data: cleaner } = await params.admin
     .from("cleaners")

@@ -565,6 +565,165 @@ export async function sendAdminHtmlEmail(params: {
   }
 }
 
+const PAYMENT_LINK_EMAIL_EVENT = "payment_link_sent";
+
+export type PaymentLinkEmailInput = {
+  customerEmail: string;
+  customerName?: string | null;
+  serviceLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  amountZar: number | null;
+  /** Paystack `authorization_url` (server-issued only). */
+  paymentUrl: string;
+  bookingId: string;
+  paystackReference: string;
+};
+
+/**
+ * Admin / ops: email with a working Paystack checkout button.
+ * URL is not passed through `renderTemplate` HTML escape (would break query strings).
+ */
+export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promise<{ sent: boolean; error?: string }> {
+  const resend = getResend();
+  const to = normalizeEmail(input.customerEmail.trim());
+  const bid = input.bookingId.trim() || null;
+  if (!to) {
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "payment_link",
+      recipient: input.customerEmail,
+      status: "failed",
+      error: "invalid_email",
+      provider: "resend",
+      role: "customer",
+      event_type: PAYMENT_LINK_EMAIL_EVENT,
+      payload: { paystack_reference: input.paystackReference },
+    });
+    return { sent: false, error: "Invalid email" };
+  }
+
+  if (!resend) {
+    await reportOperationalIssue("warn", "sendPaymentLinkEmail", "RESEND_API_KEY not set", {
+      reference: input.paystackReference,
+    });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "payment_link",
+      recipient: to,
+      status: "failed",
+      error: "resend_not_configured",
+      provider: "resend",
+      role: "customer",
+      event_type: PAYMENT_LINK_EMAIL_EVENT,
+      payload: { paystack_reference: input.paystackReference },
+    });
+    return { sent: false, error: "Email not configured" };
+  }
+
+  const greet =
+    (input.customerName?.trim() || to.split("@")[0]?.replace(/[.+_]/g, " ").trim() || "there").slice(0, 120);
+  const amountBlock =
+    input.amountZar != null && Number.isFinite(input.amountZar)
+      ? `<p style="margin:12px 0 0;"><strong>Total due:</strong> R ${input.amountZar.toLocaleString("en-ZA")}</p>`
+      : "";
+
+  const appUrl = getPublicAppUrlBase();
+  const trustPayPageHref =
+    appUrl && input.bookingId?.trim() && input.paystackReference?.trim()
+      ? `${appUrl.replace(/\/$/, "")}/pay/${encodeURIComponent(input.bookingId.trim())}?ref=${encodeURIComponent(input.paystackReference.trim())}`
+      : input.paymentUrl;
+
+  const html = `
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+  <h1 style="font-size: 22px; margin: 0 0 12px;">Complete your booking payment</h1>
+  <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
+  <p style="color:#374151;">Your cleaning visit is reserved. Pay securely below to confirm.</p>
+  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin: 18px 0;">
+    <p><strong>Service:</strong> ${escapeHtml(input.serviceLabel)}</p>
+    <p><strong>Date:</strong> ${escapeHtml(input.dateLabel)}</p>
+    <p><strong>Time:</strong> ${escapeHtml(input.timeLabel)}</p>
+    ${amountBlock}
+    <p style="font-size:12px;color:#6b7280;margin-top:12px;">
+      Booking: <span style="font-family:monospace;">${escapeHtml(input.bookingId)}</span><br/>
+      Reference: <span style="font-family:monospace;">${escapeHtml(input.paystackReference)}</span>
+    </p>
+  </div>
+  <p style="margin: 24px 0;">
+    <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
+  </p>
+  <p style="font-size:12px;color:#6b7280;">If the button does not work, copy this link into your browser:<br/>
+  <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(input.paymentUrl)}</span></p>
+</div>`;
+
+  const from = getDefaultFromAddress();
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject: `Complete payment — ${input.serviceLabel}`,
+      html,
+    });
+    if (error) {
+      await reportOperationalIssue("error", "sendPaymentLinkEmail", error.message, {
+        reference: input.paystackReference,
+        to,
+      });
+      await writeNotificationLog({
+        booking_id: bid,
+        channel: "email",
+        template_key: "payment_link",
+        recipient: to,
+        status: "failed",
+        error: error.message,
+        provider: "resend",
+        role: "customer",
+        event_type: PAYMENT_LINK_EMAIL_EVENT,
+        payload: { paystack_reference: input.paystackReference },
+      });
+      return { sent: false, error: error.message };
+    }
+    await logSystemEvent({
+      level: "info",
+      source: "email",
+      message: "Payment link email sent",
+      context: { reference: input.paystackReference, to, bookingId: input.bookingId },
+    });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "payment_link",
+      recipient: to,
+      status: "sent",
+      error: null,
+      provider: "resend",
+      role: "customer",
+      event_type: PAYMENT_LINK_EMAIL_EVENT,
+      payload: { paystack_reference: input.paystackReference },
+    });
+    return { sent: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await reportOperationalIssue("error", "sendPaymentLinkEmail", msg, { reference: input.paystackReference, to });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: "payment_link",
+      recipient: to,
+      status: "failed",
+      error: msg,
+      provider: "resend",
+      role: "customer",
+      event_type: PAYMENT_LINK_EMAIL_EVENT,
+      payload: { paystack_reference: input.paystackReference },
+    });
+    return { sent: false, error: msg };
+  }
+}
+
 export async function sendAdminNewBookingEmail(payload: BookingEmailPayload): Promise<void> {
   let recipients: string[];
   try {

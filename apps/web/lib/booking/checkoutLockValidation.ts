@@ -32,6 +32,11 @@ export type CheckoutLockValidateResult =
  */
 export type ValidateLockForCheckoutOptions = {
   skipExpiryCheck?: boolean;
+  /**
+   * When true, skip catalog vs locked `finalPrice` / `finalHours` parity checks and use
+   * `locked.finalPrice` as `visitTotalZar` (recurring engine agreed ZAR vs live surge recompute).
+   */
+  skipPriceDurationParity?: boolean;
   /** Required — frozen `pricing_versions` row or live DB catalog from {@link resolveRatesSnapshotForLockedBooking}. */
   ratesSnapshot: PricingRatesSnapshot;
   /** Optional `bookings.id` — pricing normalization / drift logs when support traces a row. */
@@ -49,6 +54,7 @@ function validateSignedLockV2(
   locked: LockedBooking,
   ratesSnapshot: PricingRatesSnapshot,
   bookingIdOverride?: string | null,
+  opts?: { skipPriceDurationParity?: boolean },
 ): CheckoutLockValidateResult {
   const rec = recomputeLockCheckoutQuote(locked, ratesSnapshot);
   if (!rec) {
@@ -60,7 +66,7 @@ function validateSignedLockV2(
   const hasSig =
     typeof locked.quoteSignature === "string" && /^[0-9a-f]{64}$/i.test(locked.quoteSignature.trim());
 
-  if (hasSig) {
+  if (hasSig && !opts?.skipPriceDurationParity) {
     const sigOk = verifyLockQuoteSignatureForQuote(locked, serverQuote, {
       job,
       timeHm,
@@ -77,20 +83,22 @@ function validateSignedLockV2(
     }
   }
 
-  if (Math.abs(serverQuote.totalZar - locked.finalPrice) > 1) {
-    return {
-      ok: false,
-      code: "PRICE_MISMATCH",
-      message: "Price updated due to changes in availability or demand. Please re-lock your slot.",
-    };
-  }
+  if (!opts?.skipPriceDurationParity) {
+    if (Math.abs(serverQuote.totalZar - locked.finalPrice) > 1) {
+      return {
+        ok: false,
+        code: "PRICE_MISMATCH",
+        message: "Price updated due to changes in availability or demand. Please re-lock your slot.",
+      };
+    }
 
-  if (Math.abs(serverQuote.hours - locked.finalHours) > 0.1) {
-    return {
-      ok: false,
-      code: "DURATION_MISMATCH",
-      message: "Visit length no longer matches this quote. Please re-lock your slot.",
-    };
+    if (Math.abs(serverQuote.hours - locked.finalHours) > 0.1) {
+      return {
+        ok: false,
+        code: "DURATION_MISMATCH",
+        message: "Visit length no longer matches this quote. Please re-lock your slot.",
+      };
+    }
   }
 
   const pricingVersionId =
@@ -108,7 +116,8 @@ function validateSignedLockV2(
       quoteTotalZar: serverQuote.totalZar,
     },
   );
-  return { ok: true, serverQuote, visitTotalZar: serverQuote.totalZar, jobSubtotalSplit };
+  const visitTotalZar = opts?.skipPriceDurationParity ? Math.max(1, Math.round(Number(locked.finalPrice))) : serverQuote.totalZar;
+  return { ok: true, serverQuote, visitTotalZar, jobSubtotalSplit };
 }
 
 export function validateLockForCheckout(
@@ -148,5 +157,7 @@ export function validateLockForCheckout(
     };
   }
 
-  return validateSignedLockV2(locked, snap, options?.bookingId);
+  return validateSignedLockV2(locked, snap, options?.bookingId, {
+    skipPriceDurationParity: options?.skipPriceDurationParity,
+  });
 }

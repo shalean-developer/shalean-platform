@@ -53,6 +53,10 @@ type BookingRow = {
   paystack_reference: string;
   duration_minutes?: number | null;
   dispatch_attempt_count?: number | null;
+  payment_needs_follow_up?: boolean | null;
+  payment_link_send_count?: number | null;
+  payment_conversion_seconds?: number | null;
+  payment_conversion_bucket?: string | null;
 };
 
 function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], status: string | null): string {
@@ -112,6 +116,12 @@ type Metrics = {
   supplyAvailableCleaners?: number;
   liveSurgeMultiplier?: number;
   slaBreachMinutes?: number;
+  paymentLinkChannelStats?: {
+    sample_size: number;
+    whatsapp_success_rate: number | null;
+    sms_fallback_rate: number | null;
+    email_only_rate: number | null;
+  };
 };
 
 type AdminRouteStop = {
@@ -186,12 +196,14 @@ function attentionKeyFromAction(
     | "sla"
     | "unassigned"
     | "payment_failed"
-    | "starting_soon_without_cleaner",
+    | "starting_soon_without_cleaner"
+    | "needs_follow_up",
 ): AttentionQueueFilter | null {
   if (f === "unassignable") return "unassignable";
   if (f === "sla") return "sla";
   if (f === "unassigned") return "unassigned";
   if (f === "starting_soon_without_cleaner") return "starting-soon";
+  // `payment_failed`, `needs_follow_up`, `all` — custom row filters, not attention-queue keys
   return null;
 }
 
@@ -282,6 +294,7 @@ export default function AdminBookingsPage() {
     | "unassigned"
     | "payment_failed"
     | "starting_soon_without_cleaner"
+    | "needs_follow_up"
   >("all");
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -329,21 +342,33 @@ export default function AdminBookingsPage() {
         | "sla"
         | "unassigned"
         | "payment_failed"
-        | "starting_soon_without_cleaner",
+        | "starting_soon_without_cleaner"
+        | "needs_follow_up",
     ) => {
       setActionFilter(next);
       const params = new URLSearchParams(searchParams.toString());
       params.delete("openAssign");
-      const key = attentionKeyFromAction(next);
+      const opsValues = new Set(["unassignable", "sla", "unassigned", "starting-soon", "follow-up"]);
       const cur = params.get("filter");
-      const opsValues = new Set(["unassignable", "sla", "unassigned", "starting-soon"]);
-      if (key) {
-        const fv = attentionUrlValue(key);
-        params.set("filter", fv);
-        persistLastOpsFilter(fv);
-      } else if (cur && opsValues.has(cur)) {
-        params.delete("filter");
-        persistLastOpsFilter(null);
+
+      if (next === "needs_follow_up") {
+        params.set("filter", "follow-up");
+        persistLastOpsFilter("follow-up");
+      } else if (next === "all") {
+        if (cur && opsValues.has(cur)) {
+          params.delete("filter");
+          persistLastOpsFilter(null);
+        }
+      } else {
+        const key = attentionKeyFromAction(next);
+        if (key) {
+          const fv = attentionUrlValue(key);
+          params.set("filter", fv);
+          persistLastOpsFilter(fv);
+        } else if (cur && opsValues.has(cur)) {
+          params.delete("filter");
+          persistLastOpsFilter(null);
+        }
       }
       const q = params.toString();
       router.replace(q ? `${pathname}?${q}` : pathname);
@@ -365,10 +390,11 @@ export default function AdminBookingsPage() {
   useEffect(() => {
     const f = searchParams.get("filter");
     if (!f) return;
-    const ops = new Set(["unassignable", "sla", "unassigned", "starting-soon"]);
+    const ops = new Set(["unassignable", "sla", "unassigned", "starting-soon", "follow-up"]);
     const date = new Set(["today", "upcoming", "completed", "all"]);
     if (ops.has(f)) {
       if (f === "starting-soon") setActionFilter("starting_soon_without_cleaner");
+      else if (f === "follow-up") setActionFilter("needs_follow_up");
       else setActionFilter(f as "unassignable" | "sla" | "unassigned");
       persistLastOpsFilter(f);
       return;
@@ -405,7 +431,8 @@ export default function AdminBookingsPage() {
     }
 
     const qs = new URLSearchParams();
-    if (filter !== "all") qs.set("filter", filter);
+    if (actionFilter === "needs_follow_up") qs.set("filter", "follow-up");
+    else if (filter !== "all") qs.set("filter", filter);
     if (selectedCityId !== "all") qs.set("cityId", selectedCityId);
     if (bookingStatusFilter !== "all") qs.set("bookingStatus", bookingStatusFilter);
     if (dateFrom.trim()) qs.set("from", dateFrom.trim());
@@ -477,7 +504,7 @@ export default function AdminBookingsPage() {
     }
 
     setLoading(false);
-  }, [filter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
+  }, [filter, actionFilter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
 
   const retryDispatchFailed = useCallback(
     async (bookingId: string) => {
@@ -687,15 +714,17 @@ export default function AdminBookingsPage() {
     let unassigned = 0;
     let failedPayments = 0;
     let startingSoonWithoutCleaner = 0;
+    let needsFollowUp = 0;
     for (const r of rows) {
       if (rowMatchesAttentionFilter(r, "unassignable", now, slaM)) unassignable++;
       if (rowMatchesAttentionFilter(r, "sla", now, slaM)) sla++;
       if (rowMatchesAttentionFilter(r, "unassigned", now, slaM)) unassigned++;
       if (rowMatchesAttentionFilter(r, "starting-soon", now, slaM)) startingSoonWithoutCleaner++;
+      if (Boolean(r.payment_needs_follow_up)) needsFollowUp++;
       const f = adminRowFlags(r, today);
       if (f.paymentMissing) failedPayments++;
     }
-    return { unassignable, sla, unassigned, failedPayments, startingSoonWithoutCleaner };
+    return { unassignable, sla, unassigned, failedPayments, startingSoonWithoutCleaner, needsFollowUp };
   }, [rows, today, metrics?.slaBreachMinutes]);
 
   const visibleRows = useMemo(() => {
@@ -708,6 +737,9 @@ export default function AdminBookingsPage() {
     }
     if (actionFilter === "payment_failed") {
       return rows.filter((r) => adminRowFlags(r, today).paymentMissing);
+    }
+    if (actionFilter === "needs_follow_up") {
+      return rows;
     }
     return rows;
   }, [rows, actionFilter, today, metrics?.slaBreachMinutes]);
@@ -801,6 +833,33 @@ export default function AdminBookingsPage() {
               />
               <MetricCard label="Repeat booking rate" value={`${metrics.repeatBookingRatePercent ?? metrics.repeatCustomerPercent}%`} />
             </div>
+            {metrics.paymentLinkChannelStats && metrics.paymentLinkChannelStats.sample_size > 0 ? (
+              <div className="mb-6 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Payment link channels</p>
+                <p className="mt-1 text-xs tabular-nums">
+                  <span className="font-mono">n={metrics.paymentLinkChannelStats.sample_size}</span>
+                  {" · "}
+                  WA success{" "}
+                  {metrics.paymentLinkChannelStats.whatsapp_success_rate != null
+                    ? `${(metrics.paymentLinkChannelStats.whatsapp_success_rate * 100).toFixed(1)}%`
+                    : "—"}
+                  {" · "}
+                  SMS after WA fail{" "}
+                  {metrics.paymentLinkChannelStats.sms_fallback_rate != null
+                    ? `${(metrics.paymentLinkChannelStats.sms_fallback_rate * 100).toFixed(1)}%`
+                    : "—"}
+                  {" · "}
+                  Email-only{" "}
+                  {metrics.paymentLinkChannelStats.email_only_rate != null
+                    ? `${(metrics.paymentLinkChannelStats.email_only_rate * 100).toFixed(1)}%`
+                    : "—"}
+                </p>
+                <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                  Latest <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">payment_link_delivery</code>{" "}
+                  per booking in this fetch (not time-series).
+                </p>
+              </div>
+            ) : null}
             <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -900,7 +959,7 @@ export default function AdminBookingsPage() {
               </button>
             ) : null}
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <ActionCard
               title="Unassignable"
               count={actionRequiredCounts.unassignable}
@@ -935,6 +994,13 @@ export default function AdminBookingsPage() {
               tone="amber"
               active={actionFilter === "payment_failed"}
               onClick={() => setOpsAttentionFilter("payment_failed")}
+            />
+            <ActionCard
+              title="Needs follow-up"
+              count={actionRequiredCounts.needsFollowUp}
+              tone="red"
+              active={actionFilter === "needs_follow_up"}
+              onClick={() => setOpsAttentionFilter("needs_follow_up")}
             />
           </div>
         </div>
@@ -994,7 +1060,18 @@ export default function AdminBookingsPage() {
             <button
               key={k}
               type="button"
-              onClick={() => setFilter(k)}
+              onClick={() => {
+                setFilter(k);
+                setActionFilter("all");
+                const params = new URLSearchParams(searchParams.toString());
+                const opsUrl = new Set(["unassignable", "sla", "unassigned", "starting-soon", "follow-up"]);
+                if (opsUrl.has(params.get("filter") ?? "")) {
+                  params.delete("filter");
+                  persistLastOpsFilter(null);
+                }
+                const q = params.toString();
+                router.replace(q ? `${pathname}?${q}` : pathname);
+              }}
               className={[
                 "rounded-full px-4 py-2 text-sm font-medium transition",
                 filter === k

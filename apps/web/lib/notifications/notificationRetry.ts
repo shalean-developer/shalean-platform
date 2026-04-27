@@ -155,6 +155,13 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
   }
 
   if (row.channel === "whatsapp" && row.provider === "meta") {
+    if (String(row.role ?? "").toLowerCase() === "customer") {
+      return {
+        ok: false,
+        error: "Customer WhatsApp retry is disabled by communication policy.",
+        httpStatus: 400,
+      };
+    }
     const text = typeof payload.text === "string" ? payload.text : "";
     if (!text.trim()) {
       return { ok: false, error: "WhatsApp retry requires payload.text.", httpStatus: 400 };

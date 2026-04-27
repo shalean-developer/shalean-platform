@@ -78,6 +78,7 @@ export function useBookings(): {
       .select(BOOKING_SELECT)
       .eq("user_id", user.id)
       .neq("status", "pending_payment")
+      .neq("status", "payment_expired")
       .order("date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(100);
@@ -88,6 +89,7 @@ export function useBookings(): {
         .select(BOOKING_SELECT.replace(",cleaners(full_name,phone)", ""))
         .eq("user_id", user.id)
         .neq("status", "pending_payment")
+        .neq("status", "payment_expired")
         .order("date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(100);

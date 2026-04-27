@@ -40,6 +40,7 @@ export async function GET(request: Request) {
     )
     .eq("user_id", userData.user.id)
     .neq("status", "pending_payment")
+    .neq("status", "payment_expired")
     .order("created_at", { ascending: false })
     .limit(100);
 

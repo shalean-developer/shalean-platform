@@ -10,5 +10,5 @@ export async function sendTestWhatsApp(
   phone: string,
   message = `Shalean WhatsApp test ${new Date().toISOString()}`,
 ): Promise<{ messageId: string }> {
-  return sendViaMetaWhatsApp({ phone, message });
+  return sendViaMetaWhatsApp({ phone, message, recipientRole: "cleaner" });
 }

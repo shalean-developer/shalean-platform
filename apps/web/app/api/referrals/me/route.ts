@@ -24,17 +24,25 @@ export async function GET(request: Request) {
 
   const referralCode = await getOrCreateCustomerReferralCode(admin, userId);
   const [rowsRes, profileRes] = await Promise.all([
-    admin.from("referrals").select("id, status, reward_amount, created_at").eq("referrer_type", "customer").eq("referrer_id", userId).order("created_at", { ascending: false }).limit(200),
+    admin
+      .from("referrals")
+      .select("id, status, reward_amount, created_at, code")
+      .eq("referrer_type", "customer")
+      .eq("referrer_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(200),
     admin.from("user_profiles").select("credit_balance_zar").eq("id", userId).maybeSingle(),
   ]);
   if (rowsRes.error) return NextResponse.json({ error: rowsRes.error.message }, { status: 500 });
   if (profileRes.error) return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
 
   const rows = rowsRes.data ?? [];
-  const totalEarned = rows
-    .filter((r) => String(r.status).toLowerCase() === "completed")
-    .reduce((s, r) => s + Number(r.reward_amount ?? 0), 0);
-  const count = rows.filter((r) => String(r.status).toLowerCase() === "completed").length;
+  const finalized = (s: string) => {
+    const x = s.toLowerCase();
+    return x === "completed" || x === "rewarded";
+  };
+  const totalEarned = rows.filter((r) => finalized(String(r.status ?? ""))).reduce((s, r) => s + Number(r.reward_amount ?? 0), 0);
+  const count = rows.filter((r) => finalized(String(r.status ?? ""))).length;
   const creditBalance = Number((profileRes.data as { credit_balance_zar?: number } | null)?.credit_balance_zar ?? 0);
 
   return NextResponse.json({ referralCode, totalEarned, referralsCount: count, creditBalance });

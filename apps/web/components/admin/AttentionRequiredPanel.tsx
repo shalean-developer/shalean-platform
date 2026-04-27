@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -236,6 +237,13 @@ export function AttentionRequiredPanel() {
           <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Attention required</h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             Priority order: SLA breach → Unassignable → Unassigned (paid) → Starting soon.
+            {" · "}
+            <Link
+              href="/admin/bookings?filter=follow-up"
+              className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Needs follow-up
+            </Link>
           </p>
           {lastIncidentLine}
         </div>

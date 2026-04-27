@@ -46,6 +46,13 @@ export async function performAdminAssignToCleaner(
 
   const b = booking as BookingRow;
   const st = String(b.status ?? "").toLowerCase();
+  if (st === "pending_payment" || st === "payment_expired") {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: "Awaiting customer payment — assign a cleaner after the customer has paid.",
+    };
+  }
   if (st === "completed" || st === "cancelled" || st === "failed") {
     return { ok: false, httpStatus: 400, error: "Booking cannot be assigned in this state." };
   }

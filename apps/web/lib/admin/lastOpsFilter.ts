@@ -1,7 +1,7 @@
 /** Persisted ops queue filter for /admin/bookings deep links (per browser). */
 export const LAST_OPS_FILTER_STORAGE_KEY = "lastOpsFilter";
 
-const VALID = new Set(["unassignable", "sla", "unassigned", "starting-soon"]);
+const VALID = new Set(["unassignable", "sla", "unassigned", "starting-soon", "follow-up"]);
 
 export function isStoredOpsFilter(value: string | null | undefined): value is string {
   return typeof value === "string" && VALID.has(value);

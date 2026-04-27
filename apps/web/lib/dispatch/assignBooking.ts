@@ -60,6 +60,15 @@ export async function assignBooking(
     booking_snapshot?: unknown;
   };
 
+  const paySt = String(b.status ?? "").toLowerCase();
+  if (paySt === "pending_payment" || paySt === "payment_expired") {
+    return {
+      ok: false,
+      error: "booking_not_pending",
+      message: "Payment not completed — cleaner cannot be assigned yet.",
+    };
+  }
+
   const teamService = isTeamService(b);
   const scopeAllowsTeam = shouldUseTeamAssignment({
     serviceType: b.service,

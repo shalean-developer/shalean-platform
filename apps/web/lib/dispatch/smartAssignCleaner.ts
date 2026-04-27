@@ -10,6 +10,13 @@ import { isBookingTimeInWindow } from "@/lib/dispatch/timeWindow";
 import type { AvailabilityRow, CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { predictAcceptanceProbability } from "@/lib/marketplace-intelligence/acceptanceProbability";
+import { scoreCleanerForBooking } from "@/lib/marketplace-intelligence/cleanerScoring";
+import type { AssignmentWeights } from "@/lib/ai-autonomy/modelWeights";
+import { predictCleanerAcceptanceSync } from "@/lib/ai-autonomy/predictions";
+import { computeAiDispatchDelta } from "@/lib/ai-autonomy/assignmentBlend";
+import { getAiAutonomyFlags } from "@/lib/ai-autonomy/flags";
+import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
 
 export type { SmartDispatchCandidate } from "@/lib/dispatch/types";
 
@@ -37,6 +44,9 @@ export type SmartAssignOptions = {
   retryTier?: number;
   /** Exclude cleaners (e.g. customer’s pick that could not be honored at checkout). */
   excludeCleanerIds?: readonly string[];
+  /** Phase-5: experiment arm + preloaded weights (from `assignBestCleaner`). */
+  aiAssignmentVariant?: "control" | "variant";
+  aiAssignmentWeights?: AssignmentWeights;
 };
 
 export type SmartAssignResult =
@@ -329,6 +339,10 @@ export async function findSmartDispatchCandidates(
     travelProvider?: TravelTimeProvider;
     maxCandidates?: number;
     excludeCleanerIds?: readonly string[];
+    /** Emits `cleaner_scored` marketplace intelligence event (top candidates). */
+    intelligenceTelemetry?: { bookingId: string };
+    aiAssignmentVariant?: "control" | "variant";
+    aiAssignmentWeights?: AssignmentWeights;
   },
 ): Promise<SmartDispatchCandidate[]> {
   const { dateYmd, timeHm, locationId } = params;
@@ -406,7 +420,7 @@ export async function findSmartDispatchCandidates(
   let cleanersQuery = supabase
     .from("cleaners")
     .select(
-      "id, full_name, rating, jobs_completed, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score",
+      "id, full_name, rating, jobs_completed, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema",
     )
     .neq("status", "offline")
     .in("id", [...eligibleFromWindow]);
@@ -461,10 +475,13 @@ export async function findSmartDispatchCandidates(
   if (baseCleaners.length === 0) return [];
 
   const ids = baseCleaners.map((c) => c.id);
+  const declineByCleaner = new Map<string, number>();
+  const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
   const since1h = new Date(Date.now() - 3600_000).toISOString();
   const minWeekDate = dateYmdDaysAgo(7);
 
-  const [{ data: dayRows }, { data: weekRows }, { data: offerFatigueRows }] = await Promise.all([
+  const [{ data: dayRows }, { data: weekRows }, { data: offerFatigueRows }, { data: declineRows }] = await Promise.all([
     supabase
       .from("bookings")
       .select("cleaner_id, time, location_id, duration_minutes, status")
@@ -478,7 +495,22 @@ export async function findSmartDispatchCandidates(
       .gte("date", minWeekDate)
       .in("status", ["completed", "assigned", "in_progress"]),
     supabase.from("dispatch_offers").select("cleaner_id").gte("created_at", since1h).in("cleaner_id", ids),
+    ids.length
+      ? supabase
+          .from("dispatch_offers")
+          .select("cleaner_id")
+          .in("cleaner_id", ids)
+          .eq("status", "rejected")
+          .gte("created_at", since7d)
+      : Promise.resolve({ data: [] as { cleaner_id?: string }[], error: null }),
   ]);
+
+  for (const row of declineRows ?? []) {
+    if (!row || typeof row !== "object" || !("cleaner_id" in row)) continue;
+    const cid = String((row as { cleaner_id?: string }).cleaner_id ?? "");
+    if (!cid) continue;
+    declineByCleaner.set(cid, (declineByCleaner.get(cid) ?? 0) + 1);
+  }
 
   const fatigueByCleaner = new Map<string, number>();
   for (const row of offerFatigueRows ?? []) {
@@ -535,8 +567,35 @@ export async function findSmartDispatchCandidates(
   if (!newIvBase) return [];
   const newIv: DayInterval = { ...newIvBase, location_id: locationId };
 
+  const clusterAffinityCounts = new Map<string, number>();
+  const hmNorm = normalizeHm(timeHm);
+  const hh = hmNorm.slice(0, 2);
+  if (ids.length && locationId && /^\d{2}$/.test(hh)) {
+    const { data: affRows } = await supabase
+      .from("bookings")
+      .select("cleaner_id")
+      .eq("date", dateYmd)
+      .eq("location_id", locationId)
+      .like("time", `${hh}:%`)
+      .in("status", ["assigned", "in_progress"])
+      .in("cleaner_id", ids);
+    for (const row of affRows ?? []) {
+      const cid = String((row as { cleaner_id?: string }).cleaner_id ?? "");
+      if (!cid) continue;
+      clusterAffinityCounts.set(cid, (clusterAffinityCounts.get(cid) ?? 0) + 1);
+    }
+  }
+
   const stricter = supplyRatioStricter;
   const scored: SmartDispatchCandidate[] = [];
+  const aiFlags = getAiAutonomyFlags();
+  const aiW =
+    aiFlags.assignment &&
+    options?.aiAssignmentVariant === "variant" &&
+    options?.aiAssignmentWeights
+      ? options.aiAssignmentWeights
+      : null;
+  const telemetryBookingId = String(options?.intelligenceTelemetry?.bookingId ?? "").trim() || "unknown";
 
   for (const c of baseCleaners) {
     const cc = cleanerCoords(c);
@@ -603,7 +662,21 @@ export async function findSmartDispatchCandidates(
 
     const priorityScore = Number((c as { priority_score?: number | null }).priority_score ?? 0) || 0;
     const forcedCleanerBoost = c.id === FORCED_PRIORITY_CLEANER_ID ? 1000 : 0;
-    const score =
+    const declines = declineByCleaner.get(c.id) ?? 0;
+    const slotHour = parseInt(normalizeHm(timeHm).slice(0, 2), 10);
+    const acceptP = predictAcceptanceProbability({
+      distanceKm,
+      acceptanceRecent: acceptanceRec,
+      acceptanceLifetime: acceptanceLife,
+      recentDeclines: declines,
+      fatigueOffersLastHour: fatigue,
+      hourOfDay: Number.isFinite(slotHour) ? slotHour : 12,
+    });
+    const ema = (c as { marketplace_outcome_ema?: number | null }).marketplace_outcome_ema;
+    const learnBoost = (Number(ema ?? 0.5) - 0.5) * 3.5;
+    const cn = clusterAffinityCounts.get(c.id) ?? 0;
+    const clusterBoost = cn <= 0 ? 0 : Math.min(2.2, 0.85 + cn * 0.4);
+    let score =
       computeDispatchScoreV4(
       {
         rating: c.rating ?? 0,
@@ -624,7 +697,48 @@ export async function findSmartDispatchCandidates(
       ) +
       nearbyWorkBoost +
       priorityScore +
-      forcedCleanerBoost;
+      forcedCleanerBoost +
+      acceptP * 2.4 +
+      learnBoost +
+      clusterBoost;
+
+    if (aiW) {
+      const workloadToday = (dayByCleaner.get(c.id) ?? []).length;
+      const bookingCtx = {
+        bookingId: telemetryBookingId,
+        dateYmd,
+        timeHm: normalizeHm(timeHm),
+        hourOfDay: Number.isFinite(slotHour) ? slotHour : 12,
+      };
+      const mi = scoreCleanerForBooking(
+        {
+          id: c.id,
+          distanceKm,
+          rating: c.rating ?? 0,
+          acceptanceRate: (acceptanceLife + acceptanceRec) / 2,
+          recentDeclines: declines,
+          lastAssignmentAt: null,
+          workloadToday,
+        },
+        bookingCtx,
+      );
+      const acc = predictCleanerAcceptanceSync(
+        {
+          cleaner: {
+            id: c.id,
+            distanceKm,
+            acceptanceRecent: acceptanceRec,
+            acceptanceLifetime: acceptanceLife,
+            recentDeclines: declines,
+            fatigueOffersLastHour: fatigue,
+            outcomeEma: (c as { marketplace_outcome_ema?: number | null }).marketplace_outcome_ema,
+          },
+          booking: bookingCtx,
+        },
+        aiW,
+      );
+      score += computeAiDispatchDelta(mi.score, acc, aiW);
+    }
 
     await logSystemEvent({
       level: "info",
@@ -650,7 +764,48 @@ export async function findSmartDispatchCandidates(
   }
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, maxCandidates);
+  const out = scored.slice(0, maxCandidates);
+
+  if (options?.intelligenceTelemetry?.bookingId && out.length) {
+    const bookingCtx = {
+      bookingId: options.intelligenceTelemetry.bookingId,
+      dateYmd,
+      timeHm: normalizeHm(timeHm),
+    };
+    const evaluations = out.slice(0, 8).map((c) => {
+      const workloadToday = (dayByCleaner.get(c.id) ?? []).length;
+      const accBlend =
+        (Number((c as { acceptance_rate?: number | null }).acceptance_rate ?? 1) +
+          Number((c as { acceptance_rate_recent?: number | null }).acceptance_rate_recent ?? 1)) /
+        2;
+      const mi = scoreCleanerForBooking(
+        {
+          id: c.id,
+          distanceKm: c.distance_km,
+          rating: c.rating ?? 0,
+          acceptanceRate: accBlend,
+          recentDeclines: declineByCleaner.get(c.id) ?? 0,
+          lastAssignmentAt: null,
+          workloadToday,
+        },
+        bookingCtx,
+      );
+      return { cleanerId: c.id, dispatchScore: c.score, score: mi.score, breakdown: mi.breakdown };
+    });
+    void logSystemEvent({
+      level: "info",
+      source: "cleaner_scored",
+      message: "Marketplace intelligence: scored cleaners for booking",
+      context: {
+        bookingId: options.intelligenceTelemetry.bookingId,
+        dateYmd,
+        locationId,
+        evaluations,
+      },
+    });
+  }
+
+  return out;
 }
 
 async function readAssignedCleanerScore(supabase: SupabaseClient, cleanerId: string): Promise<number> {
@@ -807,6 +962,9 @@ export async function smartAssignCleaner(
     travelProvider,
     maxCandidates,
     excludeCleanerIds: options?.excludeCleanerIds,
+    intelligenceTelemetry: { bookingId: params.bookingId },
+    aiAssignmentVariant: options?.aiAssignmentVariant,
+    aiAssignmentWeights: options?.aiAssignmentWeights,
   };
 
   let candidates = await findSmartDispatchCandidates(
@@ -899,6 +1057,12 @@ export async function smartAssignCleaner(
     }
 
     const now = new Date().toISOString();
+    const assignMeta = await marketplaceBookingPatchOnAssign(supabase, {
+      date: dateYmd,
+      time: normalizeHm(timeHm),
+      location_id: locationId,
+      city_id: cityId || null,
+    });
     const { error: u1 } = await supabase
       .from("bookings")
       .update({
@@ -906,6 +1070,7 @@ export async function smartAssignCleaner(
         status: "assigned",
         dispatch_status: "assigned",
         assigned_at: now,
+        ...assignMeta,
       })
       .eq("id", params.bookingId)
       .eq("status", "pending");

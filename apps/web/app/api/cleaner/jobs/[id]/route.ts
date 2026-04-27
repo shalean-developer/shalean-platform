@@ -274,6 +274,14 @@ export async function POST(
     await admin.from("cleaners").update({ jobs_completed: prev + 1 }).eq("id", cleanerId);
 
     await syncCleanerBusyFromBookings(admin, cleanerId);
+
+    const { recordAssignmentOutcomeAndLearn } = await import("@/lib/marketplace-intelligence/assignmentOutcomeFeedback");
+    try {
+      await recordAssignmentOutcomeAndLearn(admin, bookingId);
+    } catch {
+      /* learning is best-effort */
+    }
+
     return NextResponse.json({ ok: true, status: "completed" });
   }
 

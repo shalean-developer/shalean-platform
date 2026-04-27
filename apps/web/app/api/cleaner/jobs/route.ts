@@ -37,6 +37,7 @@ export async function GET(request: Request) {
     .not("status", "eq", "cancelled")
     .not("status", "eq", "failed")
     .not("status", "eq", "pending_payment")
+    .not("status", "eq", "payment_expired")
     .order("date", { ascending: true })
     .order("time", { ascending: true })
     .limit(100);

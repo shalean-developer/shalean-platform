@@ -23,7 +23,9 @@ export async function GET(request: Request) {
 
   const { data, error } = await admin
     .from("referrals")
-    .select("id, referrer_id, referrer_type, referred_email_or_phone, referred_user_id, status, reward_amount, created_at, completed_at")
+    .select(
+      "id, referrer_id, referrer_type, referred_email_or_phone, referred_user_id, status, reward_amount, created_at, completed_at, rewarded_at, code",
+    )
     .order("created_at", { ascending: false })
     .limit(2000);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

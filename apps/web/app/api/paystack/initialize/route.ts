@@ -13,7 +13,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const result = await processPaystackInitializeBody(body as Record<string, unknown>);
+  const raw = body as Record<string, unknown>;
+  const { relaxedLockValidation: _relaxed, ...safeBody } = raw;
+  void _relaxed;
+
+  const result = await processPaystackInitializeBody(safeBody);
   if (!result.ok) {
     return NextResponse.json(
       {

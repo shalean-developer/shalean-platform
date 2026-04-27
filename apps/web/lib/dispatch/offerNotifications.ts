@@ -259,6 +259,7 @@ export async function sendWhatsAppOffer(params: {
     templateName,
     languageCode,
     bodyParameters,
+    recipientRole: "cleaner",
   });
 
   const recipientDigits = metaWhatsAppToDigits(params.cleanerPhone);

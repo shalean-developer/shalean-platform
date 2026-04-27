@@ -213,7 +213,11 @@ function voidRecordUnmatchedIntentAndMaybeNotify(
         return;
       }
 
-      await sendViaMetaWhatsApp({ phone, message: UNMATCHED_CLEANER_REPLY_HINT });
+      await sendViaMetaWhatsApp({
+        phone,
+        message: UNMATCHED_CLEANER_REPLY_HINT,
+        recipientRole: "cleaner",
+      });
     } catch (err) {
       await logSystemEvent({
         level: "warn",

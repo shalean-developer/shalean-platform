@@ -25,16 +25,9 @@ import {
   type BookingEmailPayload,
 } from "@/lib/email/sendBookingEmail";
 import { getCustomerContactHealthScore } from "@/lib/notifications/customerContactHealth";
-import {
-  inferCustomerCountryForNotifications,
-  preferWhatsappFirstForPaymentPhone,
-} from "@/lib/notifications/notificationRegionPolicy";
+import { inferCustomerCountryForNotifications } from "@/lib/notifications/notificationRegionPolicy";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
-import {
-  sendCustomerSmsFromTemplate,
-  sendCustomerWhatsAppFromTemplate,
-  type CustomerOutboundDecisionTrace,
-} from "@/lib/templates/customerOutbound";
+import { sendCustomerSmsFromTemplate, type CustomerOutboundDecisionTrace } from "@/lib/templates/customerOutbound";
 import { parseTrimmedBookingId } from "@/lib/booking/bookingIds";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -252,7 +245,7 @@ function adminBaseBlock(b: {
  * Admin mail: requires `ADMIN_NOTIFICATION_EMAIL` when an admin notification is sent — missing env throws `CRITICAL: ADMIN_NOTIFICATION_EMAIL not set`.
  * Optional `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to payment_confirmed, sla_breach, and cancelled.
  *
- * Channel fallbacks (WhatsApp → SMS) are documented in `notificationChannelRules.ts` (cleaner assigned/reminder; customer payment_confirmed).
+ * Channel fallbacks are documented in `notificationChannelRules.ts` (cleaner: WhatsApp → SMS; customer payment_confirmed: email + optional SMS, no WhatsApp).
  *
  * Idempotency: `reminder_2h_sent`, `assigned_sent`, `completed_sent`, `sla_breach_sent` claims use migration
  * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). Future: cleaner read receipts / opened tracking.
@@ -324,7 +317,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
 
     const custPhone = event.snapshot?.customer?.phone?.trim();
     if (custPhone) {
-      const waCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_whatsapp" };
+      const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
       const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
       const contactHealth = await getCustomerContactHealthScore({
         bookingId: event.bookingId,
@@ -350,7 +343,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         await logSystemEvent({
           level: "info",
           source: "customer_phone_channels_skipped",
-          message: "preferred_notification_channel=email — skipping WhatsApp/SMS for payment_confirmed",
+          message: "preferred_notification_channel=email — skipping SMS for payment_confirmed",
           context: { bookingId: event.bookingId },
         });
       } else if (preferredNotificationChannel === "sms" || forceSmsFromHealth) {
@@ -359,7 +352,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           templateKey: "booking_confirmed",
           payload,
           context: {
-            ...waCtx,
+            ...phoneNotifyCtx,
             channel: forceSmsFromHealth ? "customer_sms_contact_health" : "customer_sms_preferred",
           },
           decisionTrace: {
@@ -369,69 +362,21 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           },
         });
       } else {
-        const waFirst =
-          preferredNotificationChannel === "whatsapp"
-            ? true
-            : preferWhatsappFirstForPaymentPhone({
-                phone: custPhone,
-                snapshot: event.snapshot,
-              });
-        if (waFirst) {
-          const waOk = await sendCustomerWhatsAppFromTemplate({
-            phone: custPhone,
-            templateKey: "booking_confirmed",
-            payload,
-            context: waCtx,
-            decisionTrace: {
-              decision:
-                preferredNotificationChannel === "whatsapp"
-                  ? "whatsapp_primary_preferred_channel"
-                  : "whatsapp_primary_region",
-              ...baseDecision,
-              ...healthFields,
-            },
-          });
-          if (!waOk.ok) {
-            await sendCustomerSmsFromTemplate({
-              phone: custPhone,
-              templateKey: "booking_confirmed",
-              payload,
-              context: { ...waCtx, channel: "customer_sms_after_whatsapp_failed" },
-              channelFallbackFrom: "whatsapp",
-              decisionTrace: {
-                decision: "sms_fallback_after_whatsapp_failed",
-                ...baseDecision,
-                ...healthFields,
-              },
-            });
-          }
-        } else {
-          const smsOk = await sendCustomerSmsFromTemplate({
-            phone: custPhone,
-            templateKey: "booking_confirmed",
-            payload,
-            context: { ...waCtx, channel: "customer_sms_region_primary" },
-            decisionTrace: {
-              decision: "sms_primary_region",
-              ...baseDecision,
-              ...healthFields,
-            },
-          });
-          if (!smsOk.ok) {
-            await sendCustomerWhatsAppFromTemplate({
-              phone: custPhone,
-              templateKey: "booking_confirmed",
-              payload,
-              context: { ...waCtx, channel: "customer_whatsapp_after_sms_failed" },
-              channelFallbackFrom: "sms",
-              decisionTrace: {
-                decision: "whatsapp_fallback_after_sms_failed",
-                ...baseDecision,
-                ...healthFields,
-              },
-            });
-          }
-        }
+        // Customer WhatsApp disabled — SMS only supplements email for payment_confirmed.
+        await sendCustomerSmsFromTemplate({
+          phone: custPhone,
+          templateKey: "booking_confirmed",
+          payload,
+          context: { ...phoneNotifyCtx, channel: "customer_sms_payment_confirmed_phone_copy" },
+          decisionTrace: {
+            decision:
+              preferredNotificationChannel === "whatsapp"
+                ? "sms_only_whatsapp_disabled_by_policy"
+                : "sms_only_phone_copy",
+            ...baseDecision,
+            ...healthFields,
+          },
+        });
       }
     }
 

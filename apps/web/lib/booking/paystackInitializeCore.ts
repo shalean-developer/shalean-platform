@@ -24,8 +24,15 @@ import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/dema
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackErrorCodes";
+import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
+
+function boolishInit(raw: unknown): boolean {
+  if (raw === true) return true;
+  if (typeof raw === "string") return ["1", "true", "yes"].includes(raw.trim().toLowerCase());
+  return false;
+}
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -77,7 +84,7 @@ export type PaystackInitializeSuccess = {
   ok: true;
   authorizationUrl: string;
   reference: string;
-  /** Present when a `pending_payment` row was created for this Paystack `reference`. */
+  /** `pending_payment` row id (new insert or existing `bookingId` / `booking_id` body). */
   bookingId?: string | null;
 };
 
@@ -178,6 +185,7 @@ export async function processPaystackInitializeBody(
   const checkout = validateLockForCheckout(locked, Date.now(), {
     ratesSnapshot,
     bookingId: bookingIdFromBody ?? createdPendingBookingId,
+    skipPriceDurationParity: boolishInit((b as { relaxedLockValidation?: unknown }).relaxedLockValidation),
   });
   if (!checkout.ok) {
     if (createdPendingBookingId) {
@@ -402,8 +410,9 @@ export async function processPaystackInitializeBody(
     customer_user_id: customer.user_id ?? "",
     customer_type: customer.type,
   };
-  if (createdPendingBookingId) {
-    paystackMetadata.shalean_booking_id = createdPendingBookingId;
+  const bookingIdForMetadata = createdPendingBookingId ?? bookingIdFromBody;
+  if (bookingIdForMetadata) {
+    paystackMetadata.shalean_booking_id = bookingIdForMetadata;
   }
 
   for (const [k, v] of Object.entries(extraMetadata)) {
@@ -465,6 +474,20 @@ export async function processPaystackInitializeBody(
     };
   }
 
+  if (bookingIdFromBody && reference) {
+    const { error: refUpdErr } = await admin
+      .from("bookings")
+      .update({ paystack_reference: reference })
+      .eq("id", bookingIdFromBody)
+      .eq("status", "pending_payment");
+    if (refUpdErr) {
+      await reportOperationalIssue("error", "paystackInitializeCore", `paystack_reference update failed: ${refUpdErr.message}`, {
+        bookingId: bookingIdFromBody,
+        reference,
+      });
+    }
+  }
+
   if (createdPendingBookingId) {
     metrics.increment("checkout.paystack_reference_map", {
       bookingId: createdPendingBookingId,
@@ -476,6 +499,6 @@ export async function processPaystackInitializeBody(
     ok: true,
     authorizationUrl: authUrl,
     reference,
-    bookingId: createdPendingBookingId,
+    bookingId: createdPendingBookingId ?? bookingIdFromBody,
   };
 }

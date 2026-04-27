@@ -70,7 +70,7 @@ function isPaid(r: OpsSnapshotRow): boolean {
 
 function isClosedStatus(status: string | null): boolean {
   const st = String(status ?? "").toLowerCase();
-  return st === "completed" || st === "cancelled" || st === "failed";
+  return st === "completed" || st === "cancelled" || st === "failed" || st === "payment_expired";
 }
 
 export function bookingScheduledStartUtcMs(date: string | null, time: string | null): number | null {

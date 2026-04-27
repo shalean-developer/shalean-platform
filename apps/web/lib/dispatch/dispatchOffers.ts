@@ -16,6 +16,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
+import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
 
 const POLL_MS = 400;
 
@@ -36,6 +37,19 @@ export async function createDispatchOfferRow(params: {
   /** Dispatch wave number for metrics (same row as `dispatch_attempt_count` after bump). */
   metricAttemptNumber?: number;
 }): Promise<CreateDispatchOfferRowResult> {
+  const { data: bookingHead, error: headErr } = await params.supabase
+    .from("bookings")
+    .select("status")
+    .eq("id", params.bookingId)
+    .maybeSingle();
+  if (headErr) {
+    return { ok: false, error: headErr.message };
+  }
+  const headSt = String((bookingHead as { status?: string | null } | null)?.status ?? "").toLowerCase();
+  if (headSt === "pending_payment" || headSt === "payment_expired") {
+    return { ok: false, error: "Payment not completed — cannot send dispatch offer." };
+  }
+
   const { count: priorOfferCount, error: priorCountErr } = await params.supabase
     .from("dispatch_offers")
     .select("id", { count: "exact", head: true })
@@ -328,7 +342,7 @@ export async function acceptDispatchOffer(params: {
 
   const { data: bookingBefore } = await params.supabase
     .from("bookings")
-    .select("status, cleaner_id")
+    .select("status, cleaner_id, date, time, location_id, city_id")
     .eq("id", bookingId)
     .maybeSingle();
   const bs = bookingBefore as { status?: string; cleaner_id?: string | null } | null;
@@ -341,6 +355,21 @@ export async function acceptDispatchOffer(params: {
     return { ok: false, error: "Another cleaner was assigned." };
   }
 
+  const bsMeta = bookingBefore as {
+    status?: string;
+    cleaner_id?: string | null;
+    date?: string | null;
+    time?: string | null;
+    location_id?: string | null;
+    city_id?: string | null;
+  } | null;
+  const assignMeta = await marketplaceBookingPatchOnAssign(params.supabase, {
+    date: bsMeta?.date ?? null,
+    time: bsMeta?.time ?? null,
+    location_id: bsMeta?.location_id ?? null,
+    city_id: bsMeta?.city_id ?? null,
+  });
+
   const { data: updatedRows, error: uBook } = await params.supabase
     .from("bookings")
     .update({
@@ -348,6 +377,7 @@ export async function acceptDispatchOffer(params: {
       status: "assigned",
       dispatch_status: "assigned",
       assigned_at: now,
+      ...assignMeta,
     })
     .eq("id", bookingId)
     .eq("status", "pending")
@@ -534,6 +564,18 @@ export async function rejectDispatchOffer(params: {
     level: "info",
     source: "dispatch_offer_rejected",
     message: "Offer rejected (API)",
+    context: {
+      bookingId,
+      cleanerId: params.cleanerId,
+      offerId: params.offerId,
+      latency_ms: latencyMs,
+    },
+  });
+
+  void logSystemEvent({
+    level: "info",
+    source: "cleaner_declined",
+    message: "Marketplace intelligence: cleaner declined dispatch offer",
     context: {
       bookingId,
       cleanerId: params.cleanerId,

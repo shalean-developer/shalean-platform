@@ -61,6 +61,13 @@ export async function runAdminAssignSmart(
   }
 
   const st = String((booking as { status?: string }).status ?? "").toLowerCase();
+  if (st === "pending_payment" || st === "payment_expired") {
+    return {
+      ok: false,
+      error: "Awaiting customer payment — assign after the customer has paid.",
+      attempts: 0,
+    };
+  }
   if (st === "completed" || st === "cancelled" || st === "failed") {
     return { ok: false, error: "Booking cannot be assigned in this state.", attempts: 0 };
   }

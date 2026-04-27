@@ -377,10 +377,11 @@ export async function flushWhatsAppJobById(
         templateName: payload.templateName,
         languageCode: payload.language ?? "en",
         bodyParameters: payload.bodyParams,
+        recipientRole: "cleaner",
       });
       messageId = r.messageId;
     } else {
-      const r = await sendViaMetaWhatsApp({ phone: job.phone, message: payload.text });
+      const r = await sendViaMetaWhatsApp({ phone: job.phone, message: payload.text, recipientRole: "cleaner" });
       messageId = r.messageId;
     }
 

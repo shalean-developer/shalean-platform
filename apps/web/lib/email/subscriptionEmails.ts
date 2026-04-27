@@ -27,6 +27,20 @@ export async function sendSubscriptionPrechargeReminderEmail(params: {
   );
 }
 
+/** Recurring engine: saved card will be charged for an upcoming visit (tomorrow service date). */
+export async function sendRecurringVisitPrechargeReminderEmail(params: {
+  to: string;
+  serviceLabel: string;
+  visitDateYmd: string;
+}): Promise<void> {
+  const url = `${getPublicAppUrlBase()}/dashboard/bookings`;
+  await send(
+    params.to,
+    "Payment for your upcoming cleaning",
+    `<p>Your saved card will be charged for your ${params.serviceLabel} visit on <strong>${params.visitDateYmd}</strong> (Africa/Johannesburg).</p><p>If you need to make changes, open your bookings.</p><p><a href="${url}">View bookings</a></p>`,
+  );
+}
+
 export async function sendSubscriptionChargeSuccessEmail(params: {
   to: string;
   serviceLabel: string;

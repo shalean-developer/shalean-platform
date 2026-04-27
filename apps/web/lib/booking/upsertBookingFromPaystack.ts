@@ -5,7 +5,7 @@ import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
 import { runAdminAssignSmart } from "@/lib/admin/runAdminAssignSmart";
-import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestCleaner";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -14,13 +14,19 @@ import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
-import { createPendingCustomerReferral } from "@/lib/referrals/server";
+import { attributePaidBookingToGrowthOutcomes } from "@/lib/growth/growthActionOutcomes";
+import { loadCustomerGrowthContext, persistCustomerSegmentRow } from "@/lib/growth/loadCustomerGrowthContext";
+import { logPostBookingGrowthDecision } from "@/lib/growth/postBookingGrowthHint";
+import { syncUserPrimaryCityFromBooking } from "@/lib/growth/syncPrimaryCity";
+import { createPendingCustomerReferral, processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/server";
 import { createSubscriptionFromBooking, type SubscriptionFrequency } from "@/lib/subscriptions/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   checkoutDispatchOfferTtlSeconds,
   resolveCheckoutCleanerSelection,
 } from "@/lib/booking/checkoutCleanerEligibility";
+import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConversionBucket";
+import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackReason";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { metrics } from "@/lib/metrics/counters";
@@ -84,7 +90,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
   const { data: existing, error: selectErr } = await supabase
     .from("bookings")
-    .select("id, status")
+    .select("id, status, is_recurring_generated")
     .eq("paystack_reference", input.paystackReference)
     .maybeSingle();
 
@@ -96,12 +102,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   }
 
   let existingPendingPaymentId: string | null = null;
+  let pendingRowIsRecurringGenerated = false;
   if (existing && typeof existing === "object" && "id" in existing) {
     const st = String((existing as { status?: string }).status ?? "");
     if (st !== "pending_payment") {
       return { skipped: true, bookingId: String((existing as { id: string }).id) };
     }
     existingPendingPaymentId = String((existing as { id: string }).id);
+    pendingRowIsRecurringGenerated = Boolean((existing as { is_recurring_generated?: boolean }).is_recurring_generated);
   }
 
   const locked = input.snapshot?.locked;
@@ -131,6 +139,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         skipExpiryCheck: true,
         ratesSnapshot: catalogSnap,
         bookingId: existingPendingPaymentId,
+        skipPriceDurationParity: pendingRowIsRecurringGenerated,
       });
       if (v.ok && v.serverQuote) {
         price_breakdown = { ...v.serverQuote, job: v.jobSubtotalSplit };
@@ -202,6 +211,37 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         }
       : {};
 
+  const paidMoment =
+    typeof input.paidAtIso === "string" && input.paidAtIso.trim()
+      ? input.paidAtIso.trim()
+      : new Date().toISOString();
+
+  let paymentConversionSeconds: number | null = null;
+  let paymentAttribution = {
+    firstTouch: null as "whatsapp" | "sms" | "email" | null,
+    lastTouch: null as "whatsapp" | "sms" | "email" | null,
+    assistChannels: [] as ("whatsapp" | "sms" | "email")[],
+  };
+  if (existingPendingPaymentId) {
+    paymentAttribution = await resolvePaymentAttributionTouches(supabase, existingPendingPaymentId);
+    const { data: metaRow } = await supabase
+      .from("bookings")
+      .select("payment_link_first_sent_at")
+      .eq("id", existingPendingPaymentId)
+      .maybeSingle();
+    const firstRaw =
+      metaRow && typeof metaRow === "object" && metaRow !== null && "payment_link_first_sent_at" in metaRow
+        ? (metaRow as { payment_link_first_sent_at?: string | null }).payment_link_first_sent_at
+        : null;
+    const firstIso = typeof firstRaw === "string" && firstRaw.trim() ? firstRaw.trim() : null;
+    if (firstIso) {
+      const deltaMs = Date.parse(paidMoment) - Date.parse(firstIso);
+      if (Number.isFinite(deltaMs) && deltaMs >= 0) {
+        paymentConversionSeconds = Math.floor(deltaMs / 1000);
+      }
+    }
+  }
+
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -236,6 +276,13 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     pricing_version_id: pricing_version_id || null,
     price_breakdown: price_breakdown,
     total_price: total_price ?? null,
+    payment_completed_at: paidMoment,
+    payment_conversion_seconds: paymentConversionSeconds,
+    payment_conversion_bucket: paymentConversionBucketFromSeconds(paymentConversionSeconds),
+    conversion_channel: paymentAttribution.lastTouch,
+    payment_first_touch_channel: paymentAttribution.firstTouch,
+    payment_last_touch_channel: paymentAttribution.lastTouch,
+    payment_assist_channels: paymentAttribution.assistChannels,
     ...checkoutIntentRow,
     ...userSelectedRow,
   };
@@ -298,6 +345,31 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       : userIdResolved;
 
   if (id) {
+    const authCode = input.paystackAuthorizationCode?.trim() ?? "";
+    if (authCode) {
+      const { data: recurringHead } = await supabase
+        .from("bookings")
+        .select("recurring_id")
+        .eq("id", id)
+        .maybeSingle();
+      const recurringId =
+        recurringHead && typeof recurringHead === "object" && "recurring_id" in recurringHead
+          ? (recurringHead as { recurring_id: string | null }).recurring_id
+          : null;
+      if (recurringId) {
+        const { error: recAuthErr } = await supabase
+          .from("recurring_bookings")
+          .update({ paystack_authorization_code: authCode, updated_at: new Date().toISOString() })
+          .eq("id", recurringId);
+        if (recAuthErr) {
+          await reportOperationalIssue("warn", "upsertBookingFromPaystack", `recurring auth save: ${recAuthErr.message}`, {
+            bookingId: id,
+            recurringId,
+          });
+        }
+      }
+    }
+
     const referralCode = String(input.paystackMetadata?.referral_code ?? input.paystackMetadata?.client_referralCode ?? "").trim();
     if (referralCode) {
       await createPendingCustomerReferral({
@@ -356,11 +428,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           phase: "offered",
         });
       } else {
-        const r = await ensureBookingAssignment(supabase, id, {
+        const r = await assignBestCleaner(supabase, id, {
           source: "paystack_checkout",
           smartAssign: { excludeCleanerIds: [userConfirmedCleanerId] },
         });
-        if (r.ok) {
+        const freshAssign = r.ok && !(r as { noOp?: boolean }).noOp;
+        if (freshAssign) {
           const { error: tagErr } = await supabase
             .from("bookings")
             .update({
@@ -392,7 +465,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             assigned_team_id: r.assignmentKind === "team" ? r.teamId : null,
             fallback_reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE,
           });
-        } else {
+        } else if (!r.ok) {
           await reportOperationalIssue("warn", "upsertBookingFromPaystack", "user_selected offer failed and re-dispatch failed", {
             bookingId: id,
             paystackReference: input.paystackReference,
@@ -411,11 +484,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
       const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
       if (autoDispatch) {
-        const r = await ensureBookingAssignment(supabase, id, {
+        const r = await assignBestCleaner(supabase, id, {
           source: "paystack_checkout",
           smartAssign: smartAssignOpts,
         });
-        if (r.ok) {
+        const freshAuto = r.ok && !(r as { noOp?: boolean }).noOp;
+        if (freshAuto) {
           await supabase
             .from("bookings")
             .update(
@@ -441,7 +515,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
               ? { fallback_reason: checkoutFallbackReason }
               : {}),
           });
-        } else if (offerAssignFallback) {
+        } else if (!r.ok && offerAssignFallback) {
           const smart = await runAdminAssignSmart(supabase, {
             bookingId: id,
             force: false,
@@ -531,6 +605,33 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         bookingId: id,
         paystackReference: input.paystackReference,
       });
+    }
+
+    void syncUserPrimaryCityFromBooking(supabase, userIdForEffects, cityId);
+    void processCustomerReferralAfterFirstPaidBooking({
+      admin: supabase,
+      bookingUserId: userIdForEffects,
+      customerEmail: emailStored,
+      bookingId: id,
+    });
+    void attributePaidBookingToGrowthOutcomes({
+      admin: supabase,
+      userId: userIdForEffects,
+      bookingId: id,
+      amountCents: input.amountCents,
+      paidAtIso: paidMoment,
+    });
+    if (userIdForEffects) {
+      const uid = userIdForEffects;
+      void (async () => {
+        try {
+          const ctx = await loadCustomerGrowthContext(supabase, uid);
+          if (ctx) await persistCustomerSegmentRow(supabase, ctx);
+          await logPostBookingGrowthDecision(supabase, uid);
+        } catch {
+          /* non-fatal */
+        }
+      })();
     }
   }
 

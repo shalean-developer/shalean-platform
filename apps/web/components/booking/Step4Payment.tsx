@@ -195,6 +195,7 @@ export function Step4Payment({
         .select("customer_name, customer_email, customer_phone, created_at")
         .eq("user_id", user.id)
         .neq("status", "pending_payment")
+        .neq("status", "payment_expired")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
