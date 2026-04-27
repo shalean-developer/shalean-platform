@@ -114,8 +114,6 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
 
       out.expired++;
 
-      console.log("[Dispatch Timeout]", { offerId, bookingId });
-
       await logSystemEvent({
         level: "info",
         source: "dispatch_offer_expired",

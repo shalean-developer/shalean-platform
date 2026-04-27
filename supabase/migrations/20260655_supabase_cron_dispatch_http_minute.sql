@@ -6,7 +6,7 @@
 --   - /api/cron/retry-failed-jobs
 --
 -- BEFORE APPLY (SQL Editor or CI substitute):
---   1) Replace YOUR_DOMAIN with production host, e.g. https://www.shalean.com (no trailing slash).
+--   1) Replace YOUR_DOMAIN with production host, e.g. https://www.shalean.co.za (no trailing slash).
 --   2) Replace YOUR_CRON_SECRET with the same value as Vercel/Next.js env CRON_SECRET.
 --
 -- Headers: `x-cron-secret` (required by app); optional duplicate `Authorization: Bearer` if desired.

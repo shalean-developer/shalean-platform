@@ -20,7 +20,6 @@ export function logAssignmentSuccess(params: { bookingId: string; cleanerId: str
     source: params.source,
     timestamp: new Date().toISOString(),
   };
-  console.log("ASSIGNMENT_SUCCESS", context);
   void logSystemEvent({
     level: "info",
     source: "ASSIGNMENT_SUCCESS",

@@ -145,12 +145,6 @@ export async function runParallelDispatchOfferRace(params: {
 
   if (joined.length === 0) return null;
 
-  console.log("STEP 2b: runParallelDispatchOfferRace offers created", {
-    bookingId,
-    offerIds: joined.map((j) => j.offerId),
-    cleanerIds: joined.map((j) => j.c.id),
-  });
-
   await logSystemEvent({
     level: "info",
     source: "dispatch_race_started",

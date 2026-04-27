@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.shalean.co.za"),
   title: {
     default: "Shalean Cleaning Services",
     template: "%s | Shalean Cleaning Services",

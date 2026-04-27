@@ -106,7 +106,7 @@ export default async function LocationCleaningPage({ params }: Props) {
     "@type": "LocalBusiness",
     name: "Shalean Cleaning Services",
     areaServed: loc.name,
-    url: `https://shalean.com/cleaning-services/${loc.slug}`,
+    url: `https://www.shalean.co.za/cleaning-services/${loc.slug}`,
     description: `Professional home cleaning services in ${loc.name}.`,
     serviceType: services,
     aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", reviewCount: "500" },

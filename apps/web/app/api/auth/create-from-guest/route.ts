@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -90,8 +91,8 @@ export async function POST(req: Request) {
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const emailRedirectTo = appUrl ? `${appUrl}/auth/callback` : undefined;
+  const appUrl = getPublicAppUrlBase();
+  const emailRedirectTo = `${appUrl}/auth/callback`;
 
   const pub = createClient(url, anon);
   const { error: otpError } = await pub.auth.signInWithOtp({

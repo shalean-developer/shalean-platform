@@ -19,9 +19,38 @@ import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { clearStoredReferral } from "@/lib/referrals/client";
 import { CheckoutNoticeBanner } from "@/components/booking/CheckoutNoticeBanner";
+import {
+  CUSTOMER_SUPPORT_EMAIL,
+  CUSTOMER_SUPPORT_WHATSAPP_URL,
+} from "@/lib/site/customerSupport";
 
 const VERIFY_MAX_ATTEMPTS = 3;
 const VERIFY_RETRY_DELAY_MS = 1500;
+
+function SupportContactLinks({ layout = "column" }: { layout?: "column" | "row" }) {
+  const flex =
+    layout === "row"
+      ? "flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center"
+      : "flex flex-col gap-2";
+  return (
+    <div className={flex}>
+      <a
+        href={CUSTOMER_SUPPORT_WHATSAPP_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#25D366] px-4 py-3 text-center text-sm font-semibold text-white shadow-sm hover:opacity-95 active:opacity-90"
+      >
+        WhatsApp support
+      </a>
+      <a
+        href={`mailto:${CUSTOMER_SUPPORT_EMAIL}?subject=${encodeURIComponent("Booking help — Shalean")}`}
+        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-3 text-center text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+      >
+        Email {CUSTOMER_SUPPORT_EMAIL}
+      </a>
+    </div>
+  );
+}
 
 type StatusPayload = {
   verified?: boolean;
@@ -212,6 +241,17 @@ function SuccessContent() {
           >
             Back to booking
           </Link>
+          <div className="mx-auto mt-10 max-w-md rounded-xl border border-zinc-200 bg-white p-4 text-left dark:border-zinc-800 dark:bg-zinc-950/60">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Need to cancel or change a booking?
+            </p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Contact us on WhatsApp or email — no login required. Include your payment or booking reference if you have one.
+            </p>
+            <div className="mt-4">
+              <SupportContactLinks />
+            </div>
+          </div>
         </div>
       </BookingContainer>
     );
@@ -269,6 +309,17 @@ function SuccessContent() {
           >
             Back to payment
           </Link>
+          <div className="mx-auto mt-10 max-w-md rounded-xl border border-zinc-200 bg-white p-4 text-left dark:border-zinc-800 dark:bg-zinc-950/60">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Need to cancel or change your booking?
+            </p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Reach us on WhatsApp or email. Include your booking reference when contacting support.
+            </p>
+            <div className="mt-4">
+              <SupportContactLinks />
+            </div>
+          </div>
         </div>
       </BookingContainer>
     );
@@ -300,6 +351,17 @@ function SuccessContent() {
           >
             Retry
           </button>
+          <div className="mx-auto mt-10 max-w-md rounded-xl border border-zinc-200 bg-white p-4 text-left dark:border-zinc-800 dark:bg-zinc-950/60">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Need to cancel or change your booking?
+            </p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Reach us on WhatsApp or email. Include your booking reference when contacting support.
+            </p>
+            <div className="mt-4">
+              <SupportContactLinks />
+            </div>
+          </div>
         </div>
       </BookingContainer>
     );
@@ -435,6 +497,37 @@ function SuccessContent() {
           </p>
         ) : null}
       </div>
+
+      <section
+        className="mx-auto mt-8 max-w-lg rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60 sm:p-5"
+        aria-labelledby="cancel-change-heading"
+      >
+        <h2
+          id="cancel-change-heading"
+          className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
+        >
+          Need to cancel or change your booking?
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          {isGuest
+            ? "You booked as a guest — changes and cancellations are handled by our team."
+            : "Changes and cancellations can be arranged through our team."}{" "}
+          Use WhatsApp or email below; no login required for these messages.
+        </p>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          {statusData.reference ? (
+            <>
+              Include your booking reference when contacting support:{" "}
+              <span className="font-mono text-zinc-800 dark:text-zinc-200">{statusData.reference}</span>
+            </>
+          ) : (
+            "Include your booking reference when contacting support (see your confirmation email or the summary below)."
+          )}
+        </p>
+        <div className="mt-4">
+          <SupportContactLinks layout="row" />
+        </div>
+      </section>
 
       {showGuestUpgrade ? (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 md:p-5 dark:border-blue-900/50 dark:bg-blue-950/35">

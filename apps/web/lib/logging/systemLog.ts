@@ -2,6 +2,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type SystemLogLevel = "error" | "warn" | "info";
 
+/** Operational severity; `critical` is stored in DB as `error` with a `[CRITICAL]` prefix (system_logs.level check). */
+export type OperationalIssueLevel = "error" | "warn" | "critical";
+
 /**
  * Persists a row to `system_logs` when Supabase is configured. Never throws.
  *
@@ -38,15 +41,60 @@ export async function logSystemEvent(params: {
  * Standard path for server failures: stderr (host logs) + `system_logs` (when DB available).
  */
 export async function reportOperationalIssue(
-  level: "error" | "warn",
+  level: OperationalIssueLevel,
   source: string,
   message: string,
   context?: Record<string, unknown>,
 ): Promise<void> {
-  if (level === "error") {
-    console.error(`[${source}]`, message, context ?? "");
-  } else {
+  const isCritical = level === "critical";
+  const persistMessage = isCritical ? `[CRITICAL] ${message}` : message;
+  const persistContext =
+    isCritical ? { ...context, operationalSeverity: "critical" as const } : context;
+
+  if (level === "warn") {
     console.warn(`[${source}]`, message, context ?? "");
+  } else {
+    console.error(`[${source}]`, persistMessage, context ?? "");
   }
-  await logSystemEvent({ level, source, message, context });
+
+  await logSystemEvent({
+    level: isCritical ? "error" : level,
+    source,
+    message: persistMessage,
+    context: persistContext,
+  });
+
+  if (isCritical) {
+    await dispatchCriticalAlertWebhook(persistMessage, persistContext);
+  }
+}
+
+/**
+ * Optional outbound alert for critical operational issues. Never throws.
+ * Env: `DISPATCH_ALERT_WEBHOOK_CRITICAL_URL` — POST JSON `{ message, context, timestamp }`.
+ */
+async function dispatchCriticalAlertWebhook(
+  message: string,
+  context: Record<string, unknown> | undefined,
+): Promise<void> {
+  const url = process.env.DISPATCH_ALERT_WEBHOOK_CRITICAL_URL?.trim();
+  if (!url) return;
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 8000);
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        context: context ?? {},
+        timestamp: new Date().toISOString(),
+      }),
+      signal: ac.signal,
+    });
+  } catch {
+    /* alert channel down — do not affect request path */
+  } finally {
+    clearTimeout(t);
+  }
 }

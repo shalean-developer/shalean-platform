@@ -189,7 +189,6 @@ export async function enqueueStrandedBookings(supabase: SupabaseClient): Promise
 
   if (enqueued > 0) {
     metrics.increment("dispatch.stranded.enqueued", { count: enqueued });
-    console.log("[Dispatch] stranded bookings enqueued", enqueued);
   }
 
   return enqueued;

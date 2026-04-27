@@ -62,6 +62,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     .from("bookings")
     .update({
       status: "cancelled",
+      cancelled_by: "customer",
       cleaner_payout_cents: 0,
       cleaner_bonus_cents: 0,
       company_revenue_cents: 0,

@@ -25,7 +25,7 @@ export default function CleanerJobDetailPage() {
   const [acting, setActing] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [ackTick, setAckTick] = useState(0);
-  const rtDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rtDebounceRef = useRef<number | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;

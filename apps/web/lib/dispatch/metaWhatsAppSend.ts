@@ -408,32 +408,23 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
     token = c.token;
     phoneNumberId = c.phoneNumberId;
   } catch (err) {
-    console.warn("❌ WhatsApp BLOCKED", {
-      reason: err instanceof Error ? err.message : String(err),
-      cleanerId: params.deliveryLog?.cleanerId ?? null,
-      decisionObject: { stage: "sendViaMetaWhatsAppTemplateBody", template: params.templateName },
+    void logSystemEvent({
+      level: "warn",
+      source: "whatsapp_meta_config",
+      message: err instanceof Error ? err.message : String(err),
+      context: { stage: "sendViaMetaWhatsAppTemplateBody", template: params.templateName },
     });
     throw err;
   }
 
   const toDigits = metaWhatsAppToDigits(params.phone);
   if (toDigits.length < 10 || toDigits.length > 15) {
-    console.warn("❌ WhatsApp BLOCKED", {
-      reason: "invalid_recipient_digits",
-      cleanerId: params.deliveryLog?.cleanerId ?? null,
-      decisionObject: { digitsLen: toDigits.length, toDigitsTail: toDigits.slice(-4) },
-    });
     const out: MetaWhatsAppDeliveryResult = { ok: false, error: `Invalid WhatsApp recipient digits length=${toDigits.length}` };
     await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
     return out;
   }
 
   if (isMetaSendCircuitOpen()) {
-    console.warn("❌ WhatsApp BLOCKED", {
-      reason: "meta_send_circuit_open",
-      cleanerId: params.deliveryLog?.cleanerId ?? null,
-      decisionObject: { stage: "template_send" },
-    });
     const out: MetaWhatsAppDeliveryResult = {
       ok: false,
       error: "Meta WhatsApp send paused (circuit open) — will retry",
@@ -465,11 +456,6 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
     }
 
     try {
-      console.log("📡 Sending to Meta", {
-        to: toDigits,
-        templateName: resolvedName,
-        bodyParams,
-      });
       const response = await axios.post<Record<string, unknown>>(
         url,
         {
@@ -508,7 +494,6 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
       const parsed = parseGraphMessagesResponse(res, rawText);
 
       if (!parsed.ok) {
-        console.log("📡 Meta response", response.data);
         await logSystemEvent({
           level: "warn",
           source: "whatsapp_meta_http",
@@ -526,8 +511,6 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
       if (parsed.ok) {
         recordMetaSendOutcome(true);
         const messageId = parsed.messageId;
-        console.log("📡 Meta response", response.data);
-        console.log("[whatsapp:sent]", { toPhone: toDigits, templateName: resolvedName, messageId });
         const out: MetaWhatsAppDeliveryResult = { ok: true, messageId };
         await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
         return out;

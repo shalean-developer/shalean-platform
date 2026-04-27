@@ -153,38 +153,17 @@ export async function POST(request: Request) {
   const normalizedTime = timeRaw ? normalizeTime(timeRaw) : "";
 
   if (!normalizedDate || !normalizedTime) {
-    console.log({
-      cleaner_id: cleanerId,
-      date: dateRaw,
-      time: timeRaw,
-      reason: "validation_result",
-      detail: "missing_fields",
-    });
     return NextResponse.json({ valid: false, reason: "missing_fields" }, { status: 400 });
   }
 
   const selectedStart = toMinutes(normalizedTime);
   if (selectedStart == null) {
-    console.log({
-      cleaner_id: cleanerId,
-      date: normalizedDate,
-      time: timeRaw,
-      reason: "validation_result",
-      detail: "bad_time",
-    });
     return NextResponse.json({ valid: false, reason: "bad_time" }, { status: 400 });
   }
   const selectedEnd = selectedStart + durationMinutes;
 
   /** Auto-assign checkout — no cleaner to check for calendar conflicts. */
   if (!cleanerId) {
-    console.log({
-      date: normalizedDate,
-      time: normalizedTime,
-      reason: "validation_result",
-      valid: true,
-      detail: "no_cleaner_skipped_overlap",
-    });
     return NextResponse.json({ valid: true, reason: "no_cleaner_skipped_overlap" });
   }
 
@@ -201,13 +180,6 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (cleanerErr || !cleanerRow) {
-      console.log({
-        cleaner_id: cleanerId,
-        date: normalizedDate,
-        time: normalizedTime,
-        reason: "validation_result",
-        detail: "cleaner_not_found",
-      });
       return NextResponse.json({ valid: false, reason: "cleaner_not_found" });
     }
 
@@ -219,13 +191,6 @@ export async function POST(request: Request) {
 
     if (bookErr) {
       console.error("[api/booking/validate] bookings query", bookErr.message);
-      console.log({
-        cleaner_id: cleanerId,
-        date: normalizedDate,
-        time: normalizedTime,
-        reason: "validation_result",
-        detail: "bookings_query_failed",
-      });
       return NextResponse.json({ valid: true });
     }
 
@@ -255,25 +220,9 @@ export async function POST(request: Request) {
 
     const valid = !conflict;
 
-    console.log({
-      cleaner_id: cleanerId,
-      date: normalizedDate,
-      time: normalizedTime,
-      reason: "validation_result",
-      valid,
-      bookingsChecked: rows.length,
-    });
-
     return NextResponse.json({ valid });
   } catch (e) {
     console.error("[api/booking/validate]", e);
-    console.log({
-      cleaner_id: cleanerId,
-      date: normalizedDate,
-      time: normalizedTime,
-      reason: "validation_result",
-      detail: "exception",
-    });
     return NextResponse.json({ valid: true });
   }
 }

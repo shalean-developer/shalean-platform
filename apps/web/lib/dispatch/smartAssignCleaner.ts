@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enqueueDispatchRetry } from "@/lib/dispatch/dispatchRetryQueue";
 import { MAX_PARALLEL_OFFERS, MAX_PARALLEL_OFFERS_PEAK } from "@/lib/dispatch/dispatchConstants";
+import {
+  buildCleanerRankingWindowStats,
+  computeCleanerRankingV1Bundle,
+  rankingV1DispatchAdjustment,
+  responsePenalty01FromAvgMs,
+  type CleanerTerminalBookingRow,
+} from "@/lib/dispatch/cleanerRankingV1";
 import { loadCleanerDispatchPerformanceScores } from "@/lib/dispatch/cleanerDispatchPerformance";
 import { haversineDistanceKm } from "@/lib/dispatch/distance";
 import { runParallelDispatchOfferRace } from "@/lib/dispatch/offerRace";
@@ -335,6 +342,57 @@ async function resolveLocationIdsForCleaners(
   return ids.length ? ids : [locationId];
 }
 
+/** Buffered during scoring; enriched to {@link DispatchRankingV1MetricRow} after sort. */
+type DispatchRankingV1MetricPending = {
+  cleaner_id: string;
+  booking_id: string;
+  date_ymd: string;
+  score_before_ranking_v1: number;
+  v1_bundle: number;
+  v1_ranking_adjustment: number;
+  final_dispatch_score: number;
+  acceptance_rate_blend: number;
+  completion_rate_window: number;
+  cleaner_cancellation_rate_window: number;
+  response_penalty_01: number;
+  recency_01: number;
+  distance_km: number;
+};
+
+export type DispatchRankingV1MetricRow = DispatchRankingV1MetricPending & {
+  dispatch_rank_by_score: number;
+  /** Same as dispatch_rank_by_score (1 = top composite score). */
+  rank_position: number;
+  is_primary_candidate: boolean;
+  in_dispatch_slice: boolean;
+};
+
+export type FindSmartDispatchCandidatesResult = {
+  candidates: SmartDispatchCandidate[];
+  /** Populated when DISPATCH_RANKING_V1_METRICS sampling passes; flush after known assignee in smartAssignCleaner. */
+  rankingV1MetricRows: DispatchRankingV1MetricRow[];
+};
+
+function emptyFindSmartDispatchCandidates(): FindSmartDispatchCandidatesResult {
+  return { candidates: [], rankingV1MetricRows: [] };
+}
+
+/** Writes one row per candidate; set `assignedCleanerId` when dispatch committed (instant top or soft race winner). */
+function flushDispatchRankingV1MetricRows(rows: DispatchRankingV1MetricRow[], assignedCleanerId: string | null): void {
+  if (!rows.length || process.env.DISPATCH_RANKING_V1_METRICS !== "true") return;
+  for (const row of rows) {
+    void logSystemEvent({
+      level: "info",
+      source: "dispatch.ranking.v1",
+      message: "dispatch ranking v1 candidate metrics",
+      context: {
+        ...row,
+        is_selected: assignedCleanerId != null && row.cleaner_id === assignedCleanerId,
+      },
+    });
+  }
+}
+
 export async function findSmartDispatchCandidates(
   supabase: SupabaseClient,
   params: {
@@ -359,7 +417,7 @@ export async function findSmartDispatchCandidates(
     aiAssignmentVariant?: "control" | "variant";
     aiAssignmentWeights?: AssignmentWeights;
   },
-): Promise<SmartDispatchCandidate[]> {
+): Promise<FindSmartDispatchCandidatesResult> {
   const { dateYmd, timeHm, locationId } = params;
   const cityId = params.cityId ?? null;
   const newJobDuration = params.newJobDurationMinutes ?? DEFAULT_JOB_DURATION_MIN;
@@ -401,7 +459,7 @@ export async function findSmartDispatchCandidates(
       locationId,
       dateYmd,
     });
-    return [];
+    return emptyFindSmartDispatchCandidates();
   }
 
   const { data: availRows, error: avErr } = await supabase
@@ -417,7 +475,7 @@ export async function findSmartDispatchCandidates(
         locationId,
       });
     }
-    return [];
+    return emptyFindSmartDispatchCandidates();
   }
 
   const eligibleFromWindow = new Set<string>();
@@ -428,7 +486,7 @@ export async function findSmartDispatchCandidates(
     }
   }
 
-  if (eligibleFromWindow.size === 0) return [];
+  if (eligibleFromWindow.size === 0) return emptyFindSmartDispatchCandidates();
 
   const cleanerLocationIds = await resolveLocationIdsForCleaners(supabase, locationId, searchExpansion);
 
@@ -456,7 +514,7 @@ export async function findSmartDispatchCandidates(
         locationId,
       });
     }
-    return [];
+    return emptyFindSmartDispatchCandidates();
   }
 
   const { data: conflicts } = await supabase
@@ -487,7 +545,7 @@ export async function findSmartDispatchCandidates(
     tier?: string | null;
   })[]).filter((c) => c.id && !taken.has(c.id) && !excludeCleanerIds.has(c.id));
 
-  if (baseCleaners.length === 0) return [];
+  if (baseCleaners.length === 0) return emptyFindSmartDispatchCandidates();
 
   const ids = baseCleaners.map((c) => c.id);
   const declineByCleaner = new Map<string, number>();
@@ -496,31 +554,48 @@ export async function findSmartDispatchCandidates(
   const since1h = new Date(Date.now() - 3600_000).toISOString();
   const minWeekDate = dateYmdDaysAgo(7);
 
-  const [{ data: dayRows }, { data: weekRows }, { data: offerFatigueRows }, { data: declineRows }, perfByCleaner] =
-    await Promise.all([
-      supabase
-        .from("bookings")
-        .select("cleaner_id, time, location_id, duration_minutes, status")
-        .eq("date", dateYmd)
-        .in("cleaner_id", ids)
-        .in("status", ["assigned", "in_progress", "completed"]),
-      supabase
-        .from("bookings")
-        .select("cleaner_id")
-        .in("cleaner_id", ids)
-        .gte("date", minWeekDate)
-        .in("status", ["completed", "assigned", "in_progress"]),
-      supabase.from("dispatch_offers").select("cleaner_id").gte("created_at", since1h).in("cleaner_id", ids),
-      ids.length
-        ? supabase
-            .from("dispatch_offers")
-            .select("cleaner_id")
-            .in("cleaner_id", ids)
-            .eq("status", "rejected")
-            .gte("created_at", since7d)
-        : Promise.resolve({ data: [] as { cleaner_id?: string }[], error: null }),
-      loadCleanerDispatchPerformanceScores(supabase, ids),
-    ]);
+  const min90dDate = dateYmdDaysAgo(90);
+  const [
+    { data: dayRows },
+    { data: weekRows },
+    { data: offerFatigueRows },
+    { data: declineRows },
+    perfByCleaner,
+    { data: terminalRows },
+  ] = await Promise.all([
+    supabase
+      .from("bookings")
+      .select("cleaner_id, time, location_id, duration_minutes, status")
+      .eq("date", dateYmd)
+      .in("cleaner_id", ids)
+      .in("status", ["assigned", "in_progress", "completed"]),
+    supabase
+      .from("bookings")
+      .select("cleaner_id")
+      .in("cleaner_id", ids)
+      .gte("date", minWeekDate)
+      .in("status", ["completed", "assigned", "in_progress"]),
+    supabase.from("dispatch_offers").select("cleaner_id").gte("created_at", since1h).in("cleaner_id", ids),
+    ids.length
+      ? supabase
+          .from("dispatch_offers")
+          .select("cleaner_id")
+          .in("cleaner_id", ids)
+          .eq("status", "rejected")
+          .gte("created_at", since7d)
+      : Promise.resolve({ data: [] as { cleaner_id?: string }[], error: null }),
+    loadCleanerDispatchPerformanceScores(supabase, ids),
+    ids.length
+      ? supabase
+          .from("bookings")
+          .select("cleaner_id, status, completed_at, cancelled_by")
+          .in("cleaner_id", ids)
+          .gte("date", min90dDate)
+          .in("status", ["completed", "cancelled", "failed"])
+      : Promise.resolve({ data: [] as CleanerTerminalBookingRow[], error: null }),
+  ]);
+
+  const rankingByCleaner = buildCleanerRankingWindowStats((terminalRows ?? []) as CleanerTerminalBookingRow[], ids);
 
   for (const row of declineRows ?? []) {
     if (!row || typeof row !== "object" || !("cleaner_id" in row)) continue;
@@ -581,7 +656,7 @@ export async function findSmartDispatchCandidates(
   }
 
   const newIvBase = intervalFromRow(timeHm, newJobDuration);
-  if (!newIvBase) return [];
+  if (!newIvBase) return emptyFindSmartDispatchCandidates();
   const newIv: DayInterval = { ...newIvBase, location_id: locationId };
 
   const clusterAffinityCounts = new Map<string, number>();
@@ -605,6 +680,14 @@ export async function findSmartDispatchCandidates(
 
   const stricter = supplyRatioStricter;
   const scored: SmartDispatchCandidate[] = [];
+  const rankingV1MetricsEnv = process.env.DISPATCH_RANKING_V1_METRICS === "true";
+  const sampleRaw = process.env.DISPATCH_RANKING_V1_METRICS_SAMPLE?.trim();
+  const sampleRateN =
+    sampleRaw != null && sampleRaw !== "" && Number.isFinite(Number(sampleRaw)) ? Number(sampleRaw) : 1;
+  const sampleClamped = Math.min(1, Math.max(0, sampleRateN));
+  const rankingV1MetricsFlush =
+    rankingV1MetricsEnv && (sampleClamped >= 1 || Math.random() < sampleClamped);
+  const rankingV1MetricsRows: DispatchRankingV1MetricPending[] = [];
   const aiFlags = getAiAutonomyFlags();
   const aiW =
     aiFlags.assignment &&
@@ -694,6 +777,17 @@ export async function findSmartDispatchCandidates(
     const cn = clusterAffinityCounts.get(c.id) ?? 0;
     const clusterBoost = cn <= 0 ? 0 : Math.min(2.2, 0.85 + cn * 0.4);
     const perf01 = perfByCleaner.get(c.id) ?? 0.5;
+    const win = rankingByCleaner.get(c.id)!;
+    const accBlend = (acceptanceLife + acceptanceRec) / 2;
+    const responsePenalty01 = responsePenalty01FromAvgMs(avgResp);
+    const v1Bundle = computeCleanerRankingV1Bundle({
+      acceptanceRate: accBlend,
+      completionRate: win.completionRate,
+      cancellationRate: win.cancellationRate,
+      responsePenalty01,
+      recency01: win.recency01,
+    });
+    const v1RankingAdjustment = rankingV1DispatchAdjustment(v1Bundle);
     let score =
       computeDispatchScoreV4(
       {
@@ -721,6 +815,8 @@ export async function findSmartDispatchCandidates(
       clusterBoost;
 
     score += (perf01 - 0.5) * 6;
+    const scoreBeforeRankingV1 = score;
+    score += v1RankingAdjustment;
 
     if (aiW) {
       const workloadToday = (dayByCleaner.get(c.id) ?? []).length;
@@ -760,6 +856,24 @@ export async function findSmartDispatchCandidates(
       score += computeAiDispatchDelta(mi.score, acc, aiW);
     }
 
+    if (rankingV1MetricsFlush) {
+      rankingV1MetricsRows.push({
+        cleaner_id: c.id,
+        booking_id: telemetryBookingId,
+        date_ymd: dateYmd,
+        score_before_ranking_v1: scoreBeforeRankingV1,
+        v1_bundle: v1Bundle,
+        v1_ranking_adjustment: v1RankingAdjustment,
+        final_dispatch_score: score,
+        acceptance_rate_blend: accBlend,
+        completion_rate_window: win.completionRate,
+        cleaner_cancellation_rate_window: win.cancellationRate,
+        response_penalty_01: responsePenalty01,
+        recency_01: win.recency01,
+        distance_km: Math.round(distanceKm * 1000) / 1000,
+      });
+    }
+
     if (shouldLogDispatchFilterDebug(true)) {
       await logSystemEvent({
         level: "info",
@@ -787,6 +901,22 @@ export async function findSmartDispatchCandidates(
 
   scored.sort((a, b) => b.score - a.score);
   const out = scored.slice(0, maxCandidates);
+
+  const rankingV1MetricRows: DispatchRankingV1MetricRow[] = [];
+  if (rankingV1MetricsFlush && rankingV1MetricsRows.length > 0) {
+    const primaryId = scored[0]?.id ?? null;
+    for (const row of rankingV1MetricsRows) {
+      const rank = scored.findIndex((s) => s.id === row.cleaner_id) + 1;
+      const isPrimary = Boolean(primaryId && row.cleaner_id === primaryId);
+      rankingV1MetricRows.push({
+        ...row,
+        dispatch_rank_by_score: rank,
+        rank_position: rank,
+        in_dispatch_slice: rank > 0 && rank <= maxCandidates,
+        is_primary_candidate: isPrimary,
+      });
+    }
+  }
 
   if (options?.intelligenceTelemetry?.bookingId && out.length) {
     const bookingCtx = {
@@ -827,7 +957,7 @@ export async function findSmartDispatchCandidates(
     });
   }
 
-  return out;
+  return { candidates: out, rankingV1MetricRows };
 }
 
 async function fetchDispatchWaveMetrics(
@@ -927,7 +1057,6 @@ export async function smartAssignCleaner(
   const maxCandidates = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
   const retryTier = options?.retryTier ?? 0;
   await supabase.from("bookings").update({ dispatch_status: "searching" }).eq("id", params.bookingId);
-  console.log("STEP 1: smartAssignCleaner triggered", { bookingId: params.bookingId });
 
   let searchExpansion = options?.searchExpansion ?? "none";
 
@@ -1031,7 +1160,7 @@ export async function smartAssignCleaner(
     aiAssignmentWeights: options?.aiAssignmentWeights,
   };
 
-  let candidates = await findSmartDispatchCandidates(
+  let findPack = await findSmartDispatchCandidates(
     supabase,
     {
       dateYmd,
@@ -1047,6 +1176,8 @@ export async function smartAssignCleaner(
     },
     findOpts,
   );
+  let candidates = findPack.candidates;
+  let rankingV1MetricRows = findPack.rankingV1MetricRows;
 
   const { data: priorOffers } = await supabase
     .from("dispatch_offers")
@@ -1059,6 +1190,7 @@ export async function smartAssignCleaner(
       .filter(Boolean),
   );
   candidates = candidates.filter((c) => !alreadyOfferedCleanerIds.has(c.id));
+  rankingV1MetricRows = rankingV1MetricRows.filter((r) => candidates.some((c) => c.id === r.cleaner_id));
 
   const supplyRatio = candidates.length / pendingJobs;
   await logSystemEvent({
@@ -1075,7 +1207,7 @@ export async function smartAssignCleaner(
   });
   const stricter = supplyRatio > 3;
   if (stricter && candidates.length > 0) {
-    candidates = await findSmartDispatchCandidates(
+    findPack = await findSmartDispatchCandidates(
       supabase,
       {
         dateYmd,
@@ -1091,6 +1223,8 @@ export async function smartAssignCleaner(
       },
       findOpts,
     );
+    candidates = findPack.candidates;
+    rankingV1MetricRows = findPack.rankingV1MetricRows.filter((r) => findPack.candidates.some((c) => c.id === r.cleaner_id));
   }
 
   const hoursUntilJob = hoursUntilBookingStartUtc(dateYmd, normalizeHm(timeHm));
@@ -1174,6 +1308,7 @@ export async function smartAssignCleaner(
       });
       await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4");
       await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
+      flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
       return { ok: false, error: "no_candidate" };
     }
 
@@ -1198,8 +1333,11 @@ export async function smartAssignCleaner(
 
     if (u1) {
       await reportOperationalIssue("error", "smartAssignCleaner", u1.message, { bookingId: params.bookingId });
+      flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
       return { ok: false, error: "db_error", message: u1.message };
     }
+
+    flushDispatchRankingV1MetricRows(rankingV1MetricRows, top.id);
 
     const waveMetrics = await fetchDispatchWaveMetrics(supabase, params.bookingId);
     await logSystemEvent({
@@ -1224,11 +1362,6 @@ export async function smartAssignCleaner(
   }
 
   const pool = candidates.slice(0, maxSoftOffers);
-  console.log("STEP 2: dispatch candidates selected", {
-    bookingId: params.bookingId,
-    poolSize: pool.length,
-    candidates: pool.map((c) => ({ id: c.id, score: c.score, distance_km: c.distance_km })),
-  });
   if (pool.length === 0) {
     await logSystemEvent({
       level: "warn",
@@ -1244,6 +1377,7 @@ export async function smartAssignCleaner(
     });
     await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4");
     await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
+    flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
     return { ok: false, error: "no_candidate" };
   }
 
@@ -1254,10 +1388,12 @@ export async function smartAssignCleaner(
 
     const { data: b0 } = await supabase.from("bookings").select("cleaner_id, status").eq("id", params.bookingId).maybeSingle();
     if (b0 && String((b0 as { status?: string }).status ?? "").toLowerCase() !== "pending") {
+      flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
       return { ok: false, error: "booking_not_pending", message: "Booking state changed" };
     }
     if (b0 && (b0 as { cleaner_id?: string | null }).cleaner_id) {
       const cid = String((b0 as { cleaner_id: string }).cleaner_id);
+      flushDispatchRankingV1MetricRows(rankingV1MetricRows, cid);
       const sc = await readAssignedCleanerScore(supabase, cid);
       return { ok: true, cleanerId: cid, score: sc };
     }
@@ -1294,9 +1430,12 @@ export async function smartAssignCleaner(
           time_to_assign_ms: waveMetrics.time_to_assign_ms,
         },
       });
+      flushDispatchRankingV1MetricRows(rankingV1MetricRows, winner.cleanerId);
       return { ok: true, cleanerId: winner.cleanerId, score: winner.score };
     }
   }
+
+  flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
 
   await logSystemEvent({
     level: "warn",

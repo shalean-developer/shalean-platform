@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import { enqueueFailedJob, FAILED_JOBS_ENQUEUE_ERROR } from "@/lib/booking/failedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
@@ -232,17 +232,26 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     "";
   const email = emailRaw ? normalizeEmail(emailRaw) : "";
 
-  const result = await upsertBookingFromPaystack({
-    paystackReference: ref,
-    amountCents: amount,
-    currency,
-    customerEmail: email,
-    snapshot,
-    paystackMetadata: metadata,
-    paystackAuthorizationCode: authorizationCode || null,
-    paystackCustomerCode: customerCode || null,
-    paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-  });
+  let result: Awaited<ReturnType<typeof upsertBookingFromPaystack>>;
+  try {
+    result = await upsertBookingFromPaystack({
+      paystackReference: ref,
+      amountCents: amount,
+      currency,
+      customerEmail: email,
+      snapshot,
+      paystackMetadata: metadata,
+      paystackAuthorizationCode: authorizationCode || null,
+      paystackCustomerCode: customerCode || null,
+      paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("critical", "paystack/verify", `payment verified success but upsert threw: ${msg}`, {
+      reference: ref,
+    });
+    result = { skipped: false, bookingId: null, error: msg };
+  }
 
   const adm = getSupabaseAdmin();
   let assignmentType: string | null = null;
@@ -268,21 +277,52 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
   const showCleanerSubstitutionNotice = assignmentType === "auto_fallback";
 
   if (result.error) {
-    await reportOperationalIssue("error", "paystack/verify", `upsert failed: ${result.error}`, { reference: ref });
+    await reportOperationalIssue("critical", "paystack/verify", `payment verified success but booking upsert failed: ${result.error}`, {
+      reference: ref,
+    });
+  }
+
+  if (result.bookingId && !result.error) {
+    await logSystemEvent({
+      level: "info",
+      source: "paystack/verify",
+      message: "paystack.booking.created",
+      context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
+    });
   }
 
   const bookingSaved = result.bookingId != null;
   const alreadyExists = Boolean(result.skipped && result.bookingId);
 
   if (!bookingSaved) {
-    await enqueueFailedJob("booking_insert", {
-      paystackReference: ref,
-      amountCents: amount,
-      currency,
-      customerEmail: email,
-      snapshot,
-      paystackMetadata: metadata,
-    });
+    try {
+      await enqueueFailedJob("booking_insert", {
+        paystackReference: ref,
+        amountCents: amount,
+        currency,
+        customerEmail: email,
+        snapshot,
+        paystackMetadata: metadata,
+      });
+    } catch (e) {
+      const cause = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue(
+        "critical",
+        "paystack/verify",
+        "Payment verified success but booking not saved and failed_jobs enqueue failed",
+        { reference: ref, cause },
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          ok: false,
+          paymentStatus: "unknown",
+          error: FAILED_JOBS_ENQUEUE_ERROR,
+          reference: ref,
+        },
+        { status: 500 },
+      );
+    }
   }
 
   if (result.bookingId && email && !alreadyExists && adm) {

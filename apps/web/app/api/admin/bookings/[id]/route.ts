@@ -162,6 +162,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const allowed = new Set(["pending", "assigned", "in_progress", "completed", "cancelled", "failed"]);
     if (!allowed.has(status)) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     updates.status = status;
+    if (status === "cancelled") {
+      (updates as Record<string, unknown>).cancelled_by = "system";
+    }
   }
   if (body.date != null) {
     const date = String(body.date).trim();

@@ -76,13 +76,6 @@ export async function assignBooking(
   });
 
   if (!enableTeamAssignment || !teamService || !scopeAllowsTeam) {
-    if (enableTeamAssignment && teamService && !scopeAllowsTeam) {
-      console.log("TEAM_ASSIGNMENT_SKIPPED", {
-        reason: "scope_guard",
-        service: b.service,
-        location: b.location,
-      });
-    }
     const r = await assignCleanerToBooking(supabase, bookingId, options);
     if (!r.ok) return r;
     return { ok: true, assignmentKind: "individual", cleanerId: r.cleanerId };

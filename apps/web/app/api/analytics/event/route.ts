@@ -3,12 +3,19 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
+/** Must stay in sync with `public.user_events` check constraint and client `GrowthEventType`. */
 const ALLOWED = new Set([
   "page_view",
   "start_booking",
   "view_price",
   "select_time",
   "complete_booking",
+  "cleaners_loaded",
+  "times_loaded",
+  "price_calculated",
+  "booking_started",
+  "booking_completed",
+  "booking_upsell_interaction",
   "homepage_continue_booking",
   "homepage_cta_click",
   "homepage_service_select",

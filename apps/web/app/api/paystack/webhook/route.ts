@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import { enqueueFailedJob, FAILED_JOBS_ENQUEUE_ERROR } from "@/lib/booking/failedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
@@ -50,8 +50,6 @@ export async function POST(request: Request) {
     context: { event: event.event ?? null },
   });
 
-  console.log("[paystack/webhook] event:", event.event);
-
   if (event.event !== "charge.success" || !event.data) {
     return NextResponse.json({ received: true });
   }
@@ -68,6 +66,13 @@ export async function POST(request: Request) {
     await reportOperationalIssue("warn", "paystack/webhook", "charge.success missing reference");
     return NextResponse.json({ received: true });
   }
+
+  await logSystemEvent({
+    level: "info",
+    source: "paystack/webhook",
+    message: "paystack.webhook.received",
+    context: { reference },
+  });
 
   const supabase = getSupabaseAdmin();
   if (supabase) {
@@ -128,33 +133,65 @@ export async function POST(request: Request) {
     await reportOperationalIssue("warn", "paystack/webhook", "No customer email on charge.success", { reference });
   }
 
-  const result = await upsertBookingFromPaystack({
-    paystackReference: reference,
-    amountCents: amount,
-    currency,
-    customerEmail: email,
-    snapshot,
-    paystackMetadata: metadata,
-    paystackAuthorizationCode:
-      data.authorization && typeof data.authorization === "object"
-        ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
-        : null,
-    paystackCustomerCode:
-      customerBlock && typeof customerBlock === "object"
-        ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
-        : null,
-    paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
-  });
-
-  if (result.error) {
-    await reportOperationalIssue("error", "paystack/webhook", `upsert failed: ${result.error}`, { reference });
-    await enqueueFailedJob("booking_insert", {
+  let result: Awaited<ReturnType<typeof upsertBookingFromPaystack>>;
+  try {
+    result = await upsertBookingFromPaystack({
       paystackReference: reference,
       amountCents: amount,
       currency,
       customerEmail: email,
       snapshot,
       paystackMetadata: metadata,
+      paystackAuthorizationCode:
+        data.authorization && typeof data.authorization === "object"
+          ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+          : null,
+      paystackCustomerCode:
+        customerBlock && typeof customerBlock === "object"
+          ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+          : null,
+      paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("critical", "paystack/webhook", `charge.success: upsert threw: ${msg}`, { reference });
+    result = { skipped: false, bookingId: null, error: msg };
+  }
+
+  if (result.error) {
+    await reportOperationalIssue("critical", "paystack/webhook", `charge.success: booking upsert failed: ${result.error}`, {
+      reference,
+    });
+    try {
+      await enqueueFailedJob("booking_insert", {
+        paystackReference: reference,
+        amountCents: amount,
+        currency,
+        customerEmail: email,
+        snapshot,
+        paystackMetadata: metadata,
+      });
+    } catch (e) {
+      const cause = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue(
+        "critical",
+        "paystack/webhook",
+        "charge.success: booking upsert failed and failed_jobs enqueue also failed",
+        { reference, cause },
+      );
+      return NextResponse.json(
+        { success: false, error: FAILED_JOBS_ENQUEUE_ERROR, reference },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (result.bookingId && !result.error) {
+    await logSystemEvent({
+      level: "info",
+      source: "paystack/webhook",
+      message: "paystack.booking.created",
+      context: { reference, bookingId: result.bookingId, skipped: result.skipped },
     });
   }
 

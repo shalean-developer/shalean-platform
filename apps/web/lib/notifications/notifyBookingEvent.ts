@@ -131,14 +131,6 @@ async function sendAdminIfConfigured(
  */
 function withBookingIdOnNotificationContext(ctx: Record<string, unknown>): Record<string, unknown> {
   const bid = parseTrimmedBookingId(ctx.bookingId);
-  if (
-    process.env.NEXT_PUBLIC_DEBUG_IDS === "1" &&
-    "bookingId" in ctx &&
-    ctx.bookingId !== undefined &&
-    bid === null
-  ) {
-    console.warn("[notifyBookingEvent] Invalid bookingId in notification context", { bookingId: ctx.bookingId });
-  }
   if (bid) {
     if (ctx.bookingId === bid) return ctx;
     return Object.freeze({ ...ctx, bookingId: bid });
@@ -363,26 +355,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         : forceSmsFromHealth
           ? "email_failed_sms_fallback_contact_health"
           : "email_failed_sms_fallback";
-
-      console.log("CHANNEL DECISION", {
-        flow: "payment_confirmed_customer_sms",
-        chosenChannel: "sms",
-        reason: decision,
-        cleanerId: null,
-        hasWhatsapp: false,
-        hasPhone: Boolean(custPhone?.trim()),
-        forceSmsFromHealth,
-        contactHealthSample: contactHealth?.sampleSize ?? null,
-        contactHealthScore: contactHealth?.score ?? null,
-        note: "Customer WhatsApp is disabled by policy; dashboard routing keys come from this payload.decision (not cleaner dispatch).",
-      });
-      if (forceSmsFromHealth) {
-        console.warn("❌ WhatsApp BLOCKED", {
-          reason: "customer_policy_no_whatsapp_contact_health_sms_fallback",
-          cleanerId: null,
-          decisionObject: { decision, contactHealth },
-        });
-      }
 
       const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
       await applyFallbackDelayIfNeeded(supabase, {

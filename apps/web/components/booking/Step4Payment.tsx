@@ -417,10 +417,11 @@ export function Step4Payment({
     }
     setAuthBusy(true);
     setAuthError(null);
+    const envOrigin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
     const origin =
       typeof window !== "undefined"
         ? window.location.origin
-        : (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+        : envOrigin || "https://www.shalean.co.za";
     const redirectTo = origin ? `${origin}${bookingFlowHref("checkout")}` : undefined;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,

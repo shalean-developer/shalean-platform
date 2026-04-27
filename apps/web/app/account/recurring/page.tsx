@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import StatusBadge from "@/components/admin/StatusBadge";
+import { useCustomerRecurringRealtime } from "@/hooks/useCustomerRecurringRealtime";
+import { useUser } from "@/hooks/useUser";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,7 +66,7 @@ function formatPaymentStatusLabel(raw: string | null | undefined): { label: stri
   if (s === "paid" || s === "success") return { label: "Paid", tone: "ok" };
   if (s === "failed" || s === "partial_failed") return { label: "Failed", tone: "bad" };
   if (s === "expired") return { label: "Link expired", tone: "muted" };
-  return { label: raw.trim() || "—", tone: "muted" };
+  return { label: (raw ?? "").trim() || "—", tone: "muted" };
 }
 
 function paymentToneClass(tone: "ok" | "wait" | "bad" | "muted"): string {
@@ -136,20 +138,24 @@ type MeRecurringItem = {
 
 export default function AccountRecurringPage() {
   const toast = useDashboardToast();
+  const { user, loading: userLoading } = useUser();
   const [items, setItems] = useState<MeRecurringItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
     if (!token) {
       setError("Sign in to view recurring plans.");
       setItems([]);
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
     const res = await fetch("/api/me/recurring", { headers: { Authorization: `Bearer ${token}` } });
@@ -160,13 +166,18 @@ export default function AccountRecurringPage() {
     } else {
       setItems(json.items ?? []);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
+  const silentRefetch = useCallback(() => load({ silent: true }), [load]);
+
+  useCustomerRecurringRealtime(user?.id, silentRefetch);
+
   useEffect(() => {
+    if (userLoading) return;
     const tid = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(tid);
-  }, [load]);
+  }, [userLoading, load]);
 
   async function postAction(id: string, action: "pause" | "resume" | "cancel" | "skip") {
     if (action === "cancel" && !window.confirm("Cancel this plan? Future visits will not be scheduled.")) {
@@ -196,7 +207,7 @@ export default function AccountRecurringPage() {
       else if (action === "pause") toast("Plan paused.", "success");
       else if (action === "resume") toast("Plan resumed.", "success");
       else toast("Next visit skipped.", "success");
-      await load();
+      await load({ silent: true });
     } finally {
       setBusyId(null);
     }

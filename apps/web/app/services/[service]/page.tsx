@@ -50,7 +50,7 @@ export default async function ServicePage({ params }: Props) {
       {
         "@type": "LocalBusiness",
         name: "Shalean Cleaning Services",
-        url: "https://shalean.com",
+        url: "https://www.shalean.co.za",
         areaServed: "Cape Town",
         serviceType: SERVICES.map((item) => item.name),
         aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", reviewCount: "500" },
@@ -64,7 +64,7 @@ export default async function ServicePage({ params }: Props) {
           "@type": "LocalBusiness",
           name: "Shalean Cleaning Services",
         },
-        url: `https://shalean.com/services/${service.slug}`,
+        url: `https://www.shalean.co.za/services/${service.slug}`,
         description: service.description,
         review: service.reviews.map((review) => ({
           "@type": "Review",

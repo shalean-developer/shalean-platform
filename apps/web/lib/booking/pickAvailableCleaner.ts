@@ -554,18 +554,6 @@ export async function pickAvailableCleaner(
 
   function logAndReturnPick(chosen: Scored): CleanerPick {
     const phone = String(chosen.phone_number || chosen.phone || "").trim();
-    console.log("dispatch चयन", {
-      cleanerId: chosen.id,
-      workload: chosen.workload,
-      responseTime: chosen.responseTime,
-      acceptanceRate: chosen.acceptanceRate,
-      components: chosen.components,
-      finalScore: chosen.finalScore,
-      recentDecline: chosen.recentDecline,
-      assignedRecentlySameWindow: chosen.assignedRecentlySameWindow,
-      assignedRecentlyAny: chosen.assignedRecentlyAny,
-      acceptStreak: chosen.acceptStreak,
-    });
     const fullName = String(chosen.full_name ?? "").trim() || "Cleaner";
     return { id: chosen.id, phone, fullName };
   }

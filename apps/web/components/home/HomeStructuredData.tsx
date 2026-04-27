@@ -1,12 +1,12 @@
 const localBusinessJsonLd = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
-  "@id": "https://shalean.com/#localbusiness",
+  "@id": "https://www.shalean.co.za/#localbusiness",
   name: "Shalean Cleaning Services",
-  url: "https://shalean.com/",
+  url: "https://www.shalean.co.za/",
   telephone: "+27 21 555 0123",
   email: "hello@shaleancleaning.com",
-  image: "https://shalean.com/icon-512.png",
+  image: "https://www.shalean.co.za/icon-512.png",
   priceRange: "R300+",
   address: {
     "@type": "PostalAddress",

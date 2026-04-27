@@ -158,31 +158,8 @@ export async function sendWhatsAppOffer(params: {
   /** Payment line e.g. `R450` — from {@link formatCleanerPayZarLabel}. */
   payLabel: string;
 }): Promise<SendWhatsAppOfferResult> {
-  console.log("STEP 4: sendWhatsAppOffer about to run", {
-    cleanerId: params.cleanerId,
-    bookingId: params.bookingId,
-    offerId: params.offerId,
-  });
-  console.log("🔥 sendWhatsAppOffer CALLED", {
-    phone: normalizePhone(params.cleanerPhone),
-    bookingId: params.bookingId,
-    params: {
-      cleanerId: params.cleanerId,
-      offerId: params.offerId,
-      cleanerName: params.cleanerName,
-      bookingDate: params.bookingDate,
-      bookingTime: params.bookingTime,
-      location: params.location,
-      payLabel: params.payLabel,
-    },
-  });
   const phone = normalizePhone(params.cleanerPhone);
   if (!phone) {
-    console.warn("❌ WhatsApp BLOCKED", {
-      reason: "missing_phone",
-      cleanerId: params.cleanerId,
-      decisionObject: { stage: "sendWhatsAppOffer", offerId: params.offerId, bookingId: params.bookingId },
-    });
     await logSystemEvent({
       level: "warn",
       source: "whatsapp_offer_missing_phone",
@@ -194,11 +171,6 @@ export async function sendWhatsAppOffer(params: {
 
   const paused = await isWhatsappOutboundPaused();
   if (paused.paused) {
-    console.warn("❌ WhatsApp BLOCKED", {
-      reason: "whatsapp_outbound_paused",
-      cleanerId: params.cleanerId,
-      decisionObject: { untilIso: paused.untilIso, bookingId: params.bookingId, offerId: params.offerId },
-    });
     await logSystemEvent({
       level: "warn",
       source: "whatsapp_offer_channel_paused",
@@ -238,11 +210,6 @@ export async function sendWhatsAppOffer(params: {
     },
   });
   if (!sendResult.ok) {
-    console.warn("❌ WhatsApp BLOCKED", {
-      reason: sendResult.error ?? "meta_template_send_failed",
-      cleanerId: params.cleanerId,
-      decisionObject: { stage: "sendWhatsAppOffer_meta", bookingId: params.bookingId, offerId: params.offerId },
-    });
     await logSystemEvent({
       level: "warn",
       source: "whatsapp_offer_template_send_failed",

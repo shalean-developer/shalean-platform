@@ -57,7 +57,7 @@ export function useBookings(): {
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeDebounceRef = useRef<number | null>(null);
 
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -156,7 +156,7 @@ export function useBookings(): {
     return { ok: true as const };
   }, [fetchBookings]);
 
-  const refetchBookings = useCallback(() => void fetchBookings(), [fetchBookings]);
+  const refetchBookings = useCallback(() => fetchBookings(), [fetchBookings]);
 
   const rescheduleBooking = useCallback(
     async (id: string, date: string, time: string) => {
@@ -197,7 +197,7 @@ export function useBookingDetail(id: string | undefined): {
   const [row, setRow] = useState<BookingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const detailDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailDebounceRef = useRef<number | null>(null);
 
   const fetchOne = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -308,7 +308,7 @@ export function useBookingDetail(id: string | undefined): {
 
   const booking = row ? mapBookingRow(row) : null;
 
-  const refetchOne = useCallback(() => void fetchOne(), [fetchOne]);
+  const refetchOne = useCallback(() => fetchOne(), [fetchOne]);
 
   return {
     booking,

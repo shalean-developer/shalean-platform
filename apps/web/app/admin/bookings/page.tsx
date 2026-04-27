@@ -317,6 +317,7 @@ export default function AdminBookingsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [clearingFailedJobs, setClearingFailedJobs] = useState(false);
+  const adminBookingsRealtimeDebounceRef = useRef<number | null>(null);
 
   const today = useMemo(() => todayYmdJohannesburg(), []);
 
@@ -404,12 +405,17 @@ export default function AdminBookingsPage() {
     }
   }, [searchParams]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setLoading(true);
+    const endLoading = () => {
+      if (!silent) setLoading(false);
+    };
+
     const sb = getSupabaseBrowser();
     if (!sb) {
       setError("Supabase is not configured.");
-      setLoading(false);
+      endLoading();
       return;
     }
     const {
@@ -418,7 +424,7 @@ export default function AdminBookingsPage() {
     } = await sb.auth.getUser();
     if (userErr || !user?.email) {
       setError("Please sign in as an admin.");
-      setLoading(false);
+      endLoading();
       return;
     }
 
@@ -426,7 +432,7 @@ export default function AdminBookingsPage() {
     const token = sessionData.session?.access_token;
     if (!token) {
       setError("Please sign in as an admin.");
-      setLoading(false);
+      endLoading();
       return;
     }
 
@@ -459,7 +465,7 @@ export default function AdminBookingsPage() {
       setRows([]);
       setMetrics(null);
       setFailedJobs([]);
-      setLoading(false);
+      endLoading();
       return;
     }
 
@@ -503,7 +509,7 @@ export default function AdminBookingsPage() {
       });
     }
 
-    setLoading(false);
+    endLoading();
   }, [filter, actionFilter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
 
   const retryDispatchFailed = useCallback(
@@ -586,7 +592,8 @@ export default function AdminBookingsPage() {
   }, [load]);
 
   useEffect(() => {
-    void load();
+    const tid = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(tid);
   }, [load]);
 
   async function patchBookingStatus(id: string, nextStatus: string) {
@@ -644,19 +651,23 @@ export default function AdminBookingsPage() {
     let bookingsChannel: ReturnType<typeof sb.channel> | null = null;
     let cleanersChannel: ReturnType<typeof sb.channel> | null = null;
 
+    const scheduleRealtimeReload = () => {
+      if (adminBookingsRealtimeDebounceRef.current) window.clearTimeout(adminBookingsRealtimeDebounceRef.current);
+      adminBookingsRealtimeDebounceRef.current = window.setTimeout(() => {
+        adminBookingsRealtimeDebounceRef.current = null;
+        void load({ silent: true });
+      }, 450);
+    };
+
     const connect = () => {
       bookingsChannel = sb
         .channel("admin-bookings-realtime")
-        .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
-          void load();
-        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, scheduleRealtimeReload)
         .subscribe();
 
       cleanersChannel = sb
         .channel("admin-cleaners-realtime")
-        .on("postgres_changes", { event: "*", schema: "public", table: "cleaners" }, () => {
-          void load();
-        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "cleaners" }, scheduleRealtimeReload)
         .subscribe();
     };
 
@@ -666,6 +677,7 @@ export default function AdminBookingsPage() {
 
     const onVisibility = () => {
       if (document.hidden) {
+        if (adminBookingsRealtimeDebounceRef.current) window.clearTimeout(adminBookingsRealtimeDebounceRef.current);
         if (bookingsChannel) void sb.removeChannel(bookingsChannel);
         if (cleanersChannel) void sb.removeChannel(cleanersChannel);
         bookingsChannel = null;
@@ -674,18 +686,19 @@ export default function AdminBookingsPage() {
       }
       if (!bookingsChannel && !cleanersChannel) {
         connect();
-        void load();
+        void load({ silent: true });
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
 
     const fallbackPoll = window.setInterval(() => {
-      if (!document.hidden) void load();
+      if (!document.hidden) void load({ silent: true });
     }, 15_000);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearInterval(fallbackPoll);
+      if (adminBookingsRealtimeDebounceRef.current) window.clearTimeout(adminBookingsRealtimeDebounceRef.current);
       if (bookingsChannel) void sb.removeChannel(bookingsChannel);
       if (cleanersChannel) void sb.removeChannel(cleanersChannel);
     };
@@ -819,6 +832,14 @@ export default function AdminBookingsPage() {
   return (
     <div>
       <main className="mx-auto max-w-6xl">
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <Link
+            href="/admin/bookings/create"
+            className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Create booking + payment link
+          </Link>
+        </div>
         {metrics ? (
           <>
             <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">

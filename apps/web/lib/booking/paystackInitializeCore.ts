@@ -24,6 +24,7 @@ import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/dema
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackErrorCodes";
+import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
@@ -436,8 +437,8 @@ export async function processPaystackInitializeBody(
     },
   };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const callbackUrl = appUrl ? `${appUrl}/booking/success` : undefined;
+  const appUrl = getPublicAppUrlBase();
+  const callbackUrl = `${appUrl}/booking/success`;
 
   const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
