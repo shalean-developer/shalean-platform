@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { emitAdminToast } from "@/lib/admin/toastBus";
+import { CreateRecurringPlanDialog } from "@/components/admin/CreateRecurringPlanDialog";
 import StatusBadge from "@/components/admin/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +61,7 @@ export default function AdminRecurringPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,7 +126,10 @@ export default function AdminRecurringPage() {
             Active schedules, next generator run (Africa/Johannesburg), and snapshot preview from each plan.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+            New recurring plan
+          </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             Refresh
           </Button>
@@ -141,8 +146,8 @@ export default function AdminRecurringPage() {
         <CardHeader>
           <CardTitle>All plans</CardTitle>
           <CardDescription>
-            Pause stops new generated bookings; resume recalculates <code className="text-xs">next_run_date</code>. Create
-            plans via <code className="text-xs">POST /api/admin/recurring</code> until a guided form ships.
+            Pause stops new generated bookings; resume recalculates <code className="text-xs">next_run_date</code>. Customer
+            must already have a Supabase account (matching email) before you attach a plan.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -268,6 +273,8 @@ export default function AdminRecurringPage() {
           )}
         </CardContent>
       </Card>
+
+      <CreateRecurringPlanDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void load()} />
     </div>
   );
 }

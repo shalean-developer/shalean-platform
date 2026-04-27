@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
+import { parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { requireAdminSession } from "@/lib/admin/requireAdminSession";
+import { findAuthUserIdByEmail } from "@/lib/cleaner/linkCleanerAuth";
+import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { firstOccurrenceOnOrAfter, type MonthlyPattern, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
+import { buildAdminRecurringQuickSnapshot, normalizeVisitTimeHm } from "@/lib/recurring/buildAdminRecurringQuickSnapshot";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -118,14 +122,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const customer_id = typeof body.customer_id === "string" && body.customer_id.trim() ? body.customer_id.trim() : "";
+  const customer_id_input = typeof body.customer_id === "string" && body.customer_id.trim() ? body.customer_id.trim() : "";
   const frequency = typeof body.frequency === "string" ? body.frequency : "";
   const start_date = typeof body.start_date === "string" ? body.start_date : "";
   const price = typeof body.price === "number" && Number.isFinite(body.price) ? body.price : NaN;
   const days = body.days_of_week;
-  const template = body.booking_snapshot_template;
 
-  if (!customer_id) return NextResponse.json({ error: "customer_id is required." }, { status: 400 });
   if (!["weekly", "biweekly", "monthly"].includes(frequency)) {
     return NextResponse.json({ error: "frequency must be weekly, biweekly, or monthly." }, { status: 400 });
   }
@@ -135,11 +137,85 @@ export async function POST(request: Request) {
   if (!isIntArrayDays(days)) {
     return NextResponse.json({ error: "days_of_week must be a non-empty array of integers 1–7 (Mon–Sun)." }, { status: 400 });
   }
-  if (!Number.isFinite(price) || price < 0) {
-    return NextResponse.json({ error: "price must be a non-negative number." }, { status: 400 });
-  }
-  if (template === undefined || template === null || (typeof template === "object" && Object.keys(template as object).length === 0)) {
-    return NextResponse.json({ error: "booking_snapshot_template is required (v1 snapshot with locked + customer)." }, { status: 400 });
+
+  const quickCust = body.customer;
+  const isQuickCreate =
+    !customer_id_input && quickCust && typeof quickCust === "object" && !Array.isArray(quickCust);
+
+  let customer_id = customer_id_input;
+  let template: unknown = body.booking_snapshot_template;
+
+  if (isQuickCreate) {
+    if (!Number.isFinite(price) || price <= 0) {
+      return NextResponse.json({ error: "price must be greater than zero." }, { status: 400 });
+    }
+    const c = quickCust as Record<string, unknown>;
+    const emailRaw = typeof c.email === "string" ? c.email.trim() : "";
+    const nameRaw = typeof c.name === "string" ? c.name.trim() : "";
+    const phoneRaw = typeof c.phone === "string" ? c.phone.trim() : "";
+    const em = normalizeEmail(emailRaw);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      return NextResponse.json({ error: "A valid customer email is required." }, { status: 400 });
+    }
+    if (nameRaw.length < 2) {
+      return NextResponse.json({ error: "Customer name must be at least 2 characters." }, { status: 400 });
+    }
+    const address = typeof body.address === "string" ? body.address.trim() : "";
+    if (!address) {
+      return NextResponse.json({ error: "address is required." }, { status: 400 });
+    }
+    const serviceRaw = typeof body.service === "string" ? body.service.trim() : "standard";
+    const svc: BookingServiceId = parseBookingServiceId(serviceRaw) ?? "standard";
+    const visitHm = normalizeVisitTimeHm(typeof body.visit_time === "string" ? body.visit_time : undefined);
+
+    const adminEarly = getSupabaseAdmin();
+    if (!adminEarly) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+    const uid = await findAuthUserIdByEmail(adminEarly, em);
+    if (!uid) {
+      return NextResponse.json(
+        {
+          error:
+            "No Supabase Auth user with this email. The customer must register before you can attach a recurring plan.",
+        },
+        { status: 404 },
+      );
+    }
+
+    const snap = buildAdminRecurringQuickSnapshot({
+      startDateYmd: start_date,
+      visitTimeHm: visitHm,
+      address,
+      priceZar: price,
+      service: svc,
+      customerName: nameRaw,
+      customerEmail: emailRaw,
+      customerPhone: phoneRaw,
+      userId: uid,
+    });
+    if (!snap) {
+      return NextResponse.json({ error: "Could not build booking snapshot from supplied fields." }, { status: 400 });
+    }
+    customer_id = uid;
+    template = snap;
+  } else {
+    if (!customer_id_input) {
+      return NextResponse.json(
+        { error: "customer_id is required unless using quick create (customer.email + address + service)." },
+        { status: 400 },
+      );
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      return NextResponse.json({ error: "price must be a non-negative number." }, { status: 400 });
+    }
+    if (
+      template === undefined ||
+      template === null ||
+      (typeof template === "object" && Object.keys(template as object).length === 0)
+    ) {
+      return NextResponse.json({ error: "booking_snapshot_template is required (v1 snapshot with locked + customer)." }, { status: 400 });
+    }
+    customer_id = customer_id_input;
   }
 
   let monthly_pattern: MonthlyPattern = "mirror_start_date";
