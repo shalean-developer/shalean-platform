@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, MapPin, Navigation } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/
 import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
 import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
 import { CleanerJobEarningsRow } from "@/components/cleaner/mobile/CleanerJobEarningsRow";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function CleanerJobDetailPage() {
   const params = useParams();
@@ -24,8 +25,10 @@ export default function CleanerJobDetailPage() {
   const [acting, setActing] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [ackTick, setAckTick] = useState(0);
+  const rtDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     const headers = getCleanerIdHeaders();
     if (!headers || !id) {
       setError("Not signed in.");
@@ -33,10 +36,10 @@ export default function CleanerJobDetailPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!silent) setLoading(true);
     const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, { headers });
+    if (!silent) setLoading(false);
     const json = (await res.json()) as { job?: CleanerBookingRow; error?: string };
-    setLoading(false);
     if (!res.ok) {
       setError(json.error ?? "Could not load job.");
       setRow(null);
@@ -50,6 +53,36 @@ export default function CleanerJobDetailPage() {
     const tid = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(tid);
   }, [load]);
+
+  useEffect(() => {
+    if (!id) return;
+    const sb = getSupabaseBrowser();
+    if (!sb) return;
+
+    let cancelled = false;
+    let ch: ReturnType<typeof sb.channel> | null = null;
+
+    void sb.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled || !session?.user) return;
+      const schedule = () => {
+        if (rtDebounceRef.current) window.clearTimeout(rtDebounceRef.current);
+        rtDebounceRef.current = window.setTimeout(() => {
+          rtDebounceRef.current = null;
+          void load({ silent: true });
+        }, 400);
+      };
+      ch = sb
+        .channel(`cleaner-job-detail-rt-${id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "bookings", filter: `id=eq.${id}` }, schedule)
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (rtDebounceRef.current) window.clearTimeout(rtDebounceRef.current);
+      if (ch) void sb.removeChannel(ch);
+    };
+  }, [id, load]);
 
   const availabilityAcked = useMemo(() => {
     void ackTick;
@@ -80,7 +113,7 @@ export default function CleanerJobDetailPage() {
           addTeamAvailabilityAck(id);
           setAckTick((t) => t + 1);
         }
-        await load();
+        await load({ silent: true });
       } catch {
         setActionMsg("Network error.");
       } finally {

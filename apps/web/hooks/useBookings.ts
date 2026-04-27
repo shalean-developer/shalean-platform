@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { mapBookingRow } from "@/lib/dashboard/bookingUtils";
 import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
@@ -53,12 +53,15 @@ export function useBookings(): {
   rescheduleBooking: (id: string, date: string, time: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 } {
   const { user, loading: userLoading } = useUser();
+  const userId = user?.id;
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchBookings = useCallback(async () => {
-    if (!user?.id) {
+  const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!userId) {
       setRows([]);
       setLoading(false);
       return;
@@ -70,13 +73,15 @@ export function useBookings(): {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     let res = await sb
       .from("bookings")
       .select(BOOKING_SELECT)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .neq("status", "pending_payment")
       .neq("status", "payment_expired")
       .order("date", { ascending: false })
@@ -87,7 +92,7 @@ export function useBookings(): {
       res = await sb
         .from("bookings")
         .select(BOOKING_SELECT.replace(",cleaners(full_name,phone)", ""))
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .neq("status", "pending_payment")
         .neq("status", "payment_expired")
         .order("date", { ascending: false })
@@ -101,13 +106,42 @@ export function useBookings(): {
     } else {
       setRows(((res.data ?? []) as unknown as BookingRow[]).map(normalizeCleanerJoin));
     }
-    setLoading(false);
-  }, [user?.id]);
+    if (!silent) setLoading(false);
+  }, [userId]);
 
   useEffect(() => {
     if (userLoading) return;
-    void fetchBookings();
+    const tid = window.setTimeout(() => void fetchBookings(), 0);
+    return () => window.clearTimeout(tid);
   }, [userLoading, fetchBookings]);
+
+  useEffect(() => {
+    if (userLoading || !userId) return;
+    const sb = getSupabaseClient();
+    if (!sb) return;
+
+    const schedule = () => {
+      if (realtimeDebounceRef.current) window.clearTimeout(realtimeDebounceRef.current);
+      realtimeDebounceRef.current = window.setTimeout(() => {
+        realtimeDebounceRef.current = null;
+        void fetchBookings({ silent: true });
+      }, 400);
+    };
+
+    const channel = sb
+      .channel(`customer-dashboard-bookings-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `user_id=eq.${userId}` },
+        schedule,
+      )
+      .subscribe();
+
+    return () => {
+      if (realtimeDebounceRef.current) window.clearTimeout(realtimeDebounceRef.current);
+      void sb.removeChannel(channel);
+    };
+  }, [userLoading, userId, fetchBookings]);
 
   const bookings = useMemo(() => rows.map((r) => mapBookingRow(r)), [rows]);
 
@@ -121,6 +155,8 @@ export function useBookings(): {
     await fetchBookings();
     return { ok: true as const };
   }, [fetchBookings]);
+
+  const refetchBookings = useCallback(() => void fetchBookings(), [fetchBookings]);
 
   const rescheduleBooking = useCallback(
     async (id: string, date: string, time: string) => {
@@ -142,7 +178,7 @@ export function useBookings(): {
     bookings,
     loading: userLoading || loading,
     error,
-    refetch: fetchBookings,
+    refetch: refetchBookings,
     cancelBooking,
     rescheduleBooking,
   };
@@ -157,12 +193,15 @@ export function useBookingDetail(id: string | undefined): {
   rescheduleBooking: (id: string, date: string, time: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 } {
   const { user, loading: userLoading } = useUser();
+  const detailUserId = user?.id;
   const [row, setRow] = useState<BookingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const detailDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchOne = useCallback(async () => {
-    if (!user?.id || !id) {
+  const fetchOne = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!detailUserId || !id) {
       setRow(null);
       setLoading(false);
       return;
@@ -174,14 +213,16 @@ export function useBookingDetail(id: string | undefined): {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     let res = await sb
       .from("bookings")
       .select(BOOKING_SELECT)
       .eq("id", id)
-      .eq("user_id", user.id)
+      .eq("user_id", detailUserId)
       .maybeSingle();
 
     if (res.error && /cleaners|relationship|schema/i.test(res.error.message)) {
@@ -189,7 +230,7 @@ export function useBookingDetail(id: string | undefined): {
         .from("bookings")
         .select(BOOKING_SELECT.replace(",cleaners(full_name,phone)", ""))
         .eq("id", id)
-        .eq("user_id", user.id)
+        .eq("user_id", detailUserId)
         .maybeSingle();
     }
 
@@ -202,13 +243,38 @@ export function useBookingDetail(id: string | undefined): {
     } else {
       setRow(normalizeCleanerJoin(res.data as unknown as BookingRow));
     }
-    setLoading(false);
-  }, [user?.id, id]);
+    if (!silent) setLoading(false);
+  }, [detailUserId, id]);
 
   useEffect(() => {
     if (userLoading) return;
-    void fetchOne();
+    const tid = window.setTimeout(() => void fetchOne(), 0);
+    return () => window.clearTimeout(tid);
   }, [userLoading, fetchOne]);
+
+  useEffect(() => {
+    if (userLoading || !detailUserId || !id) return;
+    const sb = getSupabaseClient();
+    if (!sb) return;
+
+    const schedule = () => {
+      if (detailDebounceRef.current) window.clearTimeout(detailDebounceRef.current);
+      detailDebounceRef.current = window.setTimeout(() => {
+        detailDebounceRef.current = null;
+        void fetchOne({ silent: true });
+      }, 400);
+    };
+
+    const channel = sb
+      .channel(`customer-booking-detail-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings", filter: `id=eq.${id}` }, schedule)
+      .subscribe();
+
+    return () => {
+      if (detailDebounceRef.current) window.clearTimeout(detailDebounceRef.current);
+      void sb.removeChannel(channel);
+    };
+  }, [userLoading, detailUserId, id, fetchOne]);
 
   const cancelBooking = useCallback(
     async (bid: string) => {
@@ -242,11 +308,13 @@ export function useBookingDetail(id: string | undefined): {
 
   const booking = row ? mapBookingRow(row) : null;
 
+  const refetchOne = useCallback(() => void fetchOne(), [fetchOne]);
+
   return {
     booking,
     loading: userLoading || loading,
     error,
-    refetch: fetchOne,
+    refetch: refetchOne,
     cancelBooking,
     rescheduleBooking,
   };
