@@ -22,7 +22,8 @@ export type EnsureAssignmentSource =
   | "escalate_ack_timeout"
   | "dispatch_retry_queue"
   | "subscription_autopay"
-  | "customer_reschedule";
+  | "customer_reschedule"
+  | "dispatch_offer_expired";
 
 export type EnsureBookingAssignmentOptions = AssignCleanerOptions & {
   source: EnsureAssignmentSource;

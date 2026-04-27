@@ -8,15 +8,18 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const ADMIN_RETRY_DISPATCH_COOLDOWN_MS = 10_000;
 
+/** Dispatch states ops can clear to re-run auto-assign (or then assign manually). */
+const TERMINAL_DISPATCH_RESET = ["failed", "unassignable", "no_cleaner"] as const;
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Clears terminal dispatch backoff / attempt cap side-effects and runs one auto-assign wave (soft).
- * For ops when `dispatch_status` is `failed` on a paid pending booking.
+ * For ops when `dispatch_status` is `failed`, `unassignable`, or `no_cleaner` on a paid pending booking.
  *
- * Idempotent under double-submit: the reset `update` requires `dispatch_status = 'failed'`, so a second
- * in-flight request after the first succeeds will update 0 rows (409) and does not corrupt state.
+ * Idempotent under double-submit: the reset `update` requires a matching terminal `dispatch_status`,
+ * so a second in-flight request after the first succeeds will update 0 rows (409) and does not corrupt state.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -64,8 +67,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (st !== "pending" || (row as { cleaner_id?: string | null }).cleaner_id) {
     return NextResponse.json({ error: "Booking must be pending and unassigned." }, { status: 422 });
   }
-  if (ds !== "failed") {
-    return NextResponse.json({ error: "Retry dispatch is only for bookings with dispatch_status failed." }, { status: 422 });
+  if (!TERMINAL_DISPATCH_RESET.includes(ds as (typeof TERMINAL_DISPATCH_RESET)[number])) {
+    return NextResponse.json(
+      {
+        error: `Retry dispatch is only for bookings with dispatch_status one of: ${TERMINAL_DISPATCH_RESET.join(", ")}.`,
+      },
+      { status: 422 },
+    );
   }
 
   const lastRetryIso = (row as { last_admin_retry_dispatch_at?: string | null }).last_admin_retry_dispatch_at ?? null;
@@ -78,6 +86,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       );
     }
   }
+
+  await admin.from("dispatch_retry_queue").delete().eq("booking_id", bookingId).eq("status", "pending");
 
   const retryStamp = new Date().toISOString();
   const { data: resetRows, error: resetErr } = await admin
@@ -92,7 +102,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     .eq("id", bookingId)
     .eq("status", "pending")
     .is("cleaner_id", null)
-    .eq("dispatch_status", "failed")
+    .in("dispatch_status", [...TERMINAL_DISPATCH_RESET])
     .select("id");
 
   if (resetErr) {
@@ -111,10 +121,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     message: "Admin retry dispatch",
     context: {
       bookingId,
+      prior_dispatch_status: ds,
       actor_user_id: user.id,
       actor_email: user.email ?? null,
     },
   });
+
+  metrics.increment("dispatch.admin_terminal_reset", { bookingId, from: ds });
 
   const result = await ensureBookingAssignment(admin, bookingId, {
     source: "admin_dispatch_api",

@@ -20,6 +20,7 @@ const MAX_LIFECYCLE_RETRY = 20;
 
 /**
  * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
+ * Schedule: every minute recommended (`* * * * *` in `apps/web/vercel.json`) so `dispatch_retry_queue` fires soon after `next_retry_at`.
  * 1) Retries Paystack booking inserts (`failed_jobs`).
  * 2) Retries lifecycle emails stuck in `failed` with attempts &lt; 5.
  * 3) Processes `dispatch_retry_queue` (auto-assign backoff).

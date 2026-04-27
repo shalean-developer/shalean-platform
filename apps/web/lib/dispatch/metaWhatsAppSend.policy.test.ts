@@ -14,9 +14,13 @@ vi.mock("@/lib/whatsapp/whatsappMetaSafeguards", () => ({
   isMetaSendCircuitOpen: vi.fn().mockReturnValue(false),
 }));
 
+import {
+  sendViaMetaWhatsApp,
+  sendViaMetaWhatsAppTemplateBody,
+} from "@/lib/dispatch/metaWhatsAppSend";
+
 describe("metaWhatsAppSend cleaner-only policy", () => {
   it("sendViaMetaWhatsApp throws when recipientRole is not cleaner", async () => {
-    const { sendViaMetaWhatsApp } = await import("@/lib/dispatch/metaWhatsAppSend");
     await expect(
       sendViaMetaWhatsApp({
         phone: "+27123456789",
@@ -27,7 +31,6 @@ describe("metaWhatsAppSend cleaner-only policy", () => {
   });
 
   it("sendViaMetaWhatsAppTemplateBody throws when recipientRole is not cleaner", async () => {
-    const { sendViaMetaWhatsAppTemplateBody } = await import("@/lib/dispatch/metaWhatsAppSend");
     await expect(
       sendViaMetaWhatsAppTemplateBody({
         phone: "+27123456789",

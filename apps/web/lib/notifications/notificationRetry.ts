@@ -1,6 +1,4 @@
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
-import { resolveWhatsAppBearerToken } from "@/lib/dispatch/metaWhatsAppSend";
-import { logSystemEvent } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { abortWhatsAppQueueJob, enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
@@ -170,8 +168,10 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
     if (digits.length < 10) {
       return { ok: false, error: "Invalid WhatsApp recipient on log row.", httpStatus: 400 };
     }
-    const hasWa = Boolean(resolveWhatsAppBearerToken() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim());
-    if (process.env.NODE_ENV === "production" && !hasWa) {
+    const hasWa = Boolean(
+      process.env.WHATSAPP_ACCESS_TOKEN?.trim() && process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
+    );
+    if (!hasWa) {
       await writeNotificationLog({
         ...baseLog,
         channel: "whatsapp",
@@ -180,25 +180,6 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
         provider: "meta",
       });
       return { ok: false, error: "WhatsApp is not configured.", httpStatus: 503 };
-    }
-    const devSkip =
-      process.env.NODE_ENV !== "production" &&
-      (process.env.WHATSAPP_DEV_MODE === "true" || !hasWa);
-    if (devSkip) {
-      await logSystemEvent({
-        level: "info",
-        source: "admin_notification_retry_whatsapp_dev",
-        message: "WhatsApp retry skipped real send (dev / missing token)",
-        context: { retried_from: row.id, to: digits },
-      });
-      await writeNotificationLog({
-        ...baseLog,
-        channel: "whatsapp",
-        status: "sent",
-        error: null,
-        provider: "meta",
-      });
-      return { ok: true };
     }
     const admin = getSupabaseAdmin();
     if (!admin) {

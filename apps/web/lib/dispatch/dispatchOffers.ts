@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import {
@@ -62,6 +63,7 @@ export async function createDispatchOfferRow(params: {
 
   const expiresAt = new Date(Date.now() + params.ttlSeconds * 1000).toISOString();
   const ux_variant = assignCleanerUxVariantForCleaner(params.cleanerId);
+  const offer_token = randomUUID();
   const { data, error } = await params.supabase
     .from("dispatch_offers")
     .insert({
@@ -71,6 +73,7 @@ export async function createDispatchOfferRow(params: {
       rank_index: params.rankIndex,
       expires_at: expiresAt,
       ux_variant,
+      offer_token,
     })
     .select("id")
     .single();
@@ -176,23 +179,19 @@ export async function createDispatchOfferRow(params: {
     }
   }
 
-  console.log("[Dispatch] Sending offer WhatsApp", {
-    bookingId: params.bookingId,
-    cleanerId: params.cleanerId,
-    offerId,
-  });
   try {
     await notifyCleanerOfDispatchOffer({
       bookingId: params.bookingId,
       offerId,
       cleanerId: params.cleanerId,
       expiresAtIso: expiresAt,
+      offerToken: offer_token,
     });
   } catch (err) {
-    console.error("[Dispatch Offer WhatsApp Error]", err);
+    console.error("[Dispatch Offer SMS Error]", err);
     await logSystemEvent({
       level: "error",
-      source: "dispatch_offer_whatsapp_notify",
+      source: "dispatch_offer_sms_notify",
       message: err instanceof Error ? err.message : String(err),
       context: { bookingId: params.bookingId, cleanerId: params.cleanerId, offerId },
     });
@@ -331,7 +330,7 @@ export async function acceptDispatchOffer(params: {
 }): Promise<AcceptDispatchOfferResult> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at")
+    .select("id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at")
     .eq("id", params.offerId)
     .maybeSingle();
 
@@ -344,6 +343,7 @@ export async function acceptDispatchOffer(params: {
     ux_variant?: string | null;
     expires_at?: string;
     whatsapp_sent_at?: string | null;
+    sms_sent_at?: string | null;
   };
   const ux_variant = sanitizeCleanerUxVariant(row.ux_variant);
   if (String(row.cleaner_id) !== params.cleanerId) {
@@ -365,7 +365,9 @@ export async function acceptDispatchOffer(params: {
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : Date.now();
   const anchorForLatency = row.whatsapp_sent_at
     ? new Date(row.whatsapp_sent_at).getTime()
-    : createdAt;
+    : row.sms_sent_at
+      ? new Date(row.sms_sent_at).getTime()
+      : createdAt;
   const responseLatencyMs = Math.max(0, Date.now() - (Number.isFinite(anchorForLatency) ? anchorForLatency : Date.now()));
   const latencyMs = responseLatencyMs;
 
@@ -561,7 +563,7 @@ export async function rejectDispatchOffer(params: {
 }): Promise<RejectDispatchOfferResult> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, cleaner_id, status, booking_id, created_at, ux_variant, expires_at, whatsapp_sent_at")
+    .select("id, cleaner_id, status, booking_id, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at")
     .eq("id", params.offerId)
     .maybeSingle();
 
@@ -574,6 +576,7 @@ export async function rejectDispatchOffer(params: {
     ux_variant?: string | null;
     expires_at?: string;
     whatsapp_sent_at?: string | null;
+    sms_sent_at?: string | null;
   };
   if (String(row.cleaner_id) !== params.cleanerId) {
     return { ok: false, error: "Not your offer.", failure: "wrong_cleaner" };
@@ -592,10 +595,15 @@ export async function rejectDispatchOffer(params: {
 
   const now = new Date().toISOString();
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : Date.now();
-  const anchorForLatency = row.whatsapp_sent_at
+  const anchorForLatencyReject = row.whatsapp_sent_at
     ? new Date(row.whatsapp_sent_at).getTime()
-    : createdAt;
-  const responseLatencyMs = Math.max(0, Date.now() - (Number.isFinite(anchorForLatency) ? anchorForLatency : Date.now()));
+    : row.sms_sent_at
+      ? new Date(row.sms_sent_at).getTime()
+      : createdAt;
+  const responseLatencyMs = Math.max(
+    0,
+    Date.now() - (Number.isFinite(anchorForLatencyReject) ? anchorForLatencyReject : Date.now()),
+  );
   const latencyMs = responseLatencyMs;
 
   const { error } = await params.supabase

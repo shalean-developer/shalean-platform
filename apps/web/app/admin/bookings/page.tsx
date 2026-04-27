@@ -66,7 +66,7 @@ function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], statu
   if (ds === "assigned") return "Assigned";
   if (ds === "failed") return "Failed";
   if (ds === "no_cleaner") return "No cleaner (area)";
-  if (ds === "unassignable") return "Unassignable — manual dispatch";
+  if (ds === "unassignable") return "No cleaner accepted — assign manually";
   const s = String(status ?? "").toLowerCase();
   if (s === "assigned") return "Assigned";
   return status ?? "—";
@@ -1237,7 +1237,7 @@ export default function AdminBookingsPage() {
                         ) : null}
                         {(r.status ?? "").toLowerCase() === "pending" &&
                         !r.cleaner_id &&
-                        (r.dispatch_status ?? "").toLowerCase() === "failed" ? (
+                        ["failed", "unassignable", "no_cleaner"].includes((r.dispatch_status ?? "").toLowerCase()) ? (
                           <div
                             className="mt-1.5 flex flex-wrap items-center gap-1.5"
                             onClick={(e) => e.stopPropagation()}

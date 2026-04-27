@@ -90,6 +90,16 @@ export async function decideGrowthActionWithAi(
   options?: { userId?: string | null },
 ): Promise<DecideGrowthActionResult> {
   const rule = decideGrowthAction(input);
+  console.log("CHANNEL DECISION", {
+    flow: "growth_decideGrowthActionWithAi",
+    chosenChannel: rule.channel,
+    reason: rule.reason,
+    cleanerId: null,
+    hasWhatsapp: false,
+    hasPhone: hasPhoneFlag(input),
+    hasEmail: hasEmailFlag(input),
+    action: rule.action,
+  });
   const flags = getAiAutonomyFlags();
   if (!flags.growth || !admin) {
     return rule;
@@ -159,11 +169,22 @@ export async function decideGrowthActionWithAi(
       chosen_action: opt.chosen,
     });
 
-    return {
+    const out = {
       action: opt.chosen.action,
       channel: opt.chosen.channel,
       reason: `${opt.chosen.reason}|ai_growth`,
     };
+    console.log("CHANNEL DECISION", {
+      flow: "growth_ai_chosen",
+      chosenChannel: out.channel,
+      reason: out.reason,
+      cleanerId: null,
+      hasWhatsapp: false,
+      hasPhone: hasPhoneFlag(input),
+      hasEmail: hasEmailFlag(input),
+      action: out.action,
+    });
+    return out;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await logAiDecision(admin, {

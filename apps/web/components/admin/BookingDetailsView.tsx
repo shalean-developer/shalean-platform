@@ -34,6 +34,8 @@ type BookingDetails = {
   payout_type?: string | null;
   is_test?: boolean | null;
   status: string | null;
+  /** Auto-dispatch funnel; terminal `unassignable` / `no_cleaner` need manual assign or reset. */
+  dispatch_status?: string | null;
   user_id: string | null;
   cleaner_id: string | null;
   team_id?: string | null;
@@ -87,7 +89,7 @@ type DispatchOfferAdminRow = {
   ux_variant?: string | null;
 };
 
-type ToastState = { kind: "success" | "error"; text: string } | null;
+type ToastState = { kind: "success" | "error" | "info"; text: string } | null;
 
 type BookingNotificationLogRow = {
   id: string;
@@ -208,6 +210,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [teamCandidates, setTeamCandidates] = useState<TeamAssignCandidate[]>([]);
   const [teamPickId, setTeamPickId] = useState<string | null>(null);
   const [assigningTeam, setAssigningTeam] = useState(false);
+  const [detailRefresh, setDetailRefresh] = useState(0);
+  const [resetDispatchBusy, setResetDispatchBusy] = useState(false);
 
   useEffect(() => {
     async function loadDetails() {
@@ -275,7 +279,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setLoading(false);
     }
     void loadDetails();
-  }, [bookingId]);
+  }, [bookingId, detailRefresh]);
 
   useEffect(() => {
     if (!bookingId || !fullBooking) return;
@@ -396,6 +400,52 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
   const companyRevenueZar = centsToZar(fullBooking.company_revenue_cents);
   const isAssigned = !!fullBooking.cleaner_id;
+  const dispatchSt = (fullBooking.dispatch_status ?? "").toLowerCase();
+  const needsDispatchManualAttention =
+    !isAssigned &&
+    (fullBooking.status ?? "").toLowerCase() === "pending" &&
+    ["failed", "unassignable", "no_cleaner"].includes(dispatchSt);
+
+  const dispatchHoldHeadline =
+    dispatchSt === "no_cleaner"
+      ? "No cleaner available for this slot or area."
+      : dispatchSt === "unassignable"
+        ? "No cleaner accepted offers — automatic dispatch stopped (retry cap or exhausted)."
+        : "Automatic dispatch failed for this booking.";
+
+  const handleResetDispatchRetry = async () => {
+    if (!fullBooking?.id) return;
+    setResetDispatchBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/retry-dispatch`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: string | null;
+      };
+      if (!res.ok) {
+        setToast({ kind: "error", text: json.error ?? "Could not reset dispatch." });
+        return;
+      }
+      if (json.ok) {
+        setToast({ kind: "success", text: "Dispatch reset; auto-assign ran." });
+      } else {
+        setToast({ kind: "info", text: json.message ?? json.error ?? "Dispatch reset; check offers." });
+      }
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setResetDispatchBusy(false);
+    }
+  };
   const startsInIsPast = startsInText.startsWith("Started");
   const startsInClass = startsInIsPast ? "text-rose-700" : "text-emerald-700";
 
@@ -621,6 +671,32 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       </header>
 
       <main className="mx-auto grid max-w-7xl grid-cols-12 gap-6 px-6 py-6">
+        {needsDispatchManualAttention ? (
+          <div
+            className="col-span-12 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 shadow-sm"
+            role="status"
+          >
+            <p className="font-semibold text-amber-950">Dispatch needs attention</p>
+            <p className="mt-1 text-amber-900/90">{dispatchHoldHeadline}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void openAssignModal()}
+                className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+              >
+                Assign manually
+              </button>
+              <button
+                type="button"
+                disabled={resetDispatchBusy}
+                onClick={() => void handleResetDispatchRetry()}
+                className="rounded-lg border border-amber-700/40 bg-white px-3 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-100 disabled:opacity-50"
+              >
+                {resetDispatchBusy ? "Resetting…" : "Reset & retry auto-dispatch"}
+              </button>
+            </div>
+          </div>
+        ) : null}
         <section className="col-span-12 space-y-6 lg:col-span-8">
           <DetailCard title="Customer">
             <p className="text-base font-medium text-zinc-900">{fullBooking.customer_email ?? userProfile?.email ?? "—"}</p>
@@ -1142,14 +1218,20 @@ function FlagPill({ flag }: { flag: string }) {
   return <span className={["rounded-full px-3 py-1 text-xs font-semibold", klass].join(" ")}>{flag}</span>;
 }
 
-function Toast({ kind, text, onClose }: { kind: "success" | "error"; text: string; onClose: () => void }) {
+function Toast({ kind, text, onClose }: { kind: "success" | "error" | "info"; text: string; onClose: () => void }) {
   useEffect(() => {
     const t = setTimeout(onClose, 2800);
     return () => clearTimeout(t);
   }, [onClose]);
+  const barClass =
+    kind === "success"
+      ? "bg-emerald-600 text-white"
+      : kind === "error"
+        ? "bg-rose-600 text-white"
+        : "bg-zinc-700 text-white";
   return (
     <div className="fixed bottom-4 right-4 z-[60]">
-      <div className={["rounded-lg px-4 py-2 text-sm font-medium shadow-lg", kind === "success" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"].join(" ")}>
+      <div className={["rounded-lg px-4 py-2 text-sm font-medium shadow-lg", barClass].join(" ")}>
         {text}
       </div>
     </div>

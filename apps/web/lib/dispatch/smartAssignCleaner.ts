@@ -927,6 +927,7 @@ export async function smartAssignCleaner(
   const maxCandidates = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
   const retryTier = options?.retryTier ?? 0;
   await supabase.from("bookings").update({ dispatch_status: "searching" }).eq("id", params.bookingId);
+  console.log("STEP 1: smartAssignCleaner triggered", { bookingId: params.bookingId });
 
   let searchExpansion = options?.searchExpansion ?? "none";
 
@@ -1223,6 +1224,11 @@ export async function smartAssignCleaner(
   }
 
   const pool = candidates.slice(0, maxSoftOffers);
+  console.log("STEP 2: dispatch candidates selected", {
+    bookingId: params.bookingId,
+    poolSize: pool.length,
+    candidates: pool.map((c) => ({ id: c.id, score: c.score, distance_km: c.distance_km })),
+  });
   if (pool.length === 0) {
     await logSystemEvent({
       level: "warn",

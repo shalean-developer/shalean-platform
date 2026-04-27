@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
+import axios, { isAxiosError } from "axios";
+
 import { metaGraphSendRetryDelayMs } from "@/lib/dispatch/metaSendRetry";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { logWhatsAppEvent } from "@/lib/whatsapp/logWhatsAppEvent";
@@ -59,19 +61,30 @@ export function metaWhatsAppToDigits(phone: string): string {
   return String(phone ?? "").replace(/\D/g, "");
 }
 
-/** Graph API version segment (e.g. `v22.0`). Override with `WHATSAPP_GRAPH_API_VERSION` if Meta requires a specific version. */
+/** Graph API version segment (e.g. `v19.0`). Override with `WHATSAPP_GRAPH_API_VERSION` if Meta requires a specific version. */
 export function getWhatsAppGraphApiVersion(): string {
-  return process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v22.0";
+  return process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v19.0";
 }
 
 /**
- * Permanent system-user token for Cloud API.
- * `WHATSAPP_ACCESS_TOKEN` is preferred (matches Meta dashboard naming); `WHATSAPP_API_TOKEN` is a legacy alias used elsewhere in the repo.
+ * Permanent system-user token for Cloud API (read-only checks, test routes).
+ * Outbound sends require {@link assertWhatsAppCloudConfigured} — `WHATSAPP_ACCESS_TOKEN` only.
  */
 export function resolveWhatsAppBearerToken(): string | undefined {
   const a = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
   const b = process.env.WHATSAPP_API_TOKEN?.trim();
   return a || b || undefined;
+}
+
+/** Required for real Meta sends; throws before any HTTP so misconfig fails fast. */
+export function assertWhatsAppCloudConfigured(): { token: string; phoneNumberId: string } {
+  if (!process.env.WHATSAPP_ACCESS_TOKEN?.trim() || !process.env.WHATSAPP_PHONE_NUMBER_ID?.trim()) {
+    throw new Error("WhatsApp not configured");
+  }
+  return {
+    token: process.env.WHATSAPP_ACCESS_TOKEN.trim(),
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID.trim(),
+  };
 }
 
 function graphMessagesUrl(phoneNumberId: string): string {
@@ -252,19 +265,7 @@ export async function sendViaMetaWhatsApp(params: {
   deliveryLog?: MetaWhatsAppDeliveryLogContext;
 }): Promise<MetaWhatsAppDeliveryResult> {
   assertMetaWhatsAppCleanerOnly(params.recipientRole);
-  const token = resolveWhatsAppBearerToken();
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
-  if (!token || !phoneNumberId) {
-    const e = "Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_API_TOKEN (or WHATSAPP_PHONE_NUMBER_ID)";
-    const out: MetaWhatsAppDeliveryResult = { ok: false, error: e };
-    await emitMetaDeliveryAudit(
-      params.deliveryLog,
-      metaWhatsAppToDigits(params.phone),
-      out,
-      "text",
-    );
-    return out;
-  }
+  const { token, phoneNumberId } = assertWhatsAppCloudConfigured();
 
   const toDigits = metaWhatsAppToDigits(params.phone);
   if (toDigits.length < 10 || toDigits.length > 15) {
@@ -400,28 +401,39 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
   deliveryLog?: MetaWhatsAppDeliveryLogContext;
 }): Promise<MetaWhatsAppDeliveryResult> {
   assertMetaWhatsAppCleanerOnly(params.recipientRole);
-  const token = resolveWhatsAppBearerToken();
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
-  if (!token || !phoneNumberId) {
-    const e = "Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_API_TOKEN (or WHATSAPP_PHONE_NUMBER_ID)";
-    const out: MetaWhatsAppDeliveryResult = { ok: false, error: e };
-    await emitMetaDeliveryAudit(
-      params.deliveryLog,
-      metaWhatsAppToDigits(params.phone),
-      out,
-      "template",
-    );
-    return out;
+  let token: string;
+  let phoneNumberId: string;
+  try {
+    const c = assertWhatsAppCloudConfigured();
+    token = c.token;
+    phoneNumberId = c.phoneNumberId;
+  } catch (err) {
+    console.warn("❌ WhatsApp BLOCKED", {
+      reason: err instanceof Error ? err.message : String(err),
+      cleanerId: params.deliveryLog?.cleanerId ?? null,
+      decisionObject: { stage: "sendViaMetaWhatsAppTemplateBody", template: params.templateName },
+    });
+    throw err;
   }
 
   const toDigits = metaWhatsAppToDigits(params.phone);
   if (toDigits.length < 10 || toDigits.length > 15) {
+    console.warn("❌ WhatsApp BLOCKED", {
+      reason: "invalid_recipient_digits",
+      cleanerId: params.deliveryLog?.cleanerId ?? null,
+      decisionObject: { digitsLen: toDigits.length, toDigitsTail: toDigits.slice(-4) },
+    });
     const out: MetaWhatsAppDeliveryResult = { ok: false, error: `Invalid WhatsApp recipient digits length=${toDigits.length}` };
     await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
     return out;
   }
 
   if (isMetaSendCircuitOpen()) {
+    console.warn("❌ WhatsApp BLOCKED", {
+      reason: "meta_send_circuit_open",
+      cleanerId: params.deliveryLog?.cleanerId ?? null,
+      decisionObject: { stage: "template_send" },
+    });
     const out: MetaWhatsAppDeliveryResult = {
       ok: false,
       error: "Meta WhatsApp send paused (circuit open) — will retry",
@@ -430,24 +442,11 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
     return out;
   }
 
-  const parameters = params.bodyParameters.map((t) => ({
-    type: "text",
-    text: String(t ?? "").slice(0, WA_BODY_TEMPLATE_MAX),
-  }));
-
   const resolvedLang = (params.languageCode || "en").trim();
   const resolvedName = params.templateName.trim();
+  const bodyParams = params.bodyParameters.map((t) => String(t ?? "").slice(0, WA_BODY_TEMPLATE_MAX));
 
-  const templateBody: Record<string, unknown> = {
-    messaging_product: "whatsapp",
-    to: toDigits,
-    type: "template",
-    template: {
-      name: resolvedName,
-      language: { code: resolvedLang },
-      components: [{ type: "body", parameters }],
-    },
-  };
+  const url = `https://graph.facebook.com/${getWhatsAppGraphApiVersion()}/${phoneNumberId}/messages`;
 
   let lastFailure: ParsedFailure | null = null;
 
@@ -464,31 +463,107 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
       recordMetaSendOutcome(false);
       break;
     }
-    const { res, rawText } = await postMetaMessage({
-      token,
-      phoneNumberId,
-      body: templateBody,
-      attempt,
-    });
-    const parsed = parseGraphMessagesResponse(res, rawText);
-    if (parsed.ok) {
-      recordMetaSendOutcome(true);
-      const out: MetaWhatsAppDeliveryResult = { ok: true, messageId: parsed.messageId };
+
+    try {
+      console.log("📡 Sending to Meta", {
+        to: toDigits,
+        templateName: resolvedName,
+        bodyParams,
+      });
+      const response = await axios.post<Record<string, unknown>>(
+        url,
+        {
+          messaging_product: "whatsapp",
+          to: toDigits,
+          type: "template",
+          template: {
+            name: resolvedName,
+            language: { code: resolvedLang },
+            components: [
+              {
+                type: "body",
+                parameters: bodyParams.map((text) => ({
+                  type: "text",
+                  text,
+                })),
+              },
+            ],
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          timeout: META_SEND_TIMEOUT_MS,
+          validateStatus: () => true,
+        },
+      );
+
+      const rawText =
+        typeof response.data === "object" && response.data !== null
+          ? JSON.stringify(response.data)
+          : String(response.data ?? "");
+      const res = new Response(rawText, { status: response.status });
+      const parsed = parseGraphMessagesResponse(res, rawText);
+
+      if (!parsed.ok) {
+        console.log("📡 Meta response", response.data);
+        await logSystemEvent({
+          level: "warn",
+          source: "whatsapp_meta_http",
+          message: `Meta messages POST failed status=${response.status} attempt=${attempt + 1}`,
+          context: {
+            response_status: response.status,
+            attempt: attempt + 1,
+            payload_type: "template",
+            to_digits_tail: toDigits.slice(-4),
+            error_preview: rawText.slice(0, 280),
+          },
+        });
+      }
+
+      if (parsed.ok) {
+        recordMetaSendOutcome(true);
+        const messageId = parsed.messageId;
+        console.log("📡 Meta response", response.data);
+        console.log("[whatsapp:sent]", { toPhone: toDigits, templateName: resolvedName, messageId });
+        const out: MetaWhatsAppDeliveryResult = { ok: true, messageId };
+        await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
+        return out;
+      }
+      lastFailure = parsed;
+      recordMetaSendOutcome(false);
+      const graphErr = parsed.graphError;
+      if (isRetryableMetaFailure(response.status, rawText, graphErr) && attempt < MAX_SEND_ATTEMPTS - 1) {
+        continue;
+      }
+      break;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("❌ Meta error", isAxiosError(err) ? (err.response?.data ?? err.message) : err);
+      console.error("[whatsapp:error]", isAxiosError(err) ? (err.response?.data ?? err.message) : err);
+      lastFailure = {
+        ok: false,
+        status: isAxiosError(err) && err.response?.status ? err.response.status : 0,
+        rawText: msg,
+        graphError: msg,
+      };
+      recordMetaSendOutcome(false);
+      if (attempt < MAX_SEND_ATTEMPTS - 1) {
+        await sleep(metaGraphSendRetryDelayMs(attempt));
+        continue;
+      }
+      const out: MetaWhatsAppDeliveryResult = { ok: false, error: msg };
       await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
       return out;
     }
-    lastFailure = parsed;
-    recordMetaSendOutcome(false);
-    const graphErr = !parsed.ok ? parsed.graphError : undefined;
-    if (isRetryableMetaFailure(res.status, rawText, graphErr) && attempt < MAX_SEND_ATTEMPTS - 1) {
-      continue;
-    }
-    break;
   }
 
   const errMsg = lastFailure?.graphError
     ? `Meta API error: ${lastFailure.graphError}`
     : `WhatsApp template send failed (${lastFailure?.status ?? "?"}): ${(lastFailure?.rawText ?? "").slice(0, 1200)}`;
+  console.error("[whatsapp:error]", lastFailure?.rawText ?? errMsg);
   await logSystemEvent({
     level: "error",
     source: "whatsapp_meta_template_send_failed",

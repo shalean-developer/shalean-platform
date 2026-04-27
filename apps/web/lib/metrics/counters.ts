@@ -56,6 +56,13 @@
  *   `dispatch.kpi.offers_per_booking` rises vs control (guardrail breach) or `time_to_accept_ms` **p95** degrades vs
  *   prior week — reduces manual review as variant count grows.
  *
+ * --- Dispatch queue / caps (`[metric]` JSON logs → wire to dashboards) ---
+ * - `dispatch.retry_queue.assigned` — assign succeeded from `dispatch_retry_queue` (fields: `retriesDone`).
+ * - `dispatch.retry_queue.rescheduled` — failed wave rescheduled (`delaySec`, `retriesDone`).
+ * - `dispatch.offer_cap_exceeded` — offer rows exceeded per-booking cap (`totalOffers`, `offerCap`).
+ * - `dispatch.admin_terminal_reset` — admin reset terminal dispatch (`from` = prior `dispatch_status`).
+ * - Accept latency: `dispatch.offer.accepted` already emits `latency_ms` (WhatsApp/SMS anchor vs accept).
+ *
  * --- Suggested external alerts (wire in your log/metrics sink) ---
  * - `dispatch.lease.stolen` — spike rate vs 7d baseline (cron overlap / contention).
  * - `dispatch_status=failed` share of pending paid bookings — threshold on % or count.

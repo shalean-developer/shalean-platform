@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { metaWhatsAppToDigits, resolveWhatsAppBearerToken } from "@/lib/dispatch/metaWhatsAppSend";
+import { metaWhatsAppToDigits } from "@/lib/dispatch/metaWhatsAppSend";
 import { sendTestWhatsApp } from "@/lib/whatsapp/sendTestWhatsApp";
 
 export const runtime = "nodejs";
@@ -21,13 +21,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const tokenPresent = Boolean(resolveWhatsAppBearerToken());
+  const tokenPresent = Boolean(process.env.WHATSAPP_ACCESS_TOKEN?.trim());
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!tokenPresent || !phoneNumberId) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Missing WHATSAPP_PHONE_NUMBER_ID or bearer token (WHATSAPP_ACCESS_TOKEN / WHATSAPP_API_TOKEN).",
+        error: "Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN (production sends require both).",
         config: { hasToken: tokenPresent, hasPhoneNumberId: Boolean(phoneNumberId) },
       },
       { status: 503 },

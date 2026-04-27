@@ -364,6 +364,26 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           ? "email_failed_sms_fallback_contact_health"
           : "email_failed_sms_fallback";
 
+      console.log("CHANNEL DECISION", {
+        flow: "payment_confirmed_customer_sms",
+        chosenChannel: "sms",
+        reason: decision,
+        cleanerId: null,
+        hasWhatsapp: false,
+        hasPhone: Boolean(custPhone?.trim()),
+        forceSmsFromHealth,
+        contactHealthSample: contactHealth?.sampleSize ?? null,
+        contactHealthScore: contactHealth?.score ?? null,
+        note: "Customer WhatsApp is disabled by policy; dashboard routing keys come from this payload.decision (not cleaner dispatch).",
+      });
+      if (forceSmsFromHealth) {
+        console.warn("❌ WhatsApp BLOCKED", {
+          reason: "customer_policy_no_whatsapp_contact_health_sms_fallback",
+          cleanerId: null,
+          decisionObject: { decision, contactHealth },
+        });
+      }
+
       const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
       await applyFallbackDelayIfNeeded(supabase, {
         userId: payUserId || null,

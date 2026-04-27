@@ -6,8 +6,39 @@ import { metrics } from "@/lib/metrics/counters";
 /** Minutes after failure before each retry wave (cron-compatible). */
 export const DISPATCH_RETRY_DELAYS_MIN = [2, 5, 10, 15] as const;
 
+const EXCLUDE_CLEANER_PREFIX = "exclude_cleaner:";
+
+/** Encoded in `dispatch_retry_queue.last_reason` so retries keep excluding the timed-out cleaner. */
+export function parseDispatchRetryExcludeCleanerId(lastReason: string | null | undefined): string | null {
+  if (!lastReason || !lastReason.startsWith(EXCLUDE_CLEANER_PREFIX)) return null;
+  const rest = lastReason.slice(EXCLUDE_CLEANER_PREFIX.length);
+  const pipe = rest.indexOf("|");
+  const id = (pipe >= 0 ? rest.slice(0, pipe) : rest).trim();
+  return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+
+function mergeDispatchRetryLastReason(excludeCleanerId: string | null, tail: string): string {
+  const t = tail.trim() || "unknown";
+  return excludeCleanerId ? `${EXCLUDE_CLEANER_PREFIX}${excludeCleanerId}|${t}` : t;
+}
+
 function addMinutesIso(minutes: number): string {
   return new Date(Date.now() + minutes * 60_000).toISOString();
+}
+
+function addSecondsIso(seconds: number): string {
+  return new Date(Date.now() + Math.max(1, seconds) * 1000).toISOString();
+}
+
+/**
+ * After a failed assign from the retry queue: delay = base_seconds × (retries_done + 1).
+ * Default base 30 → 30s, 60s, 90s, … capped at 15m. Override: DISPATCH_RETRY_BACKOFF_BASE_SECONDS (15–120).
+ */
+export function resolveDispatchRetryBackoffSeconds(retriesDone: number): number {
+  const base = Number(process.env.DISPATCH_RETRY_BACKOFF_BASE_SECONDS);
+  const b = Number.isFinite(base) && base >= 15 && base <= 120 ? Math.round(base) : 30;
+  const attempt = Math.max(0, retriesDone) + 1;
+  return Math.min(b * attempt, 900);
 }
 
 /**
@@ -34,14 +65,23 @@ export async function resolveAdaptiveFirstRetryDelayMin(supabase: SupabaseClient
   return Math.min(8, Math.max(2, Math.round(avg / 120_000)));
 }
 
+export type EnqueueDispatchRetryOptions = {
+  /** First attempt time (seconds from now). When set, overrides adaptive minute-based delay. */
+  firstDelaySeconds?: number;
+  /** Persisted in `last_reason` so `processDispatchRetryQueue` can `excludeCleanerIds` on assign. */
+  excludeCleanerId?: string;
+};
+
 /**
  * Queue a paid booking for a later auto-assign attempt (no duplicate pending rows).
+ * @returns true when a new pending row was inserted.
  */
 export async function enqueueDispatchRetry(
   supabase: SupabaseClient,
   bookingId: string,
   reason?: string,
-): Promise<void> {
+  options?: EnqueueDispatchRetryOptions,
+): Promise<boolean> {
   const { data: pending } = await supabase
     .from("dispatch_retry_queue")
     .select("id")
@@ -49,21 +89,39 @@ export async function enqueueDispatchRetry(
     .eq("status", "pending")
     .maybeSingle();
 
-  if (pending) return;
+  if (pending) return false;
 
-  const firstDelay = await resolveAdaptiveFirstRetryDelayMin(supabase);
+  const excludeId = options?.excludeCleanerId?.trim() || "";
+  const baseReason = reason?.trim() || null;
+  const lastReason =
+    excludeId && /^[0-9a-f-]{36}$/i.test(excludeId)
+      ? mergeDispatchRetryLastReason(excludeId, baseReason ?? "queued")
+      : baseReason;
+
+  let nextRetryAt: string;
+  if (options?.firstDelaySeconds != null) {
+    const sec = Math.max(1, Math.min(600, Math.round(options.firstDelaySeconds)));
+    nextRetryAt = new Date(Date.now() + sec * 1000).toISOString();
+  } else {
+    const firstDelay = await resolveAdaptiveFirstRetryDelayMin(supabase);
+    nextRetryAt = addMinutesIso(firstDelay);
+  }
+
   const { error } = await supabase.from("dispatch_retry_queue").insert({
     booking_id: bookingId,
     retries_done: 0,
-    next_retry_at: addMinutesIso(firstDelay),
+    next_retry_at: nextRetryAt,
     status: "pending",
-    last_reason: reason ?? null,
+    last_reason: lastReason,
     updated_at: new Date().toISOString(),
   });
 
   if (error) {
     await reportOperationalIssue("warn", "enqueueDispatchRetry", error.message, { bookingId });
+    return false;
   }
+
+  return true;
 }
 
 type ProcessResult = { picked: number; assigned: number; abandoned: number; errors: number };
@@ -104,6 +162,8 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
         ? String((row as { last_reason?: string | null }).last_reason ?? "")
         : null;
 
+    const excludeCleanerId = parseDispatchRetryExcludeCleanerId(lastReason);
+
     if (retriesDone >= 3) {
       await notifyDispatchEscalationAdmin({
         bookingId,
@@ -115,6 +175,7 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
     const result = await ensureBookingAssignment(supabase, bookingId, {
       source: "dispatch_retry_queue",
       retryEscalation: retriesDone,
+      smartAssign: excludeCleanerId ? { excludeCleanerIds: [excludeCleanerId] } : undefined,
     });
 
     if (result.ok) {
@@ -127,6 +188,7 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
         })
         .eq("id", id);
       out.assigned++;
+      metrics.increment("dispatch.retry_queue.assigned", { bookingId, retriesDone });
       continue;
     }
 
@@ -149,9 +211,11 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
         .eq("id", id);
       out.abandoned++;
 
+      const terminalDispatchStatus = result.error === "no_candidate" ? "no_cleaner" : "unassignable";
+
       await supabase
         .from("bookings")
-        .update({ dispatch_status: "unassignable" })
+        .update({ dispatch_status: terminalDispatchStatus })
         .eq("id", bookingId)
         .eq("status", "pending")
         .is("cleaner_id", null);
@@ -160,6 +224,7 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
         bookingId,
         error: result.error,
         message: result.message ?? null,
+        terminalDispatchStatus,
       });
 
       await notifyDispatchEscalationAdmin({
@@ -172,24 +237,28 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
       await logSystemEvent({
         level: "warn",
         source: "dispatch_retry_abandoned",
-        message: "Dispatch retries exhausted — booking dispatch_status=unassignable",
-        context: { bookingId, error: result.error },
+        message: `Dispatch retries exhausted — booking dispatch_status=${terminalDispatchStatus}`,
+        context: { bookingId, error: result.error, terminalDispatchStatus },
       });
       continue;
     }
 
-    const nextDelayMin = DISPATCH_RETRY_DELAYS_MIN[retriesDone + 1];
-    const delay = nextDelayMin ?? 15;
+    const delaySec = resolveDispatchRetryBackoffSeconds(retriesDone);
+
+    const errTail = result.message ?? result.error ?? "unknown";
+    const nextLastReason = mergeDispatchRetryLastReason(excludeCleanerId, errTail);
 
     const { error: upErr } = await supabase
       .from("dispatch_retry_queue")
       .update({
         retries_done: retriesDone + 1,
-        next_retry_at: addMinutesIso(delay),
+        next_retry_at: addSecondsIso(delaySec),
         updated_at: new Date().toISOString(),
-        last_reason: result.message ?? result.error,
+        last_reason: nextLastReason,
       })
       .eq("id", id);
+
+    metrics.increment("dispatch.retry_queue.rescheduled", { bookingId, retriesDone, delaySec });
 
     if (upErr) {
       await reportOperationalIssue("warn", "processDispatchRetryQueue", upErr.message, { bookingId });
