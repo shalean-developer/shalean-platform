@@ -115,6 +115,10 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) {
+        if (res.status === 404) {
+          setFormError("Customer not found — create an account for this email first.");
+          return;
+        }
         setFormError(json.error ?? "Create failed.");
         return;
       }
