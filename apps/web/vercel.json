@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/dispatch-timeouts",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/retry-failed-jobs",
-      "schedule": "* * * * *"
-    }
-  ]
-}
+{}

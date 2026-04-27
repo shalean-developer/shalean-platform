@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -19,8 +20,8 @@ const MAX_BOOKING_INSERT_BATCH = 15;
 const MAX_LIFECYCLE_RETRY = 20;
 
 /**
- * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
- * Schedule: every minute recommended (`* * * * *` in `apps/web/vercel.json`) so `dispatch_retry_queue` fires soon after `next_retry_at`.
+ * Cron: `Authorization: Bearer CRON_SECRET` (Vercel) or `x-cron-secret: CRON_SECRET` (Supabase pg_net).
+ * Schedule: every minute via Supabase pg_cron (see migration `20260655_supabase_cron_dispatch_http_minute.sql`).
  * 1) Retries Paystack booking inserts (`failed_jobs`).
  * 2) Retries lifecycle emails stuck in `failed` with attempts &lt; 5.
  * 3) Processes `dispatch_retry_queue` (auto-assign backoff).
@@ -29,13 +30,9 @@ const MAX_LIFECYCLE_RETRY = 20;
  * 6) SQL offer expiry RPC + user-selected bookings with drained offers → re-dispatch (same path as decline).
  */
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) {
-    return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
-  }
-  const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const auth = verifyCronSecret(request);
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status });
   }
 
   const supabase = getSupabaseAdmin();
