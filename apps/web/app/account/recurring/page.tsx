@@ -6,7 +6,10 @@ import StatusBadge from "@/components/admin/StatusBadge";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
+import { addDaysYmd, compareYmd } from "@/lib/recurring/johannesburgCalendar";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { cn } from "@/lib/utils";
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -36,6 +39,69 @@ function statusTone(status: string): "green" | "amber" | "red" | "zinc" {
   if (s === "paused") return "amber";
   if (s === "cancelled") return "red";
   return "zinc";
+}
+
+/** Visit / workflow status for generated bookings (customer-friendly). */
+function formatVisitStatusLabel(raw: string | null | undefined): string {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (!s) return "—";
+  const map: Record<string, string> = {
+    pending_payment: "Awaiting payment",
+    payment_expired: "Payment expired",
+    searching: "Finding a cleaner",
+    assigned: "Cleaner assigned",
+    in_progress: "In progress",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    failed: "Failed",
+  };
+  return map[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatPaymentStatusLabel(raw: string | null | undefined): { label: string; tone: "ok" | "wait" | "bad" | "muted" } {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (!s || s === "pending") return { label: "Pending payment", tone: "wait" };
+  if (s === "paid" || s === "success") return { label: "Paid", tone: "ok" };
+  if (s === "failed" || s === "partial_failed") return { label: "Failed", tone: "bad" };
+  if (s === "expired") return { label: "Link expired", tone: "muted" };
+  return { label: raw.trim() || "—", tone: "muted" };
+}
+
+function paymentToneClass(tone: "ok" | "wait" | "bad" | "muted"): string {
+  if (tone === "ok") return "font-medium text-emerald-800 dark:text-emerald-200";
+  if (tone === "wait") return "font-medium text-amber-800 dark:text-amber-200";
+  if (tone === "bad") return "font-medium text-rose-800 dark:text-rose-200";
+  return "text-zinc-600 dark:text-zinc-400";
+}
+
+function relativeDayPart(dateYmd: string, todayYmd: string): string {
+  const tomorrow = addDaysYmd(todayYmd, 1);
+  if (compareYmd(dateYmd, todayYmd) === 0) return "Today";
+  if (compareYmd(dateYmd, tomorrow) === 0) return "Tomorrow";
+  return new Intl.DateTimeFormat("en-ZA", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    timeZone: "Africa/Johannesburg",
+  }).format(new Date(`${dateYmd}T12:00:00+02:00`));
+}
+
+/** Earliest upcoming booking, else next generator run when active and not skipped. */
+function nextCleaningLine(r: MeRecurringItem, todayYmd: string): string | null {
+  const visitHm = formatHm(r.template_visit_time);
+  const first = r.upcoming_bookings[0];
+  if (first?.date) {
+    const t = formatHm(first.time) ?? visitHm;
+    const day = relativeDayPart(first.date, todayYmd);
+    return t ? `Next cleaning: ${day} · ${t}` : `Next cleaning: ${day}`;
+  }
+  const st = r.status.toLowerCase();
+  const skip = Boolean(r.skip_next_occurrence_date?.trim());
+  if (st === "active" && r.next_run_date && !skip) {
+    const day = relativeDayPart(r.next_run_date, todayYmd);
+    return visitHm ? `Next scheduled visit: ${day} · ${visitHm}` : `Next scheduled visit: ${day}`;
+  }
+  return null;
 }
 
 type MeRecurringItem = {
@@ -174,7 +240,9 @@ export default function AccountRecurringPage() {
         </Card>
       ) : (
         <ul className="space-y-6">
-          {items.map((r) => {
+          {(() => {
+            const todayYmd = todayYmdJohannesburg();
+            return items.map((r) => {
             const st = r.status.toLowerCase();
             const canPause = st === "active";
             const canResume = st === "paused";
@@ -189,6 +257,7 @@ export default function AccountRecurringPage() {
                 : r.next_run_date || visitHm || "—";
             const skipQueued = Boolean(r.skip_next_occurrence_date?.trim());
             const canSkip = st === "active" && Boolean(r.next_run_date) && !skipQueued;
+            const highlight = nextCleaningLine(r, todayYmd);
 
             return (
               <li key={r.id}>
@@ -201,6 +270,11 @@ export default function AccountRecurringPage() {
                     <StatusBadge label={r.status} tone={statusTone(r.status)} />
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm">
+                    {highlight ? (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/90 px-4 py-3 text-base font-semibold text-blue-950 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-100">
+                        {highlight}
+                      </div>
+                    ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Schedule</p>
@@ -244,14 +318,17 @@ export default function AccountRecurringPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {r.upcoming_bookings.map((b) => (
-                                <tr key={b.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/80">
-                                  <td className="px-3 py-2 tabular-nums text-zinc-800 dark:text-zinc-200">{b.date ?? "—"}</td>
-                                  <td className="px-3 py-2 tabular-nums text-zinc-700 dark:text-zinc-300">{formatHm(b.time) ?? "—"}</td>
-                                  <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{b.status ?? "—"}</td>
-                                  <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">{b.payment_status ?? "—"}</td>
-                                </tr>
-                              ))}
+                              {r.upcoming_bookings.map((b) => {
+                                const pay = formatPaymentStatusLabel(b.payment_status);
+                                return (
+                                  <tr key={b.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/80">
+                                    <td className="px-3 py-2 tabular-nums text-zinc-800 dark:text-zinc-200">{b.date ?? "—"}</td>
+                                    <td className="px-3 py-2 tabular-nums text-zinc-700 dark:text-zinc-300">{formatHm(b.time) ?? "—"}</td>
+                                    <td className="px-3 py-2 text-zinc-800 dark:text-zinc-200">{formatVisitStatusLabel(b.status)}</td>
+                                    <td className={cn("px-3 py-2", paymentToneClass(pay.tone))}>{pay.label}</td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -297,7 +374,8 @@ export default function AccountRecurringPage() {
                 </Card>
               </li>
             );
-          })}
+          });
+          })()}
         </ul>
       )}
     </div>
