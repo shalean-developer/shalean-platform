@@ -57,6 +57,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
     title: "Customers",
     items: [
       { label: "Customers", href: "/admin/customers" },
+      { label: "Invoices", href: "/admin/invoices" },
       { label: "Reviews", href: "/admin/reviews" },
       { label: "Review funnel", href: "/admin/reviews/analytics" },
     ],
@@ -151,7 +152,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
     const sb = getSupabaseBrowser();
     const sub =
-      sb?.auth.onAuthStateChange((event) => {
+      sb?.auth.onAuthStateChange((event: string) => {
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
           if (!cancelled) {
             setLoading(true);

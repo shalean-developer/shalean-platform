@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+
 /**
  * First-visible exposure metric (`dispatch.offer.exposed`). Deduped client-side after HTTP 200.
  */
@@ -11,7 +13,7 @@ export function reportDispatchOfferExposed(offerId: string, headers: Record<stri
   } catch {
     return;
   }
-  void fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/exposed`, {
+  void cleanerAuthenticatedFetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/exposed`, {
     method: "POST",
     headers: { ...headers },
   })

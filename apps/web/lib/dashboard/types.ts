@@ -27,6 +27,12 @@ export type BookingRow = {
   amount_paid_cents: number | null;
   currency: string | null;
   status: string | null;
+  /** Monthly billing sub-state when set (e.g. `pending_monthly`). */
+  payment_status?: string | null;
+  monthly_invoice_id?: string | null;
+  is_monthly_billing_booking?: boolean | null;
+  /** Nested from `monthly_invoices(status,is_closed)` when selected. */
+  monthly_invoices?: { status: string; is_closed?: boolean } | null;
   booking_snapshot: BookingSnapshotV1 | null | unknown;
   created_at: string;
   paystack_reference: string;
@@ -52,6 +58,8 @@ export type CustomerAddressRow = {
   suburb: string;
   city: string;
   postal_code: string;
+  /** Optional property-level instructions (saved address). */
+  notes?: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;

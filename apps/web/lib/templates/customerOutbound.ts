@@ -149,6 +149,7 @@ export async function sendCustomerSmsFromTemplate(params: {
         text: body,
         source: `customer_${params.templateKey}_sms`,
         sms_role: params.smsRole,
+        ...(smsRes.messageSid ? { twilio_message_sid: smsRes.messageSid } : {}),
       },
       trace,
     ),
@@ -187,7 +188,7 @@ export async function sendCustomerSmsPaymentLink(params: {
   payload: CustomerPaymentLinkWhatsAppPayload;
   context: Record<string, unknown>;
   smsRole: SmsRole;
-}): Promise<{ ok: boolean }> {
+}): Promise<{ ok: boolean; twilioSid: string | null }> {
   const templateKey = "payment_request";
   const template = await getTemplate(templateKey, "sms");
   const bid = bookingIdFromContext(params.context);
@@ -206,7 +207,7 @@ export async function sendCustomerSmsPaymentLink(params: {
       event_type: PAYMENT_LINK_SENT_EVENT,
       payload: customerPaymentLinkPayload({ source: "customer_template", sms_role: params.smsRole }),
     });
-    return { ok: false };
+    return { ok: false, twilioSid: null };
   }
 
   const allow = getVariableAllowlistFromRow(template);
@@ -234,7 +235,7 @@ export async function sendCustomerSmsPaymentLink(params: {
       event_type: PAYMENT_LINK_SENT_EVENT,
       payload: customerPaymentLinkPayload({ text: body, sms_role: params.smsRole }),
     });
-    return { ok: false };
+    return { ok: false, twilioSid: null };
   }
 
   const smsRes = await sendSmsFallback({
@@ -259,7 +260,8 @@ export async function sendCustomerSmsPaymentLink(params: {
       text: body,
       source: `customer_${templateKey}_sms`,
       sms_role: params.smsRole,
+      ...(smsRes.messageSid ? { twilio_message_sid: smsRes.messageSid } : {}),
     }),
   });
-  return { ok: smsRes.sent };
+  return { ok: smsRes.sent, twilioSid: smsRes.messageSid };
 }

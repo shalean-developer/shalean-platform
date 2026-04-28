@@ -227,6 +227,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/20 text-white lg:hidden"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileOpen((o) => !o)}
+            suppressHydrationWarning
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -686,6 +687,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
                     className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-50/80 sm:px-6 sm:py-5 sm:text-base"
                     onClick={() => setOpenFaqId(open ? null : faq.id)}
                     aria-expanded={open}
+                    suppressHydrationWarning
                   >
                     {faq.question}
                     <ChevronDown
@@ -920,10 +922,12 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
                     value={footerNewsletterEmail}
                     onChange={(e) => setFooterNewsletterEmail(e.target.value)}
                     className="min-h-11 w-full flex-1 rounded-full border border-white/15 bg-neutral-900 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 outline-none ring-0 transition focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/25"
+                    suppressHydrationWarning
                   />
                   <button
                     type="submit"
                     className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-black transition hover:bg-neutral-100"
+                    suppressHydrationWarning
                   >
                     Subscribe
                   </button>

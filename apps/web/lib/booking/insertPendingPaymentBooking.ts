@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
+import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -48,6 +49,9 @@ export async function insertPendingPaymentBookingRow(
     locked,
   };
 
+  const serviceSlug =
+    typeof locked.service === "string" && locked.service.trim() ? adminBookingServiceSlug(locked.service) : null;
+
   const { data, error } = await admin
     .from("bookings")
     .insert({
@@ -59,6 +63,7 @@ export async function insertPendingPaymentBookingRow(
       amount_paid_cents: 0,
       currency: "ZAR",
       booking_snapshot: minimalSnapshot,
+      ...(serviceSlug ? { service_slug: serviceSlug } : {}),
       status: "pending_payment",
       dispatch_status: "searching",
       surge_multiplier: 1,
@@ -108,8 +113,11 @@ export async function updatePendingPaymentBookingForInit(
     surgeMultiplier: number;
     surgeReason: string | null;
     extrasSnapshot: unknown[];
+    /** Admin "Create anyway" — excluded from partial unique slot index; audit flag. */
+    slotDuplicateExempt?: boolean;
+    adminForceSlotOverride?: boolean;
   },
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; pgCode?: string }> {
   const { error } = await admin
     .from("bookings")
     .update({
@@ -125,10 +133,12 @@ export async function updatePendingPaymentBookingForInit(
       surge_multiplier: params.surgeMultiplier,
       surge_reason: params.surgeReason,
       extras: params.extrasSnapshot,
+      ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
+      ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
     })
     .eq("id", params.bookingId)
     .eq("status", "pending_payment");
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: error.message, pgCode: error.code };
   return { ok: true };
 }

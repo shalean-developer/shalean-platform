@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 
 type PaymentDetails = {
   bankCode: string | null;
@@ -53,14 +54,14 @@ export default function CleanerPaymentSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers) {
       router.replace("/cleaner/login");
       return;
     }
 
     try {
-      const res = await fetch("/api/cleaner/payment-details", { headers });
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/payment-details", { headers });
       const json = await readJson(res);
       if (!res.ok) {
         setError(json.error ?? "Could not load payment details.");
@@ -84,7 +85,7 @@ export default function CleanerPaymentSettingsPage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers) {
       router.replace("/cleaner/login");
       return;
@@ -95,7 +96,7 @@ export default function CleanerPaymentSettingsPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/cleaner/payment-details", {
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/payment-details", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ bankCode, accountNumber, accountName }),

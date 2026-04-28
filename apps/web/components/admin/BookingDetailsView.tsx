@@ -46,6 +46,8 @@ type BookingDetails = {
   extras?: unknown[] | null;
   created_at: string;
   phone?: string | null;
+  /** Admin bypassed duplicate-slot guard (intentional second row on same slot). */
+  admin_force_slot_override?: boolean | null;
 };
 
 type TeamSummary = { id: string; name: string; member_count: number | null };
@@ -155,6 +157,27 @@ function normalizePhoneForWhatsApp(raw: string): string {
   if (digits.startsWith("+")) return digits.slice(1);
   if (digits.startsWith("0")) return `27${digits.slice(1)}`;
   return digits;
+}
+
+/** Admin / checkout notes stored on `booking_snapshot` (ops + customer context). */
+function formatBookingSnapshotNotes(snap: unknown): string | null {
+  const o = snap as {
+    locked?: { notes?: string };
+    admin_notes?: string;
+    customer_notes?: string;
+  } | null;
+  const admin = typeof o?.admin_notes === "string" ? o.admin_notes.trim() : "";
+  const customer = typeof o?.customer_notes === "string" ? o.customer_notes.trim() : "";
+  const locked = typeof o?.locked?.notes === "string" ? o.locked.notes.trim() : "";
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const s of [admin, customer, locked]) {
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    parts.push(s);
+  }
+  const merged = parts.join("\n\n").trim();
+  return merged || null;
 }
 
 function formatBookingExtraChip(item: unknown): { key: string; label: string } {
@@ -316,6 +339,11 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   }, [bookingId, fullBooking]);
 
   const flags = useMemo(() => (fullBooking ? detailFlags(fullBooking, userProfile) : []), [fullBooking, userProfile]);
+
+  const snapshotNotesText = useMemo(
+    () => (fullBooking ? formatBookingSnapshotNotes(fullBooking.booking_snapshot) : null),
+    [fullBooking],
+  );
 
   const filteredDispatchOffers = useMemo(() => {
     if (dispatchOfferUxFilter === "all") return dispatchOffers;
@@ -652,6 +680,15 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                   TEST BOOKING
                 </span>
               ) : null}
+              {fullBooking.admin_force_slot_override ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-rose-900 ring-1 ring-rose-200"
+                  title="An admin created this booking using “Create anyway” / duplicate-slot override. Review for policy compliance."
+                >
+                  <TriangleAlert size={12} aria-hidden />
+                  Force override
+                </span>
+              ) : null}
               <button type="button" onClick={() => void openAssignModal()} className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
                 {isAssigned ? "Reassign" : "Assign cleaner"}
               </button>
@@ -802,6 +839,13 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               </a>
             ) : null}
           </DetailCard>
+          {snapshotNotesText ? (
+            <DetailCard title="Ops & booking notes">
+              <p className="whitespace-pre-wrap rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-50">
+                {snapshotNotesText}
+              </p>
+            </DetailCard>
+          ) : null}
           <DetailCard title="Notification timeline">
             <p className="text-sm text-zinc-600">
               Outbound delivery attempts for this booking (email, WhatsApp, SMS).{" "}

@@ -10,7 +10,7 @@ export function useAddresses(): {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  insertAddress: (input: CustomerAddressInput) => Promise<{ ok: true } | { ok: false; message: string }>;
+  insertAddress: (input: CustomerAddressInput) => Promise<{ ok: true; id: string } | { ok: false; message: string }>;
   updateAddress: (
     id: string,
     patch: Partial<Pick<CustomerAddressRow, "label" | "line1" | "suburb" | "city" | "postal_code" | "is_default">>,
@@ -77,10 +77,12 @@ export function useAddresses(): {
       if (input.is_default) {
         await sb.from("customer_saved_addresses").update({ is_default: false, updated_at: now }).eq("user_id", user.id);
       }
-      const res = await sb.from("customer_saved_addresses").insert(row).select("*").single();
+      const res = await sb.from("customer_saved_addresses").insert(row).select("id").single();
       if (res.error) return { ok: false as const, message: res.error.message };
+      const id = typeof (res.data as { id?: string } | null)?.id === "string" ? (res.data as { id: string }).id : "";
+      if (!id) return { ok: false as const, message: "Could not read new address id." };
       await fetchAddresses();
-      return { ok: true as const };
+      return { ok: true as const, id };
     },
     [user?.id, fetchAddresses],
   );

@@ -8,6 +8,8 @@ export type SmsFallbackResult = {
   sent: boolean;
   /** Machine-readable reason when `sent` is false (Twilio error, invalid destination, or not configured). */
   error: string | null;
+  /** Twilio `MessageSid` when Twilio accepted the message (for ops / delivery debugging). */
+  messageSid: string | null;
 };
 
 export type SmsFallbackDeliveryLog = {
@@ -80,7 +82,7 @@ export async function sendSmsFallback(params: {
       message: "admin_sms_disabled_by_policy",
       context: { ...params.context },
     });
-    return { sent: false, error: "admin_sms_disabled_by_policy" };
+    return { sent: false, error: "admin_sms_disabled_by_policy", messageSid: null };
   }
 
   const context: Record<string, unknown> = {
@@ -101,7 +103,7 @@ export async function sendSmsFallback(params: {
       message: "Invalid SMS destination",
       context: { ...context, to: params.toE164 },
     });
-    const result = { sent: false, error: "invalid_sms_destination" } as const;
+    const result = { sent: false, error: "invalid_sms_destination", messageSid: null } as const;
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
       context,
@@ -118,7 +120,7 @@ export async function sendSmsFallback(params: {
       message: "Twilio not configured — SMS skipped",
       context,
     });
-    const result = { sent: false, error: "twilio_not_configured" } as const;
+    const result = { sent: false, error: "twilio_not_configured", messageSid: null } as const;
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
       context,
@@ -149,7 +151,7 @@ export async function sendSmsFallback(params: {
       const t = await res.text();
       const err = `twilio_${res.status}: ${t.slice(0, 400)}`;
       await reportOperationalIssue("warn", "sms_fallback", err, context);
-      const result = { sent: false, error: err };
+      const result = { sent: false, error: err, messageSid: null };
       await writeSmsDeliveryLog({
         deliveryLog: params.deliveryLog,
         context,
@@ -165,7 +167,14 @@ export async function sendSmsFallback(params: {
       message: "SMS sent",
       context,
     });
-    const ok = { sent: true, error: null } as const;
+    let messageSid: string | null = null;
+    try {
+      const bodyJson = (await res.json()) as { sid?: string };
+      if (typeof bodyJson.sid === "string" && bodyJson.sid.trim()) messageSid = bodyJson.sid.trim();
+    } catch {
+      /* ignore parse errors */
+    }
+    const ok = { sent: true, error: null, messageSid } as const;
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
       context,
@@ -177,7 +186,7 @@ export async function sendSmsFallback(params: {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await reportOperationalIssue("warn", "sms_fallback", msg, context);
-    const result = { sent: false, error: msg };
+    const result = { sent: false, error: msg, messageSid: null };
     await writeSmsDeliveryLog({
       deliveryLog: params.deliveryLog,
       context,

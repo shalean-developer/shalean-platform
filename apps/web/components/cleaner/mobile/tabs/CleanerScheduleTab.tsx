@@ -6,7 +6,8 @@ import { Navigation, Route } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { bookingRowToMobileView, ymdLocal } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
 
@@ -45,21 +46,23 @@ function OptimizedRouteToday({ dateYmd, jobSignature }: { dateYmd: string; jobSi
   const [routeLoading, setRouteLoading] = useState(false);
 
   useEffect(() => {
-    const headers = getCleanerIdHeaders();
-    if (!headers) return;
     let cancelled = false;
-    setRouteLoading(true);
-    void fetch(`/api/cleaner/route?date=${encodeURIComponent(dateYmd)}`, { headers })
+    void (async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (!headers || cancelled) return;
+      setRouteLoading(true);
+      void cleanerAuthenticatedFetch(`/api/cleaner/route?date=${encodeURIComponent(dateYmd)}`, { headers })
       .then((r) => r.json() as Promise<{ route?: RouteSchedule; error?: string }>)
-      .then((j) => {
-        if (!cancelled) setRoute(j.route ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setRoute(null);
-      })
-      .finally(() => {
-        if (!cancelled) setRouteLoading(false);
-      });
+        .then((j) => {
+          if (!cancelled) setRoute(j.route ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setRoute(null);
+        })
+        .finally(() => {
+          if (!cancelled) setRouteLoading(false);
+        });
+    })();
     return () => {
       cancelled = true;
     };

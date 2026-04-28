@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "rea
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { persistLastOpsFilter, readLastOpsFilter } from "@/lib/admin/lastOpsFilter";
+import { persistLastOpsQuick, readLastOpsQuick } from "@/lib/admin/lastOpsQuickFilter";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { AdminAssignForm, type CleanerOption } from "@/components/admin/AdminAssignForm";
@@ -17,6 +18,10 @@ import {
 } from "@/lib/admin/opsSnapshot";
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
+import {
+  adminBookingInvoiceHint,
+  adminBookingPaymentPrimaryLabel,
+} from "@/lib/admin/adminBookingListPaymentDisplay";
 
 type BookingRow = {
   id: string;
@@ -57,6 +62,11 @@ type BookingRow = {
   payment_link_send_count?: number | null;
   payment_conversion_seconds?: number | null;
   payment_conversion_bucket?: string | null;
+  payment_status?: string | null;
+  monthly_invoice_id?: string | null;
+  customer_billing_type?: string | null;
+  customer_schedule_type?: string | null;
+  admin_force_slot_override?: boolean | null;
 };
 
 function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], status: string | null): string {
@@ -320,6 +330,7 @@ export default function AdminBookingsPage() {
   const adminBookingsRealtimeDebounceRef = useRef<number | null>(null);
 
   const today = useMemo(() => todayYmdJohannesburg(), []);
+  const opsQuickParam = searchParams.get("opsQuick") ?? "";
 
   const sortedCleaners = useMemo(
     () =>
@@ -333,6 +344,18 @@ export default function AdminBookingsPage() {
         return (a.jobs_completed ?? 0) - (b.jobs_completed ?? 0);
       }),
     [cleaners],
+  );
+
+  const setOpsQuickFilter = useCallback(
+    (next: "" | "monthly_only" | "awaiting_payment" | "today" | "tomorrow") => {
+      persistLastOpsQuick(next || null);
+      const params = new URLSearchParams(searchParams.toString());
+      if (!next) params.delete("opsQuick");
+      else params.set("opsQuick", next);
+      const q = params.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname);
+    },
+    [pathname, router, searchParams],
   );
 
   const setOpsAttentionFilter = useCallback(
@@ -377,13 +400,28 @@ export default function AdminBookingsPage() {
     [pathname, router, searchParams],
   );
 
-  /** When URL has no `filter`, re-apply last ops queue filter (other query params preserved). */
+  /** When URL omits `filter` and/or `opsQuick`, restore last choices from localStorage (single navigation). */
   useEffect(() => {
-    if (searchParams.has("filter")) return;
-    const stored = readLastOpsFilter();
-    if (!stored) return;
+    const hasFilter = searchParams.has("filter");
+    const hasOpsQuick = searchParams.has("opsQuick");
+    if (hasFilter && hasOpsQuick) return;
     const p = new URLSearchParams(searchParams.toString());
-    p.set("filter", stored);
+    let changed = false;
+    if (!hasFilter) {
+      const stored = readLastOpsFilter();
+      if (stored) {
+        p.set("filter", stored);
+        changed = true;
+      }
+    }
+    if (!hasOpsQuick) {
+      const storedQ = readLastOpsQuick();
+      if (storedQ) {
+        p.set("opsQuick", storedQ);
+        changed = true;
+      }
+    }
+    if (!changed) return;
     const q = p.toString();
     router.replace(q ? `${pathname}?${q}` : pathname);
   }, [pathname, router, searchParams]);
@@ -443,6 +481,7 @@ export default function AdminBookingsPage() {
     if (bookingStatusFilter !== "all") qs.set("bookingStatus", bookingStatusFilter);
     if (dateFrom.trim()) qs.set("from", dateFrom.trim());
     if (dateTo.trim()) qs.set("to", dateTo.trim());
+    if (opsQuickParam) qs.set("opsQuick", opsQuickParam);
     const q = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/admin/bookings${q}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -510,7 +549,7 @@ export default function AdminBookingsPage() {
     }
 
     endLoading();
-  }, [filter, actionFilter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo]);
+  }, [filter, actionFilter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo, opsQuickParam]);
 
   const retryDispatchFailed = useCallback(
     async (bookingId: string) => {
@@ -837,7 +876,7 @@ export default function AdminBookingsPage() {
             href="/admin/bookings/create"
             className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
           >
-            Create booking + payment link
+            Create booking
           </Link>
         </div>
         {metrics ? (
@@ -1105,6 +1144,41 @@ export default function AdminBookingsPage() {
           ))}
         </div>
 
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Quick filters</span>
+          {(
+            [
+              ["monthly_only", "Monthly only"],
+              ["awaiting_payment", "Awaiting payment"],
+              ["today", "Today"],
+              ["tomorrow", "Tomorrow"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setOpsQuickFilter(opsQuickParam === key ? "" : key)}
+              className={[
+                "rounded-full px-3 py-1.5 text-xs font-medium transition",
+                opsQuickParam === key
+                  ? "bg-blue-600 text-white dark:bg-blue-500"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-700",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+          {opsQuickParam ? (
+            <button
+              type="button"
+              onClick={() => setOpsQuickFilter("")}
+              className="text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline dark:hover:text-zinc-200"
+            >
+              Clear quick filter
+            </button>
+          ) : null}
+        </div>
+
         <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div>
             <label className="block text-xs font-medium text-zinc-500">Booking status</label>
@@ -1148,7 +1222,7 @@ export default function AdminBookingsPage() {
         </p>
 
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">
               <tr>
                 <th className="px-3 py-3">Customer</th>
@@ -1156,6 +1230,7 @@ export default function AdminBookingsPage() {
                 <th className="px-3 py-3">When</th>
                 <th className="px-3 py-3">Starts in</th>
                 <th className="px-3 py-3">Price</th>
+                <th className="px-3 py-3">Payment</th>
                 <th className="px-3 py-3">Workflow</th>
                 <th className="px-3 py-3">Cleaner</th>
                 <th className="px-3 py-3">Quick actions</th>
@@ -1195,7 +1270,27 @@ export default function AdminBookingsPage() {
                             TEST BOOKING
                           </span>
                         ) : null}
+                        {r.admin_force_slot_override ? (
+                          <span
+                            className="ml-2 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-900 ring-1 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-100 dark:ring-rose-800"
+                            title="Created with duplicate-slot force override — review if unsure."
+                          >
+                            Force slot
+                          </span>
+                        ) : null}
                         <span className="mt-0.5 block truncate text-xs text-zinc-500">{r.customer_email ?? ""}</span>
+                        {r.customer_billing_type || r.customer_schedule_type ? (
+                          <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
+                            Billing: {r.customer_billing_type === "monthly" ? "Monthly" : r.customer_billing_type === "per_booking" ? "Per booking" : (r.customer_billing_type ?? "—")}
+                            {" · "}
+                            Schedule:{" "}
+                            {r.customer_schedule_type === "fixed_schedule"
+                              ? "Fixed"
+                              : r.customer_schedule_type === "on_demand"
+                                ? "On-demand"
+                                : (r.customer_schedule_type ?? "—")}
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2">{r.service ?? "—"}</td>
                       <td className="whitespace-nowrap px-3 py-2">{formatWhen(r.date, r.time)}</td>
@@ -1219,6 +1314,14 @@ export default function AdminBookingsPage() {
                             Payout R {cleanerPayoutZar.toLocaleString("en-ZA")}
                             {cleanerBonusZar > 0 ? ` + bonus R ${cleanerBonusZar.toLocaleString("en-ZA")}` : ""}
                             {companyRevenueZar != null ? ` · company R ${companyRevenueZar.toLocaleString("en-ZA")}` : ""}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="max-w-[140px] px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300">
+                        <div className="font-medium">{adminBookingPaymentPrimaryLabel(r)}</div>
+                        {adminBookingInvoiceHint(r.monthly_invoice_id) ? (
+                          <div className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-300">
+                            {adminBookingInvoiceHint(r.monthly_invoice_id)}
                           </div>
                         ) : null}
                       </td>

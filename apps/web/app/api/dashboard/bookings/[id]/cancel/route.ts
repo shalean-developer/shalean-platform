@@ -37,7 +37,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const { data: row, error: fetchErr } = await admin
     .from("bookings")
-    .select("id, user_id, status, started_at, service, date, time, customer_email")
+    .select("id, user_id, status, started_at, service, date, time, customer_email, monthly_invoice_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -56,6 +56,21 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   if ((row as { started_at?: string | null }).started_at) {
     return NextResponse.json({ error: "Cannot cancel after the clean has started." }, { status: 400 });
+  }
+
+  const invId = (row as { monthly_invoice_id?: string | null }).monthly_invoice_id;
+  if (invId) {
+    const { data: inv } = await admin.from("monthly_invoices").select("is_closed").eq("id", invId).maybeSingle();
+    const closed = Boolean(inv && typeof inv === "object" && (inv as { is_closed?: boolean }).is_closed);
+    if (closed) {
+      return NextResponse.json(
+        {
+          error:
+            "This booking sits on a closed billing month and can’t be cancelled online. Please contact support for changes.",
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const { error: upErr } = await admin

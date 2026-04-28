@@ -35,6 +35,8 @@ export type AdminPaymentLinkDeliveryResult = {
   whatsappOk: boolean | null;
   smsOk: boolean | null;
   emailOk: boolean | null;
+  /** Twilio SMS message id when SMS was accepted (customer policy uses SMS, not WhatsApp). */
+  twilioSmsSid: string | null;
   /** First channel that successfully delivered to the customer. */
   primaryChannel: "whatsapp" | "sms" | "email" | "none";
   fallbackTrace: string;
@@ -88,6 +90,8 @@ export async function deliverAdminPaymentLink(params: {
   bookingId?: string | null;
   /** When set with `supabaseAdmin`, optional AI send-timing delay (Phase 8; `AI_*` flags). */
   userId?: string | null;
+  /** Admin resend: skip Twilio/SMS (e.g. after SMS failure when email is available). */
+  skipSms?: boolean;
 }): Promise<AdminPaymentLinkDeliveryResult> {
   const phone = params.phone?.trim() || "";
   const email = params.email?.trim() || "";
@@ -113,6 +117,7 @@ export async function deliverAdminPaymentLink(params: {
       whatsappOk,
       smsOk,
       emailOk,
+      twilioSmsSid: null,
       primaryChannel: "none",
       fallbackTrace: trace.concat("no_email_no_phone").join(","),
       byChannel,
@@ -211,8 +216,13 @@ export async function deliverAdminPaymentLink(params: {
   }
 
   const emailResolved = Boolean(emailOk) || Boolean(emailDeferredUntilIso);
-  const needSms = Boolean(phone) && (!email || !emailResolved);
+  let needSms = Boolean(phone) && (!email || !emailResolved);
+  if (params.skipSms) {
+    needSms = false;
+    trace.push("sms_skipped_admin_request");
+  }
   let smsDeliveryRole: SmsDeliveryRole = "none";
+  let twilioSmsSid: string | null = null;
 
   if (needSms) {
     smsDeliveryRole = email && !emailResolved ? "fallback" : "primary";
@@ -234,6 +244,7 @@ export async function deliverAdminPaymentLink(params: {
         smsRole: linkSmsRole,
       });
       smsOk = sms.ok;
+      if (sms.twilioSid) twilioSmsSid = sms.twilioSid;
       if (sms.ok) {
         phoneDelivered = true;
         if (primaryChannel === "none") primaryChannel = "sms";
@@ -281,6 +292,7 @@ export async function deliverAdminPaymentLink(params: {
     whatsappOk,
     smsOk,
     emailOk,
+    twilioSmsSid,
     primaryChannel,
     fallbackTrace: trace.join(","),
     byChannel,

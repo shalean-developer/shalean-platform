@@ -16,6 +16,7 @@ import {
   insertPendingPaymentBookingRow,
   updatePendingPaymentBookingForInit,
 } from "@/lib/booking/insertPendingPaymentBooking";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { metrics } from "@/lib/metrics/counters";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
 import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
@@ -95,6 +96,8 @@ export type PaystackInitializeFailure = {
   status: number;
   /** Safe, non-technical message for clients that display `error` verbatim */
   error: string;
+  /** True when DB unique slot index rejected a second active row (admin checkout). */
+  duplicateSlot?: boolean;
   errorCode?:
     | typeof PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE
     | "AMOUNT_MISMATCH"
@@ -106,7 +109,34 @@ export type PaystackInitializeFailure = {
     | "PRICE_MISMATCH"
     | "DURATION_MISMATCH"
     | "PRICING_SNAPSHOT_MISSING"
-    | "PAYSTACK_SECRET_MISSING";
+    | "PAYSTACK_SECRET_MISSING"
+    | "MONTHLY_INVOICE_BOOKING";
+};
+
+async function abortPaystackIfMonthlyPendingBooking(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<PaystackInitializeFailure | null> {
+  const { data } = await admin.from("bookings").select("payment_status").eq("id", bookingId).maybeSingle();
+  const ps = String((data as { payment_status?: string } | null)?.payment_status ?? "");
+  if (ps !== "pending_monthly") return null;
+  await deletePendingPaymentBooking(admin, bookingId);
+  return {
+    ok: false,
+    status: 409,
+    errorCode: "MONTHLY_INVOICE_BOOKING",
+    error: "This visit is on monthly consolidated billing. Pay your monthly invoice when it is sent — no per-booking checkout.",
+  };
+}
+
+export type ProcessPaystackInitializeBodyOptions = {
+  /**
+   * Server-only: admin booking API resolves the customer by Supabase Auth id (no customer session).
+   * Must match `email` in the body; monthly `billing_type` is rejected here so Paystack never runs for those users.
+   */
+  adminTrustedCustomerUserId?: string | null;
+  /** Admin duplicate-slot force: set on the pending_payment row with user_id before checkout returns. */
+  adminSlotFlags?: { slotDuplicateExempt: boolean; adminForceSlotOverride: boolean };
 };
 
 /**
@@ -114,6 +144,7 @@ export type PaystackInitializeFailure = {
  */
 export async function processPaystackInitializeBody(
   b: Record<string, unknown>,
+  initOptions?: ProcessPaystackInitializeBodyOptions,
 ): Promise<PaystackInitializeSuccess | PaystackInitializeFailure> {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!secret) {
@@ -145,6 +176,7 @@ export async function processPaystackInitializeBody(
       error: "Checkout is temporarily unavailable. Please try again in a moment.",
     };
   }
+
   const ratesSnapshot = await resolveRatesSnapshotForLockedBooking(admin, locked);
   if (!ratesSnapshot) {
     return {
@@ -167,6 +199,19 @@ export async function processPaystackInitializeBody(
         ? b.booking_id.trim()
         : null;
 
+  if (bookingIdFromBody) {
+    const { data: payRow } = await admin.from("bookings").select("payment_status").eq("id", bookingIdFromBody).maybeSingle();
+    const ps = String((payRow as { payment_status?: string } | null)?.payment_status ?? "");
+    if (ps === "pending_monthly") {
+      return {
+        ok: false,
+        status: 409,
+        errorCode: "MONTHLY_INVOICE_BOOKING",
+        error: "This booking is on monthly consolidated billing. Pay the invoice link from your email instead.",
+      };
+    }
+  }
+
   let createdPendingBookingId: string | null = null;
   let paystackReferenceOverride: string | null = null;
   if (!bookingIdFromBody) {
@@ -181,6 +226,11 @@ export async function processPaystackInitializeBody(
       createdPendingBookingId = ins.id;
       paystackReferenceOverride = paystackRef;
     }
+  }
+
+  if (createdPendingBookingId) {
+    const monthlyEarly = await abortPaystackIfMonthlyPendingBooking(admin, createdPendingBookingId);
+    if (monthlyEarly) return monthlyEarly;
   }
 
   const checkout = validateLockForCheckout(locked, Date.now(), {
@@ -247,25 +297,8 @@ export async function processPaystackInitializeBody(
 
   const accessToken = typeof b.accessToken === "string" ? b.accessToken.trim() : "";
 
-  const customerRaw = b.customer;
-  if (!customerRaw || typeof customerRaw !== "object" || Array.isArray(customerRaw)) {
-    return { ok: false, status: 400, error: "Customer details are required." };
-  }
-  const cr = customerRaw as Record<string, unknown>;
-  const authType: BookingCustomerAuthType =
-    cr.type === "login" || cr.type === "register" || cr.type === "guest" ? cr.type : "guest";
-  const custName = typeof cr.name === "string" ? cr.name.trim() : "";
-  const custEmail = normalizeEmail(typeof cr.email === "string" ? cr.email : "");
-  const custPhone = typeof cr.phone === "string" ? cr.phone.trim() : "";
-  const clientUserId = typeof cr.userId === "string" ? cr.userId.trim() : "";
-
-  if (custEmail !== email) {
-    return {
-      ok: false,
-      status: 400,
-      error: "Customer email must match the checkout email used for payment.",
-    };
-  }
+  const trustedCustomerUid =
+    typeof initOptions?.adminTrustedCustomerUserId === "string" ? initOptions.adminTrustedCustomerUserId.trim() : "";
 
   let customer: {
     name: string;
@@ -275,53 +308,136 @@ export async function processPaystackInitializeBody(
     type: BookingCustomerAuthType;
   };
 
-  if (authType === "guest") {
-    if (!isNonEmptyContact(custName, custEmail, custPhone)) {
+  if (trustedCustomerUid) {
+    const { data: authData, error: authLookupErr } = await admin.auth.admin.getUserById(trustedCustomerUid);
+    if (authLookupErr || !authData?.user?.id) {
+      return { ok: false, status: 404, error: "Customer account not found." };
+    }
+    const authEmail = normalizeEmail(String(authData.user.email ?? ""));
+    if (!authEmail || authEmail !== email) {
       return {
         ok: false,
         status: 400,
-        error: "Please enter your full name, email, and phone number.",
+        error: "Checkout email must match the selected customer's account email.",
+      };
+    }
+    const { data: profRow } = await admin
+      .from("user_profiles")
+      .select("full_name, billing_type")
+      .eq("id", trustedCustomerUid)
+      .maybeSingle();
+    const billingType = String((profRow as { billing_type?: string } | null)?.billing_type ?? "per_booking").toLowerCase();
+    if (billingType === "monthly") {
+      return {
+        ok: false,
+        status: 409,
+        errorCode: "MONTHLY_INVOICE_BOOKING",
+        error: "This customer is on monthly consolidated billing. Create the visit without Paystack instead.",
+      };
+    }
+    const meta = authData.user.user_metadata as Record<string, unknown> | undefined;
+    const nameFromMeta =
+      typeof meta?.full_name === "string"
+        ? meta.full_name.trim()
+        : typeof meta?.name === "string"
+          ? String(meta.name).trim()
+          : "";
+    const profName = typeof (profRow as { full_name?: string } | null)?.full_name === "string"
+      ? String((profRow as { full_name?: string }).full_name).trim()
+      : "";
+    const name = (profName || nameFromMeta || authEmail.split("@")[0] || "Customer").trim() || "Customer";
+    const metaPhone = typeof meta?.phone === "string" ? String(meta.phone).trim() : "";
+    const phone = metaPhone;
+    if (phone.length < 5) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Customer phone on file is too short for checkout. Update the account phone first.",
+      };
+    }
+    if (!isNonEmptyContact(name, authEmail, phone)) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Customer profile needs a valid name, email, and phone (at least 5 characters) before checkout.",
       };
     }
     customer = {
-      name: custName,
-      email: custEmail,
-      phone: custPhone,
-      user_id: null,
-      type: "guest",
+      name,
+      email: authEmail,
+      phone,
+      user_id: trustedCustomerUid,
+      type: "login",
     };
   } else {
-    const verified = await verifySupabaseAccessToken(accessToken);
-    if (!verified || verified.id !== clientUserId) {
-      return {
-        ok: false,
-        status: 401,
-        errorCode: "SESSION_EXPIRED",
-        error: "Your session expired. Sign in again or continue as guest.",
-      };
+    const customerRaw = b.customer;
+    if (!customerRaw || typeof customerRaw !== "object" || Array.isArray(customerRaw)) {
+      return { ok: false, status: 400, error: "Customer details are required." };
     }
-    const sessionEmail = verified.email ? normalizeEmail(verified.email) : "";
-    if (!sessionEmail || sessionEmail !== email) {
-      return {
-        ok: false,
-        status: 400,
-        error: "Signed-in email must match the checkout email.",
-      };
-    }
-    if (!isNonEmptyContact(custName, custEmail, custPhone)) {
+    const cr = customerRaw as Record<string, unknown>;
+    const authType: BookingCustomerAuthType =
+      cr.type === "login" || cr.type === "register" || cr.type === "guest" ? cr.type : "guest";
+    const custName = typeof cr.name === "string" ? cr.name.trim() : "";
+    const custEmail = normalizeEmail(typeof cr.email === "string" ? cr.email : "");
+    const custPhone = typeof cr.phone === "string" ? cr.phone.trim() : "";
+    const clientUserId = typeof cr.userId === "string" ? cr.userId.trim() : "";
+
+    if (custEmail !== email) {
       return {
         ok: false,
         status: 400,
-        error: "Please enter your full name, email, and phone number.",
+        error: "Customer email must match the checkout email used for payment.",
       };
     }
-    customer = {
-      name: custName,
-      email: custEmail,
-      phone: custPhone,
-      user_id: verified.id,
-      type: authType,
-    };
+
+    if (authType === "guest") {
+      if (!isNonEmptyContact(custName, custEmail, custPhone)) {
+        return {
+          ok: false,
+          status: 400,
+          error: "Please enter your full name, email, and phone number.",
+        };
+      }
+      customer = {
+        name: custName,
+        email: custEmail,
+        phone: custPhone,
+        user_id: null,
+        type: "guest",
+      };
+    } else {
+      const verified = await verifySupabaseAccessToken(accessToken);
+      if (!verified || verified.id !== clientUserId) {
+        return {
+          ok: false,
+          status: 401,
+          errorCode: "SESSION_EXPIRED",
+          error: "Your session expired. Sign in again or continue as guest.",
+        };
+      }
+      const sessionEmail = verified.email ? normalizeEmail(verified.email) : "";
+      if (!sessionEmail || sessionEmail !== email) {
+        return {
+          ok: false,
+          status: 400,
+          error: "Signed-in email must match the checkout email.",
+        };
+      }
+      if (!isNonEmptyContact(custName, custEmail, custPhone)) {
+        return {
+          ok: false,
+          status: 400,
+          error: "Please enter your full name, email, and phone number.",
+        };
+      }
+      customer = {
+        name: custName,
+        email: custEmail,
+        phone: custPhone,
+        user_id: verified.id,
+        type: authType,
+      };
+    }
   }
 
   const cleanerId = typeof b.cleanerId === "string" ? b.cleanerId : null;
@@ -361,6 +477,7 @@ export async function processPaystackInitializeBody(
       locked.service ?? null,
     ).map(({ slug, name, price }) => ({ slug, name, price }));
     const priceBreakdown = { ...checkout.serverQuote, job: checkout.jobSubtotalSplit };
+    const slotF = initOptions?.adminSlotFlags;
     const upd = await updatePendingPaymentBookingForInit(admin, {
       bookingId: createdPendingBookingId,
       bookingSnapshot: bookingSnapshotMerged,
@@ -375,9 +492,24 @@ export async function processPaystackInitializeBody(
       surgeMultiplier,
       surgeReason,
       extrasSnapshot,
+      ...(slotF?.slotDuplicateExempt ? { slotDuplicateExempt: true } : {}),
+      ...(slotF?.adminForceSlotOverride ? { adminForceSlotOverride: true } : {}),
     });
     if (!upd.ok) {
       await deletePendingPaymentBooking(admin, createdPendingBookingId);
+      const dupSlot =
+        Boolean(trustedCustomerUid) &&
+        (upd.pgCode === "23505" ||
+          /duplicate key|unique constraint|idx_bookings_unique_active_customer_slot/i.test(upd.error));
+      if (dupSlot) {
+        return {
+          ok: false,
+          status: 409,
+          duplicateSlot: true,
+          error:
+            "This customer already has an active booking in this slot. Open the existing row, or submit again with force after acknowledging the duplicate.",
+        };
+      }
       return {
         ok: false,
         status: 503,
@@ -385,6 +517,11 @@ export async function processPaystackInitializeBody(
         error: "Could not reserve your booking. Please try again in a moment.",
       };
     }
+  }
+
+  if (createdPendingBookingId) {
+    const monthlyFinal = await abortPaystackIfMonthlyPendingBooking(admin, createdPendingBookingId);
+    if (monthlyFinal) return monthlyFinal;
   }
 
   const extraMetadata =

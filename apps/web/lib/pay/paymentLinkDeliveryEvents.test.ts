@@ -13,6 +13,7 @@ function result(by: AdminPaymentLinkDeliveryResult["byChannel"]): AdminPaymentLi
     whatsappOk: null,
     smsOk: null,
     emailOk: null,
+    twilioSmsSid: null,
     primaryChannel: "none",
     fallbackTrace: "",
     byChannel: by,

@@ -131,10 +131,22 @@ export function CleanerJobCard({
           ) : null}
         </ul>
 
-        {job.notes ? (
+        {job.operationalNoteChips.length > 0 || job.notes ? (
           <div className="rounded-xl border border-zinc-100 bg-zinc-50/90 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
-            <span className="font-semibold uppercase tracking-wide text-zinc-500">Notes · </span>
-            {job.notes}
+            <span className="font-semibold uppercase tracking-wide text-zinc-500">Notes</span>
+            {job.operationalNoteChips.length > 0 ? (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {job.operationalNoteChips.map((c) => (
+                  <span
+                    key={c}
+                    className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-950/50 dark:text-amber-100"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {job.notes ? <p className="mt-1.5 whitespace-pre-wrap text-zinc-700 dark:text-zinc-200">{job.notes}</p> : null}
           </div>
         ) : null}
 

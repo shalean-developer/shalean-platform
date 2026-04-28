@@ -11,7 +11,7 @@ import {
   cleanerOfferHeadline,
   getCleanerOfferUxConfigFromPersisted,
 } from "@/lib/cleaner/cleanerOfferUxVariant";
-import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
 import { CleanerJobEarningsRow } from "@/components/cleaner/mobile/CleanerJobEarningsRow";
 import { durationHoursFromBookingSnapshot } from "@/lib/cleaner/cleanerMobileBookingMap";
@@ -175,8 +175,10 @@ export function CleanerOffersPanel({
 
   useEffect(() => {
     if (!offer?.id) return;
-    const headers = getCleanerIdHeaders();
-    if (headers) reportDispatchOfferExposed(offer.id, headers);
+    void (async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (headers) reportDispatchOfferExposed(offer.id, headers);
+    })();
   }, [offer?.id]);
 
   useEffect(() => {

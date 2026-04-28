@@ -19,7 +19,7 @@ export type RecurringRowForInsert = {
   booking_snapshot_template: unknown;
 };
 
-function cloneSnapshotTemplate(raw: unknown): BookingSnapshotV1 | null {
+export function cloneSnapshotTemplate(raw: unknown): BookingSnapshotV1 | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
   const locked = parseLockedBookingFromUnknown(o.locked ?? null);

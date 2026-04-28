@@ -15,6 +15,9 @@ export type CleanerMobileJobView = {
   statusRaw: string;
   phase: CleanerMobilePhase;
   phone: string;
+  /** Keyword chips (Keys, Dog, …) for quick scan; empty when none. */
+  operationalNoteChips: readonly string[];
+  /** Full merged notes (admin + customer + locked); no duplicate heads-up line. */
   notes: string | null;
   /** ZAR — null until stored display earnings is available. */
   earningsZar: number | null;
@@ -43,10 +46,41 @@ export function formatApproxEarningsPerHourZar(earningsZar: number, durationHour
   return `≈ R${per.toLocaleString("en-ZA")}/hr`;
 }
 
+/** Higher-signal keywords first; at most three shown to avoid noisy heads-up lines. */
+const OPS_NOTE_KEYWORDS = ["keys", "dog", "gate", "fragile"] as const;
+
+const OPS_NOTE_CHIP_LABEL: Record<(typeof OPS_NOTE_KEYWORDS)[number], string> = {
+  keys: "🔑 Keys",
+  dog: "🐶 Dog",
+  gate: "🚪 Gate",
+  fragile: "📦 Fragile",
+};
+
+/** Chips for cleaner UI (emoji + label), max three, priority order preserved. */
+export function operationalNoteChipsFromText(notes: string): string[] {
+  const lower = notes.toLowerCase();
+  return OPS_NOTE_KEYWORDS.filter((k) => lower.includes(k))
+    .slice(0, 3)
+    .map((k) => OPS_NOTE_CHIP_LABEL[k]);
+}
+
 function notesFromSnapshot(snap: unknown): string | null {
-  const o = snap as { locked?: { notes?: string } } | null;
-  const n = o?.locked?.notes;
-  return typeof n === "string" && n.trim() ? n.trim().slice(0, 600) : null;
+  const o = snap as {
+    locked?: { notes?: string };
+    admin_notes?: string;
+    customer_notes?: string;
+  } | null;
+  const admin = typeof o?.admin_notes === "string" ? o.admin_notes.trim() : "";
+  const customer = typeof o?.customer_notes === "string" ? o.customer_notes.trim() : "";
+  const locked = typeof o?.locked?.notes === "string" ? o.locked.notes.trim() : "";
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const s of [admin, customer, locked]) {
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    parts.push(s);
+  }
+  return parts.join("\n\n").trim() || null;
 }
 
 function shortArea(location: string | null): string {
@@ -82,6 +116,9 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
       ? Math.floor(teamMemberCountRaw)
       : null;
 
+  const mergedNotes = notesFromSnapshot(row.booking_snapshot);
+  const chips = mergedNotes ? operationalNoteChipsFromText(mergedNotes) : [];
+
   return {
     id: row.id,
     customerName: row.customer_name?.trim() || "Customer",
@@ -94,7 +131,8 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     statusRaw: st,
     phase,
     phone: row.customer_phone?.trim() || "",
-    notes: notesFromSnapshot(row.booking_snapshot),
+    operationalNoteChips: chips,
+    notes: mergedNotes ? mergedNotes.slice(0, 600) : null,
     earningsZar,
     earningsIsEstimate,
     payoutStatus: st === "completed" ? payoutStatus : "pending",

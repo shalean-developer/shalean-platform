@@ -14,6 +14,8 @@ export type PaymentLinkDeliveryJson = {
   whatsapp?: "sent" | "failed" | "skipped";
   sms?: "sent" | "failed" | "skipped";
   email?: "sent" | "failed" | "skipped";
+  /** Twilio MessageSid from last successful customer SMS payment-link send (debugging). */
+  twilio_sms_sid?: string | null;
   /** SMS after failed/missing email vs phone-only send; `null` clears a previous value on merge. */
   sms_role?: SmsRole | null;
   updated_at?: string;
@@ -28,6 +30,7 @@ function toChannelMap(r: AdminPaymentLinkDeliveryResult): PaymentLinkDeliveryJso
     whatsapp: r.byChannel.whatsapp,
     sms: r.byChannel.sms,
     email: r.byChannel.email,
+    ...(r.twilioSmsSid ? { twilio_sms_sid: r.twilioSmsSid } : {}),
     updated_at: new Date().toISOString(),
     sms_role:
       r.smsDeliveryRole === "fallback" || r.smsDeliveryRole === "primary" ? r.smsDeliveryRole : null,

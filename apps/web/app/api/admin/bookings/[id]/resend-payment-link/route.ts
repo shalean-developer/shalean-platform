@@ -14,6 +14,13 @@ import { recordPaymentLinkDecision, resolvePaymentLinkDispatchDecision } from "@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function twilioRefPreview(sid: string | null | undefined): string | null {
+  const s = typeof sid === "string" ? sid.trim() : "";
+  if (!s) return null;
+  if (s.length <= 12) return s;
+  return `${s.slice(0, 3)}…${s.slice(-4)}`;
+}
+
 type Row = {
   id: string;
   user_id: string | null;
@@ -75,10 +82,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   let notificationMode: "chain" | "chain_plus_email" = "chain_plus_email";
+  let skipSms = false;
   try {
     const raw = await request.json().catch(() => ({}));
-    if (raw && typeof raw === "object" && !Array.isArray(raw) && raw.notificationMode === "chain") {
-      notificationMode = "chain";
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      if (raw.notificationMode === "chain") notificationMode = "chain";
+      if (raw.skipSms === true || raw.skipSms === "true") skipSms = true;
     }
   } catch {
     /* empty body */
@@ -166,6 +175,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       type: "admin_checkout_resend",
       booking_id: r.id,
       admin_id: user.id,
+      skip_sms: skipSms,
     },
   });
 
@@ -208,6 +218,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     supabaseAdmin: admin,
     bookingId: r.id,
     userId: r.user_id,
+    skipSms,
     phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
     emailPayload: {
       customerEmail: email,
@@ -239,6 +250,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     reference: r.paystack_reference,
     payment_status: deriveAdminClientPaymentStatus(r),
     payment_link_expires_at: r.payment_link_expires_at,
+    primary_channel: delivery.primaryChannel,
     delivery,
+    sms_twilio_ref_preview: twilioRefPreview(delivery.twilioSmsSid),
+    sms_twilio_sid: delivery.twilioSmsSid ?? null,
   });
 }

@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import { Menu, X } from "lucide-react";
 import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -57,10 +58,19 @@ export function GlobalTopNav() {
   const [cleanerLoggedIn, setCleanerLoggedIn] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setCleanerLoggedIn(Boolean(localStorage.getItem("cleaner_id")));
-    }, 0);
-    return () => window.clearTimeout(timer);
+    const sb = getSupabaseBrowser();
+    if (!sb) {
+      setCleanerLoggedIn(false);
+      return;
+    }
+    const sync = () => {
+      void sb.auth.getSession().then(({ data }) => {
+        setCleanerLoggedIn(Boolean(data.session?.access_token));
+      });
+    };
+    sync();
+    const { data: sub } = sb.auth.onAuthStateChange(() => sync());
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {

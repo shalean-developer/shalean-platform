@@ -1,22 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
-import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
-import { paymentLinkSendAllowed } from "@/lib/admin/paymentLinkSendGate";
-import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
-import { isAdmin } from "@/lib/auth/admin";
 import {
-  adminPaymentLinkTtlMs,
-  deriveAdminClientPaymentStatus,
-  isStoredPaymentLinkUsable,
-} from "@/lib/booking/adminPaymentLinkState";
+  finalizeAdminPaystackCheckout,
+  sendAdminPaystackDeliveryForRow,
+} from "@/lib/admin/adminPaystackPostInitialize";
+import { paymentLinkSendAllowed } from "@/lib/admin/paymentLinkSendGate";
+import { isAdmin } from "@/lib/auth/admin";
+import { deriveAdminClientPaymentStatus, isStoredPaymentLinkUsable } from "@/lib/booking/adminPaymentLinkState";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import type { PaymentLinkPassType } from "@/lib/pay/paymentLinkDeliveryEvents";
-import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
-import { recordPaymentLinkDecision, resolvePaymentLinkDispatchDecision } from "@/lib/pay/paymentDecisionDispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +17,7 @@ export const dynamic = "force-dynamic";
 type BookingHead = {
   id: string;
   user_id: string | null;
+  payment_status?: string | null;
   status: string | null;
   payment_link: string | null;
   payment_link_expires_at: string | null;
@@ -50,7 +44,7 @@ function boolish(v: unknown): boolean {
 }
 
 const HEAD_SELECT =
-  "id, user_id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
+  "id, user_id, payment_status, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
 
 /**
  * Admin-only: same pipeline as customer checkout (`processPaystackInitializeBody`).
@@ -130,6 +124,16 @@ export async function POST(request: Request) {
     }
 
     const row = existing as BookingHead;
+    if (String(row.payment_status ?? "").trim().toLowerCase() === "pending_monthly") {
+      return NextResponse.json(
+        {
+          error: "This booking is on monthly consolidated billing. Send the monthly invoice payment link instead.",
+          bookingId: row.id,
+        },
+        { status: 409 },
+      );
+    }
+
     const status = String(row.status ?? "").trim().toLowerCase();
 
     if (status !== "pending_payment") {
@@ -177,7 +181,7 @@ export async function POST(request: Request) {
             { status: 429, headers: { "Retry-After": String(gate.retryAfterSec) } },
           );
         }
-        await sendDeliveryForRow(admin, {
+        await sendAdminPaystackDeliveryForRow(admin, {
           row,
           authorizationUrl: row.payment_link,
           reference: row.paystack_reference,
@@ -208,67 +212,18 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!result.bookingId) {
-    await reportOperationalIssue("error", "admin/bookings/with-payment", "missing bookingId after Paystack init", {
-      reference: result.reference,
-    });
-    return NextResponse.json(
-      { error: "Checkout started but booking was not linked. Try again or check logs." },
-      { status: 503 },
-    );
-  }
-
-  const expiresAt = new Date(Date.now() + adminPaymentLinkTtlMs()).toISOString();
-
-  const { error: patchErr } = await admin
-    .from("bookings")
-    .update({
-      created_by_admin: true,
-      created_by: user.id,
-      payment_link: result.authorizationUrl,
-      payment_link_expires_at: expiresAt,
-    })
-    .eq("id", result.bookingId)
-    .eq("status", "pending_payment");
-
-  if (patchErr) {
-    await reportOperationalIssue("error", "admin/bookings/with-payment", patchErr.message, {
-      bookingId: result.bookingId,
-    });
-    return NextResponse.json({ error: "Could not tag admin booking." }, { status: 500 });
-  }
-
-  const { data: row, error: rowErr } = await admin.from("bookings").select(HEAD_SELECT).eq("id", result.bookingId).maybeSingle();
-
-  if (rowErr) {
-    await reportOperationalIssue("warn", "admin/bookings/with-payment", rowErr.message, {
-      bookingId: result.bookingId,
-    });
-  }
-
-  await logSystemEvent({
-    level: "info",
-    source: "admin_booking_with_payment",
-    message: "admin_created_payment_checkout",
-    context: {
-      type: "admin_checkout",
-      booking_id: result.bookingId,
-      admin_id: user.id,
-      paystack_reference: result.reference,
-      payment_link_expires_at: expiresAt,
-    },
+  const finalized = await finalizeAdminPaystackCheckout({
+    admin,
+    adminUserId: user.id,
+    result,
+    locked: body.locked,
+    notificationMode,
   });
-
-  if (row && typeof row === "object" && "id" in row) {
-    await sendDeliveryForRow(admin, {
-      row: row as BookingHead,
-      authorizationUrl: result.authorizationUrl,
-      reference: result.reference,
-      notificationMode,
-      locked: body.locked,
-    });
+  if (!finalized.ok) {
+    return NextResponse.json({ error: finalized.error }, { status: 500 });
   }
 
+  const { data: row } = await admin.from("bookings").select(HEAD_SELECT).eq("id", result.bookingId!).maybeSingle();
   const head = row && typeof row === "object" ? (row as BookingHead) : null;
 
   return NextResponse.json({
@@ -277,111 +232,7 @@ export async function POST(request: Request) {
     authorizationUrl: result.authorizationUrl,
     reference: result.reference,
     bookingId: result.bookingId,
-    payment_status: head ? deriveAdminClientPaymentStatus({ ...head, payment_link_expires_at: expiresAt }) : "pending",
-    payment_link_expires_at: expiresAt,
+    payment_status: head ? deriveAdminClientPaymentStatus({ ...head, payment_link_expires_at: finalized.expiresAt }) : "pending",
+    payment_link_expires_at: finalized.expiresAt,
   });
-}
-
-async function sendDeliveryForRow(
-  admin: SupabaseClient,
-  params: {
-    row: BookingHead;
-    authorizationUrl: string;
-    reference: string;
-    notificationMode: "chain" | "chain_plus_email";
-    locked: unknown;
-    passType?: PaymentLinkPassType;
-  },
-): Promise<void> {
-  const { row, authorizationUrl, reference, notificationMode, locked, passType = "admin_initial" } = params;
-  const name = String(row.customer_name ?? "").trim();
-  const phone = String(row.customer_phone ?? "").trim();
-  const email = String(row.customer_email ?? "").trim();
-
-  const lockedRec = locked && typeof locked === "object" && !Array.isArray(locked) ? (locked as Record<string, unknown>) : null;
-  const serviceId = lockedRec?.service;
-  const serviceLabel =
-    typeof serviceId === "string" && serviceId.trim()
-      ? getServiceLabel(serviceId as BookingServiceId)
-      : row.service != null
-        ? String(row.service)
-        : "Cleaning";
-  const dateLabel = row.date != null ? String(row.date) : "—";
-  const timeLabel = row.time != null ? String(row.time) : "—";
-
-  const totalZarRaw = row.total_paid_zar;
-  const amountZar =
-    typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-      ? Math.round(totalZarRaw)
-      : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-        ? Math.round(Number(totalZarRaw))
-        : null;
-
-  try {
-    const intent = passType === "admin_resend" ? "admin_resend" : "initial_send";
-    const decision = await resolvePaymentLinkDispatchDecision(
-      admin,
-      {
-        id: row.id,
-        customer_email: row.customer_email,
-        customer_phone: row.customer_phone,
-        payment_link_send_count: row.payment_link_send_count,
-        payment_conversion_bucket: row.payment_conversion_bucket,
-        payment_link_first_sent_at: row.payment_link_first_sent_at,
-        payment_link_delivery: row.payment_link_delivery,
-        payment_last_touch_channel: row.payment_last_touch_channel,
-      },
-      { intent, notificationMode: notificationMode },
-    );
-    await recordPaymentLinkDecision(
-      admin,
-      {
-        id: row.id,
-        customer_email: row.customer_email,
-        customer_phone: row.customer_phone,
-        payment_link_send_count: row.payment_link_send_count,
-        payment_conversion_bucket: row.payment_conversion_bucket,
-        payment_link_first_sent_at: row.payment_link_first_sent_at,
-        payment_link_delivery: row.payment_link_delivery,
-        payment_last_touch_channel: row.payment_last_touch_channel,
-      },
-      decision,
-      intent,
-    );
-
-    const linkForMessaging = trustPayPageUrl(row.id, reference, authorizationUrl);
-    const delivery = await deliverAdminPaymentLink({
-      phone: phone || null,
-      email: email || null,
-      mode: notificationMode,
-      supabaseAdmin: admin,
-      bookingId: row.id,
-      userId: row.user_id,
-      phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
-      emailPayload: {
-        customerEmail: email,
-        customerName: name || null,
-        serviceLabel,
-        dateLabel,
-        timeLabel,
-        amountZar,
-        paymentUrl: authorizationUrl,
-        bookingId: row.id,
-        paystackReference: reference,
-      },
-      waPayload: {
-        customerName: name || "there",
-        paymentLink: linkForMessaging,
-        service: serviceLabel,
-        date: dateLabel,
-        time: timeLabel,
-      },
-      context: { bookingId: row.id, stage: "admin_payment_link" },
-    });
-    await persistPaymentLinkDelivery(admin, row.id, delivery, { passType });
-  } catch (e) {
-    await reportOperationalIssue("error", "admin/bookings/with-payment/delivery", String(e), {
-      bookingId: row.id,
-    });
-  }
 }

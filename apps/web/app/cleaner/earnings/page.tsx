@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 
 type EarningsStatus = "pending" | "approved" | "paid" | "pending_calculation";
 
@@ -162,14 +163,14 @@ export default function CleanerEarningsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers) {
       router.replace("/cleaner/login");
       return;
     }
 
     try {
-      const res = await fetch("/api/cleaner/earnings", { headers });
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/earnings", { headers });
       const json = (await res.json()) as EarningsResponse;
       if (!res.ok) {
         setError(json.error ?? "Could not load earnings.");

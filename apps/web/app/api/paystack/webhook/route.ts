@@ -6,6 +6,7 @@ import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
 import { metrics } from "@/lib/metrics/counters";
 import {
   expectedCheckoutZarFromVerify,
@@ -114,6 +115,40 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
   if (supabase) {
+    const invPay = await applyMonthlyInvoicePayment(supabase, {
+      reference,
+      amountCents: typeof data.amount === "number" ? data.amount : 0,
+    });
+    if (invPay.ok && "settled" in invPay) {
+      const partialCtx =
+        invPay.settled === "partial"
+          ? {
+              amount_paid_cents: invPay.amount_paid_cents,
+              total_amount_cents: invPay.total_amount_cents,
+            }
+          : {};
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/webhook",
+        message: "monthly_invoice.charge.success",
+        context: {
+          reference,
+          invoiceId: invPay.invoiceId,
+          settled: invPay.settled,
+          ...partialCtx,
+        },
+      });
+      return NextResponse.json({ received: true });
+    }
+    if (
+      invPay.ok &&
+      "skipped" in invPay &&
+      invPay.skipped &&
+      (invPay.reason === "already_paid" || invPay.reason === "duplicate_charge")
+    ) {
+      return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+
     const { data: existing } = await supabase
       .from("bookings")
       .select("id, status")

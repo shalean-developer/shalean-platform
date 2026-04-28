@@ -3,46 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { mapBookingRow } from "@/lib/dashboard/bookingUtils";
+import { CUSTOMER_BOOKING_SELECT } from "@/lib/dashboard/customerBookingSelect";
+import { normalizeCustomerBookingRow } from "@/lib/dashboard/normalizeCustomerBookingRow";
 import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import { useUser } from "@/hooks/useUser";
 
-const BOOKING_SELECT = [
-  "id",
-  "service",
-  "date",
-  "time",
-  "location",
-  "total_paid_zar",
-  "total_price",
-  "price_breakdown",
-  "pricing_version_id",
-  "amount_paid_cents",
-  "currency",
-  "status",
-  "booking_snapshot",
-  "created_at",
-  "paystack_reference",
-  "cleaner_id",
-  "assigned_at",
-  "en_route_at",
-  "started_at",
-  "completed_at",
-  "duration_minutes",
-  "rooms",
-  "bathrooms",
-  "extras",
-  "cleaners(full_name,phone)",
-].join(",");
-
-function normalizeCleanerJoin(row: BookingRow): BookingRow {
-  const raw = row as BookingRow & { cleaners?: unknown };
-  const c = raw.cleaners;
-  if (Array.isArray(c)) {
-    return { ...row, cleaners: (c[0] as BookingRow["cleaners"]) ?? null };
-  }
-  return row;
-}
+const SELECT_NO_MI = CUSTOMER_BOOKING_SELECT.replace(",monthly_invoices(status,is_closed)", "");
+const SELECT_MINIMAL = SELECT_NO_MI.replace(",cleaners(full_name,phone)", "");
 
 export function useBookings(): {
   bookings: DashboardBooking[];
@@ -80,7 +48,7 @@ export function useBookings(): {
 
     let res = await sb
       .from("bookings")
-      .select(BOOKING_SELECT)
+      .select(CUSTOMER_BOOKING_SELECT)
       .eq("user_id", userId)
       .neq("status", "pending_payment")
       .neq("status", "payment_expired")
@@ -88,10 +56,22 @@ export function useBookings(): {
       .order("created_at", { ascending: false })
       .limit(100);
 
+    if (res.error && /cleaners|relationship|schema|monthly_invoices/i.test(res.error.message)) {
+      res = await sb
+        .from("bookings")
+        .select(SELECT_NO_MI)
+        .eq("user_id", userId)
+        .neq("status", "pending_payment")
+        .neq("status", "payment_expired")
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(100);
+    }
+
     if (res.error && /cleaners|relationship|schema/i.test(res.error.message)) {
       res = await sb
         .from("bookings")
-        .select(BOOKING_SELECT.replace(",cleaners(full_name,phone)", ""))
+        .select(SELECT_MINIMAL)
         .eq("user_id", userId)
         .neq("status", "pending_payment")
         .neq("status", "payment_expired")
@@ -104,7 +84,7 @@ export function useBookings(): {
       setError(res.error.message);
       setRows([]);
     } else {
-      setRows(((res.data ?? []) as unknown as BookingRow[]).map(normalizeCleanerJoin));
+      setRows(((res.data ?? []) as unknown as BookingRow[]).map((r) => normalizeCustomerBookingRow(r)));
     }
     if (!silent) setLoading(false);
   }, [userId]);
@@ -220,15 +200,24 @@ export function useBookingDetail(id: string | undefined): {
 
     let res = await sb
       .from("bookings")
-      .select(BOOKING_SELECT)
+      .select(CUSTOMER_BOOKING_SELECT)
       .eq("id", id)
       .eq("user_id", detailUserId)
       .maybeSingle();
 
+    if (res.error && /cleaners|relationship|schema|monthly_invoices/i.test(res.error.message)) {
+      res = await sb
+        .from("bookings")
+        .select(SELECT_NO_MI)
+        .eq("id", id)
+        .eq("user_id", detailUserId)
+        .maybeSingle();
+    }
+
     if (res.error && /cleaners|relationship|schema/i.test(res.error.message)) {
       res = await sb
         .from("bookings")
-        .select(BOOKING_SELECT.replace(",cleaners(full_name,phone)", ""))
+        .select(SELECT_MINIMAL)
         .eq("id", id)
         .eq("user_id", detailUserId)
         .maybeSingle();
@@ -241,7 +230,7 @@ export function useBookingDetail(id: string | undefined): {
       setRow(null);
       setError(null);
     } else {
-      setRow(normalizeCleanerJoin(res.data as unknown as BookingRow));
+      setRow(normalizeCustomerBookingRow(res.data as unknown as BookingRow));
     }
     if (!silent) setLoading(false);
   }, [detailUserId, id]);

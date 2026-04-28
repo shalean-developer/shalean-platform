@@ -3,6 +3,7 @@ import { todayJohannesburg, compareYmd } from "@/lib/recurring/johannesburgCalen
 import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
 import { insertRecurringOccurrenceBooking } from "@/lib/recurring/insertRecurringOccurrenceBooking";
+import { insertMonthlyRecurringOccurrenceBooking } from "@/lib/recurring/insertMonthlyRecurringOccurrenceBooking";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -126,42 +127,88 @@ export async function POST(request: Request) {
         return typeof meta?.phone === "string" ? meta.phone.trim() : null;
       })();
 
+    const { data: profileRow } = await admin
+      .from("user_profiles")
+      .select("billing_type, schedule_type")
+      .eq("id", r.customer_id)
+      .maybeSingle();
+    const billingType = String((profileRow as { billing_type?: string } | null)?.billing_type ?? "per_booking");
+    const scheduleType = String((profileRow as { schedule_type?: string } | null)?.schedule_type ?? "on_demand");
+
+    if (billingType === "monthly" && scheduleType === "on_demand") {
+      await logSystemEvent({
+        level: "warn",
+        source: "cron/generate-recurring-bookings",
+        message: "recurring_skip_monthly_on_demand",
+        context: { recurring_id: r.id, customer_id: r.customer_id },
+      });
+      skipped++;
+      const nextRun = calculateNextRunDate(schedule, today);
+      await admin
+        .from("recurring_bookings")
+        .update({
+          last_generated_at: new Date().toISOString(),
+          next_run_date: nextRun,
+          skip_next_occurrence_date: null,
+        })
+        .eq("id", r.id);
+      continue;
+    }
+
+    const useMonthlyInvoicePath = billingType === "monthly" && scheduleType === "fixed_schedule";
+
     const dates = occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
     for (const d of dates) {
       if (r.skip_next_occurrence_date && d === r.skip_next_occurrence_date) continue;
 
-      const ins = await insertRecurringOccurrenceBooking(admin, {
-        recurring: {
-          id: r.id,
-          customer_id: r.customer_id,
-          price: r.price,
-          booking_snapshot_template: r.booking_snapshot_template,
-        },
-        occurrenceDateYmd: d,
-        customerEmail: email,
-        customerName: customerName,
-        customerPhone: customerPhone,
-      });
+      const ins = useMonthlyInvoicePath
+        ? await insertMonthlyRecurringOccurrenceBooking(admin, {
+            recurring: {
+              id: r.id,
+              customer_id: r.customer_id,
+              price: r.price,
+              booking_snapshot_template: r.booking_snapshot_template,
+            },
+            occurrenceDateYmd: d,
+            customerEmail: email,
+            customerName: customerName,
+            customerPhone: customerPhone,
+          })
+        : await insertRecurringOccurrenceBooking(admin, {
+            recurring: {
+              id: r.id,
+              customer_id: r.customer_id,
+              price: r.price,
+              booking_snapshot_template: r.booking_snapshot_template,
+            },
+            occurrenceDateYmd: d,
+            customerEmail: email,
+            customerName: customerName,
+            customerPhone: customerPhone,
+          });
 
       if (ins.ok) {
         generated++;
-        const smartAt = await computeInitialRecurringChargeAttemptAt(admin, {
-          bookingId: ins.bookingId,
-          customerEmail: email,
-          customerPhone: customerPhone,
-        });
-        if (smartAt) {
-          await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", ins.bookingId);
+        if (!useMonthlyInvoicePath) {
+          const smartAt = await computeInitialRecurringChargeAttemptAt(admin, {
+            bookingId: ins.bookingId,
+            customerEmail: email,
+            customerPhone: customerPhone,
+          });
+          if (smartAt) {
+            await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", ins.bookingId);
+          }
         }
         await logSystemEvent({
           level: "info",
           source: "cron/generate-recurring-bookings",
-          message: "recurring_booking_generated",
+          message: useMonthlyInvoicePath ? "monthly_invoice_recurring_booking_generated" : "recurring_booking_generated",
           context: {
             recurring_id: r.id,
             booking_id: ins.bookingId,
             occurrence_date: d,
             paystack_reference: ins.paystackReference,
+            monthly_invoice: useMonthlyInvoicePath,
           },
         });
       } else if (ins.error === "duplicate_occurrence") {

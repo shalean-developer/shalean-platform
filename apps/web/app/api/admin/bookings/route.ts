@@ -1,7 +1,21 @@
+import crypto from "crypto";
+
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { finalizeAdminPaystackCheckout } from "@/lib/admin/adminPaystackPostInitialize";
+import {
+  abandonAdminBookingCreateIdempotency,
+  claimAdminBookingCreateIdempotency,
+  finalizeAdminBookingCreateIdempotency,
+} from "@/lib/admin/adminBookingCreateIdempotency";
+import { adminBookingLocationFingerprint, adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
+import { resolveMonthlyBookingDuplicateRace } from "@/lib/admin/adminBookingPostInsertRace";
+import { applyActiveAdminBookingSlotFilters } from "@/lib/booking/activeAdminBookingSlot";
+import { buildAdminPaystackLockedPayload } from "@/lib/admin/buildAdminPaystackLockedPayload";
+import { assertAdminBookingSlotAllowed, normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { fetchSlaDispatchLastActions } from "@/lib/admin/slaDispatchLastAction";
+import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
   getDispatchSlaBreachMinutes,
   rowMatchesAttentionFilter,
@@ -9,16 +23,42 @@ import {
   sortRowsForAttentionQueue,
   type OpsSnapshotRow,
 } from "@/lib/admin/opsSnapshot";
+import { adminPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
-import type { AdminClientPaymentStatus } from "@/lib/booking/adminPaymentLinkState";
-import { deriveAdminClientPaymentStatus } from "@/lib/booking/adminPaymentLinkState";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
+import { reportOperationalIssue, logSystemEvent } from "@/lib/logging/systemLog";
 import { aggregatePaymentLinkDeliveryStats } from "@/lib/pay/paymentLinkDeliveryStats";
+import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
+import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** If the conflicting booking was created this recently, surface `recent_duplicate` for calmer admin UX. */
+const RECENT_DUPLICATE_MS = 4 * 60 * 1000;
+
+function formatAdminRaceSlotLabels(params: {
+  date: string;
+  timeHm: string;
+  serviceRaw: string;
+  location: string;
+}): {
+  race_slot_time_label: string;
+  race_slot_service_label: string;
+  race_slot_location_snippet: string;
+} {
+  const serviceLabel = getServiceLabel(parseBookingServiceId(params.serviceRaw) ?? "standard");
+  const loc = params.location.trim();
+  const race_slot_location_snippet = loc.length === 0 ? "—" : loc.length <= 80 ? loc : `${loc.slice(0, 77)}…`;
+  return {
+    race_slot_time_label: `${params.date} · ${params.timeHm} (Johannesburg calendar date / slot time)`,
+    race_slot_service_label: serviceLabel,
+    race_slot_location_snippet,
+  };
+}
 
 type Row = {
   id: string;
@@ -75,9 +115,12 @@ type Row = {
   payment_assist_channels: unknown;
   booking_priority: string | null;
   last_decision_snapshot: unknown;
+  payment_status: string | null;
+  monthly_invoice_id: string | null;
+  customer_billing_type?: string | null;
+  customer_schedule_type?: string | null;
+  admin_force_slot_override?: boolean | null;
 };
-
-type RowWithPaymentStatus = Row & { payment_status: AdminClientPaymentStatus };
 
 function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
   return {
@@ -145,9 +188,10 @@ export async function GET(request: Request) {
   const bookingStatus = searchParams.get("bookingStatus");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const opsQuick = (searchParams.get("opsQuick") ?? "").trim().toLowerCase();
 
   const bookingSelect =
-    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot";
+    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect);
 
@@ -273,15 +317,48 @@ export async function GET(request: Request) {
     else vipDistribution.regular++;
   }
 
-  const withPaymentStatus: RowWithPaymentStatus[] = filtered.map((r) => ({
-    ...r,
-    payment_status: deriveAdminClientPaymentStatus(r),
-  }));
-
   const paymentLinkChannelStats = aggregatePaymentLinkDeliveryStats(rows);
 
+  const profileUserIds = [...new Set(filtered.map((r) => r.user_id).filter(Boolean))] as string[];
+  const profileById = new Map<string, { billing_type: string; schedule_type: string }>();
+  if (profileUserIds.length > 0) {
+    const { data: plist } = await admin
+      .from("user_profiles")
+      .select("id, billing_type, schedule_type")
+      .in("id", profileUserIds);
+    for (const p of plist ?? []) {
+      const row = p as { id?: string; billing_type?: string; schedule_type?: string };
+      if (row.id) {
+        profileById.set(row.id, {
+          billing_type: String(row.billing_type ?? "per_booking"),
+          schedule_type: String(row.schedule_type ?? "on_demand"),
+        });
+      }
+    }
+  }
+
+  let enriched: Row[] = filtered.map((r) => {
+    const pr = r.user_id ? profileById.get(r.user_id) : undefined;
+    return {
+      ...r,
+      customer_billing_type: pr?.billing_type ?? null,
+      customer_schedule_type: pr?.schedule_type ?? null,
+    };
+  });
+
+  if (opsQuick === "monthly_only") {
+    enriched = enriched.filter((r) => (r.customer_billing_type ?? "").toLowerCase() === "monthly");
+  } else if (opsQuick === "awaiting_payment") {
+    enriched = enriched.filter((r) => (r.status ?? "").toLowerCase() === "pending_payment");
+  } else if (opsQuick === "tomorrow") {
+    const tomorrowYmd = addDaysYmd(today, 1);
+    enriched = enriched.filter((r) => r.date === tomorrowYmd);
+  } else if (opsQuick === "today") {
+    enriched = enriched.filter((r) => classifyBooking(r, today) === "today");
+  }
+
   return NextResponse.json({
-    bookings: withPaymentStatus,
+    bookings: enriched,
     metrics: {
       totalBookingsToday,
       revenueTodayZar,
@@ -303,4 +380,549 @@ export async function GET(request: Request) {
     cities: cityRows ?? [],
     selectedCityId: cityId || null,
   });
+}
+
+const ADMIN_BOOKING_SERVICE_IDS = new Set<string>(["quick", "standard", "airbnb", "deep", "carpet", "move"]);
+
+/**
+ * Admin: create a booking for an existing customer (monthly → no Paystack; per_booking → Paystack + notifications).
+ */
+export async function POST(request: Request) {
+  const auth = await requireAdminApi(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    const raw = await request.json();
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+    body = raw as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const userId = typeof body.user_id === "string" ? body.user_id.trim() : "";
+  const date = typeof body.date === "string" ? body.date.trim() : "";
+  const timeRaw = typeof body.time === "string" ? body.time.trim() : "";
+  const timeHm = normalizeTimeHm(timeRaw);
+  const serviceRaw = typeof body.service === "string" ? body.service.trim().toLowerCase() : "";
+  const location = typeof body.location === "string" ? body.location.trim() : "";
+  const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 4000) : "";
+  const totalPaidZar =
+    typeof body.totalPaidZar === "number" && Number.isFinite(body.totalPaidZar) ? Math.round(body.totalPaidZar) : NaN;
+  const force =
+    body.force === true ||
+    body.force === "true" ||
+    (typeof body.force === "string" && body.force.trim().toLowerCase() === "true");
+  const overrideReasonRaw = typeof body.override_reason === "string" ? body.override_reason.trim() : "";
+  const overrideReason = overrideReasonRaw.length > 500 ? overrideReasonRaw.slice(0, 500) : overrideReasonRaw;
+
+  if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) {
+    return NextResponse.json({ error: "Select an existing customer." }, { status: 400 });
+  }
+  if (!location) {
+    return NextResponse.json({ error: "location is required." }, { status: 400 });
+  }
+  if (notes.length < 3) {
+    return NextResponse.json({ error: "notes are required (at least 3 characters)." }, { status: 400 });
+  }
+  if (!ADMIN_BOOKING_SERVICE_IDS.has(serviceRaw)) {
+    return NextResponse.json(
+      { error: "Invalid service. Use one of: quick, standard, airbnb, deep, carpet, move." },
+      { status: 400 },
+    );
+  }
+  if (!Number.isFinite(totalPaidZar) || totalPaidZar < 1 || totalPaidZar > 100_000) {
+    return NextResponse.json(
+      { error: "totalPaidZar must be a number between 1 and 100000 (ZAR), inclusive." },
+      { status: 400 },
+    );
+  }
+
+  const amountPaidCents = Math.round(totalPaidZar * 100);
+
+  const slot = assertAdminBookingSlotAllowed({ dateYmd: date, timeHm });
+  if (!slot.ok) {
+    return NextResponse.json({ error: slot.error }, { status: 400 });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  const serviceSlug = adminBookingServiceSlug(serviceRaw);
+  const locationHash = adminBookingLocationFingerprint(location);
+
+  const duplicateFingerprint = {
+    customerUserId: userId,
+    serviceDate: date,
+    serviceTime: timeHm,
+    serviceSlug,
+    locationHash,
+  };
+
+  if (!force) {
+    const { data: dupRows, error: dupErr } = await applyActiveAdminBookingSlotFilters(
+      admin.from("bookings").select("id, created_at"),
+      { userId, date, timeHm, serviceSlug },
+    ).limit(1);
+
+    if (dupErr) {
+      await reportOperationalIssue("error", "api/admin/bookings POST duplicate probe", dupErr.message);
+      return NextResponse.json({ error: "Could not verify duplicate bookings." }, { status: 500 });
+    }
+
+    const dup = dupRows?.[0] as { id: string; created_at?: string | null } | undefined;
+    if (dup?.id) {
+      const createdMs = dup.created_at ? Date.parse(dup.created_at) : NaN;
+      const recentDuplicate =
+        Number.isFinite(createdMs) && Date.now() - createdMs >= 0 && Date.now() - createdMs <= RECENT_DUPLICATE_MS;
+      void logSystemEvent({
+        level: "info",
+        source: "admin_booking_create",
+        message: "admin_booking_duplicate_blocked",
+        context: {
+          existing_booking_id: dup.id,
+          fingerprint: duplicateFingerprint,
+          recent_duplicate: recentDuplicate,
+          service_slug: serviceSlug,
+          date,
+          time: timeHm,
+        },
+      });
+      return NextResponse.json(
+        {
+          error: recentDuplicate
+            ? "Looks like you just created this booking. Open it to confirm, or submit again with force=true only if you need a second row on purpose."
+            : "This customer already has a booking on this date, time, and service. Open it, change the slot or service, or submit again with force=true if this is intentional.",
+          existing_booking_id: dup.id,
+          existing_booking_created_at: typeof dup.created_at === "string" ? dup.created_at : null,
+          duplicate: true,
+          recent_duplicate: recentDuplicate,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
+  const idem = await claimAdminBookingCreateIdempotency(admin, request, duplicateFingerprint);
+  if (idem.kind === "replay") return idem.response;
+  if (idem.kind === "in_flight") return idem.response;
+  if (idem.kind === "error") return idem.response;
+
+  const claimId = idem.kind === "proceed" ? idem.claimId : null;
+
+  const bail = async (res: NextResponse) => {
+    if (claimId) await abandonAdminBookingCreateIdempotency(admin, claimId);
+    return res;
+  };
+
+  const { data: prof, error: profErr } = await admin
+    .from("user_profiles")
+    .select("billing_type, schedule_type")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profErr) {
+    await reportOperationalIssue("error", "api/admin/bookings POST", profErr.message);
+    return bail(NextResponse.json({ error: profErr.message }, { status: 500 }));
+  }
+  if (!prof) {
+    return bail(NextResponse.json({ error: "Select an existing customer." }, { status: 400 }));
+  }
+
+  const billingType = String((prof as { billing_type?: string }).billing_type ?? "per_booking").toLowerCase();
+  const scheduleType = String((prof as { schedule_type?: string }).schedule_type ?? "on_demand").toLowerCase();
+
+  const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId);
+  if (authErr || !authUser?.user?.email) {
+    return bail(NextResponse.json({ error: "Select an existing customer." }, { status: 400 }));
+  }
+  const customerEmail = normalizeEmail(String(authUser.user.email));
+
+  const serviceId: BookingServiceId = parseBookingServiceId(serviceRaw) ?? "standard";
+  const paymentLinkTtlHours = Math.max(1, Math.round(adminPaymentLinkTtlMs() / (60 * 60 * 1000)));
+
+  if (billingType === "monthly") {
+    const paystackReference = `adm_mi_${crypto.randomUUID()}`;
+    const bookingSnapshot = {
+      v: 1 as const,
+      admin_notes: notes,
+      customer_notes: notes,
+      service_slug: serviceSlug,
+    };
+
+    // created_at is DB default (now); omit from insert so clustering stays deterministic.
+    const { data: row, error: insErr } = await admin
+      .from("bookings")
+      .insert({
+        paystack_reference: paystackReference,
+        customer_email: customerEmail,
+        customer_name: null,
+        customer_phone: null,
+        user_id: userId,
+        amount_paid_cents: amountPaidCents,
+        currency: "ZAR",
+        booking_snapshot: bookingSnapshot,
+        service_slug: serviceSlug,
+        status: "pending",
+        dispatch_status: "searching",
+        surge_multiplier: 1,
+        surge_reason: null,
+        service: getServiceLabel(serviceId),
+        rooms: null,
+        bathrooms: null,
+        extras: [],
+        location,
+        location_id: null,
+        city_id: null,
+        date,
+        time: timeHm,
+        total_paid_zar: totalPaidZar,
+        pricing_version_id: null,
+        price_breakdown: null,
+        total_price: null,
+        created_by_admin: true,
+        created_by: auth.userId,
+        ...(force
+          ? {
+              slot_duplicate_exempt: true,
+              admin_force_slot_override: true,
+            }
+          : {}),
+      })
+      .select("id, monthly_invoice_id, created_at")
+      .maybeSingle();
+
+    if (insErr || !row || typeof (row as { id?: string }).id !== "string") {
+      const pgCode = (insErr as { code?: string } | null)?.code;
+      const msg = insErr?.message ?? "";
+      if (
+        pgCode === "23505" ||
+        /duplicate key|unique constraint|idx_bookings_unique_active_customer_slot/i.test(msg)
+      ) {
+        const { data: dupExisting } = await applyActiveAdminBookingSlotFilters(
+          admin.from("bookings").select("id, created_at"),
+          { userId, date, timeHm, serviceSlug },
+        ).limit(1);
+        const ex = dupExisting?.[0] as { id: string; created_at?: string | null } | undefined;
+        return bail(
+          NextResponse.json(
+            {
+              error:
+                "This slot already has an active booking (database constraint). Open the existing row, or use force after acknowledging the duplicate.",
+              existing_booking_id: ex?.id ?? null,
+              existing_booking_created_at: typeof ex?.created_at === "string" ? ex.created_at : null,
+              duplicate: true,
+            },
+            { status: 409 },
+          ),
+        );
+      }
+      return bail(NextResponse.json({ error: insErr?.message ?? "Could not create booking." }, { status: 500 }));
+    }
+
+    const newBookingId = (row as { id: string }).id;
+    const race = await resolveMonthlyBookingDuplicateRace(admin, {
+      ourBookingId: newBookingId,
+      userId,
+      date,
+      timeHm,
+      serviceSlug,
+      force,
+    });
+    if (race.kind === "rpc_error") {
+      return bail(NextResponse.json({ error: race.message }, { status: 500 }));
+    }
+    if (race.kind === "reject") {
+      let winnerCreated = race.winnerCreatedAt ?? "";
+      if (!winnerCreated) {
+        const { data: winnerRow } = await admin
+          .from("bookings")
+          .select("created_at")
+          .eq("id", race.winnerId)
+          .maybeSingle();
+        winnerCreated =
+          winnerRow && typeof winnerRow === "object" && "created_at" in winnerRow
+            ? String((winnerRow as { created_at?: string | null }).created_at ?? "")
+            : "";
+      }
+      const raceLabels = formatAdminRaceSlotLabels({ date, timeHm, serviceRaw, location });
+      if (race.deletedIds.length > 0) {
+        void logSystemEvent({
+          level: "info",
+          source: "admin_booking_create",
+          message: "admin_booking_race_cleanup",
+          context: {
+            winner_id: race.winnerId,
+            deleted_ids: race.deletedIds,
+            service_slug: serviceSlug,
+            date,
+            time: timeHm,
+            cluster_size: race.clusterSize,
+            winner_created_at: (race.winnerCreatedAt ?? winnerCreated) || null,
+            requester_booking_id: newBookingId,
+            cluster_start: race.clusterStart,
+            cluster_end: race.clusterEnd,
+          },
+        });
+      }
+      void logSystemEvent({
+        level: "warn",
+        source: "admin_booking_create",
+        message: "admin_booking_duplicate_race_rolled_back",
+        context: {
+          rolled_back_booking_id: newBookingId,
+          winner_booking_id: race.winnerId,
+          userId,
+          service_slug: serviceSlug,
+          date,
+          time: timeHm,
+          left_duplicate: race.leftDuplicate,
+          deleted_ids: race.deletedIds,
+          cluster_size: race.clusterSize,
+          winner_created_at: (race.winnerCreatedAt ?? winnerCreated) || null,
+          requester_booking_id: newBookingId,
+          cluster_start: race.clusterStart,
+          cluster_end: race.clusterEnd,
+        },
+      });
+      return bail(
+        NextResponse.json(
+          {
+            error: race.leftDuplicate
+              ? "Another booking kept this slot; open it to reconcile or use Create anyway if you need both."
+              : "Another booking for this slot was created at the same time. Open the existing row or try again.",
+            existing_booking_id: race.winnerId,
+            existing_booking_created_at: winnerCreated || null,
+            duplicate: true,
+            race_rolled_back: true,
+            ...(race.leftDuplicate ? { race_left_duplicate: true } : {}),
+            race_cluster_start: race.clusterStart,
+            race_cluster_end: race.clusterEnd,
+            race_cluster_size: race.clusterSize,
+            ...raceLabels,
+          },
+          { status: 409 },
+        ),
+      );
+    }
+    if (race.deletedIds.length > 0) {
+      void logSystemEvent({
+        level: "info",
+        source: "admin_booking_create",
+        message: "admin_booking_race_cleanup",
+        context: {
+          winner_id: newBookingId,
+          deleted_ids: race.deletedIds,
+          service_slug: serviceSlug,
+          date,
+          time: timeHm,
+          cluster_size: race.clusterSize,
+          winner_created_at: race.winnerCreatedAt,
+          requester_booking_id: newBookingId,
+          cluster_start: race.clusterStart,
+          cluster_end: race.clusterEnd,
+        },
+      });
+    }
+
+    if (!force) {
+      const { count: activeSlotCount, error: invErr } = await applyActiveAdminBookingSlotFilters(
+        admin.from("bookings").select("id", { count: "exact", head: true }),
+        { userId, date, timeHm, serviceSlug },
+      );
+      if (!invErr && typeof activeSlotCount === "number" && activeSlotCount > 1) {
+        void logSystemEvent({
+          level: "warn",
+          source: "admin_booking_create",
+          message: "admin_booking_race_invariant_violation",
+          context: {
+            booking_id: newBookingId,
+            userId,
+            service_slug: serviceSlug,
+            date,
+            time: timeHm,
+            active_slot_count: activeSlotCount,
+            cluster_size: race.clusterSize,
+            cluster_start: race.clusterStart,
+            cluster_end: race.clusterEnd,
+          },
+        });
+      }
+    }
+
+    void logSystemEvent({
+      level: "info",
+      source: "admin_booking_create",
+      message: "admin_monthly_booking_created",
+      context: {
+        bookingId: newBookingId,
+        userId,
+        schedule_type: scheduleType,
+        admin_id: auth.userId,
+      },
+    });
+    if (force) {
+      void logSystemEvent({
+        level: "info",
+        source: "admin_booking_create",
+        message: "admin_booking_force_override_used",
+        context: {
+          bookingId: newBookingId,
+          userId,
+          admin_id: auth.userId,
+          mode: "monthly",
+          service_slug: serviceSlug,
+          date,
+          time: timeHm,
+          override_reason: overrideReason.length > 0 ? overrideReason : null,
+        },
+      });
+    }
+
+    const monthlyBody: Record<string, unknown> = {
+      ok: true,
+      mode: "monthly",
+      message: "Booking created (billed monthly)",
+      bookingId: newBookingId,
+      monthly_invoice_id: (row as { monthly_invoice_id?: string | null }).monthly_invoice_id ?? null,
+      amount_paid_cents: amountPaidCents,
+    };
+    if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 200, monthlyBody);
+    return NextResponse.json(monthlyBody);
+  }
+
+  if (billingType !== "per_booking") {
+    return bail(NextResponse.json({ error: "Unsupported billing_type on profile." }, { status: 400 }));
+  }
+
+  // Per-booking / Paystack: intentionally no post-insert race cleanup; rely on idempotency + duplicate pre-check.
+  // If duplicates slip through after payment, reconcile Paystack before deleting rows.
+
+  const { data: profPaystackGate, error: profGateErr } = await admin
+    .from("user_profiles")
+    .select("billing_type")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profGateErr) {
+    await reportOperationalIssue("error", "api/admin/bookings POST paystack_gate", profGateErr.message);
+    return bail(NextResponse.json({ error: profGateErr.message }, { status: 500 }));
+  }
+  const gateBilling = String((profPaystackGate as { billing_type?: string } | null)?.billing_type ?? "per_booking")
+    .trim()
+    .toLowerCase();
+  if (gateBilling === "monthly") {
+    return bail(
+      NextResponse.json(
+        {
+          error:
+            "This customer is on monthly billing — Paystack checkout is disabled. Refresh the customer card and try again.",
+        },
+        { status: 409 },
+      ),
+    );
+  }
+
+  let locked: Record<string, unknown>;
+  try {
+    locked = buildAdminPaystackLockedPayload({
+      serviceId,
+      dateYmd: date,
+      timeHm,
+      location,
+      finalPriceZar: totalPaidZar,
+    });
+  } catch (e) {
+    return bail(
+      NextResponse.json({ error: e instanceof Error ? e.message : "Invalid checkout lock." }, { status: 400 }),
+    );
+  }
+
+  const paystackBody: Record<string, unknown> = {
+    email: customerEmail,
+    locked,
+    relaxedLockValidation: true,
+    tip: 0,
+  };
+
+  const paystackResult = await processPaystackInitializeBody(paystackBody, {
+    adminTrustedCustomerUserId: userId,
+    ...(force ? { adminSlotFlags: { slotDuplicateExempt: true, adminForceSlotOverride: true } } : {}),
+  });
+  if (!paystackResult.ok) {
+    let existing_booking_id: string | null = null;
+    let existing_booking_created_at: string | null = null;
+    if (paystackResult.duplicateSlot) {
+      const { data: dupPay } = await applyActiveAdminBookingSlotFilters(
+        admin.from("bookings").select("id, created_at"),
+        { userId, date, timeHm, serviceSlug },
+      ).limit(1);
+      const ex = dupPay?.[0] as { id: string; created_at?: string | null } | undefined;
+      if (ex?.id) existing_booking_id = ex.id;
+      if (typeof ex?.created_at === "string") existing_booking_created_at = ex.created_at;
+    }
+    return bail(
+      NextResponse.json(
+        {
+          error: paystackResult.error,
+          ...(paystackResult.errorCode != null ? { errorCode: paystackResult.errorCode } : {}),
+          ...(paystackResult.duplicateSlot
+            ? {
+                duplicate: true,
+                existing_booking_id,
+                existing_booking_created_at,
+              }
+            : {}),
+        },
+        { status: paystackResult.status },
+      ),
+    );
+  }
+
+  const finalized = await finalizeAdminPaystackCheckout({
+    admin,
+    adminUserId: auth.userId,
+    result: paystackResult,
+    locked,
+    notificationMode: "chain_plus_email",
+  });
+  if (!finalized.ok) {
+    return bail(NextResponse.json({ error: finalized.error }, { status: 500 }));
+  }
+
+  const perBody: Record<string, unknown> = {
+    ok: true,
+    mode: "per_booking",
+    message: "Payment link sent",
+    bookingId: paystackResult.bookingId,
+    authorizationUrl: paystackResult.authorizationUrl,
+    reference: paystackResult.reference,
+    payment_link_expires_at: finalized.expiresAt,
+    payment_link_ttl_hours: paymentLinkTtlHours,
+    amount_paid_cents: amountPaidCents,
+  };
+  if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 200, perBody);
+  if (force && paystackResult.bookingId) {
+    void logSystemEvent({
+      level: "info",
+      source: "admin_booking_create",
+      message: "admin_booking_force_override_used",
+      context: {
+        bookingId: paystackResult.bookingId,
+        userId,
+        admin_id: auth.userId,
+        mode: "per_booking",
+        service_slug: serviceSlug,
+        date,
+        time: timeHm,
+        override_reason: overrideReason.length > 0 ? overrideReason : null,
+      },
+    });
+  }
+  return NextResponse.json(perBody);
 }

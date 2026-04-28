@@ -32,8 +32,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Outbound WhatsApp is restricted to cleaner operations only (enforced at runtime + call sites). */
-export type MetaWhatsAppRecipientRole = "cleaner";
+/** `cleaner` = dispatch/job flows; `customer` = ops-only (e.g. invoice collection) — still requires Cloud API config. */
+export type MetaWhatsAppRecipientRole = "cleaner" | "customer";
 
 export type MetaWhatsAppDeliveryResult = {
   ok: boolean;
@@ -50,9 +50,9 @@ export type MetaWhatsAppDeliveryLogContext = {
   messageType: "text" | "template";
 };
 
-function assertMetaWhatsAppCleanerOnly(role: MetaWhatsAppRecipientRole): void {
-  if (role !== "cleaner") {
-    throw new Error("WhatsApp is restricted to cleaners only");
+function assertMetaWhatsAppRecipientAllowed(role: MetaWhatsAppRecipientRole): void {
+  if (role !== "cleaner" && role !== "customer") {
+    throw new Error("Invalid WhatsApp recipient role");
   }
 }
 
@@ -255,7 +255,7 @@ async function emitMetaDeliveryAudit(
 
 /**
  * Meta Cloud API outbound send: digits-only `to`, 429 retries, optional template fallback outside 24h window.
- * `recipientRole` must be `"cleaner"` — customer/admin WhatsApp is not permitted (throws).
+ * `recipientRole`: `"cleaner"` (dispatch) or `"customer"` (invoice / collection messages).
  */
 export async function sendViaMetaWhatsApp(params: {
   phone: string;
@@ -264,7 +264,7 @@ export async function sendViaMetaWhatsApp(params: {
   /** When set, success/failure is written via {@link logWhatsAppEvent} + `whatsapp_logs`. */
   deliveryLog?: MetaWhatsAppDeliveryLogContext;
 }): Promise<MetaWhatsAppDeliveryResult> {
-  assertMetaWhatsAppCleanerOnly(params.recipientRole);
+  assertMetaWhatsAppRecipientAllowed(params.recipientRole);
   const { token, phoneNumberId } = assertWhatsAppCloudConfigured();
 
   const toDigits = metaWhatsAppToDigits(params.phone);
@@ -400,7 +400,7 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
   recipientRole: MetaWhatsAppRecipientRole;
   deliveryLog?: MetaWhatsAppDeliveryLogContext;
 }): Promise<MetaWhatsAppDeliveryResult> {
-  assertMetaWhatsAppCleanerOnly(params.recipientRole);
+  assertMetaWhatsAppRecipientAllowed(params.recipientRole);
   let token: string;
   let phoneNumberId: string;
   try {

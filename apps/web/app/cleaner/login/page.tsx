@@ -53,7 +53,6 @@ export default function CleanerLoginPage() {
         return;
       }
     }
-    localStorage.setItem("cleaner_id", json.cleanerId);
     const redirect = searchParams.get("redirect")?.trim();
     const target =
       redirect && redirect.startsWith("/") && redirect.startsWith("/cleaner") ? redirect : "/cleaner/dashboard";

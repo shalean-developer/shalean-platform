@@ -7,6 +7,7 @@ import {
   Bell,
   CalendarDays,
   CreditCard,
+  FileText,
   Gift,
   LayoutDashboard,
   LogOut,
@@ -41,6 +42,7 @@ function displayName(email: string | undefined, fullName: string | undefined): s
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/bookings", label: "Bookings", icon: CalendarDays },
+  { href: "/dashboard/invoices", label: "Invoices", icon: FileText },
   { href: "/dashboard/book", label: "Book cleaning", icon: Sparkles },
   { href: "/dashboard/addresses", label: "Addresses", icon: MapPin },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },

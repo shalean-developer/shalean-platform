@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useBookings } from "@/hooks/useBookings";
 import { useReviews } from "@/hooks/useReviews";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { BookingCard } from "@/components/dashboard/booking-card";
+import { CustomerBookingsTable } from "@/components/dashboard/customer-bookings-table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import { DashboardPageSkeleton } from "@/components/dashboard/dashboard-skeleton
 export default function DashboardBookingsPage() {
   const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
   const { reviews, loading: revLoading } = useReviews();
+  const [view, setView] = useState<"cards" | "table">("cards");
 
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
@@ -43,8 +45,14 @@ export default function DashboardBookingsPage() {
         .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
     [bookings],
   );
-  const completed = useMemo(() => bookings.filter((b) => b.status === "completed"), [bookings]);
-  const cancelled = useMemo(() => bookings.filter((b) => b.status === "cancelled" || b.status === "failed"), [bookings]);
+
+  const past = useMemo(
+    () =>
+      [...bookings]
+        .filter((b) => !isUpcomingBookingRow(b))
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
+    [bookings],
+  );
 
   if (loading) {
     return <DashboardPageSkeleton />;
@@ -52,7 +60,7 @@ export default function DashboardBookingsPage() {
 
   return (
     <div>
-      <PageHeader title="My Bookings" description="Track, reschedule, or rebook your cleans." />
+      <PageHeader title="My Bookings" description="Upcoming visits and past cleans on your monthly plan." />
 
       {error ? (
         <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
@@ -85,21 +93,29 @@ export default function DashboardBookingsPage() {
         </div>
       ) : null}
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant={view === "cards" ? "default" : "outline"} className="rounded-xl" onClick={() => setView("cards")}>
+          Cards
+        </Button>
+        <Button type="button" size="sm" variant={view === "table" ? "default" : "outline"} className="rounded-xl" onClick={() => setView("table")}>
+          Table
+        </Button>
+      </div>
+
       <Tabs defaultValue="upcoming" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto">
+        <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
           <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+          <TabsTrigger value="past">Past</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upcoming">
+        <TabsContent value="upcoming" className="mt-4">
           {upcoming.length === 0 ? (
             <EmptyState
               icon={CalendarDays}
               title="No upcoming bookings"
-              description="Schedule a clean and it will appear here with reminders and cleaner updates."
+              description="Schedule a clean from Book cleaning — it will show here with reminders and cleaner updates."
             />
-          ) : (
+          ) : view === "cards" ? (
             <ul className="space-y-4">
               {upcoming.map((b) => (
                 <li key={b.id}>
@@ -107,19 +123,21 @@ export default function DashboardBookingsPage() {
                 </li>
               ))}
             </ul>
+          ) : (
+            <CustomerBookingsTable bookings={upcoming} />
           )}
         </TabsContent>
 
-        <TabsContent value="completed">
-          {completed.length === 0 ? (
+        <TabsContent value="past" className="mt-4">
+          {past.length === 0 ? (
             <EmptyState
               icon={CalendarDays}
-              title="No completed cleans yet"
-              description="After your first visit, you'll see history and can leave a review."
+              title="No past bookings yet"
+              description="Completed and cancelled visits appear here."
             />
-          ) : (
+          ) : view === "cards" ? (
             <ul className="space-y-4">
-              {completed.map((b) => (
+              {past.map((b) => (
                 <li key={b.id}>
                   <BookingCard
                     booking={b}
@@ -130,24 +148,8 @@ export default function DashboardBookingsPage() {
                 </li>
               ))}
             </ul>
-          )}
-        </TabsContent>
-
-        <TabsContent value="cancelled">
-          {cancelled.length === 0 ? (
-            <EmptyState
-              icon={CalendarDays}
-              title="No cancelled bookings"
-              description="Cancelled visits show here for your records."
-            />
           ) : (
-            <ul className="space-y-4">
-              {cancelled.map((b) => (
-                <li key={b.id}>
-                  <BookingCard booking={b} onCancel={cancelBooking} onReschedule={rescheduleBooking} />
-                </li>
-              ))}
-            </ul>
+            <CustomerBookingsTable bookings={past} />
           )}
         </TabsContent>
       </Tabs>

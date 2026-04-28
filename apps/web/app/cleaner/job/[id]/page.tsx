@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { bookingRowToMobileView, deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
 import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
@@ -29,7 +30,7 @@ export default function CleanerJobDetailPage() {
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers || !id) {
       setError("Not signed in.");
       setRow(null);
@@ -37,7 +38,7 @@ export default function CleanerJobDetailPage() {
       return;
     }
     if (!silent) setLoading(true);
-    const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, { headers });
+    const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, { headers });
     if (!silent) setLoading(false);
     const json = (await res.json()) as { job?: CleanerBookingRow; error?: string };
     if (!res.ok) {
@@ -91,7 +92,7 @@ export default function CleanerJobDetailPage() {
 
   const postJobAction = useCallback(
     async (action: CleanerJobAction) => {
-      const headers = getCleanerIdHeaders();
+      const headers = await getCleanerAuthHeaders();
       if (!headers || !id) {
         setActionMsg("Not signed in.");
         return;
@@ -99,7 +100,7 @@ export default function CleanerJobDetailPage() {
       setActionMsg(null);
       setActing(true);
       try {
-        const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, {
+        const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify({ action }),
@@ -256,10 +257,25 @@ export default function CleanerJobDetailPage() {
                 <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">{view.time}</p>
               </div>
             </div>
-            {view.notes ? (
+            {view.operationalNoteChips.length > 0 || view.notes ? (
               <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/40">
                 <p className="text-xs font-semibold uppercase text-zinc-500">Notes</p>
-                <p className="mt-1 text-zinc-800 dark:text-zinc-100">{view.notes}</p>
+                {view.operationalNoteChips.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {view.operationalNoteChips.map((c) => (
+                      <Badge
+                        key={c}
+                        variant="outline"
+                        className="border-amber-300/80 bg-amber-50 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                      >
+                        {c}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+                {view.notes ? (
+                  <p className="mt-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-100">{view.notes}</p>
+                ) : null}
               </div>
             ) : null}
             {actionMsg ? (

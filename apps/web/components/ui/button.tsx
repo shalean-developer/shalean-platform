@@ -3,7 +3,7 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "default" | "outline" | "ghost" | "secondary";
+  variant?: "default" | "outline" | "ghost" | "secondary" | "destructive";
   size?: "default" | "sm" | "lg" | "xl";
   asChild?: boolean;
 };
@@ -14,6 +14,7 @@ const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
     "border border-zinc-300 bg-transparent hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800",
   ghost: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
   secondary: "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200",
+  destructive: "bg-red-600 text-white hover:bg-red-700 shadow-sm dark:bg-red-600 dark:hover:bg-red-500",
 };
 
 const sizes: Record<NonNullable<ButtonProps["size"]>, string> = {

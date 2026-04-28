@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { checkoutPriceLinesFromPersisted, priceZarFromPersisted } from "@/lib/dashboard/bookingUtils";
@@ -111,13 +112,13 @@ export default function CleanerJobsPage() {
     const { data: sessionData } = await sb.auth.getSession();
     const token = sessionData.session?.access_token;
     if (!token) {
-      router.replace("/auth/login?next=/cleaner/jobs");
+      router.replace("/cleaner/login?next=/cleaner/jobs");
       return;
     }
     const [jobsRes, offersRes, meRes] = await Promise.all([
-      fetch("/api/cleaner/jobs", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/cleaner/offers", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/cleaner/me", { headers: { Authorization: `Bearer ${token}` } }),
+      cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers: { Authorization: `Bearer ${token}` } }),
+      cleanerAuthenticatedFetch("/api/cleaner/offers", { headers: { Authorization: `Bearer ${token}` } }),
+      cleanerAuthenticatedFetch("/api/cleaner/me", { headers: { Authorization: `Bearer ${token}` } }),
     ]);
     const j = (await jobsRes.json()) as { jobs?: JobRow[]; error?: string };
     const o = (await offersRes.json()) as { offers?: OfferRow[]; error?: string };
@@ -225,7 +226,7 @@ export default function CleanerJobsPage() {
       setActingId(null);
       return;
     }
-    const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
+    const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
@@ -251,7 +252,7 @@ export default function CleanerJobsPage() {
       return;
     }
     const resolvedUx = uxVariant ?? offers.find((o) => o.id === offerId)?.ux_variant;
-    const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
+    const res = await cleanerAuthenticatedFetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(action === "accept" ? buildCleanerOfferAcceptBody(resolvedUx) : {}),

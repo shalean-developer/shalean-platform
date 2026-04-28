@@ -34,9 +34,34 @@ export function resolveAuthEmailsForCleaner(row: {
   return out;
 }
 
-/** Resolve an auth user id by exact email match (paginated listUsers). */
+/** Resolve an auth user id by exact email. Uses DB RPC on `auth.users` (reliable); then bookings; then listUsers. */
 export async function findAuthUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
-  const needle = email.toLowerCase();
+  const needle = email.trim().toLowerCase();
+  if (!needle) return null;
+
+  const { data: rpcData, error: rpcErr } = await admin.rpc("resolve_auth_user_id_by_email", { p_email: needle });
+  if (!rpcErr && rpcData != null && typeof rpcData === "string" && /^[0-9a-f-]{36}$/i.test(rpcData)) {
+    return rpcData;
+  }
+  if (rpcErr) {
+    log("resolve_auth_user_id_by_email failed", rpcErr.message);
+  }
+
+  const { data: bookingRow } = await admin
+    .from("bookings")
+    .select("user_id")
+    .eq("customer_email", needle)
+    .not("user_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const fromBooking = bookingRow && typeof (bookingRow as { user_id?: unknown }).user_id === "string"
+    ? (bookingRow as { user_id: string }).user_id
+    : null;
+  if (fromBooking && /^[0-9a-f-]{36}$/i.test(fromBooking)) {
+    return fromBooking;
+  }
+
   for (let page = 1; page < 40; page += 1) {
     const res = await admin.auth.admin.listUsers({ page, perPage: 1000 });
     if (res.error) {

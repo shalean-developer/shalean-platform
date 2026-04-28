@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, Clock, MapPin, Banknote } from "lucide-react";
 import type { DashboardBooking } from "@/lib/dashboard/types";
 import { formatBookingWhen } from "@/lib/dashboard/bookingUtils";
+import { filterBookableTimeSlots, johannesburgTodayYmd, lastYmdInSameMonthAs } from "@/lib/dashboard/bookingSlotTimes";
+import { customerCancelBookingHint } from "@/lib/dashboard/customerCancelCopy";
+import { rescheduleCrossMonthBlocked } from "@/lib/dashboard/dashboardRescheduleGuard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/dashboard/status-badge";
+import { CustomerBookingStatusBadge } from "@/components/dashboard/customer-booking-status-badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +54,23 @@ export function BookingCard({
 
   const modifiable = canCustomerModify(booking);
 
+  const rescheduleSlots = useMemo(() => filterBookableTimeSlots(resDate), [resDate]);
+  const crossMonthBlocked = useMemo(() => rescheduleCrossMonthBlocked(booking, resDate), [booking, resDate]);
+
+  useEffect(() => {
+    if (!rescheduleOpen) return;
+    const slots = filterBookableTimeSlots(resDate);
+    const t = resTime.trim().slice(0, 5);
+    if (slots.length > 0 && !slots.includes(t)) {
+      setResTime(slots[0] ?? "09:00");
+    }
+  }, [rescheduleOpen, resDate, resTime]);
+
+  const rescheduleSaveDisabled =
+    crossMonthBlocked || rescheduleSlots.length === 0 || !rescheduleSlots.includes(resTime.trim().slice(0, 5));
+
+  const invoiceClosed = Boolean((booking.raw.monthly_invoices as { is_closed?: boolean } | null | undefined)?.is_closed);
+
   async function confirmCancel() {
     if (!onCancel) return;
     setBusy(true);
@@ -65,8 +86,17 @@ export function BookingCard({
 
   async function confirmReschedule() {
     if (!onReschedule) return;
+    if (crossMonthBlocked) {
+      toast("Bookings can’t be moved to another billing month.", "error");
+      return;
+    }
+    const tNorm = resTime.trim().slice(0, 5);
+    if (!rescheduleSlots.includes(tNorm)) {
+      toast("Please pick a valid time with enough notice.", "error");
+      return;
+    }
     setBusy(true);
-    const r = await onReschedule(booking.id, resDate.trim(), resTime.trim());
+    const r = await onReschedule(booking.id, resDate.trim(), tNorm);
     setBusy(false);
     if (r.ok) {
       toast("Booking rescheduled.", "success");
@@ -95,7 +125,7 @@ export function BookingCard({
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <StatusBadge status={booking.status} />
+              <CustomerBookingStatusBadge booking={booking} />
               <p className="flex items-center gap-1 text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
                 <Banknote className="h-4 w-4 text-blue-600" aria-hidden />
                 R {booking.priceZar.toLocaleString("en-ZA")}
@@ -141,6 +171,8 @@ export function BookingCard({
                   variant="outline"
                   size="lg"
                   className="min-h-12 flex-1 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 sm:flex-none"
+                  disabled={invoiceClosed}
+                  title={invoiceClosed ? "This billing month is closed online. Contact support to change this visit." : undefined}
                   onClick={() => setCancelOpen(true)}
                 >
                   Cancel
@@ -161,7 +193,8 @@ export function BookingCard({
           <DialogHeader>
             <DialogTitle>Cancel this booking?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">This will mark your visit as cancelled. You may need to contact support for refunds depending on timing.</p>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">{customerCancelBookingHint(booking.raw)}</p>
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">This will mark your visit as cancelled.</p>
           <DialogFooter>
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setCancelOpen(false)} disabled={busy}>
               Keep booking
@@ -181,18 +214,49 @@ export function BookingCard({
           <div className="grid gap-3 py-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor={`rd-${booking.id}`}>Date</Label>
-              <Input id={`rd-${booking.id}`} type="date" value={resDate} onChange={(e) => setResDate(e.target.value)} />
+              <Input
+                id={`rd-${booking.id}`}
+                type="date"
+                min={johannesburgTodayYmd()}
+                value={resDate}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (rescheduleCrossMonthBlocked(booking, v)) {
+                    setResDate(lastYmdInSameMonthAs(booking.date));
+                  } else {
+                    setResDate(v);
+                  }
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor={`rt-${booking.id}`}>Time</Label>
-              <Input id={`rt-${booking.id}`} type="time" value={resTime} onChange={(e) => setResTime(e.target.value)} />
+              <Select id={`rt-${booking.id}`} value={resTime.trim().slice(0, 5)} onChange={(e) => setResTime(e.target.value)} className="w-full">
+                {rescheduleSlots.length === 0 ? (
+                  <option value="">No times left</option>
+                ) : (
+                  rescheduleSlots.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))
+                )}
+              </Select>
             </div>
           </div>
+          {crossMonthBlocked ? (
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Bookings can&apos;t be moved to another billing month. Pick a date in {booking.date.slice(0, 7)} or contact support.
+            </p>
+          ) : null}
+          {rescheduleSlots.length === 0 && !crossMonthBlocked ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">No times available on this day with enough notice. Try another date.</p>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setRescheduleOpen(false)} disabled={busy}>
               Close
             </Button>
-            <Button type="button" className="rounded-xl" onClick={() => void confirmReschedule()} disabled={busy}>
+            <Button type="button" className="rounded-xl" onClick={() => void confirmReschedule()} disabled={busy || rescheduleSaveDisabled}>
               {busy ? "Saving…" : "Save new time"}
             </Button>
           </DialogFooter>

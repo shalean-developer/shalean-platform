@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { getCleanerIdHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import {
@@ -71,7 +72,7 @@ export function useCleanerMobileWorkspace() {
   }, []);
 
   const load = useCallback(async () => {
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers) {
       setError("Not signed in.");
       setRows([]);
@@ -82,9 +83,9 @@ export function useCleanerMobileWorkspace() {
     }
     const seq = ++loadSeq.current;
     const [jobsRes, meRes, offersRes] = await Promise.all([
-      fetch("/api/cleaner/jobs", { headers }),
-      fetch("/api/cleaner/me", { headers }),
-      fetch("/api/cleaner/offers", { headers }),
+      cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers }),
+      cleanerAuthenticatedFetch("/api/cleaner/me", { headers }),
+      cleanerAuthenticatedFetch("/api/cleaner/offers", { headers }),
     ]);
     if (seq !== loadSeq.current) return;
 
@@ -116,8 +117,9 @@ export function useCleanerMobileWorkspace() {
 
   useEffect(() => {
     const sb = getSupabaseBrowser();
-    const id = typeof window !== "undefined" ? localStorage.getItem("cleaner_id")?.trim() : "";
-    if (!sb || !id) return;
+    /** DB `cleaners.id` — Realtime filters must use this, not Supabase auth uid. */
+    const cleanerId = cleaner?.id?.trim();
+    if (!sb || !cleanerId) return;
 
     let cancelled = false;
     let chBookings: ReturnType<typeof sb.channel> | null = null;
@@ -127,10 +129,10 @@ export function useCleanerMobileWorkspace() {
     void sb.auth.getSession().then(({ data: { session } }) => {
       if (cancelled || !session?.user) return;
 
-      chBookings = sb.channel(`cleaner-mobile-bookings-${id}`);
+      chBookings = sb.channel(`cleaner-mobile-bookings-${cleanerId}`);
       chBookings.on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${id}` },
+        { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${cleanerId}` },
         () => void load(),
       );
       for (const tid of teamIdsForRealtime) {
@@ -146,19 +148,19 @@ export function useCleanerMobileWorkspace() {
       });
 
       chOffers = sb
-        .channel(`cleaner-mobile-offers-${id}`)
+        .channel(`cleaner-mobile-offers-${cleanerId}`)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${id}` },
+          { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${cleanerId}` },
           () => void load(),
         )
         .subscribe();
 
       chTeamMembers = sb
-        .channel(`cleaner-mobile-team-members-${id}`)
+        .channel(`cleaner-mobile-team-members-${cleanerId}`)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${id}` },
+          { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${cleanerId}` },
           () => void load(),
         )
         .subscribe();
@@ -170,16 +172,16 @@ export function useCleanerMobileWorkspace() {
       if (chOffers) void sb.removeChannel(chOffers);
       if (chTeamMembers) void sb.removeChannel(chTeamMembers);
     };
-  }, [load, teamIdsForRealtime]);
+  }, [load, teamIdsForRealtime, cleaner?.id]);
 
   const postJobAction = useCallback(async (bookingId: string, action: CleanerJobAction) => {
     const o = assertOnline();
     if (!o.ok) return o;
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers) return { ok: false as const, error: "Not signed in." };
     setActingId(bookingId);
     try {
-      const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
+      const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
@@ -199,12 +201,12 @@ export function useCleanerMobileWorkspace() {
     async (offerId: string, action: "accept" | "decline", uxVariant?: string | null) => {
       const o = assertOnline();
       if (!o.ok) return o;
-      const headers = getCleanerIdHeaders();
+      const headers = await getCleanerAuthHeaders();
       if (!headers) return { ok: false as const, error: "Not signed in." };
       setOfferActingId(offerId);
       const resolvedUx = uxVariant ?? offers.find((x) => x.id === offerId)?.ux_variant;
       try {
-        const res = await fetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
+        const res = await cleanerAuthenticatedFetch(`/api/cleaner/offers/${encodeURIComponent(offerId)}/${action}`, {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify(action === "accept" ? buildCleanerOfferAcceptBody(resolvedUx) : {}),
@@ -225,10 +227,10 @@ export function useCleanerMobileWorkspace() {
   const setAvailability = useCallback(async (next: boolean) => {
     const o = assertOnline();
     if (!o.ok) return o;
-    const headers = getCleanerIdHeaders();
+    const headers = await getCleanerAuthHeaders();
     if (!headers) return { ok: false as const, error: "Not signed in." };
     try {
-      const res = await fetch("/api/cleaner/me", {
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/me", {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ is_available: next }),

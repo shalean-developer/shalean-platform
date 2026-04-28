@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function CleanerLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -12,18 +13,41 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const onLogin = pathname?.startsWith("/cleaner/login");
-      const cleanerId = localStorage.getItem("cleaner_id");
-      setIsLoggedIn(!onLogin && Boolean(cleanerId));
+    const onLogin = pathname?.startsWith("/cleaner/login");
+    if (onLogin) {
+      setIsLoggedIn(false);
       setChecking(false);
-    }, 0);
+      return;
+    }
 
-    return () => window.clearTimeout(timer);
-  }, [pathname, router]);
+    const sb = getSupabaseBrowser();
+    if (!sb) {
+      setIsLoggedIn(false);
+      setChecking(false);
+      return;
+    }
 
-  function handleCleanerLogout() {
-    localStorage.removeItem("cleaner_id");
+    const sync = () => {
+      void sb.auth.getSession().then(({ data }) => {
+        setIsLoggedIn(Boolean(data.session?.access_token));
+        setChecking(false);
+      });
+    };
+    sync();
+    const { data: sub } = sb.auth.onAuthStateChange(() => {
+      sync();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [pathname]);
+
+  async function handleCleanerLogout() {
+    try {
+      localStorage.removeItem("cleaner_id");
+    } catch {
+      /* ignore */
+    }
+    const sb = getSupabaseBrowser();
+    await sb?.auth.signOut().catch(() => {});
     router.push("/");
     router.refresh();
   }
@@ -78,7 +102,7 @@ export default function CleanerLayout({ children }: { children: ReactNode }) {
               Site
             </Link>
             {isLoggedIn ? (
-              <button type="button" onClick={handleCleanerLogout} className="text-zinc-700 dark:text-zinc-300">
+              <button type="button" onClick={() => void handleCleanerLogout()} className="text-zinc-700 dark:text-zinc-300">
                 Logout
               </button>
             ) : (

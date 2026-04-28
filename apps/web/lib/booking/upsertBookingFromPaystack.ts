@@ -9,6 +9,7 @@ import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestClea
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
@@ -243,6 +244,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     }
   }
 
+  const serviceSlugForRow =
+    locked?.service != null && String(locked.service).trim()
+      ? adminBookingServiceSlug(String(locked.service))
+      : null;
+
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -256,6 +262,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     service_fee_cents: serviceFeeCents,
     currency: input.currency || "ZAR",
     booking_snapshot: bookingSnapshotMerged,
+    ...(serviceSlugForRow ? { service_slug: serviceSlugForRow } : {}),
     status: "pending",
     dispatch_status: "searching",
     is_test: isTest,

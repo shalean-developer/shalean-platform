@@ -1,10 +1,14 @@
 import { processLock } from "@supabase/auth-js";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let cached: SupabaseClient | null | undefined;
 
 /**
  * Browser Supabase client (anon key). Returns null if env is missing.
+ *
+ * Uses `@supabase/ssr` so the session is stored in cookies — required for
+ * `middleware.ts` (cleaner route protection + refresh) to see auth on navigations.
  *
  * In development, auth uses {@link processLock} instead of the Web Locks API
  * (`navigator.locks` + `steal`). Next.js Fast Refresh / Strict Mode otherwise
@@ -20,7 +24,7 @@ export function getSupabaseBrowser(): SupabaseClient | null {
     cached = null;
     return null;
   }
-  cached = createClient(url, key, {
+  cached = createBrowserClient(url, key, {
     auth:
       process.env.NODE_ENV === "development"
         ? {
