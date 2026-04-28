@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Star } from "lucide-react";
 import { useReviews } from "@/hooks/useReviews";
 import { useBookings } from "@/hooks/useBookings";
@@ -31,7 +32,8 @@ function StarsRow({ value, onChange }: { value: number; onChange: (n: number) =>
   );
 }
 
-export default function DashboardReviewsPage() {
+function DashboardReviewsInner() {
+  const searchParams = useSearchParams();
   const toast = useDashboardToast();
   const { reviews, loading, error, refetch, submitReview } = useReviews();
   const { bookings, loading: bookingsLoading } = useBookings();
@@ -40,6 +42,7 @@ export default function DashboardReviewsPage() {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [bookingId, setBookingId] = useState<string>("");
+  const [openedFromQuery, setOpenedFromQuery] = useState(false);
 
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
@@ -50,6 +53,16 @@ export default function DashboardReviewsPage() {
       ),
     [bookings, reviewedIds],
   );
+
+  useEffect(() => {
+    if (openedFromQuery || bookingsLoading || loading) return;
+    const b = searchParams.get("booking")?.trim() ?? "";
+    if (!b) return;
+    if (!reviewable.some((x) => x.id === b)) return;
+    setBookingId(b);
+    setOpen(true);
+    setOpenedFromQuery(true);
+  }, [searchParams, reviewable, bookingsLoading, loading, openedFromQuery]);
 
   async function onSubmit() {
     if (!bookingId) {
@@ -176,5 +189,13 @@ export default function DashboardReviewsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function DashboardReviewsPage() {
+  return (
+    <Suspense fallback={<DashboardListSkeleton rows={3} />}>
+      <DashboardReviewsInner />
+    </Suspense>
   );
 }

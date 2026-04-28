@@ -153,18 +153,6 @@ function mapLocation(row: DbRow, index: number): HomeLocation | null {
   };
 }
 
-function mapReview(row: DbRow, index: number): HomeReview | null {
-  const quote = text(row, ["quote", "comment", "body", "review"]);
-  const rating = numberValue(row, ["rating", "stars", "score"]);
-  if (!quote || !rating) return null;
-  return {
-    id: rowId(row, `review-${index}`),
-    rating: Math.max(1, Math.min(5, rating)),
-    quote,
-    author: text(row, ["author", "customer_name", "name"]),
-  };
-}
-
 function mapFaq(row: DbRow, index: number): HomeFaq | null {
   const question = text(row, ["question", "q", "title"]);
   const answer = text(row, ["answer", "a", "body", "content"]);
@@ -177,11 +165,10 @@ function mapFaq(row: DbRow, index: number): HomeFaq | null {
 }
 
 export const getHomePageData = cache(async (): Promise<HomePageData> => {
-  const [servicesRows, pricingTierRows, locationsRows, reviewsRows, faqRows] = await Promise.all([
+  const [servicesRows, pricingTierRows, locationsRows, faqRows] = await Promise.all([
     readRows("services"),
     readRows("pricing_tiers"),
     readRows("locations"),
-    readRows("reviews"),
     readRows("faqs"),
   ]);
 
@@ -189,7 +176,7 @@ export const getHomePageData = cache(async (): Promise<HomePageData> => {
     services: servicesRows.map(mapService).filter((row): row is HomeService => Boolean(row)),
     pricingTiers: pricingTierRows.map(mapPricingTier).filter((row): row is HomePricingTier => Boolean(row)),
     locations: locationsRows.map(mapLocation).filter((row): row is HomeLocation => Boolean(row)).slice(0, 12),
-    reviews: reviewsRows.map(mapReview).filter((row): row is HomeReview => Boolean(row)).slice(0, 6),
+    reviews: [],
     faqs: faqRows.map(mapFaq).filter((row): row is HomeFaq => Boolean(row)),
   };
 });

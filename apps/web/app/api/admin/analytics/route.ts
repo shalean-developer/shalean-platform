@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { analyzeDispatchExperimentFromOffers } from "@/lib/admin/experimentSummaryFromOffers";
 import { isAdmin } from "@/lib/auth/admin";
 import { getDemandSupplySnapshot } from "@/lib/pricing/demandSupplySurge";
+import { computeReviewPromptConversionRate } from "@/lib/reviews/reviewFunnelMetrics";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -97,6 +98,18 @@ export async function GET(request: Request) {
   if (offersRes.error) return NextResponse.json({ error: offersRes.error.message }, { status: 500 });
   if (cleanersRes.error) return NextResponse.json({ error: cleanersRes.error.message }, { status: 500 });
   if (appsRes.error) return NextResponse.json({ error: appsRes.error.message }, { status: 500 });
+
+  const since7dIso = new Date(Date.now() - 7 * 86400000).toISOString();
+  const untilIso = new Date().toISOString();
+  const [failedJobsCountRes, lowRatedCleanersRes, reviewFunnelRes] = await Promise.all([
+    admin.from("failed_jobs").select("id", { count: "exact", head: true }),
+    admin
+      .from("cleaners")
+      .select("id", { count: "exact", head: true })
+      .lt("rating", 3.5)
+      .gte("review_count", 5),
+    computeReviewPromptConversionRate(admin, since7dIso, untilIso),
+  ]);
 
   const bookings = (bookingsRes.data ?? []) as BookingRow[];
   const offers = (offersRes.data ?? []) as OfferRow[];
@@ -194,6 +207,8 @@ export async function GET(request: Request) {
 
   const experiment = analyzeDispatchExperimentFromOffers(offers);
 
+  const unassignableBookings = bookings.filter((b) => String(b.dispatch_status ?? "").toLowerCase() === "failed").length;
+
   return NextResponse.json({
     kpis: {
       revenueToday,
@@ -247,5 +262,12 @@ export async function GET(request: Request) {
     experimentConfidence: experiment.confidence,
     experimentNoClearWinner: experiment.noClearWinner,
     experimentResolvedOfferCount: experiment.resolvedOfferCount,
+    ops: {
+      failedJobsTotal: failedJobsCountRes.count ?? 0,
+      unassignableBookingsInWindow: unassignableBookings,
+      avgDispatchOfferAcceptMinutes: avgAssignMinutes,
+      reviewPromptFunnelLast7d: reviewFunnelRes,
+      cleanersLowRatingFlagCount: lowRatedCleanersRes.count ?? 0,
+    },
   });
 }

@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { BookingStep1State } from "./BookingStep1";
+import { cn } from "@/lib/utils";
 import { getMaxRoomsForService } from "./serviceCategories";
 import { StepperInput } from "./StepperInput";
 
@@ -11,9 +12,17 @@ type HomeDetailsProps = {
   setState: Dispatch<SetStateAction<BookingStep1State>>;
   /** Hide the address field when location was captured on an earlier step. */
   omitLocation?: boolean;
+  /** When true, the “extra rooms” nudge is only shown on desktop (mobile copy lives in the footer insight banner). */
+  foldExtraRoomsIntoFooter?: boolean;
 };
 
-export function HomeDetails({ state, maxRooms, setState, omitLocation = false }: HomeDetailsProps) {
+export function HomeDetails({
+  state,
+  maxRooms,
+  setState,
+  omitLocation = false,
+  foldExtraRoomsIntoFooter = false,
+}: HomeDetailsProps) {
   return (
     <div className="w-full max-w-none space-y-4">
       {!omitLocation ? (
@@ -77,7 +86,12 @@ export function HomeDetails({ state, maxRooms, setState, omitLocation = false }:
       </div>
 
       {state.rooms <= 2 && state.extraRooms === 0 ? (
-        <div className="rounded-xl border border-emerald-200/90 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-emerald-950 dark:border-emerald-900/45 dark:bg-emerald-950/30 dark:text-emerald-50">
+        <div
+          className={cn(
+            "rounded-xl border border-emerald-200/90 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-emerald-950 dark:border-emerald-900/45 dark:bg-emerald-950/30 dark:text-emerald-50",
+            foldExtraRoomsIntoFooter && "hidden lg:block",
+          )}
+        >
           <p className="font-semibold">Have studies, dens, or garages not counted above?</p>
           <p className="mt-1.5 text-emerald-900/95 dark:text-emerald-100/90">
             Add them as <span className="font-medium">Extra</span> rooms so time and slot prices match the job — first extra from{" "}

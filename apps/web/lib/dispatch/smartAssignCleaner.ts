@@ -493,7 +493,7 @@ export async function findSmartDispatchCandidates(
   let cleanersQuery = supabase
     .from("cleaners")
     .select(
-      "id, full_name, rating, jobs_completed, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema",
+      "id, full_name, rating, jobs_completed, review_count, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema, needs_quality_review",
     )
     .neq("status", "offline")
     .in("id", [...eligibleFromWindow]);
@@ -596,6 +596,24 @@ export async function findSmartDispatchCandidates(
   ]);
 
   const rankingByCleaner = buildCleanerRankingWindowStats((terminalRows ?? []) as CleanerTerminalBookingRow[], ids);
+
+  const lastReviewAtByCleaner = new Map<string, number>();
+  if (ids.length) {
+    const { data: revTimeRows } = await supabase
+      .from("reviews")
+      .select("cleaner_id, created_at")
+      .in("cleaner_id", ids)
+      .eq("is_hidden", false)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    for (const raw of revTimeRows ?? []) {
+      const r = raw as { cleaner_id?: string; created_at?: string };
+      const cid = String(r.cleaner_id ?? "");
+      if (!cid || lastReviewAtByCleaner.has(cid)) continue;
+      const t = new Date(String(r.created_at ?? "")).getTime();
+      if (Number.isFinite(t)) lastReviewAtByCleaner.set(cid, t);
+    }
+  }
 
   for (const row of declineRows ?? []) {
     if (!row || typeof row !== "object" || !("cleaner_id" in row)) continue;
@@ -815,6 +833,20 @@ export async function findSmartDispatchCandidates(
       clusterBoost;
 
     score += (perf01 - 0.5) * 6;
+    const reviewCountForRank = Math.max(0, Number((c as { review_count?: number | null }).review_count ?? 0));
+    score += Math.log1p(reviewCountForRank) * 0.05;
+    const lastRevMs = lastReviewAtByCleaner.get(c.id);
+    if (lastRevMs != null && Number.isFinite(lastRevMs)) {
+      const daysSince = (Date.now() - lastRevMs) / (24 * 60 * 60 * 1000);
+      score += Math.exp(-Math.min(Math.max(daysSince, 0), 730) / 100) * 0.06;
+    }
+    const cleanerRatingRow = Number((c as { rating?: number | null }).rating ?? 5);
+    if (cleanerRatingRow < 3.5 && reviewCountForRank >= 5) {
+      score -= 0.12;
+    }
+    if (Boolean((c as { needs_quality_review?: boolean | null }).needs_quality_review)) {
+      score -= 0.22;
+    }
     const scoreBeforeRankingV1 = score;
     score += v1RankingAdjustment;
 

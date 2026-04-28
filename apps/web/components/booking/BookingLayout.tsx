@@ -9,6 +9,7 @@ import { BookingHeader } from "@/components/booking/BookingHeader";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import BookingSummary from "./BookingSummary";
 import { StickyPriceBar, type StickyPlanPriceBreakdown } from "@/components/booking/StickyPriceBar";
+import { BookingFooterInsightBanner, readFooterInsightDismissed } from "@/components/booking/BookingFooterInsightBanner";
 import { bookingCopy } from "@/lib/booking/copy";
 import type { BookingStep1State } from "./useBookingStep1";
 import { cn } from "@/lib/utils";
@@ -64,12 +65,25 @@ type BookingLayoutProps = {
     /** Details step: list + plan-discounted preview (UI only). */
     planPriceBreakdown?: StickyPlanPriceBreakdown | null;
   };
+  /**
+   * When `stickyMobileBar` is set and this is `false`, the wide desktop footer row is hidden
+   * (checkout rail in page content replaces it). Mobile sticky bar is unchanged.
+   */
+  showStickyPriceBarDesktop?: boolean;
+  /** Quote / details mobile: dismissible insight strip stacked above the sticky price bar (full width). */
+  footerInsightBanner?: {
+    variant: "quote" | "details";
+    rooms: number;
+    extraRooms: number;
+  };
   /** Desktop: summary column first (checkout trust layout). */
   summaryColumnFirst?: boolean;
   /** When true, `summaryOverride` / sidebar summary is not shown in the mobile top block (desktop sidebar unchanged). */
   summaryDesktopOnly?: boolean;
   /** Entry step: fixed bottom CTA on small screens + extra main padding (desktop keeps sticky footer). */
   mobileEntryFooter?: boolean;
+  /** Entry step: short trust line shown on the left of the footer row (e.g. social proof). */
+  footerEntryLead?: ReactNode;
 };
 
 export default function BookingLayout({
@@ -95,9 +109,22 @@ export default function BookingLayout({
   summaryColumnFirst = false,
   summaryDesktopOnly = false,
   mobileEntryFooter = false,
+  footerEntryLead,
+  footerInsightBanner,
+  showStickyPriceBarDesktop = true,
 }: BookingLayoutProps) {
   const router = useRouter();
   const { step, handleBack } = useBookingFlow();
+  /** Start true so SSR + first client paint match; sync from sessionStorage after mount only. */
+  const [footerInsightDismissed, setFooterInsightDismissed] = useState(true);
+
+  useEffect(() => {
+    if (!footerInsightBanner) {
+      setFooterInsightDismissed(true);
+      return;
+    }
+    setFooterInsightDismissed(readFooterInsightDismissed(footerInsightBanner.variant));
+  }, [footerInsightBanner?.variant]);
   const onFooterBack = useCallback(() => {
     if (step === "entry") {
       router.push("/");
@@ -113,14 +140,14 @@ export default function BookingLayout({
         onClick={onFooterBack}
         className={cn(
           "flex shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-900",
-          continueVariant === "pay" ? "min-h-14 min-w-14" : "h-12 w-12",
+          continueVariant === "pay" ? "min-h-14 min-w-14" : mobileEntryFooter ? "h-10 w-10 rounded-lg" : "h-12 w-12",
         )}
         aria-label={step === "entry" ? "Back to home" : "Go back"}
       >
         <ArrowLeft className="h-5 w-5" strokeWidth={1.75} aria-hidden />
       </button>
     ),
-    [onFooterBack, step, continueVariant],
+    [onFooterBack, step, continueVariant, mobileEntryFooter],
   );
 
   const showSummary = summaryOverride != null || summaryState != null;
@@ -141,6 +168,8 @@ export default function BookingLayout({
     };
   }, [summarySheetOpen]);
 
+  const hideMobilePricingFootnotes = Boolean(footerInsightBanner && !footerInsightDismissed);
+
   const renderSummary = (embedded?: boolean) => {
     if (summaryOverride) return summaryOverride;
     if (!summaryState) return null;
@@ -152,6 +181,7 @@ export default function BookingLayout({
         suppressEstimateUntilLocked={suppressEstimateUntilLocked}
         amountToPayZar={summaryAmountToPayZar}
         embedded={Boolean(embedded)}
+        hideMobilePricingFootnotes={hideMobilePricingFootnotes}
       />
     );
   };
@@ -163,7 +193,15 @@ export default function BookingLayout({
       <main
         className={[
           "flex-1 py-0",
-          footerSplit || stickyMobileBar ? "pb-32 sm:pb-28" : "",
+          footerSplit || stickyMobileBar
+            ? stickyMobileBar && !showStickyPriceBarDesktop
+              ? footerInsightBanner && !footerInsightDismissed
+                ? "pb-44 sm:pb-40 lg:pb-8"
+                : "pb-32 sm:pb-28 lg:pb-8"
+              : footerInsightBanner && !footerInsightDismissed
+                ? "pb-44 sm:pb-40"
+                : "pb-32 sm:pb-28"
+            : "",
           mobileEntryFooter && !footerSplit && !stickyMobileBar ? "max-lg:pb-36" : "",
         ]
           .filter(Boolean)
@@ -223,10 +261,16 @@ export default function BookingLayout({
             !stickyMobileBar &&
             "max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:bg-white max-lg:px-4 max-lg:py-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:pt-3 max-lg:shadow-[0_-4px_24px_rgba(0,0,0,0.06)] lg:sticky lg:bottom-0 lg:px-0 lg:py-3 lg:pb-[max(1rem,env(safe-area-inset-bottom))] lg:shadow-none",
           (footerSplit || stickyMobileBar) &&
-            cn(
-              "fixed bottom-0 left-0 right-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-              stickyMobileBar?.openSummarySheetOnAmountTap ? "max-lg:pt-2 lg:pt-4" : "pt-4",
-            ),
+            (stickyMobileBar && !showStickyPriceBarDesktop
+              ? cn(
+                  "max-lg:fixed max-lg:bottom-0 max-lg:left-0 max-lg:right-0 max-lg:border-t max-lg:border-zinc-200/80 max-lg:bg-white/95 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:backdrop-blur-md max-lg:dark:border-zinc-800 max-lg:dark:bg-zinc-950/95",
+                  stickyMobileBar?.openSummarySheetOnAmountTap ? "max-lg:pt-2" : "max-lg:pt-4",
+                  "lg:static lg:border-transparent lg:bg-transparent lg:pb-0 lg:pt-0 lg:shadow-none lg:backdrop-blur-none",
+                )
+              : cn(
+                  "fixed bottom-0 left-0 right-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+                  stickyMobileBar?.openSummarySheetOnAmountTap ? "max-lg:pt-2 lg:pt-4" : "pt-4",
+                )),
           !footerSplit && !stickyMobileBar && !mobileEntryFooter &&
             "sticky bottom-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3",
         )}
@@ -240,6 +284,15 @@ export default function BookingLayout({
         >
           {footerPreCta ? (
             <div className="mb-1.5 text-center text-[11px] text-zinc-600 dark:text-zinc-400">{footerPreCta}</div>
+          ) : null}
+
+          {stickyMobileBar && footerInsightBanner && !footerInsightDismissed ? (
+            <BookingFooterInsightBanner
+              variant={footerInsightBanner.variant}
+              rooms={footerInsightBanner.rooms}
+              extraRooms={footerInsightBanner.extraRooms}
+              onDismiss={() => setFooterInsightDismissed(true)}
+            />
           ) : null}
 
           {stickyMobileBar ? (
@@ -266,7 +319,7 @@ export default function BookingLayout({
             </div>
           ) : null}
 
-          {stickyMobileBar ? (
+          {stickyMobileBar && showStickyPriceBarDesktop ? (
             <div className="hidden lg:block">
               {footerSplit || stickyMobileBar ? (
                 <div className="flex items-center justify-between gap-4">
@@ -374,34 +427,51 @@ export default function BookingLayout({
               </div>
             </div>
           ) : !stickyMobileBar ? (
-            <div className="flex w-full items-stretch gap-2 sm:gap-3">
+            <div
+              className={cn(
+                "flex w-full gap-2 sm:gap-3",
+                mobileEntryFooter && footerEntryLead ? "items-center" : "items-stretch",
+              )}
+            >
+              {mobileEntryFooter && footerEntryLead ? (
+                <p className="line-clamp-2 min-w-0 flex-1 text-left text-[11px] font-medium leading-snug text-zinc-500 dark:text-zinc-400 sm:text-xs">
+                  {footerEntryLead}
+                </p>
+              ) : null}
               {footerBackButton}
               <button
                 type="button"
                 onClick={() => onContinue?.()}
                 disabled={!canContinue || continueLoading}
                 className={[
-                  "min-w-0 flex-1 rounded-xl font-semibold tracking-tight transition-all",
+                  mobileEntryFooter && footerEntryLead
+                    ? "shrink-0 whitespace-nowrap px-3.5 font-semibold tracking-tight transition-all sm:px-4"
+                    : "min-w-0 flex-1 font-semibold tracking-tight transition-all",
                   continueVariant === "pay"
-                    ? "min-h-14 px-4 text-base"
+                    ? "min-h-14 rounded-xl px-4 text-base"
                     : mobileEntryFooter
-                      ? "h-12 max-lg:h-12 text-[15px] max-lg:text-base"
-                      : "h-12 text-[15px]",
-                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                      ? cn(
+                          "h-10 rounded-lg text-sm",
+                          footerEntryLead ? "" : "px-4",
+                        )
+                      : "h-12 rounded-xl text-[15px]",
+                  mobileEntryFooter
+                    ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                    : "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                   canContinue
                     ? continueLoading
                       ? continueVariant === "pay"
                         ? "cursor-wait bg-primary text-primary-foreground opacity-95"
                         : mobileEntryFooter
-                          ? "cursor-wait max-lg:bg-zinc-800 max-lg:text-white lg:cursor-wait lg:bg-zinc-900 lg:text-white lg:opacity-95 dark:lg:bg-white dark:lg:text-zinc-950"
+                          ? "cursor-wait bg-blue-600 text-white opacity-90 dark:bg-blue-600"
                           : "cursor-wait bg-zinc-900 text-white opacity-95 dark:bg-white dark:text-zinc-950"
                       : continueVariant === "pay"
                         ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.99] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
                         : mobileEntryFooter
-                          ? "max-lg:bg-black max-lg:text-white max-lg:hover:bg-zinc-900 max-lg:active:scale-[0.99] lg:bg-zinc-900 lg:text-white lg:shadow-lg lg:shadow-zinc-900/20 lg:hover:bg-zinc-800 dark:lg:bg-white dark:lg:text-zinc-950 dark:lg:hover:bg-zinc-100"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 hover:bg-blue-700 active:scale-[0.99] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500"
                           : "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
                     : mobileEntryFooter
-                      ? "cursor-not-allowed max-lg:bg-zinc-200 max-lg:text-zinc-500 lg:cursor-not-allowed lg:bg-zinc-200 lg:text-zinc-500 dark:max-lg:bg-zinc-800 dark:max-lg:text-zinc-500 dark:lg:bg-zinc-800 dark:lg:text-zinc-500"
+                      ? "cursor-not-allowed rounded-lg bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
                       : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
                 ].join(" ")}
               >

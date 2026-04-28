@@ -13,7 +13,13 @@ import { bookingCopy } from "@/lib/booking/copy";
 import { clearSelectedCleanerFromStorage, writeSelectedCleanerToStorage } from "@/lib/booking/cleanerSelection";
 import { getLockedBookingDisplayPrice, lockedToStep1State, lockBookingSlot, mergeCleanerIdIntoLockedBooking } from "@/lib/booking/lockedBooking";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
-import type { PricedAvailabilitySlot, RawAvailabilitySlot } from "@/lib/booking/enrichAvailabilitySlots";
+import type { RawAvailabilitySlot } from "@/lib/booking/enrichAvailabilitySlots";
+import {
+  loadSlotPricesParallel,
+  quoteSlotPriceExact,
+  refineSlotPricesExact,
+  type SlotPriceEntry,
+} from "@/lib/booking/loadSlotPricesParallel";
 import {
   minSlotPrice,
   orderSlotTimesForDisplay,
@@ -27,15 +33,34 @@ import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
-type LiveSlot = PricedAvailabilitySlot;
-
 const AVAILABILITY_SLOT_CACHE_TTL_MS = 50_000;
 const availabilitySlotCache = new Map<string, { slots: RawAvailabilitySlot[]; at: number }>();
 
-const INITIAL_VISIBLE_SLOTS = 5;
+/** First screen: up to 8 slot cards before “see more”. */
+const INITIAL_VISIBLE_SLOTS = 8;
 /** Must match `/api/booking/time-slots` (startHour 7, endHour 18, step 30). Was 12:30 — hid all afternoon slots. */
 const SLOT_START_MIN = 7 * 60;
 const SLOT_END_MIN = 18 * 60;
+
+function pickFirstTwoRefineTimes(
+  raw: readonly RawAvailabilitySlot[],
+  isToday: boolean,
+  nowPlusOneHour: number,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of raw) {
+    if (!s.available) continue;
+    const mins = hmToMinutes(s.time);
+    if (mins < SLOT_START_MIN || mins > SLOT_END_MIN) continue;
+    if (isToday && mins < nowPlusOneHour) continue;
+    if (seen.has(s.time)) continue;
+    seen.add(s.time);
+    out.push(s.time);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
 
 type StepScheduleProps = {
   onNext: () => void;
@@ -109,12 +134,14 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     canonicalDurationHours,
     canonicalTotalZar,
     job: pricingJob,
-    priceRawSlots,
+    catalog,
   } = useBookingPrice();
   const summaryState = step1 ?? (locked ? lockedToStep1State(locked) : null);
   const lockBaseState = step1 ?? (locked ? lockedToStep1State(locked) : null);
 
   const [rawSlots, setRawSlots] = useState<RawAvailabilitySlot[]>([]);
+  const [slotPrices, setSlotPrices] = useState<Record<string, SlotPriceEntry>>({});
+  const [slotPricesPending, setSlotPricesPending] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotHint, setSlotHint] = useState<string | null>(null);
   const [slotFetchNonce, setSlotFetchNonce] = useState(0);
@@ -154,8 +181,6 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     setSlotFetchNonce((n) => n + 1);
   }, [selectedDate, durationMinutesForApi]);
 
-  const liveSlots = useMemo(() => priceRawSlots(rawSlots), [priceRawSlots, rawSlots]);
-
   const durationLine = useMemo(() => {
     if (canonicalDurationHours != null) return formatDurationLine(canonicalDurationHours);
     return "";
@@ -174,7 +199,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   }, [selectedDate, pricingFingerprint]);
 
   useEffect(() => {
-    if (!lockBaseState || !pricingJob) return;
+    if (!lockBaseState) return;
     const cacheKey = `${selectedDate}|${durationMinutesForApi}`;
     const bypassCache = skipAvailabilityCacheOnceRef.current;
     if (bypassCache) skipAvailabilityCacheOnceRef.current = false;
@@ -187,86 +212,134 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
 
     let cancelled = false;
     setSlotsLoading(true);
-    const debounceTimer = window.setTimeout(() => {
-      void (async () => {
-        if (cancelled) return;
-        try {
-          const params = new URLSearchParams();
-          params.set("date", selectedDate);
-          params.set("duration", String(durationMinutesForApi));
-          const url = `/api/booking/time-slots?${params.toString()}`;
-          let lastSlots: RawAvailabilitySlot[] = [];
-          let ok = false;
-          for (let attempt = 0; attempt < 2; attempt++) {
-            const res = await fetch(url);
-            const json = (await res.json()) as { slots?: RawAvailabilitySlot[]; error?: string };
-            if (cancelled) return;
-            if (res.ok) {
-              ok = true;
-              lastSlots = json.slots ?? [];
-              break;
-            }
-            trackBookingFunnelEvent("datetime", "error", {
-              message: json.error ?? `status_${res.status}`,
-              action: "time_slots_fetch",
-              date: selectedDate,
-              attempt,
-            });
-            if (attempt === 0) await sleep(400);
-          }
+    void (async () => {
+      if (cancelled) return;
+      try {
+        const params = new URLSearchParams();
+        params.set("date", selectedDate);
+        params.set("duration", String(durationMinutesForApi));
+        const url = `/api/booking/time-slots?${params.toString()}`;
+        let lastSlots: RawAvailabilitySlot[] = [];
+        let ok = false;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const res = await fetch(url);
+          const json = (await res.json()) as { slots?: RawAvailabilitySlot[]; error?: string };
           if (cancelled) return;
-          if (!ok) {
-            setRawSlots([]);
-            setSlotHint("We’re refreshing availability — try another date or check back in a moment.");
-            trackBookingFunnelEvent("datetime", "error", {
-              message: "time_slots_fetch_exhausted",
-              action: "time_slots_fetch",
-              date: selectedDate,
-            });
-            return;
+          if (res.ok) {
+            ok = true;
+            lastSlots = json.slots ?? [];
+            break;
           }
-          availabilitySlotCache.set(cacheKey, { slots: lastSlots, at: Date.now() });
-          setRawSlots(lastSlots);
-        } catch {
-          if (!cancelled) {
-            setRawSlots([]);
-            setSlotHint("Checking connection — you can still pick another date.");
-            trackBookingFunnelEvent("datetime", "error", {
-              message: "time_slots_network",
-              action: "time_slots_fetch",
-            });
-          }
-        } finally {
-          if (!cancelled) setSlotsLoading(false);
+          trackBookingFunnelEvent("datetime", "error", {
+            message: json.error ?? `status_${res.status}`,
+            action: "time_slots_fetch",
+            date: selectedDate,
+            attempt,
+          });
+          if (attempt === 0) await sleep(400);
         }
-      })();
-    }, 280);
+        if (cancelled) return;
+        if (!ok) {
+          setRawSlots([]);
+          setSlotHint("We’re refreshing availability — try another date or check back in a moment.");
+          trackBookingFunnelEvent("datetime", "error", {
+            message: "time_slots_fetch_exhausted",
+            action: "time_slots_fetch",
+            date: selectedDate,
+          });
+          return;
+        }
+        availabilitySlotCache.set(cacheKey, { slots: lastSlots, at: Date.now() });
+        setRawSlots(lastSlots);
+      } catch {
+        if (!cancelled) {
+          setRawSlots([]);
+          setSlotHint("Checking connection — you can still pick another date.");
+          trackBookingFunnelEvent("datetime", "error", {
+            message: "time_slots_network",
+            action: "time_slots_fetch",
+          });
+        }
+      } finally {
+        if (!cancelled) setSlotsLoading(false);
+      }
+    })();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(debounceTimer);
       setSlotsLoading(false);
     };
-  }, [lockBaseState, pricingJob, selectedDate, durationMinutesForApi, slotFetchNonce]);
+  }, [lockBaseState, selectedDate, durationMinutesForApi, slotFetchNonce]);
+
+  const windowedAvailableSlots = useMemo(() => {
+    return rawSlots.filter((s) => {
+      if (!s.available) return false;
+      const mins = hmToMinutes(s.time);
+      if (mins < SLOT_START_MIN || mins > SLOT_END_MIN) return false;
+      if (isToday && mins < nowPlusOneHour) return false;
+      return true;
+    });
+  }, [rawSlots, isToday, nowPlusOneHour]);
+
+  const chronologicalDisplayTimes = useMemo(() => {
+    const times = [...new Set(windowedAvailableSlots.map((s) => s.time))];
+    return times.sort((a, b) => a.localeCompare(b));
+  }, [windowedAvailableSlots]);
+
+  useEffect(() => {
+    if (!catalog || !pricingJob || rawSlots.length === 0) {
+      setSlotPrices({});
+      setSlotPricesPending(false);
+      return;
+    }
+    let cancelled = false;
+    setSlotPrices({});
+    setSlotPricesPending(true);
+    /** DOM timer id (`number`); avoid `ReturnType<typeof setTimeout>` which resolves to `NodeJS.Timeout` under `@types/node`. */
+    let refineTimer: number | undefined;
+    void loadSlotPricesParallel(rawSlots, pricingJob, catalog, vipTier, pricingFingerprint)
+      .then((map) => {
+        if (cancelled) return;
+        setSlotPrices(map);
+        setSlotPricesPending(false);
+        const refineTimes = pickFirstTwoRefineTimes(rawSlots, isToday, nowPlusOneHour);
+        if (refineTimes.length === 0) return;
+        refineTimer = window.setTimeout(() => {
+          if (cancelled) return;
+          void refineSlotPricesExact(rawSlots, refineTimes, pricingJob, catalog, vipTier, pricingFingerprint).then(
+            (patch) => {
+              if (cancelled) return;
+              setSlotPrices((prev) => ({ ...prev, ...patch }));
+            },
+          );
+        }, 0);
+      })
+      .catch(() => {
+        if (!cancelled) setSlotPricesPending(false);
+      });
+    return () => {
+      cancelled = true;
+      if (refineTimer != null) window.clearTimeout(refineTimer);
+    };
+  }, [rawSlots, catalog, pricingJob, vipTier, pricingFingerprint, isToday, nowPlusOneHour]);
 
   const slotPickRows: SlotPickInput[] = useMemo(() => {
-    return liveSlots
-      .filter((s) => {
-        if (!s.available) return false;
-        const mins = hmToMinutes(s.time);
-        if (mins < SLOT_START_MIN || mins > SLOT_END_MIN) return false;
-        if (isToday && mins < nowPlusOneHour) return false;
-        return typeof s.price === "number" && Number.isFinite(s.price);
-      })
-      .map((s) => ({ time: s.time, price: s.price!, cleanersCount: s.cleanersCount ?? 0 }));
-  }, [liveSlots, isToday, nowPlusOneHour]);
+    const byTime = new Map<string, SlotPickInput>();
+    for (const s of windowedAvailableSlots) {
+      const p = slotPrices[s.time]?.price;
+      if (typeof p !== "number" || !Number.isFinite(p)) continue;
+      byTime.set(s.time, { time: s.time, price: p, cleanersCount: s.cleanersCount ?? 0 });
+    }
+    return [...byTime.values()];
+  }, [windowedAvailableSlots, slotPrices]);
 
   const strategyRecommendedTime = useMemo(() => pickRecommendedSlot(slotPickRows), [slotPickRows]);
   const strategyMinPrice = useMemo(() => minSlotPrice(slotPickRows), [slotPickRows]);
 
   const orderedDisplayTimes = useMemo(() => {
+    if (slotPickRows.length === 0) return chronologicalDisplayTimes;
     return orderSlotTimesForDisplay(slotPickRows, strategyRecommendedTime);
-  }, [slotPickRows, strategyRecommendedTime]);
+  }, [slotPickRows, strategyRecommendedTime, chronologicalDisplayTimes]);
 
   const visibleSlotTimes = useMemo(
     () => (showAllTimes ? orderedDisplayTimes : orderedDisplayTimes.slice(0, INITIAL_VISIBLE_SLOTS)),
@@ -331,10 +404,11 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
 
   const handleSelectSlot = useCallback(
     async (time: string, opts?: { fromAutoPick?: boolean }) => {
-      if (!lockBaseState) return;
-      /** Prefer roster row from availability API — `liveSlots` can lag pricing recomputation and make `find` miss briefly. */
+      if (!lockBaseState || !catalog || !pricingJob) return;
       const rawSlot = rawSlots.find((s) => s.time === time);
       if (!rawSlot?.available) return;
+      const exactEntry = quoteSlotPriceExact(rawSlot, pricingJob, catalog, vipTier, pricingFingerprint);
+      setSlotPrices((prev) => ({ ...prev, [time]: exactEntry }));
       const cleanersCount = Math.max(0, Math.round(rawSlot.cleanersCount));
       const body = JSON.stringify({
         service: lockBaseState.service,
@@ -438,11 +512,11 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       setSlotHint("That time may have just been taken — we refreshed the list. Pick another slot below.");
       forceAvailabilityRefresh();
     },
-    [lockBaseState, rawSlots, selectedDate, vipTier, forceAvailabilityRefresh],
+    [lockBaseState, rawSlots, selectedDate, vipTier, forceAvailabilityRefresh, catalog, pricingJob, pricingFingerprint],
   );
 
   useEffect(() => {
-    if (!lockBaseState || slotsLoading || orderedDisplayTimes.length === 0) return;
+    if (!lockBaseState || slotsLoading || slotPricesPending || orderedDisplayTimes.length === 0) return;
     if (locked?.date === selectedDate && locked.time) return;
     const rec = strategyRecommendedTime;
     if (!rec || !orderedDisplayTimes.includes(rec)) return;
@@ -454,6 +528,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   }, [
     lockBaseState,
     slotsLoading,
+    slotPricesPending,
     orderedDisplayTimes,
     strategyRecommendedTime,
     selectedDate,
@@ -462,19 +537,30 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     handleSelectSlot,
   ]);
 
-  function slotCardProps(time: string) {
-    const slot = liveSlots.find((s) => s.time === time);
-    const priceZar = slot && typeof slot.price === "number" && Number.isFinite(slot.price) ? slot.price : null;
-    const row = slotPickRows.find((r) => r.time === time);
-    const strategyBadge = row ? slotStrategyBadge(time, strategyRecommendedTime, strategyMinPrice, row) : null;
-    return {
-      time,
-      priceZar,
-      cleanersCount: row?.cleanersCount ?? 0,
-      strategyBadge,
-      selected: selectedTime === time,
-    };
-  }
+  const slotRowByTime = useMemo(() => new Map(slotPickRows.map((r) => [r.time, r])), [slotPickRows]);
+
+  const slotCardProps = useCallback(
+    (time: string) => {
+      const entry = slotPrices[time];
+      const priceZar =
+        entry && typeof entry.price === "number" && Number.isFinite(entry.price) ? entry.price : null;
+      const isEstimated = Boolean(entry?.isEstimated);
+      const row = slotRowByTime.get(time);
+      const raw = rawSlots.find((s) => s.time === time);
+      const strategyBadge = row
+        ? slotStrategyBadge(time, strategyRecommendedTime, strategyMinPrice, row)
+        : null;
+      return {
+        time,
+        priceZar,
+        isEstimated,
+        cleanersCount: raw?.cleanersCount ?? row?.cleanersCount ?? 0,
+        strategyBadge,
+        selected: selectedTime === time,
+      };
+    },
+    [slotPrices, slotRowByTime, strategyRecommendedTime, strategyMinPrice, selectedTime, rawSlots],
+  );
 
   function selectCleaner(id: string, name: string) {
     setAutoAssignCleaner(false);
@@ -510,9 +596,9 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{bookingCopy.when.title}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{bookingCopy.when.intro}</p>
-          {isToday && slotPickRows.length > 0 && slotPickRows.length <= 4 ? (
+          {isToday && windowedAvailableSlots.length > 0 && windowedAvailableSlots.length <= 4 ? (
             <p className="mt-2 text-sm font-medium text-amber-800 dark:text-amber-300/90" role="status">
-              {bookingCopy.when.spotsLeftToday(slotPickRows.length)}
+              {bookingCopy.when.spotsLeftToday(windowedAvailableSlots.length)}
             </p>
           ) : null}
           {lockBaseState && lockBaseState.extraRooms > 0 ? (
@@ -563,7 +649,6 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               {slotsLoading ? (
                 <div className="space-y-2" role="status" aria-live="polite">
                   <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Checking availability…</p>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Calculating best available price...</p>
                   {canonicalTotalZar != null ? (
                     <p className="text-sm font-medium tabular-nums text-zinc-500 opacity-70 dark:text-zinc-400">
                       Current estimate: R {canonicalTotalZar.toLocaleString("en-ZA")}
@@ -576,8 +661,13 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                   </div>
                 </div>
               ) : null}
-              {!slotsLoading && orderedDisplayTimes.length > 0 ? (
-                <AvailabilityMessage slots={slotPickRows.map((s) => ({ time: s.time }))} showExactTime />
+              {!slotsLoading && slotPricesPending && chronologicalDisplayTimes.length > 0 ? (
+                <p className="text-sm text-zinc-500 dark:text-zinc-400" role="status">
+                  Checking prices…
+                </p>
+              ) : null}
+              {!slotsLoading && chronologicalDisplayTimes.length > 0 ? (
+                <AvailabilityMessage slots={chronologicalDisplayTimes.map((t) => ({ time: t }))} showExactTime />
               ) : null}
               {slotHint ? (
                 <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/95 p-3 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100">
@@ -628,7 +718,8 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               ) : null}
 
               {orderedDisplayTimes.length > 0 ? (
-                <div className="flex flex-col gap-3">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {visibleSlotTimes.map((time) => {
                     const p = slotCardProps(time);
                     const slotPrice = p.priceZar;
@@ -663,40 +754,47 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                           : p.strategyBadge === "filling-fast"
                             ? bookingCopy.when.badgeHintFillingFast
                             : null;
+                    const priceReady = p.priceZar != null;
                     return (
                       <button
                         key={time}
                         type="button"
-                        onClick={() => void handleSelectSlot(time)}
+                        disabled={!priceReady}
+                        aria-busy={!priceReady}
+                        onClick={() => {
+                          if (!priceReady) return;
+                          void handleSelectSlot(time);
+                        }}
                         className={[
-                          "w-full rounded-xl border p-4 transition text-left",
+                          "min-w-0 w-full rounded-xl border p-3 text-left transition sm:p-3.5",
+                          !priceReady ? "cursor-wait opacity-90" : "",
                           p.selected
                             ? "border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-500 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
                             : "border-zinc-200 bg-white text-zinc-800 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
                         ].join(" ")}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-base font-medium tabular-nums">{p.time}</div>
-                            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                              {isTeamService
-                                ? p.cleanersCount > 0
-                                  ? "Team scheduling available for this time"
-                                  : "Limited availability"
-                                : p.cleanersCount > 0
-                                  ? `${p.cleanersCount} cleaner${p.cleanersCount === 1 ? "" : "s"} available`
-                                  : "Limited availability"}
-                            </p>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 shrink-0">
+                            <div className="text-sm font-medium tabular-nums sm:text-base">{p.time}</div>
                           </div>
-                          <div className="text-right">
+                          <div className="min-w-0 text-right">
                             {hasComparison ? (
                               <p className="text-xs tabular-nums text-zinc-400 line-through dark:text-zinc-500">
                                 R {anchorPrice.toLocaleString("en-ZA")}
                               </p>
                             ) : null}
-                            <div className="text-lg font-semibold tabular-nums">
-                              {p.priceZar != null ? `R ${p.priceZar.toLocaleString("en-ZA")}` : "—"}
+                            <div className="text-base font-semibold tabular-nums sm:text-lg">
+                              {p.priceZar != null ? (
+                                `R ${p.priceZar.toLocaleString("en-ZA")}`
+                              ) : (
+                                <span className="text-sm font-normal text-zinc-400 dark:text-zinc-500">Checking price…</span>
+                              )}
                             </div>
+                            {p.priceZar != null && p.isEstimated ? (
+                              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                                Estimated price
+                              </p>
+                            ) : null}
                             {p.selected ? (
                               <p className="mt-0.5 text-xs font-medium text-blue-600 dark:text-blue-300">Selected</p>
                             ) : null}
@@ -720,25 +818,20 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                             {badgeHint}
                           </p>
                         ) : null}
-                        {vipTier !== "regular" && p.priceZar != null ? (
-                          <p className="mt-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                            Member price applied
-                          </p>
-                        ) : null}
                       </button>
                     );
                   })}
+                  </div>
+                  {orderedDisplayTimes.length > INITIAL_VISIBLE_SLOTS && !showAllTimes ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTimes(true)}
+                      className="w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-200"
+                    >
+                      {bookingCopy.when.seeMoreTimes}
+                    </button>
+                  ) : null}
                 </div>
-              ) : null}
-
-              {orderedDisplayTimes.length > INITIAL_VISIBLE_SLOTS && !showAllTimes ? (
-                <button
-                  type="button"
-                  onClick={() => setShowAllTimes(true)}
-                  className="w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-200"
-                >
-                  {bookingCopy.when.seeMoreTimes}
-                </button>
               ) : null}
 
               {locked && locked.date === selectedDate && selectedTime ? (
@@ -848,6 +941,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                               <p className="w-full truncate text-sm font-semibold">{c.full_name}</p>
                               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                                 ⭐ {c.rating.toFixed(1)} · {c.jobs_completed.toLocaleString("en-ZA")} jobs
+                                {c.review_count > 0 ? ` · ${c.review_count} reviews` : ""}
                               </p>
                             </button>
                           );

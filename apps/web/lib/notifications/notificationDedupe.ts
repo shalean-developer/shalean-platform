@@ -5,7 +5,11 @@ export type NotificationDedupeSource =
   | "reminder_2h_sent"
   | "assigned_sent"
   | "completed_sent"
-  | "sla_breach_sent";
+  | "sla_breach_sent"
+  | "review_prompt_sms_sent"
+  | "review_prompt_sms_reminder_sent"
+  | "abandon_checkout_reminder_sent"
+  | "daily_ops_summary";
 
 /**
  * Inserts a claim row guarded by partial unique index `idx_notification_dedupe`.

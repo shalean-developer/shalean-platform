@@ -18,6 +18,8 @@ type BookingCardProps = {
   booking: DashboardBooking;
   showActions?: boolean;
   className?: string;
+  /** When set (e.g. completed clean, cleaner assigned, no review yet), show “Leave review”. */
+  leaveReviewHref?: string | null;
   onCancel?: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   onReschedule?: (id: string, date: string, time: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 };
@@ -29,7 +31,14 @@ function canCustomerModify(b: DashboardBooking): boolean {
   return st === "pending" || st === "confirmed" || st === "assigned";
 }
 
-export function BookingCard({ booking, showActions = true, className, onCancel, onReschedule }: BookingCardProps) {
+export function BookingCard({
+  booking,
+  showActions = true,
+  className,
+  leaveReviewHref = null,
+  onCancel,
+  onReschedule,
+}: BookingCardProps) {
   const toast = useDashboardToast();
   const when = formatBookingWhen(booking.date, booking.time);
   const addr = `${booking.addressLine}, ${booking.suburb}`;
@@ -106,6 +115,11 @@ export function BookingCard({ booking, showActions = true, className, onCancel, 
               <Button asChild size="lg" className="min-h-12 flex-1 rounded-xl sm:flex-none">
                 <Link href={`/dashboard/bookings/${booking.id}`}>View Details</Link>
               </Button>
+              {leaveReviewHref ? (
+                <Button asChild size="lg" className="min-h-12 flex-1 rounded-xl bg-amber-500 text-white hover:bg-amber-600 sm:flex-none">
+                  <Link href={leaveReviewHref}>Leave review</Link>
+                </Button>
+              ) : null}
               {modifiable && onReschedule ? (
                 <Button
                   type="button"

@@ -22,8 +22,9 @@ export function PricingBadge({ anchorPrice, finalPrice, className }: PricingBadg
 
   const diffZar = Math.round(anchorPrice - finalPrice);
   const percent = Math.round((diffZar / anchorPrice) * 100);
+  const minSavingsBannerZar = 10;
 
-  if (finalPrice < anchorPrice) {
+  if (finalPrice < anchorPrice && diffZar >= minSavingsBannerZar) {
     return (
       <motion.div
         className={cn("space-y-0.5", className)}
@@ -37,6 +38,14 @@ export function PricingBadge({ anchorPrice, finalPrice, className }: PricingBadg
         </p>
         <p className="text-xs text-green-600 dark:text-green-500">Best available price</p>
       </motion.div>
+    );
+  }
+
+  if (finalPrice < anchorPrice) {
+    return (
+      <p className={cn("text-xs text-zinc-500 dark:text-zinc-400", className)} role="status">
+        Standard pricing applied
+      </p>
     );
   }
 

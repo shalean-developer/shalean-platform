@@ -16,19 +16,15 @@ function supabaseImageHost(): string | null {
 
 const supabaseHost = supabaseImageHost();
 
+const imageRemotePatterns = [
+  { protocol: "https" as const, hostname: "images.unsplash.com" },
+  ...(supabaseHost ? [{ protocol: "https" as const, hostname: supabaseHost }] : []),
+];
+
 const nextConfig: NextConfig = {
-  ...(supabaseHost
-    ? {
-        images: {
-          remotePatterns: [
-            {
-              protocol: "https" as const,
-              hostname: supabaseHost,
-            },
-          ],
-        },
-      }
-    : {}),
+  images: {
+    remotePatterns: imageRemotePatterns,
+  },
   turbopack: {
     root: turbopackRoot,
   },

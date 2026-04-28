@@ -12,7 +12,12 @@ import { processDispatchRetryQueue } from "@/lib/dispatch/dispatchRetryQueue";
 import { runOfferExpiryMaintenance } from "@/lib/dispatch/processUserSelectedOfferExpiryRedispatch";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckoutReminder";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { logDailyOpsSummaryIfNeeded } from "@/lib/ops/dailyOpsSummary";
+import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
+import { syncCleanerQualityFlags } from "@/lib/ops/enforceCleanerQualityReview";
+import { processReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,6 +88,43 @@ export async function POST(request: Request) {
     context: { route: ROUTE, timestamp: runStartedAtIso },
   });
 
+  const failedJobsThreshold = Number(process.env.FAILED_JOBS_ALERT_THRESHOLD ?? "5");
+  const thresholdJobs = Number.isFinite(failedJobsThreshold) && failedJobsThreshold > 0 ? failedJobsThreshold : 5;
+  const { count: failedJobsOpen } = await supabase.from("failed_jobs").select("id", { count: "exact", head: true });
+  if ((failedJobsOpen ?? 0) > thresholdJobs) {
+    await postDispatchControlAlert(
+      {
+        errorType: "failed_jobs_backlog",
+        message: `failed_jobs backlog: ${failedJobsOpen ?? 0} open rows (threshold ${thresholdJobs})`,
+        dedupeKey: "failed_jobs_backlog",
+        dedupeWindowMinutes: 15,
+        extra: { count: failedJobsOpen ?? 0, threshold: thresholdJobs },
+      },
+      { supabase },
+    );
+  }
+
+  const unassignableThreshold = Number(process.env.UNASSIGNABLE_BOOKINGS_ALERT_THRESHOLD ?? "3");
+  const thresholdUnassignable =
+    Number.isFinite(unassignableThreshold) && unassignableThreshold > 0 ? unassignableThreshold : 3;
+  const { count: terminalDispatchPending } = await supabase
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .in("dispatch_status", ["unassignable", "no_cleaner"]);
+  if ((terminalDispatchPending ?? 0) >= thresholdUnassignable) {
+    await postDispatchControlAlert(
+      {
+        errorType: "unassignable_bookings_threshold",
+        message: `${terminalDispatchPending ?? 0} paid booking(s) stuck in terminal dispatch (unassignable/no_cleaner)`,
+        dedupeKey: "unassignable_bookings_threshold",
+        dedupeWindowMinutes: 15,
+        extra: { count: terminalDispatchPending ?? 0, threshold: thresholdUnassignable },
+      },
+      { supabase },
+    );
+  }
+
   const { data: insertJobs, error: selErr } = await supabase
     .from("failed_jobs")
     .select("id, type, payload, attempts")
@@ -122,7 +164,7 @@ export async function POST(request: Request) {
           "critical",
           "cron/retry-failed-jobs",
           "Malformed booking_insert failed_jobs payload; quarantining job (type change)",
-          { failedJobId: id, payloadPreview },
+          { errorType: "booking_insert_invalid_payload", failedJobId: id, payloadPreview },
         );
         const { error: quarantineErr } = await supabase
           .from("failed_jobs")
@@ -231,6 +273,7 @@ export async function POST(request: Request) {
               "cron/retry-failed-jobs",
               "booking_insert retry attempts exhausted; job moved to booking_insert_exhausted",
               {
+                errorType: "booking_insert_exhausted",
                 failedJobId: id,
                 paystackReference: payload.paystackReference,
                 attempts: nextAttempts,
@@ -296,6 +339,11 @@ export async function POST(request: Request) {
   const dispatchSla = await reportPendingBookingSlaBreaches(supabase);
   const dispatchOfferTimeoutMetrics = await emitSqlExpiredOfferTimeoutMetrics(supabase);
 
+  const reviewSmsPrompts = await processReviewSmsPromptQueue(supabase);
+  const abandonCheckoutReminders = await processAbandonCheckoutReminders(supabase);
+  const dailyOpsSummary = await logDailyOpsSummaryIfNeeded(supabase);
+  const cleanerQuality = await syncCleanerQualityFlags(supabase);
+
   let failedJobsCleaned = 0;
   if (process.env.FAILED_JOBS_CLEANUP_ENABLED?.trim().toLowerCase() === "true") {
     const cutoffIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -324,6 +372,10 @@ export async function POST(request: Request) {
     dispatchSla,
     dispatchOfferTimeoutMetrics,
     failedJobsCleaned,
+    reviewSmsPrompts,
+    abandonCheckoutReminders,
+    dailyOpsSummary,
+    cleanerQuality,
   };
 
   await logSystemEvent({
@@ -352,6 +404,10 @@ export async function POST(request: Request) {
       deleted: failedJobsCleaned,
       enabled: process.env.FAILED_JOBS_CLEANUP_ENABLED?.trim().toLowerCase() === "true",
     },
+    reviewSmsPrompts,
+    abandonCheckoutReminders,
+    dailyOpsSummary,
+    cleanerQuality,
   });
 }
 

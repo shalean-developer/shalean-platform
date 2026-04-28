@@ -15,7 +15,7 @@ export type SmsFallbackDeliveryLog = {
   /** Overrides `context.bookingId` when set. */
   bookingId?: string | null;
   eventType: string;
-  role: "cleaner";
+  role: "cleaner" | "customer";
 };
 
 function bookingIdForSmsLog(

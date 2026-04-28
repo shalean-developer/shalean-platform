@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { buildAIBookingSummaryFromRows, generateAIInsights } from "@/lib/ai/generateAIInsights";
+import type { InsightBookingRow } from "@/lib/ai/generateInsights";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -44,6 +46,44 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  const wantNarrative = new URL(request.url).searchParams.get("narrative") === "1";
+  if (wantNarrative) {
+    const { data: narrativeRows, error: narrativeErr } = await admin
+      .from("bookings")
+      .select(
+        "id, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, service_fee_cents, location, cleaner_id, created_at, status, service",
+      )
+      .limit(8000);
+    if (narrativeErr) {
+      return NextResponse.json({ error: narrativeErr.message }, { status: 500 });
+    }
+    const rows = (narrativeRows ?? []) as InsightBookingRow[];
+    const summary = buildAIBookingSummaryFromRows(rows);
+    if (summary.completedSampleSize === 0) {
+      return NextResponse.json({
+        aiBusinessInsights: null,
+        aiBusinessInsightsNote:
+          "No completed bookings in this sample yet — complete jobs with stored revenue fields to enable AI narratives.",
+        generatedAt: new Date().toISOString(),
+      });
+    }
+    const gen = await generateAIInsights(summary);
+    if (gen.ok) {
+      return NextResponse.json({
+        aiBusinessInsights: gen.text,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+    if ("skipped" in gen) {
+      return NextResponse.json({
+        aiBusinessInsights: null,
+        aiBusinessInsightsNote: gen.skipped,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+    return NextResponse.json({ error: gen.error }, { status: 502 });
   }
 
   const { data: timeRows } = await admin.from("bookings").select("time").limit(8000);

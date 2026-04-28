@@ -27,23 +27,15 @@ export async function signIn(email: string, password: string) {
     password,
   });
 
-  console.log("LOGIN DATA:", data);
-  console.log("LOGIN ERROR:", error);
-
   if (error) return { user: null as User | null, session: null as Session | null, error };
 
   const u = data.user;
   if (u?.id) {
     const { data: row } = await sb.from("user_profiles").select("id").eq("id", u.id).maybeSingle();
     if (!row) {
-      const meta = u.user_metadata as { full_name?: string; name?: string };
-      const fn =
-        (typeof meta?.full_name === "string" && meta.full_name.trim()) ||
-        (typeof meta?.name === "string" && meta.name.trim()) ||
-        null;
+      /** Omit `full_name`: older DBs (pre-20260423) only have id, counts, tier, updated_at. */
       const { error: insErr } = await sb.from("user_profiles").insert({
         id: u.id,
-        full_name: fn,
         tier: "regular",
         booking_count: 0,
         total_spent_cents: 0,
@@ -72,18 +64,13 @@ export async function signUp(email: string, password: string, fullName: string) 
     },
   });
 
-  console.log("SIGNUP DATA:", data);
-  console.log("SIGNUP ERROR:", error);
-
   if (error) return { user: null as User | null, session: null as Session | null, error };
 
-  const name = fullName.trim();
   const user = data.user;
   if (user?.id) {
     const { error: profileErr } = await sb.from("user_profiles").upsert(
       {
         id: user.id,
-        full_name: name,
         tier: "regular",
         booking_count: 0,
         total_spent_cents: 0,

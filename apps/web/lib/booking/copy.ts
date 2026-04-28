@@ -66,6 +66,9 @@ export const bookingCopy = {
   },
 
   checkout: {
+    /** Shown when a slot lock is active on the payment step. */
+    lockedCheckoutNotice:
+      "This booking is locked for checkout. Complete payment below to confirm your visit.",
     title: "Confirm your booking",
     trust: [
       "⭐ Rated 4.8 by homeowners in Cape Town",
@@ -73,7 +76,6 @@ export const bookingCopy = {
       "👩‍🔧 Experienced, background-checked cleaners",
       "🔒 Secure payment powered by Paystack",
     ] as const,
-    trustShort: ["No charge until you pay below", "Secure checkout (Paystack)", "Instant confirmation email"] as const,
     cta: "Confirm & Secure Your Cleaner",
     subtext: "✔ Instant booking confirmation",
     subtitle: "Review your visit, then pay securely to confirm.",
@@ -89,6 +91,10 @@ export const bookingCopy = {
     slotHeldFallback: "Price reserved for this visit — complete checkout soon.",
     /** Footer trust strip under the CTA (single line). */
     payFooterTrustLine: "Paystack · PCI-DSS · 256-bit encryption · Instant email confirmation",
+    /** Checkout breakdown — same wording anywhere rounding is mentioned. */
+    pricingRoundingNote: "Prices may be slightly rounded for simplicity.",
+    /** Homepage hero widget — sits next to the estimate total. */
+    widgetEstimateNote: "Estimated price — final price confirmed at checkout",
   },
 
   progress: {
@@ -102,6 +108,23 @@ export const bookingCopy = {
     cta: "Continue",
     urgencySlotsFilling: "⚡ Slots filling fast",
     urgencyCleanerAvailable: "✔ Cleaner available",
+  },
+
+  /** Mobile footer insight banner (quote + details steps, stacked above sticky price bar). */
+  footerInsight: {
+    /** Compact headline (Sweep-style strip); emphasis word in banner JSX. */
+    bannerHeadlineLead: "✓ Slots available",
+    bannerHeadlineEmphasis: "today",
+    bannerHeadlineTail: "— next, lock your time for the final price.",
+    bannerCta: "Got it",
+    slotsToday: "✔ Slots available today",
+    finalPriceNote: "Final price may change based on your selected time",
+    flexibleTime: "You may get a lower price by choosing a flexible time",
+    extraRoomsTitle: "Have studies, dens, or garages not counted above?",
+    extraRoomsBodyBefore: "Add them as ",
+    extraRoomsEmphasis: "Extra",
+    extraRoomsBodyAfter:
+      " rooms so time and slot prices match the job — first extra from R35, two extras R60 (save R10).",
   },
 
   errors: {
@@ -124,5 +147,7 @@ export const bookingCopy = {
     previewHint: "Your price is set for this clean — pick a time on the next step.",
     lockedHint: "Price matches checkout — no surprises.",
     selectTimeHint: "Pick a time to see your final total",
+    /** Below estimate or locked totals — trust without changing numbers. */
+    finalPriceConfirmed: "Final price is confirmed at checkout — no hidden fees",
   },
 } as const;

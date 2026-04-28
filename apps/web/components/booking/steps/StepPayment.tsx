@@ -1,86 +1,41 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { AuthModal } from "@/components/booking/AuthModal";
+import { CheckoutSideBadge } from "@/components/booking/CheckoutSideBadge";
 import { CheckoutNoticeBanner } from "@/components/booking/CheckoutNoticeBanner";
-import { Step4Payment, type Step4Totals } from "@/components/booking/Step4Payment";
+import { CheckoutRescheduleModal } from "@/components/booking/CheckoutRescheduleModal";
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
+import { Step4Payment, type Step4PaymentHandle, type Step4Totals } from "@/components/booking/Step4Payment";
 import { useCheckoutNotice } from "@/components/booking/useCheckoutNotice";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
-import { usePersistedBookingSummaryState } from "@/components/booking/usePersistedBookingSummaryState";
 import { useSelectedCleaner } from "@/components/booking/useSelectedCleaner";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
 import { extrasSnapshotAligned } from "@/lib/booking/extrasSnapshot";
 import {
-  lockedToStep1State,
   mergeCleanerIdIntoLockedBooking,
   parseLockedBookingFromUnknown,
   readLockedBookingFromStorage,
 } from "@/lib/booking/lockedBooking";
 import { bookingCopy } from "@/lib/booking/copy";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
-
-const HELD_WINDOW_MS = 5 * 60 * 1000;
+import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function SlotHoldCountdown({ lockedAt }: { lockedAt: string }) {
-  const endMs = useMemo(() => {
-    const t = Date.parse(lockedAt);
-    if (!Number.isFinite(t)) return null;
-    return t + HELD_WINDOW_MS;
-  }, [lockedAt]);
-
-  const [remainingSec, setRemainingSec] = useState(0);
-
-  useEffect(() => {
-    if (endMs == null) return;
-    const tick = () => setRemainingSec(Math.max(0, Math.floor((endMs - Date.now()) / 1000)));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [endMs]);
-
-  if (endMs == null) {
-    return (
-      <p className="text-center text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
-        {bookingCopy.checkout.slotHeldFallback}
-      </p>
-    );
-  }
-
-  if (remainingSec <= 0) {
-    return (
-      <p className="text-center text-[11px] leading-snug text-amber-800 dark:text-amber-200">
-        If payment does not go through, choose your time again to refresh your quote.
-      </p>
-    );
-  }
-
-  const minutes = Math.max(1, Math.ceil(remainingSec / 60));
-  return (
-    <p className="text-center text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
-      <span className="font-semibold text-zinc-800 dark:text-zinc-100">
-        ~{minutes} min left at this price
-      </span>
-      <span className="text-zinc-500 dark:text-zinc-500"> · </span>
-      <span>Checkout usually under 1 minute</span>
-    </p>
-  );
-}
-
 export function StepPayment() {
   const router = useRouter();
+  const { handleBack } = useBookingFlow();
   const searchParams = useSearchParams();
   const preferRegisterTab = searchParams.get("register") === "1";
   const copy = bookingCopy.checkout;
   const locked = useLockedBooking();
   const selectedCleaner = useSelectedCleaner();
-  const step1 = usePersistedBookingSummaryState();
   const { notice, dismiss, show, showFromPaystackResponse, showNetworkError } = useCheckoutNotice();
 
   const [totals, setTotals] = useState<Step4Totals | null>(null);
@@ -97,6 +52,27 @@ export function StepPayment() {
   const checkoutRedirected = useRef(false);
   /** Blocks double-clicks before React re-renders `paying`. Cleared in `finally`. */
   const payInitInFlight = useRef(false);
+  /** Desktop checkout sidebar mount for promo/tip portal (from `CheckoutSideBadge`). */
+  const [promoTipPortalEl, setPromoTipPortalEl] = useState<HTMLDivElement | null>(null);
+  const bindPromoTipHost = useCallback((el: HTMLDivElement | null) => {
+    setPromoTipPortalEl(el);
+  }, []);
+
+  const step4Ref = useRef<Step4PaymentHandle>(null);
+
+  /** `lg` sidebar is `hidden` below this width but stays in DOM — only portal promo/tip when it is actually shown. */
+  const [lgUp, setLgUp] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setLgUp(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!locked || !lgUp) setPromoTipPortalEl(null);
+  }, [locked, lgUp]);
 
   useEffect(() => {
     if (locked || checkoutRedirected.current) return;
@@ -123,16 +99,19 @@ export function StepPayment() {
     setTotals(next);
   }, []);
 
-  const readyForPaystack = Boolean(locked && totals?.contactReady && totals.totalZar >= 1);
-  /** Enable CTA only when payment data is truly ready. */
-  const canPay = Boolean(locked && readyForPaystack && !paying);
+  const totalReadyForPay = Boolean(
+    locked && totals != null && Number.isFinite(totals.totalZar) && totals.totalZar >= 1,
+  );
+  /** Confirm opens contact dialog first; CTA enabled when visit total is valid (contact confirmed in dialog). */
+  const canPay = Boolean(locked && totalReadyForPay && !paying);
 
   const continueLabel = paying ? "Securing your cleaner…" : "Confirm →";
 
-  const summaryState = useMemo(() => {
-    if (locked) return lockedToStep1State(locked);
-    return step1;
-  }, [locked, step1]);
+  function runPaymentFlow() {
+    step4Ref.current?.runPayWithContactDialog(() => {
+      void handlePay();
+    });
+  }
 
   async function handlePay() {
     if (!locked) {
@@ -153,7 +132,7 @@ export function StepPayment() {
       show({
         tone: "danger",
         title: "Almost there",
-        description: "Enter your contact details above so we can complete secure payment.",
+        description: "Confirm your name, phone, and email in the contact step, then try paying again.",
         autoDismissMs: 5000,
       });
       return;
@@ -268,6 +247,12 @@ export function StepPayment() {
 
       writeUserEmailToStorage(totals.email);
 
+      trackGrowthEvent("payment_initiated", {
+        step: "checkout",
+        service: lockedForValidate.service ?? null,
+        total_zar: totals.totalZar,
+      });
+
       const paystackBody = {
         email: totals.email,
         locked: lockedForValidate,
@@ -333,6 +318,23 @@ export function StepPayment() {
     }
   }
 
+  /** Checkout step: no `BookingSummary` sidebar — only the pay rail when locked. */
+  const checkoutDesktopSidebar = locked ? (
+    <CheckoutSideBadge
+      mode="desktop"
+      lockedAt={locked.lockedAt}
+      showCountdown={totalReadyForPay}
+      totalZar={totals?.totalZar ?? null}
+      amountDisplayOverride={totals?.totalZar ? null : "—"}
+      canPay={canPay}
+      paying={paying}
+      onPay={runPaymentFlow}
+      onBack={handleBack}
+      continueLabel={continueLabel}
+      promoTipHostRef={lgUp ? bindPromoTipHost : undefined}
+    />
+  ) : null;
+
   useEffect(() => {
     if (!continueAfterAuth) return;
     if (!totals?.authenticated || !totals.userId || !totals.accessToken) return;
@@ -342,12 +344,15 @@ export function StepPayment() {
 
   return (
     <BookingLayout
+      summaryDesktopOnly
+      summaryOverride={checkoutDesktopSidebar ?? undefined}
       canContinue={canPay}
       continueLoading={paying}
       continueLabel={continueLabel}
       showContinueArrow={false}
       continueVariant="pay"
-      onContinue={handlePay}
+      onContinue={runPaymentFlow}
+      showStickyPriceBarDesktop={false}
       stickyMobileBar={{
         totalZar: totals?.totalZar ?? 0,
         amountDisplayOverride: totals?.totalZar ? null : "—",
@@ -355,18 +360,9 @@ export function StepPayment() {
         ctaShort: "Confirm →",
       }}
       footerTotalZar={totals?.totalZar}
-      footerPreCta={locked && readyForPaystack ? <SlotHoldCountdown lockedAt={locked.lockedAt} /> : undefined}
-      footerSubcopy={
-        readyForPaystack ? (
-          <div className="mx-auto max-w-md space-y-1 text-center">
-            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>
-            <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">{copy.payFooterTrustLine}</p>
-          </div>
-        ) : undefined
-      }
     >
       <CheckoutNoticeBanner
-        open={Boolean(notice?.open)}
+        open={Boolean(notice?.open && !notice.rescheduleInModal)}
         tone={notice?.tone ?? "danger"}
         title={notice?.title ?? ""}
         description={notice?.description ?? ""}
@@ -374,32 +370,50 @@ export function StepPayment() {
         autoDismissMs={notice?.autoDismissMs}
         cta={notice?.cta}
       />
+      <CheckoutRescheduleModal
+        open={Boolean(notice?.open && notice.rescheduleInModal && locked)}
+        onOpenChange={(next) => {
+          if (!next) dismiss();
+        }}
+        title={notice?.title ?? ""}
+        description={notice?.description ?? ""}
+        onLocked={dismiss}
+      />
       {!locked ? (
-        <div className="space-y-6">
+        <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-6 lg:pb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
           <p className="text-sm text-amber-800 dark:text-amber-400/90">
             Choose a time first — then you can confirm and pay here.
           </p>
         </div>
       ) : (
-        <div className="space-y-6 pb-4">
-          <div
-            className="rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
-            role="status"
-          >
-            <span>This booking is locked for checkout. Complete payment below to confirm your visit.</span>
-          </div>
+        <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-6 lg:pb-6">
+          <CheckoutSideBadge
+            mode="mobile"
+            className="lg:hidden"
+            lockedAt={locked.lockedAt}
+            showCountdown={totalReadyForPay}
+            totalZar={totals?.totalZar ?? null}
+            amountDisplayOverride={totals?.totalZar ? null : "—"}
+            canPay={canPay}
+            paying={paying}
+            onPay={runPaymentFlow}
+            onBack={handleBack}
+            continueLabel={continueLabel}
+          />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
           </div>
-
           <Step4Payment
+            ref={step4Ref}
             locked={locked}
             cleanerName={selectedCleaner?.name ?? "Auto-assigned cleaner"}
             preferRegisterTab={preferRegisterTab}
             authOverride={authOverride}
             onTotalsChange={onTotalsChange}
+            checkoutPromoInSidebar={lgUp}
+            promoTipPortalEl={promoTipPortalEl}
           />
         </div>
       )}

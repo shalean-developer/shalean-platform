@@ -23,6 +23,9 @@ const ALLOWED = new Set([
   "homepage_abandon",
   "homepage_scroll",
   "price_updated",
+  "review_prompt_clicked",
+  "payment_initiated",
+  "payment_completed",
 ]);
 
 export async function POST(request: Request) {
@@ -41,12 +44,19 @@ export async function POST(request: Request) {
   const payload =
     body.payload && typeof body.payload === "object" ? (body.payload as Record<string, unknown>) : {};
 
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const bookingIdFromPayload =
+    typeof payload.booking_id === "string" && UUID_RE.test(payload.booking_id.trim())
+      ? payload.booking_id.trim()
+      : null;
+
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const { error } = await admin.from("user_events").insert({
     user_id: null,
-    booking_id: null,
+    booking_id: bookingIdFromPayload,
     event_type: eventType,
     payload: { ...payload, ingest_source: "growth_engine" },
   });

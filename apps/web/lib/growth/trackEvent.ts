@@ -26,7 +26,13 @@ export type GrowthEventType =
   /** Marketing homepage — scroll depth milestone; payload: depth (0–100) */
   | "homepage_scroll"
   /** Booking flow — total changed after slot/time selection; payload: from, to, reason */
-  | "price_updated";
+  | "price_updated"
+  /** Review link opened (marketing SMS/email/deep link); payload: booking_id */
+  | "review_prompt_clicked"
+  /** Customer opened Paystack / redirect checkout; payload: step, service */
+  | "payment_initiated"
+  /** Payment succeeded (client beacon on success page); payload: reference?, booking_id? */
+  | "payment_completed";
 
 const SESSION_KEY = "shalean_growth_session_id";
 const RETARGETING_KEY = "shalean_retargeting_pending";

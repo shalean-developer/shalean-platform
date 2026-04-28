@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
-import { AvailabilityMessage } from "@/components/booking/AvailabilityMessage";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
@@ -108,6 +107,7 @@ export function StepQuote() {
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       }}
+      footerInsightBanner={{ variant: "quote", rooms: state.rooms, extraRooms: state.extraRooms }}
       canContinue={canContinue}
       onContinue={() => {
         trackBookingFunnelEvent("quote", "next", { route_step: "quote" });
@@ -128,9 +128,6 @@ export function StepQuote() {
           >
             {copy.reassurance}
           </p>
-          <div className="mt-1.5">
-            <AvailabilityMessage />
-          </div>
         </div>
 
         <section className="space-y-3" aria-labelledby="sub-services-heading">

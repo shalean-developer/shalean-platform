@@ -38,10 +38,9 @@ export default function DashboardProfilePage() {
       setEmail(user.email ?? "");
       const meta = user.user_metadata as { full_name?: string; phone?: string };
       setPhone(meta?.phone ?? "");
-      const { data } = await sb.from("user_profiles").select("full_name").eq("id", user.id).maybeSingle();
+      await sb.from("user_profiles").select("id").eq("id", user.id).maybeSingle();
       if (!cancelled) {
-        const fn = (data as { full_name?: string | null } | null)?.full_name?.trim();
-        setName(fn || meta?.full_name || "");
+        setName(meta?.full_name?.trim() || "");
         setProfileLoading(false);
       }
     })();
@@ -60,18 +59,20 @@ export default function DashboardProfilePage() {
     }
     setBusy(true);
     const now = new Date().toISOString();
+    const { error: uErr } = await sb.auth.updateUser({
+      data: { full_name: name.trim(), phone: phone.trim() || undefined },
+    });
+    if (uErr) {
+      toast(uErr.message, "error");
+      setBusy(false);
+      return;
+    }
     const { data: existing } = await sb.from("user_profiles").select("id").eq("id", user.id).maybeSingle();
     const pErr = existing
-      ? (
-          await sb
-            .from("user_profiles")
-            .update({ full_name: name.trim() || null, updated_at: now })
-            .eq("id", user.id)
-        ).error
+      ? (await sb.from("user_profiles").update({ updated_at: now }).eq("id", user.id)).error
       : (
           await sb.from("user_profiles").insert({
             id: user.id,
-            full_name: name.trim() || null,
             tier: "regular",
             booking_count: 0,
             total_spent_cents: 0,
@@ -80,14 +81,6 @@ export default function DashboardProfilePage() {
         ).error;
     if (pErr) {
       toast(pErr.message, "error");
-      setBusy(false);
-      return;
-    }
-    const { error: uErr } = await sb.auth.updateUser({
-      data: { full_name: name.trim(), phone: phone.trim() || undefined },
-    });
-    if (uErr) {
-      toast(uErr.message, "error");
       setBusy(false);
       return;
     }

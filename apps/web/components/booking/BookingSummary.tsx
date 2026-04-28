@@ -13,6 +13,7 @@ import {
   cleaningFrequencyDiscountFraction,
   cleaningFrequencyPlanDisplayLabel,
 } from "@/lib/booking/cleaningFrequencyDisplayDiscount";
+import { computeBundledExtrasTotalZarSnapshot } from "@/lib/pricing/extrasConfig";
 
 type BookingSummaryProps = {
   state: BookingStep1State;
@@ -26,6 +27,8 @@ type BookingSummaryProps = {
   amountToPayZar?: number;
   /** Bottom sheet / inline: drop sticky positioning so the card scrolls naturally. */
   embedded?: boolean;
+  /** When the mobile footer insight banner is open, hide duplicate pricing lines under the estimate (max-lg only). */
+  hideMobilePricingFootnotes?: boolean;
 };
 
 /**
@@ -39,12 +42,18 @@ export default function BookingSummary({
   suppressEstimateUntilLocked = false,
   amountToPayZar,
   embedded = false,
+  hideMobilePricingFootnotes = false,
 }: BookingSummaryProps) {
   const lockedRaw = useLockedBooking();
   const locked = ignoreLockedBooking ? null : lockedRaw;
   const selectedCleaner = useSelectedCleaner();
-  const { canonicalTotalZar } = useBookingPrice();
+  const { canonicalTotalZar, catalog } = useBookingPrice();
   const displayState: BookingStep1State = locked ? lockedToStep1State(locked) : state;
+
+  const selectedExtrasBundledZar = useMemo(() => {
+    if (!catalog || displayState.extras.length === 0) return null;
+    return computeBundledExtrasTotalZarSnapshot(catalog, displayState.extras, displayState.service);
+  }, [catalog, displayState.extras, displayState.service]);
 
   const estimateFromZar = useMemo(() => {
     if (locked || suppressEstimateUntilLocked) return null;
@@ -85,6 +94,8 @@ export default function BookingSummary({
         estimatePlanDiscountedZar={estimatePlanDiscountedZar}
         estimatePlanLabel={estimatePlanLabel}
         amountToPayZar={amountToPayZar}
+        hideMobilePricingFootnotes={hideMobilePricingFootnotes}
+        selectedExtrasBundledZar={selectedExtrasBundledZar}
       />
     </div>
   );

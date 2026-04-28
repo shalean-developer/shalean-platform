@@ -135,19 +135,20 @@ export function extrasUISections(
   if ((LIGHT as readonly string[]).includes(service)) {
     const sections: ExtrasUiSection[] = [
       {
-        id: "kitchen_home",
-        title: "Kitchen & home add-ons",
-        extraIds: pick(["inside-oven", "inside-fridge", "inside-cabinets", "interior-walls"]),
-      },
-      {
-        id: "care_laundry",
-        title: "Care & laundry",
-        extraIds: pick(["ironing", "laundry", "interior-windows", "water-plants"]),
-      },
-      {
-        id: "global",
-        title: "Team & supplies",
-        extraIds: pick(["extra-cleaner", "supplies-kit"]),
+        id: "light_extras",
+        title: "Available add-ons",
+        extraIds: pick([
+          "inside-oven",
+          "inside-fridge",
+          "inside-cabinets",
+          "interior-walls",
+          "ironing",
+          "laundry",
+          "interior-windows",
+          "water-plants",
+          "extra-cleaner",
+          "supplies-kit",
+        ]),
       },
     ];
     return sections.filter((s) => s.extraIds.length > 0);
@@ -156,19 +157,18 @@ export function extrasUISections(
   if ((HEAVY as readonly string[]).includes(service)) {
     const sections: ExtrasUiSection[] = [
       {
-        id: "deep_addons",
-        title: "Deep cleaning add-ons",
-        extraIds: pick(["carpet-cleaning", "mattress-cleaning", "ceiling-cleaning"]),
-      },
-      {
-        id: "outdoor_large",
-        title: "Outdoor & large areas",
-        extraIds: pick(["balcony-cleaning", "garage-cleaning", "outside-windows"]),
-      },
-      {
-        id: "global",
-        title: "Team & supplies",
-        extraIds: pick(["extra-cleaner", "supplies-kit"]),
+        id: "heavy_extras",
+        title: "Available add-ons",
+        extraIds: pick([
+          "carpet-cleaning",
+          "mattress-cleaning",
+          "ceiling-cleaning",
+          "balcony-cleaning",
+          "garage-cleaning",
+          "outside-windows",
+          "extra-cleaner",
+          "supplies-kit",
+        ]),
       },
     ];
     return sections.filter((s) => s.extraIds.length > 0);

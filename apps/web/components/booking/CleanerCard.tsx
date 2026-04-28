@@ -96,6 +96,15 @@ export function CleanerCard({
             </span>
             <span className="text-zinc-400">·</span>
             <span>{cleaner.jobs_completed.toLocaleString("en-ZA")} jobs</span>
+            {cleaner.review_count > 0 ? (
+              <>
+                <span className="text-zinc-400">·</span>
+                <span>
+                  {cleaner.review_count.toLocaleString("en-ZA")}{" "}
+                  {cleaner.review_count === 1 ? "review" : "reviews"}
+                </span>
+              </>
+            ) : null}
           </p>
 
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -125,6 +134,22 @@ export function CleanerCard({
                 <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} aria-hidden />
                 Background checked
               </li>
+            </ul>
+          ) : null}
+
+          {cleaner.recent_reviews && cleaner.recent_reviews.length > 0 ? (
+            <ul
+              className={[
+                "space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800",
+                isFeatured ? "mt-4" : "mt-3",
+              ].join(" ")}
+            >
+              {cleaner.recent_reviews.slice(0, 3).map((r, i) => (
+                <li key={`${r.rating}-${i}`} className="text-xs leading-snug text-zinc-600 dark:text-zinc-400">
+                  <span className="font-semibold text-amber-600 dark:text-amber-500">{r.rating}★</span>{" "}
+                  <span className="line-clamp-2">{r.quote}</span>
+                </li>
+              ))}
             </ul>
           ) : null}
         </div>

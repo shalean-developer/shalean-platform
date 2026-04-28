@@ -10,6 +10,9 @@ export type LiveCleaner = {
   email: string | null;
   rating: number;
   jobs_completed: number;
+  review_count: number;
+  /** Public snippets from `reviews` (non-hidden), max 3. */
+  recent_reviews: { rating: number; quote: string }[];
   distance_km: number | null;
   is_available: boolean;
 };
@@ -92,7 +95,20 @@ export function useCleaners(args: {
           setCleaners([]);
           return;
         }
-        const next = json.cleaners ?? [];
+        const raw = json.cleaners ?? [];
+        const next: LiveCleaner[] = raw.map((c) => ({
+          ...c,
+          review_count: typeof c.review_count === "number" && Number.isFinite(c.review_count) ? Math.max(0, Math.round(c.review_count)) : 0,
+          recent_reviews: Array.isArray((c as { recent_reviews?: unknown }).recent_reviews)
+            ? ((c as { recent_reviews: { rating?: unknown; quote?: unknown }[] }).recent_reviews ?? [])
+                .map((r) => ({
+                  rating: Math.round(Number(r.rating)),
+                  quote: typeof r.quote === "string" ? r.quote : "",
+                }))
+                .filter((r) => Number.isFinite(r.rating) && r.quote.length > 0)
+                .slice(0, 3)
+            : [],
+        }));
         cache.set(key, next);
         setCleaners(next);
         trackGrowthEvent("cleaners_loaded", {

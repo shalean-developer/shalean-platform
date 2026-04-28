@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 
 export type SystemLogLevel = "error" | "warn" | "info";
 
@@ -65,36 +66,23 @@ export async function reportOperationalIssue(
   });
 
   if (isCritical) {
-    await dispatchCriticalAlertWebhook(persistMessage, persistContext);
-  }
-}
-
-/**
- * Optional outbound alert for critical operational issues. Never throws.
- * Env: `DISPATCH_ALERT_WEBHOOK_CRITICAL_URL` — POST JSON `{ message, context, timestamp }`.
- */
-async function dispatchCriticalAlertWebhook(
-  message: string,
-  context: Record<string, unknown> | undefined,
-): Promise<void> {
-  const url = process.env.DISPATCH_ALERT_WEBHOOK_CRITICAL_URL?.trim();
-  if (!url) return;
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 8000);
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-        context: context ?? {},
-        timestamp: new Date().toISOString(),
-      }),
-      signal: ac.signal,
+    const ctx = persistContext ?? {};
+    const errorType =
+      typeof ctx.errorType === "string"
+        ? ctx.errorType
+        : typeof ctx.error_type === "string"
+          ? ctx.error_type
+          : "critical_operational";
+    const bookingIdRaw = ctx.bookingId ?? ctx.booking_id;
+    const cleanerIdRaw = ctx.cleanerId ?? ctx.cleaner_id;
+    const bookingId = typeof bookingIdRaw === "string" ? bookingIdRaw : null;
+    const cleanerId = typeof cleanerIdRaw === "string" ? cleanerIdRaw : null;
+    await postDispatchControlAlert({
+      errorType,
+      message: persistMessage,
+      bookingId,
+      cleanerId,
+      extra: ctx,
     });
-  } catch {
-    /* alert channel down — do not affect request path */
-  } finally {
-    clearTimeout(t);
   }
 }

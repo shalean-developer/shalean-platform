@@ -43,6 +43,7 @@ import {
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
 import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
+import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 
 export type NotifyBookingEventInput =
@@ -680,7 +681,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
 
     const { data: b } = await supabase
       .from("bookings")
-      .select("id, paystack_reference, customer_email, service, date, time, location, booking_snapshot, amount_paid_cents")
+      .select(
+        "id, paystack_reference, customer_email, customer_name, customer_phone, service, date, time, location, booking_snapshot, amount_paid_cents, cleaner_id",
+      )
       .eq("id", event.bookingId)
       .maybeSingle();
     if (!b || typeof b !== "object") return;
@@ -725,6 +728,20 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         bookingId: event.bookingId,
       });
     }
+
+    const cleanerIdCompleted = String((b as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
+    const phoneRawCompleted = String((b as { customer_phone?: string | null }).customer_phone ?? "").trim();
+    if (cleanerIdCompleted && phoneRawCompleted) {
+      const { data: existingReview } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("booking_id", event.bookingId)
+        .maybeSingle();
+      if (!existingReview) {
+        await enqueueReviewSmsPromptQueue(supabase, event.bookingId);
+      }
+    }
+
     const doneFields = buildBookingNotifyMessageFields({
       bookingId: event.bookingId,
       service: (b as { service?: string | null }).service,

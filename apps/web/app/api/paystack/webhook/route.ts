@@ -15,6 +15,7 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,43 @@ export async function POST(request: Request) {
     message: "Webhook hit (signature verified)",
     context: { event: event.event ?? null },
   });
+
+  if (event.event === "charge.failed" && event.data) {
+    const d = event.data as Record<string, unknown>;
+    const reference =
+      typeof d.reference === "string"
+        ? d.reference
+        : typeof (d as { reference?: unknown }).reference === "string"
+          ? String((d as { reference: string }).reference)
+          : "";
+    const gateway =
+      typeof d.gateway_response === "string"
+        ? d.gateway_response.slice(0, 500)
+        : JSON.stringify(d.gateway_response ?? d.message ?? "").slice(0, 500);
+    await reportOperationalIssue("error", "paystack/webhook", "Paystack charge.failed (customer payment not completed)", {
+      reference: reference || null,
+      gateway_response: gateway || null,
+      errorType: "payment_charge_failed",
+    });
+    const admin = getSupabaseAdmin();
+    let bookingId: string | null = null;
+    if (admin && reference) {
+      const { data: b } = await admin.from("bookings").select("id").eq("paystack_reference", reference).maybeSingle();
+      if (b && typeof (b as { id?: string }).id === "string") bookingId = (b as { id: string }).id;
+    }
+    await postDispatchControlAlert(
+      {
+        errorType: "payment_charge_failed",
+        message: "Paystack charge.failed (customer payment not completed)",
+        bookingId,
+        dedupeKey: reference ? `payment_charge_failed:${reference}` : "payment_charge_failed:unknown",
+        dedupeWindowMinutes: 30,
+        extra: { reference: reference || null, gateway_response: gateway || null },
+      },
+      { supabase: admin },
+    );
+    return NextResponse.json({ received: true });
+  }
 
   if (event.event !== "charge.success" || !event.data) {
     return NextResponse.json({ received: true });

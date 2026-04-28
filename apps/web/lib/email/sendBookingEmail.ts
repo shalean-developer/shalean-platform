@@ -853,6 +853,39 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
   }
 }
 
+/** Gentle nudge when checkout was started but payment not completed (cron). */
+export async function sendAbandonedCheckoutReminderEmail(params: {
+  customerEmail: string;
+  firstName: string;
+  checkoutUrl: string;
+  serviceLabel: string;
+}): Promise<{ sent: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { sent: false, error: "Email not configured" };
+  const from = getDefaultFromAddress();
+  const name = params.firstName.trim() || "there";
+  const html = `
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+  <p>Hi ${escapeHtml(name)},</p>
+  <p>Your <strong>${escapeHtml(params.serviceLabel)}</strong> booking is still waiting for payment. Complete checkout in one step — your slot is held briefly.</p>
+  <p><a href="${escapeAttr(params.checkoutUrl)}" style="display:inline-block;margin-top:12px;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">Continue to payment</a></p>
+  <p style="font-size:12px;color:#6b7280;">If you already paid, you can ignore this email.</p>
+</div>`;
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to: normalizeEmail(params.customerEmail.trim()),
+      subject: `Complete your Shalean booking — ${params.serviceLabel}`,
+      html,
+    });
+    if (error) return { sent: false, error: error.message };
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function sendCustomerBookingCancelledEmail(params: {
   customerEmail: string;
   serviceLabel: string;

@@ -70,6 +70,7 @@ export function GlobalTopNav() {
 
   /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. */
   const hideMarketingNav =
+    pathname === "/" ||
     pathname.startsWith("/admin") ||
     pathname === "/booking" ||
     pathname.startsWith("/booking/") ||

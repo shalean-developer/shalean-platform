@@ -11,6 +11,7 @@ import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapsh
 import { Button } from "@/components/ui/button";
 import { AddOnsSelector, iconForAddOn, type AddOn } from "@/components/booking/AddOnsSelector";
 import { cn } from "@/lib/utils";
+import { bookingCopy } from "@/lib/booking/copy";
 
 type BookingWidgetProps = {
   services: HomeService[];
@@ -171,7 +172,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
 
         <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-4">
           <div className="flex items-center justify-between text-sm text-zinc-600">
-            <span>Base service</span>
+            <span>Cleaning service (base)</span>
             <span className="font-semibold text-zinc-900">{formatZar(basePrice)}</span>
           </div>
           <div className="mt-2 flex items-center justify-between text-sm text-zinc-600">
@@ -182,6 +183,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
             <span className="text-sm font-semibold text-blue-700">Estimated total</span>
             <span className="text-3xl font-bold tabular-nums text-blue-700">{formatZar(total)}</span>
           </div>
+          <p className="mt-2 text-[11px] leading-snug text-zinc-600">{bookingCopy.checkout.widgetEstimateNote}</p>
         </div>
 
         <Button type="button" size="xl" className="w-full" disabled={!canContinue} onClick={handleContinue}>

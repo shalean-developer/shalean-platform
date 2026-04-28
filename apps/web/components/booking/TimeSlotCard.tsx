@@ -20,8 +20,6 @@ type TimeSlotCardProps = {
   assistantRecommended?: boolean;
   /** Badge text when `assistantRecommended` (conversion copy). */
   recommendedBadgeText?: string;
-  /** When true, slot list price already includes loyalty discount from `quoteCheckoutZar`. */
-  memberPriceApplied?: boolean;
 };
 
 function DemandBandLabel({ band }: { band: SlotDemandPriceBand }) {
@@ -74,7 +72,6 @@ export function TimeSlotCard({
   onSelect,
   assistantRecommended = false,
   recommendedBadgeText = "Recommended",
-  memberPriceApplied = false,
 }: TimeSlotCardProps) {
   const strategyHighlight = slotStrategyBadge === "recommended" && !selected;
   const assistantHighlight = !slotStrategyBadge && assistantRecommended && !selected;
@@ -143,11 +140,6 @@ export function TimeSlotCard({
         >
           {priceZar != null ? `R ${priceZar.toLocaleString("en-ZA")}` : "—"}
         </p>
-        {memberPriceApplied && priceZar != null ? (
-          <span className="text-[10px] font-medium leading-tight text-emerald-700 dark:text-emerald-300">
-            Member price applied
-          </span>
-        ) : null}
       </div>
     </button>
   );

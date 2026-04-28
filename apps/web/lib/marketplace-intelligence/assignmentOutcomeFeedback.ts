@@ -71,6 +71,7 @@ export async function recordAssignmentOutcomeAndLearn(
     .from("reviews")
     .select("rating")
     .eq("booking_id", bookingId)
+    .eq("is_hidden", false)
     .maybeSingle();
 
   const { data: cl } = await supabase.from("cleaners").select("rating, marketplace_outcome_ema, marketplace_outcome_samples").eq("id", cleanerId).maybeSingle();

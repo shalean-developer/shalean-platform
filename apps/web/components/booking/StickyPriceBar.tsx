@@ -120,7 +120,7 @@ export function StickyPriceBar({
         variant === "flat" &&
           (disabled || loading
             ? "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
-            : "bg-black text-white hover:bg-zinc-900 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"),
+            : "bg-blue-600 text-white shadow-md shadow-blue-600/20 hover:bg-blue-700 active:scale-[0.99] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500"),
         variant === "elevated" &&
           (disabled || loading
             ? "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"

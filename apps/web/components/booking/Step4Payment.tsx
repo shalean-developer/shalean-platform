@@ -1,16 +1,21 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { forwardRef, startTransition, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
 import { readGuestUserFromStorage, writeGuestUserToStorage } from "@/lib/booking/guestUserStorage";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
-import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
 import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
-import { computeBundledExtrasTotalZarSnapshot, computeExtrasBundleSavingsZar } from "@/lib/pricing/extrasConfig";
+import {
+  computeBundledExtrasTotalZarSnapshot,
+  extrasLineItemsFromSnapshot,
+} from "@/lib/pricing/extrasConfig";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getStoredReferral } from "@/lib/referrals/client";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
@@ -54,6 +59,11 @@ function contactFieldsValid(name: string, email: string, phone: string): boolean
   );
 }
 
+export type Step4PaymentHandle = {
+  /** Opens contact details in a dialog; calls `continueToPay` after the user confirms valid details. */
+  runPayWithContactDialog: (continueToPay: () => void | Promise<void>) => void;
+};
+
 type Step4PaymentProps = {
   locked: LockedBooking;
   cleanerName: string | null;
@@ -67,15 +77,24 @@ type Step4PaymentProps = {
     phone?: string;
   } | null;
   onTotalsChange: (totals: Step4Totals) => void;
+  /** When true, promo/tip render in `promoTipPortalEl` (desktop checkout sidebar) instead of the main column accordion. */
+  checkoutPromoInSidebar?: boolean;
+  /** Mount element for promo/tip when `checkoutPromoInSidebar` — set by parent when desktop sidebar host is ready. */
+  promoTipPortalEl?: HTMLDivElement | null;
 };
 
-export function Step4Payment({
-  locked,
-  cleanerName,
-  preferRegisterTab,
-  authOverride,
-  onTotalsChange,
-}: Step4PaymentProps) {
+export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(function Step4Payment(
+  {
+    locked,
+    cleanerName,
+    preferRegisterTab,
+    authOverride,
+    onTotalsChange,
+    checkoutPromoInSidebar = false,
+    promoTipPortalEl = null,
+  },
+  ref,
+) {
   const { catalog, canonicalTotalZar } = useBookingPrice();
   const [tip, setTip] = useState(0);
   const [customMode, setCustomMode] = useState(false);
@@ -96,8 +115,8 @@ export function Step4Payment({
 
   const recurringDiscount = useMemo(() => {
     const f = locked.cleaningFrequency ?? "one_time";
-    if (f === "weekly") return { label: "Weekly plan discount", amount: Math.round(locked.finalPrice * 0.1), frequency: f };
-    if (f === "biweekly") return { label: "Bi-weekly plan discount", amount: Math.round(locked.finalPrice * 0.05), frequency: f };
+    if (f === "weekly") return { amount: Math.round(locked.finalPrice * 0.1), frequency: f };
+    if (f === "biweekly") return { amount: Math.round(locked.finalPrice * 0.05), frequency: f };
     return null;
   }, [locked.cleaningFrequency, locked.finalPrice]);
 
@@ -227,21 +246,21 @@ export function Step4Payment({
     if (promoApplied && promoApplied.discountZar > 0) {
       lines.push({
         key: "promo",
-        label: promoApplied.description.trim() || `Promo (${promoApplied.code})`,
+        label: "Discount (promo)",
         amount: promoApplied.discountZar,
       });
     }
     if (referralDiscount && referralDiscount.discountZar > 0) {
       lines.push({
         key: "referral",
-        label: "Referral discount",
+        label: "Discount (referral)",
         amount: referralDiscount.discountZar,
       });
     }
     if (recurringDiscount && recurringDiscount.amount > 0) {
       lines.push({
         key: "plan",
-        label: recurringDiscount.label,
+        label: "Discount (subscription)",
         amount: recurringDiscount.amount,
       });
     }
@@ -255,9 +274,38 @@ export function Step4Payment({
     [name, email, phone],
   );
 
-  const payReadyForMode = useMemo(() => {
-    return Boolean(contactReady && sessionUser?.accessToken && sessionUser.id);
-  }, [authMode, contactReady, sessionUser]);
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
+  const [contactDialogError, setContactDialogError] = useState<string | null>(null);
+  const continuePayRef = useRef<(() => void | Promise<void>) | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    runPayWithContactDialog: (continueToPay) => {
+      continuePayRef.current = continueToPay;
+      setContactDialogError(null);
+      setContactDialogOpen(true);
+    },
+  }));
+
+  function handleContactDialogOpenChange(open: boolean) {
+    if (!open) {
+      continuePayRef.current = null;
+      setContactDialogError(null);
+    }
+    setContactDialogOpen(open);
+  }
+
+  function submitContactDialog() {
+    if (!contactFieldsValid(name, email, phone)) {
+      setContactDialogError("Enter your full name, a valid phone number, and email.");
+      return;
+    }
+    setContactDialogError(null);
+    persistGuest();
+    const next = continuePayRef.current;
+    continuePayRef.current = null;
+    setContactDialogOpen(false);
+    queueMicrotask(() => void next?.());
+  }
 
   useEffect(() => {
     const userId = sessionUser?.id ?? null;
@@ -483,24 +531,29 @@ export function Step4Payment({
       ? "Not selected"
       : getBookingSummaryServiceLabel(locked.service, locked.service_type);
 
-  const extrasLineItems = useMemo(
-    () => resolveExtrasLineItems({ extras: locked.extras, extras_line_items: locked.extras_line_items, service: locked.service }),
-    [locked.extras, locked.extras_line_items, locked.service],
-  );
-
   const extrasBundledZar = useMemo(() => {
     if (!catalog) return 0;
     return computeBundledExtrasTotalZarSnapshot(catalog, locked.extras, locked.service);
   }, [catalog, locked.extras, locked.service]);
 
-  const extrasBundleSavingsZar = useMemo(
-    () => (catalog ? computeExtrasBundleSavingsZar(catalog, locked.extras, locked.service) : 0),
-    [catalog, locked.extras, locked.service],
+  const extrasRetailRows = useMemo(() => {
+    if (!catalog || !locked.service || locked.extras.length === 0) return [];
+    return extrasLineItemsFromSnapshot(catalog, locked.extras, locked.service);
+  }, [catalog, locked.extras, locked.service]);
+
+  const extrasRetailSumZar = useMemo(
+    () => extrasRetailRows.reduce((s, r) => s + Math.max(0, Math.round(Number(r.price) || 0)), 0),
+    [extrasRetailRows],
   );
 
   const checkoutMicro = bookingCopy.checkout;
   const visitTotalZar = locked.finalPrice;
   const extrasTotalZar = Math.max(0, extrasBundledZar);
+  const showExtrasRetailBreakdown =
+    extrasTotalZar > 0 && extrasRetailRows.length > 0 && extrasRetailSumZar >= extrasTotalZar;
+  const extrasBundleSavingsDisplayZar = showExtrasRetailBreakdown
+    ? Math.max(0, extrasRetailSumZar - extrasTotalZar)
+    : 0;
   const serviceSubtotalZar = Math.max(0, visitTotalZar - extrasTotalZar);
   const anchorPrice = canonicalTotalZar != null && Number.isFinite(canonicalTotalZar) && canonicalTotalZar > 0
     ? canonicalTotalZar
@@ -509,12 +562,141 @@ export function Step4Payment({
   const pricingDeltaPercent =
     anchorPrice != null ? Math.round(((anchorPrice - visitTotalZar) / anchorPrice) * 100) : null;
 
+  const vipSavingsEligible =
+    typeof locked.quoteVipSavingsZar === "number" &&
+    Number.isFinite(locked.quoteVipSavingsZar) &&
+    locked.quoteVipSavingsZar > 0;
+  const timeComparisonSaved =
+    pricingDeltaZar != null && pricingDeltaPercent != null && pricingDeltaZar >= 10;
+  const timeComparisonHigher = pricingDeltaZar != null && pricingDeltaZar < 0;
+  const timeComparisonSame = pricingDeltaZar === 0 && anchorPrice != null;
+  const showSavingsSection =
+    vipSavingsEligible ||
+    timeComparisonSaved ||
+    timeComparisonHigher ||
+    timeComparisonSame ||
+    extrasBundleSavingsDisplayZar > 0;
+
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
 
   const inputClass =
     "h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-primary";
+
+  /** Promo + tip controls — promo row above tip presets (sidebar + accordion). */
+  const promoTipFields = (
+    <>
+      <div className="space-y-2">
+        {recurringDiscount ? (
+          <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
+            Discount (subscription) applied.
+          </div>
+        ) : null}
+        {referralDiscount ? (
+          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+            Referral code {referralDiscount.code}: R {formatZar(referralDiscount.discountZar)} off your payment.
+          </div>
+        ) : null}
+        {promoApplied ? (
+          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+            <p className="font-medium">{promoApplied.code} applied</p>
+            <button type="button" onClick={clearPromo} className="mt-1 text-[11px] font-semibold underline">
+              Remove
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={promoInput}
+                onChange={(e) => {
+                  setPromoInput(e.target.value);
+                  setPromoError(null);
+                }}
+                placeholder="Promo code"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={applyPromo}
+                className="h-9 shrink-0 rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
+              >
+                Apply
+              </button>
+            </div>
+            {promoError ? (
+              <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                {promoError}
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {TIP_PRESETS.map((amount) => {
+            const active = !customMode && tip === amount;
+            return (
+              <button
+                key={amount}
+                type="button"
+                onClick={() => selectPreset(amount)}
+                className={[
+                  "rounded-full border px-3 py-1 text-sm transition",
+                  active
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
+                    : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
+                ].join(" ")}
+              >
+                R{amount}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={startCustom}
+            className={[
+              "rounded-full border px-3 py-1 text-sm transition",
+              customMode
+                ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
+                : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950",
+            ].join(" ")}
+          >
+            Custom
+          </button>
+        </div>
+        {customMode ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex h-9 items-center overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+              <span className="pl-2 text-xs text-zinc-500">R</span>
+              <input
+                type="number"
+                min={0}
+                max={MAX_TIP_ZAR}
+                step={1}
+                value={customTipDraft}
+                onChange={(e) => setCustomTipDraft(e.target.value)}
+                onBlur={commitCustomTip}
+                className="h-full w-20 bg-transparent px-1 text-sm outline-none dark:text-zinc-100"
+                aria-label="Custom tip amount"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={commitCustomTip}
+              className="h-9 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+            >
+              Set
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:p-6">
@@ -533,332 +715,248 @@ export function Step4Payment({
             <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhen}</dt>
             <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{formatLockedAppointmentLabel(locked)}</dd>
           </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">Bedrooms</dt>
-            <dd className="min-w-0 tabular-nums text-zinc-800 dark:text-zinc-100">{locked.rooms}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">Bathrooms</dt>
-            <dd className="min-w-0 tabular-nums text-zinc-800 dark:text-zinc-100">{locked.bathrooms}</dd>
-          </div>
         </dl>
-        <ul className="mt-4 space-y-1 border-t border-zinc-200/80 pt-3 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-          {checkoutMicro.trustShort.map((line) => (
-            <li key={line} className="flex gap-2 leading-snug">
-              <span className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden>
-                ✓
-              </span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Price breakdown</h2>
-        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">Clear summary of what you are paying for.</p>
-        {typeof locked.quoteSubtotalZar === "number" &&
-        Number.isFinite(locked.quoteSubtotalZar) &&
-        typeof locked.quoteVipSavingsZar === "number" &&
-        Number.isFinite(locked.quoteVipSavingsZar) &&
-        locked.quoteVipSavingsZar > 0 ? (
-          <>
-            <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-              <span>Service</span>
-              <span className="tabular-nums">R {formatZar(locked.quoteSubtotalZar)}</span>
-            </div>
-            <div className="mt-1 flex items-center justify-between text-sm text-emerald-800 dark:text-emerald-300">
-              <span>VIP discount ({vipTierDisplayName(normalizeVipTier(locked.vipTier))})</span>
-              <span className="tabular-nums">−R {formatZar(locked.quoteVipSavingsZar)}</span>
-            </div>
-            {typeof locked.quoteAfterVipSubtotalZar === "number" &&
-            Number.isFinite(locked.quoteAfterVipSubtotalZar) ? (
-              <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                After loyalty: R {formatZar(locked.quoteAfterVipSubtotalZar)}
-              </p>
-            ) : null}
-          </>
-        ) : null}
-        <div className="mt-3 space-y-1 rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/40">
-          <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
-            <span>
-              Service ({locked.rooms} bed, {locked.bathrooms} bath)
-            </span>
-            <span className="tabular-nums">R {formatZar(serviceSubtotalZar)}</span>
-          </div>
-          <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
-            <span>Extras</span>
-            <span className="tabular-nums">R {formatZar(extrasTotalZar)}</span>
-          </div>
-          {pricingDeltaZar != null && pricingDeltaZar > 0 ? (
-            <div className="flex items-center justify-between text-green-600 dark:text-green-400">
-              <span>Savings (better time)</span>
-              <span className="tabular-nums">-R {formatZar(Math.abs(pricingDeltaZar))}</span>
-            </div>
-          ) : null}
-          {pricingDeltaZar != null && pricingDeltaZar < 0 ? (
-            <div className="flex items-center justify-between text-orange-600 dark:text-orange-400">
-              <span>High demand</span>
-              <span className="tabular-nums">+R {formatZar(Math.abs(pricingDeltaZar))}</span>
-            </div>
-          ) : null}
-          <div className="border-t border-zinc-200 pt-2 dark:border-zinc-700">
-            <div className="flex items-center justify-between font-semibold">
-              <span className="text-zinc-900 dark:text-zinc-50">Visit total</span>
-              <span className="tabular-nums text-zinc-900 dark:text-zinc-50">R {formatZar(visitTotalZar)}</span>
-            </div>
-          </div>
-        </div>
-        {extrasLineItems.length > 0 ? (
-          <div className="mt-2 space-y-1">
-            <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Extras</p>
-            <ul className="space-y-1">
-              {extrasLineItems.map((row) => (
-                <li key={row.slug} className="flex items-center justify-between text-sm text-zinc-600 dark:text-zinc-400">
-                  <span className="min-w-0 pr-2">{row.name}</span>
-                  <span className="shrink-0 tabular-nums">R {formatZar(row.price)}</span>
-                </li>
-              ))}
-            </ul>
-            {extrasBundleSavingsZar > 0 ? (
-              <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                Bundle savings (R {formatZar(extrasBundleSavingsZar)}) are included in your locked visit total below.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        {tip > 0 ? (
-          <div className="mt-1 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-            <span>Tip</span>
-            <span className="tabular-nums">R {formatZar(tip)}</span>
-          </div>
-        ) : null}
-        {checkoutDiscountLines.map((row) => (
-          <div key={row.key} className="mt-1 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-            <span>{row.label}</span>
-            <span className="tabular-nums text-emerald-700 dark:text-emerald-400">-R {formatZar(row.amount)}</span>
-          </div>
-        ))}
-        <div className="mt-2 flex items-center justify-between text-lg font-semibold">
-          <span className="text-zinc-900 dark:text-zinc-50">
-            {checkoutDiscountLines.length > 0 || tip > 0 ? "Final total" : "Total"}
-          </span>
-          <span className="tabular-nums text-emerald-600 dark:text-emerald-400">R {formatZar(totalZar)}</span>
-        </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Includes all selected extras • Price locked for your selected time
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+          Your visit total is the final price for this booking.
         </p>
-        {pricingDeltaZar != null && pricingDeltaPercent != null && pricingDeltaZar > 0 ? (
-          <p className="text-xs text-green-600 dark:text-green-400">
-            ✔ You saved R{formatZar(Math.abs(pricingDeltaZar))} ({Math.abs(pricingDeltaPercent)}%) by choosing this time
+
+        <div className="mt-4 space-y-0 rounded-lg border border-zinc-200/80 bg-zinc-50/70 text-sm dark:border-zinc-700 dark:bg-zinc-900/40">
+          <div className="flex items-start justify-between gap-3 px-3 py-3 text-zinc-700 dark:text-zinc-300">
+            <span className="min-w-0">
+              <span className="font-medium text-zinc-800 dark:text-zinc-200">Cleaning service</span>
+              <span className="mt-0.5 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+                {locked.rooms} bed · {locked.bathrooms} bath
+              </span>
+            </span>
+            <span className="shrink-0 tabular-nums font-medium text-zinc-800 dark:text-zinc-200">
+              R {formatZar(serviceSubtotalZar)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-t border-zinc-200/80 px-3 py-3 text-zinc-700 dark:text-zinc-300 dark:border-zinc-700/80">
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">Extras</span>
+            <span className="tabular-nums font-medium text-zinc-800 dark:text-zinc-200">
+              R {formatZar(extrasTotalZar)}
+            </span>
+          </div>
+          <div className="border-t border-zinc-300/80 dark:border-zinc-600/80" role="separator" />
+          <div className="flex items-center justify-between px-3 py-3">
+            <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Visit total</span>
+            <span className="text-lg font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-xl">
+              R {formatZar(visitTotalZar)}
+            </span>
+          </div>
+        </div>
+
+        {showSavingsSection ? (
+          <div className="mt-4 space-y-1.5 rounded-lg border border-emerald-200/60 bg-emerald-50/40 px-3 py-3 text-[11px] leading-snug text-emerald-950 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-100">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200/90">
+              Savings and benefits
+            </p>
+            {vipSavingsEligible ? (
+              <p>
+                You saved R {formatZar(Number(locked.quoteVipSavingsZar))} with VIP{" "}
+                {vipTierDisplayName(normalizeVipTier(locked.vipTier))}. Already reflected in your visit total.
+              </p>
+            ) : null}
+            {timeComparisonSaved && pricingDeltaZar != null && pricingDeltaPercent != null ? (
+              <p>
+                You saved R {formatZar(Math.abs(pricingDeltaZar))} compared with our usual reference time for this job
+                ({Math.abs(pricingDeltaPercent)}%). Already reflected in your visit total.
+              </p>
+            ) : null}
+            {timeComparisonHigher ? (
+              <p className="text-zinc-600 dark:text-zinc-400">
+                Your selected time differs from our reference estimate; your visit total above already includes this.
+              </p>
+            ) : null}
+            {timeComparisonSame ? (
+              <p className="text-zinc-600 dark:text-zinc-400">Same as our reference-time estimate for this visit.</p>
+            ) : null}
+            {extrasBundleSavingsDisplayZar > 0 ? (
+              <p>
+                You saved R {formatZar(extrasBundleSavingsDisplayZar)} by bundling your add-ons. Already reflected in
+                your visit total.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <p className="mt-3 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+          {checkoutMicro.pricingRoundingNote}
+        </p>
+
+        {tip > 0 || checkoutDiscountLines.length > 0 ? (
+          <div className="mt-4 space-y-2 border-t border-zinc-200/80 pt-3 dark:border-zinc-700">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Payment adjustments
+            </h3>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Your visit total stays as above; these items change only what you pay today.
+            </p>
+            {tip > 0 ? (
+              <div className="flex items-center justify-between text-sm text-zinc-700 dark:text-zinc-300">
+                <span>Tip added</span>
+                <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
+                  R {formatZar(tip)}
+                </span>
+              </div>
+            ) : null}
+            {checkoutDiscountLines.length > 0 ? (
+              <>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Promotions applied at payment</p>
+                {checkoutDiscountLines.map((row) => (
+                  <div
+                    key={row.key}
+                    className="flex items-center justify-between text-sm text-zinc-700 dark:text-zinc-300"
+                  >
+                    <span>{row.label}</span>
+                    <span className="tabular-nums font-medium text-emerald-800 dark:text-emerald-300">
+                      R {formatZar(row.amount)} off
+                    </span>
+                  </div>
+                ))}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-4 rounded-xl border border-primary/25 bg-primary/[0.07] px-4 py-4 dark:border-primary/35 dark:bg-primary/[0.12]">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Total to pay
+            </span>
+            <span className="text-[1.85rem] font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl">
+              R {formatZar(totalZar)}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-snug text-zinc-600 dark:text-zinc-400">
+            {tip > 0 || discountZar > 0
+              ? "Includes your locked visit plus tip, with promotions applied as shown."
+              : "Same as your visit total · Price locked for this time"}
           </p>
-        ) : null}
-        {pricingDeltaZar != null && pricingDeltaZar < 0 ? (
-          <p className="text-xs text-orange-600 dark:text-orange-400">
-            ⚡ Higher price due to demand at this time
-          </p>
-        ) : null}
-        {pricingDeltaZar === 0 ? (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Standard pricing applied</p>
-        ) : null}
-        {anchorPrice != null ? (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Compared to standard time price</p>
-        ) : null}
+        </div>
         <p className="mt-3 rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 text-xs font-medium leading-snug text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
           {checkoutMicro.extrasGuarantee}
         </p>
       </section>
 
-      <section
-        aria-labelledby="optional-heading"
-        className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60"
-      >
-        <button
-          type="button"
-          id="optional-heading"
-          onClick={() => setPromoOpen((o) => !o)}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50"
-          aria-expanded={promoOpen}
+      {checkoutPromoInSidebar && promoTipPortalEl
+        ? createPortal(
+            <div className="space-y-4 text-sm text-zinc-900 dark:text-zinc-100">
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">Add promo or tip (optional)</p>
+              {promoTipFields}
+            </div>,
+            promoTipPortalEl,
+          )
+        : null}
+
+      {!checkoutPromoInSidebar ? (
+        <section
+          aria-labelledby="optional-heading"
+          className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60"
         >
-          <span>Add promo or tip (optional)</span>
-          <ChevronDown
-            className={[
-              "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
-              promoOpen ? "rotate-180" : "",
-            ].join(" ")}
-            aria-hidden
-          />
-        </button>
-        {promoOpen ? (
-          <div className="space-y-4 border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">
-            <div className="space-y-2">
-              {recurringDiscount ? (
-                <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
-                  {recurringDiscount.label} applied.
-                </div>
-              ) : null}
-              {referralDiscount ? (
-                <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
-                  Code: {referralDiscount.code} · −R {formatZar(referralDiscount.discountZar)}
-                </div>
-              ) : null}
-              {promoApplied ? (
-                <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
-                  <p className="font-medium">{promoApplied.code} applied</p>
-                  <button
-                    type="button"
-                    onClick={clearPromo}
-                    className="mt-1 text-[11px] font-semibold underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={promoInput}
-                      onChange={(e) => {
-                        setPromoInput(e.target.value);
-                        setPromoError(null);
-                      }}
-                      placeholder="Promo code"
-                      className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950"
-                      autoComplete="off"
-                    />
-                    <button
-                      type="button"
-                      onClick={applyPromo}
-                      className="h-9 shrink-0 rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                  {promoError ? (
-                    <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-                      {promoError}
-                    </p>
-                  ) : null}
-                </>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {TIP_PRESETS.map((amount) => {
-                  const active = !customMode && tip === amount;
-                  return (
-                    <button
-                      key={amount}
-                      type="button"
-                      onClick={() => selectPreset(amount)}
-                      className={[
-                        "rounded-full border px-3 py-1 text-sm transition",
-                        active
-                          ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
-                          : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
-                      ].join(" ")}
-                    >
-                      R{amount}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={startCustom}
-                  className={[
-                    "rounded-full border px-3 py-1 text-sm transition",
-                    customMode
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
-                      : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950",
-                  ].join(" ")}
-                >
-                  Custom
-                </button>
-              </div>
-              {customMode ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex h-9 items-center overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-                    <span className="pl-2 text-xs text-zinc-500">R</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={MAX_TIP_ZAR}
-                      step={1}
-                      value={customTipDraft}
-                      onChange={(e) => setCustomTipDraft(e.target.value)}
-                      onBlur={commitCustomTip}
-                      className="h-full w-20 bg-transparent px-1 text-sm outline-none dark:text-zinc-100"
-                      aria-label="Custom tip amount"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={commitCustomTip}
-                    className="h-9 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                  >
-                    Set
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      <section
-        aria-labelledby="contact-heading"
-        className="rounded-xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950/60"
-      >
-        <h2 id="contact-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Contact details</h2>
-        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-          {sessionUser
-            ? "Signed in. Confirm your details before payment."
-            : "You’ll be asked to login or sign up after tapping Confirm."}
-        </p>
-        <div className="mt-3 space-y-3">
-          <input
-            type="text"
-            required
-            autoComplete="name"
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={persistGuest}
-            className={inputClass}
-          />
-          <input
-            type="tel"
-            required
-            autoComplete="tel"
-            inputMode="tel"
-            placeholder="Phone number"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onBlur={persistGuest}
-            className={inputClass}
-          />
-          <input
-            type="email"
-            required
-            autoComplete="email"
-            inputMode="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={persistGuest}
-            className={inputClass}
-          />
-        </div>
-        {!supabaseConfigured ? (
-          <p className="mt-2 text-xs text-amber-800 dark:text-amber-400/90">Sign-in is currently unavailable.</p>
-        ) : null}
-      </section>
-
-      {cleanerName ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Cleaner: {cleanerName}</p>
+          <button
+            type="button"
+            id="optional-heading"
+            onClick={() => setPromoOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50"
+            aria-expanded={promoOpen}
+          >
+            <span>Add promo or tip (optional)</span>
+            <ChevronDown
+              className={[
+                "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
+                promoOpen ? "rotate-180" : "",
+              ].join(" ")}
+              aria-hidden
+            />
+          </button>
+          {promoOpen ? (
+            <div className="space-y-4 border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">{promoTipFields}</div>
+          ) : null}
+        </section>
       ) : null}
+
+      <Dialog open={contactDialogOpen} onOpenChange={handleContactDialogOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contact details</DialogTitle>
+            <DialogDescription>
+              {sessionUser
+                ? "Signed in. Confirm your details before payment."
+                : "You’ll be asked to log in or sign up after you continue, if you’re not already signed in."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <input
+              type="text"
+              required
+              autoComplete="name"
+              placeholder="Full name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setContactDialogError(null);
+              }}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
+            <input
+              type="tel"
+              required
+              autoComplete="tel"
+              inputMode="tel"
+              placeholder="Phone number"
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                setContactDialogError(null);
+              }}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              inputMode="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setContactDialogError(null);
+              }}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
+          </div>
+          {cleanerName ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Cleaner: {cleanerName}</p>
+          ) : null}
+          {!supabaseConfigured ? (
+            <p className="text-xs text-amber-800 dark:text-amber-400/90">Sign-in is currently unavailable.</p>
+          ) : null}
+          {contactDialogError ? (
+            <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+              {contactDialogError}
+            </p>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={() => handleContactDialogOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitContactDialog}>
+              Continue to secure payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+});
+
+Step4Payment.displayName = "Step4Payment";

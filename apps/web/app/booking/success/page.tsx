@@ -172,6 +172,29 @@ function SuccessContent() {
             assigned_cleaner_id: data.assignedCleanerId ?? null,
             selected_cleaner_id: data.selectedCleanerId ?? null,
           });
+          try {
+            const refKey = String(data.reference ?? reference ?? "").trim();
+            const k = refKey ? `shalean_payment_completed_${refKey}` : "";
+            if (typeof sessionStorage !== "undefined" && k) {
+              if (!sessionStorage.getItem(k)) {
+                sessionStorage.setItem(k, "1");
+                trackGrowthEvent("payment_completed", {
+                  reference: data.reference ?? null,
+                  booking_id: data.bookingId ?? null,
+                });
+              }
+            } else {
+              trackGrowthEvent("payment_completed", {
+                reference: data.reference ?? null,
+                booking_id: data.bookingId ?? null,
+              });
+            }
+          } catch {
+            trackGrowthEvent("payment_completed", {
+              reference: data.reference ?? null,
+              booking_id: data.bookingId ?? null,
+            });
+          }
           setPhase("success");
           return true;
         }

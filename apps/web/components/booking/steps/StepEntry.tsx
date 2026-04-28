@@ -133,6 +133,7 @@ export function StepEntry() {
   return (
     <BookingLayout
       mobileEntryFooter
+      footerEntryLead={copy.socialProof}
       canContinue={canContinue}
       onContinue={goQuote}
       continueLabel={copy.cta}
@@ -144,7 +145,6 @@ export function StepEntry() {
             {copy.title}
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400 lg:mt-2">{copy.subtitle}</p>
-          <p className="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.socialProof}</p>
         </div>
 
         <div className="space-y-1.5 max-lg:space-y-1.5 lg:space-y-2">

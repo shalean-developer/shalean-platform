@@ -3,6 +3,12 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export type CleanerReviewSnippet = {
+  rating: number;
+  /** Truncated, single-line text for cards (no PII). */
+  quote: string;
+};
+
 export type AvailableCleaner = {
   id: string;
   full_name: string;
@@ -11,6 +17,10 @@ export type AvailableCleaner = {
   rating: number;
   is_available: boolean;
   jobs_completed: number;
+  /** Denormalized count from `reviews` (see migration). */
+  review_count: number;
+  /** Up to 3 recent public (non-hidden) reviews for trust UI. */
+  recent_reviews: CleanerReviewSnippet[];
   distance_km: number | null;
   base_lat: number | null;
   base_lng: number | null;
@@ -24,6 +34,7 @@ type CleanerRow = {
   rating: number | null;
   is_available: boolean | null;
   jobs_completed: number | null;
+  review_count?: number | null;
   home_lat?: number | null;
   home_lng?: number | null;
   latitude?: number | null;
@@ -86,6 +97,48 @@ function bookingDate(row: BookingRow): string | null {
   return row.booking_date ?? row.date ?? null;
 }
 
+function sanitizeReviewQuote(raw: string | null | undefined): string {
+  if (!raw || typeof raw !== "string") return "";
+  return raw.replace(/\s+/g, " ").trim().slice(0, 180);
+}
+
+async function fetchRecentPublicReviewsForCleaners(
+  admin: SupabaseClient,
+  cleanerIds: string[],
+): Promise<Map<string, CleanerReviewSnippet[]>> {
+  const out = new Map<string, CleanerReviewSnippet[]>();
+  for (const id of cleanerIds) out.set(id, []);
+  if (cleanerIds.length === 0) return out;
+
+  const rows = await Promise.all(
+    cleanerIds.map(async (cleanerId) => {
+      const { data, error } = await admin
+        .from("reviews")
+        .select("rating, comment")
+        .eq("cleaner_id", cleanerId)
+        .eq("is_hidden", false)
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (error) return { cleanerId, snippets: [] as CleanerReviewSnippet[] };
+      const snippets = (data ?? [])
+        .map((r) => {
+          const rating = Math.round(Number((r as { rating?: number }).rating));
+          const quote = sanitizeReviewQuote(String((r as { comment?: string | null }).comment ?? ""));
+          if (!Number.isFinite(rating) || rating < 1 || rating > 5) return null;
+          const displayQuote = quote.length > 0 ? quote : `Rated ${rating}/5.`;
+          return { rating, quote: displayQuote };
+        })
+        .filter((x): x is CleanerReviewSnippet => x != null);
+      return { cleanerId, snippets: snippets.slice(0, 3) };
+    }),
+  );
+
+  for (const row of rows) {
+    out.set(row.cleanerId, row.snippets);
+  }
+  return out;
+}
+
 /** Slot [slotStart, slotEnd] fully inside availability [winStart, winEnd]. */
 function slotWithinWindow(slotStart: number, slotEnd: number, winStart: number, winEnd: number): boolean {
   return slotStart >= winStart && slotEnd <= winEnd;
@@ -140,7 +193,9 @@ export async function getAvailableCleaners(
   const [cleanersRes, bookingsRes] = await Promise.all([
     admin
       .from("cleaners")
-      .select("id, full_name, phone, email, rating, is_available, jobs_completed, home_lat, home_lng, latitude, longitude")
+      .select(
+        "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude",
+      )
       .eq("is_available", true),
     admin
       .from("bookings")
@@ -221,6 +276,8 @@ export async function getAvailableCleaners(
       rating: Number(c.rating ?? 5),
       is_available: Boolean(c.is_available),
       jobs_completed: Number(c.jobs_completed ?? 0),
+      review_count: Math.max(0, Math.round(Number(c.review_count ?? 0))),
+      recent_reviews: [],
       distance_km: canCalc ? haversineKm(args.userLat!, args.userLng!, lat!, lng!) : null,
       base_lat: lat,
       base_lng: lng,
@@ -235,7 +292,15 @@ export async function getAvailableCleaners(
     return b.jobs_completed - a.jobs_completed;
   });
 
-  return withDistance.slice(0, limit);
+  const sliced = withDistance.slice(0, limit);
+  const recentByCleaner = await fetchRecentPublicReviewsForCleaners(
+    admin,
+    sliced.map((c) => c.id),
+  );
+  return sliced.map((c) => ({
+    ...c,
+    recent_reviews: recentByCleaner.get(c.id) ?? [],
+  }));
 }
 
 /**

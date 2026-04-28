@@ -104,6 +104,7 @@ export function StepDetailsForm() {
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       }}
+      footerInsightBanner={{ variant: "details", rooms: state.rooms, extraRooms: state.extraRooms }}
       canContinue={canContinue}
       onContinue={goWhen}
       continueLabel={copy.cta}
@@ -132,7 +133,13 @@ export function StepDetailsForm() {
         >
           <SectionCard title={copy.homeDetailsTitle} description={copy.homeDetailsHint} descriptionDesktopOnly>
             <MobileFullWidth insideSectionCard>
-              <HomeDetails state={state} maxRooms={maxRooms} setState={setState} omitLocation />
+              <HomeDetails
+                state={state}
+                maxRooms={maxRooms}
+                setState={setState}
+                omitLocation
+                foldExtraRoomsIntoFooter
+              />
             </MobileFullWidth>
           </SectionCard>
 

@@ -11,6 +11,8 @@ export type CheckoutNoticePayload = {
   description: string;
   cta?: { label: string; onClick: () => void };
   autoDismissMs?: number;
+  /** Payment step: show reschedule dialog instead of top banner (no auto-dismiss). */
+  rescheduleInModal?: boolean;
 };
 
 /** Strip legacy / internal wording from any API error string. */
@@ -36,14 +38,21 @@ export function useCheckoutNotice() {
       const raw = typeof data.error === "string" ? data.error : "";
 
       if (code === PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE || looksLikeLockOrTamperMessage(raw)) {
+        if (options?.onChooseAnotherTime) {
+          show({
+            tone: "danger",
+            title: "Time slot unavailable",
+            description: "This time was just booked. Pick another available slot below.",
+            autoDismissMs: 0,
+            rescheduleInModal: true,
+          });
+          return;
+        }
         show({
           tone: "danger",
           title: "Time slot unavailable",
           description: "This time was just booked. Please choose another available slot.",
           autoDismissMs: 4000,
-          cta: options?.onChooseAnotherTime
-            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
-            : undefined,
         });
         return;
       }
@@ -59,19 +68,39 @@ export function useCheckoutNotice() {
       }
 
       if (code === "LOCK_EXPIRED") {
+        if (options?.onChooseAnotherTime) {
+          show({
+            tone: "danger",
+            title: "Price hold expired",
+            description: "Pick a new time below to refresh your quote, then continue to payment.",
+            autoDismissMs: 0,
+            rescheduleInModal: true,
+          });
+          return;
+        }
         show({
           tone: "danger",
           title: "Price hold expired",
           description: "Choose your time again to refresh your quote, then continue to payment.",
           autoDismissMs: 6000,
-          cta: options?.onChooseAnotherTime
-            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
-            : undefined,
         });
         return;
       }
 
       if (code === "REQUOTE_REQUIRED" || code === "SIGNATURE_INVALID") {
+        if (options?.onChooseAnotherTime) {
+          show({
+            tone: "danger",
+            title: "Quote needs a refresh",
+            description:
+              typeof data.error === "string" && data.error.trim()
+                ? data.error
+                : "Pick a new time below to lock an up-to-date price, then continue.",
+            autoDismissMs: 0,
+            rescheduleInModal: true,
+          });
+          return;
+        }
         show({
           tone: "danger",
           title: "Quote needs a refresh",
@@ -80,14 +109,24 @@ export function useCheckoutNotice() {
               ? data.error
               : "Choose your time again to lock an up-to-date price, then continue.",
           autoDismissMs: 7000,
-          cta: options?.onChooseAnotherTime
-            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
-            : undefined,
         });
         return;
       }
 
       if (code === "PRICE_MISMATCH" || code === "DURATION_MISMATCH") {
+        if (options?.onChooseAnotherTime) {
+          show({
+            tone: "danger",
+            title: "Price updated",
+            description:
+              typeof data.error === "string" && data.error.trim()
+                ? data.error
+                : "Availability or demand changed. Pick a new time below to re-lock your slot.",
+            autoDismissMs: 0,
+            rescheduleInModal: true,
+          });
+          return;
+        }
         show({
           tone: "danger",
           title: "Price updated",
@@ -96,9 +135,6 @@ export function useCheckoutNotice() {
               ? data.error
               : "Availability or demand changed. Re-lock your slot to continue.",
           autoDismissMs: 7000,
-          cta: options?.onChooseAnotherTime
-            ? { label: "Choose another time", onClick: options.onChooseAnotherTime }
-            : undefined,
         });
         return;
       }

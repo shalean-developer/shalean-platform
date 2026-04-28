@@ -55,7 +55,11 @@ const NAV_GROUPS: readonly NavGroup[] = [
   },
   {
     title: "Customers",
-    items: [{ label: "Customers", href: "/admin/customers" }],
+    items: [
+      { label: "Customers", href: "/admin/customers" },
+      { label: "Reviews", href: "/admin/reviews" },
+      { label: "Review funnel", href: "/admin/reviews/analytics" },
+    ],
   },
 ] as const;
 
@@ -80,6 +84,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAllowed, setIsAllowed] = useState(false);
   const [userLabel, setUserLabel] = useState<string>("");
+  /** When signed in but `isAdmin()` is false — usually missing or mismatched `ADMIN_EMAIL` / `ADMIN_EMAILS` on the server. */
+  const [signedInNonAdminEmail, setSignedInNonAdminEmail] = useState<string | null>(null);
+  const [noSupabaseClient, setNoSupabaseClient] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const redirectTarget = useMemo(() => pathname || "/admin", [pathname]);
@@ -90,15 +97,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+
+    async function verifyAdminAccess(): Promise<void> {
       const sb = getSupabaseBrowser();
       if (!sb) {
         if (!cancelled) {
           setIsAllowed(false);
+          setNoSupabaseClient(true);
+          setSignedInNonAdminEmail(null);
           setLoading(false);
         }
         return;
       }
+      if (!cancelled) setNoSupabaseClient(false);
+
       const { data: sessionData } = await sb.auth.getSession();
       const token = sessionData.session?.access_token;
       const email = sessionData.session?.user?.email?.trim();
@@ -107,6 +119,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       if (!token) {
         if (!cancelled) {
           setIsAllowed(false);
+          setSignedInNonAdminEmail(null);
           setLoading(false);
         }
         return;
@@ -115,15 +128,49 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       const res = await fetch("/api/admin/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const json = (await res.json()) as { isAdmin?: boolean };
-      if (!cancelled) {
-        setIsAllowed(Boolean(res.ok && json.isAdmin));
-        setLoading(false);
+      const json = (await res.json()) as {
+        isAdmin?: boolean;
+        user?: { email?: string | null };
+        error?: string;
+      };
+      if (cancelled) return;
+
+      const okAdmin = Boolean(res.ok && json.isAdmin);
+      setIsAllowed(okAdmin);
+      if (okAdmin) {
+        setSignedInNonAdminEmail(null);
+      } else if (res.ok && json.user?.email && !json.isAdmin) {
+        setSignedInNonAdminEmail(String(json.user.email));
+      } else {
+        setSignedInNonAdminEmail(null);
       }
-    })();
+      setLoading(false);
+    }
+
+    void verifyAdminAccess();
+
+    const sb = getSupabaseBrowser();
+    const sub =
+      sb?.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+          if (!cancelled) {
+            setLoading(true);
+            void verifyAdminAccess();
+          }
+        }
+        if (event === "SIGNED_OUT") {
+          if (!cancelled) {
+            setIsAllowed(false);
+            setSignedInNonAdminEmail(null);
+            setUserLabel("");
+            setLoading(false);
+          }
+        }
+      }) ?? null;
 
     return () => {
       cancelled = true;
+      sub?.data.subscription.unsubscribe();
     };
   }, []);
 
@@ -146,13 +193,41 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <main className="flex min-h-[55vh] items-center justify-center px-4">
         <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Admin access required</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Login to continue.</p>
-          <Link
-            href={`/login?role=admin&redirect=${encodeURIComponent(redirectTarget)}`}
-            className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
-          >
-            Login as Admin
-          </Link>
+          {noSupabaseClient ? (
+            <p className="mt-2 text-sm text-amber-800 dark:text-amber-200/90">
+              This build is missing <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">NEXT_PUBLIC_SUPABASE_URL</code> or{" "}
+              <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> — check{" "}
+              <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">.env.local</code>.
+            </p>
+          ) : signedInNonAdminEmail ? (
+            <>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                You are signed in as <span className="font-medium text-zinc-900 dark:text-zinc-100">{signedInNonAdminEmail}</span>, but this address is
+                not on the server admin allowlist.
+              </p>
+              <p className="mt-3 text-left text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                Deploy / local server must set <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">ADMIN_EMAIL</code> (single) or{" "}
+                <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">ADMIN_EMAILS</code> (comma-separated) to the exact login email,
+                then restart. Vercel: Project → Settings → Environment Variables.
+              </p>
+              <Link
+                href={`/login?role=admin&redirect=${encodeURIComponent(redirectTarget)}`}
+                className="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+              >
+                Use a different account
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Sign in with an allowlisted admin account to continue.</p>
+              <Link
+                href={`/login?role=admin&redirect=${encodeURIComponent(redirectTarget)}`}
+                className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                Login as Admin
+              </Link>
+            </>
+          )}
         </div>
       </main>
     );

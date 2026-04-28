@@ -11,6 +11,7 @@ import { bookingCopy } from "@/lib/booking/copy";
 import type { VipTier } from "@/lib/pricing/vipTier";
 import { normalizeVipTier, vipDiscountLabel, vipTierDisplayName } from "@/lib/pricing/vipTier";
 import { Bath, Bed, Clock3, DoorOpen, MapPin, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type BookingSummaryCardProps = {
   state: BookingStep1State;
@@ -30,6 +31,10 @@ type BookingSummaryCardProps = {
   amountToPayZar?: number;
   /** Step 3+ — from `booking_cleaner`; does not affect pricing. */
   selectedCleanerName?: string | null;
+  /** Hide estimate footnotes on small screens (shown in footer insight banner instead). */
+  hideMobilePricingFootnotes?: boolean;
+  /** Bundled ZAR total for selected extras (details / quote; null when none or catalog missing). */
+  selectedExtrasBundledZar?: number | null;
 };
 
 function formatHoursLabel(hours: number): string {
@@ -113,6 +118,8 @@ export function BookingSummaryCard({
   estimatePlanLabel = null,
   amountToPayZar,
   selectedCleanerName = null,
+  hideMobilePricingFootnotes = false,
+  selectedExtrasBundledZar = null,
 }: BookingSummaryCardProps) {
   const whatValue =
     state.service === null ? "Not selected" : getBookingSummaryServiceLabel(state.service, state.service_type);
@@ -153,6 +160,18 @@ export function BookingSummaryCard({
         <CompactDetailRow label="When" value={whenValue} icon="when" />
       </div>
 
+      {state.extras.length > 0 && selectedExtrasBundledZar != null ? (
+        <p className="mt-3 text-sm font-medium tabular-nums text-zinc-800 dark:text-zinc-100">
+          Selected add-ons:{" "}
+          <span className="text-blue-600 dark:text-blue-400">
+            R {selectedExtrasBundledZar.toLocaleString("en-ZA")}
+          </span>
+          <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400 sm:ml-2 sm:mt-0 sm:inline">
+            (bundled where it saves you money)
+          </span>
+        </p>
+      ) : null}
+
       {!locked && estimateFromZar != null && !suppressEstimateUntilLocked ? (
         <div className="mt-4 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/50 dark:bg-blue-950/35">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -178,9 +197,14 @@ export function BookingSummaryCard({
               From R {estimateFromZar.toLocaleString("en-ZA")}
             </p>
           )}
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Final price may change based on your selected time</p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400/90">
-            You may get a lower price by choosing a flexible time
+          <div className={cn(hideMobilePricingFootnotes && "max-lg:hidden")}>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">{bookingCopy.checkout.widgetEstimateNote}</p>
+            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400/90">
+              You may get a lower price by choosing a flexible time
+            </p>
+          </div>
+          <p className="mt-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            {bookingCopy.summary.finalPriceConfirmed}
           </p>
         </div>
       ) : null}
@@ -230,13 +254,20 @@ export function BookingSummaryCard({
           locked.quoteVipSavingsZar > 0 ? (
             <div className="space-y-1 rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2 text-xs dark:border-emerald-900/40 dark:bg-emerald-950/25">
               <p className="flex justify-between tabular-nums text-zinc-700 dark:text-zinc-300">
-                <span>Job subtotal</span>
+                <span>Cleaning service (base)</span>
                 <span>R {locked.quoteSubtotalZar.toLocaleString("en-ZA")}</span>
               </p>
               <p className="flex justify-between tabular-nums font-medium text-emerald-900 dark:text-emerald-200">
                 <span>VIP ({vipTierDisplayName(normalizeVipTier(locked.vipTier))})</span>
                 <span>−R {locked.quoteVipSavingsZar.toLocaleString("en-ZA")}</span>
               </p>
+              {typeof locked.quoteAfterVipSubtotalZar === "number" &&
+              Number.isFinite(locked.quoteAfterVipSubtotalZar) ? (
+                <p className="text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+                  After loyalty: R {locked.quoteAfterVipSubtotalZar.toLocaleString("en-ZA")} — your visit total below
+                  includes time and demand. {bookingCopy.checkout.pricingRoundingNote}
+                </p>
+              ) : null}
             </div>
           ) : null}
           <p className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
@@ -249,25 +280,27 @@ export function BookingSummaryCard({
           Number.isFinite(amountToPayZar) &&
           Math.round(amountToPayZar) !== Math.round(getLockedBookingDisplayPrice(locked)) ? (
             <>
-              <p className="flex justify-between font-semibold">
-                <span className="text-emerald-800 dark:text-emerald-200">Total to pay</span>
-                <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              <p className="flex items-end justify-between gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-emerald-900/90 dark:text-emerald-200/90">
+                  Total to pay
+                </span>
+                <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                   R {amountToPayZar.toLocaleString("en-ZA")}
                 </span>
               </p>
-              <p className="flex justify-between text-xs text-zinc-600 dark:text-zinc-400">
-                <span>Visit price (locked)</span>
-                <span className="font-medium tabular-nums">
+              <p className="mt-1 flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
+                <span>Visit total</span>
+                <span className="font-medium tabular-nums text-zinc-700 dark:text-zinc-300">
                   R {getLockedBookingDisplayPrice(locked).toLocaleString("en-ZA")}
                 </span>
               </p>
             </>
           ) : (
-            <p className="flex justify-between font-semibold">
-              <span className="text-emerald-800 dark:text-emerald-200">
-                {typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar) ? "Total to pay" : "Final price"}
+            <p className="flex items-end justify-between gap-3">
+              <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                {typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar) ? "Total to pay" : "Visit total"}
               </span>
-              <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                 R{" "}
                 {(typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar)
                   ? amountToPayZar
@@ -276,9 +309,7 @@ export function BookingSummaryCard({
               </span>
             </p>
           )}
-          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-            Best available price applied
-          </p>
+          <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{bookingCopy.summary.finalPriceConfirmed}</p>
         </div>
       ) : null}
 

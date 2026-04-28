@@ -3,6 +3,7 @@ import { enqueueDispatchRetry } from "@/lib/dispatch/dispatchRetryQueue";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 
 const DEFAULT_SLA_MIN = 10;
 
@@ -65,7 +66,19 @@ export async function reportPendingBookingSlaBreaches(
       "warn",
       "dispatch_sla_watchdog",
       `${bookingIds.length} booking(s) pending without cleaner past SLA (${minutes}m, clock=became_pending_at|created_at)`,
-      { bookingIds, minutes },
+      { bookingIds, minutes, errorType: "dispatch_unassigned_past_sla" },
+    );
+    const bucket = Math.floor(Date.now() / (15 * 60_000));
+    await postDispatchControlAlert(
+      {
+        errorType: "dispatch_unassigned_past_sla",
+        message: `${bookingIds.length} pending booking(s) without cleaner past ${minutes}m SLA`,
+        bookingId: bookingIds[0],
+        dedupeKey: `dispatch_sla_webhook:${bucket}:${minutes}`,
+        dedupeWindowMinutes: 14,
+        extra: { bookingIds, minutes },
+      },
+      { supabase },
     );
     try {
       await notifyBookingEvent({ type: "sla_breach", supabase, bookingIds, minutes });

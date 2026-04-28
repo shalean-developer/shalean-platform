@@ -464,7 +464,6 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
       },
       assistantRecommended: false,
       recommendedBadgeText: bookingCopy.when.recommended,
-      memberPriceApplied: vipTier !== "regular",
     };
   }
 
