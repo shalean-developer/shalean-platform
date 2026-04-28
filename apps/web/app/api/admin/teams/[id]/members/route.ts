@@ -427,6 +427,26 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Team is inactive." }, { status: 400 });
   }
 
+  const { data: payoutOwnerBlock, error: payoutOwnerErr } = await admin
+    .from("bookings")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("is_team_job", true)
+    .eq("payout_owner_cleaner_id", cleanerId)
+    .limit(1)
+    .maybeSingle();
+  if (payoutOwnerErr) return NextResponse.json({ error: payoutOwnerErr.message }, { status: 500 });
+  if (payoutOwnerBlock) {
+    return NextResponse.json(
+      {
+        error:
+          "This cleaner is the payout owner on at least one team booking. Reassign the payout owner on those bookings before removing them from the team.",
+        code: "payout_owner_team_member",
+      },
+      { status: 409 },
+    );
+  }
+
   const { data: blocking, error: activeErr } = await admin
     .from("bookings")
     .select("id")

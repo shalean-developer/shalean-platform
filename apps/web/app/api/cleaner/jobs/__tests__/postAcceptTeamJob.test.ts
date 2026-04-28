@@ -33,9 +33,16 @@ function adminForTeamAccept() {
                     is_team_job: true,
                     status: "assigned",
                     assignment_attempts: 0,
+                    cleaner_response_status: null,
+                    en_route_at: null,
                   },
                   error: null,
                 }),
+            }),
+          }),
+          update: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({ error: null }),
             }),
           }),
         };
@@ -76,8 +83,8 @@ describe("POST /api/cleaner/jobs/[id] — team job Confirm availability (accept)
       { params: Promise.resolve({ id: "b1" }) },
     );
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { ok?: boolean; status?: string };
-    expect(json).toEqual({ ok: true, status: "assigned" });
+    const json = (await res.json()) as { ok?: boolean; status?: string; cleaner_response_status?: string };
+    expect(json).toMatchObject({ ok: true, status: "assigned", cleaner_response_status: "accepted" });
     expect(syncCleanerBusyFromBookings).toHaveBeenCalledWith(expect.anything(), "cleaner-1");
   });
 });

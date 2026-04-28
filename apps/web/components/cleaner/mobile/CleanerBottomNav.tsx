@@ -1,13 +1,12 @@
 "use client";
 
-import { CalendarDays, Home, UserRound, Wallet } from "lucide-react";
+import { Home, UserRound, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type CleanerMobileTab = "home" | "schedule" | "earnings" | "profile";
+export type CleanerMobileTab = "home" | "earnings" | "profile";
 
 const tabs: { id: CleanerMobileTab; label: string; Icon: typeof Home }[] = [
   { id: "home", label: "Home", Icon: Home },
-  { id: "schedule", label: "Schedule", Icon: CalendarDays },
   { id: "earnings", label: "Earnings", Icon: Wallet },
   { id: "profile", label: "Profile", Icon: UserRound },
 ];

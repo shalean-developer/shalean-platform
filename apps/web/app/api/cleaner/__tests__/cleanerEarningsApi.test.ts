@@ -168,6 +168,8 @@ describe("cleaner API earnings contracts", () => {
 
     expect(row.displayEarningsCents).toBeDefined();
     expect(row.displayEarningsCents).toBe(25_000);
+    expect(row.earnings_cents).toBe(25_000);
+    expect(row.earnings_estimated).toBe(false);
     expect(row.cleaner_bonus_cents).toBeUndefined();
     expect(row.payout_earnings_cents).toBeUndefined();
     expect(row.internal_earnings_cents).toBeUndefined();
@@ -196,9 +198,71 @@ describe("cleaner API earnings contracts", () => {
 
     expect(offer.displayEarningsCents).toBeDefined();
     expect(Number(offer.displayEarningsCents)).toBeGreaterThan(0);
+    expect(offer.earnings_cents).toBe(offer.displayEarningsCents);
   });
 
-  it("team job resolves cleaner-facing display earnings to 25000", async () => {
+  it("offers include row with null when earnings cannot be resolved", async () => {
+    mockState.admin = new MockSupabaseClient({
+      dispatch_offers: [
+        { id: "o-none", booking_id: "b-none", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
+      ],
+      bookings: [
+        {
+          id: "b-none",
+          service: "Standard Cleaning",
+          display_earnings_cents: null,
+          cleaner_payout_cents: null,
+          payout_frozen_cents: null,
+          amount_paid_cents: null,
+          total_paid_zar: null,
+          booking_snapshot: null,
+          status: "pending",
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/offers/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/offers"));
+    const json = (await res.json()) as { offers: Array<Record<string, unknown>> };
+
+    expect(json.offers).toHaveLength(1);
+    expect(json.offers[0]!.displayEarningsCents).toBeNull();
+    expect(json.offers[0]!.earnings_cents).toBeNull();
+  });
+
+  it("offers return null display when booking has no stored cleaner earnings", async () => {
+    mockState.admin = new MockSupabaseClient({
+      dispatch_offers: [
+        { id: "o-est", booking_id: "b-est", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
+      ],
+      bookings: [
+        {
+          id: "b-est",
+          service: "Standard Cleaning",
+          is_team_job: false,
+          display_earnings_cents: null,
+          cleaner_payout_cents: null,
+          amount_paid_cents: null,
+          total_paid_zar: null,
+          payout_frozen_cents: null,
+          booking_snapshot: { locked: { finalPrice: 1000 } },
+          status: "pending",
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/offers/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/offers"));
+    const json = (await res.json()) as { offers: Array<Record<string, unknown>> };
+    const offer = json.offers[0]!;
+
+    expect(offer.displayEarningsCents).toBeNull();
+    expect(offer.displayEarningsIsEstimate).toBe(false);
+    expect(offer.earnings_cents).toBeNull();
+    expect(offer.earnings_estimated).toBe(false);
+  });
+
+  it("team job offer has null display when booking has no stored cleaner earnings", async () => {
     mockState.admin = new MockSupabaseClient({
       dispatch_offers: [
         { id: "o2", booking_id: "b3", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
@@ -210,6 +274,7 @@ describe("cleaner API earnings contracts", () => {
           is_team_job: true,
           display_earnings_cents: null,
           cleaner_payout_cents: null,
+          payout_frozen_cents: null,
           status: "pending",
         },
       ],
@@ -219,12 +284,11 @@ describe("cleaner API earnings contracts", () => {
     const res = await GET(new Request("http://localhost/api/cleaner/offers"));
     const json = (await res.json()) as { offers: Array<Record<string, unknown>> };
 
-    expect(json.offers[0]!.displayEarningsCents).toBe(25_000);
-    expect(json.offers[0]!.displayEarningsIsEstimate).toBe(true);
+    expect(json.offers[0]!.displayEarningsCents).toBeNull();
+    expect(json.offers[0]!.displayEarningsIsEstimate).toBe(false);
   });
 
-  it("uses fallback when display earnings missing and logs warning", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("jobs use frozen then display only (no cleaner_payout path in API)", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],
       bookings: [
@@ -235,6 +299,7 @@ describe("cleaner API earnings contracts", () => {
           status: "assigned",
           display_earnings_cents: null,
           cleaner_payout_cents: 19_000,
+          payout_frozen_cents: null,
         },
       ],
     });
@@ -243,13 +308,11 @@ describe("cleaner API earnings contracts", () => {
     const res = await GET(new Request("http://localhost/api/cleaner/jobs"));
     const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
 
-    expect(json.jobs[0]!.displayEarningsCents).toBe(19_000);
+    expect(json.jobs[0]!.displayEarningsCents).toBeNull();
     expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(false);
-    expect(warnSpy).toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith("Fallback earnings used", "b4", "api/cleaner/jobs");
   });
 
-  it("team job without stored display earnings marks estimate flag", async () => {
+  it("team job without stored display earnings returns null from jobs API", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],
       bookings: [
@@ -262,6 +325,7 @@ describe("cleaner API earnings contracts", () => {
           team_id: "team-1",
           display_earnings_cents: null,
           cleaner_payout_cents: null,
+          payout_frozen_cents: null,
         },
       ],
     });
@@ -270,8 +334,8 @@ describe("cleaner API earnings contracts", () => {
     const res = await GET(new Request("http://localhost/api/cleaner/jobs"));
     const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
 
-    expect(json.jobs[0]!.displayEarningsCents).toBe(25_000);
-    expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(true);
+    expect(json.jobs[0]!.displayEarningsCents).toBeNull();
+    expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(false);
   });
 });
 

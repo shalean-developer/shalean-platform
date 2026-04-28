@@ -3,6 +3,21 @@ export function johannesburgMonthKey(d = new Date()): string {
   return d.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }).slice(0, 7);
 }
 
+/** Calendar day `YYYY-MM-DD` in Africa/Johannesburg (cleaner schedule + field “today”). */
+export function johannesburgCalendarYmd(d = new Date()): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
+}
+
+/** Civil `YYYY-MM-DD` + N days (UTC calendar math; suitable for comparing booking `date` strings). */
+export function johannesburgCalendarYmdAddDays(ymd: string, deltaDays: number): string {
+  const parts = ymd.split("-").map(Number);
+  const y = parts[0] ?? 0;
+  const m = parts[1] ?? 1;
+  const d = parts[2] ?? 1;
+  const t = Date.UTC(y, m - 1, d + deltaDays);
+  return new Date(t).toISOString().slice(0, 10);
+}
+
 /**
  * First and last calendar day of that JHB month as `YYYY-MM-DD` (for `bookings.date` string range).
  * Prefer this for admin billing impact (`/api/admin/customers/.../billing`) and any monthly-invoice guards

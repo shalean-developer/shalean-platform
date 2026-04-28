@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { CleanerDashboardClient } from "@/components/cleaner/mobile/CleanerDashboardClient";
-
-export default function CleanerDashboardPage() {
-  return <CleanerDashboardClient />;
+export default function CleanerDashboardRedirectPage() {
+  redirect("/cleaner");
 }

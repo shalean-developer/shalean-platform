@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
- * Deletes expired admin API idempotency rows (`expires_at` in the past).
+ * Deletes expired admin API idempotency rows (`expires_at` in the past), including billing-switch replay rows.
  *
  * Suggested schedule: daily — POST /api/cron/prune-admin-idempotency
  */
@@ -42,11 +42,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: errBookingCreate.message }, { status: 500 });
   }
 
+  const { error: errBillingSwitch } = await admin.from("admin_billing_idempotency").delete().lt("expires_at", nowIso);
+
+  if (errBillingSwitch) {
+    return NextResponse.json({ error: errBillingSwitch.message }, { status: 500 });
+  }
+
   await logSystemEvent({
     level: "info",
     source: "cron/prune-admin-idempotency",
     message: "pruned_admin_api_idempotency_expired",
-    context: { before: nowIso, tables: ["admin_api_idempotency", "admin_booking_create_idempotency"] },
+    context: {
+      before: nowIso,
+      tables: ["admin_api_idempotency", "admin_booking_create_idempotency", "admin_billing_idempotency"],
+    },
   });
 
   return NextResponse.json({ ok: true });

@@ -4,13 +4,12 @@ import {
   resolvePayoutBaseAndServiceFeeCents,
 } from "@/lib/payout/calculateCleanerPayout";
 import { computeBookingEarnings, type ComputeBookingEarningsOutput } from "@/lib/payout/computeBookingEarnings";
-import { devOrSampledConsoleLog } from "@/lib/logging/devOrSampledConsole";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const EARNINGS_MODEL_VERSION_FALLBACK = "v1_2026_earnings";
-const TEAM_MEMBER_DISPLAY_CENTS_FALLBACK = 25_000;
 
 function resolveServiceId(snapshot: unknown, serviceLabel: string | null | undefined): string {
   if (snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
@@ -86,13 +85,7 @@ async function buildFallbackEarnings(params: {
 }): Promise<ComputeBookingEarningsOutput | null> {
   const { admin, r, expectedCleanerId, isTeamJob } = params;
   if (isTeamJob) {
-    const t = TEAM_MEMBER_DISPLAY_CENTS_FALLBACK;
-    return {
-      display_earnings_cents: t,
-      payout_earnings_cents: t,
-      internal_earnings_cents: t,
-      earnings_model_version: EARNINGS_MODEL_VERSION_FALLBACK,
-    };
+    return null;
   }
   const legacy = Number(r.cleaner_payout_cents);
   if (Number.isFinite(legacy) && legacy >= 0) {
@@ -203,12 +196,6 @@ async function persistCleanerPayoutIfUnsetCore(
   }
 
   if (!earnings) {
-    console.error("EARNINGS_PERSIST_FALLBACK", {
-      bookingId,
-      serviceId,
-      computeRejectReason,
-      computedVsFallback: "fallback",
-    });
     const fb = await buildFallbackEarnings({ admin, r, expectedCleanerId, isTeamJob });
     if (!fb) {
       await reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", "earnings fallback unresolved", {
@@ -291,32 +278,15 @@ async function persistCleanerPayoutIfUnsetCore(
       .is("display_earnings_cents", null)
       .select("id");
     if (teamUpErr) {
-      await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", teamUpErr.message, { bookingId });
+      await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", teamUpErr.message, {
+        bookingId,
+        error_id: newPayoutMoneyPathErrorId(),
+      });
       return { ok: false, error: teamUpErr.message };
     }
     if (!updatedTeam?.length) {
-      console.warn("EARNINGS_PERSIST_NOOP", {
-        bookingId,
-        serviceId,
-        teamId,
-        assignmentKind: "team",
-        reason: "update_matched_zero_rows",
-        detail: "bookings update with .is(display_earnings_cents, null) returned no rows (race or display already set)",
-      });
       return { ok: true, skipped: true };
     }
-    devOrSampledConsoleLog(
-      "EARNINGS_PERSIST_SUCCESS",
-      {
-        bookingId,
-        serviceId,
-        teamId,
-        assignmentKind: "team",
-        computedVsFallback: usedFallback ? "fallback" : "computed",
-        display_earnings_cents: earnings.display_earnings_cents,
-      },
-      0.02,
-    );
     return { ok: true, skipped: false };
   }
 
@@ -367,48 +337,16 @@ async function persistCleanerPayoutIfUnsetCore(
     .select("id");
 
   if (upErr) {
-    await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", upErr.message, { bookingId });
+    await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", upErr.message, {
+      bookingId,
+      error_id: newPayoutMoneyPathErrorId(),
+    });
     return { ok: false, error: upErr.message };
   }
 
   if (!updated?.length) {
-    console.warn("EARNINGS_PERSIST_NOOP", {
-      bookingId,
-      serviceId,
-      cleanerId: expectedCleanerId,
-      assignmentKind: "individual",
-      reason: "update_matched_zero_rows",
-      detail: "bookings update with .is(display_earnings_cents, null) returned no rows (race or display already set)",
-    });
     return { ok: true, skipped: true };
   }
-
-  devOrSampledConsoleLog(
-    "EARNINGS_PERSIST_SUCCESS",
-    {
-      bookingId,
-      serviceId,
-      assignmentKind: "individual",
-      computedVsFallback: usedFallback ? "fallback" : "computed",
-      display_earnings_cents: earnings.display_earnings_cents,
-    },
-    0.02,
-  );
-
-  console.log("PAYOUT_CALCULATED", {
-    bookingId,
-    cleanerPayout: payout.payoutCents,
-    cleanerBonus: payout.bonusCents,
-    companyRevenue: payout.companyRevenueCents,
-    type: payout.payoutType,
-    payoutBaseCents: payout.payoutBaseCents,
-    serviceFeeCents: payout.serviceFeeCents,
-  });
-  console.log("EARNINGS_COMPARISON", {
-    bookingId,
-    old: r.cleaner_payout_cents,
-    new: earnings.payout_earnings_cents,
-  });
 
   void logSystemEvent({
     level: "info",
@@ -439,17 +377,16 @@ export async function persistCleanerPayoutIfUnset(
   params: { admin: SupabaseClient; bookingId: string; cleanerId: string },
 ): Promise<{ ok: true; skipped: boolean; payout?: CleanerPayoutResult } | { ok: false; error: string }> {
   try {
+    const first = await persistCleanerPayoutIfUnsetCore(params);
+    if (first.ok) return first;
+    await new Promise((r) => setTimeout(r, 200));
     return await persistCleanerPayoutIfUnsetCore(params);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("persistCleanerPayoutIfUnset", {
-      bookingId: params.bookingId,
-      cleanerId: params.cleanerId,
-      error: msg,
-    });
     await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", msg, {
       bookingId: params.bookingId,
       cleanerId: params.cleanerId,
+      error_id: newPayoutMoneyPathErrorId(),
     });
     return { ok: false, error: msg };
   }

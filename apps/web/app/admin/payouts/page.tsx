@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminInvoiceEligiblePayouts } from "@/components/admin/AdminInvoiceEligiblePayouts";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type PayoutRow = {
@@ -136,7 +137,10 @@ async function readJsonResponse<T>(res: Response): Promise<T & { error?: string 
   }
 }
 
+type PayoutsHubTab = "invoice" | "batches";
+
 export default function AdminPayoutsPage() {
+  const [hubTab, setHubTab] = useState<PayoutsHubTab>("invoice");
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -208,26 +212,27 @@ export default function AdminPayoutsPage() {
   }, [getToken]);
 
   useEffect(() => {
+    if (hubTab !== "batches") return;
     const timer = window.setTimeout(() => {
       void loadPayouts();
       void loadMissingPayouts();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadPayouts, loadMissingPayouts]);
+  }, [hubTab, loadPayouts, loadMissingPayouts]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (hubTab !== "batches" || !selectedId) return;
     const timer = window.setTimeout(() => void loadDetail(selectedId), 0);
     return () => window.clearTimeout(timer);
-  }, [selectedId, loadDetail]);
+  }, [hubTab, selectedId, loadDetail]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (hubTab !== "batches" || !selectedId) return;
     const timer = window.setInterval(() => {
       if (!busy) void loadDetail(selectedId);
     }, 30_000);
     return () => window.clearInterval(timer);
-  }, [busy, selectedId, loadDetail]);
+  }, [hubTab, busy, selectedId, loadDetail]);
 
   const totals = useMemo(() => {
     const rows = detail?.bookings ?? [];
@@ -321,6 +326,37 @@ export default function AdminPayoutsPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/80">
+        <button
+          type="button"
+          onClick={() => setHubTab("invoice")}
+          className={[
+            "rounded-lg px-4 py-2 text-sm font-semibold transition",
+            hubTab === "invoice"
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+          ].join(" ")}
+        >
+          Invoice payouts
+        </button>
+        <button
+          type="button"
+          onClick={() => setHubTab("batches")}
+          className={[
+            "rounded-lg px-4 py-2 text-sm font-semibold transition",
+            hubTab === "batches"
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+          ].join(" ")}
+        >
+          Paystack batches
+        </button>
+      </div>
+
+      {hubTab === "invoice" ? <AdminInvoiceEligiblePayouts /> : null}
+
+      {hubTab === "batches" ? (
+        <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Finance</p>
@@ -619,6 +655,8 @@ export default function AdminPayoutsPage() {
       </div>
 
       {toast ? <ToastMessage toast={toast} onClose={() => setToast(null)} /> : null}
+        </>
+      ) : null}
     </main>
   );
 }

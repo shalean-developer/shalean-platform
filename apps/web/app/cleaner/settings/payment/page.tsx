@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { nextPayoutMondayShort } from "@/lib/cleaner/cleanerPayoutCopy";
 
 type PaymentDetails = {
   bankCode: string | null;
@@ -42,6 +44,18 @@ function updatedLabel(value: string | null): string | null {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function parseEarningsActivity(json: unknown): boolean {
+  if (!json || typeof json !== "object") return false;
+  const o = json as { rows?: unknown[]; summary?: Record<string, unknown> };
+  if (Array.isArray(o.rows) && o.rows.length > 0) return true;
+  const s = o.summary;
+  if (!s || typeof s !== "object") return false;
+  const p = Number(s.pending_cents) || 0;
+  const e = Number(s.eligible_cents) || 0;
+  const d = Number(s.paid_cents) || 0;
+  return p + e + d > 0;
+}
+
 export default function CleanerPaymentSettingsPage() {
   const router = useRouter();
   const [details, setDetails] = useState<PaymentDetails | null>(null);
@@ -51,7 +65,8 @@ export default function CleanerPaymentSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const [showNextPayoutHint, setShowNextPayoutHint] = useState(false);
 
   const load = useCallback(async () => {
     const headers = await getCleanerAuthHeaders();
@@ -61,7 +76,11 @@ export default function CleanerPaymentSettingsPage() {
     }
 
     try {
-      const res = await cleanerAuthenticatedFetch("/api/cleaner/payment-details", { headers });
+      const [res, earningsRes] = await Promise.all([
+        cleanerAuthenticatedFetch("/api/cleaner/payment-details", { headers }),
+        cleanerAuthenticatedFetch("/api/cleaner/earnings", { headers }).catch(() => null),
+      ]);
+
       const json = await readJson(res);
       if (!res.ok) {
         setError(json.error ?? "Could not load payment details.");
@@ -71,6 +90,13 @@ export default function CleanerPaymentSettingsPage() {
       setBankCode(json.details?.bankCode ?? "");
       setAccountName(json.details?.accountName ?? "");
       setError(null);
+
+      if (earningsRes?.ok) {
+        const earnJson = (await earningsRes.json().catch(() => null)) as unknown;
+        setShowNextPayoutHint(parseEarningsActivity(earnJson));
+      } else {
+        setShowNextPayoutHint(false);
+      }
     } catch {
       setError("Network error while loading payment details.");
     } finally {
@@ -93,7 +119,7 @@ export default function CleanerPaymentSettingsPage() {
 
     setSaving(true);
     setError(null);
-    setSuccess(null);
+    setJustSaved(false);
 
     try {
       const res = await cleanerAuthenticatedFetch("/api/cleaner/payment-details", {
@@ -110,7 +136,7 @@ export default function CleanerPaymentSettingsPage() {
       setBankCode(json.details?.bankCode ?? bankCode);
       setAccountName(json.details?.accountName ?? accountName);
       setAccountNumber("");
-      setSuccess("Payment details saved. Your payout recipient is ready.");
+      setJustSaved(true);
     } catch {
       setError("Network error while saving payment details.");
     } finally {
@@ -120,9 +146,14 @@ export default function CleanerPaymentSettingsPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-2xl space-y-4 px-4 py-8">
-        <div className="h-8 w-56 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-        <div className="h-72 animate-pulse rounded-2xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+      <main className="mx-auto max-w-md space-y-6 px-4 pb-8 pt-6">
+        <div className="h-7 w-48 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-4 w-full max-w-sm animate-pulse rounded bg-zinc-200/80 dark:bg-zinc-800/80" />
+        <div className="space-y-4 pt-4">
+          <div className="h-12 animate-pulse rounded-xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+          <div className="h-12 animate-pulse rounded-xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+          <div className="h-12 animate-pulse rounded-xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+        </div>
       </main>
     );
   }
@@ -130,87 +161,109 @@ export default function CleanerPaymentSettingsPage() {
   const lastUpdated = updatedLabel(details?.updatedAt ?? null);
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 px-4 py-8">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Cleaner settings</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Payment details</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Save the bank account where your weekly cleaner payouts should be sent.
+    <main className="mx-auto max-w-md px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Payment details</h1>
+        <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          Add your bank account to receive weekly payouts
         </p>
       </header>
 
-      {details?.hasRecipientCode ? (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
-          <p className="font-semibold">Ready for payout</p>
-          <p className="mt-1">
-            Current account: {details.accountNumberMasked ?? "saved"}
-            {lastUpdated ? ` · updated ${lastUpdated}` : ""}
+      <div className="mt-8 space-y-8">
+        {justSaved ? (
+          <section className="rounded-2xl bg-emerald-50/95 px-4 py-3.5 dark:bg-emerald-950/30" role="status">
+            <p className="font-semibold text-emerald-950 dark:text-emerald-50">✅ Payment details saved</p>
+            <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-100/90">You&apos;ll receive payouts every week.</p>
+          </section>
+        ) : details?.hasRecipientCode ? (
+          <section className="rounded-2xl bg-emerald-50/90 px-4 py-3.5 text-sm text-emerald-950 dark:bg-emerald-950/25 dark:text-emerald-100">
+            <p className="font-semibold">You&apos;re set for payouts</p>
+            <p className="mt-1 text-emerald-900/90 dark:text-emerald-100/85">
+              Account on file: {details.accountNumberMasked ?? "saved"}
+              {lastUpdated ? ` · updated ${lastUpdated}` : ""}
+            </p>
+          </section>
+        ) : (
+          <section className="rounded-2xl bg-amber-50/95 px-4 py-3.5 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-50">
+            <p className="font-semibold">⚠️ Add your bank details to get paid</p>
+            <p className="mt-1 text-amber-900/95 dark:text-amber-100/85">
+              You won&apos;t receive payouts until this is completed.
+            </p>
+          </section>
+        )}
+
+        {error ? (
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-100">
+            {error}
           </p>
-        </section>
-      ) : (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-          <p className="font-semibold">Missing bank details</p>
-          <p className="mt-1">Add your account details before payouts can be sent.</p>
-        </section>
-      )}
+        ) : null}
 
-      {error ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-100">
-          {error}
-        </p>
-      ) : null}
-      {success ? (
-        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
-          {success}
-        </p>
-      ) : null}
-
-      <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <Select label="Bank" value={bankCode} onChange={(event) => setBankCode(event.target.value)} required>
-          <option value="">Select your bank</option>
-          {banks.map((bank) => (
-            <option key={bank.code} value={bank.code}>
-              {bank.name}
-            </option>
-          ))}
-        </Select>
-
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Account number</span>
-          <Input
-            value={accountNumber}
-            onChange={(event) => setAccountNumber(event.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder={details?.accountNumberMasked ?? "Enter account number"}
-            minLength={6}
-            maxLength={20}
-            required
-          />
-          {details?.accountNumberMasked ? (
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              For security, we only show the saved account as {details.accountNumberMasked}. Re-enter the full account number to update.
-            </span>
+        <form onSubmit={onSubmit} className="space-y-6">
+          {showNextPayoutHint ? (
+            <p className="text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">{nextPayoutMondayShort()}</p>
           ) : null}
-        </label>
 
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Account holder name</span>
-          <Input
-            value={accountName}
-            onChange={(event) => setAccountName(event.target.value)}
-            autoComplete="name"
-            placeholder="Name on bank account"
-            minLength={2}
-            maxLength={120}
-            required
-          />
-        </label>
+          <div className="space-y-5">
+            <Select label="Bank" value={bankCode} onChange={(event) => setBankCode(event.target.value)} required>
+              <option value="">Select your bank</option>
+              {banks.map((bank) => (
+                <option key={bank.code} value={bank.code}>
+                  {bank.name}
+                </option>
+              ))}
+            </Select>
 
-        <Button type="submit" disabled={saving} className="w-full">
-          {saving ? "Saving..." : "Save payment details"}
-        </Button>
-      </form>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Account number</span>
+              <Input
+                value={accountNumber}
+                onChange={(event) => setAccountNumber(event.target.value.replace(/\D/g, ""))}
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={details?.accountNumberMasked ? "Enter full number to update" : "e.g. 1234567890"}
+                minLength={6}
+                maxLength={20}
+                required
+                className="h-12 rounded-xl border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950"
+              />
+              {details?.accountNumberMasked ? (
+                <span className="text-xs leading-snug text-zinc-500 dark:text-zinc-400">
+                  Saved as {details.accountNumberMasked}. Enter the full account number only if you need to change it.
+                </span>
+              ) : null}
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Account holder</span>
+              <Input
+                value={accountName}
+                onChange={(event) => setAccountName(event.target.value)}
+                autoComplete="name"
+                placeholder="Your full name"
+                minLength={2}
+                maxLength={120}
+                required
+                className="h-12 rounded-xl border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950"
+              />
+            </label>
+          </div>
+
+          <p className="flex items-start gap-2 text-sm leading-snug text-zinc-600 dark:text-zinc-400">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-500" aria-hidden />
+            <span>Your bank details are encrypted and securely stored.</span>
+          </p>
+
+          <div className="sticky bottom-0 -mx-4 border-t border-zinc-100 bg-zinc-50/95 px-4 pb-2 pt-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/90 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <Button
+              type="submit"
+              disabled={saving}
+              className="h-12 w-full rounded-xl bg-blue-600 text-base font-semibold text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+            >
+              {saving ? "Saving…" : "Save & receive payouts"}
+            </Button>
+          </div>
+        </form>
+      </div>
     </main>
   );
 }

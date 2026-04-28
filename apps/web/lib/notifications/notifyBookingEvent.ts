@@ -510,21 +510,18 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       location: (b as { location?: string | null }).location,
     });
 
-    const payResolved = resolveDisplayEarnings(
-      {
-        id: event.bookingId,
-        is_team_job: (b as { is_team_job?: boolean | null }).is_team_job === true,
-        display_earnings_cents:
-          typeof (b as { display_earnings_cents?: unknown }).display_earnings_cents === "number"
-            ? (b as { display_earnings_cents: number }).display_earnings_cents
-            : null,
-        cleaner_payout_cents:
-          typeof (b as { cleaner_payout_cents?: unknown }).cleaner_payout_cents === "number"
-            ? (b as { cleaner_payout_cents: number }).cleaner_payout_cents
-            : null,
-      },
-      "notifyBookingEvent/assigned",
-    );
+    const payResolved = resolveDisplayEarnings({
+      id: event.bookingId,
+      is_team_job: (b as { is_team_job?: boolean | null }).is_team_job === true,
+      display_earnings_cents:
+        typeof (b as { display_earnings_cents?: unknown }).display_earnings_cents === "number"
+          ? (b as { display_earnings_cents: number }).display_earnings_cents
+          : null,
+      cleaner_payout_cents:
+        typeof (b as { cleaner_payout_cents?: unknown }).cleaner_payout_cents === "number"
+          ? (b as { cleaner_payout_cents: number }).cleaner_payout_cents
+          : null,
+    });
     const cleanerPayZar =
       payResolved.cents != null && Number.isFinite(payResolved.cents) ? Math.round(payResolved.cents / 100) : null;
     const assignedHeadline = buildCleanerAssignedNotifyHeadline(cleanerPayZar, payResolved.isEstimate, {

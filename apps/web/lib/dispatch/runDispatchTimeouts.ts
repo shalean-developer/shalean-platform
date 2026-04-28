@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { maxDispatchOffersPerBooking } from "@/lib/dispatch/dispatchAttemptLimits";
+import { processDeferredDispatchOfferNotifications } from "@/lib/dispatch/dispatchOffers";
 import { notifyDispatchEscalationAdmin } from "@/lib/dispatch/dispatchEscalation";
 import { enqueueDispatchRetry, enqueueStrandedBookings } from "@/lib/dispatch/dispatchRetryQueue";
 import { logSystemEvent } from "@/lib/logging/systemLog";
@@ -42,6 +43,19 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
     errors: 0,
     strandedEnqueued: 0,
   };
+
+  try {
+    await processDeferredDispatchOfferNotifications(supabase);
+  } catch (e) {
+    out.errors++;
+    const msg = e instanceof Error ? e.message : String(e);
+    await logSystemEvent({
+      level: "warn",
+      source: "runDispatchTimeouts",
+      message: msg,
+      context: { step: "deferred_dispatch_notifications" },
+    });
+  }
 
   const runStrandedPass = async () => {
     try {

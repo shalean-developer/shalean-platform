@@ -126,6 +126,24 @@ class TeamMembersQuery {
   }
 }
 
+/** GET /api/cleaner/jobs loads issue-report flags; tests use an empty report set. */
+class IssueReportsEmptyQuery {
+  select() {
+    return this;
+  }
+  in() {
+    return this;
+  }
+  eq() {
+    return this;
+  }
+  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+    const payload = { data: [] as Row[], error: null as null };
+    if (onfulfilled) onfulfilled(payload);
+    return Promise.resolve(payload);
+  }
+}
+
 class MockSupabase {
   tables: { cleaners: Row[]; team_members: Row[]; bookings: Row[] };
 
@@ -141,6 +159,7 @@ class MockSupabase {
     if (table === "bookings") return new BookingsQuery(this.tables.bookings) as unknown as CleanersQuery;
     if (table === "cleaners") return new CleanersQuery(this);
     if (table === "team_members") return new TeamMembersQuery(this);
+    if (table === "cleaner_job_issue_reports") return new IssueReportsEmptyQuery() as unknown as CleanersQuery;
     throw new Error(`unexpected table ${table}`);
   }
 }

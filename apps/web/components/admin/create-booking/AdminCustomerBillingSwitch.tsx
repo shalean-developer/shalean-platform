@@ -15,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
+import { BillingSwitchCode } from "@/lib/admin/billingSwitchCodes";
 
 export type AdminBillingCustomer = {
   id: string;
@@ -55,6 +56,7 @@ function billingSuccessLabel(t: string): string {
 
 export function AdminCustomerBillingSwitch({ customer, service, disabled = false, onBillingUpdated }: Props) {
   const billingIdempotencyKeyRef = useRef<string | null>(null);
+  const patchInFlightRef = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [activityWarn, setActivityWarn] = useState<{
@@ -185,35 +187,38 @@ export function AdminCustomerBillingSwitch({ customer, service, disabled = false
 
   const applyPatch = useCallback(
     async (body: Pending & { confirm?: boolean; confirm_strict?: boolean }) => {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
-      if (!token) {
-        setError("Not signed in.");
-        return;
-      }
+      if (patchInFlightRef.current) return;
+      patchInFlightRef.current = true;
       setSaving(true);
       setError(null);
-      const idem = billingIdempotencyKeyRef.current;
-      const idemHeaders =
-        idem != null && idem.length > 0
-          ? ({ "Idempotency-Key": idem } as Record<string, string>)
-          : ({} as Record<string, string>);
-
-      type PatchJson = {
-        ok?: boolean;
-        error?: string;
-        code?: string;
-        requires_confirmation?: boolean;
-        requires_strict_confirmation?: boolean;
-        billing_type?: string;
-        schedule_type?: string;
-        schedule_enforced?: boolean;
-        details?: { bookings_count?: number; invoice_status?: string | null };
-      };
-
-      let patch: Pending & { confirm?: boolean; confirm_strict?: boolean } = { ...body };
       try {
-        for (let strictAttempt = 0; strictAttempt < 2; strictAttempt++) {
+        const sb = getSupabaseBrowser();
+        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        if (!token) {
+          setError("Not signed in.");
+          return;
+        }
+
+        const idem = billingIdempotencyKeyRef.current;
+        const idemHeaders =
+          idem != null && idem.length > 0
+            ? ({ "Idempotency-Key": idem } as Record<string, string>)
+            : ({} as Record<string, string>);
+
+        type PatchJson = {
+          ok?: boolean;
+          error?: string;
+          code?: string;
+          requires_confirmation?: boolean;
+          requires_strict_confirmation?: boolean;
+          billing_type?: string;
+          schedule_type?: string;
+          schedule_enforced?: boolean;
+          details?: { bookings_count?: number; invoice_status?: string | null };
+        };
+
+        let patch: Pending & { confirm?: boolean; confirm_strict?: boolean } = { ...body };
+        for (let _strictRetry = 0; _strictRetry < 2; _strictRetry++) {
           const res = await fetch(`/api/admin/customers/${encodeURIComponent(customer.id)}/billing`, {
             method: "PATCH",
             headers: {
@@ -228,6 +233,7 @@ export function AdminCustomerBillingSwitch({ customer, service, disabled = false
               ...(patch.confirm_strict ? { confirm_strict: true } : {}),
             }),
           });
+          const idempotentReplayed = res.headers.get("X-Idempotent-Replayed") === "1";
           let json: PatchJson;
           try {
             json = (await res.json()) as PatchJson;
@@ -266,12 +272,20 @@ export function AdminCustomerBillingSwitch({ customer, service, disabled = false
           }
           if (typeof json.billing_type === "string" && typeof json.schedule_type === "string") {
             onBillingUpdated({ billing_type: json.billing_type, schedule_type: json.schedule_type });
-            const base = `✔ Billing updated to ${billingSuccessLabel(json.billing_type)}`;
-            const extra =
-              json.schedule_enforced === true
-                ? " Schedule set to On-demand (required for monthly billing)."
-                : "";
-            setBillingSuccess(base + extra);
+            if (
+              idempotentReplayed &&
+              (json.code === BillingSwitchCode.NO_CHANGE || json.code === BillingSwitchCode.UPDATED)
+            ) {
+              setBillingSuccess("No changes applied (already updated).");
+            } else {
+              const base = `✔ Billing updated to ${billingSuccessLabel(json.billing_type)}`;
+              const monthlyCoercionLine = " Schedule set to On-demand (required for monthly billing).";
+              const extra =
+                normBilling(json.billing_type) === "monthly" || json.schedule_enforced === true
+                  ? monthlyCoercionLine
+                  : "";
+              setBillingSuccess(base + extra);
+            }
             window.setTimeout(() => setBillingSuccess(null), 6000);
           }
           resetModal();
@@ -283,6 +297,7 @@ export function AdminCustomerBillingSwitch({ customer, service, disabled = false
       } catch {
         setError("Could not update billing. Check your connection and try again.");
       } finally {
+        patchInFlightRef.current = false;
         setSaving(false);
       }
     },
@@ -290,7 +305,7 @@ export function AdminCustomerBillingSwitch({ customer, service, disabled = false
   );
 
   const onConfirm = useCallback(() => {
-    if (!pending || saving) return;
+    if (!pending || saving || patchInFlightRef.current) return;
     trackAdminBillingSwitchClicked({
       customer_id: customer.id,
       action: "confirm",

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
 
 export type ApplyMonthlyInvoicePaymentResult =
   | { ok: true; skipped: true; reason: "not_found" | "already_paid" | "duplicate_charge" }
@@ -14,7 +15,7 @@ export type ApplyMonthlyInvoicePaymentResult =
 /**
  * Applies Paystack `charge.success` to `monthly_invoices`: idempotent per charge `reference`,
  * accumulates `amount_paid_cents`, `partially_paid` until settled, then `paid` + booking settlement +
- * `payout_status = eligible` + `payout_frozen_cents` (immutable payout basis).
+ * `payout_status = eligible` + `payout_frozen_cents` (immutable cleaner earnings basis from display / cleaner_payout).
  */
 export async function applyMonthlyInvoicePayment(
   admin: SupabaseClient,
@@ -113,7 +114,7 @@ export async function applyMonthlyInvoicePayment(
 
     const { data: bookings, error: bErr } = await admin
       .from("bookings")
-      .select("id, total_paid_zar, amount_paid_cents")
+      .select("id, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
       .eq("monthly_invoice_id", row.id)
       .neq("status", "cancelled");
 
@@ -123,15 +124,34 @@ export async function applyMonthlyInvoicePayment(
     }
 
     for (const raw of bookings ?? []) {
-      const b = raw as { id: string; total_paid_zar: number | null; amount_paid_cents: number | null };
-      const lineCents = Math.max(0, Math.round(Number(b.total_paid_zar ?? 0) * 100));
+      const b = raw as {
+        id: string;
+        amount_paid_cents: number | null;
+        display_earnings_cents: number | null;
+        cleaner_payout_cents: number | null;
+      };
+      const existingPaidCents = Math.max(0, Math.round(Number(b.amount_paid_cents ?? 0)));
+      const frozen = resolveCleanerFrozenCentsForSettlement({
+        display_earnings_cents: b.display_earnings_cents,
+        cleaner_payout_cents: b.cleaner_payout_cents,
+      });
+      if (frozen == null) {
+        await admin.from("monthly_invoice_paystack_charge_dedup").delete().eq("charge_reference", ref);
+        await logSystemEvent({
+          level: "error",
+          source: "monthly_invoice/payment",
+          message: "monthly_invoice_booking_missing_cleaner_frozen_basis",
+          context: { invoice_id: row.id, booking_id: b.id, reference: ref },
+        });
+        return { ok: false, error: `booking_missing_cleaner_earnings_basis:${b.id}` };
+      }
       const { error: u } = await admin
         .from("bookings")
         .update({
           payment_status: "success",
-          amount_paid_cents: lineCents > 0 ? lineCents : b.amount_paid_cents ?? 0,
+          amount_paid_cents: existingPaidCents,
           payout_status: "eligible",
-          payout_frozen_cents: lineCents > 0 ? lineCents : b.amount_paid_cents ?? 0,
+          payout_frozen_cents: frozen,
         })
         .eq("id", b.id);
       if (u) {

@@ -1,39 +1,36 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Clock, Loader2, MapPin, Zap } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
-import {
-  cleanerOfferAcceptCta,
-  cleanerOfferHeadline,
-  getCleanerOfferUxConfigFromPersisted,
-} from "@/lib/cleaner/cleanerOfferUxVariant";
+import { getCleanerOfferUxConfigFromPersisted } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { reportDispatchOfferExposed } from "@/lib/cleaner/reportDispatchOfferExposed";
-import { CleanerJobEarningsRow } from "@/components/cleaner/mobile/CleanerJobEarningsRow";
-import { durationHoursFromBookingSnapshot } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { suburbFromLocationForOffer } from "@/lib/cleaner/cleanerOfferLocationSuburb";
+import { explicitDurationHoursFromBookingSnapshot, formatApproxJobDurationJobLabel } from "@/lib/cleaner/cleanerMobileBookingMap";
 import {
-  drivingEtaMinutesFromOfferSnapshot,
-  formatOfferTravelDecisionHint,
-} from "@/lib/cleaner/cleanerOfferValue";
+  cleanerUxEstimatedPayZar,
+  formatCleanerUxEstimatedPayRangeLabel,
+  jobTotalZarFromCleanerBookingLike,
+} from "@/lib/cleaner/cleanerUxEstimatedPayZar";
+import { formatZarFromCents, formatZarWhole } from "@/lib/cleaner/cleanerZarFormat";
 import { cn } from "@/lib/utils";
 
-function formatMmSs(totalSec: number): string {
+/** Under 1h: `M:SS`; from 1h: `H:MM:SS` (clear for long accept windows). */
+function formatOfferCountdown(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    return `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  }
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-/** Three-tier countdown styling (fixed thresholds; complements A/B `ux` sound/headline). */
-function offerUrgencyLevel(secLeft: number): "normal" | "high" | "critical" {
-  if (secLeft <= 0) return "normal";
-  if (secLeft <= 30) return "critical";
-  if (secLeft <= 90) return "high";
-  return "normal";
 }
 
 function playOfferPing(): void {
@@ -61,7 +58,6 @@ function playOfferPing(): void {
   }
 }
 
-/** Stronger two-tone ping when countdown enters the critical window (≤30s). */
 function playOfferCriticalPing(): void {
   try {
     const AC =
@@ -90,44 +86,56 @@ function playOfferCriticalPing(): void {
   }
 }
 
-export function CleanerOffersPanel({
+type OfferRowBadge = "best_match" | "good_option" | null;
+
+function offerRowBadge(rankIndex: number, total: number): OfferRowBadge {
+  if (rankIndex === 0 && total >= 1) return "best_match";
+  if (rankIndex === 1 && total >= 2) return "good_option";
+  return null;
+}
+
+type OfferCardProps = {
+  offer: CleanerOfferRow;
+  rankIndex: number;
+  total: number;
+  /** Only the top-ranked row tracks expiry “missed” toast (legacy behaviour). */
+  trackMissedToast: boolean;
+  /** Avoid stacking entry pings when several offers load at once. */
+  playEntrySound: boolean;
+  busy: boolean;
+  busyOfferId?: string | null;
+  cleanerCreatedAtIso: string | null;
+  onAccept: (offerId: string, uxVariant?: string | null) => Promise<boolean>;
+  onDecline: (offerId: string) => void | Promise<void>;
+  onAcceptSuccess?: (bookingId: string) => void;
+  onCelebrate: (bookingId: string) => void;
+};
+
+function CleanerOfferCardRow({
   offer,
+  rankIndex,
+  total,
+  trackMissedToast,
+  playEntrySound,
   busy,
   busyOfferId,
-  primaryOfferBadge = null,
-  moreJobsTodayCount = 0,
+  cleanerCreatedAtIso,
   onAccept,
   onDecline,
   onAcceptSuccess,
-  hideSectionHeading = false,
-}: {
-  offer: CleanerOfferRow | null | undefined;
-  busy: boolean;
-  /** When set, spinners/disabled state apply only to this offer id. */
-  busyOfferId?: string | null;
-  /** One of: best value (multi-offer queue) or recommended (close + strong value); never both. */
-  primaryOfferBadge?: "best_value" | "recommended" | null;
-  /** Other solo offers dated today (batching nudge). */
-  moreJobsTodayCount?: number;
-  onAccept: (offerId: string, uxVariant?: string | null) => Promise<boolean>;
-  onDecline: (offerId: string) => Promise<void>;
-  /** Fires with booking id after accept succeeds (scroll / highlight in parent). */
-  onAcceptSuccess?: (bookingId: string) => void;
-  /** Parent already shows “Available jobs” section title. */
-  hideSectionHeading?: boolean;
-}) {
+  onCelebrate,
+}: OfferCardProps) {
   const [secLeft, setSecLeft] = useState(0);
-  const [celebrate, setCelebrate] = useState(false);
-  const [missedZar, setMissedZar] = useState<number | null>(null);
   const alertedOfferIdRef = useRef<string | null>(null);
   const criticalChimedRef = useRef(false);
   const prevSecRef = useRef<number | null>(null);
-  const ux = useMemo(() => getCleanerOfferUxConfigFromPersisted(offer?.ux_variant), [offer?.ux_variant]);
-
-  const mutatingThisOffer = Boolean(busy && busyOfferId && offer?.id && busyOfferId === offer.id);
+  const ux = useMemo(() => getCleanerOfferUxConfigFromPersisted(offer.ux_variant), [offer.ux_variant]);
+  const mutatingThisOffer = Boolean(busy && busyOfferId && offer.id && busyOfferId === offer.id);
+  const isTop = rankIndex === 0;
+  const badge = offerRowBadge(rankIndex, total);
 
   useEffect(() => {
-    if (!offer?.id) {
+    if (!trackMissedToast || !offer.id) {
       prevSecRef.current = null;
       return;
     }
@@ -137,33 +145,20 @@ export function CleanerOffersPanel({
     const prev = prevSecRef.current;
     prevSecRef.current = secLeft;
     if (prev != null && prev > 0 && secLeft === 0 && zar != null) {
-      setMissedZar(zar);
-      const t = window.setTimeout(() => setMissedZar(null), 2000);
-      return () => clearTimeout(t);
+      window.dispatchEvent(new CustomEvent("cleaner-offer-missed", { detail: { zar } }));
     }
-  }, [secLeft, offer?.id, offer?.displayEarningsCents]);
-
-  useEffect(() => {
-    if (!celebrate) return;
-    const t = window.setTimeout(() => setCelebrate(false), 2200);
-    return () => window.clearTimeout(t);
-  }, [celebrate]);
-
-  useEffect(() => {
-    if (offer?.id) setCelebrate(false);
-    prevSecRef.current = null;
-  }, [offer?.id]);
+  }, [secLeft, offer.id, offer.displayEarningsCents, trackMissedToast]);
 
   useEffect(() => {
     criticalChimedRef.current = false;
-  }, [offer?.id]);
+  }, [offer.id]);
 
   useEffect(() => {
     if (secLeft > 30) {
       criticalChimedRef.current = false;
       return;
     }
-    if (!ux.sound || !offer?.id) return;
+    if (!playEntrySound || !ux.sound || !offer.id) return;
     if (secLeft <= 0 || secLeft > 30) return;
     if (criticalChimedRef.current) return;
     criticalChimedRef.current = true;
@@ -171,18 +166,17 @@ export function CleanerOffersPanel({
       navigator.vibrate([20, 40, 24, 40, 20]);
     }
     playOfferCriticalPing();
-  }, [secLeft, ux.sound, offer?.id]);
+  }, [secLeft, ux.sound, offer.id, playEntrySound]);
 
   useEffect(() => {
-    if (!offer?.id) return;
     void (async () => {
       const headers = await getCleanerAuthHeaders();
       if (headers) reportDispatchOfferExposed(offer.id, headers);
     })();
-  }, [offer?.id]);
+  }, [offer.id]);
 
   useEffect(() => {
-    if (!offer?.id) return;
+    if (!playEntrySound) return;
     if (alertedOfferIdRef.current === offer.id) return;
     alertedOfferIdRef.current = offer.id;
     if (!ux.sound) return;
@@ -190,10 +184,10 @@ export function CleanerOffersPanel({
       navigator.vibrate([16, 36, 20]);
     }
     playOfferPing();
-  }, [offer?.id, ux.sound]);
+  }, [offer.id, ux.sound, playEntrySound]);
 
   useEffect(() => {
-    if (!offer?.expires_at) {
+    if (!offer.expires_at) {
       setSecLeft(0);
       return;
     }
@@ -203,10 +197,224 @@ export function CleanerOffersPanel({
     };
     tick();
     const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [offer?.expires_at, offer?.id]);
+    return () => clearInterval(id);
+  }, [offer.expires_at, offer.id]);
 
-  if (celebrate) {
+  if (!offer.booking || offer.booking.is_team_job === true) return null;
+  const b = offer.booking;
+  const durationHours = explicitDurationHoursFromBookingSnapshot(b.booking_snapshot);
+  const durationJobLine = durationHours != null ? formatApproxJobDurationJobLabel(durationHours) : null;
+  const displayEarningsCents =
+    offer.displayEarningsCents != null && Number.isFinite(Number(offer.displayEarningsCents))
+      ? Math.max(0, Math.round(Number(offer.displayEarningsCents)))
+      : null;
+  const displayEarningsIsEstimate = offer.displayEarningsIsEstimate === true;
+  const offerJobTotalZar = jobTotalZarFromCleanerBookingLike(b);
+  const uxPayWhenMissingCents =
+    displayEarningsCents == null ? cleanerUxEstimatedPayZar(cleanerCreatedAtIso, offerJobTotalZar) : null;
+  const suburb = suburbFromLocationForOffer(b.location).trim() || "Area on file";
+  const showYouEarnLine = displayEarningsCents != null || uxPayWhenMissingCents?.kind === "exact";
+  const jobHref = `/cleaner/job/${encodeURIComponent(offer.booking_id)}`;
+
+  async function handleAccept(): Promise<void> {
+    const ok = await onAccept(offer.id, offer.ux_variant ?? null);
+    if (ok) {
+      onCelebrate(offer.booking_id);
+      onAcceptSuccess?.(offer.booking_id);
+    }
+  }
+
+  return (
+    <Card
+      className={cn(
+        "rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900",
+        isTop && "border-emerald-400/75 shadow-md dark:border-emerald-600/45",
+      )}
+    >
+      <CardContent className={cn("pt-3", isTop ? "p-5" : "p-4")}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-h-[28px] min-w-0 flex-1">
+            {badge === "best_match" ? (
+              <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950/60 dark:text-blue-100">
+                Best match
+              </span>
+            ) : badge === "good_option" ? (
+              <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100">
+                Good option
+              </span>
+            ) : (
+              <span className="block min-h-[28px]" aria-hidden />
+            )}
+          </div>
+          <span
+            className={cn(
+              "shrink-0 tabular-nums text-xs font-medium text-zinc-500 dark:text-zinc-400",
+              secLeft > 0 && secLeft <= 30 && "font-semibold text-rose-600 dark:text-rose-400",
+            )}
+            aria-live="polite"
+          >
+            ⏱ {formatOfferCountdown(secLeft)}
+          </span>
+        </div>
+
+        <div className={cn("mt-5 space-y-1.5", isTop && "mt-6")}>
+          {displayEarningsCents != null ? (
+            <p
+              className={cn(
+                "font-bold tabular-nums leading-tight text-green-600 dark:text-green-400",
+                isTop ? "text-3xl" : "text-2xl",
+              )}
+            >
+              {formatZarFromCents(displayEarningsCents)}
+              {displayEarningsIsEstimate ? (
+                <span className="ml-1.5 text-sm font-semibold text-zinc-500 dark:text-zinc-400">(est.)</span>
+              ) : null}
+            </p>
+          ) : uxPayWhenMissingCents?.kind === "exact" ? (
+            <p
+              className={cn(
+                "font-bold tabular-nums leading-tight text-green-600 dark:text-green-400",
+                isTop ? "text-3xl" : "text-2xl",
+              )}
+            >
+              {formatZarWhole(uxPayWhenMissingCents.zar)}
+            </p>
+          ) : (
+            <p
+              className={cn(
+                "font-bold tabular-nums leading-tight text-green-600 dark:text-green-400",
+                isTop ? "text-3xl" : "text-2xl",
+              )}
+            >
+              {formatCleanerUxEstimatedPayRangeLabel()}
+            </p>
+          )}
+
+          {showYouEarnLine ? (
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">You earn</p>
+          ) : null}
+
+          {durationJobLine ? (
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{durationJobLine}</p>
+          ) : null}
+
+          <p className="pt-0.5 text-base font-semibold text-zinc-900 dark:text-zinc-50">{suburb}</p>
+
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Paid after completion</p>
+        </div>
+
+        {secLeft <= 0 ? (
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">This offer has expired.</p>
+        ) : null}
+
+        <div className="mt-5 space-y-2">
+          {isTop ? (
+            <>
+              <Button
+                className="h-12 w-full rounded-xl bg-blue-600 text-base font-semibold text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                disabled={mutatingThisOffer || secLeft <= 0}
+                onClick={() => void handleAccept()}
+              >
+                {mutatingThisOffer ? (
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin" aria-label="Accepting" />
+                ) : (
+                  "Accept job"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 w-full rounded-xl border-zinc-300 text-base font-medium text-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
+                disabled={mutatingThisOffer}
+                onClick={() => void onDecline(offer.id)}
+              >
+                Decline
+              </Button>
+            </>
+          ) : (
+            <>
+              {secLeft > 0 ? (
+                <Button
+                  className="h-12 w-full rounded-xl border-2 border-blue-200 bg-white text-base font-semibold text-blue-800 hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/40"
+                  asChild
+                >
+                  <Link href={jobHref}>View job</Link>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled
+                  className="h-12 w-full rounded-xl border-2 border-zinc-200 bg-zinc-100 text-base font-semibold text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
+                >
+                  View job
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-10 w-full text-sm font-medium text-zinc-600 dark:text-zinc-400"
+                disabled={mutatingThisOffer}
+                onClick={() => void onDecline(offer.id)}
+              >
+                Decline
+              </Button>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function CleanerOffersPanel({
+  rankedSoloOffers,
+  busy,
+  busyOfferId,
+  cleanerCreatedAtIso = null,
+  moreJobsTodayCount = 0,
+  onAccept,
+  onDecline,
+  onAcceptSuccess,
+  hideSectionHeading = false,
+}: {
+  /** Client-ranked dispatch offers (solo). */
+  rankedSoloOffers: CleanerOfferRow[];
+  busy: boolean;
+  busyOfferId?: string | null;
+  cleanerCreatedAtIso?: string | null;
+  moreJobsTodayCount?: number;
+  onAccept: (offerId: string, uxVariant?: string | null) => Promise<boolean>;
+  onDecline: (offerId: string) => void | Promise<void>;
+  onAcceptSuccess?: (bookingId: string) => void;
+  hideSectionHeading?: boolean;
+}) {
+  const [celebrateBookingId, setCelebrateBookingId] = useState<string | null>(null);
+  const [missedZar, setMissedZar] = useState<number | null>(null);
+
+  const solo = useMemo(
+    () => rankedSoloOffers.filter((o) => o.booking != null && o.booking.is_team_job !== true),
+    [rankedSoloOffers],
+  );
+
+  useEffect(() => {
+    const onMissed = (e: Event) => {
+      const ce = e as CustomEvent<{ zar: number }>;
+      const z = ce.detail?.zar;
+      if (typeof z !== "number" || !Number.isFinite(z)) return;
+      setMissedZar(z);
+      window.setTimeout(() => setMissedZar(null), 2000);
+    };
+    window.addEventListener("cleaner-offer-missed", onMissed as EventListener);
+    return () => window.removeEventListener("cleaner-offer-missed", onMissed as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (!celebrateBookingId) return;
+    const t = window.setTimeout(() => setCelebrateBookingId(null), 2200);
+    return () => clearTimeout(t);
+  }, [celebrateBookingId]);
+
+  if (celebrateBookingId) {
     return (
       <div className={cn("space-y-2", hideSectionHeading ? "mb-0" : "mb-4")}>
         {hideSectionHeading ? null : (
@@ -225,7 +433,7 @@ export function CleanerOffersPanel({
     );
   }
 
-  if (!offer) {
+  if (solo.length === 0) {
     if (hideSectionHeading && missedZar == null) return null;
     return (
       <div className={cn("space-y-2", hideSectionHeading ? "mb-0" : "mb-4")}>
@@ -250,46 +458,8 @@ export function CleanerOffersPanel({
     );
   }
 
-  if (!offer.booking) return null;
-  if (offer.booking.is_team_job === true) return null;
-
-  const b = offer.booking;
-  const displayEarningsCents =
-    offer.displayEarningsCents != null && Number.isFinite(Number(offer.displayEarningsCents))
-      ? Math.max(0, Math.round(Number(offer.displayEarningsCents)))
-      : null;
-  const displayEarningsZar = displayEarningsCents != null ? Math.round(displayEarningsCents / 100) : null;
-  const displayEarningsIsEstimate = offer.displayEarningsIsEstimate === true;
-  const offerDurationHours = durationHoursFromBookingSnapshot(b.booking_snapshot);
-  const teamMemberCount =
-    typeof b.teamMemberCount === "number" && Number.isFinite(b.teamMemberCount) && b.teamMemberCount > 0
-      ? Math.floor(b.teamMemberCount)
-      : null;
-
-  const etaMin = drivingEtaMinutesFromOfferSnapshot(offer);
-  const travelHint = formatOfferTravelDecisionHint(etaMin, secLeft);
-  const travelLine = travelHint ?? (etaMin == null ? "📍 Nearby job" : null);
-
-  const urgencyTier = secLeft > 0 ? offerUrgencyLevel(secLeft) : "normal";
-  const urgencyRing =
-    urgencyTier === "critical"
-      ? "animate-pulse ring-2 ring-rose-400/80 shadow-lg shadow-rose-900/10 dark:ring-rose-500/50"
-      : urgencyTier === "high"
-        ? "ring-2 ring-amber-400/70 shadow-md dark:ring-amber-500/40"
-        : "";
-
-  async function handleAccept(): Promise<void> {
-    if (!offer?.id) return;
-    const bookingId = offer.booking_id;
-    const ok = await onAccept(offer.id, offer.ux_variant ?? null);
-    if (ok) {
-      onAcceptSuccess?.(bookingId);
-      setCelebrate(true);
-    }
-  }
-
   return (
-    <div className={cn("space-y-2", hideSectionHeading ? "mb-0" : "mb-4")}>
+    <div className={cn("space-y-3", hideSectionHeading ? "mb-0" : "mb-4")}>
       {missedZar != null ? (
         <p
           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
@@ -302,119 +472,25 @@ export function CleanerOffersPanel({
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Available Jobs</p>
       )}
       {moreJobsTodayCount > 0 ? (
-        <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-          {moreJobsTodayCount} more job{moreJobsTodayCount === 1 ? "" : "s"} available — earn more today
-        </p>
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{moreJobsTodayCount} more today</p>
       ) : null}
-      <Card
-        className={cn(
-          "rounded-2xl border-amber-200 bg-amber-50/90 shadow-sm transition-shadow duration-300 dark:border-amber-900/50 dark:bg-amber-950/35",
-          urgencyRing,
-        )}
-      >
-        <CardContent className="space-y-3 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="warning" className="gap-1 font-semibold">
-                <Zap className="h-3 w-3" aria-hidden />
-                New offer
-              </Badge>
-              {primaryOfferBadge === "best_value" ? (
-                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Best value</span>
-              ) : primaryOfferBadge === "recommended" ? (
-                <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Recommended</span>
-              ) : null}
-            </div>
-            <span
-              className={cn(
-                "flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-xs font-bold tabular-nums",
-                secLeft <= 0 && "bg-zinc-200/90 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
-                secLeft > 0 && urgencyTier === "critical" && "bg-rose-600 text-white dark:bg-rose-700",
-                secLeft > 0 && urgencyTier === "high" && "bg-amber-500 text-amber-950 dark:bg-amber-600 dark:text-amber-50",
-                secLeft > 0 && urgencyTier === "normal" && "bg-zinc-200/90 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100",
-              )}
-              aria-live="polite"
-            >
-              <Clock className="h-3.5 w-3.5" aria-hidden />
-              {formatMmSs(secLeft)}
-            </span>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              {cleanerOfferHeadline(ux)}
-            </h2>
-            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
-              {b.customer_name?.trim() || "Customer"} · {b.service ?? "Cleaning"}
-            </p>
-            <p className="mt-1 flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
-              <span>{b.location?.trim() || "Location TBD"}</span>
-            </p>
-            {travelLine ? (
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{travelLine}</p>
-            ) : null}
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {b.date ?? "—"} {b.time ?? ""}
-            </p>
-            <CleanerJobEarningsRow
-              className="mt-3"
-              service={b.service ?? "Cleaning"}
-              earningsZar={displayEarningsZar}
-              earningsIsEstimate={displayEarningsIsEstimate}
-              showServiceColumn={false}
-              durationHours={offerDurationHours}
-              isTeamJob={b.is_team_job === true}
-              teamMemberCount={teamMemberCount}
-            />
-            {secLeft > 0 ? (
-              <p
-                className={cn(
-                  "mt-2 text-xs font-medium",
-                  urgencyTier === "critical" && "animate-pulse text-red-600 dark:text-red-400",
-                  urgencyTier === "high" && "text-amber-600 dark:text-amber-500",
-                  urgencyTier === "normal" && "text-zinc-500 dark:text-zinc-400",
-                )}
-              >
-                Expires in {formatMmSs(secLeft)} — accept now to secure this job
-              </p>
-            ) : (
-              <p className="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                This offer has expired — new jobs coming soon
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              size="lg"
-              className="h-auto min-h-12 rounded-xl px-2 py-2 text-base font-bold shadow-sm"
-              disabled={mutatingThisOffer || secLeft <= 0 || displayEarningsCents == null}
-              onClick={() => void handleAccept()}
-            >
-              {mutatingThisOffer ? (
-                <Loader2 className="mx-auto h-6 w-6 animate-spin" aria-label="Accepting" />
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-0.5 leading-tight">
-                  <span>{cleanerOfferAcceptCta(ux)}</span>
-                  {displayEarningsZar != null ? (
-                    <span className="text-xs font-semibold opacity-80">
-                      Earn R{displayEarningsZar.toLocaleString("en-ZA")}
-                    </span>
-                  ) : null}
-                </div>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-12 rounded-xl border-zinc-300 text-base dark:border-zinc-600"
-              disabled={mutatingThisOffer}
-              onClick={() => void onDecline(offer.id)}
-            >
-              Decline
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {solo.map((offer, rankIndex) => (
+        <CleanerOfferCardRow
+          key={offer.id}
+          offer={offer}
+          rankIndex={rankIndex}
+          total={solo.length}
+          trackMissedToast={rankIndex === 0}
+          playEntrySound={rankIndex === 0}
+          busy={busy}
+          busyOfferId={busyOfferId}
+          cleanerCreatedAtIso={cleanerCreatedAtIso}
+          onAccept={onAccept}
+          onDecline={onDecline}
+          onAcceptSuccess={onAcceptSuccess}
+          onCelebrate={setCelebrateBookingId}
+        />
+      ))}
     </div>
   );
 }

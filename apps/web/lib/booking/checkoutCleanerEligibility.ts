@@ -13,11 +13,11 @@ export type CheckoutCleanerResolution =
   | { kind: "honor"; cleanerId: string }
   | { kind: "fallback"; attemptedId: string; reason: BookingFallbackReason };
 
-/** TTL (seconds) for checkout dispatch offers (user-selected cleaner). Env: `DISPATCH_CHECKOUT_OFFER_TTL_SECONDS` (30–600). */
+/** TTL (seconds) for checkout dispatch offers (user-selected cleaner). Env: `DISPATCH_CHECKOUT_OFFER_TTL_SECONDS` (60–86400). */
 export function checkoutDispatchOfferTtlSeconds(): number {
   const raw = Number(process.env.DISPATCH_CHECKOUT_OFFER_TTL_SECONDS);
-  if (Number.isFinite(raw) && raw >= 30 && raw <= 600) return Math.round(raw);
-  return 180;
+  if (Number.isFinite(raw) && raw >= 60 && raw <= 24 * 60 * 60) return Math.round(raw);
+  return 2 * 60 * 60;
 }
 
 export function checkoutDurationMinutesFromLocked(locked: LockedBooking | null): number {

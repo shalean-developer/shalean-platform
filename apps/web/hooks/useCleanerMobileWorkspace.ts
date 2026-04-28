@@ -6,22 +6,20 @@ import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFet
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
-import {
-  adaptiveWeeklyEarningsGoalZar,
-  bookingRowToMobileView,
-  earningsSummaryFromRows,
-  getActiveMobileJob,
-  getNextUpcomingMobileJob,
-  idleMinutesSinceLastCompletedJob,
-  ymdLocal,
-} from "@/lib/cleaner/cleanerMobileBookingMap";
-import {
-  drivingEtaMinutesFromOfferSnapshot,
-  medianOfferValueScore,
-  offerValueScoreCentsPerHour,
-  sortCleanerOffersByAdjustedValue,
-} from "@/lib/cleaner/cleanerOfferValue";
+import { getActiveMobileJob, getNextUpcomingMobileJob } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
+import { sortCleanerOffersByAcceptanceScore } from "@/lib/cleaner/cleanerOfferAcceptanceRank";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import {
+  trustJobCompletionFeedbackFromRow,
+  type TrustJobCompletionFeedback,
+} from "@/lib/cleaner/trustJobCompletionFeedback";
+
+export type PostJobActionResult =
+  | { ok: true; trustCompletion?: TrustJobCompletionFeedback }
+  | { ok: false; error: string };
+
+export type { TrustJobCompletionFeedback };
 
 type MeCleaner = {
   id: string;
@@ -34,9 +32,13 @@ type MeCleaner = {
   rating?: number | null;
   jobs_completed?: number | null;
   location?: string | null;
+  created_at?: string | null;
 };
 
-export type CleanerJobAction = "accept" | "en_route" | "start" | "complete";
+export type CleanerJobAction = "accept" | "reject" | "en_route" | "start" | "complete";
+
+/** Alias for schedule/job list UIs (same values as {@link CleanerJobAction}). */
+export type CleanerScheduleLifecycleAction = CleanerJobAction;
 
 function assertOnline(): { ok: true } | { ok: false; error: string } {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -58,7 +60,11 @@ export function useCleanerMobileWorkspace() {
   const [online, setOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
+  /** Bumps on sign-out / sign-in / user swap so Realtime channels are torn down and re-bound. */
+  const [realtimeAuthEpoch, setRealtimeAuthEpoch] = useState(0);
+  const realtimeAuthDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadSeq = useRef(0);
+  const realtimeLoadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const up = () => setOnline(true);
@@ -71,7 +77,26 @@ export function useCleanerMobileWorkspace() {
     };
   }, []);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    const sb = getSupabaseBrowser();
+    if (!sb) return;
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_OUT" && event !== "SIGNED_IN" && event !== "USER_UPDATED") return;
+      if (realtimeAuthDebounceRef.current) clearTimeout(realtimeAuthDebounceRef.current);
+      realtimeAuthDebounceRef.current = setTimeout(() => {
+        realtimeAuthDebounceRef.current = null;
+        setRealtimeAuthEpoch((n) => n + 1);
+      }, 220);
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (realtimeAuthDebounceRef.current) clearTimeout(realtimeAuthDebounceRef.current);
+    };
+  }, []);
+
+  const load = useCallback(async (): Promise<{ jobs: CleanerBookingRow[]; jobsOk: boolean } | null> => {
     const headers = await getCleanerAuthHeaders();
     if (!headers) {
       setError("Not signed in.");
@@ -79,31 +104,44 @@ export function useCleanerMobileWorkspace() {
       setOffers([]);
       setCleaner(null);
       setLoading(false);
-      return;
+      return null;
     }
     const seq = ++loadSeq.current;
-    const [jobsRes, meRes, offersRes] = await Promise.all([
-      cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers }),
-      cleanerAuthenticatedFetch("/api/cleaner/me", { headers }),
-      cleanerAuthenticatedFetch("/api/cleaner/offers", { headers }),
-    ]);
-    if (seq !== loadSeq.current) return;
+    try {
+      const [jobsRes, meRes, offersRes] = await Promise.all([
+        cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers }),
+        cleanerAuthenticatedFetch("/api/cleaner/me", { headers }),
+        cleanerAuthenticatedFetch("/api/cleaner/offers", { headers }),
+      ]);
+      if (seq !== loadSeq.current) return null;
 
-    const j = (await jobsRes.json()) as { jobs?: CleanerBookingRow[]; error?: string };
-    const m = (await meRes.json()) as { cleaner?: MeCleaner | null; teamIds?: string[]; error?: string };
-    const o = (await offersRes.json()) as { offers?: CleanerOfferRow[]; error?: string };
+      const j = (await jobsRes.json().catch(() => ({}))) as { jobs?: CleanerBookingRow[]; error?: string };
+      const m = (await meRes.json().catch(() => ({}))) as { cleaner?: MeCleaner | null; teamIds?: string[]; error?: string };
+      const o = (await offersRes.json().catch(() => ({}))) as { offers?: CleanerOfferRow[]; error?: string };
 
-    if (!jobsRes.ok) {
-      setError(j.error ?? "Could not load jobs.");
+      const jobs = j.jobs ?? [];
+      if (!jobsRes.ok) {
+        setError(j.error ?? "Could not load jobs.");
+        setRows([]);
+      } else {
+        setError(null);
+        setRows(jobs);
+      }
+      setOffers(offersRes.ok ? (o.offers ?? []) : []);
+      if (meRes.ok && m.cleaner) setCleaner(m.cleaner);
+      setTeamIdsForRealtime(
+        meRes.ok && Array.isArray(m.teamIds) ? m.teamIds.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [],
+      );
+      return { jobs: jobsRes.ok ? jobs : [], jobsOk: jobsRes.ok };
+    } catch {
+      if (seq !== loadSeq.current) return null;
+      setError("Could not load workspace. Check your connection and try again.");
       setRows([]);
-    } else {
-      setError(null);
-      setRows(j.jobs ?? []);
+      setOffers([]);
+      return { jobs: [], jobsOk: false };
+    } finally {
+      if (seq === loadSeq.current) setLoading(false);
     }
-    setOffers(offersRes.ok ? (o.offers ?? []) : []);
-    if (meRes.ok && m.cleaner) setCleaner(m.cleaner);
-    setTeamIdsForRealtime(meRes.ok && Array.isArray(m.teamIds) ? m.teamIds.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : []);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -115,10 +153,19 @@ export function useCleanerMobileWorkspace() {
     return () => window.clearInterval(t);
   }, [load]);
 
+  const scheduleRealtimeReload = useCallback(() => {
+    if (realtimeLoadDebounceRef.current) clearTimeout(realtimeLoadDebounceRef.current);
+    realtimeLoadDebounceRef.current = setTimeout(() => {
+      realtimeLoadDebounceRef.current = null;
+      void load();
+    }, 400);
+  }, [load]);
+
   useEffect(() => {
+    if (!cleaner?.id) return;
     const sb = getSupabaseBrowser();
     /** DB `cleaners.id` — Realtime filters must use this, not Supabase auth uid. */
-    const cleanerId = cleaner?.id?.trim();
+    const cleanerId = cleaner.id.trim();
     if (!sb || !cleanerId) return;
 
     let cancelled = false;
@@ -133,14 +180,14 @@ export function useCleanerMobileWorkspace() {
       chBookings.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${cleanerId}` },
-        () => void load(),
+        scheduleRealtimeReload,
       );
       for (const tid of teamIdsForRealtime) {
         if (!tid.trim()) continue;
         chBookings.on(
           "postgres_changes",
           { event: "*", schema: "public", table: "bookings", filter: `team_id=eq.${tid}` },
-          () => void load(),
+          scheduleRealtimeReload,
         );
       }
       chBookings.subscribe((status) => {
@@ -152,7 +199,7 @@ export function useCleanerMobileWorkspace() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${cleanerId}` },
-          () => void load(),
+          scheduleRealtimeReload,
         )
         .subscribe();
 
@@ -161,24 +208,28 @@ export function useCleanerMobileWorkspace() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${cleanerId}` },
-          () => void load(),
+          scheduleRealtimeReload,
         )
         .subscribe();
     });
 
     return () => {
       cancelled = true;
+      if (realtimeLoadDebounceRef.current) {
+        clearTimeout(realtimeLoadDebounceRef.current);
+        realtimeLoadDebounceRef.current = null;
+      }
       if (chBookings) void sb.removeChannel(chBookings);
       if (chOffers) void sb.removeChannel(chOffers);
       if (chTeamMembers) void sb.removeChannel(chTeamMembers);
     };
-  }, [load, teamIdsForRealtime, cleaner?.id]);
+  }, [load, teamIdsForRealtime, cleaner?.id, realtimeAuthEpoch, scheduleRealtimeReload]);
 
-  const postJobAction = useCallback(async (bookingId: string, action: CleanerJobAction) => {
+  const postJobAction = useCallback(async (bookingId: string, action: CleanerJobAction): Promise<PostJobActionResult> => {
     const o = assertOnline();
-    if (!o.ok) return o;
+    if (!o.ok) return { ok: false, error: o.error };
     const headers = await getCleanerAuthHeaders();
-    if (!headers) return { ok: false as const, error: "Not signed in." };
+    if (!headers) return { ok: false, error: "Not signed in." };
     setActingId(bookingId);
     try {
       const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
@@ -187,11 +238,15 @@ export function useCleanerMobileWorkspace() {
         body: JSON.stringify({ action }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) return { ok: false as const, error: json.error ?? "Action failed." };
-      await load();
-      return { ok: true as const };
+      if (!res.ok) return { ok: false, error: json.error ?? "Action failed." };
+      const payload = await load();
+      if (action === "complete" && payload?.jobsOk) {
+        const row = payload.jobs.find((x) => x.id === bookingId);
+        if (row) return { ok: true, trustCompletion: trustJobCompletionFeedbackFromRow(row) };
+      }
+      return { ok: true };
     } catch {
-      return { ok: false as const, error: "Network error." };
+      return { ok: false, error: "Network error." };
     } finally {
       setActingId(null);
     }
@@ -246,75 +301,48 @@ export function useCleanerMobileWorkspace() {
 
   const activeJob = useMemo(() => getActiveMobileJob(rows), [rows]);
   const nextJob = useMemo(() => getNextUpcomingMobileJob(rows), [rows]);
-  const earnings = useMemo(() => earningsSummaryFromRows(rows, new Date()), [rows]);
   /** Dispatch offers only — team-assigned jobs never appear here (they live under My Jobs). */
   const availableOffers = useMemo(
     () => offers.filter((o) => o.booking == null || o.booking.is_team_job !== true),
     [offers],
   );
-  const idleMinutesSinceLastCompleted = useMemo(
-    () => idleMinutesSinceLastCompletedJob(rows, new Date()),
-    [rows],
+  const offerAcceptanceRankCtx = useMemo(
+    () => ({
+      now: new Date(),
+      cleanerCreatedAtIso: cleaner?.created_at ?? null,
+    }),
+    [availableOffers, cleaner?.created_at],
   );
-  const weeklyEarningsGoalZar = useMemo(() => adaptiveWeeklyEarningsGoalZar(rows, new Date()), [rows]);
-  const offerSortCtx = useMemo(
-    () => ({ now: new Date(), idleMinutesSinceLastCompleted: idleMinutesSinceLastCompleted }),
-    [availableOffers, idleMinutesSinceLastCompleted],
+  const rankedSoloOffers = useMemo(
+    () => sortCleanerOffersByAcceptanceScore(availableOffers, offerAcceptanceRankCtx),
+    [availableOffers, offerAcceptanceRankCtx],
   );
-  const sortedAvailableOffers = useMemo(
-    () => sortCleanerOffersByAdjustedValue(availableOffers, offerSortCtx),
-    [availableOffers, offerSortCtx],
-  );
-  const topOffer = sortedAvailableOffers[0] ?? null;
-  const medianValueScore = useMemo(() => medianOfferValueScore(availableOffers), [availableOffers]);
-  /** Single badge: best value wins over “recommended” when both apply. */
-  const topOfferPrimaryBadge = useMemo((): "best_value" | "recommended" | null => {
-    if (!topOffer) return null;
-    const isBestValue = sortedAvailableOffers.length > 1;
-    if (isBestValue) return "best_value";
-    const eta = drivingEtaMinutesFromOfferSnapshot(topOffer);
-    const score = offerValueScoreCentsPerHour(topOffer);
-    const isRecommended =
-      sortedAvailableOffers.length === 1
-        ? eta != null && eta <= 15 && score > 0
-        : eta != null && eta <= 15 && score >= medianValueScore;
-    return isRecommended ? "recommended" : null;
-  }, [topOffer, medianValueScore, sortedAvailableOffers.length]);
+  const topOffer = rankedSoloOffers[0] ?? null;
   const extraSoloOffersTodayCount = useMemo(() => {
-    const y = ymdLocal(new Date());
-    const n = sortedAvailableOffers.filter((o) => String(o.booking?.date ?? "").slice(0, 10) === y).length;
+    const y = johannesburgCalendarYmd(new Date());
+    const n = rankedSoloOffers.filter((o) => String(o.booking?.date ?? "").slice(0, 10) === y).length;
     return Math.max(0, n - 1);
-  }, [sortedAvailableOffers]);
-
-  const earningsRows = useMemo(() => {
-    const completed = rows.filter((r) => String(r.status ?? "").toLowerCase() === "completed");
-    const sorted = [...completed].sort((a, b) =>
-      String(b.completed_at ?? b.date ?? "").localeCompare(String(a.completed_at ?? a.date ?? "")),
-    );
-    return sorted.slice(0, 25).map((r) => {
-      const view = bookingRowToMobileView(r);
-      const display = r.displayEarningsCents;
-      const displayEarningsZar =
-        display != null && Number.isFinite(Number(display)) ? Math.round(Number(display) / 100) : null;
-      return {
-        id: r.id,
-        serviceLabel: `${r.service ?? "Job"} · ${view.areaLabel}`,
-        displayEarningsZar,
-        payoutStatus: r.payout_id ? ("paid" as const) : ("pending" as const),
-      };
-    });
-  }, [rows]);
+  }, [rankedSoloOffers]);
 
   const profile = useMemo(() => {
     if (!cleaner) return null;
     const phone = String(cleaner.phone_number ?? cleaner.phone ?? "").trim() || "—";
     const areas = cleaner.location?.trim() ? [cleaner.location.trim()] : ["Areas not set"];
+    const jobsCompleted =
+      typeof cleaner.jobs_completed === "number" && Number.isFinite(cleaner.jobs_completed)
+        ? Math.max(0, Math.round(cleaner.jobs_completed))
+        : 0;
+    const createdRaw = cleaner.created_at;
+    const createdAt =
+      typeof createdRaw === "string" && createdRaw.trim().length > 0 ? createdRaw.trim() : null;
     return {
       name: cleaner.full_name?.trim() || "Cleaner",
       phone,
       areas,
       rating: typeof cleaner.rating === "number" && Number.isFinite(cleaner.rating) ? cleaner.rating : 5,
       isAvailable: cleaner.is_available === true || String(cleaner.status ?? "").toLowerCase() === "available",
+      jobsCompleted,
+      createdAt,
     };
   }, [cleaner]);
 
@@ -322,8 +350,7 @@ export function useCleanerMobileWorkspace() {
     rows,
     offers,
     topOffer,
-    topOfferPrimaryBadge,
-    weeklyEarningsGoalZar,
+    rankedSoloOffers,
     extraSoloOffersTodayCount,
     loading,
     error,
@@ -335,8 +362,6 @@ export function useCleanerMobileWorkspace() {
     setAvailability,
     activeJob,
     nextJob,
-    earnings,
-    earningsRows,
     profile,
     realtimeOk,
     online,

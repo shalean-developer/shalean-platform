@@ -1,13 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { johannesburgCalendarMonthDateRangeYmd } from "@/lib/dashboard/johannesburgMonth";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { BillingSwitchCode } from "@/lib/admin/billingSwitchCodes";
 import {
   readBillingSwitchIdempotencyKey,
   rememberBillingSwitchSuccess,
   tryReplayBillingSwitchSuccess,
-} from "@/lib/admin/adminBillingSwitchIdempotencyMemory";
+} from "@/lib/admin/adminBillingSwitchIdempotency";
+import { checkAdminBillingSwitchRateLimit } from "@/lib/admin/adminBillingSwitchRateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,6 +171,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
+  const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
+
   const { userId: rawUserId } = await ctx.params;
   const customerId = (rawUserId ?? "").trim();
   if (!isUuid(customerId)) {
@@ -202,7 +207,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
 
   const idempotencyKey = readBillingSwitchIdempotencyKey(request);
   if (idempotencyKey) {
-    const replay = tryReplayBillingSwitchSuccess(customerId, idempotencyKey);
+    const replay = await tryReplayBillingSwitchSuccess(admin, customerId, idempotencyKey);
     if (replay) {
       return NextResponse.json(replay.body, {
         status: replay.status,
@@ -235,17 +240,26 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
     }));
     const noopBody = {
       ok: true,
-      code: "NO_CHANGE" as const,
+      code: BillingSwitchCode.NO_CHANGE,
       requires_confirmation: false,
+      requires_strict_confirmation: false,
       billing_type: fromBilling,
       schedule_type: fromSchedule,
       schedule_enforced: false,
       impact: impactNoop,
     };
     if (idempotencyKey) {
-      rememberBillingSwitchSuccess(customerId, idempotencyKey, 200, noopBody as unknown as Record<string, unknown>);
+      await rememberBillingSwitchSuccess(admin, customerId, idempotencyKey, 200, noopBody as unknown as Record<string, unknown>);
     }
     return NextResponse.json(noopBody);
+  }
+
+  const rate = checkAdminBillingSwitchRateLimit(auth.userId, customerId);
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: rate.error },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } },
+    );
   }
 
   let impact;
@@ -270,8 +284,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
   if (hasActivity && !confirm) {
     return NextResponse.json({
       ok: true,
-      code: "EXISTING_ACTIVITY_THIS_MONTH",
+      code: BillingSwitchCode.EXISTING_ACTIVITY_THIS_MONTH,
       requires_confirmation: true,
+      requires_strict_confirmation: false,
+      schedule_enforced: false,
       reason: "existing_activity_this_month",
       details: {
         bookings_count: bookingsThisMonth,
@@ -287,8 +303,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
   if (strictScenario && confirm && !confirm_strict) {
     return NextResponse.json({
       ok: true,
-      code: "STRICT_CONFIRM_REQUIRED",
+      code: BillingSwitchCode.STRICT_CONFIRM_REQUIRED,
+      requires_confirmation: false,
       requires_strict_confirmation: true,
+      schedule_enforced: false,
       reason: "mid_cycle_monthly_flip",
       details: {
         bookings_count: bookingsThisMonth,
@@ -301,116 +319,87 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
     });
   }
 
-  let impactLatest;
-  try {
-    impactLatest = await fetchMonthImpact(admin, customerId);
-  } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Impact query failed." }, { status: 500 });
+  const { data: rpcRaw, error: rpcErr } = await admin.rpc("admin_billing_switch_finalize", {
+    p_customer_id: customerId,
+    p_billing_type: billing_type,
+    p_target_schedule_type: toSchedule,
+    p_schedule_enforced: schedule_enforced,
+    p_confirm: confirm,
+    p_confirm_strict: confirm_strict,
+    p_strict_flip_enabled: adminBillingFlipStrictEnabled(),
+  });
+
+  if (rpcErr) {
+    return NextResponse.json({ error: rpcErr.message }, { status: 500 });
   }
 
-  const bookingsLatest = impactLatest.bookings_count;
-  const hasMonthInvoiceLatest = impactLatest.has_month_invoice;
-  const hasActivityLatest = bookingsLatest > 0 || hasMonthInvoiceLatest;
+  const rpcJson = rpcRaw as Record<string, unknown> | null;
+  if (!rpcJson || rpcJson.ok === false) {
+    const errMsg =
+      rpcJson && typeof rpcJson.error === "string" ? rpcJson.error : "Billing switch could not be applied.";
+    return NextResponse.json({ error: errMsg }, { status: 400 });
+  }
+
+  const code = rpcJson.code;
+  if (
+    code === BillingSwitchCode.EXISTING_ACTIVITY_THIS_MONTH ||
+    code === BillingSwitchCode.STRICT_CONFIRM_REQUIRED
+  ) {
+    return NextResponse.json(rpcJson);
+  }
+
+  if (code !== BillingSwitchCode.NO_CHANGE && code !== BillingSwitchCode.UPDATED) {
+    return NextResponse.json({ error: "Unexpected billing switch response." }, { status: 500 });
+  }
+
+  const impactOut = rpcJson.impact as (typeof impact) | undefined;
+  const bookingsFinal = typeof impactOut?.bookings_count === "number" ? impactOut.bookings_count : 0;
+  const hasMonthInvoiceFinal = Boolean(impactOut?.has_month_invoice);
   const strictLatest =
     adminBillingFlipStrictEnabled() &&
     flippingMonthly &&
-    bookingsLatest > 0 &&
-    hasMonthInvoiceLatest;
+    bookingsFinal > 0 &&
+    hasMonthInvoiceFinal;
 
-  if (hasActivityLatest && !confirm) {
-    return NextResponse.json({
-      ok: true,
-      code: "EXISTING_ACTIVITY_THIS_MONTH",
-      requires_confirmation: true,
-      reason: "existing_activity_this_month",
-      details: {
-        bookings_count: bookingsLatest,
-        invoice_status: impactLatest.invoice_status,
-        invoice_month: impactLatest.invoice_month,
+  if (code === BillingSwitchCode.UPDATED) {
+    const ts = new Date().toISOString();
+    const billingOut = String(rpcJson.billing_type ?? billing_type);
+    const scheduleOut = String(rpcJson.schedule_type ?? toSchedule);
+    await logSystemEvent({
+      level: "info",
+      source: "admin_billing_switch",
+      message: "admin_changed_billing_type",
+      context: {
+        event: "admin_changed_billing_type",
+        rpc_invoked: true,
+        rpc_code: String(code),
+        customer_id: customerId,
+        from: fromBilling,
+        to: billing_type,
+        schedule_from: fromSchedule,
+        schedule_to: toSchedule,
+        before: { billing_type: fromBilling, schedule_type: fromSchedule },
+        after: {
+          billing_type: billingOut,
+          schedule_type: scheduleOut,
+        },
+        ts,
+        schedule_enforced,
+        admin_id: auth.userId,
+        bookings_count_this_month: bookingsFinal,
+        invoice_status: impactOut?.invoice_status ?? null,
+        invoice_month: impactOut?.invoice_month ?? null,
+        has_month_invoice: hasMonthInvoiceFinal,
+        confirm_strict_used: strictLatest ? confirm_strict : false,
+        idempotency_key: idempotencyKey ?? null,
+        request_id: requestId,
       },
-      billing_type: fromBilling,
-      schedule_type: fromSchedule,
-      impact: impactLatest,
     });
   }
 
-  if (strictLatest && confirm && !confirm_strict) {
-    return NextResponse.json({
-      ok: true,
-      code: "STRICT_CONFIRM_REQUIRED",
-      requires_strict_confirmation: true,
-      reason: "mid_cycle_monthly_flip",
-      details: {
-        bookings_count: bookingsLatest,
-        invoice_status: impactLatest.invoice_status,
-        invoice_month: impactLatest.invoice_month,
-      },
-      billing_type: fromBilling,
-      schedule_type: fromSchedule,
-      impact: impactLatest,
-    });
-  }
-
-  impact = impactLatest;
-  const bookingsThisMonthFinal = impact.bookings_count;
-  const hasMonthInvoiceFinal = impact.has_month_invoice;
-
-  const { data: updated, error: updErr } = await admin
-    .from("user_profiles")
-    .update({
-      billing_type,
-      schedule_type: toSchedule,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", customerId)
-    .select("billing_type, schedule_type")
-    .single();
-
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
-  }
-
-  const u = updated as { billing_type?: string; schedule_type?: string };
-
-  const ts = new Date().toISOString();
-  await logSystemEvent({
-    level: "info",
-    source: "admin_billing_switch",
-    message: "admin_changed_billing_type",
-    context: {
-      event: "admin_changed_billing_type",
-      customer_id: customerId,
-      from: fromBilling,
-      to: billing_type,
-      schedule_from: fromSchedule,
-      schedule_to: toSchedule,
-      before: { billing_type: fromBilling, schedule_type: fromSchedule },
-      after: {
-        billing_type: String(u.billing_type ?? billing_type),
-        schedule_type: String(u.schedule_type ?? toSchedule),
-      },
-      ts,
-      schedule_enforced,
-      admin_id: auth.userId,
-      bookings_count_this_month: bookingsThisMonthFinal,
-      invoice_status: impact.invoice_status,
-      invoice_month: impact.invoice_month,
-      has_month_invoice: hasMonthInvoiceFinal,
-      confirm_strict_used: strictLatest ? confirm_strict : false,
-    },
-  });
-
-  const successBody = {
-    ok: true,
-    code: "UPDATED" as const,
-    requires_confirmation: false,
-    billing_type: String(u.billing_type ?? billing_type),
-    schedule_type: String(u.schedule_type ?? toSchedule),
-    schedule_enforced,
-    impact,
-  };
   if (idempotencyKey) {
-    rememberBillingSwitchSuccess(customerId, idempotencyKey, 200, successBody as unknown as Record<string, unknown>);
+    await rememberBillingSwitchSuccess(admin, customerId, idempotencyKey, 200, rpcJson as Record<string, unknown>);
   }
-  return NextResponse.json(successBody);
+
+  return NextResponse.json(rpcJson);
 }

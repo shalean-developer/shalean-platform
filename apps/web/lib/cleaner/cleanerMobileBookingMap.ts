@@ -1,7 +1,13 @@
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
+import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
+import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
+import { jobTotalZarFromCleanerBookingLike } from "@/lib/cleaner/cleanerUxEstimatedPayZar";
 
 /** UI lifecycle for cleaner field app (maps DB status + timestamps). */
-export type CleanerMobilePhase = "assigned" | "en_route" | "in_progress" | "completed";
+export type CleanerMobilePhase = "pending" | "assigned" | "en_route" | "in_progress" | "completed";
 
 export type CleanerMobileJobView = {
   id: string;
@@ -19,15 +25,23 @@ export type CleanerMobileJobView = {
   operationalNoteChips: readonly string[];
   /** Full merged notes (admin + customer + locked); no duplicate heads-up line. */
   notes: string | null;
-  /** ZAR — null until stored display earnings is available. */
+  /** ZAR — whole rand, may round from cents; prefer {@link CleanerMobileJobView.earningsCents} for display. */
   earningsZar: number | null;
-  /** Team placeholder (fixed member amount) vs confirmed stored earnings. */
+  /** Resolved cleaner-facing pay in cents when stored; null until calculated. */
+  earningsCents: number | null;
+  /** True when API marks display pay as an estimate (e.g. team placeholder). */
   earningsIsEstimate: boolean;
-  payoutStatus: "paid" | "pending";
+  payoutStatus: "paid" | "pending" | "eligible" | "invalid";
   /** Team-assigned booking (cleaner_id may be null on server). */
   isTeamJob: boolean;
   /** Active cleaners on roster for booking date; null if unknown or not a team job. */
   teamMemberCount: number | null;
+  /** From `bookings.cleaner_response_status` (snake_case on wire). */
+  cleanerResponseStatus?: string | null;
+  enRouteAt?: string | null;
+  cleanerId?: string | null;
+  /** Invoice / paid total in ZAR when present — UX-only pay hint when {@link CleanerMobileJobView.earningsCents} is null. */
+  jobTotalZar: number | null;
 };
 
 /** Hours from `booking_snapshot.locked.finalHours`, default 2 when missing. */
@@ -38,12 +52,25 @@ export function durationHoursFromBookingSnapshot(snap: unknown): number {
   return 2;
 }
 
-/** Approximate hourly rate for cleaner-facing pay display. */
-export function formatApproxEarningsPerHourZar(earningsZar: number, durationHours: number): string | null {
-  if (!Number.isFinite(earningsZar) || !Number.isFinite(durationHours) || durationHours <= 0) return null;
-  const per = Math.round(earningsZar / durationHours);
-  if (!Number.isFinite(per) || per < 0) return null;
-  return `≈ R${per.toLocaleString("en-ZA")}/hr`;
+/** Like {@link durationHoursFromBookingSnapshot} but returns null when hours are not set on the snapshot (no default). */
+export function explicitDurationHoursFromBookingSnapshot(snap: unknown): number | null {
+  const o = snap as { locked?: { finalHours?: number } } | null;
+  const h = o?.locked?.finalHours;
+  if (typeof h === "number" && Number.isFinite(h) && h > 0) return h;
+  return null;
+}
+
+/** Under pay: expected time on site from `finalHours` (or snapshot default), e.g. `Takes ~3h`. */
+export function formatTakesAboutJobHoursLine(hours: number): string | null {
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  return `Takes ~${Number.isInteger(hours) ? String(hours) : hours.toFixed(1)}h`;
+}
+
+/** Offer-style duration line when `finalHours` is on the snapshot, e.g. `~3h job`. */
+export function formatApproxJobDurationJobLabel(hours: number): string | null {
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  const s = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  return `~${s}h job`;
 }
 
 /** Higher-signal keywords first; at most three shown to avoid noisy heads-up lines. */
@@ -91,25 +118,73 @@ function shortArea(location: string | null): string {
 
 export function deriveMobilePhase(row: CleanerBookingRow): CleanerMobilePhase {
   const st = String(row.status ?? "").toLowerCase();
-  if (st === "completed") return "completed";
+  if (st === "completed" || st === "cancelled") return "completed";
   if (st === "in_progress") return "in_progress";
-  if (st === "assigned" || st === "pending") {
-    if (row.en_route_at) return "en_route";
-    return "assigned";
+  if (st === "pending") return row.en_route_at ? "en_route" : "pending";
+  if (st === "assigned") return row.en_route_at ? "en_route" : "assigned";
+  return "pending";
+}
+
+/** At most one primary action group for schedule / job detail (matches server lifecycle rules). */
+export type CleanerJobLifecycleSlot =
+  | { kind: "accept_reject"; canReject: boolean }
+  | { kind: "en_route" }
+  | { kind: "start" }
+  | { kind: "complete" }
+  | null;
+
+export function deriveCleanerJobLifecycleSlot(row: CleanerBookingRow): CleanerJobLifecycleSlot {
+  const st = String(row.status ?? "").toLowerCase();
+  if (st === "completed" || st === "cancelled" || st === "failed") return null;
+  if (st === "in_progress") return { kind: "complete" };
+  const rec = row as Record<string, unknown>;
+  const raw = rec.cleaner_response_status as string | null | undefined;
+  const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
+  const isTeam = row.is_team_job === true;
+  const soloAssigned = !isTeam && String(row.cleaner_id ?? "").trim().length > 0;
+  const accepted = r === CLEANER_RESPONSE.ACCEPTED || (soloAssigned && r === "");
+  const hasEnRoute = Boolean(row.en_route_at);
+  if (st === "assigned") {
+    if (hasEnRoute) return { kind: "start" };
+    if (!accepted) return { kind: "accept_reject", canReject: !isTeam };
+    return { kind: "en_route" };
   }
-  return "assigned";
+  return null;
+}
+
+/** Prefer camelCase from cleaner APIs; fall back to snake_case if present. */
+export function cleanerFacingDisplayEarningsCents(row: CleanerBookingRow): number | null {
+  const rec = row as Record<string, unknown>;
+  return resolveCleanerEarningsCents({
+    payout_frozen_cents: rec.payout_frozen_cents,
+    display_earnings_cents:
+      optionalCentsFromDb(row.displayEarningsCents) ?? optionalCentsFromDb(rec.display_earnings_cents),
+  });
+}
+
+function payoutUiForCompleted(row: CleanerBookingRow): "paid" | "pending" | "eligible" | "invalid" {
+  const rec = row as Record<string, unknown>;
+  const ps = String(rec.payout_status ?? "")
+    .trim()
+    .toLowerCase();
+  if (ps === "paid") {
+    if (isBookingPayoutPaid({ payout_status: rec.payout_status, payout_paid_at: rec.payout_paid_at })) return "paid";
+    return "invalid";
+  }
+  if (ps === "eligible") return "eligible";
+  return "pending";
 }
 
 export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJobView {
   const st = String(row.status ?? "").toLowerCase();
   const phase = deriveMobilePhase(row);
-  const displayCents =
-    row.displayEarningsCents != null && Number.isFinite(Number(row.displayEarningsCents))
-      ? Math.round(Number(row.displayEarningsCents))
-      : null;
+  const rec = row as Record<string, unknown>;
+  const crsRaw = row.cleaner_response_status ?? (rec.cleaner_response_status as string | null | undefined);
+  const displayCents = cleanerFacingDisplayEarningsCents(row);
   const earningsZar = displayCents != null ? Math.round(displayCents / 100) : null;
-  const earningsIsEstimate = row.displayEarningsIsEstimate === true;
-  const payoutStatus: "paid" | "pending" = row.payout_id ? "paid" : "pending";
+  const estimateFlag = row.displayEarningsIsEstimate === true || row.earnings_estimated === true;
+  const payoutStatus: "paid" | "pending" | "eligible" | "invalid" =
+    st === "completed" ? payoutUiForCompleted(row) : "pending";
   const teamMemberCountRaw = row.teamMemberCount;
   const teamMemberCount =
     typeof teamMemberCountRaw === "number" && Number.isFinite(teamMemberCountRaw) && teamMemberCountRaw > 0
@@ -134,10 +209,15 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     operationalNoteChips: chips,
     notes: mergedNotes ? mergedNotes.slice(0, 600) : null,
     earningsZar,
-    earningsIsEstimate,
-    payoutStatus: st === "completed" ? payoutStatus : "pending",
+    earningsCents: displayCents,
+    earningsIsEstimate: estimateFlag,
+    payoutStatus,
     isTeamJob: row.is_team_job === true,
     teamMemberCount,
+    cleanerResponseStatus: crsRaw != null && crsRaw !== "" ? String(crsRaw) : null,
+    enRouteAt: row.en_route_at ? String(row.en_route_at) : null,
+    cleanerId: row.cleaner_id != null && String(row.cleaner_id).trim() ? String(row.cleaner_id).trim() : null,
+    jobTotalZar: jobTotalZarFromCleanerBookingLike(row),
   };
 }
 
@@ -148,55 +228,75 @@ export function getActiveMobileJob(rows: CleanerBookingRow[]): CleanerMobileJobV
   return bookingRowToMobileView(sorted[0]!);
 }
 
-export function getNextUpcomingMobileJob(rows: CleanerBookingRow[]): CleanerMobileJobView | null {
+export function getNextUpcomingMobileJob(rows: CleanerBookingRow[], now = new Date()): CleanerMobileJobView | null {
+  const todayYmd = johannesburgCalendarYmd(now);
   const candidates = rows.filter((r) => {
     const st = String(r.status ?? "").toLowerCase();
-    return st === "assigned" || st === "pending";
+    if (!(st === "assigned" || st === "pending")) return false;
+    const d = String(r.date ?? "").slice(0, 10);
+    if (!d) return false;
+    return d >= todayYmd;
   });
   if (candidates.length === 0) return null;
   const sorted = [...candidates].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.time ?? "").localeCompare(b.time ?? ""));
   return bookingRowToMobileView(sorted[0]!);
 }
 
-export function ymdLocal(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+/** Schedule tab / jobs list: overdue (open, date before JHB today), Today (open, JHB today), Upcoming (open, future dates), Completed. */
+export type CleanerScheduleSectionKey = "overdue" | "today" | "upcoming" | "completed";
 
-export function earningsSummaryFromRows(rows: CleanerBookingRow[], now: Date) {
-  const completed = rows.filter((r) => String(r.status ?? "").toLowerCase() === "completed");
-  const todayY = ymdLocal(now);
-  const startOfWeek = new Date(now);
-  const dow = startOfWeek.getDay();
-  const diff = dow === 0 ? 6 : dow - 1;
-  startOfWeek.setDate(startOfWeek.getDate() - diff);
-  startOfWeek.setHours(0, 0, 0, 0);
-  const weekStartMs = startOfWeek.getTime();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-  const zar = (r: CleanerBookingRow) => {
-    const c = r.displayEarningsCents;
-    if (c != null && Number.isFinite(Number(c))) {
-      return Math.round(Number(c) / 100);
-    }
-    return 0;
+export function groupCleanerScheduleRows(
+  rows: CleanerBookingRow[],
+  now: Date,
+): {
+  todayYmd: string;
+  sections: { key: CleanerScheduleSectionKey; title: string; rows: CleanerBookingRow[] }[];
+} {
+  const todayYmd = johannesburgCalendarYmd(now);
+  const stOf = (r: CleanerBookingRow) => String(r.status ?? "").toLowerCase();
+  const dOf = (r: CleanerBookingRow) => String(r.date ?? "").slice(0, 10);
+  const sortBySchedule = (a: CleanerBookingRow, b: CleanerBookingRow) =>
+    (a.date ?? "").localeCompare(b.date ?? "") || String(a.time ?? "").localeCompare(String(b.time ?? ""));
+  const pastStamp = (r: CleanerBookingRow) => {
+    const st = stOf(r);
+    if (st === "completed") return String(r.completed_at ?? r.date ?? "");
+    if (st === "cancelled") return String(r.date ?? r.created_at ?? "");
+    return "";
   };
+  const sortPastDesc = (a: CleanerBookingRow, b: CleanerBookingRow) => pastStamp(b).localeCompare(pastStamp(a));
 
-  let today = 0;
-  let week = 0;
-  let month = 0;
-  for (const r of completed) {
-    const z = zar(r);
-    const d = (r.completed_at ?? r.date ?? "").slice(0, 10);
-    if (!d) continue;
-    if (d === todayY) today += z;
-    const dayMs = new Date(`${d}T12:00:00`).getTime();
-    if (!Number.isNaN(dayMs) && dayMs >= weekStartMs) week += z;
-    if (d.slice(0, 7) === monthKey) month += z;
-  }
-  return { today, week, month };
+  const pastRows = rows
+    .filter((r) => {
+      const st = stOf(r);
+      return st === "completed" || st === "cancelled";
+    })
+    .sort(sortPastDesc);
+  const open = rows.filter((r) => {
+    const st = stOf(r);
+    return st !== "completed" && st !== "cancelled";
+  });
+  const overdue = open
+    .filter((r) => {
+      const d = dOf(r);
+      if (!d) return true;
+      return d < todayYmd;
+    })
+    .sort(sortBySchedule);
+  const todayRows = open.filter((r) => dOf(r) === todayYmd).sort(sortBySchedule);
+  const upcomingRows = open
+    .filter((r) => {
+      const d = dOf(r);
+      if (!d) return false;
+      return d > todayYmd;
+    })
+    .sort(sortBySchedule);
+
+  const sections: { key: CleanerScheduleSectionKey; title: string; rows: CleanerBookingRow[] }[] = [];
+  if (overdue.length) sections.push({ key: "overdue", title: "Needs attention", rows: overdue });
+  if (todayRows.length) sections.push({ key: "today", title: "Today", rows: todayRows });
+  if (upcomingRows.length) sections.push({ key: "upcoming", title: "Upcoming", rows: upcomingRows });
+  if (pastRows.length) sections.push({ key: "completed", title: "Past", rows: pastRows });
+  return { todayYmd, sections };
 }
 
 /** Minutes since last completed job (for offer fairness). No completions → 24h nominal idle. */
@@ -225,53 +325,9 @@ export function adaptiveWeeklyEarningsGoalZar(rows: CleanerBookingRow[], now: Da
     if (!raw) continue;
     const t = new Date(raw).getTime();
     if (Number.isNaN(t) || t < cutoff) continue;
-    const c = r.displayEarningsCents;
-    if (c == null || !Number.isFinite(Number(c))) continue;
-    sum += Math.round(Number(c) / 100);
+    const c = cleanerFacingDisplayEarningsCents(r);
+    if (c == null) continue;
+    sum += Math.round(c / 100);
   }
   return Math.max(1000, Math.round(sum * 1.2));
-}
-
-/** Dispatch offer shape (avoid importing full row type). */
-type TodayOfferHint = {
-  booking_id: string;
-  displayEarningsCents?: number | null;
-  booking: { date?: string | null; is_team_job?: boolean | null } | null;
-} | null;
-
-/**
- * Sum known display earnings (ZAR) for today’s open pipeline: assigned/pending/in-progress
- * bookings dated today, plus a pending solo offer dated today if that booking is not already in `rows`.
- */
-export function todayPotentialEarningsZar(params: {
-  rows: CleanerBookingRow[];
-  topOffer: TodayOfferHint;
-  now: Date;
-}): { zar: number; hasGap: boolean } {
-  const todayY = ymdLocal(params.now);
-  let zar = 0;
-  let hasGap = false;
-  const rowIds = new Set(params.rows.map((r) => String(r.id)));
-
-  for (const r of params.rows) {
-    const d = String(r.date ?? "").slice(0, 10);
-    if (d !== todayY) continue;
-    const st = String(r.status ?? "").toLowerCase();
-    if (st === "completed") continue;
-    const view = bookingRowToMobileView(r);
-    if (view.earningsZar != null) zar += view.earningsZar;
-    else hasGap = true;
-  }
-
-  const o = params.topOffer;
-  if (o?.booking && o.booking.is_team_job !== true) {
-    const od = String(o.booking.date ?? "").slice(0, 10);
-    if (od === todayY && !rowIds.has(String(o.booking_id))) {
-      const c = o.displayEarningsCents;
-      if (c != null && Number.isFinite(Number(c))) zar += Math.max(0, Math.round(Number(c) / 100));
-      else hasGap = true;
-    }
-  }
-
-  return { zar, hasGap };
 }

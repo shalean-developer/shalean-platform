@@ -78,7 +78,7 @@ export function GlobalTopNav() {
     return () => window.clearTimeout(timer);
   }, [pathname]);
 
-  /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. */
+  /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. Cleaner app uses `app/cleaner/layout.tsx` (workspace bar on sub-routes, full shell on home/job). */
   const hideMarketingNav =
     pathname === "/" ||
     pathname.startsWith("/admin") ||
@@ -86,9 +86,7 @@ export function GlobalTopNav() {
     pathname.startsWith("/booking/") ||
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
-    pathname.startsWith("/cleaner/dashboard") ||
-    pathname.startsWith("/cleaner/job/") ||
-    pathname.startsWith("/cleaner/login");
+    pathname.startsWith("/cleaner");
 
   async function handleLogout() {
     if (user) {
@@ -103,7 +101,7 @@ export function GlobalTopNav() {
 
   const navLinkClass = "rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-blue-50 hover:text-blue-700";
   const loggedIn = Boolean(user || cleanerLoggedIn);
-  const accountHref = user ? "/dashboard" : "/cleaner/dashboard";
+  const accountHref = user ? "/dashboard" : "/cleaner";
   const avatarName = user ? userDisplayName(user) : "Cleaner account";
   const avatarPhoto = user ? avatarImageUrl(user) : null;
   const avatarInitial = avatarLetter(user, cleanerLoggedIn);

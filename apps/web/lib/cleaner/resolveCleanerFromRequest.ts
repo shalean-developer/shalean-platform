@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  recordLegacyCleanerAuthMetric,
+  shouldEmitLegacyRowMatchLog,
+} from "@/lib/cleaner/cleanerAuthLegacyMetrics";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 export function extractBearerToken(request: Request): string | null {
@@ -9,14 +13,9 @@ export function extractBearerToken(request: Request): string | null {
   return t || null;
 }
 
-function envFlagTrue(v: string | undefined): boolean {
-  const s = (v ?? "").trim().toLowerCase();
-  return s === "1" || s === "true" || s === "yes";
-}
-
-/** When false (default), `x-cleaner-id` without Bearer is rejected (spoof-resistant). */
+/** Legacy `x-cleaner-id` auth is permanently disabled in production builds. */
 export function cleanerAuthAllowLegacyHeader(): boolean {
-  return envFlagTrue(process.env.CLEANER_AUTH_ALLOW_LEGACY_HEADER);
+  return false;
 }
 
 export type ResolvedCleanerRow = { id: string };
@@ -37,13 +36,17 @@ async function cleanerRowForAuthUserId(
   }
   const { data: legacy } = await admin.from("cleaners").select("id").eq("id", authUserId).maybeSingle();
   if (legacy && typeof (legacy as { id?: string }).id === "string") {
-    void logSystemEvent({
-      level: "warn",
-      source: "cleaner_auth",
-      message: "cleaner_legacy_id_match_used",
-      context: { auth_user_id: authUserId, cleaner_id: String((legacy as { id: string }).id) },
-    });
-    return { id: String((legacy as { id: string }).id) };
+    const cleanerId = String((legacy as { id: string }).id);
+    recordLegacyCleanerAuthMetric("legacy_id_row_match", { auth_user_id: authUserId, cleaner_id: cleanerId });
+    if (shouldEmitLegacyRowMatchLog(authUserId)) {
+      void logSystemEvent({
+        level: "warn",
+        source: "cleaner_auth",
+        message: "cleaner_legacy_id_match_used",
+        context: { auth_user_id: authUserId, cleaner_id: cleanerId },
+      });
+    }
+    return { id: cleanerId };
   }
   return null;
 }
@@ -51,12 +54,10 @@ async function cleanerRowForAuthUserId(
 /**
  * Resolve cleaner for `/api/cleaner/*`.
  *
- * 1. **Primary:** `Authorization: Bearer <jwt>` → Supabase `getUser` → `cleaners.auth_user_id`
- *    (fallback: same-row `cleaners.id = auth uid`, logs `cleaner_legacy_id_match_used`).
- * 2. **Rollout only:** `x-cleaner-id` when there is **no** Bearer and
- *    `CLEANER_AUTH_ALLOW_LEGACY_HEADER=true` — logs `legacy_cleaner_auth_used`.
+ * **Only** `Authorization: Bearer <jwt>` → Supabase `getUser` → `cleaners.auth_user_id`
+ * (fallback: same-row `cleaners.id = auth uid`, logs `cleaner_legacy_id_match_used`).
  *
- * Bearer always wins when present (invalid token → 401; legacy header is not consulted).
+ * `x-cleaner-id` without Bearer is **not** accepted (spoof-resistant).
  */
 export async function resolveCleanerFromRequest(
   request: Request,
@@ -84,25 +85,6 @@ export async function resolveCleanerFromRequest(
       email: userData.user.email ?? null,
     };
     return { ok: true, cleaner, authUserId, authUser };
-  }
-
-  const legacyCleanerId = request.headers.get("x-cleaner-id")?.trim() ?? "";
-  if (legacyCleanerId && cleanerAuthAllowLegacyHeader()) {
-    void logSystemEvent({
-      level: "warn",
-      source: "cleaner_auth",
-      message: "legacy_cleaner_auth_used",
-      context: { cleaner_id: legacyCleanerId },
-    });
-    const { data: row } = await admin.from("cleaners").select("id").eq("id", legacyCleanerId).maybeSingle();
-    if (!row || typeof (row as { id?: string }).id !== "string") {
-      return { ok: false, error: "Invalid cleaner session.", status: 401 };
-    }
-    return { ok: true, cleaner: { id: legacyCleanerId }, authUserId: legacyCleanerId, authUser: null };
-  }
-
-  if (legacyCleanerId && !cleanerAuthAllowLegacyHeader()) {
-    return { ok: false, error: "Missing cleaner session.", status: 401 };
   }
 
   return { ok: false, error: "Missing cleaner session.", status: 401 };

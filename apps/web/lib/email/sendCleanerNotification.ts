@@ -46,7 +46,7 @@ export async function sendCleanerNewJobEmail(params: {
   }
 
   const appUrl = getPublicAppUrlBase();
-  const jobsUrl = `${appUrl}/cleaner/jobs`;
+  const jobsUrl = `${appUrl}/cleaner`;
 
   const extrasBlock =
     params.extrasRequired && params.extrasRequired.length > 0

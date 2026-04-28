@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { sanitizeCleanerPostAuthRedirect } from "@/lib/cleaner/cleanerRedirect";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export default function CleanerLoginPage() {
@@ -53,10 +54,14 @@ export default function CleanerLoginPage() {
         return;
       }
     }
-    const redirect = searchParams.get("redirect")?.trim();
-    const target =
-      redirect && redirect.startsWith("/") && redirect.startsWith("/cleaner") ? redirect : "/cleaner/dashboard";
-    router.replace(target);
+    const redirectRaw = searchParams.get("redirect")?.trim();
+    const fallback = "/cleaner";
+    if (!redirectRaw) {
+      router.replace(fallback);
+      return;
+    }
+    const safe = sanitizeCleanerPostAuthRedirect(redirectRaw);
+    router.replace(safe === "/cleaner" ? fallback : safe);
   }
 
   return (

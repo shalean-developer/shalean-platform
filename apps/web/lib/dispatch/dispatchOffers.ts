@@ -38,6 +38,12 @@ export async function createDispatchOfferRow(params: {
   ttlSeconds: number;
   /** Dispatch wave number for metrics (same row as `dispatch_attempt_count` after bump). */
   metricAttemptNumber?: number;
+  /** Smart dispatch tier (A/B/C); null = legacy row. */
+  dispatchTier?: "A" | "B" | "C" | null;
+  /** When set, cleaner APIs hide the offer until this instant; `expires_at` runs from this anchor. */
+  dispatchVisibleAtIso?: string | null;
+  /** End of exclusive window for this wave (logging / analytics). */
+  dispatchTierWindowEndAtIso?: string | null;
 }): Promise<CreateDispatchOfferRowResult> {
   const { data: bookingHead, error: headErr } = await params.supabase
     .from("bookings")
@@ -61,7 +67,11 @@ export async function createDispatchOfferRow(params: {
     console.warn("[createDispatchOfferRow] prior offer count failed", priorCountErr.message);
   }
 
-  const expiresAt = new Date(Date.now() + params.ttlSeconds * 1000).toISOString();
+  const visibleAtMs = params.dispatchVisibleAtIso ? new Date(params.dispatchVisibleAtIso).getTime() : Date.now();
+  const anchorMs = Number.isFinite(visibleAtMs) ? visibleAtMs : Date.now();
+  const expiresAt = new Date(anchorMs + params.ttlSeconds * 1000).toISOString();
+  const nowMs = Date.now();
+  const deferNotify = anchorMs > nowMs + 2500;
   const ux_variant = assignCleanerUxVariantForCleaner(params.cleanerId);
   const offer_token = randomUUID();
   const { data, error } = await params.supabase
@@ -74,6 +84,10 @@ export async function createDispatchOfferRow(params: {
       expires_at: expiresAt,
       ux_variant,
       offer_token,
+      dispatch_tier: params.dispatchTier ?? null,
+      dispatch_visible_at: params.dispatchVisibleAtIso ?? null,
+      dispatch_tier_window_end_at: params.dispatchTierWindowEndAtIso ?? null,
+      offer_notification_deferred: deferNotify,
     })
     .select("id")
     .single();
@@ -129,6 +143,9 @@ export async function createDispatchOfferRow(params: {
       offerId,
       rankIndex: params.rankIndex,
       latency_ms: Date.now() - t0,
+      dispatch_tier: params.dispatchTier ?? null,
+      dispatch_visible_at: params.dispatchVisibleAtIso ?? null,
+      offer_notification_deferred: deferNotify,
     },
   });
 
@@ -180,13 +197,15 @@ export async function createDispatchOfferRow(params: {
   }
 
   try {
-    await notifyCleanerOfDispatchOffer({
-      bookingId: params.bookingId,
-      offerId,
-      cleanerId: params.cleanerId,
-      expiresAtIso: expiresAt,
-      offerToken: offer_token,
-    });
+    if (!deferNotify) {
+      await notifyCleanerOfDispatchOffer({
+        bookingId: params.bookingId,
+        offerId,
+        cleanerId: params.cleanerId,
+        expiresAtIso: expiresAt,
+        offerToken: offer_token,
+      });
+    }
   } catch (err) {
     console.error("[Dispatch Offer SMS Error]", err);
     await logSystemEvent({
@@ -315,6 +334,7 @@ export type AcceptDispatchOfferFailure =
   | "wrong_cleaner"
   | "not_pending"
   | "expired"
+  | "not_visible_yet"
   | "booking_taken"
   | "assigned_other"
   | "db";
@@ -330,7 +350,9 @@ export async function acceptDispatchOffer(params: {
 }): Promise<AcceptDispatchOfferResult> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at")
+    .select(
+      "id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at, dispatch_tier, dispatch_visible_at",
+    )
     .eq("id", params.offerId)
     .maybeSingle();
 
@@ -344,6 +366,8 @@ export async function acceptDispatchOffer(params: {
     expires_at?: string;
     whatsapp_sent_at?: string | null;
     sms_sent_at?: string | null;
+    dispatch_tier?: string | null;
+    dispatch_visible_at?: string | null;
   };
   const ux_variant = sanitizeCleanerUxVariant(row.ux_variant);
   if (String(row.cleaner_id) !== params.cleanerId) {
@@ -351,6 +375,11 @@ export async function acceptDispatchOffer(params: {
   }
   if (String(row.status) !== "pending") {
     return { ok: false, error: "Offer is no longer pending.", failure: "not_pending" };
+  }
+  const visRaw = row.dispatch_visible_at;
+  const visMs = visRaw ? new Date(visRaw).getTime() : NaN;
+  if (Number.isFinite(visMs) && Date.now() < visMs) {
+    return { ok: false, error: "Offer is not visible yet.", failure: "not_visible_yet" };
   }
   const expRaw = row.expires_at;
   const expMs = expRaw ? new Date(expRaw).getTime() : NaN;
@@ -405,6 +434,7 @@ export async function acceptDispatchOffer(params: {
     .from("bookings")
     .update({
       cleaner_id: params.cleanerId,
+      payout_owner_cleaner_id: params.cleanerId,
       status: "assigned",
       dispatch_status: "assigned",
       assigned_at: now,
@@ -484,6 +514,7 @@ export async function acceptDispatchOffer(params: {
       cleanerId: params.cleanerId,
       offerId: params.offerId,
       latency_ms: latencyMs,
+      dispatch_tier: row.dispatch_tier ?? null,
     },
   });
 
@@ -511,6 +542,7 @@ export async function acceptDispatchOffer(params: {
     offerId: params.offerId,
     latency_ms: latencyMs,
     ux_variant,
+    dispatch_tier: row.dispatch_tier ?? undefined,
     ...metricTags,
   });
 
@@ -550,6 +582,7 @@ export type RejectDispatchOfferFailure =
   | "wrong_cleaner"
   | "not_pending"
   | "expired"
+  | "not_visible_yet"
   | "db";
 
 export type RejectDispatchOfferResult =
@@ -563,7 +596,9 @@ export async function rejectDispatchOffer(params: {
 }): Promise<RejectDispatchOfferResult> {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
-    .select("id, cleaner_id, status, booking_id, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at")
+    .select(
+      "id, cleaner_id, status, booking_id, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at, dispatch_visible_at",
+    )
     .eq("id", params.offerId)
     .maybeSingle();
 
@@ -577,12 +612,18 @@ export async function rejectDispatchOffer(params: {
     expires_at?: string;
     whatsapp_sent_at?: string | null;
     sms_sent_at?: string | null;
+    dispatch_visible_at?: string | null;
   };
   if (String(row.cleaner_id) !== params.cleanerId) {
     return { ok: false, error: "Not your offer.", failure: "wrong_cleaner" };
   }
   if (String(row.status) !== "pending") {
     return { ok: false, error: "Offer is no longer pending.", failure: "not_pending" };
+  }
+  const visRaw = row.dispatch_visible_at;
+  const visMs = visRaw ? new Date(visRaw).getTime() : NaN;
+  if (Number.isFinite(visMs) && Date.now() < visMs) {
+    return { ok: false, error: "Offer is not visible yet.", failure: "not_visible_yet" };
   }
   const expRaw = row.expires_at;
   const expMs = expRaw ? new Date(expRaw).getTime() : NaN;
@@ -683,4 +724,59 @@ export async function rejectDispatchOffer(params: {
   });
 
   return { ok: true };
+}
+
+/**
+ * Sends SMS for tier-deferred offers once `dispatch_visible_at` has passed (minute cron).
+ */
+export async function processDeferredDispatchOfferNotifications(
+  supabase: SupabaseClient,
+): Promise<{ attempted: number; sent: number }> {
+  const nowIso = new Date().toISOString();
+  const { data: rows, error } = await supabase
+    .from("dispatch_offers")
+    .select("id, booking_id, cleaner_id, expires_at, offer_token")
+    .eq("status", "pending")
+    .eq("offer_notification_deferred", true)
+    .lte("dispatch_visible_at", nowIso)
+    .is("sms_sent_at", null)
+    .limit(40);
+
+  if (error || !rows?.length) {
+    return { attempted: 0, sent: 0 };
+  }
+
+  let sent = 0;
+  for (const raw of rows as Array<{
+    id: string;
+    booking_id: string;
+    cleaner_id: string;
+    expires_at: string;
+    offer_token: string;
+  }>) {
+    const offerId = String(raw.id);
+    const bookingId = String(raw.booking_id);
+    const cleanerId = String(raw.cleaner_id);
+    const expiresAtIso = String(raw.expires_at);
+    const offerToken = String(raw.offer_token ?? "");
+    try {
+      await notifyCleanerOfDispatchOffer({
+        bookingId,
+        offerId,
+        cleanerId,
+        expiresAtIso,
+        offerToken,
+      });
+      await supabase
+        .from("dispatch_offers")
+        .update({ offer_notification_deferred: false })
+        .eq("id", offerId)
+        .eq("status", "pending");
+      sent++;
+    } catch {
+      /* notifyCleanerOfDispatchOffer logs failures */
+    }
+  }
+
+  return { attempted: rows.length, sent };
 }

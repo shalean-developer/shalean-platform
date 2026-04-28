@@ -23,8 +23,8 @@ afterEach(() => {
 });
 
 describe("checkoutDispatchOfferTtlSeconds", () => {
-  it("defaults to 180", () => {
-    expect(checkoutDispatchOfferTtlSeconds()).toBe(180);
+  it("defaults to 2 hours", () => {
+    expect(checkoutDispatchOfferTtlSeconds()).toBe(2 * 60 * 60);
   });
 
   it("respects env in range", () => {

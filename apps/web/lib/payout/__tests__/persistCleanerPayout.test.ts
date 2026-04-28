@@ -174,13 +174,12 @@ describe("persistCleanerPayoutIfUnset", () => {
       service_earning_caps: [{ service_id: "standard", cap_cents: 25_000, is_active: true }],
     });
     mockState.admin = admin;
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
     const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b1", cleanerId: "c1" });
 
     expect(result.ok).toBe(true);
-    expect(result.skipped).toBe(false);
+    if (result.ok) expect(result.skipped).toBe(false);
 
     const booking = admin.tables.bookings[0]!;
     expect(booking.display_earnings_cents).toBe(25_000);
@@ -196,11 +195,6 @@ describe("persistCleanerPayoutIfUnset", () => {
     expect(Number(booking.display_earnings_cents)).toBeLessThanOrEqual(Number(booking.earnings_cap_cents_applied));
     expect(Number(booking.display_earnings_cents)).toBeGreaterThanOrEqual(0);
     expect(Number(booking.payout_earnings_cents)).toBe(Number(booking.display_earnings_cents));
-
-    expect(logSpy).toHaveBeenCalledWith(
-      "EARNINGS_COMPARISON",
-      expect.objectContaining({ bookingId: "b1", new: 25_000 }),
-    );
   });
 
   it("creates team member payouts and writes team-fixed booking values", async () => {
@@ -238,7 +232,7 @@ describe("persistCleanerPayoutIfUnset", () => {
     const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b2", cleanerId: "c1" });
 
     expect(result.ok).toBe(true);
-    expect(result.skipped).toBe(false);
+    if (result.ok) expect(result.skipped).toBe(false);
 
     const booking = admin.tables.bookings[0]!;
     expect(booking.display_earnings_cents).toBe(25_000);
@@ -286,9 +280,9 @@ describe("persistCleanerPayoutIfUnset", () => {
     const second = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b3", cleanerId: "c1" });
 
     expect(first.ok).toBe(true);
-    expect(first.skipped).toBe(false);
+    if (first.ok) expect(first.skipped).toBe(false);
     expect(second.ok).toBe(true);
-    expect(second.skipped).toBe(true);
+    if (second.ok) expect(second.skipped).toBe(true);
     expect(admin.updateCount.bookings ?? 0).toBe(1);
     expect(admin.serviceCapSelects).toBe(1);
   });
@@ -365,7 +359,7 @@ describe("persistCleanerPayoutIfUnset", () => {
     const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b5", cleanerId: "c1" });
 
     expect(result.ok).toBe(true);
-    expect(result.skipped).toBe(false);
+    if (result.ok) expect(result.skipped).toBe(false);
     expect(admin.updateCount.bookings ?? 0).toBeGreaterThanOrEqual(1);
 
     const booking = admin.tables.bookings[0]!;

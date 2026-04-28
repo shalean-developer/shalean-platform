@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
+import { useCleanerPayoutSummary } from "@/hooks/useCleanerPayoutSummary";
 import type { CleanerMobileJobView } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { CleanerJobCard } from "@/components/cleaner/mobile/dashboard/CleanerJobCard";
 import { EarningsCard } from "@/components/cleaner/mobile/dashboard/EarningsCard";
@@ -24,9 +25,10 @@ type Props = {
   todayPotentialZar: number;
   todayPotentialHasGap: boolean;
   weekEarnedZar: number;
-  weeklyGoalZar: number;
+  monthEarnedZar: number;
   highlightJobId: string | null;
   cleanerRating: number | null;
+  onViewEarnings?: () => void;
 };
 
 export function CleanerDashboardHome({
@@ -41,10 +43,13 @@ export function CleanerDashboardHome({
   todayPotentialZar,
   todayPotentialHasGap,
   weekEarnedZar,
-  weeklyGoalZar,
+  monthEarnedZar,
   highlightJobId,
-  cleanerRating,
+  cleanerRating: _cleanerRating,
+  onViewEarnings,
 }: Props) {
+  const payout = useCleanerPayoutSummary();
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -68,10 +73,14 @@ export function CleanerDashboardHome({
   return (
     <div className="space-y-4">
       <EarningsCard
-        earningsToday={todayPotentialZar}
-        weekEarnedZar={weekEarnedZar}
-        weeklyGoalZar={weeklyGoalZar}
+        loading={payout.loading}
+        eligibleCents={payout.summary?.eligible_cents ?? 0}
+        todayZar={todayPotentialZar}
+        weekZar={weekEarnedZar}
+        monthZar={monthEarnedZar}
         hasGap={todayPotentialHasGap}
+        missingBankDetails={payout.missingBankDetails}
+        onViewEarnings={onViewEarnings ?? (() => {})}
       />
       {job ? (
         <CleanerJobCard
@@ -80,7 +89,6 @@ export function CleanerDashboardHome({
           actingId={actingId}
           availabilityAcked={teamAvailabilityAckIds.has(job.id)}
           highlightPulse={highlightJobId != null && highlightJobId === job.id}
-          cleanerRating={cleanerRating}
           onJobAction={onJobAction}
         />
       ) : !hasAnyJob ? (

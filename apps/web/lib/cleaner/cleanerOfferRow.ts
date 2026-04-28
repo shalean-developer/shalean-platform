@@ -10,6 +10,10 @@ export type CleanerOfferRow = {
   ux_variant?: string | null;
   displayEarningsCents?: number | null;
   displayEarningsIsEstimate?: boolean;
+  /** Mirrors `displayEarningsCents` (API contract). */
+  earnings_cents?: number | null;
+  /** Mirrors `displayEarningsIsEstimate`. */
+  earnings_estimated?: boolean;
   booking: {
     id: string;
     service: string | null;
@@ -20,6 +24,8 @@ export type CleanerOfferRow = {
     customer_phone: string | null;
     status: string | null;
     total_paid_zar?: number | null;
+    total_price?: number | string | null;
+    amount_paid_cents?: number | null;
     is_team_job?: boolean;
     team_id?: string | null;
     /** From `team_member_count_snapshot` when present. */

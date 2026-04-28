@@ -5,6 +5,7 @@ import ActionMenu from "@/components/admin/ActionMenu";
 import DataTable from "@/components/admin/DataTable";
 import MetricsGrid from "@/components/admin/MetricsGrid";
 import SlideOverPanel from "@/components/admin/SlideOverPanel";
+import { AdminCleanerPreferencesPanel } from "@/components/admin/AdminCleanerPreferencesPanel";
 import {
   createAdminCleaner,
   fetchCleaners,
@@ -524,6 +525,7 @@ export default function AdminCleanersPage() {
               </p>
               <p className="text-sm text-zinc-600 dark:text-zinc-300">Status: {selected.status ?? "offline"}</p>
             </section>
+            <AdminCleanerPreferencesPanel cleanerId={selected.id} onToast={(msg) => setToast(msg)} />
             <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Performance metrics</h3>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Acceptance rate: {acceptanceRate(selected)}%</p>

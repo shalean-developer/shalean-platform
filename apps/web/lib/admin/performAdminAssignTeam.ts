@@ -169,12 +169,31 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     }
   }
 
+  const activeCleanerIds = [
+    ...new Set(
+      (memberRows ?? [])
+        .map((row) => row as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
+        .filter((row) => countActiveTeamMembersOnDate([row], dateYmd) > 0)
+        .map((row) => String(row.cleaner_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ].sort();
+  const payoutOwnerCleanerId = activeCleanerIds[0] ?? null;
+  if (!payoutOwnerCleanerId) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: "Cannot assign team: no active member on the service date to use as payout owner.",
+    };
+  }
+
   const { error: updErr } = await admin
     .from("bookings")
     .update({
       team_id: tid,
       is_team_job: true,
       cleaner_id: null,
+      payout_owner_cleaner_id: payoutOwnerCleanerId,
       team_member_count_snapshot: rosterCount,
     })
     .eq("id", bookingId);
@@ -191,16 +210,6 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   if (delAssignErr) {
     return { ok: false, httpStatus: 500, error: `Failed clearing team assignment rows: ${delAssignErr.message}` };
   }
-
-  const activeCleanerIds = [
-    ...new Set(
-      (memberRows ?? [])
-        .map((row) => row as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
-        .filter((row) => countActiveTeamMembersOnDate([row], dateYmd) > 0)
-        .map((row) => String(row.cleaner_id ?? "").trim())
-        .filter(Boolean),
-    ),
-  ];
 
   const payoutRows = activeCleanerIds.map((cleaner_id) => ({
     booking_id: bookingId,

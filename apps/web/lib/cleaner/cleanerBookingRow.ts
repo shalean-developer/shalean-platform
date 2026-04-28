@@ -30,8 +30,16 @@ export type CleanerBookingRow = {
   teamMemberCount?: number | null;
   /** Null for team-assigned bookings; UI must not assume a cleaner id exists. */
   cleaner_id?: string | null;
+  /** DB `cleaner_response_status` — `accepted` unlocks "On the way". */
+  cleaner_response_status?: string | null;
   displayEarningsCents?: number | null;
   /** True when pay is the team-job placeholder until stored display earnings exist. */
   displayEarningsIsEstimate?: boolean;
-  payout_id?: string | null;
+  earnings_cents?: number | null;
+  earnings_estimated?: boolean;
+  payout_status?: string | null;
+  payout_paid_at?: string | null;
+  payout_frozen_cents?: number | null;
+  /** True when this cleaner has at least one row in `cleaner_job_issue_reports` for this booking. */
+  cleaner_has_issue_report?: boolean;
 };

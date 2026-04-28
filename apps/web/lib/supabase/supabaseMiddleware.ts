@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { sanitizeCleanerPostAuthRedirect } from "@/lib/cleaner/cleanerRedirect";
 
 /**
  * Refreshes the Supabase auth cookie and enforces cleaner-area session on navigations.
@@ -8,6 +9,15 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   let supabaseResponse = NextResponse.next({ request });
 
+  const pathname = request.nextUrl.pathname;
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/static") ||
+    pathname === "/favicon.ico"
+  ) {
+    return supabaseResponse;
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
@@ -15,6 +25,11 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   const supabase = createServerClient(url, anon, {
+    cookieOptions: {
+      path: "/",
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -39,13 +54,14 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
   const cleanerPublic = pathname.startsWith("/cleaner/login") || pathname.startsWith("/cleaner/apply");
 
   if (pathname.startsWith("/cleaner") && !cleanerPublic && !user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/cleaner/login";
-    redirectUrl.searchParams.set("redirect", `${pathname}${request.nextUrl.search}`);
+    const rawNext = `${pathname}${request.nextUrl.search}`;
+    /** `URLSearchParams.set` percent-encodes the value when the URL is serialized (safe for query). */
+    redirectUrl.searchParams.set("redirect", sanitizeCleanerPostAuthRedirect(rawNext));
     return NextResponse.redirect(redirectUrl);
   }
 

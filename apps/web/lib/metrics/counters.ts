@@ -74,6 +74,26 @@
  * - Prune: combine with "Prune job monitoring" above (stalled `deleted=0` vs spike alerts on `context.deleted`).
  */
 export const metrics = {
+  /**
+   * Cleaner job issue reports (`POST /api/cleaner/jobs/:id/issue`):
+   * - `cleaner_issue_report_created` — new row persisted
+   * - `cleaner_issue_report_rate_limited` — 429 (5 reports / 10 min per booking+cleaner)
+   * - `cleaner_issue_report_duplicate_ignored` — idempotency key replay or same reason within 2 min (fields: `kind`)
+   *
+   * Includes `legacy_cleaner_auth_used_count` (fields: `kind` = `x_cleaner_id_header` | `legacy_id_row_match`) for cutover tracking.
+   * Cleaner session refresh (single-flight): `cleaner_auth_refresh_attempt` | `cleaner_auth_refresh_success` | `cleaner_auth_refresh_failure`.
+   *
+   * --- Payout / earnings integrity (JSON `[metric]` logs) ---
+   * - `payout.invalid_paid_rows_count` — GET `/api/cleaner/earnings` exposed ≥1 invalid / integrity row (`rows` = count that request).
+   * - `payout.stuck_earnings_triggered` — DB claimed a stuck-null earnings recompute slot (`recompute_source` =
+   *   `jobs_list` | `job_detail`).
+   * - `payout.stuck_earnings_recompute_skipped_cooldown` — skipped path; fields: `reason` = `cooldown` (includes
+   *   **`next_allowed_at_utc`**) | `missing_booking` | `deleted_booking` (prefetch miss) |
+   *   `deleted_booking_after_prefetch` (TOCTOU after prefetch) | `recent_success` (reserved); `recompute_source` as above.
+   * - `payout.mark_paid_readback_failures` — read-back guard (`kind`, optional `error_id` `PP-…`).
+   * Money-path correlation ids: **`PP-…`** (persist / mark-paid / earnings integrity logs), **`TA-…`** (team assignment).
+   * Daily DB rollup (trends): POST `/api/cron/payout-integrity-daily` + `supabase/queries/payout_metrics_daily_monitoring.sql`.
+   */
   increment(name: string, fields?: Record<string, unknown>): void {
     if (process.env.NODE_ENV === "test") return;
     try {

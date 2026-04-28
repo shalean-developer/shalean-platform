@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, MapPin, Pencil, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Pencil, Phone, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import {
   assignCleaner,
@@ -14,6 +14,7 @@ import {
   type AdminCleanerRow,
 } from "@/lib/admin/dashboard";
 import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
+import { issueReportReasonDisplay } from "@/lib/cleaner/cleanerJobIssueReasons";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type BookingSeed = { id: string };
@@ -104,6 +105,42 @@ type BookingNotificationLogRow = {
   created_at: string;
   payload: Record<string, unknown> | null;
 };
+
+type CleanerIssueReportRow = {
+  id: string;
+  cleaner_id: string;
+  reason_key: string;
+  reason_version?: string | null;
+  detail: string | null;
+  whatsapp_snapshot?: unknown;
+  idempotency_key?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+};
+
+function digitsForWhatsApp(phone: string | null | undefined): string | null {
+  if (!phone?.trim()) return null;
+  const d = phone.replace(/\D/g, "");
+  if (d.length < 9) return null;
+  if (d.startsWith("27")) return d;
+  if (d.startsWith("0")) return `27${d.slice(1)}`;
+  return d;
+}
+
+function formatTimeSinceReport(iso: string | null | undefined, nowMs: number): string | null {
+  if (!iso?.trim()) return null;
+  const t = new Date(iso.trim()).getTime();
+  if (!Number.isFinite(t)) return null;
+  const sec = Math.max(0, Math.floor((nowMs - t) / 1000));
+  if (sec < 45) return "Reported just now";
+  const m = Math.floor(sec / 60);
+  if (sec < 3600) return m <= 1 ? "Reported 1 min ago" : `Reported ${m} min ago`;
+  const h = Math.floor(sec / 3600);
+  if (sec < 86400) return h === 1 ? "Reported 1 hour ago" : `Reported ${h} hours ago`;
+  const d = Math.floor(sec / 86400);
+  return d === 1 ? "Reported 1 day ago" : `Reported ${d} days ago`;
+}
 
 type DispatchOfferUxFilter = "all" | CleanerUxVariant | "unknown";
 
@@ -227,6 +264,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [fleetBestUxVariant, setFleetBestUxVariant] = useState<CleanerUxVariant | "unknown" | null>(null);
   const [notificationLogs, setNotificationLogs] = useState<BookingNotificationLogRow[]>([]);
   const [notificationLogsLoading, setNotificationLogsLoading] = useState(false);
+  const [cleanerIssueReports, setCleanerIssueReports] = useState<CleanerIssueReportRow[]>([]);
   const [supportsTeamAssignment, setSupportsTeamAssignment] = useState(false);
   const [teamSummary, setTeamSummary] = useState<TeamSummary | null>(null);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
@@ -235,6 +273,14 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [assigningTeam, setAssigningTeam] = useState(false);
   const [detailRefresh, setDetailRefresh] = useState(0);
   const [resetDispatchBusy, setResetDispatchBusy] = useState(false);
+  const [issueResolveBusyId, setIssueResolveBusyId] = useState<string | null>(null);
+  const [issueReportNowMs, setIssueReportNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (cleanerIssueReports.length === 0) return;
+    const id = window.setInterval(() => setIssueReportNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [cleanerIssueReports.length]);
 
   useEffect(() => {
     async function loadDetails() {
@@ -267,6 +313,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           cleaner?: Cleaner | null;
           userProfile?: UserProfile | null;
           dispatch_offers?: DispatchOfferAdminRow[];
+          cleaner_issue_reports?: CleanerIssueReportRow[];
           supports_team_assignment?: boolean;
           team_summary?: TeamSummary | null;
           error?: string;
@@ -294,6 +341,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setCleaner(json.cleaner ?? null);
       setUserProfile(json.userProfile ?? null);
       setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
+      setCleanerIssueReports(Array.isArray(json.cleaner_issue_reports) ? json.cleaner_issue_reports : []);
+      setIssueReportNowMs(Date.now());
       setSupportsTeamAssignment(json.supports_team_assignment === true);
       setTeamSummary(json.team_summary ?? null);
       setDraftDate(json.booking?.date ?? "");
@@ -440,6 +489,36 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       : dispatchSt === "unassignable"
         ? "No cleaner accepted offers — automatic dispatch stopped (retry cap or exhausted)."
         : "Automatic dispatch failed for this booking.";
+
+  const markIssueReportResolved = async (reportId: string) => {
+    if (!bookingId) return;
+    setIssueResolveBusyId(reportId);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const res = await fetch(
+        `/api/admin/bookings/${encodeURIComponent(bookingId)}/issue-reports/${encodeURIComponent(reportId)}`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ resolved: true }),
+        },
+      );
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setToast({ kind: "error", text: j.error ?? "Could not mark resolved." });
+        return;
+      }
+      setToast({ kind: "success", text: "Marked resolved." });
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setIssueResolveBusyId(null);
+    }
+  };
 
   const handleResetDispatchRetry = async () => {
     if (!fullBooking?.id) return;
@@ -846,6 +925,115 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               </p>
             </DetailCard>
           ) : null}
+          <DetailCard title="Cleaner-reported issues">
+            <p className="text-sm text-zinc-600">
+              Logged from the cleaner app (&quot;Report a problem&quot;). Also written to system logs. Configure the
+              dispatch alert webhook and CLEANER_ISSUE_OPS_NOTIFY_EMAIL if you want instant ops pings.
+            </p>
+            {cleanerIssueReports.length === 0 ? (
+              <p className="mt-2 text-sm text-zinc-500">No reports on this booking yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+                {cleanerIssueReports.map((rep) => {
+                  const rk = String(rep.reason_key ?? "").trim();
+                  const reasonLabel = issueReportReasonDisplay(rk, rep.reason_version);
+                  const since = formatTimeSinceReport(rep.created_at, issueReportNowMs);
+                  const snap =
+                    rep.whatsapp_snapshot && typeof rep.whatsapp_snapshot === "object"
+                      ? (rep.whatsapp_snapshot as Record<string, unknown>)
+                      : null;
+                  const prefill =
+                    typeof snap?.prefill_text === "string" ? (snap.prefill_text as string).slice(0, 2000) : null;
+                  const waUrl = typeof snap?.wa_url === "string" ? snap.wa_url : null;
+                  const assignedTel =
+                    cleaner?.id === rep.cleaner_id ? digitsForWhatsApp(cleaner?.phone ?? null) : null;
+                  const customerWa = digitsForWhatsApp(userProfile?.phone ?? fullBooking.phone ?? null);
+                  const resolved = Boolean(rep.resolved_at);
+                  return (
+                    <li
+                      key={rep.id}
+                      className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-sm dark:border-amber-900/40 dark:bg-amber-950/25"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="font-medium text-amber-950 dark:text-amber-50">{reasonLabel}</span>
+                        <span className="text-right text-xs text-zinc-500">
+                          {since ? (
+                            <>
+                              {since}
+                              <span className="mt-0.5 block font-normal text-zinc-400">
+                                {rep.created_at ? new Date(rep.created_at).toLocaleString() : "—"}
+                              </span>
+                            </>
+                          ) : rep.created_at ? (
+                            new Date(rep.created_at).toLocaleString()
+                          ) : (
+                            "—"
+                          )}
+                        </span>
+                      </div>
+                      <p className="mt-1 font-mono text-[11px] text-zinc-500">Cleaner {rep.cleaner_id}</p>
+                      {resolved ? (
+                        <p className="mt-2 text-xs font-medium text-emerald-800 dark:text-emerald-200">
+                          Resolved{rep.resolved_by ? ` by ${rep.resolved_by}` : ""}
+                          {rep.resolved_at ? ` · ${new Date(rep.resolved_at).toLocaleString()}` : ""}
+                        </p>
+                      ) : null}
+                      {rep.detail?.trim() ? (
+                        <p className="mt-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-100">{rep.detail.trim()}</p>
+                      ) : null}
+                      {prefill ? (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs font-medium text-zinc-600">WhatsApp snapshot</summary>
+                          <p className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-zinc-600">{prefill}</p>
+                          {waUrl ? (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                              Open same wa.me link
+                            </a>
+                          ) : null}
+                        </details>
+                      ) : null}
+                      {!resolved ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {assignedTel ? (
+                            <a
+                              href={`tel:+${assignedTel}`}
+                              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                              <Phone size={13} aria-hidden />
+                              Call cleaner
+                            </a>
+                          ) : null}
+                          {customerWa ? (
+                            <a
+                              href={`https://wa.me/${customerWa}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+                            >
+                              Message customer (WhatsApp)
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={issueResolveBusyId === rep.id}
+                            onClick={() => void markIssueReportResolved(rep.id)}
+                            className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+                          >
+                            {issueResolveBusyId === rep.id ? "Saving…" : "Mark resolved"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </DetailCard>
           <DetailCard title="Notification timeline">
             <p className="text-sm text-zinc-600">
               Outbound delivery attempts for this booking (email, WhatsApp, SMS).{" "}

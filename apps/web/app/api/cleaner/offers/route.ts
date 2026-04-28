@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
+import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
+import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,46 +14,51 @@ export async function GET(request: Request) {
   if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
   const cleanerId = session.cleanerId;
 
-  const { data: offers, error } = await admin
+  const { data: offersRaw, error } = await admin
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id, status, expires_at, created_at, ux_variant")
+    .select(
+      "id, booking_id, cleaner_id, status, expires_at, created_at, ux_variant, dispatch_tier, dispatch_visible_at, dispatch_tier_window_end_at",
+    )
     .eq("cleaner_id", cleanerId)
     .eq("status", "pending")
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(40);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const bookingIds = (offers ?? []).map((o) => String(o.booking_id)).filter(Boolean);
+  const nowMs = Date.now();
+  const offers = (offersRaw ?? [])
+    .filter((o) => {
+      const raw = (o as { dispatch_visible_at?: string | null }).dispatch_visible_at;
+      if (raw == null || raw === "") return true;
+      const t = new Date(raw).getTime();
+      return !Number.isFinite(t) || t <= nowMs;
+    })
+    .slice(0, 20);
+
+  const bookingIds = offers.map((o) => String(o.booking_id)).filter(Boolean);
   let bookingById = new Map<string, Record<string, unknown>>();
   if (bookingIds.length > 0) {
     const { data: rows } = await admin
       .from("bookings")
       .select(
-        "id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_payout_cents, booking_snapshot",
+        "id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, amount_paid_cents, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_payout_cents, booking_snapshot, payout_frozen_cents",
       )
       .in("id", bookingIds);
     bookingById = new Map((rows ?? []).map((r) => [String((r as { id: string }).id), r as Record<string, unknown>]));
   }
 
-  return NextResponse.json({
-    offers: (offers ?? []).map((o) => {
+  const offersOut = offers
+    .map((o) => {
       const booking = bookingById.get(String(o.booking_id)) ?? null;
-      const resolved =
+      const displayEarningsCents =
         booking == null
           ? null
-          : resolveDisplayEarnings(
-              {
-                id: typeof booking.id === "string" ? booking.id : null,
-                is_team_job: booking.is_team_job === true,
-                display_earnings_cents:
-                  typeof booking.display_earnings_cents === "number" ? booking.display_earnings_cents : null,
-                cleaner_payout_cents: typeof booking.cleaner_payout_cents === "number" ? booking.cleaner_payout_cents : null,
-              },
-              "api/cleaner/offers",
-            );
-      const displayEarningsCents = resolved?.cents ?? null;
-      const displayEarningsIsEstimate = resolved?.isEstimate ?? false;
+          : resolveCleanerEarningsCents({
+              payout_frozen_cents: booking.payout_frozen_cents,
+              display_earnings_cents: optionalCentsFromDb(booking.display_earnings_cents),
+            });
+      const displayEarningsIsEstimate = false;
       const safeBooking =
         booking == null
           ? null
@@ -80,8 +86,11 @@ export async function GET(request: Request) {
         ...o,
         displayEarningsCents,
         displayEarningsIsEstimate,
+        earnings_cents: displayEarningsCents,
+        earnings_estimated: displayEarningsIsEstimate,
         booking: safeBooking,
       };
-    }),
-  });
+    });
+
+  return NextResponse.json({ offers: offersOut });
 }

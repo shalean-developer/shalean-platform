@@ -3,15 +3,20 @@ import { cleanerHasBookingAccess } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { runCleanerBookingLifecycleAction, type CleanerLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
+import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
-import { devOrSampledConsoleLog } from "@/lib/logging/devOrSampledConsole";
+import {
+  isStuckNullEarningsBooking,
+  logEligibleOrPaidWithoutFrozen,
+  maybeLogStuckNullEarnings,
+} from "@/lib/cleaner/cleanerPayoutInvariantLogging";
+import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, display_earnings_cents, cleaner_payout_cents, payout_id";
+  "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -39,28 +44,20 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   });
   if (!canAccess) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
 
-  if (record.is_team_job === true && String(record.cleaner_id ?? "").trim() !== session.cleanerId) {
-    devOrSampledConsoleLog(
-      "TEAM_JOB_VISIBLE_TO_CLEANER",
-      {
-        bookingId,
-        teamId: record.team_id ?? null,
-        cleanerId: session.cleanerId,
-      },
-      0.02,
-    );
-  }
-  const resolved = resolveDisplayEarnings(
-    {
-      id: typeof record.id === "string" ? record.id : null,
-      is_team_job: record.is_team_job === true,
-      display_earnings_cents: typeof record.display_earnings_cents === "number" ? record.display_earnings_cents : null,
-      cleaner_payout_cents: typeof record.cleaner_payout_cents === "number" ? record.cleaner_payout_cents : null,
-    },
-    "api/cleaner/jobs/[id]",
-  );
-  const displayEarningsCents = resolved.cents;
-  const displayEarningsIsEstimate = resolved.isEstimate;
+  const { data: issueHit } = await admin
+    .from("cleaner_job_issue_reports")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .eq("cleaner_id", session.cleanerId)
+    .limit(1)
+    .maybeSingle();
+  const cleaner_has_issue_report = Boolean(issueHit && typeof (issueHit as { id?: string }).id === "string");
+
+  const displayEarningsCents = resolveCleanerEarningsCents({
+    payout_frozen_cents: record.payout_frozen_cents,
+    display_earnings_cents: record.display_earnings_cents,
+  });
+  const displayEarningsIsEstimate = false;
   const snapRaw = record.team_member_count_snapshot;
   const snapCount =
     typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
@@ -88,8 +85,27 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }
   }
 
+  logEligibleOrPaidWithoutFrozen(bookingId, record);
+  maybeLogStuckNullEarnings(bookingId, record);
+  if (isStuckNullEarningsBooking(record)) {
+    scheduleStuckEarningsRecomputeDebounced({
+      admin,
+      bookingId,
+      cleanerId: session.cleanerId,
+      recomputeSource: "job_detail",
+    });
+  }
+
   return NextResponse.json({
-    job: { ...safe, displayEarningsCents, displayEarningsIsEstimate, teamMemberCount },
+    job: {
+      ...safe,
+      displayEarningsCents,
+      displayEarningsIsEstimate,
+      earnings_cents: displayEarningsCents,
+      earnings_estimated: displayEarningsIsEstimate,
+      teamMemberCount,
+      cleaner_has_issue_report,
+    },
   });
 }
 

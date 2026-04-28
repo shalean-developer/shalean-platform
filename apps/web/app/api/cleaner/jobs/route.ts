@@ -5,9 +5,14 @@ import {
 } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
+import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
-import { devOrSampledConsoleLog } from "@/lib/logging/devOrSampledConsole";
+import {
+  isStuckNullEarningsBooking,
+  logEligibleOrPaidWithoutFrozen,
+  maybeLogStuckNullEarnings,
+} from "@/lib/cleaner/cleanerPayoutInvariantLogging";
+import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,10 +36,9 @@ export async function GET(request: Request) {
   const { data: jobs, error } = await admin
     .from("bookings")
     .select(
-      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, display_earnings_cents, cleaner_payout_cents, payout_id",
+      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents",
     )
     .or(visibilityOr)
-    .not("status", "eq", "cancelled")
     .not("status", "eq", "failed")
     .not("status", "eq", "pending_payment")
     .not("status", "eq", "payment_expired")
@@ -48,17 +52,10 @@ export async function GET(request: Request) {
 
   const mappedJobs = (jobs ?? []).map((raw) => {
     const row = raw as Record<string, unknown>;
-    const resolved = resolveDisplayEarnings(
-      {
-        id: typeof row.id === "string" ? row.id : null,
-        is_team_job: row.is_team_job === true,
-        display_earnings_cents: typeof row.display_earnings_cents === "number" ? row.display_earnings_cents : null,
-        cleaner_payout_cents: typeof row.cleaner_payout_cents === "number" ? row.cleaner_payout_cents : null,
-      },
-      "api/cleaner/jobs",
-    );
-    const displayEarningsCents = resolved.cents;
-    const displayEarningsIsEstimate = resolved.isEstimate;
+    const displayEarningsCents = resolveCleanerEarningsCents({
+      payout_frozen_cents: row.payout_frozen_cents,
+      display_earnings_cents: row.display_earnings_cents,
+    });
     const snapRaw = row.team_member_count_snapshot;
     const teamSnap =
       typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
@@ -66,7 +63,9 @@ export async function GET(request: Request) {
     return {
       ...safe,
       displayEarningsCents,
-      displayEarningsIsEstimate,
+      displayEarningsIsEstimate: false,
+      earnings_cents: displayEarningsCents,
+      earnings_estimated: false,
       __teamSnap: teamSnap as number | null,
     };
   });
@@ -130,20 +129,45 @@ export async function GET(request: Request) {
     return { ...pub, teamMemberCount: teamMemberCount > 0 ? teamMemberCount : null };
   });
 
-  const teamVisible = mappedWithTeamCounts.filter((j) => (j as { is_team_job?: boolean }).is_team_job === true);
-  if (teamVisible.length > 0) {
-    devOrSampledConsoleLog(
-      "TEAM_JOB_VISIBLE_TO_CLEANER",
-      {
-        cleanerId: session.cleanerId,
-        jobs: teamVisible.map((x) => ({
-          bookingId: String((x as { id?: string }).id ?? ""),
-          teamId: (x as { team_id?: string | null }).team_id ?? null,
-        })),
-      },
-      0.02,
-    );
+  const bookingIds = mappedWithTeamCounts
+    .map((j) => String((j as { id?: string }).id ?? "").trim())
+    .filter(Boolean);
+
+  const reportedIds = new Set<string>();
+  if (bookingIds.length > 0) {
+    const { data: repRows, error: repErr } = await admin
+      .from("cleaner_job_issue_reports")
+      .select("booking_id")
+      .in("booking_id", bookingIds)
+      .eq("cleaner_id", session.cleanerId);
+    if (!repErr && repRows?.length) {
+      for (const r of repRows as { booking_id?: string }[]) {
+        const bid = String(r.booking_id ?? "").trim();
+        if (bid) reportedIds.add(bid);
+      }
+    }
   }
 
-  return NextResponse.json({ jobs: mappedWithTeamCounts });
+  const jobsWithIssueFlag = mappedWithTeamCounts.map((j) => {
+    const id = String((j as { id?: string }).id ?? "").trim();
+    return { ...j, cleaner_has_issue_report: id ? reportedIds.has(id) : false };
+  });
+
+  for (const j of jobsWithIssueFlag) {
+    const rec = j as Record<string, unknown>;
+    const id = String(rec.id ?? "").trim();
+    if (!id) continue;
+    logEligibleOrPaidWithoutFrozen(id, rec);
+    maybeLogStuckNullEarnings(id, rec);
+    if (isStuckNullEarningsBooking(rec)) {
+      scheduleStuckEarningsRecomputeDebounced({
+        admin,
+        bookingId: id,
+        cleanerId: session.cleanerId,
+        recomputeSource: "jobs_list",
+      });
+    }
+  }
+
+  return NextResponse.json({ jobs: jobsWithIssueFlag });
 }

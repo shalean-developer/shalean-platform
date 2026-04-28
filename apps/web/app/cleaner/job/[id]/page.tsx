@@ -2,20 +2,33 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, MapPin, Navigation } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, ChevronRight, MapPin, Navigation, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
-import { bookingRowToMobileView, deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
+import {
+  bookingRowToMobileView,
+  cleanerFacingDisplayEarningsCents,
+  deriveCleanerJobLifecycleSlot,
+  deriveMobilePhase,
+} from "@/lib/cleaner/cleanerMobileBookingMap";
+import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
 import { TEAM_JOB_ROLE_SUBTEXT, teamJobAssignmentHeadline } from "@/lib/cleaner/teamJobUiCopy";
-import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
+import { addTeamAvailabilityAck } from "@/lib/cleaner/teamAvailabilitySession";
 import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
 import { CleanerJobEarningsRow } from "@/components/cleaner/mobile/CleanerJobEarningsRow";
+import { CleanerReportJobIssueDialog } from "@/components/cleaner/CleanerReportJobIssueDialog";
+import { CleanerJobCompletionTrustBanner } from "@/components/cleaner/CleanerJobCompletionTrustBanner";
+import { CleanerEarningsConfirmedBanner } from "@/components/cleaner/CleanerEarningsConfirmedBanner";
+import { trustJobCompletionFeedbackFromRow } from "@/lib/cleaner/trustJobCompletionFeedback";
+import { useTrustCompletionBanner } from "@/hooks/useTrustCompletionBanner";
+import { useCleanerPayoutSummary } from "@/hooks/useCleanerPayoutSummary";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { jobTotalZarFromCleanerBookingLike } from "@/lib/cleaner/cleanerUxEstimatedPayZar";
 
 export default function CleanerJobDetailPage() {
   const params = useParams();
@@ -25,17 +38,33 @@ export default function CleanerJobDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [ackTick, setAckTick] = useState(0);
+  const [earningsConfirmedCents, setEarningsConfirmedCents] = useState<number | null>(null);
+  const { trustCompletion, showTrustCompletionBanner, clearTrustCompletionBanner } = useTrustCompletionBanner();
+  const { refresh: refreshPayoutSummary } = useCleanerPayoutSummary();
+  const jobIdForEarningsRef = useRef<string | null>(null);
+  const prevEarningsCentsRef = useRef<number | null>(null);
   const rtDebounceRef = useRef<number | null>(null);
+  const [cleanerCreatedAtIso, setCleanerCreatedAtIso] = useState<string | null>(null);
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  useEffect(() => {
+    void (async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (!headers) return;
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/me", { headers });
+      const json = (await res.json().catch(() => ({}))) as { cleaner?: { created_at?: string | null } | null };
+      const raw = json.cleaner?.created_at;
+      setCleanerCreatedAtIso(typeof raw === "string" && raw.trim() ? raw.trim() : null);
+    })();
+  }, []);
+
+  const load = useCallback(async (opts?: { silent?: boolean }): Promise<CleanerBookingRow | null> => {
     const silent = opts?.silent === true;
     const headers = await getCleanerAuthHeaders();
     if (!headers || !id) {
       setError("Not signed in.");
       setRow(null);
       setLoading(false);
-      return;
+      return null;
     }
     if (!silent) setLoading(true);
     const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, { headers });
@@ -44,10 +73,12 @@ export default function CleanerJobDetailPage() {
     if (!res.ok) {
       setError(json.error ?? "Could not load job.");
       setRow(null);
-      return;
+      return null;
     }
     setError(null);
-    setRow(json.job ?? null);
+    const job = json.job ?? null;
+    setRow(job);
+    return job;
   }, [id]);
 
   useEffect(() => {
@@ -85,10 +116,28 @@ export default function CleanerJobDetailPage() {
     };
   }, [id, load]);
 
-  const availabilityAcked = useMemo(() => {
-    void ackTick;
-    return id ? readTeamAvailabilityAckSet().has(id) : false;
-  }, [id, ackTick]);
+  useEffect(() => {
+    if (!row?.id) return;
+    const cur = cleanerFacingDisplayEarningsCents(row);
+    const completed = String(row.status ?? "").toLowerCase() === "completed";
+
+    if (jobIdForEarningsRef.current !== row.id) {
+      jobIdForEarningsRef.current = row.id;
+      prevEarningsCentsRef.current = cur;
+      return;
+    }
+
+    const prev = prevEarningsCentsRef.current;
+    prevEarningsCentsRef.current = cur;
+
+    if (!completed) return;
+    if ((prev == null || prev === 0) && cur != null && cur > 0) {
+      clearTrustCompletionBanner();
+      setEarningsConfirmedCents(cur);
+      const t = window.setTimeout(() => setEarningsConfirmedCents(null), 4500);
+      return () => window.clearTimeout(t);
+    }
+  }, [row, clearTrustCompletionBanner]);
 
   const postJobAction = useCallback(
     async (action: CleanerJobAction) => {
@@ -110,18 +159,22 @@ export default function CleanerJobDetailPage() {
           setActionMsg(json.error ?? "Could not update job.");
           return;
         }
-        if (action === "accept" && row?.is_team_job === true) {
+        if (action === "accept") {
           addTeamAvailabilityAck(id);
-          setAckTick((t) => t + 1);
         }
-        await load({ silent: true });
+        const job = await load({ silent: true });
+        if (action === "complete" && job) {
+          const base = trustJobCompletionFeedbackFromRow(job);
+          const sum = await refreshPayoutSummary();
+          showTrustCompletionBanner({ ...base, todayTotalCents: sum?.today_cents ?? null });
+        }
       } catch {
         setActionMsg("Network error.");
       } finally {
         setActing(false);
       }
     },
-    [id, load, row],
+    [id, load, refreshPayoutSummary, showTrustCompletionBanner],
   );
 
   if (loading) {
@@ -138,7 +191,7 @@ export default function CleanerJobDetailPage() {
       <div className="flex min-h-[100dvh] flex-col bg-zinc-50 dark:bg-zinc-950">
         <header className="border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
           <Link
-            href="/cleaner/dashboard"
+            href="/cleaner"
             className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -165,10 +218,14 @@ export default function CleanerJobDetailPage() {
         ? "In progress"
         : phase === "en_route"
           ? "On the way"
-          : "Assigned";
+          : phase === "pending"
+            ? "Being processed"
+            : "Assigned";
 
   const showLifecycleActions = phase !== "completed";
   const isTeam = row.is_team_job === true;
+  const st = String(row.status ?? "").toLowerCase();
+  const lifecycleSlot = deriveCleanerJobLifecycleSlot(row);
 
   const telDigits = view.phone.replace(/\s/g, "");
   const telHref = telDigits ? `tel:${telDigits}` : null;
@@ -179,11 +236,11 @@ export default function CleanerJobDetailPage() {
     <div className="flex min-h-[100dvh] flex-col bg-zinc-50 dark:bg-zinc-950">
       <header className="shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <Link
-          href="/cleaner/dashboard"
+          href="/cleaner"
           className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
-          Back to dashboard
+          Back to home
         </Link>
         <h1 className="mt-3 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Job details</h1>
       </header>
@@ -219,7 +276,10 @@ export default function CleanerJobDetailPage() {
                 className="mt-3"
                 service={view.service}
                 earningsZar={view.earningsZar}
+                earningsCents={view.earningsCents}
                 earningsIsEstimate={view.earningsIsEstimate}
+                cleanerCreatedAtIso={cleanerCreatedAtIso}
+                jobTotalZar={jobTotalZarFromCleanerBookingLike(row)}
                 durationHours={view.durationHours}
                 isTeamJob={view.isTeamJob}
                 teamMemberCount={view.teamMemberCount}
@@ -284,40 +344,64 @@ export default function CleanerJobDetailPage() {
               </p>
             ) : null}
 
-            {phase === "completed" ? (
+            {showLifecycleActions ? (
+              <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">On-site help</p>
+                {row.cleaner_has_issue_report === true ? (
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Issue reported — you can add another note below if something changed.
+                  </p>
+                ) : null}
+                <CleanerReportJobIssueDialog
+                  bookingId={id}
+                  locationHint={view.address}
+                  onSuccess={() => void load({ silent: true })}
+                />
+              </div>
+            ) : null}
+
+            {trustCompletion ? <CleanerJobCompletionTrustBanner feedback={trustCompletion} /> : null}
+            {earningsConfirmedCents != null ? (
+              <CleanerEarningsConfirmedBanner cents={earningsConfirmedCents} className="mt-2" />
+            ) : null}
+            {phase === "completed" && !trustCompletion ? (
               <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100">
-                {row.payout_id
-                  ? "Job completed — your earnings are recorded for payout."
-                  : "Job completed — payout will appear in earnings once processed."}
+                {isBookingPayoutPaid({
+                  payout_status: (row as { payout_status?: string | null }).payout_status,
+                  payout_paid_at: (row as { payout_paid_at?: string | null }).payout_paid_at,
+                })
+                  ? "Marked paid in your earnings."
+                  : "See Earnings for payout status."}
               </p>
             ) : null}
 
             <div className="flex flex-col gap-2.5 pt-2">
-              {showLifecycleActions && phase === "in_progress" ? (
-                <Button
-                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                  disabled={acting}
-                  onClick={() => void postJobAction("complete")}
-                >
-                  <span className="flex w-full items-center justify-center gap-1">
-                    {acting ? "Saving…" : "Complete job"}
-                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                  </span>
-                </Button>
+              {showLifecycleActions && lifecycleSlot?.kind === "accept_reject" ? (
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                    disabled={acting}
+                    onClick={() => void postJobAction("accept")}
+                  >
+                    <span className="flex w-full items-center justify-center gap-1">
+                      {acting ? "Saving…" : isTeam ? "Confirm availability" : "Acknowledge"}
+                      {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                    </span>
+                  </Button>
+                  {lifecycleSlot.canReject ? (
+                    <Button
+                      variant="outline"
+                      className="h-12 w-full rounded-xl border-red-300 text-base font-medium text-red-800 dark:border-red-800 dark:text-red-200"
+                      disabled={acting}
+                      onClick={() => void postJobAction("reject")}
+                    >
+                      Reject
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
-              {showLifecycleActions && isTeam && phase === "assigned" && !availabilityAcked ? (
-                <Button
-                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                  disabled={acting}
-                  onClick={() => void postJobAction("accept")}
-                >
-                  <span className="flex w-full items-center justify-center gap-1">
-                    {acting ? "Saving…" : "Confirm availability"}
-                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                  </span>
-                </Button>
-              ) : null}
-              {showLifecycleActions && phase === "assigned" && (!isTeam || availabilityAcked) ? (
+              {showLifecycleActions && lifecycleSlot?.kind === "en_route" ? (
                 <Button
                   className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
                   disabled={acting}
@@ -329,7 +413,7 @@ export default function CleanerJobDetailPage() {
                   </span>
                 </Button>
               ) : null}
-              {showLifecycleActions && phase === "en_route" ? (
+              {showLifecycleActions && lifecycleSlot?.kind === "start" ? (
                 <Button
                   className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
                   disabled={acting}
@@ -340,6 +424,20 @@ export default function CleanerJobDetailPage() {
                     {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
                   </span>
                 </Button>
+              ) : null}
+              {showLifecycleActions && lifecycleSlot?.kind === "complete" ? (
+                <div className="space-y-2">
+                  <Button
+                    className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                    disabled={acting}
+                    onClick={() => void postJobAction("complete")}
+                  >
+                    <span className="flex w-full items-center justify-center gap-1">
+                      {acting ? "Saving…" : "Complete job"}
+                      {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                    </span>
+                  </Button>
+                </div>
               ) : null}
 
               <Button variant="outline" size="lg" className="h-12 w-full rounded-xl text-base" asChild>

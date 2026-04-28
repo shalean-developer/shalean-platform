@@ -7,7 +7,15 @@ import { shouldUseTeamAssignment } from "@/lib/dispatch/shouldUseTeamAssignment"
 export type AssignBookingResult =
   | { ok: true; assignmentKind: "individual"; cleanerId: string }
   | { ok: true; assignmentKind: "team"; teamId: string }
-  | { ok: false; error: "no_candidate" | "booking_not_pending" | "db_error"; message?: string };
+  | {
+      ok: false;
+      error: "no_candidate" | "booking_not_pending" | "db_error";
+      message?: string;
+      code?: string;
+      booking_id?: string;
+      team_id?: string;
+      error_id?: string;
+    };
 
 export function isTeamService(booking: { service?: string | null; booking_snapshot?: unknown }): boolean {
   const snap = booking.booking_snapshot;

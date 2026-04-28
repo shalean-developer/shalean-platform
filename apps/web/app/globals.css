@@ -31,3 +31,56 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Subtle periodic shimmer over “available jobs” area (cleaner home). */
+@keyframes cleaner-offers-shimmer {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.45;
+  }
+  24% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+.cleaner-offers-shimmer-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.cleaner-offers-shimmer-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 55%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: cleaner-offers-shimmer 9s ease-in-out infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cleaner-offers-shimmer-overlay::after {
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  }
+}
+
+.dark .cleaner-offers-shimmer-overlay::after {
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cleaner-offers-shimmer-overlay::after {
+    animation: none;
+    opacity: 0;
+  }
+}

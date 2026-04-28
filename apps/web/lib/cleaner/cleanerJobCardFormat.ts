@@ -1,5 +1,5 @@
 import type { CleanerMobileJobView } from "@/lib/cleaner/cleanerMobileBookingMap";
-import { ymdLocal } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { johannesburgCalendarYmd, johannesburgCalendarYmdAddDays } from "@/lib/dashboard/johannesburgMonth";
 
 export function formatJobDurationShort(hours: number): string {
   if (hours % 1 === 0) return `${hours}h`;
@@ -11,11 +11,22 @@ export function telHref(phone: string): string | undefined {
   return d ? `tel:${d}` : undefined;
 }
 
-export function jobDateHeading(dateStr: string): string {
+/** Relative calendar label for a booking `YYYY-MM-DD` vs “now” in Johannesburg. */
+export function relativeJobDayHeading(dateStr: string, now = new Date()): string {
   const ymd = dateStr.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return dateStr.trim() || "Scheduled";
-  const today = ymdLocal(new Date());
-  const tomorrow = ymdLocal(new Date(Date.now() + 86400000));
+  const today = johannesburgCalendarYmd(now);
+  const yesterday = johannesburgCalendarYmdAddDays(today, -1);
+  if (ymd === today) return "Today";
+  if (ymd === yesterday) return "Yesterday";
+  return jobDateHeading(dateStr, now);
+}
+
+export function jobDateHeading(dateStr: string, now = new Date()): string {
+  const ymd = dateStr.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return dateStr.trim() || "Scheduled";
+  const today = johannesburgCalendarYmd(now);
+  const tomorrow = johannesburgCalendarYmdAddDays(today, 1);
   if (ymd === today) return "Today";
   if (ymd === tomorrow) return "Tomorrow";
   const [, m, d] = ymd.split("-");

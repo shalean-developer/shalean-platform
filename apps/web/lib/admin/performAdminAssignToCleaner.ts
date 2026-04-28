@@ -5,6 +5,7 @@ import {
   cleanerSlotMatchesCalendar,
   effectiveJobDurationMinutes,
 } from "@/lib/admin/adminAssignEligibility";
+import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
@@ -162,7 +163,7 @@ export async function performAdminAssignToCleaner(
     bookingId,
     cleanerId: resolvedCleanerId,
     rankIndex: 0,
-    ttlSeconds: 60,
+    ttlSeconds: resolveDispatchOfferAcceptTtlSeconds(),
   });
   if (!offer.ok) {
     if (process.env.NODE_ENV !== "production") {

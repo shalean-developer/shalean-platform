@@ -81,15 +81,37 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     .eq("booking_id", id)
     .order("created_at", { ascending: false });
 
-  const [{ data: cleaner }, { data: userProfile }, { data: dispatchOffers, error: offersErr }] = await Promise.all([
-    cleanerPromise,
-    userProfilePromise,
-    offersPromise,
-  ]);
+  const issueReportsPromise = admin
+    .from("cleaner_job_issue_reports")
+    .select(
+      "id, cleaner_id, reason_key, reason_version, detail, whatsapp_snapshot, idempotency_key, created_at, resolved_at, resolved_by",
+    )
+    .eq("booking_id", id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const [
+    { data: cleaner },
+    { data: userProfile },
+    { data: dispatchOffers, error: offersErr },
+    { data: cleanerIssueReportsRaw, error: issueErr },
+  ] = await Promise.all([cleanerPromise, userProfilePromise, offersPromise, issueReportsPromise]);
 
   if (offersErr) {
     return NextResponse.json({ error: offersErr.message }, { status: 500 });
   }
+  if (issueErr) {
+    return NextResponse.json({ error: issueErr.message }, { status: 500 });
+  }
+
+  const cleanerIssueReports = [...(cleanerIssueReportsRaw ?? [])].sort((a, b) => {
+    const ar = Boolean((a as { resolved_at?: string | null }).resolved_at);
+    const br = Boolean((b as { resolved_at?: string | null }).resolved_at);
+    if (ar !== br) return ar ? 1 : -1;
+    const ta = new Date(String((a as { created_at?: string }).created_at ?? "")).getTime();
+    const tb = new Date(String((b as { created_at?: string }).created_at ?? "")).getTime();
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
 
   const b = booking as Record<string, unknown>;
   const supports_team_assignment = isTeamService({
@@ -125,6 +147,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     cleaner: cleaner ?? null,
     userProfile: userProfile ?? null,
     dispatch_offers: dispatchOffers ?? [],
+    cleaner_issue_reports: cleanerIssueReports ?? [],
     supports_team_assignment,
     team_summary,
   });

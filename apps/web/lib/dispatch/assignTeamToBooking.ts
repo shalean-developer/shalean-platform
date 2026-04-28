@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
 
 /**
  * Statuses that consume a team-day slot for allocator + RPC alignment.
@@ -26,7 +27,17 @@ function teamDayCapacitySlots(team: Pick<TeamRow, "capacity_per_day">): number {
 
 export type TeamAssignResult =
   | { ok: true; teamId: string }
-  | { ok: false; error: "no_candidate" | "booking_not_pending" | "db_error"; message?: string };
+  | {
+      ok: false;
+      error: "no_candidate" | "booking_not_pending" | "db_error";
+      message?: string;
+      /** Machine-stable diagnostic (e.g. `team_payout_owner_unresolved`). */
+      code?: string;
+      booking_id?: string;
+      team_id?: string;
+      /** Correlates UI / API responses with `system_logs` (e.g. `TA-7F3A1B2C`). */
+      error_id?: string;
+    };
 
 type TeamCandidate = TeamRow & {
   rosterSnapshot: number;
@@ -365,11 +376,54 @@ async function finalizeBookingTeamAssignment(
     return { ok: false, error: "no_candidate", message: "capacity_claim_rejected" };
   }
 
+  const { data: leadRow } = await supabase
+    .from("team_members")
+    .select("cleaner_id")
+    .eq("team_id", selected.id)
+    .not("cleaner_id", "is", null)
+    .order("cleaner_id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const payoutOwnerCleanerId =
+    leadRow && typeof (leadRow as { cleaner_id?: string }).cleaner_id === "string"
+      ? String((leadRow as { cleaner_id: string }).cleaner_id).trim()
+      : null;
+
+  if (!payoutOwnerCleanerId) {
+    await supabase.rpc("release_team_capacity_slot", {
+      p_team_id: selected.id,
+      p_booking_date: dateYmd,
+    });
+    const error_id = newTeamAssignmentErrorId();
+    void logSystemEvent({
+      level: "warn",
+      source: "TEAM_PAYOUT_OWNER_UNRESOLVED",
+      message: "Team assignment aborted: no payout owner resolved for roster",
+      context: {
+        error_id,
+        booking_id: bookingId,
+        team_id: selected.id,
+        bookingDate: dateYmd,
+        serviceType,
+      },
+    });
+    return {
+      ok: false,
+      error: "no_candidate",
+      message: "team_payout_owner_unresolved",
+      code: "team_payout_owner_unresolved",
+      booking_id: bookingId,
+      team_id: selected.id,
+      error_id,
+    };
+  }
+
   const nowIso = new Date().toISOString();
   /** Snapshot from the chosen team at assignment time (post-claim), not a stale pre-sort value. */
   const rosterSnapshot = Math.max(0, Math.floor(selected.rosterSnapshot));
   const baseUpdate = {
     cleaner_id: null,
+    payout_owner_cleaner_id: payoutOwnerCleanerId,
     is_team_job: true,
     team_id: selected.id,
     status: "assigned" as const,
@@ -602,6 +656,17 @@ export async function assignTeamToBooking(
       }
     }
     const r = await finalizeBookingTeamAssignment(supabase, booking.id, dateYmd, team, serviceType);
+    if (!r.ok && r.code === "team_payout_owner_unresolved") {
+      return {
+        ok: false,
+        error: "no_candidate",
+        message: r.message,
+        code: r.code,
+        booking_id: r.booking_id ?? booking.id,
+        team_id: r.team_id ?? team.id,
+        error_id: r.error_id,
+      };
+    }
     if (r.ok) {
       if (failedTeamIds.length > 0) {
         void logSystemEvent({

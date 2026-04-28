@@ -1,6 +1,7 @@
 "use client";
 
 import { TEAM_MEMBER_ADD_CODE } from "./teamMemberAddCodes";
+import type { CleanerPreferencesPayload, PreferredTimeBlock } from "@/lib/cleaner/cleanerPreferencesTypes";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export type AdminBookingRow = {
@@ -312,6 +313,53 @@ export async function createAdminCleaner(payload: {
   const json = (await res.json()) as { error?: string; cleanerId?: string };
   if (!res.ok) throw new Error(json.error ?? "Failed to create cleaner.");
   return json;
+}
+
+export type AdminCleanerPreferencesResponse = {
+  preferences: {
+    cleaner_id: string;
+    preferred_areas: string[];
+    preferred_services: string[];
+    preferred_time_blocks: PreferredTimeBlock[];
+    is_strict: boolean;
+    updated_at?: string | null;
+  } | null;
+  locationOptions: { id: string; name: string; slug: string | null }[];
+  serviceOptions: { slug: string; label: string }[];
+};
+
+export async function fetchAdminCleanerPreferences(cleanerId: string): Promise<AdminCleanerPreferencesResponse> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}/preferences`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as AdminCleanerPreferencesResponse & { error?: string };
+  if (res.status === 401) throw new Error("Please sign in as an admin.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to load preferences.");
+  return {
+    preferences: json.preferences ?? null,
+    locationOptions: json.locationOptions ?? [],
+    serviceOptions: json.serviceOptions ?? [],
+  };
+}
+
+export async function saveAdminCleanerPreferences(
+  cleanerId: string,
+  payload: CleanerPreferencesPayload,
+): Promise<AdminCleanerPreferencesResponse["preferences"]> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}/preferences`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = (await res.json()) as { ok?: boolean; preferences?: AdminCleanerPreferencesResponse["preferences"]; error?: string };
+  if (res.status === 401) throw new Error("Please sign in as an admin.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to save preferences.");
+  if (!json.preferences) throw new Error("Save succeeded but response was incomplete.");
+  return json.preferences;
 }
 
 export async function updateCleanerProfile(
