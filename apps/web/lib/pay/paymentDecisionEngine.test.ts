@@ -15,6 +15,9 @@ const richStats: PaymentLinkChannelStats = {
   whatsapp_success_rate: 0.5,
   sms_fallback_rate: 0.55,
   email_only_rate: 0.1,
+  email_attempted: 20,
+  email_success_rate: 0.4,
+  sms_fallback_after_email_failed_rate: 0.2,
 };
 
 const defaultStats: PaymentLinkChannelStats = {
@@ -22,6 +25,9 @@ const defaultStats: PaymentLinkChannelStats = {
   whatsapp_success_rate: 0.9,
   sms_fallback_rate: 0.35,
   email_only_rate: 0.05,
+  email_attempted: 40,
+  email_success_rate: 0.85,
+  sms_fallback_after_email_failed_rate: 0.1,
 };
 
 describe("normalizePhoneTryOrder", () => {

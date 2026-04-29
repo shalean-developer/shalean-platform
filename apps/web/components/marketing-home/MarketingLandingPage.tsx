@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { type FormEvent, useLayoutEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   ArrowUpRight,
   ChevronDown,
   Clock3,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import type { HomeFaq, HomeLocation } from "@/lib/home/data";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
+import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { MarketingFreshHero } from "@/components/marketing-home/MarketingFreshHero";
 import {
@@ -31,56 +32,53 @@ import {
 } from "@/lib/site/customerSupport";
 import { cn } from "@/lib/utils";
 
-const bookingEntry = `${bookingFlowHref("entry")}&source=marketing_home`;
+const bookingEntry = `${bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"))}&source=marketing_home`;
 
-/** Design reference: `public/marketing/book-cleaner-section.png` (copied from product mock). */
-const BOOK_CLEANER_SECTION_IMG = "/marketing/book-cleaner-section.png";
+/**
+ * When you overwrite any PNG under `public/` that this page uses, bump this string (e.g. `b` → `c`) and save.
+ * Otherwise the UI keeps showing the old picture: `next/image` and the browser cache by full URL, including `?v=…`.
+ * Hero images use the separate `HERO_IMAGE_VERSION` in `MarketingFreshHero.tsx` — bump that too if you change them.
+ */
+const MARKETING_LANDING_IMAGE_VERSION = "20260429d";
+const mimg = (path: string) => `${path}?v=${MARKETING_LANDING_IMAGE_VERSION}`;
 
-const ABOUT_SHOWCASE_IMG =
-  "https://images.unsplash.com/photo-1581578694689-35a7e2c1b978?auto=format&fit=crop&w=800&q=85";
-const ABOUT_TESTIMONIAL_AVATAR =
-  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=128&q=80";
-const GUIDE_A =
-  "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=80";
-const BUSINESS_IMG =
-  "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80";
+const BOOK_CLEANER_SECTION_IMG = mimg("/marketing/book-professional-team-living-room-cape-town.webp");
 
-const WHY_CHOOSE_IMG_MAIN =
-  "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=720&q=85";
-const WHY_CHOOSE_IMG_TOP =
-  "https://images.unsplash.com/photo-1563453392212-326f5e854473?auto=format&fit=crop&w=640&q=80";
-const WHY_CHOOSE_IMG_BOTTOM =
-  "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=640&q=80";
+const ABOUT_SHOWCASE_IMG = mimg("/images/marketing/shalean-cleaner-balcony-cape-town.webp");
 
-const OUR_SERVICE_CARPET =
-  "https://images.unsplash.com/photo-1527515545081-5db817172677?auto=format&fit=crop&w=800&q=85";
-const OUR_SERVICE_DEEP_HOME = GUIDE_A;
-const OUR_SERVICE_OFFICE = BUSINESS_IMG;
-const OUR_SERVICE_BATH_KITCHEN =
-  "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=85";
+const WHY_CHOOSE_IMG_MAIN = mimg("/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp");
+const WHY_CHOOSE_IMG_TOP = mimg("/images/marketing/cleaning-team-bright-space-cape-town.webp");
+const WHY_CHOOSE_IMG_BOTTOM = mimg("/images/marketing/bright-living-room-after-cleaning-cape-town.webp");
 
+/** “Freshness At Your Fingertips” service cards — brand photography under `public/images/marketing/`. */
+const OUR_SERVICE_FRESHNESS_1 = mimg("/images/marketing/sofa-carpet-care-cape-town.webp");
+const OUR_SERVICE_FRESHNESS_2 = mimg("/images/marketing/house-deep-cleaning-cape-town.webp");
+const OUR_SERVICE_FRESHNESS_3 = mimg("/images/marketing/office-cleaning-workspace-cape-town.webp");
+const OUR_SERVICE_FRESHNESS_4 = mimg("/images/marketing/bathroom-kitchen-deep-clean-cape-town.webp");
+
+/** Left-to-right: card 1 → sofa carpet webp, … card 4 → bathroom/kitchen webp (no random wiring). */
 const OUR_SERVICES_CARDS = [
   {
-    image: OUR_SERVICE_CARPET,
-    alt: "Professional cleaning carpet and sofa area",
+    image: OUR_SERVICE_FRESHNESS_1,
+    alt: "Sofa and carpet refresh and upholstery care in Cape Town",
     title: "Sofa And Carpet Refresh",
     description: "Remove Stains, Odors, And Bring Back Comfort To Your Furniture.",
   },
   {
-    image: OUR_SERVICE_DEEP_HOME,
-    alt: "Deep cleaning kitchen counters and surfaces",
+    image: OUR_SERVICE_FRESHNESS_2,
+    alt: "House deep cleaning for fresh living spaces in Cape Town",
     title: "House Deep Cleaning",
     description: "Thorough Dusting, Mopping, And Sanitizing To Keep Your Home Fresh.",
   },
   {
-    image: OUR_SERVICE_OFFICE,
-    alt: "Office workspace being cleaned",
+    image: OUR_SERVICE_FRESHNESS_3,
+    alt: "Professional office cleaning in a bright Cape Town workspace",
     title: "Professional Office Cleaning",
     description: "Keep Work Areas Spotless, Organized, And Boost Team Productivity.",
   },
   {
-    image: OUR_SERVICE_BATH_KITCHEN,
-    alt: "Bathroom tiles and surfaces deep cleaned",
+    image: OUR_SERVICE_FRESHNESS_4,
+    alt: "Bathroom and kitchen deep clean with spotless surfaces in Cape Town",
     title: "Bathroom & Kitchen Shine",
     description: "Deep Scrubbing To Remove Grime And Germs From Tough Corners.",
   },
@@ -149,7 +147,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
     window.location.href = `mailto:${CUSTOMER_SUPPORT_EMAIL}?subject=${encodeURIComponent("Newsletter — cleaning tips")}&body=${encodeURIComponent(`Please add this email to updates: ${v}`)}`;
   }
 
-  /** One sync for breakpoint + image box height so 500+ card gets half-height after first paint (avoids lg state lag vs CSS). */
+  /** One sync for breakpoint + image box height so 4,500+ card gets half-height after first paint (avoids lg state lag vs CSS). */
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const el = aboutShowcaseImgRef.current;
@@ -184,8 +182,19 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
       {/* Site header (design-specific; GlobalTopNav hidden on `/`) */}
       <header className="sticky top-0 z-40 border-b border-blue-900/25 bg-[#1e4fd4] shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <Link href="/" className="shrink-0 text-lg font-bold tracking-tight text-white">
-            Shalean<span className="text-sky-400">.</span>
+          <Link
+            href="/"
+            className="flex shrink-0 items-center rounded-lg bg-white/95 px-2 py-1 shadow-sm ring-1 ring-white/30"
+            aria-label="Shalean home"
+          >
+            <Image
+              src="/images/shalean-logo.png"
+              alt="Shalean Cleaning Services"
+              width={152}
+              height={40}
+              className="h-8 w-auto max-w-[min(168px,52vw)] sm:h-9 sm:max-w-[180px]"
+              priority
+            />
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
@@ -271,6 +280,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
         ) : null}
       </header>
 
+      <main>
       <MarketingFreshHero bookHref={bookingEntry} />
 
       {/* Trust banner (below hero) */}
@@ -361,7 +371,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
               <div className="relative min-h-[220px] overflow-hidden rounded-2xl shadow-md ring-1 ring-black/5 sm:row-span-2 sm:min-h-0 sm:h-full">
                 <Image
                   src={WHY_CHOOSE_IMG_MAIN}
-                  alt="Professional cleaner vacuuming a bedroom"
+                  alt="Professional cleaner vacuuming a bedroom in Cape Town"
                   fill
                   className="object-cover object-center"
                   sizes="(max-width: 640px) 100vw, 42vw"
@@ -370,7 +380,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
               <div className="relative aspect-[16/10] overflow-hidden rounded-2xl shadow-md ring-1 ring-black/5">
                 <Image
                   src={WHY_CHOOSE_IMG_TOP}
-                  alt="Cleaning team working in a bright space"
+                  alt="Cleaning team working in a bright Cape Town space"
                   fill
                   className="object-cover object-center"
                   sizes="(max-width: 640px) 100vw, 38vw"
@@ -379,7 +389,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
               <div className="relative aspect-[16/10] overflow-hidden rounded-2xl shadow-md ring-1 ring-black/5">
                 <Image
                   src={WHY_CHOOSE_IMG_BOTTOM}
-                  alt="Clean, bright living space"
+                  alt="Clean, bright living space after home cleaning in Cape Town"
                   fill
                   className="object-cover object-center"
                   sizes="(max-width: 640px) 100vw, 38vw"
@@ -502,7 +512,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
 
           {/*
             Three columns on lg: bottom edges align (photo, stat cards, testimonial).
-            Stat cards stack with normal gap; 6+ and 500+ are left-aligned in the middle column.
+            Stat cards stack with normal gap; Since 2022 and 4,500+ are left-aligned in the middle column.
           */}
           <div className="mt-14 flex flex-col gap-10 lg:mt-20 lg:flex-row lg:items-end lg:gap-5 xl:gap-8">
             {/* Left: tall portrait photo */}
@@ -513,7 +523,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
               >
                 <Image
                   src={ABOUT_SHOWCASE_IMG}
-                  alt="Professional cleaner mopping a home"
+                  alt="Shalean cleaner in uniform mopping a sunny tiled balcony by the water in Cape Town"
                   fill
                   className="object-cover object-center"
                   sizes="(max-width: 1024px) 100vw, 33vw"
@@ -521,14 +531,15 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
               </div>
             </div>
 
-            {/* Middle: 6+ right-aligned above 500+ (left); lg aligns to row bottom */}
+            {/* Middle: Since 2022 card right-aligned above 4,500+ (left); lg aligns to row bottom */}
             <div className="flex w-full shrink-0 flex-col items-start gap-5 lg:min-w-0 lg:flex-1 lg:gap-6 lg:self-end">
               <div className="box-border flex aspect-square w-40 max-w-full shrink-0 flex-col justify-center self-end rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:w-44 sm:p-5">
-                <p className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  6+ <span className="text-xl font-bold sm:text-2xl">Years</span>
+                <p className="flex items-center gap-1.5 text-lg font-bold leading-snug tracking-tight text-slate-900 sm:gap-2 sm:text-2xl">
+                  <ArrowRight className="size-[1.1em] shrink-0 text-slate-700" strokeWidth={2} aria-hidden />
+                  Since 2022
                 </p>
                 <p className="mt-2 text-[0.65rem] leading-tight text-slate-500 sm:mt-2.5 sm:text-[11px] sm:leading-snug">
-                  Customer Satisfaction With Every Service
+                  Trusted by thousands of homes across Cape Town
                 </p>
               </div>
               <div
@@ -549,14 +560,16 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
                     : undefined
                 }
               >
-                <p className="text-3xl font-bold tracking-tight sm:text-4xl">500+</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums sm:text-4xl lg:text-2xl xl:text-3xl">
+                  4,500+
+                </p>
                 <p className="mt-2 text-sm leading-snug text-blue-100 sm:mt-3 lg:text-[11px] lg:leading-snug">
-                  Delivering Spotless Results With Every Visit
+                  Delivering spotless homes across Cape Town every week
                 </p>
               </div>
             </div>
 
-            {/* Right: testimonial card — bottom aligns with image & 500+ row */}
+            {/* Right: testimonial card — bottom aligns with image & 4,500+ row */}
             <div className="relative w-full shrink-0 overflow-hidden rounded-3xl border border-emerald-100/60 bg-gradient-to-br from-[#eef6df] via-[#f4f9ec] to-[#faf8ef] p-8 shadow-md ring-1 ring-black/[0.04] sm:p-9 lg:min-w-0 lg:flex-1">
               <Quote
                 className="pointer-events-none absolute left-6 top-6 h-14 w-14 text-emerald-300/90 sm:left-8 sm:top-8 sm:h-16 sm:w-16"
@@ -564,23 +577,20 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
                 aria-hidden
               />
               <blockquote className="relative pt-10 text-base font-medium leading-relaxed text-slate-800 sm:pt-12 sm:text-lg">
-                Shalean turned my messy apartment into a fresh, spotless space in just a few hours. Their team was
-                friendly, on time, and truly professional. I finally feel comfortable at home again!
+                Shalean completely transformed my apartment in Claremont. The team was professional, fast, and paid
+                attention to every detail. It honestly felt like walking into a brand-new home.
               </blockquote>
               <footer className="relative mt-8 flex items-center gap-4 border-t border-emerald-900/10 pt-8">
-                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-white shadow-md">
-                  <Image
-                    src={ABOUT_TESTIMONIAL_AVATAR}
-                    alt=""
-                    width={48}
-                    height={48}
-                    className="object-cover"
-                  />
+                <div
+                  className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-sm font-bold tracking-tight text-emerald-900 ring-2 ring-white shadow-md"
+                  aria-hidden
+                >
+                  SM
                 </div>
                 <div>
                   <cite className="not-italic">
-                    <span className="block text-base font-bold text-slate-900">Rafiq Ahmed</span>
-                    <span className="mt-0.5 block text-sm text-slate-500">Digital Creator</span>
+                    <span className="block text-base font-bold text-slate-900">Sarah M.</span>
+                    <span className="mt-0.5 block text-sm text-slate-500">Claremont</span>
                   </cite>
                 </div>
               </footer>
@@ -632,7 +642,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.75rem] shadow-lg ring-1 ring-black/[0.06] sm:rounded-[28px] lg:aspect-[5/4]">
               <Image
                 src={BOOK_CLEANER_SECTION_IMG}
-                alt="Professional cleaning team working in a bright living room"
+                alt="Professional cleaning team working in a bright living room in Cape Town"
                 fill
                 className="object-cover object-center"
                 sizes="(max-width: 1024px) 100vw, 50vw"
@@ -817,6 +827,7 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer — four-column layout (brand, quick links, services, newsletter + social) */}
       <footer id="contact" className="scroll-mt-24 bg-black py-14 text-white sm:py-16">
@@ -883,23 +894,23 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
               <p className="text-sm font-bold text-white">Popular Services</p>
               <ul className="mt-4 space-y-3 text-sm text-white/90">
                 <li>
-                  <Link href="/services/deep-cleaning" className="transition hover:text-white">
+                  <Link href="/services/deep-cleaning-cape-town" className="transition hover:text-white">
                     Deep Cleaning
                   </Link>
                 </li>
                 <li>
-                  <Link href={hash("#our-services")} className="transition hover:text-white">
+                  <Link href="/services/carpet-cleaning-cape-town" className="transition hover:text-white">
                     Sofa &amp; Carpet Care
                   </Link>
                 </li>
                 <li>
-                  <Link href={bookingEntry} className="transition hover:text-white">
+                  <Link href="/services/office-cleaning-cape-town" className="transition hover:text-white">
                     Office Cleaning
                   </Link>
                 </li>
                 <li>
-                  <Link href={hash("#our-services")} className="transition hover:text-white">
-                    Bathroom &amp; Kitchen
+                  <Link href="/services/standard-cleaning-cape-town" className="transition hover:text-white">
+                    Standard Home Cleaning
                   </Link>
                 </li>
               </ul>

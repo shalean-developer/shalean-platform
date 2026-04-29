@@ -1,4 +1,5 @@
 import type { HomeFaq, HomeLocation, HomeService } from "@/lib/home/data";
+import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import {
   CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_TELEPHONE_E164,
@@ -8,6 +9,7 @@ type StructuredDataProps = {
   services: HomeService[];
   locations: HomeLocation[];
   faqs: HomeFaq[];
+  reviewBanner?: PublicReviewBannerStats | null;
 };
 
 const SITE_URL = "https://www.shalean.co.za";
@@ -16,7 +18,7 @@ const LOCAL_BUSINESS_ID = `${SITE_URL}/#localbusiness`;
 /** Primary service labels for Google rich results (aligned with CleaningService). */
 const CORE_SERVICE_TYPES = ["house cleaning", "deep cleaning", "move-out cleaning"] as const;
 
-export function StructuredData({ services, locations, faqs }: StructuredDataProps) {
+export function StructuredData({ services, locations, faqs, reviewBanner = null }: StructuredDataProps) {
   const areaServed = [
     { "@type": "Country" as const, name: "South Africa" },
     ...locations.map((location) => ({
@@ -25,8 +27,7 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     })),
   ];
 
-  const localBusiness = {
-    "@context": "https://schema.org",
+  const localBusiness: Record<string, unknown> = {
     "@type": "LocalBusiness",
     "@id": LOCAL_BUSINESS_ID,
     name: "Shalean Cleaning Services",
@@ -53,8 +54,15 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     })),
   };
 
+  if (reviewBanner != null && reviewBanner.reviewCount >= 1 && Number.isFinite(reviewBanner.avgRating)) {
+    localBusiness.aggregateRating = {
+      "@type": "AggregateRating",
+      ratingValue: reviewBanner.avgRating.toFixed(1),
+      reviewCount: String(reviewBanner.reviewCount),
+    };
+  }
+
   const cleaningService = {
-    "@context": "https://schema.org",
     "@type": "CleaningService",
     "@id": `${SITE_URL}/#cleaningservice`,
     name: "Shalean Cleaning Services",
@@ -64,8 +72,7 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     provider: { "@id": LOCAL_BUSINESS_ID },
   };
 
-  const serviceSchema = services.map((service) => ({
-    "@context": "https://schema.org",
+  const serviceNodes = services.map((service) => ({
     "@type": "Service",
     name: service.title,
     description: service.description,
@@ -73,28 +80,32 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     provider: { "@id": LOCAL_BUSINESS_ID },
   }));
 
-  const faqSchema =
-    faqs.length > 0
-      ? {
-          "@context": "https://schema.org",
-          "@type": "FAQPage",
-          mainEntity: faqs.map((faq) => ({
-            "@type": "Question",
-            name: faq.question,
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: faq.answer,
-            },
-          })),
-        }
-      : null;
+  const graph: unknown[] = [localBusiness, cleaningService, ...serviceNodes];
 
-  const graphs = [localBusiness, cleaningService, ...serviceSchema, faqSchema].filter(Boolean);
+  if (faqs.length > 0) {
+    graph.push({
+      "@type": "FAQPage",
+      "@id": `${SITE_URL}/#faq`,
+      mainEntity: faqs.map((faq) => ({
+        "@type": "Question",
+        name: faq.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: faq.answer,
+        },
+      })),
+    });
+  }
+
+  const payload = {
+    "@context": "https://schema.org",
+    "@graph": graph,
+  };
 
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(graphs).replace(/</g, "\\u003c") }}
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(payload).replace(/</g, "\\u003c") }}
     />
   );
 }

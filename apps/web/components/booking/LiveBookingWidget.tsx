@@ -20,6 +20,8 @@ import {
   slotsLeftForWidgetDate,
 } from "@/lib/booking/liveWidgetPricing";
 import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
+import { ServiceAreaPicker } from "@/components/booking/ServiceAreaPicker";
+import { bookingCopy } from "@/lib/booking/copy";
 
 export type LiveBookingWidgetProps = {
   className?: string;
@@ -39,7 +41,10 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
   const [service, setService] = useState<HomeWidgetServiceKey>("standard");
   const [date, setDate] = useState(() => todayBookingYmd());
   const [time, setTime] = useState<string>(() => defaultBookingTimeForDate(todayBookingYmd()));
-  const [location, setLocation] = useState("");
+  const [street, setStreet] = useState("");
+  const [serviceAreaLocationId, setServiceAreaLocationId] = useState<string | null>(null);
+  const [serviceAreaCityId, setServiceAreaCityId] = useState<string | null>(null);
+  const [serviceAreaName, setServiceAreaName] = useState("");
   const extras = useMemo<string[]>(() => [], []);
 
   const priceInput: LiveWidgetPriceInput = useMemo(
@@ -60,6 +65,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
   const slotsLeft = useMemo(() => slotsLeftForWidgetDate(date), [date]);
 
   function handleBook() {
+    if (!serviceAreaLocationId) return;
     const payload: LiveWidgetPersistedState = isEstimateMode
       ? {
           estimateOnly: true,
@@ -67,7 +73,10 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
           date,
           time,
           extras: [],
-          location: location.trim().slice(0, 500),
+          location: street.trim().slice(0, 500),
+          serviceAreaLocationId,
+          serviceAreaCityId,
+          serviceAreaName: serviceAreaName.trim().slice(0, 120),
           quotedPriceZar: baseEstimate ?? 0,
           savedAt: new Date().toISOString(),
         }
@@ -79,7 +88,10 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
           date,
           time,
           extras: [...extras],
-          location: location.trim().slice(0, 500),
+          location: street.trim().slice(0, 500),
+          serviceAreaLocationId,
+          serviceAreaCityId,
+          serviceAreaName: serviceAreaName.trim().slice(0, 120),
           quotedPriceZar: fullQuoteForNonHome ?? 0,
           savedAt: new Date().toISOString(),
         };
@@ -114,20 +126,35 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
       <CardContent className="space-y-4 p-6 pt-2">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="live-widget-location" className={cn("block", ROOM_FIELD_LABEL_CLASS)}>
-              Address or area (optional)
-            </label>
-            <input
-              id="live-widget-location"
-              type="text"
-              autoComplete="street-address"
-              placeholder="e.g. Sea Point, Cape Town"
-              value={location}
-              onChange={(e) => setLocation(e.target.value.slice(0, 500))}
+            <span className={cn("block", ROOM_FIELD_LABEL_CLASS)}>Service area (suburb)</span>
+            <ServiceAreaPicker
+              id="live-widget-service-area"
+              value={serviceAreaLocationId}
+              emptyListMessage={bookingCopy.entry.emptyServiceAreaCoverage}
+              onChange={(next) => {
+                setServiceAreaLocationId(next.locationId);
+                setServiceAreaCityId(next.cityId);
+                setServiceAreaName(next.name);
+              }}
+              placeholder="Choose your suburb"
               className={ROOM_TEXT_INPUT_CLASS}
             />
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Confirm full address when you book.</p>
+          <div className="space-y-1.5">
+            <label htmlFor="live-widget-street" className={cn("block", ROOM_FIELD_LABEL_CLASS)}>
+              Street (optional)
+            </label>
+            <input
+              id="live-widget-street"
+              type="text"
+              autoComplete="street-address"
+              placeholder="Unit, street number…"
+              value={street}
+              onChange={(e) => setStreet(e.target.value.slice(0, 500))}
+              className={ROOM_TEXT_INPUT_CLASS}
+            />
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Suburb sets pricing and availability; add street detail if you like.</p>
           <WidgetServicePicker
             value={service}
             onChange={setService}
@@ -179,6 +206,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
           <Button
             type="button"
             size="default"
+            disabled={!serviceAreaLocationId}
             onClick={handleBook}
             className="h-full min-h-[2.75rem] min-w-0 rounded-xl px-2 text-sm font-bold leading-snug shadow-md sm:min-h-12 sm:px-3 sm:text-base"
           >

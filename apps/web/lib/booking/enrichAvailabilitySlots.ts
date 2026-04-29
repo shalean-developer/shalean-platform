@@ -4,7 +4,13 @@ import type { PricingJobInput } from "@/lib/pricing/pricingEngine";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
 /** Rows from `/api/booking/time-slots` — no ZAR. */
-export type RawAvailabilitySlot = { time: string; available: boolean; cleanersCount: number };
+export type RawAvailabilitySlot = {
+  time: string;
+  available: boolean;
+  cleanersCount: number;
+  /** Present when slots were scoped to a service area. */
+  locationId?: string | null;
+};
 
 export type PricedAvailabilitySlot = RawAvailabilitySlot & {
   price?: number;
@@ -21,8 +27,15 @@ export function enrichAvailabilitySlotsWithPricing(
   snapshot: PricingRatesSnapshot,
 ): PricedAvailabilitySlot[] {
   return raw.map((s) => {
+    const locEcho =
+      typeof s.locationId === "string" && s.locationId.trim() ? s.locationId.trim() : undefined;
     if (!s.available) {
-      return { time: s.time, available: false, cleanersCount: s.cleanersCount };
+      return {
+        time: s.time,
+        available: false,
+        cleanersCount: s.cleanersCount,
+        ...(locEcho ? { locationId: locEcho } : {}),
+      };
     }
     const q = quoteCheckoutZarWithSnapshot(snapshot, job, s.time, vipTier, {
       cleanersCount: Math.max(0, Math.round(s.cleanersCount)),
@@ -35,6 +48,7 @@ export function enrichAvailabilitySlotsWithPricing(
       duration: q.hours,
       surgeMultiplier: q.effectiveSurgeMultiplier,
       surgeApplied: q.effectiveSurgeMultiplier > 1.001,
+      ...(locEcho ? { locationId: locEcho } : {}),
     };
   });
 }

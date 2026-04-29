@@ -12,7 +12,6 @@ import { Step4Payment, type Step4PaymentHandle, type Step4Totals } from "@/compo
 import { useCheckoutNotice } from "@/components/booking/useCheckoutNotice";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 import { useSelectedCleaner } from "@/components/booking/useSelectedCleaner";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
 import { extrasSnapshotAligned } from "@/lib/booking/extrasSnapshot";
 import {
@@ -30,7 +29,7 @@ function sleep(ms: number): Promise<void> {
 
 export function StepPayment() {
   const router = useRouter();
-  const { handleBack } = useBookingFlow();
+  const { handleBack, bookingHref } = useBookingFlow();
   const searchParams = useSearchParams();
   const preferRegisterTab = searchParams.get("register") === "1";
   const copy = bookingCopy.checkout;
@@ -86,14 +85,14 @@ export function StepPayment() {
         description: "Pick an arrival window to lock your visit total, then return here to pay.",
         autoDismissMs: 7000,
       });
-      router.replace(bookingFlowHref("when"));
+      router.replace(bookingHref("when"));
     });
     return () => cancelAnimationFrame(id);
-  }, [locked, router, show]);
+  }, [locked, router, show, bookingHref]);
 
   const goChooseAnotherTime = useCallback(() => {
-    router.push(`${bookingFlowHref("when")}#booking-time-slots`);
-  }, [router]);
+    router.push(`${bookingHref("when")}#booking-time-slots`);
+  }, [router, bookingHref]);
 
   const onTotalsChange = useCallback((next: Step4Totals) => {
     setTotals(next);
@@ -123,7 +122,7 @@ export function StepPayment() {
         autoDismissMs: 6000,
         cta: { label: "Choose another time", onClick: goChooseAnotherTime },
       });
-      router.push(bookingFlowHref("when"));
+      router.push(bookingHref("when"));
       return;
     }
 
@@ -165,7 +164,7 @@ export function StepPayment() {
           description:
             "Your selected extras don’t match the locked visit price. Go back to home details to refresh add-ons, then choose your time again before paying.",
           autoDismissMs: 8000,
-          cta: { label: "Home details", onClick: () => router.push(bookingFlowHref("details")) },
+          cta: { label: "Home details", onClick: () => router.push(bookingHref("details")) },
         });
         return;
       }
@@ -239,7 +238,7 @@ export function StepPayment() {
           description,
           autoDismissMs: 6000,
           cta: extrasMismatch
-            ? { label: "Home details", onClick: () => router.push(bookingFlowHref("details")) }
+            ? { label: "Home details", onClick: () => router.push(bookingHref("details")) }
             : { label: "Choose another time", onClick: goChooseAnotherTime },
         });
         return;

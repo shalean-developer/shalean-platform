@@ -4,7 +4,7 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
+import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import { consumeWidgetDraftForHydration } from "@/lib/booking/bookingWidgetDraft";
@@ -14,6 +14,7 @@ import {
   type BookingServiceGroupKey,
   type BookingServiceId,
   type BookingServiceTypeKey,
+  bookingServiceIdFromType,
   getBlockedExtraIds,
   getMaxRoomsForService,
   inferServiceGroupFromServiceId,
@@ -30,7 +31,16 @@ export type BookingStep1State = {
   service: BookingServiceId | null;
   service_group: BookingServiceGroupKey | null;
   service_type: BookingServiceTypeKey | null;
-  /** Service address / area — shown on later steps, edited on step 1. */
+  /**
+   * Canonical `public.locations.id` from the suburb picker (entry).
+   * When set, availability / pricing / dispatch use this instead of guessing from free text.
+   */
+  serviceAreaLocationId: string | null;
+  /** Optional `public.locations.city_id` from the same row. */
+  serviceAreaCityId: string | null;
+  /** Display label for summaries (denormalized from picker). */
+  serviceAreaName: string;
+  /** Street, unit, gate — optional detail; suburb is {@link serviceAreaLocationId}. */
   location: string;
   /** Low-friction step 1 — property shape (UX; does not change pricing today). */
   propertyType: PropertyTypeKind | null;
@@ -43,6 +53,11 @@ export type BookingStep1State = {
   bathrooms: number;
   extraRooms: number;
   extras: string[];
+  /**
+   * When true, schedule may call `/api/booking/resolve-location` on free-text `location` if no structured suburb.
+   * Set only for legacy widget payloads; main entry clears this.
+   */
+  allowLocationTextFallback?: boolean;
 };
 
 export const BOOKING_STEP1_KEY = "booking_step1";
@@ -54,6 +69,9 @@ export const INITIAL_BOOKING_STEP1_STATE: BookingStep1State = {
   service: null,
   service_group: null,
   service_type: null,
+  serviceAreaLocationId: null,
+  serviceAreaCityId: null,
+  serviceAreaName: "",
   location: "",
   propertyType: "apartment",
   subServices: [],
@@ -86,6 +104,14 @@ function parsePropertyType(value: unknown): PropertyTypeKind | null {
   return null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseUuidOrNull(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  if (!s || !UUID_RE.test(s)) return null;
+  return s;
+}
+
 function parseServiceGroup(value: unknown): BookingServiceGroupKey | null {
   if (value === "regular" || value === "specialised") return value;
   return null;
@@ -105,7 +131,34 @@ function parseServiceType(value: unknown): BookingServiceTypeKey | null {
 }
 
 function syncStep1ServiceFields(s: BookingStep1State): BookingStep1State {
+  /** Quote step treats `service_type` as canonical; repair legacy rows where `service` was left stale. */
+  if (s.service && s.service_type) {
+    const inferredType = inferServiceTypeFromServiceId(s.service);
+    if (inferredType && inferredType !== s.service_type) {
+      const alignedService = bookingServiceIdFromType(s.service_type);
+      const group = inferServiceGroupFromServiceId(alignedService);
+      return normalizeStep1ForService({
+        ...s,
+        service: alignedService,
+        selectedCategory: group ?? s.selectedCategory,
+        service_group: group ?? s.service_group,
+      });
+    }
+  }
+
+  if (!s.service && s.service_type) {
+    const alignedService = bookingServiceIdFromType(s.service_type);
+    const group = inferServiceGroupFromServiceId(alignedService);
+    return normalizeStep1ForService({
+      ...s,
+      service: alignedService,
+      selectedCategory: group ?? s.selectedCategory,
+      service_group: group ?? s.service_group,
+    });
+  }
+
   if (!s.service) return s;
+
   const inferredGroup = inferServiceGroupFromServiceId(s.service);
   const inferredType = inferServiceTypeFromServiceId(s.service);
   return {
@@ -156,6 +209,11 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
   const location =
     typeof o.location === "string" ? o.location.trim().slice(0, 500) : "";
 
+  const serviceAreaLocationId = parseUuidOrNull(o.serviceAreaLocationId);
+  const serviceAreaCityId = parseUuidOrNull(o.serviceAreaCityId);
+  const serviceAreaName =
+    typeof o.serviceAreaName === "string" ? o.serviceAreaName.trim().slice(0, 120) : "";
+
   const propertyType = parsePropertyType(o.propertyType) ?? "apartment";
   const cleaningFrequency =
     o.cleaningFrequency === "weekly" ||
@@ -167,6 +225,7 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
   const subServicesRaw = Array.isArray(o.subServices) ? o.subServices : [];
   const subServices = subServicesRaw.filter((v): v is BookingServiceTypeKey => parseServiceType(v) !== null);
   const notes = typeof o.notes === "string" ? o.notes.slice(0, 1200) : "";
+  const allowLocationTextFallback = o.allowLocationTextFallback === true;
 
   return syncStep1ServiceFields(
     normalizeStep1ForService({
@@ -174,6 +233,9 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
       service,
       service_group,
       service_type,
+      serviceAreaLocationId,
+      serviceAreaCityId,
+      serviceAreaName,
       location,
       propertyType,
       subServices,
@@ -183,6 +245,7 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
       bathrooms,
       extraRooms,
       extras,
+      ...(allowLocationTextFallback ? { allowLocationTextFallback: true } : {}),
     }),
   );
 }
@@ -236,12 +299,19 @@ export type UseBookingStep1Return = {
 const BookingStep1Context = createContext<UseBookingStep1Return | null>(null);
 
 /** Single source of truth for funnel step-1 state — must wrap {@link BookingPriceProvider} and all booking steps. */
-export function BookingStep1Provider({ children }: { children: ReactNode }) {
-  const value = useBookingStep1Store();
+export function BookingStep1Provider({
+  children,
+  urlPromo,
+}: {
+  children: ReactNode;
+  /** Sanitized `promo` query from {@link BookingFlowClient} (avoid nested `useSearchParams` hydration quirks). */
+  urlPromo: string | null;
+}) {
+  const value = useBookingStep1Store(urlPromo);
   return createElement(BookingStep1Context.Provider, { value }, children);
 }
 
-function useBookingStep1Store(): UseBookingStep1Return {
+function useBookingStep1Store(urlPromo: string | null): UseBookingStep1Return {
   const router = useRouter();
   const [state, setState] = useState<BookingStep1State>(initialState);
   const [hydrated, setHydrated] = useState(false);
@@ -325,8 +395,8 @@ function useBookingStep1Store(): UseBookingStep1Return {
     } catch {
       /* ignore */
     }
-    router.push(bookingFlowHref("when"));
-  }, [canContinue, router]);
+    router.push(bookingFlowHref("when", bookingFlowPromoExtra(urlPromo)));
+  }, [canContinue, router, urlPromo]);
 
   const mainTransitionKey = selectedCategory ?? "choose-category";
 

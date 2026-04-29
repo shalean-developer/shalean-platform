@@ -12,7 +12,13 @@ const OPTIONS: {
   popular?: boolean;
 }[] = [
   { id: "one_time", shortTitle: "Once", longTitle: "One-time", savings: "No plan" },
-  { id: "weekly", shortTitle: "Weekly", longTitle: "Weekly", savings: "Save 10%", popular: true },
+  {
+    id: "weekly",
+    shortTitle: "Weekly",
+    longTitle: "Weekly",
+    savings: "🔥 Weekly — save R400+/mo",
+    popular: true,
+  },
   { id: "biweekly", shortTitle: "2 Weeks", longTitle: "Every 2 weeks", savings: "Save 5%" },
   { id: "monthly", shortTitle: "Monthly", longTitle: "Monthly", savings: "Flexible" },
 ];

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/payout-integrity-daily",
       "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/cron/extend-cleaner-availability",
+      "schedule": "30 2 * * *"
     }
   ]
 }

@@ -80,12 +80,15 @@ export function ConversionBookingStep2({
 
       <div className="space-y-2">
         <label htmlFor="conv-address" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Service address
+          {form.serviceAreaLocationId ? "Street / unit (optional)" : "Service address"}
         </label>
         <input
           id="conv-address"
+          type="text"
           autoComplete="street-address"
-          placeholder="Street, suburb, city"
+          placeholder={
+            form.serviceAreaLocationId ? "Gate, unit, street number…" : "Street, suburb, city"
+          }
           value={form.address}
           onChange={(e) => setForm((p) => ({ ...p, address: e.target.value.slice(0, 500) }))}
           className={inputClass}

@@ -52,9 +52,11 @@ function MetricTile({
 }) {
   const Icon = icon === "bed" ? Bed : icon === "bath" ? Bath : DoorOpen;
   return (
-    <div className="rounded-xl border border-zinc-200/70 bg-white/80 p-3 text-center dark:border-zinc-800/80 dark:bg-zinc-950/50">
+    <div className="min-w-0 rounded-xl border border-zinc-200/70 bg-white/80 px-1.5 py-3 text-center dark:border-zinc-800/80 dark:bg-zinc-950/50">
       <Icon className="mx-auto h-4 w-4 text-blue-600" aria-hidden />
-      <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="mt-1 text-[10px] font-medium uppercase leading-tight tracking-wide text-zinc-500 dark:text-zinc-400">
+        {label}
+      </p>
       <p className="mt-1 text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{value}</p>
     </div>
   );
@@ -121,9 +123,11 @@ export function BookingSummaryCard({
   hideMobilePricingFootnotes = false,
   selectedExtrasBundledZar = null,
 }: BookingSummaryCardProps) {
-  const whatValue =
-    state.service === null ? "Not selected" : getBookingSummaryServiceLabel(state.service, state.service_type);
-  const whereValue = state.location.trim() || "Not set";
+  const whatValue = getBookingSummaryServiceLabel(state.service, state.service_type);
+  const area = state.serviceAreaName?.trim();
+  const street = state.location.trim();
+  const whereValue =
+    area && street ? `${area} — ${street}` : area ? area : street ? street : "Not set";
   const whenValue = locked
     ? formatLockedAppointmentLabel(locked)
     : scheduleDateHint?.trim()
@@ -203,9 +207,6 @@ export function BookingSummaryCard({
               You may get a lower price by choosing a flexible time
             </p>
           </div>
-          <p className="mt-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            {bookingCopy.summary.finalPriceConfirmed}
-          </p>
         </div>
       ) : null}
 
@@ -309,7 +310,6 @@ export function BookingSummaryCard({
               </span>
             </p>
           )}
-          <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{bookingCopy.summary.finalPriceConfirmed}</p>
         </div>
       ) : null}
 

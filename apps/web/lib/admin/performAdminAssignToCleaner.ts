@@ -1,13 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
-import {
-  busyUntilFromOverlappingJobs,
-  cleanerSlotMatchesCalendar,
-  effectiveJobDurationMinutes,
-} from "@/lib/admin/adminAssignEligibility";
+import { effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
+import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
-import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 
 export type AdminAssignOneResult =
@@ -23,6 +19,7 @@ type BookingRow = {
   city_id?: string | null;
   dispatch_status?: string | null;
   duration_minutes?: number | null;
+  location_id?: string | null;
 };
 
 /**
@@ -37,7 +34,7 @@ export async function performAdminAssignToCleaner(
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes")
+    .select("id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, location_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -74,51 +71,23 @@ export async function performAdminAssignToCleaner(
   const resolvedCleanerId = String((cleaner as { id: string }).id);
 
   if (!force && dateYmd && timeHm) {
-    const { data: windows } = await admin
-      .from("cleaner_availability")
-      .select("start_time, end_time, is_available")
-      .eq("cleaner_id", resolvedCleanerId)
-      .eq("date", dateYmd)
-      .eq("is_available", true);
-
-    const winRows =
-      (windows ?? []).map((w) => ({
-        start_time: String((w as { start_time?: string }).start_time ?? "00:00"),
-        end_time: String((w as { end_time?: string }).end_time ?? "23:59"),
-        is_available: Boolean((w as { is_available?: boolean }).is_available),
-      })) ?? [];
-
-    if (!cleanerSlotMatchesCalendar(winRows, timeHm)) {
+    const locId = String((b as { location_id?: string | null }).location_id ?? "").trim();
+    const eligible = await getEligibleCleaners(admin, {
+      date: dateYmd,
+      startTime: timeHm.trim().slice(0, 5),
+      durationMinutes: effectiveJobDurationMinutes(b),
+      locationId: locId,
+      locationExpandedIds: locId ? [locId] : null,
+      cleanerIds: [resolvedCleanerId],
+      limit: 5,
+    });
+    if (eligible.length === 0) {
       return {
         ok: false,
         httpStatus: 400,
         error:
-          "No calendar window for this cleaner on this date/time (roster ≠ slot-free). Pass force=true to override.",
+          "Cleaner is not eligible for this slot (calendar, service area, or overlap). Pass force=true to override.",
       };
-    }
-
-    const startMin = hmToMinutes(timeHm.trim().slice(0, 5));
-    const durationMin = effectiveJobDurationMinutes(b);
-    if (startMin != null) {
-      const { data: others } = await admin
-        .from("bookings")
-        .select("time, duration_minutes, status")
-        .eq("date", dateYmd)
-        .eq("cleaner_id", resolvedCleanerId)
-        .neq("id", bookingId);
-
-      const otherRows = (others ?? []).filter((row) => {
-        const s = String((row as { status?: string }).status ?? "").toLowerCase();
-        return ["pending", "assigned", "in_progress", "confirmed"].includes(s);
-      }) as Array<{ time: string | null; duration_minutes?: number | null }>;
-
-      if (busyUntilFromOverlappingJobs(startMin, durationMin, otherRows) != null) {
-        return {
-          ok: false,
-          httpStatus: 400,
-          error: "Cleaner already has a job overlapping this slot. Pass force=true to override.",
-        };
-      }
     }
   }
 

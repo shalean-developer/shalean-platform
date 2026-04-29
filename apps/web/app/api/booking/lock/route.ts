@@ -7,6 +7,7 @@ import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRates
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { resolveServiceForPricing } from "@/lib/pricing/pricingEngine";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { validateLockSlotAgainstEligibility } from "@/lib/booking/validateLockSlotEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,15 @@ export async function POST(request: Request) {
   const r = quoteLockFromRequestBodyWithSnapshot(body, snapshot, { allowClientDynamicAdjustment: false });
   if (!r.ok) {
     return NextResponse.json({ ok: false, error: r.error }, { status: r.status });
+  }
+
+  const b = body as Record<string, unknown>;
+  const slotCheck = await validateLockSlotAgainstEligibility(admin, b, {
+    timeHm: r.timeHm,
+    durationHours: r.quote.hours,
+  });
+  if (!slotCheck.ok) {
+    return NextResponse.json({ ok: false, error: slotCheck.error }, { status: slotCheck.status });
   }
 
   const q = r.quote;

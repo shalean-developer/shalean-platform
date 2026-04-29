@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { BadgeCheck, Calendar, Mail, MapPin, Sparkles, UserRound } from "lucide-react";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { formatLockedAppointmentLabel } from "@/lib/booking/lockedBooking";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { applyRebookSnapshot } from "@/lib/booking/rebookApply";
-import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import type {
+  BookingSnapshotDiscountLineV1,
+  BookingSnapshotV1,
+} from "@/lib/booking/paystackChargeTypes";
 import type {
   PaystackVerifyPostFailure,
   PaystackVerifyPostResponse,
@@ -74,15 +78,25 @@ type StatusPayload = {
   selectedCleanerId?: string | null;
 };
 
-type Snapshot = {
-  v?: number;
-  locked?: LockedBooking;
-  total_zar?: number;
-  cleaner_name?: string | null;
-};
+function isSnapshot(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
 
-function isSnapshot(v: unknown): v is Snapshot {
-  return v !== null && typeof v === "object";
+function parseDiscountLinesFromSnapshot(bookingSnapshot: unknown): BookingSnapshotDiscountLineV1[] {
+  if (!isSnapshot(bookingSnapshot)) return [];
+  const raw = bookingSnapshot.discount_lines;
+  if (!Array.isArray(raw)) return [];
+  const out: BookingSnapshotDiscountLineV1[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const o = item as Record<string, unknown>;
+    const amount = typeof o.amount_zar === "number" ? o.amount_zar : Number(o.amount_zar);
+    const label = typeof o.label === "string" ? o.label : "";
+    const id = typeof o.id === "string" ? o.id : "discount";
+    if (!label || !Number.isFinite(amount) || amount <= 0) continue;
+    out.push({ id, label, amount_zar: Math.round(amount) });
+  }
+  return out;
 }
 
 function mapVerifySuccessToStatus(data: PaystackVerifyPostSuccess): StatusPayload {
@@ -400,7 +414,9 @@ function SuccessContent() {
     );
   }
 
-  const snap = isSnapshot(statusData.bookingSnapshot) ? statusData.bookingSnapshot : null;
+  const snap = isSnapshot(statusData.bookingSnapshot)
+    ? (statusData.bookingSnapshot as BookingSnapshotV1)
+    : null;
   const locked = snap?.locked;
   const serviceLabel =
     locked?.service != null ? getServiceLabel(locked.service) : "Cleaning service";
@@ -414,6 +430,36 @@ function SuccessContent() {
     (typeof statusData.amountCents === "number" && statusData.amountCents > 0
       ? Math.round(statusData.amountCents / 100)
       : null);
+
+  const discountZar =
+    snap && typeof snap.discount_zar === "number" && snap.discount_zar > 0 ? Math.round(snap.discount_zar) : null;
+  const promoCodeRaw = snap && typeof snap.promo_code === "string" ? snap.promo_code.trim() : "";
+  const promoCode = promoCodeRaw ? promoCodeRaw.toUpperCase() : null;
+
+  const tipZar =
+    snap && typeof snap.tip_zar === "number" && Number.isFinite(snap.tip_zar) && snap.tip_zar > 0
+      ? Math.round(snap.tip_zar)
+      : 0;
+  const visitTotalZar =
+    snap && typeof snap.visit_total_zar === "number" && Number.isFinite(snap.visit_total_zar)
+      ? Math.round(snap.visit_total_zar)
+      : totalPaidZar != null && discountZar != null
+        ? totalPaidZar + discountZar - tipZar
+        : null;
+
+  const parsedDiscountLines = snap ? parseDiscountLinesFromSnapshot(snap) : [];
+  const displayDiscountLines: BookingSnapshotDiscountLineV1[] =
+    parsedDiscountLines.length > 0
+      ? parsedDiscountLines
+      : discountZar != null && discountZar > 0
+        ? [
+            {
+              id: "legacy",
+              label: promoCode ? `Promo · ${promoCode}` : "Discounts",
+              amount_zar: discountZar,
+            },
+          ]
+        : [];
 
   const isGuest = !statusData.userId;
   const upgradeName =
@@ -475,7 +521,7 @@ function SuccessContent() {
   }
 
   return (
-    <BookingContainer className="py-10 sm:py-14">
+    <BookingContainer className="py-8 sm:py-12">
       <CheckoutNoticeBanner
         open={guestAccountNotice != null}
         tone={guestAccountNotice?.tone ?? "danger"}
@@ -484,172 +530,244 @@ function SuccessContent() {
         onDismiss={() => setGuestAccountNotice(null)}
         autoDismissMs={guestAccountNotice?.tone === "success" ? 6000 : 5000}
       />
-      <div className="text-center">
-        <div className="mx-auto mb-4 text-3xl" aria-hidden>
-          🎉
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Booking confirmed
-        </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Check your email for the receipt
-          {statusData.customerEmail ? ` (${statusData.customerEmail})` : ""}.
-        </p>
+
+      <div className="mx-auto max-w-lg space-y-5 md:max-w-xl">
         {statusData.showCleanerSubstitutionNotice ? (
-          <p className="mx-auto mt-4 max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="rounded-2xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
             Your selected cleaner isn&apos;t available at that time — we&apos;ve assigned a similar top-rated cleaner.
           </p>
         ) : null}
         {statusData.bookingInDatabase === false ? (
-          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
-            Your payment succeeded. We&apos;re still saving your booking to our system — you should receive a
-            confirmation email. If anything looks wrong, contact support with your reference below.
+          <p className="rounded-2xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Your payment succeeded. We&apos;re still saving your booking to our system — you should receive a confirmation
+            email. If anything looks wrong, contact support with your reference below.
             {statusData.upsertError ? ` (${statusData.upsertError})` : ""}
           </p>
         ) : null}
         {statusData.bookingInDatabase !== false && statusData.upsertError ? (
-          <p className="mt-2 text-xs text-amber-800 dark:text-amber-400/90">
+          <p className="rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/45 dark:bg-amber-950/35 dark:text-amber-100/95">
             Payment is confirmed, but we couldn&apos;t save all booking details automatically ({statusData.upsertError}).
             Contact support with your reference below.
           </p>
         ) : null}
         {waitNote && !statusData.upsertError ? (
-          <p className="mt-2 text-xs text-amber-800 dark:text-amber-400/90">
-            Your payment is confirmed. If the confirmation email doesn&apos;t arrive within a few minutes, contact
-            support with your reference below.
+          <p className="rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/45 dark:bg-amber-950/35 dark:text-amber-100/95">
+            Your payment is confirmed. If the confirmation email doesn&apos;t arrive within a few minutes, contact support
+            with your reference below.
           </p>
         ) : null}
-      </div>
 
-      <section
-        className="mx-auto mt-8 max-w-lg rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60 sm:p-5"
-        aria-labelledby="cancel-change-heading"
-      >
-        <h2
-          id="cancel-change-heading"
-          className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
-        >
-          Need to cancel or change your booking?
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-          {isGuest
-            ? "You booked as a guest — changes and cancellations are handled by our team."
-            : "Changes and cancellations can be arranged through our team."}{" "}
-          Use WhatsApp or email below; no login required for these messages.
-        </p>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          {statusData.reference ? (
-            <>
-              Include your booking reference when contacting support:{" "}
-              <span className="font-mono text-zinc-800 dark:text-zinc-200">{statusData.reference}</span>
-            </>
-          ) : (
-            "Include your booking reference when contacting support (see your confirmation email or the summary below)."
-          )}
-        </p>
-        <div className="mt-4">
-          <SupportContactLinks layout="row" />
-        </div>
-      </section>
-
-      {showGuestUpgrade ? (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 md:p-5 dark:border-blue-900/50 dark:bg-blue-950/35">
-          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Save your details for next time
-          </h3>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Create an account with the same email — track bookings and book faster next time.
+        <header className="relative overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/50 px-6 pb-8 pt-10 text-center shadow-sm dark:border-emerald-900/35 dark:from-emerald-950/45 dark:via-zinc-950 dark:to-zinc-900/90">
+          <div
+            className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/15 blur-2xl dark:bg-emerald-400/10"
+            aria-hidden
+          />
+          <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-700/25 ring-4 ring-emerald-500/15 dark:bg-emerald-500 dark:ring-emerald-400/10">
+            <BadgeCheck className="h-9 w-9" strokeWidth={2.25} aria-hidden />
+          </div>
+          <h1 className="relative mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Booking confirmed
+          </h1>
+          <p className="relative mx-auto mt-3 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            Thanks for choosing Shalean. We&apos;ve emailed your receipt
+            {statusData.customerEmail ? (
+              <>
+                {" "}
+                to <span className="font-medium text-zinc-800 dark:text-zinc-200">{statusData.customerEmail}</span>
+              </>
+            ) : null}
+            .
           </p>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">No spam. We&apos;ll send a secure link to your inbox.</p>
+          <div className="relative mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-white/90 px-4 py-2 text-xs font-medium text-emerald-900 shadow-sm dark:border-emerald-800/60 dark:bg-zinc-900/80 dark:text-emerald-100/90">
+            <Mail className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+            Receipt in your inbox
+          </div>
+        </header>
+
+        <section
+          className="rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 sm:p-6"
+          aria-labelledby="visit-details-heading"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-4 dark:border-zinc-800/80">
+            <h2 id="visit-details-heading" className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">
+              Visit details
+            </h2>
+          </div>
+
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+            <div className="flex gap-3 py-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                <Sparkles className="h-4 w-4" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Service</p>
+                <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{serviceLabel}</p>
+              </div>
+            </div>
+            <div className="flex gap-3 py-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                <Calendar className="h-4 w-4" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Date &amp; time</p>
+                <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{when}</p>
+              </div>
+            </div>
+            {locked?.location ? (
+              <div className="flex gap-3 py-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  <MapPin className="h-4 w-4" aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Location</p>
+                  <p className="mt-0.5 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
+                    {locked.location}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {locked || snap?.cleaner_name?.trim() ? (
+              <div className="flex gap-3 py-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  <UserRound className="h-4 w-4" aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cleaner</p>
+                  <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    {snap?.cleaner_name?.trim() || (locked ? "Auto-assigned cleaner" : "—")}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-2 rounded-xl bg-zinc-50 px-4 py-4 dark:bg-zinc-900/60">
+            {visitTotalZar != null ? (
+              <div className="mb-3 flex items-center justify-between gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+                <span>Visit subtotal</span>
+                <span className="font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+                  R {visitTotalZar.toLocaleString("en-ZA")}
+                </span>
+              </div>
+            ) : null}
+            {tipZar > 0 ? (
+              <div className="mb-3 flex items-center justify-between gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+                <span>Tip</span>
+                <span className="font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+                  R {tipZar.toLocaleString("en-ZA")}
+                </span>
+              </div>
+            ) : null}
+            {displayDiscountLines.length > 0 ? (
+              <ul className="mb-3 space-y-2.5 border-b border-zinc-200/80 pb-3 dark:border-zinc-700/80">
+                {displayDiscountLines.map((line) => (
+                  <li
+                    key={`${line.id}-${line.label}`}
+                    className="flex items-start justify-between gap-3 text-sm leading-snug"
+                  >
+                    <span className="min-w-0 flex-1 font-medium text-emerald-800 dark:text-emerald-300/95">
+                      {line.label}
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                      −R {line.amount_zar.toLocaleString("en-ZA")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Total paid</span>
+              <span className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">
+                {totalPaidZar != null ? `R ${totalPaidZar.toLocaleString("en-ZA")}` : "—"}
+                {statusData.currency ? (
+                  <span className="ml-1.5 align-middle text-xs font-medium text-zinc-500">{statusData.currency}</span>
+                ) : null}
+              </span>
+            </div>
+          </div>
+
+          {statusData.reference ? (
+            <div className="mt-5 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Booking reference</p>
+              <p className="mt-1 break-all font-mono text-xs leading-relaxed text-zinc-700 dark:text-zinc-200">
+                {statusData.reference}
+              </p>
+            </div>
+          ) : null}
+        </section>
+
+        <section
+          className="rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/40 sm:p-6"
+          aria-labelledby="cancel-change-heading"
+        >
+          <h2 id="cancel-change-heading" className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            Reschedule or cancel
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            {isGuest
+              ? "Guest booking — our team handles changes on WhatsApp or email."
+              : "Changes go through our team on WhatsApp or email."}{" "}
+            No login needed for these messages.
+          </p>
+          {statusData.reference ? (
+            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+              Include reference <span className="font-mono font-medium text-zinc-700 dark:text-zinc-300">{statusData.reference}</span> when you reach out.
+            </p>
+          ) : null}
+          <div className="mt-4">
+            <SupportContactLinks layout="row" />
+          </div>
+        </section>
+
+        {showGuestUpgrade ? (
+          <div className="rounded-2xl border border-blue-200/90 bg-gradient-to-br from-blue-50 to-white p-5 dark:border-blue-900/50 dark:from-blue-950/40 dark:to-zinc-950 md:p-6">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Save your details for next time</h3>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Create an account with the same email — track bookings and book faster next time.
+            </p>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">No spam. We&apos;ll send a secure link to your inbox.</p>
+            <button
+              type="button"
+              onClick={() => void handleSaveDetails()}
+              disabled={upgradeLoading}
+              className="mt-4 flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 disabled:opacity-60"
+            >
+              {upgradeLoading ? "Setting up your account…" : "Save my details for next time"}
+            </button>
+            <p className="mt-3 text-center text-sm">
+              <Link
+                href={`/auth/signup?redirect=${encodeURIComponent("/dashboard/bookings")}`}
+                className="font-medium text-primary hover:underline"
+              >
+                Or sign up with email &amp; password
+              </Link>
+            </p>
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">
           <button
             type="button"
-            onClick={() => void handleSaveDetails()}
-            disabled={upgradeLoading}
-            className="mt-4 flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            onClick={() => handleBookAgain()}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 sm:w-auto sm:min-w-[200px]"
           >
-            {upgradeLoading ? "Setting up your account…" : "Save my details for next time"}
+            Book this again
           </button>
-          <p className="mt-3 text-center text-sm">
+          {hasSession ? (
             <Link
-              href={`/auth/signup?redirect=${encodeURIComponent("/dashboard/bookings")}`}
-              className="font-medium text-primary hover:underline"
+              href="/dashboard/bookings"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 sm:w-auto sm:min-w-[160px]"
             >
-              Or sign up with email &amp; password
+              My bookings
             </Link>
-          </p>
-        </div>
-      ) : null}
-
-      <div className="rounded-xl border border-zinc-200/90 bg-white p-4 text-left shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60 md:p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Your booking summary
-        </h2>
-        <dl className="mt-4 space-y-3 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500 dark:text-zinc-400">Service</dt>
-            <dd className="text-right font-medium text-zinc-900 dark:text-zinc-100">{serviceLabel}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500 dark:text-zinc-400">Date &amp; time</dt>
-            <dd className="text-right font-medium text-zinc-900 dark:text-zinc-100">{when}</dd>
-          </div>
-          {locked?.location ? (
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Location</dt>
-              <dd className="max-w-[60%] text-right font-medium text-zinc-900 dark:text-zinc-100">
-                {locked.location}
-              </dd>
-            </div>
           ) : null}
-          {snap?.cleaner_name ? (
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Cleaner</dt>
-              <dd className="text-right font-medium text-zinc-900 dark:text-zinc-100">
-                {snap.cleaner_name}
-              </dd>
-            </div>
-          ) : null}
-          <div className="flex justify-between gap-4 border-t border-zinc-200/80 pt-3 dark:border-zinc-800">
-            <dt className="font-medium text-zinc-800 dark:text-zinc-200">Total paid</dt>
-            <dd className="text-right text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-              {totalPaidZar != null
-                ? `R ${totalPaidZar.toLocaleString("en-ZA")}`
-                : "—"}
-              {statusData.currency ? (
-                <span className="ml-1 text-xs font-normal text-zinc-500">{statusData.currency}</span>
-              ) : null}
-            </dd>
-          </div>
-        </dl>
-        {statusData.reference ? (
-          <p className="mt-4 font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
-            Ref: {statusData.reference}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-        <button
-          type="button"
-          onClick={() => handleBookAgain()}
-          className="inline-flex w-full max-w-xs justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 sm:w-auto"
-        >
-          Book this again in 10 seconds
-        </button>
-        {hasSession ? (
           <Link
-            href="/dashboard/bookings"
-            className="inline-flex w-full max-w-xs justify-center rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-800 dark:border-zinc-600 dark:text-zinc-100 sm:w-auto"
+            href="/"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-primary/25 bg-primary/10 px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/15 sm:w-auto sm:min-w-[140px]"
           >
-            My bookings
+            Home
           </Link>
-        ) : null}
-        <Link
-          href="/"
-          className="inline-flex w-full max-w-xs justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 sm:w-auto"
-        >
-          Home
-        </Link>
+        </div>
       </div>
     </BookingContainer>
   );

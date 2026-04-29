@@ -37,6 +37,7 @@ import {
 } from "@/lib/pricing/slotRevenueStrategy";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
+import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
 
 type LiveSlot = {
   time: string;
@@ -117,6 +118,12 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const pastHints = usePastBookingHints();
   const summaryState = step1 ?? (locked ? lockedToStep1State(locked) : null);
   const lockBaseState = step1 ?? (locked ? lockedToStep1State(locked) : null);
+  const { locationId: resolvedLocationId, cityId: resolvedCityId } = useBookingAvailabilityArea({
+    serviceAreaLocationId: lockBaseState?.serviceAreaLocationId,
+    serviceAreaCityId: lockBaseState?.serviceAreaCityId,
+    locationLabel: lockBaseState?.location,
+    allowFreeTextFallback: lockBaseState?.allowLocationTextFallback === true,
+  });
   const [rawSlots, setRawSlots] = useState<RawAvailabilitySlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
@@ -209,6 +216,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
         const params = new URLSearchParams();
         params.set("date", selectedDate);
         params.set("duration", String(Math.max(30, Math.round(canonicalDurationHours * 60))));
+        if (resolvedLocationId) params.set("locationId", resolvedLocationId);
         const res = await fetch(`/api/booking/time-slots?${params.toString()}`);
         const json = (await res.json()) as { slots?: RawAvailabilitySlot[]; error?: string };
         if (!active) return;
@@ -239,7 +247,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
     return () => {
       active = false;
     };
-  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey, canonicalDurationHours]);
+  }, [lockBaseState, selectedDate, vipTier, slotPricingDepsKey, canonicalDurationHours, resolvedLocationId]);
 
   useEffect(() => {
     autoLockRunRef.current = "";
@@ -298,6 +306,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
       if (!lockBaseState) return;
       const slot = liveSlots.find((s) => s.time === time);
       if (!slot) return;
+      const rawForTime = rawSlots.find((s) => s.time === time);
+      const slotLocationId =
+        rawForTime && typeof rawForTime.locationId === "string" && rawForTime.locationId.trim()
+          ? rawForTime.locationId.trim()
+          : resolvedLocationId;
       const res = await fetch("/api/booking/lock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -312,6 +325,13 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           time,
           cleanersCount: slot.cleanersCount,
           vipTier,
+          ...(resolvedLocationId
+            ? {
+                locationId: resolvedLocationId,
+                ...(slotLocationId ? { slotLocationId } : {}),
+                ...(resolvedCityId ? { cityId: resolvedCityId } : {}),
+              }
+            : {}),
         }),
       });
       const json = (await res.json()) as {
@@ -370,7 +390,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
         },
       });
     },
-    [lockBaseState, liveSlots, selectedDate, vipTier],
+    [lockBaseState, liveSlots, rawSlots, selectedDate, vipTier, resolvedLocationId, resolvedCityId],
   );
 
   useEffect(() => {

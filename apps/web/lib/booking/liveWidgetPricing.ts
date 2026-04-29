@@ -37,6 +37,10 @@ export type LiveWidgetPersistedState = {
   time: string;
   extras: string[];
   location: string;
+  /** From `/api/booking/service-locations` when user picks a suburb in the widget. */
+  serviceAreaLocationId?: string | null;
+  serviceAreaCityId?: string | null;
+  serviceAreaName?: string;
   quotedPriceZar: number;
   savedAt: string;
   /** When true, rooms/extras were not part of the homepage quote — booking step 1 owns final pricing. */

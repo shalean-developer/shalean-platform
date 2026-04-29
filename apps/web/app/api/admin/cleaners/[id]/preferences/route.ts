@@ -88,17 +88,20 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const [{ data: prefRow, error: prefErr }, { data: locRows, error: locErr }] = await Promise.all([
-    admin
-      .from("cleaner_preferences")
-      .select("cleaner_id, preferred_areas, preferred_services, preferred_time_blocks, is_strict, updated_at")
-      .eq("cleaner_id", id)
-      .maybeSingle(),
-    admin.from("locations").select("id, name, slug").order("name", { ascending: true }),
-  ]);
+  const [{ data: prefRow, error: prefErr }, { data: locRows, error: locErr }, { data: assignedRows, error: asErr }] =
+    await Promise.all([
+      admin
+        .from("cleaner_preferences")
+        .select("cleaner_id, preferred_areas, preferred_services, preferred_time_blocks, is_strict, updated_at")
+        .eq("cleaner_id", id)
+        .maybeSingle(),
+      admin.from("locations").select("id, name, slug").order("name", { ascending: true }),
+      admin.from("cleaner_locations").select("location_id").eq("cleaner_id", id),
+    ]);
 
   if (prefErr) return NextResponse.json({ error: prefErr.message }, { status: 500 });
   if (locErr) return NextResponse.json({ error: locErr.message }, { status: 500 });
+  if (asErr) return NextResponse.json({ error: asErr.message }, { status: 500 });
 
   const locationOptions = (locRows ?? []).map((r) => ({
     id: String((r as { id: string }).id),
@@ -111,10 +114,15 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     label: ADMIN_DISPATCH_SERVICE_LABELS[slug],
   }));
 
+  const assignedLocationIds = (assignedRows ?? [])
+    .map((r) => String((r as { location_id?: string }).location_id ?? "").trim())
+    .filter(Boolean);
+
   return NextResponse.json({
     preferences: prefRow ?? null,
     locationOptions,
     serviceOptions,
+    assignedLocationIds,
   });
 }
 

@@ -6,6 +6,24 @@ export const BOOKING_STEP_LS_KEY = "booking_step";
 /** Set when homepage draft could not be written (e.g. private mode). Booking UI shows a gentle notice. */
 export const BOOKING_NODRAFT_QUERY = "noDraft";
 
+/** Promo / coupon code carried through the funnel (e.g. `?promo=SAVE10`). */
+export const BOOKING_PROMO_QUERY = "promo";
+
+/** Safe subset for URL promo codes (matches client promo entry). */
+export function sanitizeBookingPromoParam(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const t = raw.trim();
+  if (t.length < 2 || t.length > 32) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(t)) return null;
+  return t.toUpperCase();
+}
+
+export function bookingFlowPromoExtra(promo: string | null | undefined): Record<string, string> | undefined {
+  const s = sanitizeBookingPromoParam(promo ?? null);
+  if (!s) return undefined;
+  return { [BOOKING_PROMO_QUERY]: s };
+}
+
 /** Five-step conversion flow (URL `?step=`). */
 export const BOOKING_FLOW_STEPS = ["entry", "quote", "details", "when", "checkout"] as const;
 export type BookingFlowStep = (typeof BOOKING_FLOW_STEPS)[number];

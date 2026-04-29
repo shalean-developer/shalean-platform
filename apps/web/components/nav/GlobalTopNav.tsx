@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -154,8 +155,15 @@ export function GlobalTopNav() {
   return (
     <header className="sticky top-0 z-50 border-b border-blue-100 bg-white/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="shrink-0 text-sm font-bold tracking-tight text-zinc-900 sm:text-base">
-          Shalean<span className="text-blue-600">.</span>
+        <Link href="/" className="flex shrink-0 items-center" aria-label="Shalean home">
+          <Image
+            src="/images/shalean-logo.png"
+            alt="Shalean Cleaning Services"
+            width={152}
+            height={40}
+            className="h-8 w-auto max-w-[min(168px,52vw)] sm:h-9 sm:max-w-[180px]"
+            priority
+          />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">

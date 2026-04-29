@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { forwardRef, startTransition, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,11 @@ import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTota
 import { readGuestUserFromStorage, writeGuestUserToStorage } from "@/lib/booking/guestUserStorage";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
+import {
+  BOOKING_PROMO_QUERY,
+  sanitizeBookingPromoParam,
+} from "@/lib/booking/bookingFlow";
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { bookingCopy } from "@/lib/booking/copy";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import {
@@ -95,6 +100,9 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   },
   ref,
 ) {
+  const searchParams = useSearchParams();
+  const { bookingHref } = useBookingFlow();
+  const urlPromoAppliedRef = useRef(false);
   const { catalog, canonicalTotalZar } = useBookingPrice();
   const [tip, setTip] = useState(0);
   const [customMode, setCustomMode] = useState(false);
@@ -108,6 +116,23 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     description: string;
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (urlPromoAppliedRef.current) return;
+    const code = sanitizeBookingPromoParam(searchParams.get(BOOKING_PROMO_QUERY));
+    if (!code) return;
+    const result = getPromoDiscountZar(code, locked.finalPrice);
+    if (!result) return;
+    urlPromoAppliedRef.current = true;
+    setPromoInput(code);
+    setPromoApplied({
+      code,
+      discountZar: result.discountZar,
+      description: result.description,
+    });
+    setPromoError(null);
+  }, [searchParams, locked.finalPrice]);
+
   const [referralDiscount, setReferralDiscount] = useState<{
     code: string;
     discountZar: number;
@@ -470,7 +495,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
       typeof window !== "undefined"
         ? window.location.origin
         : envOrigin || "https://www.shalean.co.za";
-    const redirectTo = origin ? `${origin}${bookingFlowHref("checkout")}` : undefined;
+    const redirectTo = origin ? `${origin}${bookingHref("checkout")}` : undefined;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,
     });
@@ -844,43 +869,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
         </p>
       </section>
 
-      {checkoutPromoInSidebar && promoTipPortalEl
-        ? createPortal(
-            <div className="space-y-4 text-sm text-zinc-900 dark:text-zinc-100">
-              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">Add promo or tip (optional)</p>
-              {promoTipFields}
-            </div>,
-            promoTipPortalEl,
-          )
-        : null}
-
-      {!checkoutPromoInSidebar ? (
-        <section
-          aria-labelledby="optional-heading"
-          className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60"
-        >
-          <button
-            type="button"
-            id="optional-heading"
-            onClick={() => setPromoOpen((o) => !o)}
-            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50"
-            aria-expanded={promoOpen}
-          >
-            <span>Add promo or tip (optional)</span>
-            <ChevronDown
-              className={[
-                "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
-                promoOpen ? "rotate-180" : "",
-              ].join(" ")}
-              aria-hidden
-            />
-          </button>
-          {promoOpen ? (
-            <div className="space-y-4 border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">{promoTipFields}</div>
-          ) : null}
-        </section>
-      ) : null}
-
       <Dialog open={contactDialogOpen} onOpenChange={handleContactDialogOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -955,6 +943,43 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {checkoutPromoInSidebar && promoTipPortalEl
+        ? createPortal(
+            <div className="space-y-4 text-sm text-zinc-900 dark:text-zinc-100">
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">Add promo or tip (optional)</p>
+              {promoTipFields}
+            </div>,
+            promoTipPortalEl,
+          )
+        : null}
+
+      {!checkoutPromoInSidebar ? (
+        <section
+          aria-labelledby="optional-heading"
+          className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60"
+        >
+          <button
+            type="button"
+            id="optional-heading"
+            onClick={() => setPromoOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50"
+            aria-expanded={promoOpen}
+          >
+            <span>Add promo or tip (optional)</span>
+            <ChevronDown
+              className={[
+                "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
+                promoOpen ? "rotate-180" : "",
+              ].join(" ")}
+              aria-hidden
+            />
+          </button>
+          {promoOpen ? (
+            <div className="space-y-4 border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">{promoTipFields}</div>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 });

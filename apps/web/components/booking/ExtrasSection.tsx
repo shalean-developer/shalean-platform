@@ -228,19 +228,13 @@ export function ExtrasSection({ state, blockedExtras, setState }: ExtrasSectionP
 
   return (
     <div className="w-full max-w-none min-w-0 space-y-8">
-      {state.extras.length === 0 ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Tap a circle to add an extra — your total updates live.</p>
-      ) : null}
       {blockedExtras.size > 0 ? (
         <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
           Some add-ons aren&apos;t available for this service so we can keep the visit focused and efficient.
         </p>
       ) : null}
       {sections.map((section) => (
-        <div key={section.id} className="space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            {section.title}
-          </p>
+        <div key={section.id} className="min-w-0">
           <div className="grid grid-cols-3 justify-items-start gap-x-3 gap-y-8 sm:grid-cols-4 sm:gap-x-4 lg:grid-cols-6">
             {section.extraIds.map((id) => {
               const row = catalog.extras[id];

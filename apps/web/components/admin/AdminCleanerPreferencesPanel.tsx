@@ -27,9 +27,7 @@ export function AdminCleanerPreferencesPanel({ cleanerId, onToast }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [locationOptions, setLocationOptions] = useState<AdminCleanerPreferencesResponse["locationOptions"]>([]);
   const [serviceOptions, setServiceOptions] = useState<AdminCleanerPreferencesResponse["serviceOptions"]>([]);
-  const [selectedAreas, setSelectedAreas] = useState<Set<string>>(new Set());
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [timeBlocks, setTimeBlocks] = useState<PreferredTimeBlock[]>([]);
   const [isStrict, setIsStrict] = useState(false);
@@ -39,17 +37,14 @@ export function AdminCleanerPreferencesPanel({ cleanerId, onToast }: Props) {
     setError(null);
     try {
       const data = await fetchAdminCleanerPreferences(cleanerId);
-      setLocationOptions(data.locationOptions);
       setServiceOptions(data.serviceOptions);
       const p = data.preferences;
       if (p) {
-        setSelectedAreas(new Set((p.preferred_areas ?? []).map(String)));
         setSelectedServices(new Set((p.preferred_services ?? []).map((s) => String(s).toLowerCase())));
         const blocks = Array.isArray(p.preferred_time_blocks) ? (p.preferred_time_blocks as PreferredTimeBlock[]) : [];
         setTimeBlocks(blocks.length ? blocks : []);
         setIsStrict(Boolean(p.is_strict));
       } else {
-        setSelectedAreas(new Set());
         setSelectedServices(new Set());
         setTimeBlocks([]);
         setIsStrict(false);
@@ -64,15 +59,6 @@ export function AdminCleanerPreferencesPanel({ cleanerId, onToast }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const toggleArea = (id: string) => {
-    setSelectedAreas((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const toggleService = (slug: string) => {
     setSelectedServices((prev) => {
@@ -107,7 +93,7 @@ export function AdminCleanerPreferencesPanel({ cleanerId, onToast }: Props) {
         }))
         .filter((b) => /^\d{2}:\d{2}$/.test(b.start) && /^\d{2}:\d{2}$/.test(b.end));
       await saveAdminCleanerPreferences(cleanerId, {
-        preferred_areas: [...selectedAreas],
+        preferred_areas: [],
         preferred_services: [...selectedServices],
         preferred_time_blocks: blocks,
         is_strict: isStrict,
@@ -134,37 +120,13 @@ export function AdminCleanerPreferencesPanel({ cleanerId, onToast }: Props) {
     <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
       <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Dispatch preferences</h3>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-        Used in dispatch scoring (and strict mode excludes non-matching jobs). Does not change payouts or cleaner app.
+        Dispatch scoring only. Service areas are managed in Working areas; calendar rows in Weekly availability. Strict
+        mode applies to services and preferred time blocks below (not geography).
       </p>
 
       {error ? <p className="mt-2 text-sm text-rose-700 dark:text-rose-400">{error}</p> : null}
 
       <div className="mt-4 space-y-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Preferred areas</p>
-          <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
-            {locationOptions.length === 0 ? (
-              <p className="text-sm text-zinc-500">No locations in database.</p>
-            ) : (
-              <ul className="space-y-1">
-                {locationOptions.map((loc) => (
-                  <li key={loc.id}>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                      <input
-                        type="checkbox"
-                        checked={selectedAreas.has(loc.id)}
-                        onChange={() => toggleArea(loc.id)}
-                        className="rounded border-zinc-400"
-                      />
-                      <span>{loc.name}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Preferred services</p>
           <div className="mt-2 flex flex-wrap gap-3">
@@ -247,7 +209,7 @@ export function AdminCleanerPreferencesPanel({ cleanerId, onToast }: Props) {
 
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
           <input type="checkbox" checked={isStrict} onChange={(e) => setIsStrict(e.target.checked)} className="rounded border-zinc-400" />
-          Strict mode (exclude this cleaner from jobs that do not match configured preferences)
+          Strict mode (exclude when service or preferred time blocks do not match)
         </label>
       </div>
 

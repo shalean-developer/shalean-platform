@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type RefCallback } from "react";
 import { bookingCopy } from "@/lib/booking/copy";
 import { cn } from "@/lib/utils";
 
@@ -42,12 +42,13 @@ function SlotHoldCountdown({ lockedAt, align }: { lockedAt: string; align: "cent
     );
   }
 
-  const minutes = Math.max(1, Math.ceil(remainingSec / 60));
+  const mm = Math.floor(remainingSec / 60);
+  const ss = remainingSec % 60;
+  const clock = `${mm}:${String(ss).padStart(2, "0")}`;
   return (
     <p className={cn("text-[11px] leading-snug text-zinc-600 dark:text-zinc-400", alignClass)}>
-      <span className="font-semibold text-zinc-800 dark:text-zinc-100">
-        ~{minutes} min left at this price
-      </span>
+      <span className="font-semibold text-zinc-800 dark:text-zinc-100">⏳ Price locked for </span>
+      <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{clock}</span>
       <span className="text-zinc-500 dark:text-zinc-500"> · </span>
       <span>Checkout usually under 1 minute</span>
     </p>
@@ -69,7 +70,7 @@ export type CheckoutSideBadgeProps = {
   continueLabel: string;
   className?: string;
   /** Desktop: mount node for promo/tip UI (filled via portal from the payment form). */
-  promoTipHostRef?: React.RefCallback<HTMLDivElement | null>;
+  promoTipHostRef?: RefCallback<HTMLDivElement | null>;
 };
 
 export function CheckoutSideBadge({
@@ -102,10 +103,6 @@ export function CheckoutSideBadge({
       )}
       aria-label="Checkout summary"
     >
-      {mode === "desktop" && promoTipHostRef ? (
-        <div ref={promoTipHostRef} className="min-h-0 border-b border-zinc-100 pb-4 dark:border-zinc-800" />
-      ) : null}
-
       <p
         className="rounded-lg border border-amber-200/90 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
         role="status"
@@ -121,6 +118,11 @@ export function CheckoutSideBadge({
             <p className="text-xs text-zinc-500 dark:text-zinc-400">{bookingCopy.stickyBar.total}</p>
             <p className="mt-0.5 text-xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{amountLine}</p>
           </div>
+          <ul className="space-y-1.5 border-t border-zinc-100 pt-3 text-[11px] leading-snug text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
+            {copy.confirmTrustBullets.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
           <div className="flex items-stretch gap-2">
             <button
               type="button"
@@ -147,8 +149,17 @@ export function CheckoutSideBadge({
               {paying ? "Redirecting…" : continueLabel}
             </button>
           </div>
+          {promoTipHostRef ? (
+            <div ref={promoTipHostRef} className="min-h-0 border-t border-zinc-100 pt-4 dark:border-zinc-800" />
+          ) : null}
         </>
-      ) : null}
+      ) : (
+        <ul className="space-y-1.5 text-[11px] leading-snug text-zinc-700 dark:text-zinc-300">
+          {copy.confirmTrustBullets.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="space-y-1 border-t border-zinc-100 pt-3 dark:border-zinc-800">
         <p className="text-left text-xs font-medium text-zinc-700 dark:text-zinc-300">{copy.subtext}</p>

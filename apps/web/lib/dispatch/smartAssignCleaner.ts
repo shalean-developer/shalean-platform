@@ -22,8 +22,8 @@ import { getDistanceKm } from "@/lib/dispatch/routeOptimization";
 import { getDefaultTravelTimeProvider } from "@/lib/dispatch/travelProvider";
 import type { TravelTimeProvider } from "@/lib/dispatch/travelProviderTypes";
 import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
-import { isBookingTimeInWindow } from "@/lib/dispatch/timeWindow";
-import type { AvailabilityRow, CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
+import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
+import type { CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { predictAcceptanceProbability } from "@/lib/marketplace-intelligence/acceptanceProbability";
@@ -477,45 +477,35 @@ export async function findSmartDispatchCandidates(
     return emptyFindSmartDispatchCandidates();
   }
 
-  const { data: availRows, error: avErr } = await supabase
-    .from("cleaner_availability")
-    .select("cleaner_id, date, start_time, end_time, is_available")
-    .eq("date", dateYmd)
-    .eq("is_available", true);
-
-  if (avErr || !availRows?.length) {
-    if (avErr) {
-      await reportOperationalIssue("warn", "findSmartDispatchCandidates", `availability: ${avErr.message}`, {
-        dateYmd,
-        locationId,
-      });
-    }
-    return emptyFindSmartDispatchCandidates();
-  }
-
-  const eligibleFromWindow = new Set<string>();
-  for (const row of availRows as AvailabilityRow[]) {
-    if (!row.cleaner_id) continue;
-    if (isBookingTimeInWindow(timeHm, row.start_time, row.end_time)) {
-      eligibleFromWindow.add(row.cleaner_id);
-    }
-  }
-
-  if (eligibleFromWindow.size === 0) return emptyFindSmartDispatchCandidates();
-
   const cleanerLocationIds = await resolveLocationIdsForCleaners(supabase, locationId, searchExpansion);
+  const expandedForEligibility =
+    searchExpansion === "broadcast"
+      ? null
+      : cleanerLocationIds?.length
+        ? cleanerLocationIds
+        : [locationId];
+
+  const eligibleCards = await getEligibleCleaners(supabase, {
+    date: dateYmd,
+    startTime: normalizeHm(timeHm),
+    durationMinutes: newJobDuration,
+    locationId,
+    locationExpandedIds: expandedForEligibility,
+    limit: 500,
+  });
+  const eligibleFromUnified = new Set(eligibleCards.map((c) => c.id));
+
+  if (eligibleFromUnified.size === 0) return emptyFindSmartDispatchCandidates();
 
   let cleanersQuery = supabase
     .from("cleaners")
     .select(
-      "id, full_name, rating, jobs_completed, review_count, status, location_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema, needs_quality_review",
+      "id, full_name, rating, jobs_completed, review_count, status, location_id, city_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema, needs_quality_review",
     )
     .neq("status", "offline")
-    .in("id", [...eligibleFromWindow]);
+    .eq("is_available", true)
+    .in("id", [...eligibleFromUnified]);
 
-  if (searchExpansion !== "broadcast" && cleanerLocationIds?.length) {
-    cleanersQuery = cleanersQuery.in("location_id", cleanerLocationIds);
-  }
   if (cityId) {
     cleanersQuery = cleanersQuery.eq("city_id", cityId);
   }

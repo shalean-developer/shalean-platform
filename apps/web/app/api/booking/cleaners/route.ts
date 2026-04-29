@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const selectedDate = url.searchParams.get("date") ?? "";
   const selectedTime = url.searchParams.get("time") ?? "";
+  const locationId = url.searchParams.get("locationId")?.trim() ?? url.searchParams.get("location_id")?.trim() ?? null;
   const userLatRaw = url.searchParams.get("lat");
   const userLngRaw = url.searchParams.get("lng");
   const durationRaw = Number(url.searchParams.get("duration"));
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
       selectedTime,
       durationMinutes,
       limit: 5,
+      locationId,
     });
     return NextResponse.json({ cleaners });
   } catch (error) {

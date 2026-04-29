@@ -118,10 +118,6 @@ export function cleanerPreferenceStrictExcludesJob(
   job: JobPreferenceContext,
 ): boolean {
   if (!pref.is_strict) return false;
-  const areas = normAreas(pref.preferred_areas);
-  if (areas.length > 0 && !areas.includes(String(job.jobLocationId).trim())) {
-    return true;
-  }
   const services = normServices(pref.preferred_services);
   const svc = (job.jobServiceSlug ?? "").trim().toLowerCase();
   if (services.length > 0 && (!svc || !services.includes(svc))) {

@@ -14,27 +14,27 @@ const services = ["Standard cleaning", "Deep cleaning", "Airbnb cleaning", "Move
 const serviceDetails = [
   {
     title: "Standard Home Cleaning",
-    href: "/services/standard-cleaning",
+    href: "/services/standard-cleaning-cape-town",
     body: "Recurring maintenance cleaning for kitchens, bathrooms, floors, bedrooms, and high-touch surfaces.",
   },
   {
     title: "Deep Cleaning Services",
-    href: "/services/deep-cleaning",
+    href: "/services/deep-cleaning-cape-town",
     body: "A more detailed reset for built-up dust, grout, fixtures, cupboards, and areas that need extra time.",
   },
   {
     title: "Airbnb Cleaning",
-    href: "/services/airbnb-cleaning",
+    href: "/services/airbnb-cleaning-cape-town",
     body: "Guest-ready turnover cleaning for short-stay properties, including bathrooms, kitchens, beds, and presentation details.",
   },
   {
     title: "Move Out Cleaning",
-    href: "/services/move-out-cleaning",
+    href: "/services/move-out-cleaning-cape-town",
     body: "Handover-ready cleaning for tenants, landlords, and families preparing a property before or after a move.",
   },
   {
     title: "Carpet Cleaning",
-    href: "/services/carpet-cleaning",
+    href: "/services/carpet-cleaning-cape-town",
     body: "Refresh high-traffic rugs and carpets as part of a wider cleaning plan for your home.",
   },
 ] as const;
@@ -68,6 +68,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical: `/cleaning-services/${loc.slug}`,
     },
+    robots: { index: false, follow: true },
   };
 }
 
@@ -109,13 +110,6 @@ export default async function LocationCleaningPage({ params }: Props) {
     url: `https://www.shalean.co.za/cleaning-services/${loc.slug}`,
     description: `Professional home cleaning services in ${loc.name}.`,
     serviceType: services,
-    aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", reviewCount: "500" },
-    review: locationReviews.map((review) => ({
-        "@type": "Review",
-        author: { "@type": "Person", name: review.author },
-        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
-        reviewBody: review.body,
-      })),
   };
 
   const faqJsonLd = {

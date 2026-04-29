@@ -168,7 +168,7 @@ async function expectTeamAssignThrows(
 
 describe("assignTeamToBooking edge cases", () => {
   beforeEach(() => {
-    vi.spyOn(systemLog, "logSystemEvent").mockImplementation(() => {});
+    vi.spyOn(systemLog, "logSystemEvent").mockImplementation(async () => {});
   });
   afterEach(() => {
     vi.useRealTimers();

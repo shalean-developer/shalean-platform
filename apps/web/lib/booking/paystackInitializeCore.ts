@@ -6,7 +6,10 @@ import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTota
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
-import type { BookingCustomerAuthType } from "@/lib/booking/paystackChargeTypes";
+import type {
+  BookingCustomerAuthType,
+  BookingSnapshotDiscountLineV1,
+} from "@/lib/booking/paystackChargeTypes";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
 import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
@@ -19,7 +22,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { metrics } from "@/lib/metrics/counters";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
-import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
+import { resolveBookingLocationContext } from "@/lib/booking/resolveLocationId";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
@@ -42,8 +45,11 @@ function clamp(n: number, min: number, max: number): number {
 
 function buildBookingSnapshot(params: {
   locked: LockedBooking;
+  visitTotalZar: number;
   tip: number;
   discountZar: number;
+  discountLines: BookingSnapshotDiscountLineV1[];
+  planDiscountZar: number;
   promoCode: string;
   totalZar: number;
   cleanerId: string | null;
@@ -60,15 +66,17 @@ function buildBookingSnapshot(params: {
   return {
     v: 1,
     locked: params.locked,
+    visit_total_zar: params.visitTotalZar,
     tip_zar: params.tip,
     discount_zar: params.discountZar,
+    discount_lines: params.discountLines.length > 0 ? params.discountLines : undefined,
     promo_code: params.promoCode || null,
     total_zar: params.totalZar,
     cleaner_id: params.cleanerId,
     cleaner_name: params.cleanerName,
     subscription:
       params.subscriptionFrequency != null
-        ? { frequency: params.subscriptionFrequency, discount_zar: params.discountZar }
+        ? { frequency: params.subscriptionFrequency, discount_zar: params.planDiscountZar }
         : null,
     customer: params.customer,
   };
@@ -277,19 +285,44 @@ export async function processPaystackInitializeBody(
 
   const promoCode = typeof b.promoCode === "string" ? b.promoCode.trim() : "";
   const promo = promoCode ? getPromoDiscountZar(promoCode, visitZar) : null;
-  let discountZar = promo ? promo.discountZar : 0;
+  const promoDiscountZar = promo?.discountZar ?? 0;
 
   const referralCode = typeof b.referralCode === "string" ? b.referralCode.trim().toUpperCase() : "";
-  if (referralCode) {
-    discountZar += 50;
-  }
+  const referralDiscountZar = referralCode ? 50 : 0;
 
   const freq = locked.cleaningFrequency ?? "one_time";
+  let planDiscountZar = 0;
   if (freq === "weekly") {
-    discountZar += Math.round(visitZar * 0.1);
+    planDiscountZar = Math.round(visitZar * 0.1);
   } else if (freq === "biweekly") {
-    discountZar += Math.round(visitZar * 0.05);
+    planDiscountZar = Math.round(visitZar * 0.05);
   }
+
+  const discountLines: BookingSnapshotDiscountLineV1[] = [];
+  if (promoDiscountZar > 0 && promoCode) {
+    const desc = promo?.description;
+    discountLines.push({
+      id: "promo",
+      label: desc
+        ? `Promo · ${promoCode.trim().toUpperCase()} — ${desc}`
+        : `Promo · ${promoCode.trim().toUpperCase()}`,
+      amount_zar: promoDiscountZar,
+    });
+  }
+  if (referralDiscountZar > 0) {
+    discountLines.push({ id: "referral", label: "Referral credit", amount_zar: referralDiscountZar });
+  }
+  if (planDiscountZar > 0) {
+    const planLabel =
+      freq === "weekly"
+        ? "Weekly plan (10% off this visit)"
+        : freq === "biweekly"
+          ? "Every 2 weeks plan (5% off this visit)"
+          : "Plan savings";
+    discountLines.push({ id: "plan", label: planLabel, amount_zar: planDiscountZar });
+  }
+
+  const discountZar = promoDiscountZar + referralDiscountZar + planDiscountZar;
 
   /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
   const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
@@ -451,8 +484,11 @@ export async function processPaystackInitializeBody(
 
   const snapshot = buildBookingSnapshot({
     locked,
+    visitTotalZar: visitZar,
     tip,
     discountZar,
+    discountLines,
+    planDiscountZar,
     promoCode,
     totalZar,
     cleanerId,
@@ -464,7 +500,7 @@ export async function processPaystackInitializeBody(
   if (createdPendingBookingId && checkout.serverQuote) {
     const flat = buildSnapshotFlat(locked);
     const bookingSnapshotMerged = mergeSnapshotWithFlat(snapshot, flat);
-    const locationContext = await resolveLocationContextFromLabel(admin, locked.location?.trim() ?? null);
+    const locationContext = await resolveBookingLocationContext(admin, locked);
     const locationId = locationContext.locationId;
     const cityId = locationContext.cityId;
     const ds = await getDemandSupplySnapshotByCity(admin, cityId);

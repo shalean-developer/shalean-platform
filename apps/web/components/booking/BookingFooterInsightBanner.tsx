@@ -9,12 +9,10 @@ const storageKey = (variant: "quote" | "details") => `shalean-footer-insight-dis
 
 export type BookingFooterInsightBannerProps = {
   variant: "quote" | "details";
-  rooms: number;
-  extraRooms: number;
   onDismiss: () => void;
 };
 
-export function BookingFooterInsightBanner({ variant, rooms, extraRooms, onDismiss }: BookingFooterInsightBannerProps) {
+export function BookingFooterInsightBanner({ variant, onDismiss }: BookingFooterInsightBannerProps) {
   const [entered, setEntered] = useState(false);
   const copy = bookingCopy.footerInsight;
 
@@ -31,8 +29,6 @@ export function BookingFooterInsightBanner({ variant, rooms, extraRooms, onDismi
     }
     onDismiss();
   }, [onDismiss, variant]);
-
-  const showExtraRoomsNudge = variant === "details" && rooms <= 2 && extraRooms === 0;
 
   return (
     <div
@@ -61,14 +57,6 @@ export function BookingFooterInsightBanner({ variant, rooms, extraRooms, onDismi
           </p>
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-white/85 sm:text-xs">
             {copy.finalPriceNote} {copy.flexibleTime}
-            {showExtraRoomsNudge ? (
-              <>
-                {" "}
-                <span className="font-semibold text-white">{copy.extraRoomsTitle}</span> {copy.extraRoomsBodyBefore}
-                <span className="font-bold">{copy.extraRoomsEmphasis}</span>
-                {copy.extraRoomsBodyAfter}
-              </>
-            ) : null}
           </p>
         </div>
 

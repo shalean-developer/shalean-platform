@@ -17,6 +17,8 @@ import {
 } from "@/lib/booking/extraRoomsSelectOptions";
 import { todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import { cn } from "@/lib/utils";
+import { ServiceAreaPicker } from "@/components/booking/ServiceAreaPicker";
+import { bookingCopy } from "@/lib/booking/copy";
 
 export type ConversionBookingStep1Props = {
   form: ConversionBookingFormState;
@@ -122,6 +124,25 @@ export function ConversionBookingStep1({
         labelId="conversion-service-type-label"
         embedded
       />
+
+      <div className="space-y-2">
+        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Service area (suburb)</span>
+        <ServiceAreaPicker
+          id="conversion-service-area"
+          value={form.serviceAreaLocationId}
+          emptyListMessage={bookingCopy.entry.emptyServiceAreaCoverage}
+          onChange={(next) =>
+            setForm((p) => ({
+              ...p,
+              serviceAreaLocationId: next.locationId,
+              serviceAreaCityId: next.cityId,
+              serviceAreaName: next.name,
+            }))
+          }
+          placeholder="Choose your suburb"
+          className="h-12 rounded-xl text-base"
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <FloatingSelect

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
-import { getLocationsByCity } from "@/lib/locations";
-import { SERVICES } from "@/lib/services";
+import { PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import { BLOG_POST_SLUGS } from "@/lib/blog/posts";
+import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 
 const BASE = "https://www.shalean.co.za";
 
@@ -10,12 +11,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const entries: MetadataRoute.Sitemap = [
     { url: BASE, lastModified },
     { url: `${BASE}/services`, lastModified },
-    ...SERVICES.map((s) => ({
-      url: `${BASE}/services/${s.slug}`,
+    { url: `${BASE}/blog`, lastModified },
+    ...BLOG_POST_SLUGS.map((slug) => ({
+      url: `${BASE}/blog/${slug}`,
       lastModified,
     })),
-    ...getLocationsByCity("cape-town").map((loc) => ({
-      url: `${BASE}/cleaning-services/${loc.slug}`,
+    ...PROGRAMMATIC_POSTS.map((post) => ({
+      url: `${BASE}/blog/${post.slug}`,
+      lastModified,
+    })),
+    ...Object.values(CAPE_TOWN_SERVICE_SEO).map((p) => ({
+      url: `${BASE}${p.path}`,
+      lastModified,
+    })),
+    ...Object.values(LOCATION_SEO_PAGES).map((p) => ({
+      url: `${BASE}${p.path}`,
       lastModified,
     })),
   ];

@@ -61,6 +61,12 @@ export function BookingSummary({
           <dt className="text-zinc-500 dark:text-zinc-400">Extra rooms</dt>
           <dd className="font-medium tabular-nums">{form.extraRooms >= 5 ? "5+" : form.extraRooms}</dd>
         </div>
+        {form.serviceAreaName.trim() ? (
+          <div className="flex justify-between gap-3">
+            <dt className="text-zinc-500 dark:text-zinc-400">Service area</dt>
+            <dd className="max-w-[55%] text-right text-xs font-medium leading-snug">{form.serviceAreaName.trim()}</dd>
+          </div>
+        ) : null}
         <div className="flex justify-between gap-3">
           <dt className="text-zinc-500 dark:text-zinc-400">Date &amp; time</dt>
           <dd className="text-right font-medium">

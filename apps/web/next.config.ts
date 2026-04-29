@@ -24,6 +24,11 @@ const imageRemotePatterns = [
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: imageRemotePatterns,
+    /**
+     * Next 16+ requires local `next/image` src paths to match here.
+     * Omit `search` so optional `?v=` cache-bust query strings under `/images/**` are allowed.
+     */
+    localPatterns: [{ pathname: "/images/**" }, { pathname: "/marketing/**" }],
   },
   turbopack: {
     root: turbopackRoot,

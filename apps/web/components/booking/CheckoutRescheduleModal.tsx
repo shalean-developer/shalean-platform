@@ -19,6 +19,7 @@ import {
   type SlotPickInput,
 } from "@/lib/pricing/slotRevenueStrategy";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
 
 const INITIAL_VISIBLE_SLOTS = 9;
 const SLOT_START_MIN = 7 * 60;
@@ -86,6 +87,12 @@ export function CheckoutRescheduleModal({
   const { job: pricingJob, priceRawSlots, canonicalTotalZar, canonicalDurationHours } = useBookingPrice();
 
   const lockBaseState = step1 ?? (locked ? lockedToStep1State(locked) : null);
+  const { locationId: resolvedLocationId, cityId: resolvedCityId } = useBookingAvailabilityArea({
+    serviceAreaLocationId: lockBaseState?.serviceAreaLocationId,
+    serviceAreaCityId: lockBaseState?.serviceAreaCityId,
+    locationLabel: lockBaseState?.location,
+    allowFreeTextFallback: lockBaseState?.allowLocationTextFallback === true,
+  });
 
   const allDateValues = useMemo(() => generateNextDates(BOOKING_CALENDAR_DAYS).map((d) => d.value), []);
   const lockedDateInRange = locked?.date && allDateValues.includes(locked.date) ? locked.date : null;
@@ -141,6 +148,7 @@ export function CheckoutRescheduleModal({
           const params = new URLSearchParams();
           params.set("date", selectedDate);
           params.set("duration", String(durationMinutesForApi));
+          if (resolvedLocationId) params.set("locationId", resolvedLocationId);
           const url = `/api/booking/time-slots?${params.toString()}`;
           let lastSlots: RawAvailabilitySlot[] = [];
           let ok = false;
@@ -178,7 +186,7 @@ export function CheckoutRescheduleModal({
       window.clearTimeout(debounceTimer);
       setSlotsLoading(false);
     };
-  }, [open, lockBaseState, pricingJob, selectedDate, durationMinutesForApi]);
+  }, [open, lockBaseState, pricingJob, selectedDate, durationMinutesForApi, resolvedLocationId]);
 
   const liveSlots: LiveSlot[] = useMemo(() => priceRawSlots(rawSlots), [priceRawSlots, rawSlots]);
 
@@ -214,6 +222,10 @@ export function CheckoutRescheduleModal({
       const rawSlot = rawSlots.find((s) => s.time === time);
       if (!rawSlot?.available) return;
       const cleanersCount = Math.max(0, Math.round(rawSlot.cleanersCount));
+      const slotLocationId =
+        typeof rawSlot.locationId === "string" && rawSlot.locationId.trim()
+          ? rawSlot.locationId.trim()
+          : resolvedLocationId;
       const body = JSON.stringify({
         service: lockBaseState.service,
         service_type: lockBaseState.service_type,
@@ -225,6 +237,13 @@ export function CheckoutRescheduleModal({
         time,
         cleanersCount,
         vipTier,
+        ...(resolvedLocationId
+          ? {
+              locationId: resolvedLocationId,
+              ...(slotLocationId ? { slotLocationId } : {}),
+              ...(resolvedCityId ? { cityId: resolvedCityId } : {}),
+            }
+          : {}),
       });
       let lastErr = "Could not lock this time.";
       for (let attempt = 0; attempt < 4; attempt++) {
@@ -313,7 +332,7 @@ export function CheckoutRescheduleModal({
       }
       setSlotHint("That time may have just been taken — pick another slot below.");
     },
-    [lockBaseState, rawSlots, selectedDate, vipTier, onLocked],
+    [lockBaseState, rawSlots, selectedDate, vipTier, onLocked, resolvedLocationId, resolvedCityId],
   );
 
   function slotCardProps(time: string) {

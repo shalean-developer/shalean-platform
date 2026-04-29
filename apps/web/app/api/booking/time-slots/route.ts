@@ -16,6 +16,8 @@ export type TimeSlotAvailability = {
   time: string;
   available: boolean;
   cleanersCount: number;
+  /** Area the slot grid was built for — must match `locationId` on lock when both are sent. */
+  locationId: string | null;
 };
 
 export const runtime = "nodejs";
@@ -35,6 +37,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const selectedDate = url.searchParams.get("date") ?? "";
   const durationParam = url.searchParams.get("duration");
+  const locationId = url.searchParams.get("locationId")?.trim() ?? url.searchParams.get("location_id")?.trim() ?? null;
   const latRaw = Number(url.searchParams.get("lat"));
   const lngRaw = Number(url.searchParams.get("lng"));
 
@@ -82,6 +85,7 @@ export async function GET(request: Request) {
       startHour: 7,
       endHour: 18,
       stepMinutes: 30,
+      locationId,
     });
 
     return NextResponse.json({ slots });

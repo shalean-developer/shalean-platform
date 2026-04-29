@@ -20,6 +20,13 @@ export function buildConversionLockedBooking(form: ConversionBookingFormState): 
     time: form.time,
     extras: form.extras,
     location: form.address.trim().slice(0, 500),
+    ...(form.serviceAreaLocationId
+      ? {
+          serviceAreaLocationId: form.serviceAreaLocationId,
+          serviceAreaCityId: form.serviceAreaCityId,
+          serviceAreaName: form.serviceAreaName,
+        }
+      : {}),
   };
 
   const step1 = finalizeWidgetStep1(intake);

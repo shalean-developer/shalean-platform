@@ -1,20 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isBookingTimeInWindow, hmToMinutes } from "@/lib/dispatch/timeWindow";
+import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
+import { cleanerAreasAllowJob, jobFitsAvailabilityWindows } from "@/lib/booking/getEligibleCleaners";
+import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 
 export const DEFAULT_ASSIGN_JOB_DURATION_MIN = 240;
 
 type AvRow = { start_time: string; end_time: string; is_available: boolean };
 
-/** Mirrors admin assign route: booking time falls in an `is_available` window for that date. */
+/** @deprecated Use {@link jobFitsAvailabilityWindows} with job duration. */
 export function cleanerSlotMatchesCalendar(windows: AvRow[], bookingTimeHm: string): boolean {
-  const hm = bookingTimeHm.trim().slice(0, 5);
-  for (const w of windows) {
-    if (!w.is_available) continue;
-    if (isBookingTimeInWindow(hm, String(w.start_time).slice(0, 5), String(w.end_time).slice(0, 5))) {
-      return true;
-    }
-  }
-  return false;
+  const t = hmToMinutes(bookingTimeHm.trim().slice(0, 5));
+  if (t == null) return false;
+  return jobFitsAvailabilityWindows(windows, t, t + DEFAULT_ASSIGN_JOB_DURATION_MIN, !useStrictAvailability());
 }
 
 function intervalsOverlap(a0: number, a1: number, b0: number, b1: number): boolean {
@@ -26,7 +23,7 @@ function dayMinutes(hm: string | null | undefined): number | null {
   return hmToMinutes(hm.trim().slice(0, 5));
 }
 
-const ACTIVE = new Set(["pending", "assigned", "in_progress", "confirmed"]);
+const ACTIVE = new Set(["pending", "pending_payment", "assigned", "in_progress", "confirmed"]);
 
 /** Bookings that still consume capacity in the schedule for overlap / demand hints. */
 export const SCHEDULE_DEMAND_STATUSES = new Set([
@@ -43,9 +40,6 @@ export function effectiveJobDurationMinutes(row: { duration_minutes?: number | n
   return DEFAULT_ASSIGN_JOB_DURATION_MIN;
 }
 
-/**
- * If another job blocks this slot for the same cleaner/date, return busy-until (minutes from midnight).
- */
 export function busyUntilFromOverlappingJobs(
   bookingStartMin: number,
   bookingDurationMin: number,
@@ -54,10 +48,6 @@ export function busyUntilFromOverlappingJobs(
   return overlapBlockingDetail(bookingStartMin, bookingDurationMin, others).busyUntilMin;
 }
 
-/**
- * Busy-until (end of latest overlapping job) plus the time range of the job that drives that end
- * (for admin UI copy).
- */
 export function overlapBlockingDetail(
   bookingStartMin: number,
   bookingDurationMin: number,
@@ -85,30 +75,27 @@ export function overlapBlockingDetail(
 const NEXT_SLOT_STEP_MIN = 15;
 const NEXT_SLOT_SEARCH_END_MIN = 21 * 60;
 
-/**
- * Earliest HH:mm (same day, 15-minute grid) at or after `startFromMin` where this cleaner has
- * calendar coverage at start and no overlap with `others` for `durationMin`.
- */
 export function nextAvailableBookingStartHm(
   startFromMin: number,
   durationMin: number,
   windows: AvRow[],
   others: Array<{ time: string | null; duration_minutes?: number | null }>,
 ): string | null {
+  const strict = useStrictAvailability();
   let t = Math.ceil(startFromMin / NEXT_SLOT_STEP_MIN) * NEXT_SLOT_STEP_MIN;
   for (; t + durationMin <= NEXT_SLOT_SEARCH_END_MIN; t += NEXT_SLOT_STEP_MIN) {
-    const hm = formatMinutesAsHm(t);
-    if (!cleanerSlotMatchesCalendar(windows, hm)) continue;
+    const winObjs = windows.map((w) => ({
+      start_time: String(w.start_time).slice(0, 5),
+      end_time: String(w.end_time).slice(0, 5),
+      is_available: Boolean(w.is_available),
+    }));
+    if (!jobFitsAvailabilityWindows(winObjs, t, t + durationMin, strict)) continue;
     if (busyUntilFromOverlappingJobs(t, durationMin, others) != null) continue;
-    return hm;
+    return formatMinutesAsHm(t);
   }
   return null;
 }
 
-/**
- * How many bookings on the same day overlap this time window (demand statuses). Includes every
- * overlapping row (e.g. two customers at 10:00 → 2).
- */
 export async function countBookingsOverlappingDemandSlot(
   admin: SupabaseClient,
   params: { dateYmd: string; cityId: string | null; slotStartMin: number; slotDurationMin: number },
@@ -152,12 +139,9 @@ export type AssignEligibilityRow = {
   slotCalendarOk: boolean;
   overlapBlocked: boolean;
   busyUntilMin: number | null;
-  /** e.g. "10:00–13:30" for the job that extends busy-until (admin copy). */
   overlapJobRangeLabel: string | null;
-  /** Same-day next start (15m grid) with calendar + no overlap, when current slot is blocked (non-offline). */
   nextAvailableStartHm: string | null;
   offline: boolean;
-  /** Same gate as POST assign without force. */
   canAssignWithoutForce: boolean;
 };
 
@@ -169,11 +153,24 @@ export async function computeAssignEligibility(
     bookingTimeHm: string;
     durationMinutes: number;
     cleanerIds: string[];
+    /** Booking `location_id` when known. */
+    bookingLocationId?: string | null;
+    /** When set, overrides single-location expansion for eligibility. */
+    bookingLocationExpandedIds?: string[] | null;
   },
 ): Promise<Map<string, AssignEligibilityRow>> {
   const out = new Map<string, AssignEligibilityRow>();
-  const { bookingId, bookingDateYmd, bookingTimeHm, durationMinutes, cleanerIds } = params;
+  const {
+    bookingId,
+    bookingDateYmd,
+    bookingTimeHm,
+    durationMinutes,
+    cleanerIds,
+    bookingLocationId,
+    bookingLocationExpandedIds,
+  } = params;
   const startMin = dayMinutes(bookingTimeHm);
+  const strict = useStrictAvailability();
   if (!cleanerIds.length || startMin == null) {
     for (const id of cleanerIds) {
       out.set(id, {
@@ -189,16 +186,21 @@ export async function computeAssignEligibility(
     }
     return out;
   }
+  const slotEnd = startMin + durationMinutes;
 
   const { data: cleaners } = await admin
     .from("cleaners")
-    .select("id, status")
+    .select("id, status, location_id")
     .in("id", cleanerIds);
 
   const offlineById = new Map<string, boolean>();
+  const fallbackLocationById = new Map<string, string | null>();
   for (const c of cleaners ?? []) {
-    const row = c as { id?: string; status?: string | null };
-    if (row.id) offlineById.set(String(row.id), String(row.status ?? "").toLowerCase() === "offline");
+    const row = c as { id?: string; status?: string | null; location_id?: string | null };
+    if (row.id) {
+      offlineById.set(String(row.id), String(row.status ?? "").toLowerCase() === "offline");
+      fallbackLocationById.set(String(row.id), row.location_id ? String(row.location_id) : null);
+    }
   }
 
   const { data: avRows } = await admin
@@ -216,11 +218,30 @@ export async function computeAssignEligibility(
     const list = windowsByCleaner.get(cid);
     if (!list) continue;
     list.push({
-      start_time: String(row.start_time ?? "00:00"),
-      end_time: String(row.end_time ?? "23:59"),
+      start_time: String(row.start_time ?? "00:00").slice(0, 5),
+      end_time: String(row.end_time ?? "23:59").slice(0, 5),
       is_available: Boolean(row.is_available),
     });
   }
+
+  const { data: locRows } = await admin.from("cleaner_locations").select("cleaner_id, location_id").in("cleaner_id", cleanerIds);
+  const locByCleaner = new Map<string, Set<string>>();
+  for (const id of cleanerIds) locByCleaner.set(id, new Set());
+  for (const raw of locRows ?? []) {
+    const r = raw as { cleaner_id?: string; location_id?: string };
+    const cid = String(r.cleaner_id ?? "");
+    const lid = String(r.location_id ?? "").trim();
+    if (!cid || !lid) continue;
+    const s = locByCleaner.get(cid);
+    if (s) s.add(lid);
+  }
+
+  const locExpanded =
+    bookingLocationExpandedIds !== undefined
+      ? bookingLocationExpandedIds
+      : (bookingLocationId ?? "").trim()
+        ? [(bookingLocationId ?? "").trim()]
+        : null;
 
   const { data: dayBookings } = await admin
     .from("bookings")
@@ -248,14 +269,22 @@ export async function computeAssignEligibility(
 
   for (const id of cleanerIds) {
     const windows = windowsByCleaner.get(id) ?? [];
-    const slotCalendarOk = cleanerSlotMatchesCalendar(windows, bookingTimeHm);
+    const winObjs = windows.map((w) => ({
+      start_time: w.start_time,
+      end_time: w.end_time,
+      is_available: w.is_available,
+    }));
+    const slotCalendarOk = jobFitsAvailabilityWindows(winObjs, startMin, slotEnd, strict);
+    const allowed = locByCleaner.get(id) ?? new Set();
+    const locationOk = cleanerAreasAllowJob(allowed, fallbackLocationById.get(id) ?? null, locExpanded);
+
     const others = othersByCleaner.get(id) ?? [];
     const overlapDetail = overlapBlockingDetail(startMin, durationMinutes, others);
     const busyUntilMin = overlapDetail.busyUntilMin;
     const overlapJobRangeLabel = overlapDetail.overlapJobRangeLabel;
     const overlapBlocked = busyUntilMin != null;
     const offline = offlineById.get(id) ?? false;
-    const canAssignWithoutForce = slotCalendarOk && !overlapBlocked && !offline;
+    const canAssignWithoutForce = slotCalendarOk && locationOk && !overlapBlocked && !offline;
     let nextAvailableStartHm: string | null = null;
     if (!offline && !canAssignWithoutForce) {
       nextAvailableStartHm = nextAvailableBookingStartHm(startMin, durationMinutes, windows, others);
@@ -265,7 +294,7 @@ export async function computeAssignEligibility(
 
     out.set(id, {
       cleanerId: id,
-      slotCalendarOk,
+      slotCalendarOk: slotCalendarOk && locationOk,
       overlapBlocked,
       busyUntilMin,
       overlapJobRangeLabel,

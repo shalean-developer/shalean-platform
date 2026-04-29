@@ -3,7 +3,7 @@ import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
-import { resolveLocationContextFromLabel } from "@/lib/booking/resolveLocationId";
+import { resolveBookingLocationContext } from "@/lib/booking/resolveLocationId";
 import { runAdminAssignSmart } from "@/lib/admin/runAdminAssignSmart";
 import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestCleaner";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
@@ -175,7 +175,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const flat = buildSnapshotFlat(locked ?? undefined);
   const bookingSnapshotMerged = mergeSnapshotWithFlat(input.snapshot, flat);
 
-  const locationContext = await resolveLocationContextFromLabel(supabase, locked?.location?.trim() ?? null);
+  const locationContext = await resolveBookingLocationContext(supabase, locked ?? undefined);
   const locationId = locationContext.locationId;
   const cityId = locationContext.cityId;
   const ds = await getDemandSupplySnapshotByCity(supabase, cityId);

@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import {
@@ -19,9 +19,11 @@ import {
 import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { extrasLineItemsForService } from "@/lib/pricing/extrasConfig";
+import { bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
 
 export function StepQuote() {
   const router = useRouter();
+  const { bookingHref, promoParam } = useBookingFlow();
   const booking = useBookingStep1();
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
@@ -107,11 +109,12 @@ export function StepQuote() {
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       }}
-      footerInsightBanner={{ variant: "quote", rooms: state.rooms, extraRooms: state.extraRooms }}
+      footerInsightBanner={{ variant: "quote" }}
       canContinue={canContinue}
       onContinue={() => {
         trackBookingFunnelEvent("quote", "next", { route_step: "quote" });
-        router.push(bookingFlowHref("details"));
+        const welcomePromo = promoParam == null ? bookingFlowPromoExtra("SAVE10") : undefined;
+        router.push(bookingHref("details", welcomePromo));
       }}
       continueLabel={copy.cta}
     >
@@ -121,7 +124,7 @@ export function StepQuote() {
             {copy.title}
           </h1>
           {estimateZar == null ? (
-            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Pick a clean type to continue.</p>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Choose a cleaning type to continue.</p>
           ) : null}
           <p
             className={`text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 ${estimateZar == null ? "mt-2" : "mt-3"}`}
@@ -139,8 +142,14 @@ export function StepQuote() {
             onSelect={selectService}
             popularLabel={copy.mostPopularLabel}
             recommendedLabel={copy.recommendedServiceLabel}
+            fromPriceById={copy.serviceFromPriceLine}
+            dominantPopular
           />
         </section>
+
+        <p className="rounded-lg border border-zinc-200/80 bg-zinc-50/80 px-3 py-2 text-center text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-200">
+          {copy.midFlowSocialProof}
+        </p>
 
         {selectedExtras.length > 0 ? (
           <section className="space-y-2" aria-labelledby="quote-extras-heading">

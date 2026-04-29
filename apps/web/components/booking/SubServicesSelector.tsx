@@ -56,6 +56,10 @@ export function SubServicesSelector({
   showPricingSaveSignal = true,
   /** When set, that option shows a “High demand” badge instead of the save signal. */
   highDemandServiceId = null,
+  /** Optional “from R…” line per service id (marketing copy). */
+  fromPriceById,
+  /** Stronger visual weight on the popular card (conversion). */
+  dominantPopular = false,
 }: {
   selectedService: BookingServiceTypeKey | null;
   onSelect: (next: BookingServiceTypeKey) => void;
@@ -66,6 +70,8 @@ export function SubServicesSelector({
   recommendedLabel?: string;
   showPricingSaveSignal?: boolean;
   highDemandServiceId?: BookingServiceTypeKey | null;
+  fromPriceById?: Partial<Record<BookingServiceTypeKey, string>> | null;
+  dominantPopular?: boolean;
 }) {
   const count = OPTIONS.length;
 
@@ -78,7 +84,9 @@ export function SubServicesSelector({
         const isRecommended = recommendedId != null && id === recommendedId;
         const hasBadge = isPopular || isRecommended;
         const showHighDemand = highDemandServiceId === id;
-        const showSavePill = showPricingSaveSignal && !showHighDemand;
+        const showSavePill = showPricingSaveSignal && !showHighDemand && isPopular;
+        const fromLine = fromPriceById ? fromPriceById[id] : undefined;
+        const dominant = dominantPopular && isPopular && !active;
 
         return (
           <button
@@ -91,9 +99,12 @@ export function SubServicesSelector({
               "lg:min-h-[120px] lg:rounded-xl lg:px-3 lg:pb-3 lg:text-sm lg:font-semibold",
               hasBadge ? "max-lg:pt-5 lg:pt-6" : "max-lg:pt-4 lg:pt-4",
               isLastRemainder && "max-lg:col-span-4 max-lg:mx-auto max-lg:max-w-[140px] max-lg:w-full",
+              dominant &&
+                "z-[1] border-amber-300/90 bg-gradient-to-b from-amber-50/90 to-white shadow-md ring-2 ring-amber-400/35 dark:border-amber-700/50 dark:from-amber-950/40 dark:to-zinc-900 dark:ring-amber-600/25",
               active
                 ? "border-blue-600 bg-blue-50 text-blue-900 shadow-sm ring-1 ring-blue-600/10 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
-                : "border-zinc-200/90 bg-white text-zinc-800 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-blue-900/60",
+                : !dominant &&
+                    "border-zinc-200/90 bg-white text-zinc-800 hover:border-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-blue-900/60",
             )}
           >
             {isPopular ? (
@@ -114,6 +125,11 @@ export function SubServicesSelector({
             />
             <span className="max-w-full truncate">{title}</span>
             <span className="mt-0.5 hidden max-w-full text-xs font-normal leading-snug text-zinc-500 dark:text-zinc-400 lg:inline">{subtitle}</span>
+            {fromLine ? (
+              <span className="mt-0.5 max-w-full truncate text-[9px] font-semibold tabular-nums text-zinc-600 dark:text-zinc-300 lg:mt-1 lg:text-[10px]">
+                {fromLine}
+              </span>
+            ) : null}
             {showSavePill ? (
               <span className="mt-1.5 max-w-full truncate rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 lg:mt-2 lg:px-2 lg:text-[9px]">
                 Save up to 15%

@@ -7,6 +7,7 @@ import { useCleaners, type LiveCleaner } from "@/components/booking/useCleaners"
 import { writeSelectedCleanerToStorage } from "@/lib/booking/cleanerSelection";
 import { mergeCleanerIdIntoLockedBooking } from "@/lib/booking/lockedBooking";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
+import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
 
 const RECOMMEND_HINT =
   "Recommended based on your location and service.";
@@ -19,9 +20,22 @@ type Step3CleanerSelectionProps = {
 export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) {
   const selected = useSelectedCleaner();
   const locked = useLockedBooking();
+  const { locationId: resolvedLocationId } = useBookingAvailabilityArea({
+    serviceAreaLocationId: locked?.serviceAreaLocationId,
+    serviceAreaCityId: locked?.serviceAreaCityId,
+    locationLabel: locked?.location,
+    allowFreeTextFallback: locked?.allowLocationTextFallback === true,
+  });
+  const durationMinutes = useMemo(() => {
+    const h = locked?.finalHours;
+    if (typeof h === "number" && Number.isFinite(h)) return Math.max(30, Math.round(h * 60));
+    return 120;
+  }, [locked?.finalHours]);
   const { cleaners: pool, recommendedCleaner: recommended, loading, error } = useCleaners({
     selectedDate: locked?.date ?? null,
     selectedTime: slotTime,
+    durationMinutes,
+    locationId: resolvedLocationId,
   });
   const others = useMemo(() => {
     if (!recommended) return pool.slice(0, 4);

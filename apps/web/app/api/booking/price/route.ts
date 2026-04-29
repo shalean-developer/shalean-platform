@@ -5,6 +5,7 @@ import { calculateDynamicPrice } from "@/lib/marketplace-intelligence/dynamicPri
 import { getAiAutonomyFlags } from "@/lib/ai-autonomy/flags";
 import { calculateDynamicPriceWithAiLayers } from "@/lib/ai-autonomy/dynamicPricingWithAi";
 import { forecastDemand } from "@/lib/marketplace-intelligence/demandForecast";
+import { countEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -55,8 +56,18 @@ export async function POST(request: Request) {
     const dow = /^\d{4}-\d{2}-\d{2}$/.test(dateYmd)
       ? new Date(`${dateYmd}T12:00:00Z`).getUTCDay()
       : new Date().getUTCDay();
-    const ccRaw = b.cleanersCount ?? b.cleaners_count;
-    const cleanersN = typeof ccRaw === "number" && Number.isFinite(ccRaw) ? Math.max(0, Math.round(ccRaw)) : null;
+    const loc = String(b.locationId ?? b.location_id ?? "").trim();
+    let cleanersN: number | null = null;
+    if (loc && /^\d{4}-\d{2}-\d{2}$/.test(dateYmd) && r.timeHm) {
+      const durationMin = Math.max(30, Math.round((q.hours ?? 2) * 60));
+      cleanersN = await countEligibleCleaners(admin, {
+        date: dateYmd,
+        startTime: r.timeHm,
+        durationMinutes: durationMin,
+        locationId: loc,
+        locationExpandedIds: [loc],
+      });
+    }
     const availRatio = cleanersN != null ? Math.min(1, cleanersN / 12) : null;
     const dynCtx = {
       hourOfDay: Number.isFinite(slotHour) ? slotHour : 12,

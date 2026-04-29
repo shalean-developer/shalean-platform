@@ -11,9 +11,9 @@ import { SmartRetentionBanner } from "@/components/booking/SmartRetentionBanner"
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { usePastBookingHints } from "@/lib/booking/usePastBookingHints";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
+import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import { serviceSupportsCleaningFrequencyPlan } from "@/components/booking/serviceCategories";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
@@ -33,6 +33,7 @@ const ExtrasSection = lazy(() =>
 
 export function StepDetailsForm() {
   const router = useRouter();
+  const { bookingHref } = useBookingFlow();
   const copy = bookingCopy.details;
   const booking = useBookingStep1();
   const { state, setState, maxRooms, blockedExtras, canContinue, hydrated } = booking;
@@ -83,12 +84,10 @@ export function StepDetailsForm() {
     state.service,
   ]);
 
-  const recurringDiscountPct = discountFrac;
-
   const goWhen = () => {
     if (!canContinue) return;
     trackBookingFunnelEvent("extras", "next", { route_step: "details" });
-    router.push(bookingFlowHref("when"));
+    router.push(bookingHref("when"));
   };
 
   return (
@@ -104,7 +103,7 @@ export function StepDetailsForm() {
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       }}
-      footerInsightBanner={{ variant: "details", rooms: state.rooms, extraRooms: state.extraRooms }}
+      footerInsightBanner={{ variant: "details" }}
       canContinue={canContinue}
       onContinue={goWhen}
       continueLabel={copy.cta}
@@ -123,8 +122,7 @@ export function StepDetailsForm() {
 
         <div className="w-full max-w-none">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>
-          <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.priceLiveHint}</p>
+          <p className="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{copy.priceLiveHint}</p>
         </div>
 
         <fieldset
@@ -138,7 +136,6 @@ export function StepDetailsForm() {
                 maxRooms={maxRooms}
                 setState={setState}
                 omitLocation
-                foldExtraRoomsIntoFooter
               />
             </MobileFullWidth>
           </SectionCard>
@@ -152,24 +149,6 @@ export function StepDetailsForm() {
                 estimateZar={estimateZar}
               />
             </MobileFullWidth>
-          ) : null}
-
-          {planEligible ? (
-            <SectionCard title="Choose cleaning frequency">
-              <MobileFullWidth insideSectionCard>
-                <CleaningFrequencySelector
-                  value={state.cleaningFrequency}
-                  onChange={(next) => setState((p) => ({ ...p, cleaningFrequency: next }))}
-                />
-              </MobileFullWidth>
-              {recurringDiscountPct > 0 ? (
-                <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:bg-blue-950/30 dark:text-blue-300 max-lg:mt-2 lg:mt-3">
-                  {state.cleaningFrequency === "weekly"
-                    ? "Weekly plan: 10% off each visit — preview above; final total is confirmed at checkout after you pick a time."
-                    : "Every 2 weeks: 5% off each visit — preview above; final total is confirmed at checkout after you pick a time."}
-                </p>
-              ) : null}
-            </SectionCard>
           ) : null}
 
           <Suspense
@@ -196,6 +175,17 @@ export function StepDetailsForm() {
                 pastHints={pastHints}
               />
             </MobileFullWidth>
+          ) : null}
+
+          {planEligible ? (
+            <SectionCard title="Choose cleaning frequency">
+              <MobileFullWidth insideSectionCard>
+                <CleaningFrequencySelector
+                  value={state.cleaningFrequency}
+                  onChange={(next) => setState((p) => ({ ...p, cleaningFrequency: next }))}
+                />
+              </MobileFullWidth>
+            </SectionCard>
           ) : null}
         </fieldset>
       </div>

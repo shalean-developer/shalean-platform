@@ -326,6 +326,8 @@ export type AdminCleanerPreferencesResponse = {
   } | null;
   locationOptions: { id: string; name: string; slug: string | null }[];
   serviceOptions: { slug: string; label: string }[];
+  /** From `cleaner_locations` — authoritative service areas. */
+  assignedLocationIds: string[];
 };
 
 export async function fetchAdminCleanerPreferences(cleanerId: string): Promise<AdminCleanerPreferencesResponse> {
@@ -341,7 +343,39 @@ export async function fetchAdminCleanerPreferences(cleanerId: string): Promise<A
     preferences: json.preferences ?? null,
     locationOptions: json.locationOptions ?? [],
     serviceOptions: json.serviceOptions ?? [],
+    assignedLocationIds: json.assignedLocationIds ?? [],
   };
+}
+
+export async function saveAdminCleanerWeeklyAvailability(
+  cleanerId: string,
+  payload: { weeklySchedule: { day: number; start: string; end: string }[]; horizonDays?: number },
+): Promise<{ inserted: number }> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}/availability`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = (await res.json()) as { ok?: boolean; inserted?: number; error?: string };
+  if (res.status === 401) throw new Error("Please sign in as an admin.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to save availability.");
+  return { inserted: json.inserted ?? 0 };
+}
+
+export async function saveAdminCleanerLocationIds(cleanerId: string, locationIds: string[]): Promise<{ count: number }> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}/locations`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ locationIds }),
+  });
+  const json = (await res.json()) as { ok?: boolean; count?: number; error?: string };
+  if (res.status === 401) throw new Error("Please sign in as an admin.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to save locations.");
+  return { count: json.count ?? 0 };
 }
 
 export async function saveAdminCleanerPreferences(

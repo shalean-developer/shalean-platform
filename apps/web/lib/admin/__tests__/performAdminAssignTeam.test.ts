@@ -58,7 +58,7 @@ function countChain(count: number) {
 function createMockAdmin(opts: {
   booking: ReturnType<typeof baseBooking>;
   team?: ReturnType<typeof baseTeam>;
-  members?: typeof twoMembers;
+  members?: Array<{ cleaner_id: string; active_from: string; active_to: string | null }>;
   slotCount?: number;
   oldTeamCapacityRow?: { capacity_per_day: number };
 }) {

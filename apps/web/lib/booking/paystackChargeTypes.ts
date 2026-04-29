@@ -19,18 +19,30 @@ export type BookingSnapshotFlatV1 = {
   time: string | null;
 };
 
+/** Line-item discounts stored on the Paystack booking snapshot (sum matches `discount_zar`). */
+export type BookingSnapshotDiscountLineV1 = {
+  id: string;
+  label: string;
+  amount_zar: number;
+};
+
 /** Parsed from `metadata.booking_json` on Paystack charge / verify responses. */
 export type BookingSnapshotV1 = {
   v: number;
   locked?: LockedBooking;
   /** Denormalized mirror of `locked` for queries and rebook UX. */
   flat?: BookingSnapshotFlatV1;
+  /** Visit total before tip and before discounts (matches checkout `visitTotalZar`). */
+  visit_total_zar?: number;
   tip_zar?: number;
   discount_zar?: number;
+  /** When set, each row is a portion of `discount_zar` (promo, referral, plan, etc.). */
+  discount_lines?: BookingSnapshotDiscountLineV1[];
   promo_code?: string | null;
   total_zar?: number;
   cleaner_id?: string | null;
   cleaner_name?: string | null;
+  /** Recurring plan selection; `discount_zar` here is only the plan portion of savings, not promo/referral. */
   subscription?: {
     frequency: "weekly" | "biweekly" | "monthly";
     discount_zar: number;

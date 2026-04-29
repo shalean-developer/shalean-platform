@@ -40,6 +40,13 @@ export function ConversionBookingFlow() {
           date: intake.date,
           time: intake.time,
           address: intake.location?.trim() ? intake.location : prev.address,
+          ...(intake.serviceAreaLocationId
+            ? {
+                serviceAreaLocationId: intake.serviceAreaLocationId,
+                serviceAreaCityId: intake.serviceAreaCityId ?? null,
+                serviceAreaName: intake.serviceAreaName ?? "",
+              }
+            : {}),
         }));
         return;
       }
@@ -53,6 +60,13 @@ export function ConversionBookingFlow() {
         date: intake.date,
         time: intake.time,
         address: intake.location?.trim() ? intake.location : prev.address,
+        ...(intake.serviceAreaLocationId
+          ? {
+              serviceAreaLocationId: intake.serviceAreaLocationId,
+              serviceAreaCityId: intake.serviceAreaCityId ?? null,
+              serviceAreaName: intake.serviceAreaName ?? "",
+            }
+          : {}),
       }));
     } catch {
       /* ignore */
@@ -65,9 +79,10 @@ export function ConversionBookingFlow() {
         form.time &&
         form.bedrooms >= 1 &&
         form.bathrooms >= 1 &&
+        form.serviceAreaLocationId &&
         /^\d{4}-\d{2}-\d{2}$/.test(form.date),
     );
-  }, [form.date, form.time, form.bedrooms, form.bathrooms]);
+  }, [form.date, form.time, form.bedrooms, form.bathrooms, form.serviceAreaLocationId]);
 
   const lockPriceAndContinue = useCallback(async () => {
     if (!step1Ready || locking) return;
@@ -108,19 +123,34 @@ export function ConversionBookingFlow() {
     } finally {
       setLocking(false);
     }
-  }, [form.bathrooms, form.bedrooms, form.extraRooms, form.date, form.extras, form.service, form.time, locking, step1Ready]);
+  }, [
+    form.bathrooms,
+    form.bedrooms,
+    form.extraRooms,
+    form.date,
+    form.extras,
+    form.service,
+    form.time,
+    form.serviceAreaLocationId,
+    locking,
+    step1Ready,
+  ]);
 
   const step2Ready = useMemo(() => {
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
+    const addressOk =
+      form.serviceAreaLocationId != null
+        ? true
+        : form.address.trim().length >= 3;
     return (
       emailOk &&
       form.name.trim().length >= 2 &&
       form.phone.trim().length >= 5 &&
-      form.address.trim().length >= 3 &&
+      addressOk &&
       form.price != null &&
       isLocked
     );
-  }, [form.email, form.name, form.phone, form.address, form.price, isLocked]);
+  }, [form.email, form.name, form.phone, form.address, form.serviceAreaLocationId, form.price, isLocked]);
 
   const handleSubmit = useCallback(() => {
     if (!step2Ready || submitting) return;

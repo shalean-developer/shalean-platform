@@ -142,7 +142,7 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200">
-                Deal · Save R{bundleSav}
+                🔥 Most customers add this — save R{bundleSav} today
               </p>
               <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-50">{primaryBundle.label}</p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400">{primaryBundle.blurb}</p>

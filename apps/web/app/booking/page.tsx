@@ -1,7 +1,14 @@
 import { Suspense } from "react";
 import { BookingFlowClient } from "@/components/booking/BookingFlowClient";
 
-export default function BookingPage() {
+type BookingPageSearchParams = Record<string, string | string[] | undefined>;
+
+type PageProps = {
+  searchParams: Promise<BookingPageSearchParams>;
+};
+
+export default async function BookingPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
   return (
     <Suspense
       fallback={
@@ -10,7 +17,7 @@ export default function BookingPage() {
         </div>
       }
     >
-      <BookingFlowClient />
+      <BookingFlowClient initialSearchParams={sp} />
     </Suspense>
   );
 }

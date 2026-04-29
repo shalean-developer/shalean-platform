@@ -73,8 +73,6 @@ type BookingLayoutProps = {
   /** Quote / details mobile: dismissible insight strip stacked above the sticky price bar (full width). */
   footerInsightBanner?: {
     variant: "quote" | "details";
-    rooms: number;
-    extraRooms: number;
   };
   /** Desktop: summary column first (checkout trust layout). */
   summaryColumnFirst?: boolean;
@@ -289,8 +287,6 @@ export default function BookingLayout({
           {stickyMobileBar && footerInsightBanner && !footerInsightDismissed ? (
             <BookingFooterInsightBanner
               variant={footerInsightBanner.variant}
-              rooms={footerInsightBanner.rooms}
-              extraRooms={footerInsightBanner.extraRooms}
               onDismiss={() => setFooterInsightDismissed(true)}
             />
           ) : null}

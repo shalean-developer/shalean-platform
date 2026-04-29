@@ -239,11 +239,19 @@ export function lockedToStep1State(l: LockedBooking): BookingStep1State {
   const group =
     l.service_group ?? (l.service ? inferServiceGroupFromServiceId(l.service) : null);
   const typ = l.service_type ?? (l.service ? inferServiceTypeFromServiceId(l.service) : null);
+  const rec = l as Record<string, unknown>;
+  const sal = typeof rec.serviceAreaLocationId === "string" ? rec.serviceAreaLocationId.trim().toLowerCase() : "";
+  const sac = typeof rec.serviceAreaCityId === "string" ? rec.serviceAreaCityId.trim().toLowerCase() : "";
+  const san = typeof rec.serviceAreaName === "string" ? rec.serviceAreaName.trim().slice(0, 120) : "";
+  const allowLocationTextFallback = rec.allowLocationTextFallback === true;
   return {
     selectedCategory: l.selectedCategory ?? group,
     service: l.service,
     service_group: group,
     service_type: typ,
+    serviceAreaLocationId: sal && /^[0-9a-f-]{36}$/i.test(sal) ? sal : null,
+    serviceAreaCityId: sac && /^[0-9a-f-]{36}$/i.test(sac) ? sac : null,
+    serviceAreaName: san,
     location: l.location ?? "",
     propertyType: l.propertyType ?? null,
     cleaningFrequency: l.cleaningFrequency ?? "one_time",
@@ -251,6 +259,7 @@ export function lockedToStep1State(l: LockedBooking): BookingStep1State {
     bathrooms: l.bathrooms,
     extraRooms: l.extraRooms,
     extras: l.extras,
+    ...(allowLocationTextFallback ? { allowLocationTextFallback: true } : {}),
   };
 }
 

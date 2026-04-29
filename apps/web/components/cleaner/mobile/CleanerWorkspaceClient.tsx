@@ -10,7 +10,9 @@ import {
 } from "@/components/cleaner/mobile/dashboard/CleanerHomeStatusStrip";
 import { CleanerWorkStatusCard } from "@/components/cleaner/mobile/dashboard/CleanerWorkStatusCard";
 import { CleanerEarningsTab } from "@/components/cleaner/mobile/tabs/CleanerEarningsTab";
+import type { CleanerRosterSnapshot } from "@/components/cleaner/mobile/tabs/CleanerProfileTab";
 import { CleanerProfileTab } from "@/components/cleaner/mobile/tabs/CleanerProfileTab";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
 import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
 import { useCleanerMobileWorkspace } from "@/hooks/useCleanerMobileWorkspace";
@@ -35,6 +37,7 @@ export function CleanerWorkspaceClient() {
   const [teamAvailabilityAckIds, setTeamAvailabilityAckIds] = useState<Set<string>>(() => new Set());
   const [now, setNow] = useState(() => new Date());
   const [homeJobFilter, setHomeJobFilter] = useState<CleanerHomeJobFilter>("today");
+  const [roster, setRoster] = useState<CleanerRosterSnapshot | null>(null);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -80,6 +83,23 @@ export function CleanerWorkspaceClient() {
   useEffect(() => {
     setTeamAvailabilityAckIds(readTeamAvailabilityAckSet());
   }, [rows]);
+
+  useEffect(() => {
+    if (tab !== "profile") return;
+    void (async () => {
+      try {
+        const res = await cleanerAuthenticatedFetch("/api/cleaner/roster");
+        if (!res.ok) {
+          setRoster(null);
+          return;
+        }
+        const j = (await res.json()) as CleanerRosterSnapshot;
+        setRoster(j);
+      } catch {
+        setRoster(null);
+      }
+    })();
+  }, [tab]);
 
   useEffect(() => {
     if (!availabilityBanner) return;
@@ -285,7 +305,7 @@ export function CleanerWorkspaceClient() {
       ) : null}
       {tab === "profile" ? (
         <div className="mx-auto max-w-md">
-          <CleanerProfileTab profile={profile} onSetAvailability={setAvailability} />
+          <CleanerProfileTab profile={profile} roster={roster} onSetAvailability={setAvailability} />
         </div>
       ) : null}
     </CleanerMobileShell>

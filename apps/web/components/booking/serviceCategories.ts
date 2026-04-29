@@ -101,15 +101,10 @@ export function getBookingSummaryServiceLabel(
   service: BookingServiceId | null,
   serviceType: BookingServiceTypeKey | null,
 ): string {
-  if (!service) return "Not selected";
+  if (!service && !serviceType) return "Not selected";
   if (service === "quick") return "Quick Clean";
-  if (serviceType) {
-    if (service === "standard" && serviceType === "standard_cleaning") return SERVICE_TYPE_DISPLAY.standard_cleaning;
-    if (service === "airbnb" && serviceType === "airbnb_cleaning") return SERVICE_TYPE_DISPLAY.airbnb_cleaning;
-    if (service === "deep" && serviceType === "deep_cleaning") return SERVICE_TYPE_DISPLAY.deep_cleaning;
-    if (service === "move" && serviceType === "move_cleaning") return SERVICE_TYPE_DISPLAY.move_cleaning;
-    if (service === "carpet" && serviceType === "carpet_cleaning") return SERVICE_TYPE_DISPLAY.carpet_cleaning;
-  }
+  if (serviceType) return SERVICE_TYPE_DISPLAY[serviceType];
+  if (!service) return "Not selected";
   return getServiceLabel(service);
 }
 

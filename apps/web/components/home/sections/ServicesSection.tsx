@@ -22,7 +22,7 @@ const services: ServiceCard[] = [
     description: "Regular upkeep for busy homes: dusting, floors, kitchens, bathrooms, and general refreshes.",
     icon: Home,
     service: "standard",
-    servicePage: "/services/standard-cleaning",
+    servicePage: "/services/standard-cleaning-cape-town",
     source: "home_services_standard",
   },
   {
@@ -30,7 +30,7 @@ const services: ServiceCard[] = [
     description: "A detailed full clean for kitchens, bathrooms, build-up, high-touch areas, and hard-to-reach spots.",
     icon: Sparkles,
     service: "deep",
-    servicePage: "/services/deep-cleaning",
+    servicePage: "/services/deep-cleaning-cape-town",
     source: "home_services_deep",
   },
   {
@@ -38,7 +38,7 @@ const services: ServiceCard[] = [
     description: "Fast turnovers for hosts who need bathrooms, kitchens, beds, floors, and guest-ready details handled.",
     icon: Building2,
     service: "airbnb",
-    servicePage: "/services/airbnb-cleaning",
+    servicePage: "/services/airbnb-cleaning-cape-town",
     source: "home_services_airbnb",
   },
   {
@@ -46,7 +46,7 @@ const services: ServiceCard[] = [
     description: "End-of-lease and handover cleaning for tenants, landlords, agents, and moving day resets.",
     icon: Truck,
     service: "move",
-    servicePage: "/services/move-out-cleaning",
+    servicePage: "/services/move-out-cleaning-cape-town",
     source: "home_services_move",
   },
   {
@@ -54,7 +54,7 @@ const services: ServiceCard[] = [
     description: "Deep fabric cleaning support for rugs, carpets, bedrooms, lounges, and high-traffic areas.",
     icon: Layers,
     service: "carpet",
-    servicePage: "/services/carpet-cleaning",
+    servicePage: "/services/carpet-cleaning-cape-town",
     source: "home_services_carpet",
   },
 ];

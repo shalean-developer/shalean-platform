@@ -20,6 +20,11 @@ function initialsFromName(name: string): string {
   return (parts[0]?.[0] ?? "?").toUpperCase();
 }
 
+export type CleanerRosterSnapshot = {
+  availability: Array<{ date: string; start_time: string; end_time: string; is_available: boolean }>;
+  workingAreas: Array<{ id: string; name: string }>;
+};
+
 export type CleanerMobileProfile = {
   name: string;
   phone: string;
@@ -31,9 +36,11 @@ export type CleanerMobileProfile = {
 
 export function CleanerProfileTab({
   profile,
+  roster,
   onSetAvailability,
 }: {
   profile: CleanerMobileProfile | null;
+  roster?: CleanerRosterSnapshot | null;
   onSetAvailability: (next: boolean) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
@@ -107,6 +114,35 @@ export function CleanerProfileTab({
           </p>
         </div>
       </section>
+
+      {roster && roster.workingAreas.length > 0 ? (
+        <section>
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Working areas</p>
+          <ul className="mt-2 list-inside list-disc text-sm text-zinc-700 dark:text-zinc-200">
+            {roster.workingAreas.map((a) => (
+              <li key={a.id}>{a.name}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {roster && roster.availability.length > 0 ? (
+        <section>
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Upcoming roster</p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Next 14 days (read-only)</p>
+          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm text-zinc-700 dark:text-zinc-200">
+            {roster.availability.slice(0, 40).map((row, i) => (
+              <li key={`${row.date}-${i}`} className="flex justify-between gap-2 border-b border-zinc-100 py-1 dark:border-zinc-800">
+                <span className="text-zinc-500">{row.date}</span>
+                <span>
+                  {String(row.start_time).slice(0, 5)}–{String(row.end_time).slice(0, 5)}
+                  {!row.is_available ? " (off)" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section>
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Availability</p>

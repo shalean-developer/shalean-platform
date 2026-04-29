@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { HomeService } from "@/lib/home/data";
 import { BOOKING_DATA_STORAGE_KEY } from "@/lib/booking/bookingWidgetDraft";
-import { bookingFlowHref } from "@/lib/booking/bookingFlow";
+import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
 import { defaultBookingTimeForDate, todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import { calculateHomeWidgetQuoteZar, type HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { AddOnsSelector, iconForAddOn, type AddOn } from "@/components/booking/AddOnsSelector";
 import { cn } from "@/lib/utils";
 import { bookingCopy } from "@/lib/booking/copy";
+import { ServiceAreaPicker } from "@/components/booking/ServiceAreaPicker";
+import { ROOM_FIELD_LABEL_CLASS, ROOM_TEXT_INPUT_CLASS } from "@/components/ui/floating-select";
 
 type BookingWidgetProps = {
   services: HomeService[];
@@ -32,6 +34,11 @@ export function BookingWidget({ services }: BookingWidgetProps) {
   const [bedrooms, setBedrooms] = useState(2);
   const [bathrooms, setBathrooms] = useState(1);
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [street, setStreet] = useState("");
+  const [serviceAreaLocationId, setServiceAreaLocationId] = useState<string | null>(null);
+  const [serviceAreaCityId, setServiceAreaCityId] = useState<string | null>(null);
+  const [serviceAreaName, setServiceAreaName] = useState("");
+  const entryCopy = bookingCopy.entry;
 
   const selectedService = availableServices.find((item) => item.id === service) ?? availableServices[0] ?? null;
   const addOns = useMemo<AddOn[]>(
@@ -58,7 +65,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
   }, 0);
 
   const total = basePrice + extrasTotal;
-  const canContinue = Boolean(selectedService && total > 0);
+  const canContinue = Boolean(selectedService && total > 0 && serviceAreaLocationId);
 
   const handleToggle = (id: string) => {
     setSelectedAddOns((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
@@ -77,7 +84,10 @@ export function BookingWidget({ services }: BookingWidgetProps) {
       date,
       time,
       extras: selectedAddOns,
-      location: "",
+      location: street.trim().slice(0, 500),
+      serviceAreaLocationId,
+      serviceAreaCityId,
+      serviceAreaName: serviceAreaName.trim().slice(0, 120),
       quotedPriceZar: total,
       savedAt: new Date().toISOString(),
     };
@@ -86,7 +96,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
     } catch {
       /* Storage can be unavailable in private browsing. */
     }
-    router.push(`${bookingFlowHref("entry")}&source=home_hero_widget`);
+    router.push(`${bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"))}&source=home_hero_widget`);
   }
 
   return (
@@ -106,6 +116,37 @@ export function BookingWidget({ services }: BookingWidgetProps) {
       </div>
 
       <div className="mt-5 space-y-4">
+        <div className="space-y-1.5">
+          <span className={cn("block", ROOM_FIELD_LABEL_CLASS)}>{entryCopy.suburbLabel}</span>
+          <ServiceAreaPicker
+            id="hero-widget-service-area"
+            value={serviceAreaLocationId}
+            emptyListMessage={entryCopy.emptyServiceAreaCoverage}
+            onChange={(next) => {
+              setServiceAreaLocationId(next.locationId);
+              setServiceAreaCityId(next.cityId);
+              setServiceAreaName(next.name);
+            }}
+            placeholder={entryCopy.suburbPlaceholder}
+            loadingLabel="Loading suburbs…"
+            className={cn(fieldClass, "mt-0")}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="hero-widget-street" className={ROOM_FIELD_LABEL_CLASS}>
+            {entryCopy.streetLabel}
+          </label>
+          <input
+            id="hero-widget-street"
+            type="text"
+            autoComplete="street-address"
+            placeholder={entryCopy.streetPlaceholder}
+            value={street}
+            onChange={(e) => setStreet(e.target.value.slice(0, 500))}
+            className={ROOM_TEXT_INPUT_CLASS}
+          />
+        </div>
+        <p className="text-xs text-zinc-500">{entryCopy.suburbHelper}</p>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-blue-700" htmlFor="home-service">
             Service

@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { BookingStep1State } from "./BookingStep1";
-import { cn } from "@/lib/utils";
 import { getMaxRoomsForService } from "./serviceCategories";
 import { StepperInput } from "./StepperInput";
 
@@ -12,8 +11,6 @@ type HomeDetailsProps = {
   setState: Dispatch<SetStateAction<BookingStep1State>>;
   /** Hide the address field when location was captured on an earlier step. */
   omitLocation?: boolean;
-  /** When true, the “extra rooms” nudge is only shown on desktop (mobile copy lives in the footer insight banner). */
-  foldExtraRoomsIntoFooter?: boolean;
 };
 
 export function HomeDetails({
@@ -21,10 +18,15 @@ export function HomeDetails({
   maxRooms,
   setState,
   omitLocation = false,
-  foldExtraRoomsIntoFooter = false,
 }: HomeDetailsProps) {
   return (
     <div className="w-full max-w-none space-y-4">
+      {omitLocation && state.serviceAreaName.trim() ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">Service area:</span>{" "}
+          {state.serviceAreaName.trim()}
+        </p>
+      ) : null}
       {!omitLocation ? (
         <div className="space-y-1.5">
           <label
@@ -84,22 +86,6 @@ export function HomeDetails({
           }
         />
       </div>
-
-      {state.rooms <= 2 && state.extraRooms === 0 ? (
-        <div
-          className={cn(
-            "rounded-xl border border-emerald-200/90 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-emerald-950 dark:border-emerald-900/45 dark:bg-emerald-950/30 dark:text-emerald-50",
-            foldExtraRoomsIntoFooter && "hidden lg:block",
-          )}
-        >
-          <p className="font-semibold">Have studies, dens, or garages not counted above?</p>
-          <p className="mt-1.5 text-emerald-900/95 dark:text-emerald-100/90">
-            Add them as <span className="font-medium">Extra</span> rooms so time and slot prices match the job — first extra from{" "}
-            <span className="font-medium tabular-nums">R35</span>, two extras <span className="font-medium tabular-nums">R60</span> (save{" "}
-            <span className="font-medium tabular-nums">R10</span>).
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }

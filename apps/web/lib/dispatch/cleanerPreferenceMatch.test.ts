@@ -62,15 +62,29 @@ describe("computePreferenceScore01", () => {
 });
 
 describe("cleanerPreferenceStrictExcludesJob", () => {
-  it("excludes when area mismatch", () => {
+  it("strict ignores preferred_areas (eligibility uses cleaner_locations)", () => {
+    expect(
+      cleanerPreferenceStrictExcludesJob(
+        {
+          preferred_areas: ["other"],
+          preferred_services: [],
+          preferred_time_blocks: [],
+          is_strict: true,
+        },
+        job(),
+      ),
+    ).toBe(false);
+  });
+
+  it("excludes when service mismatch in strict mode", () => {
     const x = cleanerPreferenceStrictExcludesJob(
       {
-        preferred_areas: ["other"],
-        preferred_services: [],
+        preferred_areas: [],
+        preferred_services: ["deep"],
         preferred_time_blocks: [],
         is_strict: true,
       },
-      job(),
+      job({ jobServiceSlug: "standard" }),
     );
     expect(x).toBe(true);
   });

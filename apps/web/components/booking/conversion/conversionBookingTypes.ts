@@ -16,6 +16,9 @@ export type ConversionBookingFormState = {
   name: string;
   phone: string;
   address: string;
+  serviceAreaLocationId: string | null;
+  serviceAreaCityId: string | null;
+  serviceAreaName: string;
 };
 
 export const CONVERSION_CHECKOUT_STORAGE_KEY = "shalean_conversion_checkout";
@@ -35,5 +38,8 @@ export function initialConversionFormState(): ConversionBookingFormState {
     name: "",
     phone: "",
     address: "",
+    serviceAreaLocationId: null,
+    serviceAreaCityId: null,
+    serviceAreaName: "",
   };
 }

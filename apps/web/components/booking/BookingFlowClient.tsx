@@ -2,14 +2,17 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BOOKING_NODRAFT_QUERY,
+  BOOKING_PROMO_QUERY,
   BOOKING_STEP_LS_KEY,
   BOOKING_STEP_QUERY,
   bookingFlowHref,
+  bookingFlowPromoExtra,
   getBookingStepGateRedirect,
   normalizeBookingStepParam,
+  sanitizeBookingPromoParam,
   type BookingFlowStep,
 } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage, readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
@@ -29,12 +32,42 @@ import {
 } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 
-export function BookingFlowClient() {
+function firstSearchParamValue(
+  record: Record<string, string | string[] | undefined> | undefined,
+  key: string,
+): string | null {
+  if (!record) return null;
+  const v = record[key];
+  if (v == null) return null;
+  const s = Array.isArray(v) ? v[0] : v;
+  return s ?? null;
+}
+
+export type BookingFlowClientProps = {
+  /** Snapshot from the Server Component — keeps first paint aligned with SSR when `useSearchParams` lags. */
+  initialSearchParams?: Record<string, string | string[] | undefined>;
+};
+
+export function BookingFlowClient(props: BookingFlowClientProps = {}) {
+  const { initialSearchParams } = props;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rawStep = searchParams.get(BOOKING_STEP_QUERY);
-  const step = normalizeBookingStepParam(rawStep);
-  const [showNoDraftBanner] = useState(() => searchParams.get(BOOKING_NODRAFT_QUERY) === "true");
+  const rawStepQuery =
+    searchParams.get(BOOKING_STEP_QUERY) ?? firstSearchParamValue(initialSearchParams, BOOKING_STEP_QUERY);
+  const step = normalizeBookingStepParam(rawStepQuery);
+  const rawPromo =
+    searchParams.get(BOOKING_PROMO_QUERY) ?? firstSearchParamValue(initialSearchParams, BOOKING_PROMO_QUERY);
+  const promo = useMemo(() => sanitizeBookingPromoParam(rawPromo), [rawPromo]);
+  const promoExtra = useMemo(() => bookingFlowPromoExtra(promo), [promo]);
+  const withPromo = useCallback(
+    (s: BookingFlowStep) => bookingFlowHref(s, promoExtra),
+    [promoExtra],
+  );
+  const [showNoDraftBanner] = useState(
+    () =>
+      searchParams.get(BOOKING_NODRAFT_QUERY) === "true" ||
+      firstSearchParamValue(initialSearchParams, BOOKING_NODRAFT_QUERY) === "true",
+  );
   const [exitIntentOpen, setExitIntentOpen] = useState(false);
   const lastExitIntentAt = useRef(0);
   const trackedViewRef = useRef(false);
@@ -43,20 +76,20 @@ export function BookingFlowClient() {
 
   /** Canonicalize legacy `?step=service` / `who` URLs. */
   useEffect(() => {
-    if (rawStep === "service" || rawStep === "who") {
-      router.replace(bookingFlowHref(normalizeBookingStepParam(rawStep)));
+    if (rawStepQuery === "service" || rawStepQuery === "who") {
+      router.replace(withPromo(normalizeBookingStepParam(rawStepQuery)));
     }
-  }, [rawStep, router]);
+  }, [rawStepQuery, router, withPromo]);
 
   /** Strip `noDraft` after first paint so the URL stays shareable; banner stays via local state. */
   useEffect(() => {
     if (!showNoDraftBanner) return;
-    router.replace(bookingFlowHref("entry"));
-  }, [router, showNoDraftBanner]);
+    router.replace(withPromo("entry"));
+  }, [router, showNoDraftBanner, withPromo]);
 
   /** If user opens `/booking` with no `step` query, restore last step from localStorage when allowed. */
   useEffect(() => {
-    if (rawStep !== null) return;
+    if (rawStepQuery !== null) return;
 
     try {
       const saved = localStorage.getItem(BOOKING_STEP_LS_KEY);
@@ -67,17 +100,17 @@ export function BookingFlowClient() {
       const target = gate ?? stepFromLs;
       if (target === "entry") return;
 
-      router.replace(bookingFlowHref(target));
+      router.replace(withPromo(target));
     } catch {
       /* ignore */
     }
-  }, [rawStep, router]);
+  }, [rawStepQuery, router, withPromo]);
 
   const goTo = useCallback(
     (s: BookingFlowStep) => {
-      router.push(bookingFlowHref(s));
+      router.push(withPromo(s));
     },
-    [router],
+    [router, withPromo],
   );
 
   useEffect(() => {
@@ -100,9 +133,9 @@ export function BookingFlowClient() {
   useEffect(() => {
     const redirect = getBookingStepGateRedirect(step);
     if (redirect && redirect !== step) {
-      router.replace(bookingFlowHref(redirect));
+      router.replace(withPromo(redirect));
     }
-  }, [step, router]);
+  }, [step, router, withPromo]);
 
   useEffect(() => {
     try {
@@ -187,19 +220,19 @@ export function BookingFlowClient() {
       return;
     }
     if (locked) {
-      router.push(bookingFlowHref("checkout"));
+      router.push(withPromo("checkout"));
       return;
     }
     if (step === "when") {
       document.getElementById("booking-time-slots")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    router.push(bookingFlowHref("when"));
-  }, [router, step]);
+    router.push(withPromo("when"));
+  }, [router, step, withPromo]);
 
   return (
-    <BookingFlowProvider step={step}>
-      <BookingStep1Provider>
+    <BookingFlowProvider step={step} promoParam={promo}>
+      <BookingStep1Provider urlPromo={promo}>
         <BookingPriceProvider>
           <div
             className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950"

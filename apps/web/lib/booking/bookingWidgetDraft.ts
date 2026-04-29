@@ -14,6 +14,14 @@ export const LIVE_WIDGET_STORAGE_KEY = "shalean_live_booking_widget";
 
 export const WIDGET_INTAKE_SESSION_KEY = "shalean_widget_intake";
 
+const WIDGET_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseWidgetUuid(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  if (!s || !WIDGET_UUID_RE.test(s)) return null;
+  return s;
+}
+
 export type WidgetIntakePayload = {
   bedrooms: number;
   bathrooms: number;
@@ -24,6 +32,9 @@ export type WidgetIntakePayload = {
   time: string;
   extras: string[];
   location: string;
+  serviceAreaLocationId?: string | null;
+  serviceAreaCityId?: string | null;
+  serviceAreaName?: string;
   quotedPriceZar?: number;
   savedAt?: string;
   /** Homepage quick estimate — rooms/extras not collected on `/`. */
@@ -116,6 +127,10 @@ export function parseWidgetIntakeFromUnknown(raw: unknown): WidgetIntakePayload 
   const quotedPriceZar =
     typeof o.quotedPriceZar === "number" && Number.isFinite(o.quotedPriceZar) ? o.quotedPriceZar : undefined;
   const savedAt = typeof o.savedAt === "string" ? o.savedAt : undefined;
+  const serviceAreaLocationId = parseWidgetUuid(o.serviceAreaLocationId);
+  const serviceAreaCityId = parseWidgetUuid(o.serviceAreaCityId);
+  const serviceAreaName =
+    typeof o.serviceAreaName === "string" ? o.serviceAreaName.trim().slice(0, 120) : "";
 
   return {
     bedrooms,
@@ -126,6 +141,9 @@ export function parseWidgetIntakeFromUnknown(raw: unknown): WidgetIntakePayload 
     time,
     extras,
     location,
+    ...(serviceAreaLocationId
+      ? { serviceAreaLocationId, serviceAreaCityId: serviceAreaCityId ?? null, serviceAreaName }
+      : {}),
     quotedPriceZar,
     savedAt,
     estimateOnly,
@@ -140,11 +158,19 @@ export function widgetIntakeToStep1State(intake: WidgetIntakePayload): BookingSt
   const service = mapWidgetServiceToBookingServiceId(intake.service);
   const service_group = inferServiceGroupFromServiceId(service);
   const service_type = inferServiceTypeFromServiceId(service);
+  const sid = parseWidgetUuid(intake.serviceAreaLocationId);
+  const scid = parseWidgetUuid(intake.serviceAreaCityId);
+  const sname =
+    typeof intake.serviceAreaName === "string" ? intake.serviceAreaName.trim().slice(0, 120) : "";
+  const allowLocationTextFallback = !sid && !!(typeof intake.location === "string" ? intake.location.trim() : "");
   return {
     selectedCategory: service_group,
     service,
     service_group,
     service_type,
+    serviceAreaLocationId: sid,
+    serviceAreaCityId: scid,
+    serviceAreaName: sname,
     location: intake.location,
     propertyType: null,
     cleaningFrequency: "one_time",
@@ -152,6 +178,7 @@ export function widgetIntakeToStep1State(intake: WidgetIntakePayload): BookingSt
     bathrooms: intake.bathrooms,
     extraRooms: intake.extraRooms ?? 0,
     extras: mapWidgetExtrasToStep1Ids(intake.extras),
+    ...(allowLocationTextFallback ? { allowLocationTextFallback: true } : {}),
   };
 }
 
