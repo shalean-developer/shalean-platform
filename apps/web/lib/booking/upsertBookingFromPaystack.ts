@@ -10,7 +10,7 @@ import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssign
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
@@ -34,6 +34,8 @@ import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackRea
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { metrics } from "@/lib/metrics/counters";
 import { pickUserSelectedCleanerId } from "@/lib/booking/userSelectedCleanerFromSnapshot";
+import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
+import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 function buildAutoAssignmentPatch(
   autoAssignmentTag: "auto_dispatch" | "auto_fallback",
@@ -207,21 +209,23 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     boolish(input.paystackMetadata?.test_booking) ||
     boolish(input.paystackMetadata?.client_isTest);
 
+  const paidMoment =
+    typeof input.paidAtIso === "string" && input.paidAtIso.trim()
+      ? input.paidAtIso.trim()
+      : new Date().toISOString();
+
   const userSelectedRow =
     userConfirmedCleanerId != null
       ? {
           selected_cleaner_id: userConfirmedCleanerId,
           attempted_cleaner_id: userConfirmedCleanerId,
           assignment_type: "user_selected",
-          status: "pending",
-          dispatch_status: "searching",
+          cleaner_id: userConfirmedCleanerId,
+          status: "assigned",
+          dispatch_status: "assigned",
+          assigned_at: paidMoment,
         }
       : {};
-
-  const paidMoment =
-    typeof input.paidAtIso === "string" && input.paidAtIso.trim()
-      ? input.paidAtIso.trim()
-      : new Date().toISOString();
 
   let paymentConversionSeconds: number | null = null;
   let paymentAttribution = {
@@ -633,6 +637,45 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       bookingId: id,
       amountCents: input.amountCents,
     });
+
+    const { data: persistedForEarnings } = await supabase
+      .from("bookings")
+      .select("status, cleaner_id, payout_owner_cleaner_id, is_team_job")
+      .eq("id", id)
+      .maybeSingle();
+    if (
+      persistedForEarnings &&
+      String((persistedForEarnings as { status?: string | null }).status ?? "").toLowerCase() === "completed"
+    ) {
+      const persistCleanerId = resolvePersistCleanerIdForBooking(persistedForEarnings as BookingPersistIdsRow);
+      if (persistCleanerId) {
+        void logSystemEvent({
+          level: "info",
+          source: "upsertBookingFromPaystack",
+          message: "earnings_trigger_completed_status",
+          context: { bookingId: id, paystackReference: input.paystackReference },
+        });
+        const pr = await persistCleanerPayoutIfUnset({
+          admin: supabase,
+          bookingId: id,
+          cleanerId: persistCleanerId,
+        });
+        if (!pr.ok) {
+          void reportOperationalIssue("warn", "upsertBookingFromPaystack", pr.error ?? "persist failed", {
+            bookingId: id,
+            cleanerId: persistCleanerId,
+          });
+        }
+      } else {
+        void logSystemEvent({
+          level: "warn",
+          source: "upsertBookingFromPaystack",
+          message: "earnings_skipped_completed_missing_cleaner",
+          context: { bookingId: id },
+        });
+      }
+    }
+
     if (userIdForEffects) {
       const uid = userIdForEffects;
       void (async () => {

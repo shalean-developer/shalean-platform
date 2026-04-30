@@ -27,6 +27,7 @@ export function isStuckNullEarningsBooking(record: Record<string, unknown>): boo
     .toLowerCase();
   if (st !== "assigned" && st !== "in_progress") return false;
   const cents = resolveCleanerEarningsCents({
+    cleaner_earnings_total_cents: record.cleaner_earnings_total_cents,
     payout_frozen_cents: record.payout_frozen_cents,
     display_earnings_cents: record.display_earnings_cents,
   });

@@ -13,6 +13,7 @@ type BookingEligibleRow = {
   payout_owner_cleaner_id: string | null;
   payout_frozen_cents: number | null;
   display_earnings_cents: number | null;
+  cleaner_earnings_total_cents: number | null;
   cleaner_payout_cents: number | null;
   is_team_job: boolean | null;
 };
@@ -24,6 +25,7 @@ function payrollKey(row: BookingEligibleRow): string {
 function amountCents(row: BookingEligibleRow): number {
   return (
     resolveCleanerEarningsCents({
+      cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
       payout_frozen_cents: row.payout_frozen_cents,
       display_earnings_cents: row.display_earnings_cents,
     }) ?? 0
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, is_team_job",
+      "id, date, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job",
     )
     .eq("payout_status", "eligible")
     .order("date", { ascending: true });

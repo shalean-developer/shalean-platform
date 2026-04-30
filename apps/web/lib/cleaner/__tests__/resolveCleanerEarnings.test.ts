@@ -2,6 +2,26 @@ import { describe, expect, it } from "vitest";
 import { resolveCleanerEarningsCents, resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
 
 describe("resolveCleanerEarningsCents", () => {
+  it("prefers positive cleaner_earnings_total_cents over frozen and display", () => {
+    expect(
+      resolveCleanerEarningsCents({
+        cleaner_earnings_total_cents: 42_000,
+        payout_frozen_cents: 50_000,
+        display_earnings_cents: 30_000,
+      }),
+    ).toBe(42_000);
+  });
+
+  it("ignores zero line total and uses frozen/display", () => {
+    expect(
+      resolveCleanerEarningsCents({
+        cleaner_earnings_total_cents: 0,
+        payout_frozen_cents: 25_000,
+        display_earnings_cents: 10_000,
+      }),
+    ).toBe(25_000);
+  });
+
   it("prefers positive frozen over display", () => {
     expect(
       resolveCleanerEarningsCents({

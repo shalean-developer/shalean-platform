@@ -162,6 +162,7 @@ export function deriveCleanerJobLifecycleSlot(row: CleanerBookingRow): CleanerJo
 export function cleanerFacingDisplayEarningsCents(row: CleanerBookingRow): number | null {
   const rec = row as Record<string, unknown>;
   return resolveCleanerEarningsCents({
+    cleaner_earnings_total_cents: rec.cleaner_earnings_total_cents,
     payout_frozen_cents: rec.payout_frozen_cents,
     display_earnings_cents:
       optionalCentsFromDb(row.displayEarningsCents) ?? optionalCentsFromDb(rec.display_earnings_cents),

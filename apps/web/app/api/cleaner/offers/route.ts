@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const { data: rows } = await admin
       .from("bookings")
       .select(
-        "id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, amount_paid_cents, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_payout_cents, booking_snapshot, payout_frozen_cents",
+        "id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, amount_paid_cents, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, booking_snapshot, payout_frozen_cents",
       )
       .in("id", bookingIds);
     bookingById = new Map((rows ?? []).map((r) => [String((r as { id: string }).id), r as Record<string, unknown>]));
@@ -55,6 +55,7 @@ export async function GET(request: Request) {
         booking == null
           ? null
           : resolveCleanerEarningsCents({
+              cleaner_earnings_total_cents: booking.cleaner_earnings_total_cents,
               payout_frozen_cents: booking.payout_frozen_cents,
               display_earnings_cents: optionalCentsFromDb(booking.display_earnings_cents),
             });

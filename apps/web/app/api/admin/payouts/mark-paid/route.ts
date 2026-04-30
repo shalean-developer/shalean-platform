@@ -102,7 +102,7 @@ export async function POST(request: Request) {
 
   const { data: updated, error } = await admin
     .from("bookings")
-    .select("id, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, is_team_job")
+    .select("id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job")
     .eq("payout_run_id", payoutRunId);
 
   if (error) {
@@ -113,6 +113,7 @@ export async function POST(request: Request) {
     id: string;
     payout_frozen_cents?: number | null;
     display_earnings_cents?: number | null;
+    cleaner_earnings_total_cents?: number | null;
     cleaner_payout_cents?: number | null;
     is_team_job?: boolean | null;
   }[];
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
   for (const r of rows) {
     totalCents +=
       resolveCleanerEarningsCents({
+        cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
         payout_frozen_cents: r.payout_frozen_cents,
         display_earnings_cents: r.display_earnings_cents,
       }) ?? 0;

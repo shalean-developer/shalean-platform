@@ -38,6 +38,7 @@ import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -435,6 +436,11 @@ export async function POST(request: Request) {
     body.force === true ||
     body.force === "true" ||
     (typeof body.force === "string" && body.force.trim().toLowerCase() === "true");
+  const adminMarkCompleted =
+    body.admin_mark_completed === true ||
+    body.admin_mark_completed === "true" ||
+    (typeof body.admin_mark_completed === "string" &&
+      body.admin_mark_completed.trim().toLowerCase() === "true");
   const overrideReasonRaw = typeof body.override_reason === "string" ? body.override_reason.trim() : "";
   const overrideReason = overrideReasonRaw.length > 500 ? overrideReasonRaw.slice(0, 500) : overrideReasonRaw;
 
@@ -648,6 +654,8 @@ export async function POST(request: Request) {
     }
 
     const paystackReference = `adm_mi_${crypto.randomUUID()}`;
+    const completedAtIso = adminMarkCompleted ? new Date().toISOString() : null;
+    const assignedAtIso = selectedCleanerId ? new Date().toISOString() : null;
 
     // created_at is DB default (now); omit from insert so clustering stays deterministic.
     const ins = await insertBookingRowUnified(admin, {
@@ -661,8 +669,9 @@ export async function POST(request: Request) {
         amount_paid_cents: amountPaidCents,
         currency: "ZAR",
         service_slug: serviceSlug,
-        status: "pending",
-        dispatch_status: "searching",
+        status: adminMarkCompleted ? "completed" : selectedCleanerId ? "assigned" : "pending",
+        dispatch_status: selectedCleanerId ? "assigned" : "searching",
+        ...(adminMarkCompleted && completedAtIso ? { completed_at: completedAtIso } : {}),
         surge_multiplier: 1,
         surge_reason: null,
         service: getServiceLabel(serviceId),
@@ -680,7 +689,12 @@ export async function POST(request: Request) {
         booking_source: "admin",
         created_by_admin_id: auth.userId,
         ...(selectedCleanerId
-          ? { selected_cleaner_id: selectedCleanerId, assignment_type: "user_selected" }
+          ? {
+              selected_cleaner_id: selectedCleanerId,
+              assignment_type: "user_selected",
+              cleaner_id: selectedCleanerId,
+              ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
+            }
           : {}),
         ...(ignoreCleanerSlotConflict
           ? {
@@ -886,6 +900,8 @@ export async function POST(request: Request) {
       }
     }
 
+    await runAdminBookingPostCreateNormalizationAndEarnings(admin, newBookingId, "admin_booking_create_monthly");
+
     void logSystemEvent({
       level: "info",
       source: "admin_booking_create",
@@ -895,6 +911,7 @@ export async function POST(request: Request) {
         userId,
         schedule_type: scheduleType,
         admin_id: auth.userId,
+        admin_mark_completed: adminMarkCompleted,
       },
     });
     if (force) {
@@ -1051,6 +1068,36 @@ export async function POST(request: Request) {
   });
   if (!finalized.ok) {
     return bail(NextResponse.json({ error: finalized.error }, { status: 500 }));
+  }
+
+  const createdPaystackBookingId =
+    typeof paystackResult.bookingId === "string" && paystackResult.bookingId.trim()
+      ? paystackResult.bookingId.trim()
+      : null;
+  if (createdPaystackBookingId) {
+    if (adminMarkCompleted) {
+      const completedAt = new Date().toISOString();
+      const { error: completeErr } = await admin
+        .from("bookings")
+        .update({
+          status: "completed",
+          completed_at: completedAt,
+          dispatch_status: selectedCleanerId ? "assigned" : "searching",
+        })
+        .eq("id", createdPaystackBookingId)
+        .eq("status", "pending_payment");
+      if (completeErr) {
+        await reportOperationalIssue("error", "api/admin/bookings POST", completeErr.message, {
+          bookingId: createdPaystackBookingId,
+        });
+        return bail(NextResponse.json({ error: "Could not mark booking completed." }, { status: 500 }));
+      }
+    }
+    await runAdminBookingPostCreateNormalizationAndEarnings(
+      admin,
+      createdPaystackBookingId,
+      "admin_booking_create_per_booking",
+    );
   }
 
   const perBody: Record<string, unknown> = {

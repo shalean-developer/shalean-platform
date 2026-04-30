@@ -12,6 +12,8 @@ import {
 import { computeBookingEarnings, type ComputeBookingEarningsOutput } from "@/lib/payout/computeBookingEarnings";
 import { sumEligibleLineItemsSubtotalCents } from "@/lib/payout/computeEarningsFromLineItems";
 import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
+import { computeCleanerEarningsForBooking } from "@/lib/payout/computeCleanerEarningsForBooking";
+import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
@@ -167,6 +169,7 @@ async function persistCleanerPayoutIfUnsetCore(
   }
 
   const r = row as {
+    status?: string | null;
     payout_id?: string | null;
     cleaner_id?: string | null;
     payout_owner_cleaner_id?: string | null;
@@ -195,6 +198,8 @@ async function persistCleanerPayoutIfUnsetCore(
     return { ok: true, skipped: true };
   }
 
+  const isTeamJob = r.is_team_job === true;
+
   const payoutIdForLock = String(r.payout_id ?? "").trim();
   if (payoutIdForLock) {
     const { data: cp, error: cpErr } = await admin
@@ -215,6 +220,27 @@ async function persistCleanerPayoutIfUnsetCore(
 
   const recomputeZeroDisplay = shouldRecomputeZeroDisplayEarnings(r);
   if (r.display_earnings_cents != null && Number.isFinite(Number(r.display_earnings_cents)) && !recomputeZeroDisplay) {
+    if (!isTeamJob) {
+      const lineEarly = await computeCleanerEarningsForBooking({
+        admin,
+        bookingId,
+        cleanerId: expectedCleanerId,
+      });
+      if (!lineEarly.ok) {
+        void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `computeCleanerEarningsForBooking: ${lineEarly.error}`, {
+          bookingId,
+          cleanerId: expectedCleanerId,
+        });
+      }
+      if (String(r.status ?? "").toLowerCase() === "completed") {
+        const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
+        if (!led.ok) {
+          void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `ensureCleanerEarningsLedgerRow: ${led.error}`, {
+            bookingId,
+          });
+        }
+      }
+    }
     return { ok: true, skipped: true };
   }
 
@@ -226,7 +252,6 @@ async function persistCleanerPayoutIfUnsetCore(
   });
   const bookingDateIso = resolveBookingDateIso(r.date, r.time);
   const serviceId = resolveServiceId(r.booking_snapshot ?? null, r.service ?? null);
-  const isTeamJob = r.is_team_job === true;
 
   let lineItemRows: { id: string; item_type: string; total_price_cents: number }[] = [];
   if (!isTeamJob) {
@@ -444,6 +469,39 @@ async function persistCleanerPayoutIfUnsetCore(
     return { ok: false, error: soloVerify.error };
   }
 
+  const lineEarn = await computeCleanerEarningsForBooking({
+    admin,
+    bookingId,
+    cleanerId: expectedCleanerId,
+  });
+  if (!lineEarn.ok) {
+    void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `computeCleanerEarningsForBooking: ${lineEarn.error}`, {
+      bookingId,
+      cleanerId: expectedCleanerId,
+    });
+  }
+  if (lineEarn.ok && !lineEarn.skipped) {
+    const { error: displaySyncErr } = await admin
+      .from("bookings")
+      .update({ display_earnings_cents: lineEarn.total_cents })
+      .eq("id", bookingId);
+    if (displaySyncErr) {
+      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", displaySyncErr.message, {
+        bookingId,
+        cleanerId: expectedCleanerId,
+        context: "display_earnings_sync_from_line_total",
+      });
+    }
+  }
+  if (String(r.status ?? "").toLowerCase() === "completed") {
+    const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
+    if (!led.ok) {
+      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `ensureCleanerEarningsLedgerRow: ${led.error}`, {
+        bookingId,
+      });
+    }
+  }
+
   if (usedLineItemBasis && lineItemRows.length > 0) {
     const snap = await persistBookingCleanerEarningsSnapshot({
       admin,
@@ -537,6 +595,34 @@ export async function persistCleanerPayoutIfUnset(
   params: { admin: SupabaseClient; bookingId: string; cleanerId: string },
 ): Promise<{ ok: true; skipped: boolean; payout?: CleanerPayoutResult } | { ok: false; error: string }> {
   try {
+    const { data: idemRow } = await params.admin
+      .from("bookings")
+      .select("is_team_job, display_earnings_cents, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents")
+      .eq("id", params.bookingId)
+      .maybeSingle();
+    if (idemRow && (idemRow as { is_team_job?: boolean | null }).is_team_job !== true) {
+      const finRaw = (idemRow as { cleaner_line_earnings_finalized_at?: string | null }).cleaner_line_earnings_finalized_at;
+      const lineFinalized = finRaw != null && String(finRaw).trim() !== "";
+      const totalRaw = (idemRow as { cleaner_earnings_total_cents?: number | null }).cleaner_earnings_total_cents;
+      const totalSet = totalRaw != null && Number.isFinite(Number(totalRaw));
+      const displayOk = hasPersistedDisplayEarningsBasis((idemRow as { display_earnings_cents?: unknown }).display_earnings_cents);
+      if (lineFinalized && totalSet && displayOk) {
+        const { count, error: ctErr } = await params.admin
+          .from("cleaner_earnings")
+          .select("id", { count: "exact", head: true })
+          .eq("booking_id", params.bookingId);
+        if (!ctErr && (count ?? 0) > 0) {
+          void logSystemEvent({
+            level: "info",
+            source: "persistCleanerPayoutIfUnset",
+            message: "skip_idempotent_solo_ledger_and_lines_finalized",
+            context: { bookingId: params.bookingId, cleanerId: params.cleanerId },
+          });
+          return { ok: true, skipped: true };
+        }
+      }
+    }
+
     const first = await persistCleanerPayoutIfUnsetCore(params);
     let out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, first);
     if (!out.ok) {
