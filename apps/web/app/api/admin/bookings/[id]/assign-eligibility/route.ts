@@ -104,6 +104,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const eligibility: Record<
     string,
     {
+      weekdayOk: boolean;
       slotCalendarOk: boolean;
       overlapBlocked: boolean;
       busyUntilLabel: string | null;
@@ -122,6 +123,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
           ? `Busy until ${formatMinutesAsHm(row.busyUntilMin)} (overlap)`
           : null;
     eligibility[id] = {
+      weekdayOk: row.weekdayOk,
       slotCalendarOk: row.slotCalendarOk,
       overlapBlocked: row.overlapBlocked,
       busyUntilLabel: row.busyUntilMin != null ? formatMinutesAsHm(row.busyUntilMin) : null,

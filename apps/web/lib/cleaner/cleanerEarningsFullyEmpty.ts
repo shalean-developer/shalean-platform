@@ -5,14 +5,17 @@ export function cleanerEarningsFullyEmpty(
     eligible_cents: number;
     paid_cents: number;
     invalid_cents?: number;
+    frozen_batch_cents?: number;
   },
   opts?: { completedEarningsRowCount?: number },
 ): boolean {
   const n = opts?.completedEarningsRowCount;
   if (typeof n === "number" && n > 0) return false;
   const inv = Math.round(Number(s.invalid_cents) || 0);
+  const frozen = Math.round(Number(s.frozen_batch_cents) || 0);
   return (
     inv === 0 &&
+    frozen === 0 &&
     Math.round(Number(s.pending_cents) || 0) === 0 &&
     Math.round(Number(s.eligible_cents) || 0) === 0 &&
     Math.round(Number(s.paid_cents) || 0) === 0

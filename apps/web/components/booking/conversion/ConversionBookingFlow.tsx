@@ -89,7 +89,7 @@ export function ConversionBookingFlow() {
     setLocking(true);
     setSubmitError(null);
     try {
-      const res = await fetch("/api/bookings", {
+      const res = await fetch("/api/booking/widget-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -101,7 +101,6 @@ export function ConversionBookingFlow() {
           date: form.date,
           time: form.time,
           location: "",
-          dryRun: true,
         }),
       });
       const json = (await res.json()) as { total_paid_zar?: number; error?: string };

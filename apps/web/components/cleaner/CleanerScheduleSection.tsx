@@ -353,6 +353,13 @@ export function CleanerScheduleSection({
                             {v.service} · {formatDuration(v.durationHours)}
                             {row.date ? ` · ${String(row.date).slice(0, 10)}` : null}
                           </p>
+                          {v.scopeLines.length > 0 ? (
+                            <ul className="mt-1 list-inside list-disc text-xs text-zinc-600 dark:text-zinc-400">
+                              {v.scopeLines.map((line, i) => (
+                                <li key={`${i}-${line}`}>{line}</li>
+                              ))}
+                            </ul>
+                          ) : null}
                           <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-2 text-xs">
                             {earnCents != null && earnCents > 0 ? (
                               <>
@@ -432,6 +439,13 @@ export function CleanerScheduleSection({
                             <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                               {durationLineOpen ? <p>{durationLineOpen}</p> : null}
                               <p className="font-medium text-zinc-800 dark:text-zinc-200">{suburb}</p>
+                              {v.scopeLines.length > 0 ? (
+                                <ul className="list-inside list-disc space-y-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                                  {v.scopeLines.map((line, i) => (
+                                    <li key={`${i}-${line}`}>{line}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
                             </div>
                             {microNudge ? (
                               <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{microNudge}</p>

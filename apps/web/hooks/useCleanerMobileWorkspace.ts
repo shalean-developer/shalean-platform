@@ -9,6 +9,8 @@ import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import { getActiveMobileJob, getNextUpcomingMobileJob } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { sortCleanerOffersByAcceptanceScore } from "@/lib/cleaner/cleanerOfferAcceptanceRank";
+import { mapCleanerMeToMobileProfile } from "@/lib/cleaner/cleanerMobileProfileFromMe";
+import { setCleanerAvailability as patchCleanerAvailability } from "@/lib/cleaner/setCleanerAvailability";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import {
   trustJobCompletionFeedbackFromRow,
@@ -33,6 +35,7 @@ type MeCleaner = {
   jobs_completed?: number | null;
   location?: string | null;
   created_at?: string | null;
+  availability_weekdays?: string[] | null;
 };
 
 export type CleanerJobAction = "accept" | "reject" | "en_route" | "start" | "complete";
@@ -282,21 +285,10 @@ export function useCleanerMobileWorkspace() {
   const setAvailability = useCallback(async (next: boolean) => {
     const o = assertOnline();
     if (!o.ok) return o;
-    const headers = await getCleanerAuthHeaders();
-    if (!headers) return { ok: false as const, error: "Not signed in." };
-    try {
-      const res = await cleanerAuthenticatedFetch("/api/cleaner/me", {
-        method: "PATCH",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ is_available: next }),
-      });
-      const json = (await res.json()) as { cleaner?: MeCleaner; error?: string };
-      if (!res.ok) return { ok: false as const, error: json.error ?? "Update failed." };
-      if (json.cleaner) setCleaner(json.cleaner);
-      return { ok: true as const };
-    } catch {
-      return { ok: false as const, error: "Network error." };
-    }
+    const r = await patchCleanerAvailability(next);
+    if (!r.ok) return r;
+    setCleaner(r.cleaner as MeCleaner);
+    return { ok: true as const };
   }, []);
 
   const activeJob = useMemo(() => getActiveMobileJob(rows), [rows]);
@@ -324,27 +316,7 @@ export function useCleanerMobileWorkspace() {
     return Math.max(0, n - 1);
   }, [rankedSoloOffers]);
 
-  const profile = useMemo(() => {
-    if (!cleaner) return null;
-    const phone = String(cleaner.phone_number ?? cleaner.phone ?? "").trim() || "—";
-    const areas = cleaner.location?.trim() ? [cleaner.location.trim()] : ["Areas not set"];
-    const jobsCompleted =
-      typeof cleaner.jobs_completed === "number" && Number.isFinite(cleaner.jobs_completed)
-        ? Math.max(0, Math.round(cleaner.jobs_completed))
-        : 0;
-    const createdRaw = cleaner.created_at;
-    const createdAt =
-      typeof createdRaw === "string" && createdRaw.trim().length > 0 ? createdRaw.trim() : null;
-    return {
-      name: cleaner.full_name?.trim() || "Cleaner",
-      phone,
-      areas,
-      rating: typeof cleaner.rating === "number" && Number.isFinite(cleaner.rating) ? cleaner.rating : 5,
-      isAvailable: cleaner.is_available === true || String(cleaner.status ?? "").toLowerCase() === "available",
-      jobsCompleted,
-      createdAt,
-    };
-  }, [cleaner]);
+  const profile = useMemo(() => mapCleanerMeToMobileProfile(cleaner), [cleaner]);
 
   return {
     rows,

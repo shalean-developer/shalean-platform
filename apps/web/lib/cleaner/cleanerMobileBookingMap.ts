@@ -1,4 +1,5 @@
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -42,6 +43,11 @@ export type CleanerMobileJobView = {
   cleanerId?: string | null;
   /** Invoice / paid total in ZAR when present — UX-only pay hint when {@link CleanerMobileJobView.earningsCents} is null. */
   jobTotalZar: number | null;
+  /**
+   * Rooms, bathrooms, and add-ons **as stored on the booking** (columns + snapshot + `extras` JSON).
+   * Never derived from the live pricing catalog.
+   */
+  scopeLines: readonly string[];
 };
 
 /** Hours from `booking_snapshot.locked.finalHours`, default 2 when missing. */
@@ -193,6 +199,7 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
 
   const mergedNotes = notesFromSnapshot(row.booking_snapshot);
   const chips = mergedNotes ? operationalNoteChipsFromText(mergedNotes) : [];
+  const scopeLines = cleanerBookingScopeLines(row);
 
   return {
     id: row.id,
@@ -218,6 +225,7 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     enRouteAt: row.en_route_at ? String(row.en_route_at) : null,
     cleanerId: row.cleaner_id != null && String(row.cleaner_id).trim() ? String(row.cleaner_id).trim() : null,
     jobTotalZar: jobTotalZarFromCleanerBookingLike(row),
+    scopeLines,
   };
 }
 

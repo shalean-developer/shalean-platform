@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
+import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 
 type PayoutRow = {
   id: string;
@@ -15,13 +17,6 @@ type BookingPayoutRow = {
   cleaner_payout_cents: number | null;
   cleaner_bonus_cents: number | null;
   is_test: boolean | null;
-};
-
-type CleanerPaymentDetails = {
-  cleaner_id: string;
-  account_number: string;
-  bank_code: string;
-  recipient_code: string;
 };
 
 type ExistingTransfer = {
@@ -55,11 +50,21 @@ function cents(value: unknown): number {
   return Math.max(0, Math.round(Number(value)));
 }
 
+function paystackTransferClientReference(payoutId: string, paymentStatus: string | null | undefined): string {
+  const base = `shalean-cleaner-payout-${payoutId}`;
+  const s = String(paymentStatus ?? "")
+    .trim()
+    .toLowerCase();
+  if (s === "failed" || s === "partial_failed") return `${base}-retry-${Date.now()}`;
+  return base;
+}
+
 async function paystackRequest(path: string, body: Record<string, unknown>): Promise<{ ok: true; json: PaystackJson } | { ok: false; error: string }> {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
 
-  const res = await fetch(`https://api.paystack.co${path}`, {
+  const origin = getPaystackBaseUrl();
+  const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${secret}`,
@@ -182,25 +187,17 @@ export async function payCleanerPayoutWithPaystack(
     return { ok: false, error: "Payout total does not match linked booking totals.", status: 400 };
   }
 
-  const { data: detailsData, error: detailsErr } = await admin
-    .from("cleaner_payment_details")
-    .select("cleaner_id, account_number, bank_code, recipient_code")
-    .eq("cleaner_id", payout.cleaner_id)
-    .maybeSingle();
-  if (detailsErr) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: detailsErr.message };
-  }
-  if (!detailsData || !(detailsData as CleanerPaymentDetails).recipient_code?.trim()) {
-    const error = "Cleaner Paystack recipient_code is missing. Create the Paystack recipient before payout.";
+  const ensured = await ensurePaystackRecipient(admin, payout.cleaner_id);
+  if (!ensured.ok) {
+    const error = ensured.error;
     await logFailedTransfer(admin, { payoutId: payout.id, cleanerId: payout.cleaner_id, amountCents: payoutAmount, error });
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error, status: 400 };
   }
 
-  const recipientCode = (detailsData as CleanerPaymentDetails).recipient_code.trim();
+  const recipientCode = ensured.recipientCode;
 
-  const reference = payout.payment_reference?.trim() || `cleaner-payout-${payout.id}`;
+  const reference = paystackTransferClientReference(payout.id, payout.payment_status);
   const transfer = await paystackRequest("/transfer", {
     source: "balance",
     amount: payoutAmount,

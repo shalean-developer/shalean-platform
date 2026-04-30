@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { runAdminCreateCleaner } from "@/lib/cleaner/runAdminCreateCleaner";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -36,10 +37,25 @@ export async function GET(request: Request) {
   const search = new URL(request.url).searchParams.get("search")?.trim() ?? "";
   const escaped = search.replace(/%/g, "\\%").replace(/,/g, "");
 
-  let query = admin
-    .from("cleaners")
-    .select(
-      `
+  const selectWithWeekdays = `
+      id,
+      full_name,
+      phone,
+      auth_user_id,
+      rating,
+      jobs_completed,
+      is_available,
+      home_lat,
+      home_lng,
+      email,
+      status,
+      city_id,
+      location,
+      availability_start,
+      availability_end,
+      availability_weekdays
+    `;
+  const selectBase = `
       id,
       full_name,
       phone,
@@ -55,15 +71,22 @@ export async function GET(request: Request) {
       location,
       availability_start,
       availability_end
-    `,
-    )
-    .order("full_name", { ascending: true });
+    `;
 
-  if (escaped.length > 0) {
-    query = query.or(`full_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`);
+  const build = (columns: string) => {
+    let q = admin.from("cleaners").select(columns).order("full_name", { ascending: true });
+    if (escaped.length > 0) {
+      q = q.or(`full_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`);
+    }
+    return q;
+  };
+
+  let { data, error } = await build(selectWithWeekdays);
+  if (error && isUnknownColumnError(error, "availability_weekdays")) {
+    const r2 = await build(selectBase);
+    data = r2.data;
+    error = r2.error;
   }
-
-  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

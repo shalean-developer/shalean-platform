@@ -52,6 +52,21 @@ export function nextPayoutMondayWithRelativeDays(now = new Date()): string {
   return `${base} (in ${d} days)`;
 }
 
+/** Compact line for sticky earnings header (weekday + countdown, Johannesburg calendar). */
+export function nextPayoutStickySubtitle(now = new Date()): string {
+  const today = johannesburgCalendarYmd(now);
+  const payoutYmd = nextPayoutDayJhb(now);
+  const d = parseYmdSast(payoutYmd);
+  const weekday = d.toLocaleDateString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    weekday: "long",
+  });
+  const days = johannesburgCalendarDaysBetween(today, payoutYmd);
+  if (days <= 0) return `Next payout · ${weekday} (today)`;
+  if (days === 1) return `Next payout · ${weekday} (tomorrow)`;
+  return `Next payout · ${weekday} · in ${days} days`;
+}
+
 /** Stronger CTA when there is an eligible balance but no recipient on file. */
 export function cleanerBankDetailsPromptWithEligible(eligibleCents: number): string {
   return `⚠ Add bank details to receive ${formatZarFromCents(eligibleCents)}`;

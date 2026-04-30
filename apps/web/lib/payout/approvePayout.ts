@@ -17,18 +17,34 @@ export async function approveCleanerPayout(
     return { ok: false, error: "Cannot approve a payout batch containing test bookings." };
   }
 
-  const { data: updated, error } = await admin
+  const patch = {
+    status: "approved" as const,
+    approved_at: new Date().toISOString(),
+    approved_by: params.approvedBy,
+  };
+
+  const { data: updatedPending, error: errPending } = await admin
     .from("cleaner_payouts")
-    .update({
-      status: "approved",
-      approved_at: new Date().toISOString(),
-      approved_by: params.approvedBy,
-    })
+    .update(patch)
     .eq("id", params.payoutId)
     .eq("status", "pending")
     .select("id");
 
-  if (error) return { ok: false, error: error.message };
+  if (errPending) return { ok: false, error: errPending.message };
+
+  let updated = updatedPending;
+  if (!updated?.length) {
+    const { data: updatedFrozen, error: errFrozen } = await admin
+      .from("cleaner_payouts")
+      .update(patch)
+      .eq("id", params.payoutId)
+      .eq("status", "frozen")
+      .is("payout_run_id", null)
+      .select("id");
+    if (errFrozen) return { ok: false, error: errFrozen.message };
+    updated = updatedFrozen;
+  }
+
   if (!updated?.length) return { ok: false, error: "Payout is not pending or was already updated." };
 
   void logSystemEvent({

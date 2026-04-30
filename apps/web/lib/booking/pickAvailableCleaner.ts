@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 
 export type CleanerPick = { id: string; phone: string; /** `cleaners.full_name` for WhatsApp template {{1}} */ fullName: string };
 
@@ -44,6 +46,7 @@ type CleanerRow = {
   acceptance_rate?: number | null;
   avg_response_time_ms?: number | null;
   total_offers?: number | null;
+  availability_weekdays?: string[] | null;
 };
 
 export type DispatchPickBehavior = {
@@ -460,11 +463,22 @@ export async function pickAvailableCleaner(
       .filter((id): id is string => typeof id === "string" && id.length > 0),
   );
 
-  const { data: cleaners, error } = await admin
-    .from("cleaners")
-    .select("id, phone, phone_number, full_name, acceptance_rate, avg_response_time_ms, total_offers")
-    .eq("is_available", true)
-    .limit(MAX_CLEANER_CANDIDATES);
+  const selWithWd =
+    "id, phone, phone_number, full_name, acceptance_rate, avg_response_time_ms, total_offers, availability_weekdays";
+  const selBase = "id, phone, phone_number, full_name, acceptance_rate, avg_response_time_ms, total_offers";
+
+  let cleaners: CleanerRow[] | null = null;
+  let error = null as { message?: string } | null;
+  {
+    const r1 = await admin.from("cleaners").select(selWithWd).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES);
+    cleaners = (r1.data ?? null) as CleanerRow[] | null;
+    error = r1.error;
+    if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
+      const r2 = await admin.from("cleaners").select(selBase).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES);
+      cleaners = (r2.data ?? null) as CleanerRow[] | null;
+      error = r2.error;
+    }
+  }
 
   if (error || !cleaners?.length) {
     if (error) console.error("[pickAvailableCleaner] cleaners query failed", error.message);
@@ -474,7 +488,12 @@ export async function pickAvailableCleaner(
   const list = cleaners as CleanerRow[];
   const eligible = list.filter((c) => {
     const hasPhone = String(c.phone_number || c.phone || "").trim().length > 0;
-    return hasPhone && !busyCleanerIds.has(c.id) && !exclude.has(c.id);
+    return (
+      hasPhone &&
+      !busyCleanerIds.has(c.id) &&
+      !exclude.has(c.id) &&
+      cleanerWorksOnScheduledWeekday(c.availability_weekdays, slotDate)
+    );
   });
   if (!eligible.length) return null;
 

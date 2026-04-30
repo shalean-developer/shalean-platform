@@ -34,6 +34,8 @@ export type AdminCleanerRow = {
   location?: string | null;
   availability_start?: string | null;
   availability_end?: string | null;
+  /** Lowercase mon..sun from `cleaners.availability_weekdays`. */
+  availability_weekdays?: string[] | null;
 };
 
 export type CleanerAuthBackfillResult = {
@@ -406,6 +408,7 @@ export async function updateCleanerProfile(
     availability_end?: string | null;
     is_available?: boolean;
     status?: "available" | "busy" | "offline";
+    availability_weekdays?: string[];
   },
 ) {
   const token = await getAdminToken();

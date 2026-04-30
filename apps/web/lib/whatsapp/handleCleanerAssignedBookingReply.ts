@@ -254,7 +254,7 @@ export type TryHandleCleanerAssignedBookingWhatsAppReplyOpts = {
 };
 
 /**
- * Handles cleaner WhatsApp replies for assigned bookings (POST /api/bookings flow).
+ * Handles cleaner WhatsApp replies for assigned bookings (legacy assignment / admin flows).
  * Resolves booking via reply-context wamid → whatsapp_logs, UUID in body, then at most one assigned row in the last 30 minutes.
  * Decline runs before accept when both match. One reassignment attempt after decline. Does not throw.
  */

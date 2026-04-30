@@ -10,6 +10,8 @@ import {
   hasPersistedDisplayEarningsBasis,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { computeBookingEarnings, type ComputeBookingEarningsOutput } from "@/lib/payout/computeBookingEarnings";
+import { sumEligibleLineItemsSubtotalCents } from "@/lib/payout/computeEarningsFromLineItems";
+import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
@@ -165,6 +167,7 @@ async function persistCleanerPayoutIfUnsetCore(
   }
 
   const r = row as {
+    payout_id?: string | null;
     cleaner_id?: string | null;
     payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
@@ -192,6 +195,24 @@ async function persistCleanerPayoutIfUnsetCore(
     return { ok: true, skipped: true };
   }
 
+  const payoutIdForLock = String(r.payout_id ?? "").trim();
+  if (payoutIdForLock) {
+    const { data: cp, error: cpErr } = await admin
+      .from("cleaner_payouts")
+      .select("status, frozen_at")
+      .eq("id", payoutIdForLock)
+      .maybeSingle();
+    if (cpErr) return { ok: false, error: cpErr.message };
+    const cpRow = cp as { status?: string | null; frozen_at?: string | null } | null;
+    const frozenAt = cpRow?.frozen_at != null && String(cpRow.frozen_at).trim() !== "";
+    const st = String(cpRow?.status ?? "")
+      .trim()
+      .toLowerCase();
+    if (frozenAt || st === "frozen" || st === "approved" || st === "paid") {
+      return { ok: true, skipped: true };
+    }
+  }
+
   const recomputeZeroDisplay = shouldRecomputeZeroDisplayEarnings(r);
   if (r.display_earnings_cents != null && Number.isFinite(Number(r.display_earnings_cents)) && !recomputeZeroDisplay) {
     return { ok: true, skipped: true };
@@ -207,25 +228,58 @@ async function persistCleanerPayoutIfUnsetCore(
   const serviceId = resolveServiceId(r.booking_snapshot ?? null, r.service ?? null);
   const isTeamJob = r.is_team_job === true;
 
+  let lineItemRows: { id: string; item_type: string; total_price_cents: number }[] = [];
+  if (!isTeamJob) {
+    const { data: li } = await admin
+      .from("booking_line_items")
+      .select("id, item_type, total_price_cents")
+      .eq("booking_id", bookingId);
+    lineItemRows = (li ?? [])
+      .map((x) => x as { id?: string; item_type?: string; total_price_cents?: number })
+      .filter((x) => typeof x.id === "string" && typeof x.item_type === "string")
+      .map((x) => ({
+        id: String(x.id),
+        item_type: String(x.item_type),
+        total_price_cents: Number(x.total_price_cents) || 0,
+      }));
+  }
+
   let earnings: ComputeBookingEarningsOutput | null = null;
   let usedFallback = false;
   let computeRejectReason: string | null = null;
+  let usedLineItemBasis = false;
 
-  try {
-    const computed = await computeBookingEarnings({
-      servicePriceCents: payoutBaseCents,
-      serviceId,
-      cleanerId: expectedCleanerId,
-      isTeamJob,
-      bookingDate: bookingDateIso,
-    });
-    if (isValidEarningsShape(computed)) {
-      earnings = computed;
-    } else {
+  async function tryComputeEarnings(servicePriceCents: number, team: boolean): Promise<ComputeBookingEarningsOutput | null> {
+    try {
+      const computed = await computeBookingEarnings({
+        servicePriceCents,
+        serviceId,
+        cleanerId: expectedCleanerId,
+        isTeamJob: team,
+        bookingDate: bookingDateIso,
+      });
+      if (isValidEarningsShape(computed)) return computed;
       computeRejectReason = "invalid_compute_output";
+    } catch (e) {
+      computeRejectReason = `compute_threw:${String(e)}`;
     }
-  } catch (e) {
-    computeRejectReason = `compute_threw:${String(e)}`;
+    return null;
+  }
+
+  if (!isTeamJob) {
+    const lineSubtotal = sumEligibleLineItemsSubtotalCents(lineItemRows);
+    if (lineSubtotal > 0) {
+      const fromLines = await tryComputeEarnings(lineSubtotal, false);
+      if (fromLines) {
+        earnings = fromLines;
+        usedLineItemBasis = true;
+      }
+    }
+  }
+
+  if (!earnings) {
+    const fromBooking = await tryComputeEarnings(payoutBaseCents, isTeamJob);
+    if (fromBooking) earnings = fromBooking;
   }
 
   if (!earnings) {
@@ -390,6 +444,22 @@ async function persistCleanerPayoutIfUnsetCore(
     return { ok: false, error: soloVerify.error };
   }
 
+  if (usedLineItemBasis && lineItemRows.length > 0) {
+    const snap = await persistBookingCleanerEarningsSnapshot({
+      admin,
+      bookingId,
+      cleanerId: expectedCleanerId,
+      lineRows: lineItemRows,
+      earnings,
+    });
+    if (!snap.ok) {
+      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `booking_cleaner_earnings_snapshot: ${snap.error}`, {
+        bookingId,
+        cleanerId: expectedCleanerId,
+      });
+    }
+  }
+
   void logSystemEvent({
     level: "info",
     source: "PAYOUT_CALCULATED",
@@ -404,6 +474,7 @@ async function persistCleanerPayoutIfUnsetCore(
       payoutPercentage: payout.payoutPercentage,
       payoutBaseCents: payout.payoutBaseCents,
       serviceFeeCents: payout.serviceFeeCents,
+      used_line_item_earnings_basis: usedLineItemBasis,
     },
   });
 

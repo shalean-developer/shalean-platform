@@ -81,6 +81,10 @@ type FormState = {
   date: string;
   time: string;
   service: BookingServiceId;
+  /** Bedroom count for cleaner scope and Paystack lock (required for per-booking links). */
+  rooms: string;
+  /** Bathroom count for cleaner scope and Paystack lock. */
+  bathrooms: string;
   /** Saved `customer_saved_addresses.id`, or "" when typing a custom address. */
   savedAddressId: string;
   /** When true, `location` is typed manually; when false, a saved property supplies it. */
@@ -97,6 +101,8 @@ function emptyForm(): FormState {
     date: "",
     time: "",
     service: "standard",
+    rooms: "2",
+    bathrooms: "1",
     savedAddressId: "",
     useCustomAddress: false,
     location: "",
@@ -440,6 +446,14 @@ export default function AdminCreateBookingPage() {
     if (!Number.isFinite(price) || price < 1 || price > 100_000) {
       return "Visit price (ZAR) must be between 1 and 100000.";
     }
+    const rooms = Number(f.rooms);
+    const bathrooms = Number(f.bathrooms);
+    if (!Number.isFinite(rooms) || rooms < 1 || rooms > 20) {
+      return "Bedrooms must be a whole number from 1 to 20.";
+    }
+    if (!Number.isFinite(bathrooms) || bathrooms < 1 || bathrooms > 20) {
+      return "Bathrooms must be a whole number from 1 to 20.";
+    }
     return null;
   }
 
@@ -451,6 +465,8 @@ export default function AdminCreateBookingPage() {
         date: f.date.trim(),
         time: normalizeTimeHm(f.time),
         service: f.service,
+        rooms: Math.round(Number(f.rooms)),
+        bathrooms: Math.round(Number(f.bathrooms)),
         location: f.location.trim(),
         notes: f.notes.trim(),
         totalPaidZar: Number(f.totalPaidZar),
@@ -547,6 +563,14 @@ export default function AdminCreateBookingPage() {
           date: typeof o.date === "string" ? o.date : "",
           time: normalizeTimeHm(typeof o.time === "string" ? o.time : ""),
           service: svc,
+          rooms:
+            typeof o.rooms === "number" && Number.isFinite(o.rooms)
+              ? String(Math.round(o.rooms))
+              : typeof o.bedrooms === "number" && Number.isFinite(o.bedrooms)
+                ? String(Math.round(o.bedrooms))
+                : "2",
+          bathrooms:
+            typeof o.bathrooms === "number" && Number.isFinite(o.bathrooms) ? String(Math.round(o.bathrooms)) : "1",
           savedAddressId: sid,
           useCustomAddress: !sid && loc.trim().length > 0,
           location: loc,
@@ -578,6 +602,16 @@ export default function AdminCreateBookingPage() {
           date: typeof o.date === "string" ? o.date : s.date,
           time: normalizeTimeHm(typeof o.time === "string" ? o.time : s.time),
           service: (typeof o.service === "string" ? o.service : s.service) as BookingServiceId,
+          rooms:
+            typeof o.rooms === "number" && Number.isFinite(o.rooms)
+              ? String(Math.round(o.rooms))
+              : typeof o.bedrooms === "number" && Number.isFinite(o.bedrooms)
+                ? String(Math.round(o.bedrooms))
+                : s.rooms,
+          bathrooms:
+            typeof o.bathrooms === "number" && Number.isFinite(o.bathrooms)
+              ? String(Math.round(o.bathrooms))
+              : s.bathrooms,
           savedAddressId: savedFromLast,
           useCustomAddress: useCustom,
           location: oloc,
@@ -643,6 +677,8 @@ export default function AdminCreateBookingPage() {
         date: form.date.trim(),
         time: timeHm,
         service: form.service,
+        rooms: Math.round(Number(form.rooms)),
+        bathrooms: Math.round(Number(form.bathrooms)),
         location: form.location.trim(),
         notes: form.notes.trim(),
         totalPaidZar: Math.round(Number(form.totalPaidZar)),
@@ -744,6 +780,8 @@ export default function AdminCreateBookingPage() {
           selectedCustomer: s.selectedCustomer,
           totalPaidZar: s.totalPaidZar,
           service: s.service,
+          rooms: s.rooms,
+          bathrooms: s.bathrooms,
           savedAddressId: s.savedAddressId,
           useCustomAddress: s.savedAddressId ? false : s.useCustomAddress,
           location: s.location,
@@ -877,6 +915,16 @@ export default function AdminCreateBookingPage() {
         return {
           ...s,
           service: (typeof o.service === "string" ? o.service : s.service) as BookingServiceId,
+          rooms:
+            typeof o.rooms === "number" && Number.isFinite(o.rooms)
+              ? String(Math.round(o.rooms))
+              : typeof o.bedrooms === "number" && Number.isFinite(o.bedrooms)
+                ? String(Math.round(o.bedrooms))
+                : s.rooms,
+          bathrooms:
+            typeof o.bathrooms === "number" && Number.isFinite(o.bathrooms)
+              ? String(Math.round(o.bathrooms))
+              : s.bathrooms,
           savedAddressId: nextSid,
           useCustomAddress: !(typeof o.saved_address_id === "string" && o.saved_address_id),
           location: typeof o.location === "string" ? o.location : s.location,
@@ -980,6 +1028,8 @@ export default function AdminCreateBookingPage() {
                       notes: "",
                       totalPaidZar: "",
                       service: "standard",
+                      rooms: "2",
+                      bathrooms: "1",
                     }));
                   }}
                   disabled={submitting}
@@ -1161,6 +1211,44 @@ export default function AdminCreateBookingPage() {
                 ))}
               </Select>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
+                <Label htmlFor="rooms">
+                  Bedrooms <span className="text-red-600 dark:text-red-400">*</span>
+                </Label>
+                <Input
+                  id="rooms"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={form.rooms}
+                  onChange={(e) => setForm((s) => ({ ...s, rooms: e.target.value }))}
+                  disabled={submitting}
+                />
+              </div>
+              <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
+                <Label htmlFor="bathrooms">
+                  Bathrooms <span className="text-red-600 dark:text-red-400">*</span>
+                </Label>
+                <Input
+                  id="bathrooms"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={form.bathrooms}
+                  onChange={(e) => setForm((s) => ({ ...s, bathrooms: e.target.value }))}
+                  disabled={submitting}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Shown to cleaners on the job card. Required for per-booking payment links.
+            </p>
 
             {form.selectedCustomer ? (
               <div className="border-l-4 border-amber-400/80 pl-3">

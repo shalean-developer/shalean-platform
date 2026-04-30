@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
 import type { AvailableCleaner, CleanerAvailabilityRow } from "@/lib/booking/cleanerPoolTypes";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
@@ -56,6 +58,7 @@ export type CleanerBase = {
   longitude?: number | null;
   location_id?: string | null;
   status?: string | null;
+  availability_weekdays?: string[] | null;
 };
 
 function toMinutes(hm: string): number {
@@ -157,27 +160,41 @@ export async function getEligibleCleaners(
 
   let cleaners: CleanerBase[];
   if (params.preloadedCleaners?.length) {
-    cleaners = params.preloadedCleaners.filter((c) => c.is_available !== false && String(c.status ?? "").toLowerCase() !== "offline");
+    cleaners = params.preloadedCleaners.filter((c) => {
+      if (c.is_available === false || String(c.status ?? "").toLowerCase() === "offline") return false;
+      if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) return false;
+      return true;
+    });
     if (params.cleanerIds?.length) {
       const allow = new Set(params.cleanerIds);
       cleaners = cleaners.filter((c) => allow.has(c.id));
     }
   } else {
-    let q = admin
-      .from("cleaners")
-      .select(
-        "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status",
-      )
-      .eq("is_available", true)
-      .neq("status", "offline");
+    const selWithWd =
+      "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
+    const selBase =
+      "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
 
-    if (params.cleanerIds?.length) {
-      q = q.in("id", params.cleanerIds);
+    const run = (columns: string) => {
+      let q = admin.from("cleaners").select(columns).eq("is_available", true).neq("status", "offline");
+      if (params.cleanerIds?.length) q = q.in("id", params.cleanerIds);
+      return q;
+    };
+
+    let cleanersRaw: CleanerBase[] | null = null;
+    let cErr = null as { message?: string } | null;
+    {
+      const r1 = await run(selWithWd);
+      cleanersRaw = (r1.data ?? null) as CleanerBase[] | null;
+      cErr = r1.error;
+      if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
+        const r2 = await run(selBase);
+        cleanersRaw = (r2.data ?? null) as CleanerBase[] | null;
+        cErr = r2.error;
+      }
     }
-
-    const { data: cleanersRaw, error: cErr } = await q;
     if (cErr || !cleanersRaw?.length) return [];
-    cleaners = cleanersRaw as CleanerBase[];
+    cleaners = cleanersRaw;
   }
 
   if (!cleaners.length) return [];
@@ -239,6 +256,8 @@ export async function getEligibleCleaners(
 
   const filtered: CleanerBase[] = [];
   for (const c of cleaners) {
+    if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) continue;
+
     const avail = availabilityByCleaner.get(c.id) ?? [];
     const windows = avail.map((a) => ({
       start_time: String(a.start_time ?? "00:00").slice(0, 5),

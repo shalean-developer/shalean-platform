@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchCleanerTeamIds } from "@/lib/cleaner/cleanerBookingAccess";
+import { fetchCleanerMeRow, updateCleanerMeAvailabilityAndFetch } from "@/lib/cleaner/cleanerMeDb";
 import { resolveCleanerFromRequest } from "@/lib/cleaner/resolveCleanerFromRequest";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -21,11 +22,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data: cleaner, error } = await admin
-    .from("cleaners")
-    .select("id, full_name, phone, phone_number, email, status, is_available, rating, jobs_completed, created_at, location")
-    .eq("id", session.cleaner.id)
-    .maybeSingle();
+  const { data: cleaner, error } = await fetchCleanerMeRow(admin, session.cleaner.id);
 
   if (error) {
     return NextResponse.json(
@@ -78,12 +75,12 @@ export async function PATCH(request: Request) {
   }
 
   const status = body.is_available ? "available" : "offline";
-  const { data: cleaner, error } = await admin
-    .from("cleaners")
-    .update({ is_available: body.is_available, status })
-    .eq("id", session.cleaner.id)
-    .select("id, full_name, phone, phone_number, email, status, is_available, rating, jobs_completed, created_at, location")
-    .maybeSingle();
+  const { data: cleaner, error } = await updateCleanerMeAvailabilityAndFetch(
+    admin,
+    session.cleaner.id,
+    body.is_available,
+    status,
+  );
 
   if (error) {
     return NextResponse.json(

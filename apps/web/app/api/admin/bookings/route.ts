@@ -26,6 +26,9 @@ import {
 import { adminPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
+import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { reportOperationalIssue, logSystemEvent } from "@/lib/logging/systemLog";
 import { aggregatePaymentLinkDeliveryStats } from "@/lib/pay/paymentLinkDeliveryStats";
@@ -413,6 +416,14 @@ export async function POST(request: Request) {
   const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 4000) : "";
   const totalPaidZar =
     typeof body.totalPaidZar === "number" && Number.isFinite(body.totalPaidZar) ? Math.round(body.totalPaidZar) : NaN;
+  const roomsRaw = body.rooms ?? body.bedrooms;
+  const roomsOpt =
+    typeof roomsRaw === "number" && Number.isFinite(roomsRaw) ? Math.round(roomsRaw) : undefined;
+  const bathroomsOpt =
+    typeof body.bathrooms === "number" && Number.isFinite(body.bathrooms) ? Math.round(body.bathrooms) : undefined;
+  const extrasOpt = Array.isArray(body.extras)
+    ? (body.extras as unknown[]).filter((x): x is string => typeof x === "string")
+    : undefined;
   const force =
     body.force === true ||
     body.force === "true" ||
@@ -441,6 +452,24 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  if (roomsOpt == null || bathroomsOpt == null || roomsOpt < 1 || roomsOpt > 20 || bathroomsOpt < 1 || bathroomsOpt > 20) {
+    return NextResponse.json(
+      {
+        error:
+          "rooms and bathrooms are required (whole numbers 1–20). Send `rooms` and `bathrooms` in the request body.",
+      },
+      { status: 400 },
+    );
+  }
+  const rooms = Math.min(20, Math.max(1, Math.round(roomsOpt)));
+  const bathrooms = Math.min(20, Math.max(1, Math.round(bathroomsOpt)));
+  const extrasAllowed = (extrasOpt ?? []).filter(
+    (x): x is string => typeof x === "string" && BOOKING_EXTRA_ID_SET.has(x.trim()),
+  );
+  const extrasPersist = sanitizeBookingExtrasForPersist(extrasAllowed, {
+    where: "POST /api/admin/bookings",
+  });
 
   const amountPaidCents = Math.round(totalPaidZar * 100);
 
@@ -549,17 +578,11 @@ export async function POST(request: Request) {
 
   if (billingType === "monthly") {
     const paystackReference = `adm_mi_${crypto.randomUUID()}`;
-    const bookingSnapshot = {
-      v: 1 as const,
-      admin_notes: notes,
-      customer_notes: notes,
-      service_slug: serviceSlug,
-    };
 
     // created_at is DB default (now); omit from insert so clustering stays deterministic.
-    const { data: row, error: insErr } = await admin
-      .from("bookings")
-      .insert({
+    const ins = await insertBookingRowUnified(admin, {
+      source: "admin_monthly",
+      rowBase: {
         paystack_reference: paystackReference,
         customer_email: customerEmail,
         customer_name: null,
@@ -567,16 +590,12 @@ export async function POST(request: Request) {
         user_id: userId,
         amount_paid_cents: amountPaidCents,
         currency: "ZAR",
-        booking_snapshot: bookingSnapshot,
         service_slug: serviceSlug,
         status: "pending",
         dispatch_status: "searching",
         surge_multiplier: 1,
         surge_reason: null,
         service: getServiceLabel(serviceId),
-        rooms: null,
-        bathrooms: null,
-        extras: [],
         location,
         location_id: null,
         city_id: null,
@@ -594,13 +613,33 @@ export async function POST(request: Request) {
               admin_force_slot_override: true,
             }
           : {}),
-      })
-      .select("id, monthly_invoice_id, created_at")
-      .maybeSingle();
+      },
+      rooms,
+      bathrooms,
+      extrasRaw: extrasPersist,
+      serviceSlugForFlat: serviceRaw,
+      locationForFlat: location,
+      dateForFlat: date,
+      timeForFlat: timeHm,
+      snapshotExtension: {
+        admin_notes: notes,
+        customer_notes: notes,
+        service_slug: serviceSlug,
+      },
+      select: "id, monthly_invoice_id, created_at",
+      logInsert: false,
+      lineItemsPricing: {
+        mode: "monthly_bundled_zar",
+        quotedTotalZar: totalPaidZar,
+        bundleLabel: "Admin monthly booking (job subtotal)",
+      },
+    });
 
-    if (insErr || !row || typeof (row as { id?: string }).id !== "string") {
-      const pgCode = (insErr as { code?: string } | null)?.code;
-      const msg = insErr?.message ?? "";
+    const row = ins.ok ? ins.row : null;
+
+    if (!ins.ok || !row || typeof (row as { id?: string }).id !== "string") {
+      const pgCode = ins.ok ? undefined : ins.pgCode;
+      const msg = ins.ok ? "" : ins.error;
       if (
         pgCode === "23505" ||
         /duplicate key|unique constraint|idx_bookings_unique_active_customer_slot/i.test(msg)
@@ -623,7 +662,12 @@ export async function POST(request: Request) {
           ),
         );
       }
-      return bail(NextResponse.json({ error: insErr?.message ?? "Could not create booking." }, { status: 500 }));
+      return bail(
+        NextResponse.json(
+          { error: !ins.ok ? ins.error : "Could not create booking." },
+          { status: 500 },
+        ),
+      );
     }
 
     const newBookingId = (row as { id: string }).id;
@@ -836,6 +880,9 @@ export async function POST(request: Request) {
       timeHm,
       location,
       finalPriceZar: totalPaidZar,
+      rooms,
+      bathrooms,
+      ...(extrasPersist.length > 0 ? { extras: extrasPersist.map((e) => e.slug) } : {}),
     });
   } catch (e) {
     return bail(

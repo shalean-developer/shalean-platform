@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CleanerEarningsUnifiedView } from "@/components/cleaner/CleanerEarningsUnifiedView";
+import { CleanerEarningsOverview } from "@/components/cleaner/CleanerEarningsOverview";
 import { useCleanerPayoutSummary } from "@/hooks/useCleanerPayoutSummary";
-import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummaryTypes";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { getActiveMobileJob, getNextUpcomingMobileJob, type CleanerMobileJobView } from "@/lib/cleaner/cleanerMobileBookingMap";
+import type { CleanerPayoutSummary } from "@/lib/cleaner/cleanerPayoutSummaryTypes";
 
 export default function CleanerEarningsPage() {
   const router = useRouter();
-  const { loading, error, summary, rows, missingBankDetails, refresh } = useCleanerPayoutSummary();
+  const { loading, error, summary, rows, missingBankDetails, hasFailedTransfer, refresh } = useCleanerPayoutSummary();
+  const [highlightJob, setHighlightJob] = useState<CleanerMobileJobView | null>(null);
+  const [openJobsCount, setOpenJobsCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!loading && error === "Not signed in.") {
@@ -16,25 +22,50 @@ export default function CleanerEarningsPage() {
     }
   }, [loading, error, router]);
 
-  const paidRowsSorted = useMemo(() => {
-    const paid = rows.filter((r) => r.payout_status === "paid" || r.payout_status === "invalid");
-    paid.sort((a, b) => {
-      const ai = a.payout_status === "invalid" ? 1 : 0;
-      const bi = b.payout_status === "invalid" ? 1 : 0;
-      if (ai !== bi) return bi - ai;
-      return String(b.payout_paid_at ?? "").localeCompare(String(a.payout_paid_at ?? ""));
-    });
-    return paid as CleanerPayoutSummaryRow[];
-  }, [rows]);
-
-  const pendingJobCount = useMemo(() => rows.filter((r) => r.payout_status === "pending").length, [rows]);
+  useEffect(() => {
+    if (loading || error) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const headers = await getCleanerAuthHeaders();
+        if (!headers || cancelled) return;
+        const res = await cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers });
+        const json = (await res.json().catch(() => ({}))) as { jobs?: CleanerBookingRow[] };
+        if (cancelled || !res.ok || !Array.isArray(json.jobs)) {
+          setHighlightJob(null);
+          setOpenJobsCount(null);
+          return;
+        }
+        const list = json.jobs;
+        setHighlightJob(getActiveMobileJob(list) ?? getNextUpcomingMobileJob(list));
+        setOpenJobsCount(
+          list.filter((r) => {
+            const st = String(r.status ?? "").toLowerCase();
+            return st !== "completed" && st !== "cancelled";
+          }).length,
+        );
+      } catch {
+        if (!cancelled) {
+          setHighlightJob(null);
+          setOpenJobsCount(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, error]);
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-md space-y-8 px-4 py-8">
+      <main className="mx-auto max-w-md space-y-4 px-4 py-8">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-        <div className="h-10 w-40 animate-pulse rounded-lg bg-zinc-200/80 dark:bg-zinc-800/80" />
-        <div className="h-24 w-full animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+        <div className="h-24 animate-pulse rounded-xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+        <div className="h-36 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800/60" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-20 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+          <div className="h-20 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+        </div>
       </main>
     );
   }
@@ -49,44 +80,42 @@ export default function CleanerEarningsPage() {
     );
   }
 
-  const s = summary ?? {
-    pending_cents: 0,
-    eligible_cents: 0,
-    paid_cents: 0,
-    invalid_cents: 0,
-    today_cents: 0,
-    week_cents: 0,
-    month_cents: 0,
-  };
+  const s: CleanerPayoutSummary =
+    summary ?? {
+      pending_cents: 0,
+      eligible_cents: 0,
+      paid_cents: 0,
+      frozen_batch_cents: 0,
+      invalid_cents: 0,
+      today_cents: 0,
+      week_cents: 0,
+      month_cents: 0,
+    };
 
   return (
-    <main className="mx-auto max-w-md px-4 py-8">
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+    <main className="mx-auto max-w-md px-4 py-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Earnings</h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Money and payouts in one place.</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Money first — then jobs and history.</p>
         </div>
         <button
           type="button"
           onClick={() => void refresh()}
-          className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          className="min-h-[44px] rounded-xl border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
         >
           Refresh
         </button>
       </div>
 
-      <CleanerEarningsUnifiedView
-        todayCents={s.today_cents ?? 0}
-        weekCents={s.week_cents ?? 0}
-        monthCents={s.month_cents ?? 0}
-        eligibleCents={s.eligible_cents}
-        pendingCents={s.pending_cents}
-        paidCents={s.paid_cents}
-        invalidCents={s.invalid_cents ?? 0}
-        pendingJobCount={pendingJobCount}
+      <CleanerEarningsOverview
+        summary={s}
+        rows={rows}
         missingBankDetails={missingBankDetails}
-        paidRowsSorted={paidRowsSorted}
+        hasFailedTransfer={hasFailedTransfer}
         completedEarningsRowCount={rows.length}
+        highlightJob={highlightJob}
+        openJobsCount={openJobsCount}
       />
     </main>
   );

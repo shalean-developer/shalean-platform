@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -48,7 +49,8 @@ async function fetchPaystackTransfer(transferCode: string): Promise<{ ok: true; 
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
 
-  const res = await fetch(`https://api.paystack.co/transfer/${encodeURIComponent(transferCode)}`, {
+  const origin = getPaystackBaseUrl();
+  const res = await fetch(`${origin}/transfer/${encodeURIComponent(transferCode)}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${secret}`,

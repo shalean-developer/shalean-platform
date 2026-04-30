@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { AdminDisbursementRunsPanel } from "@/components/admin/payout-runs/AdminDisbursementRunsPanel";
 import { AdminInvoiceEligiblePayouts } from "@/components/admin/AdminInvoiceEligiblePayouts";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
@@ -137,10 +140,17 @@ async function readJsonResponse<T>(res: Response): Promise<T & { error?: string 
   }
 }
 
-type PayoutsHubTab = "invoice" | "batches";
+type PayoutsHubTab = "invoice" | "batches" | "disbursements";
+
+function tabFromSearchParams(sp: ReturnType<typeof useSearchParams>): PayoutsHubTab {
+  const t = sp.get("tab");
+  if (t === "batches" || t === "disbursements" || t === "invoice") return t;
+  return "invoice";
+}
 
 export default function AdminPayoutsPage() {
-  const [hubTab, setHubTab] = useState<PayoutsHubTab>("invoice");
+  const searchParams = useSearchParams();
+  const [hubTab, setHubTab] = useState<PayoutsHubTab>(() => tabFromSearchParams(searchParams));
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -150,6 +160,15 @@ export default function AdminPayoutsPage() {
   const [toast, setToast] = useState<Toast>(null);
   const [missingPayouts, setMissingPayouts] = useState<MissingPayoutStatus | null>(null);
   const [lastRepairResult, setLastRepairResult] = useState<RepairResult>(null);
+
+  useEffect(() => {
+    setHubTab(tabFromSearchParams(searchParams));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const payout = searchParams.get("payout")?.trim();
+    if (payout && hubTab === "batches") setSelectedId(payout);
+  }, [searchParams, hubTab]);
 
   const getToken = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -351,9 +370,23 @@ export default function AdminPayoutsPage() {
         >
           Paystack batches
         </button>
+        <button
+          type="button"
+          onClick={() => setHubTab("disbursements")}
+          className={[
+            "rounded-lg px-4 py-2 text-sm font-semibold transition",
+            hubTab === "disbursements"
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+          ].join(" ")}
+        >
+          Disbursement runs
+        </button>
       </div>
 
       {hubTab === "invoice" ? <AdminInvoiceEligiblePayouts /> : null}
+
+      {hubTab === "disbursements" ? <AdminDisbursementRunsPanel /> : null}
 
       {hubTab === "batches" ? (
         <>
@@ -363,6 +396,9 @@ export default function AdminPayoutsPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Payout Approval</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             Generate payout batches, review job-level totals, approve, then pay via Paystack.
+          </p>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Multi-cleaner disbursement runs live in the <strong className="text-zinc-800 dark:text-zinc-200">Disbursement runs</strong> tab.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

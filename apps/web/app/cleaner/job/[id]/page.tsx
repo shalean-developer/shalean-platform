@@ -307,6 +307,16 @@ export default function CleanerJobDetailPage() {
                 <span className="font-semibold uppercase tracking-wide">Service</span> · {view.service.trim()}
               </p>
             ) : null}
+            {view.scopeLines.length > 0 ? (
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/40">
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Cleaning includes:</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-zinc-800 dark:text-zinc-100">
+                  {view.scopeLines.map((line, i) => (
+                    <li key={`${i}-${line}`}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-800/80">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Date</p>

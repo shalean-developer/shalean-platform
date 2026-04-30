@@ -28,6 +28,7 @@ import {
   resolveCheckoutCleanerSelection,
 } from "@/lib/booking/checkoutCleanerEligibility";
 import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConversionBucket";
+import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackReason";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
@@ -151,7 +152,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     pricing_version_id = lockedRow.pricing_version_id?.trim() ?? null;
   }
 
-  const extrasSnapshot =
+  const extrasSnapshotRaw =
     Array.isArray(locked?.extras_line_items) && locked.extras_line_items.length > 0
       ? locked.extras_line_items.map(({ slug, name, price }) => ({ slug, name, price }))
       : catalogSnap
@@ -163,6 +164,10 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             }),
           )
         : [];
+  const extrasSnapshot = sanitizeBookingExtrasForPersist(extrasSnapshotRaw, {
+    where: "upsertBookingFromPaystack",
+    bookingId: existingPendingPaymentId ?? undefined,
+  });
   const cust = input.snapshot?.customer;
   const emailStored = normalizeEmail(input.customerEmail);
   const userIdResolved = await resolveBookingUserId(

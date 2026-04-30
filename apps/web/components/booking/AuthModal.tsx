@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PasswordInput } from "@/components/ui/password-input";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type AuthModalProps = {
@@ -119,14 +120,13 @@ export function AuthModal({
                 placeholder="Email"
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-950"
               />
-              <input
-                type="password"
+              <PasswordInput
                 required
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-950"
+                className="h-10 w-full rounded-lg border-zinc-200 px-3 text-sm dark:border-zinc-700"
               />
               {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
               <button
@@ -168,14 +168,13 @@ export function AuthModal({
                 placeholder="Email"
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-950"
               />
-              <input
-                type="password"
+              <PasswordInput
                 required
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password (min 6)"
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-950"
+                className="h-10 w-full rounded-lg border-zinc-200 px-3 text-sm dark:border-zinc-700"
               />
               {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
               <button

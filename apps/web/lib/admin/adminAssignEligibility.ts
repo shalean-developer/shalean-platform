@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
 import { cleanerAreasAllowJob, jobFitsAvailabilityWindows } from "@/lib/booking/getEligibleCleaners";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
@@ -136,6 +138,8 @@ export function formatMinutesAsHm(mins: number): string {
 
 export type AssignEligibilityRow = {
   cleanerId: string;
+  /** Admin roster: booking weekday is in `cleaners.availability_weekdays`. */
+  weekdayOk: boolean;
   slotCalendarOk: boolean;
   overlapBlocked: boolean;
   busyUntilMin: number | null;
@@ -175,6 +179,7 @@ export async function computeAssignEligibility(
     for (const id of cleanerIds) {
       out.set(id, {
         cleanerId: id,
+        weekdayOk: false,
         slotCalendarOk: false,
         overlapBlocked: false,
         busyUntilMin: null,
@@ -188,18 +193,32 @@ export async function computeAssignEligibility(
   }
   const slotEnd = startMin + durationMinutes;
 
-  const { data: cleaners } = await admin
-    .from("cleaners")
-    .select("id, status, location_id")
-    .in("id", cleanerIds);
+  type CleanerAvailRow = {
+    id?: string;
+    status?: string | null;
+    location_id?: string | null;
+    availability_weekdays?: string[] | null;
+  };
+  let cleaners: CleanerAvailRow[] | null = null;
+  {
+    const r1 = await admin.from("cleaners").select("id, status, location_id, availability_weekdays").in("id", cleanerIds);
+    cleaners = (r1.data ?? null) as CleanerAvailRow[] | null;
+    if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
+      const r2 = await admin.from("cleaners").select("id, status, location_id").in("id", cleanerIds);
+      cleaners = (r2.data ?? null) as CleanerAvailRow[] | null;
+    }
+  }
 
   const offlineById = new Map<string, boolean>();
   const fallbackLocationById = new Map<string, string | null>();
+  const weekdaysById = new Map<string, string[] | null>();
   for (const c of cleaners ?? []) {
-    const row = c as { id?: string; status?: string | null; location_id?: string | null };
+    const row = c as { id?: string; status?: string | null; location_id?: string | null; availability_weekdays?: string[] | null };
     if (row.id) {
-      offlineById.set(String(row.id), String(row.status ?? "").toLowerCase() === "offline");
-      fallbackLocationById.set(String(row.id), row.location_id ? String(row.location_id) : null);
+      const id = String(row.id);
+      offlineById.set(id, String(row.status ?? "").toLowerCase() === "offline");
+      fallbackLocationById.set(id, row.location_id ? String(row.location_id) : null);
+      weekdaysById.set(id, Array.isArray(row.availability_weekdays) ? row.availability_weekdays : null);
     }
   }
 
@@ -277,6 +296,7 @@ export async function computeAssignEligibility(
     const slotCalendarOk = jobFitsAvailabilityWindows(winObjs, startMin, slotEnd, strict);
     const allowed = locByCleaner.get(id) ?? new Set();
     const locationOk = cleanerAreasAllowJob(allowed, fallbackLocationById.get(id) ?? null, locExpanded);
+    const weekdayOk = cleanerWorksOnScheduledWeekday(weekdaysById.get(id), bookingDateYmd);
 
     const others = othersByCleaner.get(id) ?? [];
     const overlapDetail = overlapBlockingDetail(startMin, durationMinutes, others);
@@ -284,7 +304,7 @@ export async function computeAssignEligibility(
     const overlapJobRangeLabel = overlapDetail.overlapJobRangeLabel;
     const overlapBlocked = busyUntilMin != null;
     const offline = offlineById.get(id) ?? false;
-    const canAssignWithoutForce = slotCalendarOk && locationOk && !overlapBlocked && !offline;
+    const canAssignWithoutForce = weekdayOk && slotCalendarOk && locationOk && !overlapBlocked && !offline;
     let nextAvailableStartHm: string | null = null;
     if (!offline && !canAssignWithoutForce) {
       nextAvailableStartHm = nextAvailableBookingStartHm(startMin, durationMinutes, windows, others);
@@ -294,6 +314,7 @@ export async function computeAssignEligibility(
 
     out.set(id, {
       cleanerId: id,
+      weekdayOk,
       slotCalendarOk: slotCalendarOk && locationOk,
       overlapBlocked,
       busyUntilMin,

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { validateCleanerAvailabilityWeekdaysForAdmin } from "@/lib/cleaner/availabilityWeekdays";
 import { normalizeSouthAfricaPhone, southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
 export const runtime = "nodejs";
@@ -41,6 +42,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     availability_start?: string | null;
     availability_end?: string | null;
     is_available?: boolean;
+    availability_weekdays?: string[];
   };
   try {
     body = (await request.json()) as { status?: string };
@@ -91,6 +93,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (body.status === undefined) {
       updates.status = body.is_available ? "available" : "offline";
     }
+  }
+  if (body.availability_weekdays !== undefined) {
+    const w = validateCleanerAvailabilityWeekdaysForAdmin(body.availability_weekdays);
+    if (!w.ok) return NextResponse.json({ error: w.error }, { status: 400 });
+    updates.availability_weekdays = w.value;
   }
 
   if (Object.keys(updates).length === 0) {

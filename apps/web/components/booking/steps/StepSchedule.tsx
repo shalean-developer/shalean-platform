@@ -38,6 +38,7 @@ import {
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
 import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
+import { bookingExtrasClientLimitMessage, bookingExtrasOverClientLimit } from "@/lib/booking/bookingExtrasLimits";
 
 type LiveSlot = {
   time: string;
@@ -127,6 +128,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const [rawSlots, setRawSlots] = useState<RawAvailabilitySlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [scheduleActionMessage, setScheduleActionMessage] = useState<string | null>(null);
   const autoLockRunRef = useRef<string>("");
 
   const allDateValues = useMemo(
@@ -139,6 +141,9 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const selectedDate = dateOverride ?? lockedDateInRange ?? allDateValues[0]!;
 
   const extrasJoinKey = lockBaseState?.extras.join("\u0001") ?? "";
+  useEffect(() => {
+    setScheduleActionMessage(null);
+  }, [extrasJoinKey]);
   const slotPricingDepsKey = useMemo(() => {
     if (!lockBaseState) return "";
     return [
@@ -304,6 +309,11 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
   const handleSelectSlot = useCallback(
     async (time: string) => {
       if (!lockBaseState) return;
+      if (bookingExtrasOverClientLimit(lockBaseState.extras)) {
+        setScheduleActionMessage(bookingExtrasClientLimitMessage());
+        return;
+      }
+      setScheduleActionMessage(null);
       const slot = liveSlots.find((s) => s.time === time);
       if (!slot) return;
       const rawForTime = rawSlots.find((s) => s.time === time);
@@ -575,6 +585,9 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
                   </div>
                 ) : null}
                 {slotsError ? <p className="text-sm text-rose-700 dark:text-rose-400">{slotsError}</p> : null}
+                {scheduleActionMessage ? (
+                  <p className="text-sm text-rose-700 dark:text-rose-400">{scheduleActionMessage}</p>
+                ) : null}
                 {!slotsLoading && !slotsError && orderedAllSlotTimes.length === 0 ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-50">
                     <p>No slots on this day.</p>

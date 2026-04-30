@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
+import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth/authClient";
 
 function LoginForm() {
@@ -67,15 +68,14 @@ function LoginForm() {
             <label htmlFor="password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+              wrapperClassName="mt-1"
               suppressHydrationWarning
             />
           </div>

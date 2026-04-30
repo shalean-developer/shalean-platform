@@ -23,6 +23,7 @@ type BookingEarningsRow = {
   date: string | null;
   completed_at: string | null;
   location: string | null;
+  payout_id: string | null;
   payout_status: string | null;
   payout_frozen_cents: number | null;
   display_earnings_cents: number | null;
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     admin
       .from("bookings")
       .select(
-        "id, service, date, completed_at, location, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id",
+        "id, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id",
       )
       .or(visibilityOr)
       .eq("status", "completed")
@@ -111,10 +112,28 @@ export async function GET(request: Request) {
 
   const rows = (bookings ?? []) as BookingEarningsRow[];
 
+  const [{ data: lockedPayouts }, { data: failedTransfers }] = await Promise.all([
+    admin.from("cleaner_payouts").select("id").eq("cleaner_id", session.cleanerId).in("status", ["frozen", "approved"]),
+    admin
+      .from("cleaner_payouts")
+      .select("id")
+      .eq("cleaner_id", session.cleanerId)
+      .eq("status", "approved")
+      .in("payment_status", ["failed", "partial_failed"])
+      .limit(3),
+  ]);
+
+  const lockedWeeklyPayoutIds = new Set(
+    (lockedPayouts ?? []).map((x) => String((x as { id?: string }).id ?? "")).filter(Boolean),
+  );
+
+  const has_failed_transfer = (failedTransfers ?? []).length > 0;
+
   let pending_cents = 0;
   let eligible_cents = 0;
   let paid_cents = 0;
   let invalid_cents = 0;
+  let frozen_batch_cents = 0;
 
   const out = rows.map((b) => {
     const rawPs = String(b.payout_status ?? "")
@@ -142,7 +161,11 @@ export async function GET(request: Request) {
       },
     );
 
-    if (normalized.payout_status === "pending") pending_cents += cents;
+    const pid = String(b.payout_id ?? "").trim();
+    const inLockedWeeklyBatch = Boolean(pid && lockedWeeklyPayoutIds.has(pid));
+    if (inLockedWeeklyBatch) {
+      frozen_batch_cents += cents;
+    } else if (normalized.payout_status === "pending") pending_cents += cents;
     else if (normalized.payout_status === "eligible") eligible_cents += cents;
     else if (normalized.payout_status === "paid") paid_cents += cents;
     else if (normalized.payout_status === "invalid") invalid_cents += cents;
@@ -150,6 +173,7 @@ export async function GET(request: Request) {
     return {
       booking_id: normalized.booking_id,
       date: normalized.date,
+      completed_at: b.completed_at,
       service: normalized.service,
       location: normalized.location,
       payout_status: normalized.payout_status,
@@ -157,6 +181,7 @@ export async function GET(request: Request) {
       amount_cents: normalized.amount_cents,
       payout_paid_at: normalized.payout_paid_at,
       payout_run_id: normalized.payout_run_id,
+      in_frozen_batch: inLockedWeeklyBatch,
       ...(normalized.__invalid ? { __invalid: true as const } : {}),
     };
   });
@@ -171,7 +196,7 @@ export async function GET(request: Request) {
   );
 
   const sumRowCents = out.reduce((acc, r) => acc + r.amount_cents, 0);
-  const sumBucketCents = pending_cents + eligible_cents + paid_cents + invalid_cents;
+  const sumBucketCents = pending_cents + eligible_cents + paid_cents + invalid_cents + frozen_batch_cents;
   if (sumRowCents !== sumBucketCents) {
     void logSystemEvent({
       level: "warn",
@@ -199,10 +224,12 @@ export async function GET(request: Request) {
       eligible_cents,
       paid_cents,
       invalid_cents,
+      frozen_batch_cents,
       today_cents,
       week_cents,
       month_cents,
     },
+    has_failed_transfer,
     paymentDetails: {
       readyForPayout: Boolean((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),
       missingBankDetails: !((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),

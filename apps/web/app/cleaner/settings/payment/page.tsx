@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { nextPayoutMondayShort } from "@/lib/cleaner/cleanerPayoutCopy";
+import { SOUTH_AFRICAN_PAYSTACK_BANKS } from "@/lib/cleaner/southAfricanPaystackBanks";
 
 type PaymentDetails = {
   bankCode: string | null;
@@ -22,16 +23,6 @@ type PaymentDetailsResponse = {
   details: PaymentDetails | null;
   error?: string;
 };
-
-const banks = [
-  { code: "632005", name: "ABSA Bank" },
-  { code: "470010", name: "Capitec Bank" },
-  { code: "250655", name: "First National Bank" },
-  { code: "580105", name: "Investec Bank" },
-  { code: "198765", name: "Nedbank" },
-  { code: "051001", name: "Standard Bank" },
-  { code: "678910", name: "TymeBank" },
-];
 
 async function readJson(res: Response): Promise<PaymentDetailsResponse> {
   return (await res.json().catch(() => ({ error: "Unexpected server response." }))) as PaymentDetailsResponse;
@@ -206,7 +197,7 @@ export default function CleanerPaymentSettingsPage() {
           <div className="space-y-5">
             <Select label="Bank" value={bankCode} onChange={(event) => setBankCode(event.target.value)} required>
               <option value="">Select your bank</option>
-              {banks.map((bank) => (
+              {SOUTH_AFRICAN_PAYSTACK_BANKS.map((bank) => (
                 <option key={bank.code} value={bank.code}>
                   {bank.name}
                 </option>

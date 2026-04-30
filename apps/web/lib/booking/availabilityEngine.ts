@@ -3,10 +3,17 @@
  * Eligibility rules live in {@link getEligibleCleaners}.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import type { AvailableCleaner, CleanerAvailabilityRow, CleanerReviewSnippet } from "@/lib/booking/cleanerPoolTypes";
+import type { CleanerBase } from "@/lib/booking/getEligibleCleaners";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
 export type { AvailableCleaner, CleanerReviewSnippet, CleanerAvailabilityRow } from "@/lib/booking/cleanerPoolTypes";
+
+const CLEANERS_LIST_SELECT_WITH_WEEKDAYS =
+  "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
+const CLEANERS_LIST_SELECT_BASE =
+  "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
 
 function sanitizeReviewQuote(raw: string | null | undefined): string {
   if (!raw || typeof raw !== "string") return "";
@@ -113,20 +120,29 @@ export async function getAvailableCleaners(
     availRows = await fetchAvailabilityForDate(admin, args.selectedDate);
   }
 
-  const { data: cleanersRaw, error: cErr } = await admin
-    .from("cleaners")
-    .select(
-      "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status",
-    )
-    .eq("is_available", true)
-    .neq("status", "offline");
+  let cleanersRaw: CleanerBase[] | null = null;
+  let cErr = null as { message?: string } | null;
+  {
+    const r1 = await admin
+      .from("cleaners")
+      .select(CLEANERS_LIST_SELECT_WITH_WEEKDAYS)
+      .eq("is_available", true)
+      .neq("status", "offline");
+    cleanersRaw = (r1.data ?? null) as unknown as CleanerBase[] | null;
+    cErr = r1.error;
+    if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
+      const r2 = await admin.from("cleaners").select(CLEANERS_LIST_SELECT_BASE).eq("is_available", true).neq("status", "offline");
+      cleanersRaw = (r2.data ?? null) as unknown as CleanerBase[] | null;
+      cErr = r2.error;
+    }
+  }
 
   if (cErr || !cleanersRaw?.length) {
     if (cErr) console.error("[availabilityEngine] cleaners query failed:", cErr.message);
     return [];
   }
 
-  const preloadedCleaners = cleanersRaw as import("@/lib/booking/getEligibleCleaners").CleanerBase[];
+  const preloadedCleaners = (cleanersRaw ?? []) as CleanerBase[];
   const ids = preloadedCleaners.map((c) => c.id);
   const preloadedLocs = await fetchCleanerLocationsForIds(admin, ids);
 
@@ -199,15 +215,21 @@ export async function getAvailableTimeSlots(
   try {
     const availabilityRows = await fetchAvailabilityForDate(admin, args.selectedDate);
 
-    const { data: cleanersRaw } = await admin
-      .from("cleaners")
-      .select(
-        "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status",
-      )
-      .eq("is_available", true)
-      .neq("status", "offline");
+    let cleanersRaw: CleanerBase[] | null = null;
+    {
+      const r1 = await admin
+        .from("cleaners")
+        .select(CLEANERS_LIST_SELECT_WITH_WEEKDAYS)
+        .eq("is_available", true)
+        .neq("status", "offline");
+      cleanersRaw = (r1.data ?? null) as unknown as CleanerBase[] | null;
+      if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
+        const r2 = await admin.from("cleaners").select(CLEANERS_LIST_SELECT_BASE).eq("is_available", true).neq("status", "offline");
+        cleanersRaw = (r2.data ?? null) as unknown as CleanerBase[] | null;
+      }
+    }
 
-    const preloadedCleaners = (cleanersRaw ?? []) as import("@/lib/booking/getEligibleCleaners").CleanerBase[];
+    const preloadedCleaners = (cleanersRaw ?? []) as CleanerBase[];
     const preloadedLocs = await fetchCleanerLocationsForIds(
       admin,
       preloadedCleaners.map((c) => c.id),

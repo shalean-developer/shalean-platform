@@ -35,7 +35,10 @@ async function maybeMarkPayoutPaid(supabase: SupabaseClient, payoutId: string) {
   if (error) throw new Error(error.message);
 
   const transfers = (data ?? []) as { status: string }[];
-  if (transfers.length === 0 || transfers.some((transfer) => transfer.status !== "success")) return;
+  if (transfers.length === 0) return;
+  const anySuccess = transfers.some((t) => t.status === "success");
+  const anyProcessing = transfers.some((t) => t.status === "processing");
+  if (!anySuccess || anyProcessing) return;
 
   const { error: updateError } = await supabase
     .from("cleaner_payouts")
@@ -49,6 +52,31 @@ async function maybeMarkPayoutPaid(supabase: SupabaseClient, payoutId: string) {
     .neq("payment_status", "success");
 
   if (updateError) throw new Error(updateError.message);
+}
+
+/** When every child payout in the same disbursement run is `paid`, close the run. */
+export async function tryCloseDisbursementRunIfComplete(supabase: SupabaseClient, runId: string) {
+  const { data: siblings, error: sibErr } = await supabase.from("cleaner_payouts").select("id, status").eq("payout_run_id", runId);
+  if (sibErr) throw new Error(sibErr.message);
+  const rows = (siblings ?? []) as { id: string; status: string }[];
+  if (!rows.length) return;
+  if (rows.some((r) => r.status !== "paid")) return;
+
+  const { error: runErr } = await supabase
+    .from("cleaner_payout_runs")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", runId)
+    .eq("status", "processing");
+
+  if (runErr) throw new Error(runErr.message);
+}
+
+async function maybeMarkPayoutRunPaid(supabase: SupabaseClient, payoutId: string) {
+  const { data: self, error: selfErr } = await supabase.from("cleaner_payouts").select("payout_run_id").eq("id", payoutId).maybeSingle();
+  if (selfErr) throw new Error(selfErr.message);
+  const runId = (self as { payout_run_id?: string | null } | null)?.payout_run_id;
+  if (!runId) return;
+  await tryCloseDisbursementRunIfComplete(supabase, runId);
 }
 
 export async function applyTransferSuccess(
@@ -78,6 +106,7 @@ export async function applyTransferSuccess(
   if (updateError) throw new Error(updateError.message);
 
   await maybeMarkPayoutPaid(supabase, transfer.payout_id);
+  await maybeMarkPayoutRunPaid(supabase, transfer.payout_id);
   return { transferCode, payoutId: transfer.payout_id };
 }
 

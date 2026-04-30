@@ -13,6 +13,7 @@ import {
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
+import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
   const { data: jobs, error } = await admin
     .from("bookings")
     .select(
-      "id, service, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents",
+      "id, service, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents",
     )
     .or(visibilityOr)
     .not("status", "eq", "failed")
@@ -129,7 +130,17 @@ export async function GET(request: Request) {
     return { ...pub, teamMemberCount: teamMemberCount > 0 ? teamMemberCount : null };
   });
 
-  const bookingIds = mappedWithTeamCounts
+  const bookingIdsForLines = mappedWithTeamCounts
+    .map((j) => String((j as { id?: string }).id ?? "").trim())
+    .filter(Boolean);
+  const lineItemsByBooking = await fetchBookingLineItemsByBookingIds(admin, bookingIdsForLines);
+  const mappedWithLineItems = mappedWithTeamCounts.map((j) => {
+    const id = String((j as { id?: string }).id ?? "").trim();
+    const lineItems = id ? lineItemsByBooking.get(id) ?? null : null;
+    return { ...j, lineItems: lineItems && lineItems.length > 0 ? lineItems : null };
+  });
+
+  const bookingIds = mappedWithLineItems
     .map((j) => String((j as { id?: string }).id ?? "").trim())
     .filter(Boolean);
 
@@ -148,7 +159,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const jobsWithIssueFlag = mappedWithTeamCounts.map((j) => {
+  const jobsWithIssueFlag = mappedWithLineItems.map((j) => {
     const id = String((j as { id?: string }).id ?? "").trim();
     return { ...j, cleaner_has_issue_report: id ? reportedIds.has(id) : false };
   });

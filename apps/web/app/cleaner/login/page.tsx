@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { sanitizeCleanerPostAuthRedirect } from "@/lib/cleaner/cleanerRedirect";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
@@ -96,9 +97,8 @@ export default function CleanerLoginPage() {
                 <label htmlFor="cleaner-password" className="sr-only">
                   Password
                 </label>
-                <Input
+                <PasswordInput
                   id="cleaner-password"
-                  type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

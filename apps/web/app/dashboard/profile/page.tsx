@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
@@ -144,11 +145,16 @@ export default function DashboardProfilePage() {
             <p className="text-xs text-zinc-500">Leave blank to keep your current password. Supabase may require a recent login for password changes.</p>
             <div className="space-y-1.5">
               <Label htmlFor="pw-current">Current password (optional)</Label>
-              <Input id="pw-current" type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" />
+              <PasswordInput
+                id="pw-current"
+                value={pwCurrent}
+                onChange={(e) => setPwCurrent(e.target.value)}
+                autoComplete="current-password"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="pw-new">New password</Label>
-              <Input id="pw-new" type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" />
+              <PasswordInput id="pw-new" value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" />
             </div>
           </CardContent>
         </Card>

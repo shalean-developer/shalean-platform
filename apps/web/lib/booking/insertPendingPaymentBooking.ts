@@ -5,6 +5,7 @@ import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerpri
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 
 const DUPLICATE_PENDING_EMAIL_WINDOW_MIN = 20;
 
@@ -118,6 +119,10 @@ export async function updatePendingPaymentBookingForInit(
     adminForceSlotOverride?: boolean;
   },
 ): Promise<{ ok: true } | { ok: false; error: string; pgCode?: string }> {
+  const extrasPersist = sanitizeBookingExtrasForPersist(params.extrasSnapshot, {
+    where: "updatePendingPaymentBookingForInit",
+    bookingId: params.bookingId,
+  });
   const { error } = await admin
     .from("bookings")
     .update({
@@ -132,7 +137,7 @@ export async function updatePendingPaymentBookingForInit(
       city_id: params.cityId,
       surge_multiplier: params.surgeMultiplier,
       surge_reason: params.surgeReason,
-      extras: params.extrasSnapshot,
+      extras: extrasPersist,
       ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
       ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
     })

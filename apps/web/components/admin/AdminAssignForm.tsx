@@ -37,6 +37,7 @@ export type AssignBookingFragment = {
 };
 
 export type AssignEligibilityUi = {
+  weekdayOk: boolean;
   slotCalendarOk: boolean;
   overlapBlocked: boolean;
   busyUntilLabel: string | null;
@@ -65,6 +66,7 @@ function slotCheckable(date: string | null | undefined, time: string | null | un
 function slotReason(e: AssignEligibilityUi): string {
   if (e.canAssignWithoutForce) return "OK for this slot";
   if (e.offline) return "Offline";
+  if (!e.weekdayOk) return "Not on admin weekday roster for this day";
   if (e.overlapExplain) {
     return e.nextAvailableHm ? `${e.overlapExplain} · Next: ${e.nextAvailableHm}` : e.overlapExplain;
   }
@@ -156,6 +158,7 @@ export function AdminAssignForm({
           for (const [id, row] of Object.entries(raw)) {
             const r = row as AssignEligibilityUi;
             normalized[id] = {
+              weekdayOk: r.weekdayOk !== false,
               slotCalendarOk: Boolean(r.slotCalendarOk),
               overlapBlocked: Boolean(r.overlapBlocked),
               busyUntilLabel: r.busyUntilLabel ?? null,

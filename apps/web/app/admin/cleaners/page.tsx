@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PasswordInput } from "@/components/ui/password-input";
 import ActionMenu from "@/components/admin/ActionMenu";
 import DataTable from "@/components/admin/DataTable";
 import MetricsGrid from "@/components/admin/MetricsGrid";
@@ -18,6 +21,12 @@ import {
   updateCleanerEmail,
   updateCleanerProfile,
 } from "@/lib/admin/dashboard";
+import {
+  CLEANER_WEEKDAY_CODES,
+  CLEANER_WEEKDAY_LABELS,
+  normalizeCleanerAvailabilityWeekdays,
+  type CleanerWeekdayCode,
+} from "@/lib/cleaner/availabilityWeekdays";
 
 type City = { id: string; name: string; slug: string };
 
@@ -30,6 +39,8 @@ type CleanerForm = {
   location: string;
   availabilityStart: string;
   availabilityEnd: string;
+  /** Admin-editable; cleaners see read-only in the app. */
+  availabilityWeekdays: CleanerWeekdayCode[];
   isAvailable: boolean;
   status: "available" | "busy" | "offline";
 };
@@ -43,6 +54,7 @@ const DEFAULT_FORM: CleanerForm = {
   location: "",
   availabilityStart: "08:00",
   availabilityEnd: "17:00",
+  availabilityWeekdays: [...CLEANER_WEEKDAY_CODES],
   isAvailable: true,
   status: "available",
 };
@@ -73,6 +85,7 @@ function AuthLinkBadge({ linked }: { linked: boolean }) {
 }
 
 export default function AdminCleanersPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<AdminCleanerRow[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,6 +262,7 @@ export default function AdminCleanersPage() {
       location: row.location ?? "",
       availabilityStart: row.availability_start ?? "08:00",
       availabilityEnd: row.availability_end ?? "17:00",
+      availabilityWeekdays: normalizeCleanerAvailabilityWeekdays(row.availability_weekdays),
       isAvailable: Boolean(row.is_available),
       status: (String(row.status ?? "offline").toLowerCase() as CleanerForm["status"]) || "offline",
     });
@@ -280,6 +294,7 @@ export default function AdminCleanersPage() {
         location: editForm.location.trim() || null,
         availability_start: editForm.availabilityStart || null,
         availability_end: editForm.availabilityEnd || null,
+        availability_weekdays: editForm.availabilityWeekdays,
         is_available: editForm.isAvailable,
         status: editForm.status,
       });
@@ -462,6 +477,12 @@ export default function AdminCleanersPage() {
                 <ActionMenu
                   items={[
                     { label: "View details", onSelect: () => setSelected(row) },
+                    {
+                      label: "Payout history",
+                      onSelect: () => {
+                        router.push(`/admin/cleaners/${encodeURIComponent(row.id)}/payouts`);
+                      },
+                    },
                     { label: "Assign to booking", onSelect: () => setToast("Assign flow ready to connect.") },
                     { label: "Edit", onSelect: () => openEdit(row) },
                     { label: "Reset password", onSelect: () => openReset(row) },
@@ -513,6 +534,14 @@ export default function AdminCleanersPage() {
           <>
             <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Profile</h3>
+              <p className="mt-2">
+                <Link
+                  href={`/admin/cleaners/${encodeURIComponent(selected.id)}/payouts`}
+                  className="text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                >
+                  Payout history (audit)
+                </Link>
+              </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">Supabase Auth</span>
                 <AuthLinkBadge linked={Boolean(selected.auth_user_id)} />
@@ -524,6 +553,12 @@ export default function AdminCleanersPage() {
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Availability</h3>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
                 {selected.availability_start ?? "—"} - {selected.availability_end ?? "—"}
+              </p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                Weekdays:{" "}
+                {normalizeCleanerAvailabilityWeekdays(selected.availability_weekdays)
+                  .map((d) => CLEANER_WEEKDAY_LABELS[d])
+                  .join(", ")}
               </p>
               <p className="text-sm text-zinc-600 dark:text-zinc-300">Status: {selected.status ?? "offline"}</p>
             </section>
@@ -586,12 +621,13 @@ export default function AdminCleanersPage() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900">
             <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Reset password</h3>
-            <input
-              type="password"
+            <PasswordInput
               value={resetPasswordValue}
               onChange={(e) => setResetPasswordValue(e.target.value)}
-              className="mt-3 h-10 w-full rounded-lg border border-zinc-300 px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              autoComplete="new-password"
               placeholder="New password"
+              wrapperClassName="mt-3"
+              className="h-10 rounded-lg border-zinc-300 px-3 text-sm dark:border-zinc-700"
             />
             {resetError ? <p className="mt-2 text-sm text-rose-700 dark:text-rose-400">{resetError}</p> : null}
             <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
@@ -662,7 +698,17 @@ function CleanerFormModal({
           <Input label="Full Name" value={form.fullName} onChange={(v) => onChange({ ...form, fullName: v })} />
           <Input label="Phone Number" value={form.phone} onChange={(v) => onChange({ ...form, phone: v })} />
           <Input label="Email (optional)" value={form.email} onChange={(v) => onChange({ ...form, email: v })} />
-          {withPassword ? <Input label="Password" type="password" value={form.password} onChange={(v) => onChange({ ...form, password: v })} /> : null}
+          {withPassword ? (
+            <label className="block text-sm text-zinc-700 dark:text-zinc-200">
+              <span className="mb-1 block">Password</span>
+              <PasswordInput
+                value={form.password}
+                onChange={(e) => onChange({ ...form, password: e.target.value })}
+                autoComplete="new-password"
+                className="h-10 rounded-lg border-zinc-300 px-3 dark:border-zinc-700"
+              />
+            </label>
+          ) : null}
           <label className="text-sm text-zinc-700 dark:text-zinc-200">
             <span className="mb-1 block">City</span>
             <select value={form.cityId} onChange={(e) => onChange({ ...form, cityId: e.target.value })} className="h-10 w-full rounded-lg border border-zinc-300 px-3 dark:border-zinc-700 dark:bg-zinc-950">
@@ -677,6 +723,40 @@ function CleanerFormModal({
           <Input label="Primary Location" value={form.location} onChange={(v) => onChange({ ...form, location: v })} />
           <Input label="Availability Start" type="time" value={form.availabilityStart} onChange={(v) => onChange({ ...form, availabilityStart: v })} />
           <Input label="Availability End" type="time" value={form.availabilityEnd} onChange={(v) => onChange({ ...form, availabilityEnd: v })} />
+        </div>
+        <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Working weekdays</p>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            Shown read-only in the cleaner app. At least one day required.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CLEANER_WEEKDAY_CODES.map((code) => {
+              const checked = form.availabilityWeekdays.includes(code);
+              return (
+                <label
+                  key={code}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      const set = new Set(form.availabilityWeekdays);
+                      if (checked) {
+                        if (set.size <= 1) return;
+                        set.delete(code);
+                      } else {
+                        set.add(code);
+                      }
+                      const next = CLEANER_WEEKDAY_CODES.filter((d) => set.has(d));
+                      onChange({ ...form, availabilityWeekdays: next });
+                    }}
+                  />
+                  {CLEANER_WEEKDAY_LABELS[code]}
+                </label>
+              );
+            })}
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">

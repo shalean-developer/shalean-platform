@@ -10,7 +10,7 @@ import {
 } from "@/components/cleaner/mobile/dashboard/CleanerHomeStatusStrip";
 import { CleanerWorkStatusCard } from "@/components/cleaner/mobile/dashboard/CleanerWorkStatusCard";
 import { CleanerEarningsTab } from "@/components/cleaner/mobile/tabs/CleanerEarningsTab";
-import type { CleanerRosterSnapshot } from "@/components/cleaner/mobile/tabs/CleanerProfileTab";
+import type { CleanerRosterSnapshot } from "@/lib/cleaner/cleanerProfileTypes";
 import { CleanerProfileTab } from "@/components/cleaner/mobile/tabs/CleanerProfileTab";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
@@ -56,6 +56,8 @@ export function CleanerWorkspaceClient() {
 
   const {
     rows,
+    activeJob,
+    nextJob,
     topOffer,
     rankedSoloOffers,
     extraSoloOffersTodayCount,
@@ -70,6 +72,16 @@ export function CleanerWorkspaceClient() {
     online,
     reload,
   } = useCleanerMobileWorkspace();
+
+  const earningsHighlightJob = useMemo(() => activeJob ?? nextJob, [activeJob, nextJob]);
+  const openJobsCount = useMemo(
+    () =>
+      rows.filter((r) => {
+        const st = String(r.status ?? "").toLowerCase();
+        return st !== "completed" && st !== "cancelled";
+      }).length,
+    [rows],
+  );
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -190,25 +202,30 @@ export function CleanerWorkspaceClient() {
       onTabChange={setTab}
       alert={alertStrip}
       headerProfile={
-        profile
-          ? {
-              displayName: profile.name,
-              isAvailable: profile.isAvailable,
-              showNotificationDot: Boolean(topOffer),
-              availabilityMicrocopy: profile.isAvailable
-                ? "You're visible to customers."
-                : "You won't receive new jobs.",
-              homeStrip:
-                tab === "home" ? (
-                  <CleanerHomeStatusStrip
-                    isAvailable={profile.isAvailable}
-                    activeFilter={homeJobFilter}
-                    onFilterChange={setHomeJobFilter}
-                    layout="grid"
-                  />
-                ) : undefined,
-            }
-          : null
+        tab === "profile"
+          ? null
+          : profile
+            ? {
+                displayName: profile.name,
+                isAvailable: profile.isAvailable,
+                showNotificationDot: Boolean(topOffer),
+                availabilityMicrocopy: profile.isAvailable
+                  ? "You're visible to customers."
+                  : "You won't receive new jobs.",
+                homeStrip:
+                  tab === "home" ? (
+                    <CleanerHomeStatusStrip
+                      isAvailable={profile.isAvailable}
+                      activeFilter={homeJobFilter}
+                      onFilterChange={setHomeJobFilter}
+                      layout="grid"
+                    />
+                  ) : undefined,
+              }
+            : null
+      }
+      simpleHeaderBell={
+        tab === "profile" ? { showDot: Boolean(topOffer), onClick: () => setTab("home") } : undefined
       }
       onBellClick={() => setTab("home")}
       contentClassName="px-4 pb-8 pt-3"
@@ -301,6 +318,10 @@ export function CleanerWorkspaceClient() {
             payoutError={payout.error}
             payoutRows={payout.rows}
             missingBankDetails={payout.missingBankDetails}
+            hasFailedTransfer={payout.hasFailedTransfer}
+            highlightJob={earningsHighlightJob}
+            openJobsCount={openJobsCount}
+            onRefreshPayout={() => void refreshPayoutSummary()}
           />
         </div>
       ) : null}

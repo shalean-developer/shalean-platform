@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { BOOKING_MIN_LEAD_MINUTES, filterBookableTimeSlots, johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -105,6 +106,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Account email is required." }, { status: 400 });
   }
 
+  const rooms = typeof body.rooms === "number" && Number.isFinite(body.rooms) ? Math.round(body.rooms) : null;
+  const bathrooms = typeof body.bathrooms === "number" && Number.isFinite(body.bathrooms) ? Math.round(body.bathrooms) : null;
+  if (
+    rooms == null ||
+    bathrooms == null ||
+    rooms < 1 ||
+    rooms > 20 ||
+    bathrooms < 1 ||
+    bathrooms > 20
+  ) {
+    return NextResponse.json(
+      { error: "rooms and bathrooms are required (whole numbers between 1 and 20)." },
+      { status: 400 },
+    );
+  }
+
+  const extrasRaw = Array.isArray(body.extras) ? (body.extras as unknown[]) : [];
+
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -132,14 +151,10 @@ export async function POST(request: Request) {
   }
 
   const paystackReference = `dash_${crypto.randomUUID()}`;
-  const bookingSnapshot =
-    notes.length > 0
-      ? { v: 1 as const, customer_notes: notes }
-      : null;
 
-  const { data: row, error: insErr } = await admin
-    .from("bookings")
-    .insert({
+  const ins = await insertBookingRowUnified(admin, {
+    source: "dashboard_monthly",
+    rowBase: {
       paystack_reference: paystackReference,
       customer_email: userEmail,
       customer_name: null,
@@ -147,15 +162,11 @@ export async function POST(request: Request) {
       user_id: userId,
       amount_paid_cents: 0,
       currency: "ZAR",
-      booking_snapshot: bookingSnapshot,
       status: "pending",
       dispatch_status: "searching",
       surge_multiplier: 1,
       surge_reason: null,
       service: getServiceLabel(serviceRaw as BookingServiceId),
-      rooms: typeof body.rooms === "number" && Number.isFinite(body.rooms) ? Math.round(body.rooms) : null,
-      bathrooms: typeof body.bathrooms === "number" && Number.isFinite(body.bathrooms) ? Math.round(body.bathrooms) : null,
-      extras: [],
       location,
       location_id: null,
       city_id: null,
@@ -165,15 +176,29 @@ export async function POST(request: Request) {
       pricing_version_id: null,
       price_breakdown: null,
       total_price: null,
-    })
-    .select("id")
-    .maybeSingle();
+    },
+    rooms,
+    bathrooms,
+    extrasRaw,
+    serviceSlugForFlat: serviceRaw,
+    locationForFlat: location,
+    dateForFlat: date,
+    timeForFlat: time,
+    snapshotExtension: notes.length > 0 ? { customer_notes: notes } : null,
+    select: "id",
+    logInsert: false,
+    lineItemsPricing: {
+      mode: "monthly_bundled_zar",
+      quotedTotalZar: totalPaidZar,
+      bundleLabel: "Dashboard monthly booking (job subtotal)",
+    },
+  });
 
-  if (insErr || !row || typeof (row as { id?: string }).id !== "string") {
-    return NextResponse.json({ error: insErr?.message ?? "Could not create booking." }, { status: 500 });
+  if (!ins.ok) {
+    return NextResponse.json({ error: ins.error }, { status: 500 });
   }
 
-  const bookingId = (row as { id: string }).id;
+  const bookingId = ins.id;
   void logSystemEvent({
     level: "info",
     source: "customer_dashboard_booking",

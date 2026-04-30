@@ -1,7 +1,19 @@
 /** Row shape returned by GET `/api/cleaner/jobs` and `/api/cleaner/jobs/[id]`. */
+/** Slim wire shape from cleaner APIs / `booking_line_items` join. */
+export type CleanerBookingLineItemWire = {
+  item_type: string;
+  slug: string | null;
+  name: string;
+  quantity: number;
+};
+
 export type CleanerBookingRow = {
   id: string;
   service: string | null;
+  /** Bedroom count when persisted on the row (mirrors checkout lock). */
+  rooms?: number | null;
+  /** Bathroom count when persisted on the row. */
+  bathrooms?: number | null;
   date: string | null;
   time: string | null;
   location: string | null;
@@ -14,6 +26,8 @@ export type CleanerBookingRow = {
   customer_name: string | null;
   customer_phone: string | null;
   extras?: unknown[] | null;
+  /** When present (cleaner APIs), preferred source for scope copy vs legacy `extras` JSON. */
+  lineItems?: CleanerBookingLineItemWire[] | null;
   assigned_at: string | null;
   en_route_at: string | null;
   started_at: string | null;

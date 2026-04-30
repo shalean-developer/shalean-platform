@@ -6,7 +6,7 @@ import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
 
 /**
  * Builds a Paystack-compatible `LockedBooking` from the 2-step conversion form.
- * `form.price` must be the server-locked ZAR total from `/api/bookings` dryRun.
+ * `form.price` must be the server-locked ZAR total from `POST /api/booking/widget-quote`.
  */
 export function buildConversionLockedBooking(form: ConversionBookingFormState): LockedBooking | null {
   if (form.price == null || !Number.isFinite(form.price) || form.price < 1) return null;

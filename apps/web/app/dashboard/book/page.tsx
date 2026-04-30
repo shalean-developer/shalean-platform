@@ -52,6 +52,8 @@ export default function DashboardBookPage() {
     return slots[0] ?? "09:00";
   });
   const [service, setService] = useState<BookingServiceId>("standard");
+  const [rooms, setRooms] = useState(2);
+  const [bathrooms, setBathrooms] = useState(1);
   const [addressId, setAddressId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -137,6 +139,10 @@ export default function DashboardBookPage() {
     e.preventDefault();
     setError(null);
     setSuccess(false);
+    if (!Number.isFinite(rooms) || rooms < 1 || rooms > 20 || !Number.isFinite(bathrooms) || bathrooms < 1 || bathrooms > 20) {
+      setError("Bedrooms and bathrooms must be whole numbers from 1 to 20.");
+      return;
+    }
     if (!location.trim()) {
       setError("Please choose a saved property for this visit.");
       return;
@@ -153,6 +159,8 @@ export default function DashboardBookPage() {
         date: date.trim(),
         time: tNorm,
         service,
+        rooms: Math.round(rooms),
+        bathrooms: Math.round(bathrooms),
         location: location.trim(),
         notes: notes.trim(),
       },
@@ -288,6 +296,42 @@ export default function DashboardBookPage() {
                 ))}
               </Select>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="dash-book-rooms">Bedrooms</Label>
+                <Input
+                  id="dash-book-rooms"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={20}
+                  step={1}
+                  required
+                  value={rooms}
+                  onChange={(e) => setRooms(Number(e.target.value))}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dash-book-bathrooms">Bathrooms</Label>
+                <Input
+                  id="dash-book-bathrooms"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={20}
+                  step={1}
+                  required
+                  value={bathrooms}
+                  onChange={(e) => setBathrooms(Number(e.target.value))}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              This scope is shown to your cleaner for the visit.
+            </p>
 
             <div className="space-y-2">
               <Label htmlFor="dash-book-address">My properties</Label>

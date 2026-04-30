@@ -20,11 +20,13 @@ type ApiResponse = {
     pending_cents: number;
     eligible_cents: number;
     paid_cents: number;
+    frozen_batch_cents?: number;
     invalid_cents?: number;
     today_cents?: number;
     week_cents?: number;
     month_cents?: number;
   };
+  has_failed_transfer?: boolean;
   rows?: unknown[];
   paymentDetails?: { readyForPayout?: boolean; missingBankDetails?: boolean };
   error?: string;
@@ -39,6 +41,8 @@ export type CleanerEarningsDataContextValue = {
   summary: CleanerPayoutSummary | null;
   rows: CleanerPayoutSummaryRow[];
   missingBankDetails: boolean;
+  /** At least one weekly payout had a Paystack transfer failure (update bank or contact support). */
+  hasFailedTransfer: boolean;
   /** Resolves with the summary just fetched (or null on failure / signed out). */
   refresh: () => Promise<CleanerPayoutSummary | null>;
 };
@@ -48,7 +52,7 @@ export const CleanerEarningsDataContext = createContext<CleanerEarningsDataConte
 function mapRows(list: unknown[]): CleanerPayoutSummaryRow[] {
   return list.map((r) => {
     const row = r as Record<string, unknown>;
-    return normalizeCleanerPayoutSummaryRow(
+    const normalized = normalizeCleanerPayoutSummaryRow(
       {
         booking_id: String(row.booking_id),
         date: (row.date as string | null | undefined) ?? null,
@@ -62,6 +66,11 @@ function mapRows(list: unknown[]): CleanerPayoutSummaryRow[] {
       },
       {},
     );
+    return {
+      ...normalized,
+      completed_at: typeof row.completed_at === "string" ? row.completed_at : null,
+      in_frozen_batch: row.in_frozen_batch === true,
+    };
   });
 }
 
@@ -71,6 +80,7 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
   const [summary, setSummary] = useState<CleanerPayoutSummary | null>(null);
   const [rows, setRows] = useState<CleanerPayoutSummaryRow[]>([]);
   const [missingBankDetails, setMissingBankDetails] = useState(false);
+  const [hasFailedTransfer, setHasFailedTransfer] = useState(false);
   const lastFetchedAtRef = useRef(0);
 
   const load = useCallback(async (): Promise<CleanerPayoutSummary | null> => {
@@ -80,6 +90,7 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
         setError("Not signed in.");
         setSummary(null);
         setRows([]);
+        setHasFailedTransfer(false);
         return null;
       }
       const res = await cleanerAuthenticatedFetch("/api/cleaner/earnings", { headers });
@@ -88,6 +99,7 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
         setError(json.error ?? "Could not load payout summary.");
         setSummary(null);
         setRows([]);
+        setHasFailedTransfer(false);
         return null;
       }
       setError(null);
@@ -98,6 +110,7 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
               pending_cents: s.pending_cents,
               eligible_cents: s.eligible_cents ?? 0,
               paid_cents: s.paid_cents ?? 0,
+              frozen_batch_cents: typeof s.frozen_batch_cents === "number" ? s.frozen_batch_cents : 0,
               invalid_cents: typeof s.invalid_cents === "number" ? s.invalid_cents : 0,
               today_cents: typeof s.today_cents === "number" ? s.today_cents : 0,
               week_cents: typeof s.week_cents === "number" ? s.week_cents : 0,
@@ -107,6 +120,7 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
               pending_cents: 0,
               eligible_cents: 0,
               paid_cents: 0,
+              frozen_batch_cents: 0,
               invalid_cents: 0,
               today_cents: 0,
               week_cents: 0,
@@ -116,6 +130,7 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
       const list = Array.isArray(json.rows) ? json.rows : [];
       setRows(mapRows(list));
       setMissingBankDetails(json.paymentDetails?.missingBankDetails === true);
+      setHasFailedTransfer(json.has_failed_transfer === true);
       lastFetchedAtRef.current = Date.now();
       return nextSummary;
     } catch {
@@ -150,9 +165,10 @@ export function CleanerEarningsDataProvider({ children }: { children: ReactNode 
       summary,
       rows,
       missingBankDetails,
+      hasFailedTransfer,
       refresh: load,
     }),
-    [loading, error, summary, rows, missingBankDetails, load],
+    [loading, error, summary, rows, missingBankDetails, hasFailedTransfer, load],
   );
 
   return <CleanerEarningsDataContext.Provider value={value}>{children}</CleanerEarningsDataContext.Provider>;

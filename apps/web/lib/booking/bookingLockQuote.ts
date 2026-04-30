@@ -14,6 +14,7 @@ import {
 } from "@/lib/pricing/pricingEngine";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 import { quoteCheckoutZarWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
+import { MAX_BOOKING_EXTRAS_ROWS } from "@/lib/booking/bookingExtrasLimits";
 
 export type LockQuoteError = { ok: false; status: number; error: string };
 
@@ -98,6 +99,14 @@ export function quoteLockFromRequestBodyWithSnapshot(
     ...jobDraft,
     extras: filterExtrasForSnapshot(snapshot, readExtras(b), resolvedService),
   };
+
+  if (job.extras.length > MAX_BOOKING_EXTRAS_ROWS) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Too many add-ons selected. Remove some extras and try again.",
+    };
+  }
 
   const vipTier = normalizeVipTier(
     typeof b.vipTier === "string" ? b.vipTier : typeof b.vip_tier === "string" ? b.vip_tier : undefined,

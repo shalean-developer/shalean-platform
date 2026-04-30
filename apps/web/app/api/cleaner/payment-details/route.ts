@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
+import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -76,7 +77,7 @@ async function createPaystackRecipient(params: {
 
   let res: Response;
   try {
-    res = await fetch("https://api.paystack.co/transferrecipient", {
+    res = await fetch(`${getPaystackBaseUrl()}/transferrecipient`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${secret}`,

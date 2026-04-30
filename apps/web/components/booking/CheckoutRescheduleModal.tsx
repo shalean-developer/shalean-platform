@@ -20,6 +20,7 @@ import {
 } from "@/lib/pricing/slotRevenueStrategy";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
+import { bookingExtrasClientLimitMessage, bookingExtrasOverClientLimit } from "@/lib/booking/bookingExtrasLimits";
 
 const INITIAL_VISIBLE_SLOTS = 9;
 const SLOT_START_MIN = 7 * 60;
@@ -219,6 +220,10 @@ export function CheckoutRescheduleModal({
   const handleSelectSlot = useCallback(
     async (time: string) => {
       if (!lockBaseState) return;
+      if (bookingExtrasOverClientLimit(lockBaseState.extras)) {
+        setSlotHint(bookingExtrasClientLimitMessage());
+        return;
+      }
       const rawSlot = rawSlots.find((s) => s.time === time);
       if (!rawSlot?.available) return;
       const cleanersCount = Math.max(0, Math.round(rawSlot.cleanersCount));

@@ -42,6 +42,7 @@ import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
+import { bookingExtrasClientLimitMessage, bookingExtrasOverClientLimit } from "@/lib/booking/bookingExtrasLimits";
 
 const AVAILABILITY_SLOT_CACHE_TTL_MS = 50_000;
 const availabilitySlotCache = new Map<string, { slots: RawAvailabilitySlot[]; at: number }>();
@@ -688,6 +689,12 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const handleSelectSlot = useCallback(
     async (time: string, opts?: { fromAutoPick?: boolean }) => {
       if (!lockBaseState || !catalog || !pricingJob) return;
+      if (bookingExtrasOverClientLimit(lockBaseState.extras)) {
+        setLockConfirmPhase("idle");
+        setLockingTime(null);
+        setSlotHint(bookingExtrasClientLimitMessage());
+        return;
+      }
       const rawSlot = rawSlots.find((s) => s.time === time);
       if (!rawSlot?.available) return;
       setLockConfirmPhase("checking");
