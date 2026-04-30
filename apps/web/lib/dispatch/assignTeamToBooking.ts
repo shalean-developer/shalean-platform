@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 /**
  * Statuses that consume a team-day slot for allocator + RPC alignment.
@@ -429,6 +430,7 @@ async function finalizeBookingTeamAssignment(
     status: "assigned" as const,
     dispatch_status: "assigned" as const,
     assigned_at: nowIso,
+    cleaner_response_status: CLEANER_RESPONSE.PENDING,
   };
 
   let upd = await supabase

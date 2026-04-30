@@ -3,6 +3,10 @@ export const CLEANER_RESPONSE = {
   NONE: "none",
   PENDING: "pending",
   ACCEPTED: "accepted",
+  /** Cleaner tapped “On my way” (travel started). */
+  ON_MY_WAY: "on_my_way",
+  /** Job marked started (`bookings.status` becomes `in_progress`). */
+  STARTED: "started",
   DECLINED: "declined",
   TIMEOUT: "timeout",
 } as const;

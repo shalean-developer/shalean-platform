@@ -19,6 +19,7 @@ import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
 import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 const POLL_MS = 400;
 
@@ -438,6 +439,7 @@ export async function acceptDispatchOffer(params: {
       status: "assigned",
       dispatch_status: "assigned",
       assigned_at: now,
+      cleaner_response_status: CLEANER_RESPONSE.PENDING,
       ...assignMeta,
     })
     .eq("id", bookingId)

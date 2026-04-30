@@ -8,6 +8,10 @@ export type PriceSnapshotV1 = {
   base_price: number;
   extras: { id: string; name: string; price: number }[];
   total_price: number;
+  /** Optional audit trail when an admin reprices an existing booking. */
+  version?: string;
+  repriced_at?: string;
+  repriced_by?: string;
 };
 
 function finiteNumber(v: unknown): number | null {

@@ -9,7 +9,11 @@ export type NotificationDedupeSource =
   | "review_prompt_sms_sent"
   | "review_prompt_sms_reminder_sent"
   | "abandon_checkout_reminder_sent"
-  | "daily_ops_summary";
+  | "daily_ops_summary"
+  /** One auto-dispatch wave per booking after admin mark-paid (retries must not re-run assign/notify). */
+  | "dispatch_admin_mark_paid"
+  /** Reserved for edit-details side-effect waves (claim before notify/dispatch when wired). */
+  | "dispatch_edit_details";
 
 /**
  * Inserts a claim row guarded by partial unique index `idx_notification_dedupe`.

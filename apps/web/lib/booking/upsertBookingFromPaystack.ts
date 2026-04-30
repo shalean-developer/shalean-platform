@@ -32,6 +32,7 @@ import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingEx
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackReason";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { metrics } from "@/lib/metrics/counters";
 import { pickUserSelectedCleanerId } from "@/lib/booking/userSelectedCleanerFromSnapshot";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
@@ -225,6 +226,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           status: "assigned",
           dispatch_status: "assigned",
           assigned_at: paidMoment,
+          cleaner_response_status: CLEANER_RESPONSE.PENDING,
         }
       : {};
 

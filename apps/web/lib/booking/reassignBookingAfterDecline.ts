@@ -3,6 +3,7 @@ import "server-only";
 import { type CreatedBookingRecord, sendCleanerJobAssignedWhatsApp } from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { pickAvailableCleaner } from "@/lib/booking/pickAvailableCleaner";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BOOKING_ROW_SELECT =
@@ -44,6 +45,9 @@ export async function tryOnceReassignAfterDecline(
         status: "assigned",
         dispatch_status: "assigned",
         assigned_at: nowIso,
+        cleaner_response_status: CLEANER_RESPONSE.PENDING,
+        en_route_at: null,
+        started_at: null,
         last_declined_by_cleaner_id: null,
         last_declined_at: null,
       })

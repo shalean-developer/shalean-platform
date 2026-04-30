@@ -12,12 +12,13 @@ import {
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
+import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -111,6 +112,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       earnings_estimated: displayEarningsIsEstimate,
       teamMemberCount,
       cleaner_has_issue_report,
+      ...augmentCleanerBookingWire(record as Record<string, unknown>),
     },
   });
 }

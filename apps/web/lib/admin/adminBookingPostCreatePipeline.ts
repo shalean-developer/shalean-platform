@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   resolvePersistCleanerIdForBooking,
@@ -8,36 +9,81 @@ import {
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * When a preferred cleaner was chosen (`selected_cleaner_id`), align `cleaner_id` and move
- * operational `pending` → `assigned` so cleaner lifecycle CTAs apply. Skips completed/cancelled/etc.
+ * Pure mirror of DB constraint `bookings_assigned_requires_status` (operational `pending`
+ * must not coexist with cleaner_id / selected_cleaner_id).
  */
-export async function normalizeAdminBookingCleanerFromPreferred(
+export function bookingViolatesCleanerAssignedWhilePending(row: {
+  status?: string | null;
+  cleaner_id?: string | null;
+  selected_cleaner_id?: string | null;
+}): boolean {
+  const st = String(row.status ?? "").trim().toLowerCase();
+  if (st !== "pending") return false;
+  const c = String(row.cleaner_id ?? "").trim();
+  const s = String(row.selected_cleaner_id ?? "").trim();
+  return c.length > 0 || s.length > 0;
+}
+
+/**
+ * Aligns `cleaner_id` from `selected_cleaner_id` when missing, and promotes `pending` → `assigned`
+ * when any cleaner reference exists (matches `bookings_assigned_requires_status`).
+ */
+export async function ensureBookingAssignedStatusInvariant(
   admin: SupabaseClient,
   bookingId: string,
 ): Promise<void> {
   const { data: r, error } = await admin
     .from("bookings")
-    .select("cleaner_id, selected_cleaner_id, status, assigned_at")
+    .select("cleaner_id, selected_cleaner_id, status, assigned_at, cleaner_response_status, dispatch_status")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !r) return;
-  const selected = String((r as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim();
-  if (!selected || !/^[0-9a-f-]{36}$/i.test(selected)) return;
 
-  const st = String((r as { status?: string | null }).status ?? "")
-    .trim()
-    .toLowerCase();
-  const assignedRaw = (r as { assigned_at?: string | null }).assigned_at;
-  const hasAssignedAt = typeof assignedRaw === "string" && assignedRaw.trim() !== "";
+  const st = String((r as { status?: string | null }).status ?? "").trim().toLowerCase();
+  const cleanerId = String((r as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
+  const selectedId = String((r as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim();
+  const cleanerOk = UUID_RE.test(cleanerId);
+  const selectedOk = UUID_RE.test(selectedId);
 
-  const patch: Record<string, unknown> = { cleaner_id: selected };
-  if (st === "pending") {
-    patch.status = "assigned";
-    if (!hasAssignedAt) patch.assigned_at = new Date().toISOString();
+  const patch: Record<string, unknown> = {};
+  if (selectedOk && !cleanerOk) {
+    patch.cleaner_id = selectedId;
   }
 
-  await admin.from("bookings").update(patch).eq("id", bookingId);
+  const hasCleanerRef = cleanerOk || selectedOk;
+  if (st === "pending" && hasCleanerRef) {
+    patch.status = "assigned";
+    const crsRaw = (r as { cleaner_response_status?: string | null }).cleaner_response_status;
+    patch.cleaner_response_status =
+      crsRaw != null && String(crsRaw).trim() !== "" ? String(crsRaw).trim() : CLEANER_RESPONSE.PENDING;
+    const assignedRaw = (r as { assigned_at?: string | null }).assigned_at;
+    if (assignedRaw == null || !String(assignedRaw).trim()) {
+      patch.assigned_at = new Date().toISOString();
+    }
+    const ds = String((r as { dispatch_status?: string | null }).dispatch_status ?? "").trim().toLowerCase();
+    if (ds === "searching" || ds === "offered" || ds === "failed" || ds === "") {
+      patch.dispatch_status = "assigned";
+    }
+  }
+
+  if (Object.keys(patch).length === 0) return;
+  const { error: uErr } = await admin.from("bookings").update(patch).eq("id", bookingId);
+  if (uErr) {
+    void reportOperationalIssue("warn", "ensureBookingAssignedStatusInvariant", uErr.message, { bookingId });
+  }
+}
+
+/**
+ * @deprecated Prefer {@link ensureBookingAssignedStatusInvariant}; kept as an alias for existing imports.
+ */
+export async function normalizeAdminBookingCleanerFromPreferred(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<void> {
+  await ensureBookingAssignedStatusInvariant(admin, bookingId);
 }
 
 /**
@@ -98,6 +144,6 @@ export async function runAdminBookingPostCreateNormalizationAndEarnings(
   bookingId: string,
   logSource: string,
 ): Promise<void> {
-  await normalizeAdminBookingCleanerFromPreferred(admin, bookingId);
+  await ensureBookingAssignedStatusInvariant(admin, bookingId);
   await triggerPersistCleanerPayoutIfCompleted(admin, bookingId, logSource);
 }

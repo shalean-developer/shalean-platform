@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Loader2, MapPin, Pencil, Phone, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import {
@@ -15,7 +15,9 @@ import {
 } from "@/lib/admin/dashboard";
 import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { issueReportReasonDisplay } from "@/lib/cleaner/cleanerJobIssueReasons";
+import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { AdminBookingLiveLocation } from "@/components/admin/AdminBookingLiveLocation";
 
 type BookingSeed = { id: string };
 
@@ -37,6 +39,8 @@ type BookingDetails = {
   status: string | null;
   /** Auto-dispatch funnel; terminal `unassignable` / `no_cleaner` need manual assign or reset. */
   dispatch_status?: string | null;
+  /** Cleaner lifecycle: `on_my_way` enables live GPS tracking. */
+  cleaner_response_status?: string | null;
   user_id: string | null;
   cleaner_id: string | null;
   team_id?: string | null;
@@ -53,6 +57,25 @@ type BookingDetails = {
   price_snapshot?: unknown;
   /** Invoice-style booking payout lifecycle (`pending` | `eligible` | `paid`). */
   payout_status?: string | null;
+  payment_completed_at?: string | null;
+  payment_status?: string | null;
+  /** Off-platform settlement: cash | zoho (set by admin mark-paid). */
+  payment_method?: string | null;
+  payment_reference_external?: string | null;
+  paystack_reference?: string | null;
+  /** Quoted total in ZAR (major units) at checkout / admin init. */
+  total_price?: number | null;
+  rooms?: number | null;
+  bathrooms?: number | null;
+  cleaner_line_earnings_finalized_at?: string | null;
+  /** Row version for optimistic locking (admin edit-details). */
+  updated_at?: string | null;
+  payment_mismatch?: boolean | null;
+  total_paid_cents?: number | null;
+  assigned_at?: string | null;
+  en_route_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 };
 
 type TeamSummary = { id: string; name: string; member_count: number | null };
@@ -224,6 +247,89 @@ function statusBadgeClass(status: string | null): string {
   return "bg-amber-100 text-amber-800";
 }
 
+/** Human label when payment was recorded off-platform (cash / Zoho). */
+function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null {
+  const pm = String(booking.payment_method ?? "").trim().toLowerCase();
+  if (pm === "cash") return "Paid (Cash)";
+  if (pm === "zoho") {
+    const ext = String(booking.payment_reference_external ?? "").trim();
+    if (!ext) return "Paid (Zoho)";
+    const short = ext.length > 42 ? `${ext.slice(0, 42)}…` : ext;
+    return `Paid (Zoho: ${short})`;
+  }
+  const ref = String(booking.paystack_reference ?? "").trim().toLowerCase();
+  if (ref.startsWith("cash_")) return "Paid (Cash)";
+  if (ref.startsWith("zoho_")) {
+    const tail = ref.replace(/^zoho_/, "");
+    const ext = tail.length > 42 ? `${tail.slice(0, 42)}…` : tail;
+    return ext ? `Paid (Zoho: ${ext})` : "Paid (Zoho)";
+  }
+  return null;
+}
+
+function formatShortTs(iso: string | null | undefined): string {
+  if (!iso || !String(iso).trim()) return "—";
+  const d = new Date(String(iso).trim());
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
+  const paidAt = booking.payment_completed_at;
+  const offPlatform = adminOffPlatformPaidBadgeLabel(booking);
+  const paidTitle = offPlatform ?? (paidAt ? "Paid (checkout)" : "Pending payment");
+  const payoutPs = String(booking.payout_status ?? "").trim().toLowerCase();
+  const payoutLabel =
+    payoutPs === "paid" ? "Paid out to cleaner" : payoutPs === "eligible" ? "Eligible for payout" : payoutPs ? payoutPs : "—";
+
+  const steps: { key: string; label: string; detail: string; done: boolean }[] = [
+    { key: "created", label: "Created", detail: formatShortTs(booking.created_at), done: true },
+    {
+      key: "paid",
+      label: paidTitle,
+      detail: paidAt ? formatShortTs(paidAt) : "Not recorded",
+      done: Boolean(paidAt),
+    },
+    {
+      key: "assigned",
+      label: "Assigned",
+      detail: booking.cleaner_id ? formatShortTs(booking.assigned_at ?? null) : "No cleaner yet",
+      done: Boolean(booking.cleaner_id),
+    },
+    {
+      key: "progress",
+      label: "In progress",
+      detail: formatShortTs(booking.started_at ?? null),
+      done: String(booking.status ?? "").toLowerCase() === "in_progress" || String(booking.status ?? "").toLowerCase() === "completed",
+    },
+    {
+      key: "completed",
+      label: "Completed",
+      detail: formatShortTs(booking.completed_at ?? null),
+      done: String(booking.status ?? "").toLowerCase() === "completed",
+    },
+    { key: "payout", label: "Payout", detail: payoutLabel, done: payoutPs === "paid" },
+  ];
+
+  return (
+    <ol className="space-y-3 border-l-2 border-zinc-200 pl-4">
+      {steps.map((s) => (
+        <li key={s.key} className="relative">
+          <span
+            className={[
+              "absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white",
+              s.done ? "bg-emerald-500" : "bg-zinc-300",
+            ].join(" ")}
+            aria-hidden
+          />
+          <p className="text-sm font-semibold text-zinc-900">{s.label}</p>
+          <p className="text-xs text-zinc-600">{s.detail}</p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function detailFlags(booking: BookingDetails, userProfile: UserProfile | null) {
   const flags: string[] = [];
   if ((userProfile?.tier ?? "").toLowerCase() === "gold" || (userProfile?.tier ?? "").toLowerCase() === "platinum") {
@@ -263,6 +369,45 @@ function formatBookingSnapshotNotes(snap: unknown): string | null {
   const merged = parts.join("\n\n").trim();
   return merged || null;
 }
+
+function readAdminNotesRawFromSnapshot(snap: unknown): string {
+  if (!snap || typeof snap !== "object" || Array.isArray(snap)) return "";
+  const o = snap as { admin_notes?: unknown };
+  return typeof o.admin_notes === "string" ? o.admin_notes : "";
+}
+
+function extrasSlugsFromBookingRows(extras: unknown): string[] {
+  if (!Array.isArray(extras)) return [];
+  const out: string[] = [];
+  for (const item of extras) {
+    if (typeof item === "string") {
+      const s = item.trim();
+      if (s) out.push(s);
+      continue;
+    }
+    if (item && typeof item === "object" && "slug" in item && typeof (item as { slug?: unknown }).slug === "string") {
+      const s = (item as { slug: string }).slug.trim();
+      if (s) out.push(s);
+    }
+  }
+  return [...new Set(out)];
+}
+
+function extrasSlugsFromBookingPayload(
+  extras: unknown,
+  lockedExtras: unknown,
+): string[] {
+  const fromRows = extrasSlugsFromBookingRows(extras);
+  if (fromRows.length > 0) return fromRows;
+  if (Array.isArray(lockedExtras)) {
+    return lockedExtras
+      .filter((e): e is string => typeof e === "string" && e.trim().length > 0)
+      .map((e) => e.trim());
+  }
+  return [];
+}
+
+const BOOKING_EXTRA_CHECKBOX_SLUGS = [...BOOKING_EXTRA_ID_SET].sort((a, b) => a.localeCompare(b));
 
 function formatBookingExtraChip(item: unknown): { key: string; label: string } {
   if (typeof item === "string") {
@@ -323,6 +468,33 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [fixEarningsBusy, setFixEarningsBusy] = useState(false);
   const [resetEarningsBusy, setResetEarningsBusy] = useState(false);
   const [resetEarningsModalOpen, setResetEarningsModalOpen] = useState(false);
+  const [markPaidModalOpen, setMarkPaidModalOpen] = useState(false);
+  const [markPaidMethod, setMarkPaidMethod] = useState<"cash" | "zoho">("cash");
+  const [markPaidReference, setMarkPaidReference] = useState("");
+  const [markPaidAmountZar, setMarkPaidAmountZar] = useState("");
+  const [markPaidBusy, setMarkPaidBusy] = useState(false);
+  const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
+  const [editDetailsBusy, setEditDetailsBusy] = useState(false);
+  const [editBedrooms, setEditBedrooms] = useState(2);
+  const [editBathrooms, setEditBathrooms] = useState(1);
+  const [editExtrasSlugs, setEditExtrasSlugs] = useState<string[]>([]);
+  const [editAdminNotes, setEditAdminNotes] = useState("");
+  type EditDetailsSeed = { bedrooms: number; bathrooms: number; extras: string[]; notes: string };
+  const editDetailsSeedRef = useRef<EditDetailsSeed>({ bedrooms: 2, bathrooms: 1, extras: [], notes: "" });
+  type EditPricePreview = {
+    old_total_cents: number;
+    new_total_cents: number;
+    delta_cents: number;
+    requires_collect_confirm: boolean;
+    paid: boolean;
+  };
+  const [editPricePreview, setEditPricePreview] = useState<EditPricePreview | null>(null);
+  const [editPricePreviewLoading, setEditPricePreviewLoading] = useState(false);
+  const [editPricePreviewRetry, setEditPricePreviewRetry] = useState(0);
+  const [editPricePreviewHttpError, setEditPricePreviewHttpError] = useState<string | null>(null);
+  const [editConflictResyncNonce, setEditConflictResyncNonce] = useState(0);
+  const [confirmCollectAdditional, setConfirmCollectAdditional] = useState(false);
+  const [editIdempotencyKey, setEditIdempotencyKey] = useState("");
   /** From GET /api/admin/bookings/[id] — used to disable reset before hitting the API. */
   const [ledgerCleanerEarnings, setLedgerCleanerEarnings] = useState<Array<{ id: string; status: string | null }>>([]);
   const [earningsPreview, setEarningsPreview] = useState<EarningsPreviewResponse | null>(null);
@@ -419,8 +591,10 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   useEffect(() => {
     if (!resetEarningsModalOpen || !bookingId) {
       if (!resetEarningsModalOpen) {
-        setEarningsPreview(null);
-        setEarningsPreviewLoading(false);
+        queueMicrotask(() => {
+          setEarningsPreview(null);
+          setEarningsPreviewLoading(false);
+        });
       }
       return;
     }
@@ -522,6 +696,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     if (!fullBooking?.date || !fullBooking.time) return "—";
     const dt = new Date(`${fullBooking.date}T${fullBooking.time.slice(0, 5)}:00+02:00`);
     if (Number.isNaN(dt.getTime())) return "—";
+    // eslint-disable-next-line react-hooks/purity -- relative "starts in" copy uses wall clock
     const mins = Math.round((dt.getTime() - Date.now()) / 60000);
     const abs = Math.abs(mins);
     if (mins >= 0) {
@@ -530,7 +705,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     }
     if (abs < 60) return `Started ${abs}m ago`;
     return `Started ${Math.floor(abs / 60)}h ${abs % 60}m ago`;
-  }, [fullBooking?.date, fullBooking?.time]);
+  }, [fullBooking]);
 
   const resetEarningsClientBlockReason = useMemo(() => {
     if (!fullBooking) return null;
@@ -545,6 +720,283 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     }
     return null;
   }, [fullBooking, ledgerCleanerEarnings]);
+
+  const canMarkPaid = useMemo(() => {
+    if (!fullBooking) return false;
+    const s = (fullBooking.status ?? "").toLowerCase();
+    if (s === "cancelled" || s === "failed") return false;
+    const p = fullBooking.payment_completed_at;
+    if (p != null && String(p).trim() !== "") return false;
+    return true;
+  }, [fullBooking]);
+
+  const markPaidPreviewZar = useMemo(() => {
+    if (!fullBooking) return null;
+    const raw = markPaidAmountZar.trim();
+    if (raw) {
+      const z = Number(raw.replace(",", "."));
+      if (Number.isFinite(z) && z > 0) return z;
+    }
+    return money(fullBooking);
+  }, [fullBooking, markPaidAmountZar]);
+
+  const editBookingClientBlockReason = useMemo(() => {
+    if (!fullBooking) return null;
+    const fin = (fullBooking as { cleaner_line_earnings_finalized_at?: string | null }).cleaner_line_earnings_finalized_at;
+    if (fin != null && String(fin).trim() !== "") {
+      return "Cannot edit booking after payout is locked.";
+    }
+    return resetEarningsClientBlockReason;
+  }, [fullBooking, resetEarningsClientBlockReason]);
+
+  const openEditDetailsModal = useCallback(() => {
+    if (!fullBooking) return;
+    const snap = fullBooking.booking_snapshot as {
+      locked?: { extras?: unknown; rooms?: unknown; bedrooms?: unknown; bathrooms?: unknown };
+    } | null;
+    const locked = snap?.locked;
+    const br = Math.max(
+      1,
+      Math.min(
+        10,
+        Math.round(Number(locked?.bedrooms ?? locked?.rooms ?? fullBooking.rooms ?? 2) || 2),
+      ),
+    );
+    const bt = Math.max(
+      1,
+      Math.min(10, Math.round(Number(locked?.bathrooms ?? fullBooking.bathrooms ?? 1) || 1)),
+    );
+    const ex = extrasSlugsFromBookingPayload(fullBooking.extras, locked?.extras).sort((a, b) => a.localeCompare(b));
+    const notes = readAdminNotesRawFromSnapshot(fullBooking.booking_snapshot);
+    editDetailsSeedRef.current = { bedrooms: br, bathrooms: bt, extras: [...ex], notes };
+    setEditBedrooms(br);
+    setEditBathrooms(bt);
+    setEditExtrasSlugs(ex);
+    setEditAdminNotes(notes);
+    setEditPricePreview(null);
+    setEditPricePreviewLoading(false);
+    setEditPricePreviewHttpError(null);
+    setConfirmCollectAdditional(false);
+    setEditIdempotencyKey(
+      typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+    );
+    setEditDetailsModalOpen(true);
+  }, [fullBooking]);
+
+  useEffect(() => {
+    if (editConflictResyncNonce === 0) return;
+    if (loading || !fullBooking) return;
+    setEditConflictResyncNonce(0);
+    openEditDetailsModal();
+  }, [editConflictResyncNonce, loading, fullBooking, openEditDetailsModal]);
+
+  const toggleEditExtra = (slug: string) => {
+    setEditExtrasSlugs((prev) => {
+      if (prev.includes(slug)) return prev.filter((s) => s !== slug);
+      return [...prev, slug].sort((a, b) => a.localeCompare(b));
+    });
+  };
+
+  const editPricingDirty = useMemo(() => {
+    if (!editDetailsModalOpen || !fullBooking) return false;
+    if ((fullBooking.status ?? "").trim().toLowerCase() === "in_progress") return false;
+    const seed = editDetailsSeedRef.current;
+    const exEq = [...editExtrasSlugs].sort().join("|") === [...seed.extras].sort().join("|");
+    return editBedrooms !== seed.bedrooms || editBathrooms !== seed.bathrooms || !exEq;
+  }, [editDetailsModalOpen, fullBooking, editBedrooms, editBathrooms, editExtrasSlugs]);
+
+  const editSaveBlockedByPreview =
+    editDetailsModalOpen &&
+    editPricingDirty &&
+    (editPricePreviewLoading || editPricePreview == null || editPricePreviewHttpError != null);
+
+  useEffect(() => {
+    if (!editDetailsModalOpen || !fullBooking?.id) return;
+    const inProg = (fullBooking.status ?? "").trim().toLowerCase() === "in_progress";
+    if (inProg) {
+      setEditPricePreview(null);
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      setEditPricePreviewLoading(true);
+      setEditPricePreviewHttpError(null);
+      try {
+        const sb = getSupabaseBrowser();
+        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        if (!token || cancelled) return;
+        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/edit-details/preview`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bedrooms: editBedrooms,
+            bathrooms: editBathrooms,
+            extras: editExtrasSlugs,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          old_total_cents?: number;
+          new_total_cents?: number;
+          delta_cents?: number;
+          requires_collect_confirm?: boolean;
+          paid?: boolean;
+        };
+        if (cancelled || !res.ok || !json.ok) {
+          if (!cancelled) {
+            setEditPricePreview(null);
+            setEditPricePreviewHttpError(
+              !res.ok ? `Preview failed (HTTP ${res.status}).` : (json.error ?? "Preview could not run."),
+            );
+          }
+          return;
+        }
+        if (!cancelled) setEditPricePreviewHttpError(null);
+        setEditPricePreview({
+          old_total_cents: Number(json.old_total_cents) || 0,
+          new_total_cents: Number(json.new_total_cents) || 0,
+          delta_cents: Number(json.delta_cents) || 0,
+          requires_collect_confirm: Boolean(json.requires_collect_confirm),
+          paid: Boolean(json.paid),
+        });
+      } finally {
+        if (!cancelled) setEditPricePreviewLoading(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [
+    editDetailsModalOpen,
+    fullBooking?.id,
+    fullBooking?.status,
+    editBedrooms,
+    editBathrooms,
+    editExtrasSlugs,
+    editPricePreviewRetry,
+  ]);
+
+  const handleEditDetailsConfirm = async () => {
+    if (!fullBooking?.id) return;
+    const inProg = (fullBooking.status ?? "").trim().toLowerCase() === "in_progress";
+    if (!inProg && editSaveBlockedByPreview) {
+      setToast({
+        kind: "error",
+        text: editPricePreviewHttpError
+          ? "Fix preview or use Retry preview before saving."
+          : "Wait for the price preview to finish before saving.",
+      });
+      return;
+    }
+    const seed = editDetailsSeedRef.current;
+    const extrasEqual =
+      [...editExtrasSlugs].sort().join("\0") === [...seed.extras].sort().join("\0");
+    const body: Record<string, unknown> = {
+      client_updated_at: String((fullBooking as { updated_at?: string | null }).updated_at ?? "").trim(),
+    };
+    if (!body.client_updated_at) {
+      setToast({ kind: "error", text: "Missing updated_at on booking — refresh the page and try again." });
+      return;
+    }
+    if (inProg) {
+      if (editAdminNotes === seed.notes) {
+        setToast({ kind: "info", text: "No changes to save." });
+        setEditDetailsModalOpen(false);
+        return;
+      }
+      body.notes = editAdminNotes;
+    } else {
+      if (editBedrooms !== seed.bedrooms) body.bedrooms = editBedrooms;
+      if (editBathrooms !== seed.bathrooms) body.bathrooms = editBathrooms;
+      if (!extrasEqual) body.extras = editExtrasSlugs;
+      if (editAdminNotes !== seed.notes) body.notes = editAdminNotes;
+      if (
+        editPricePreview?.requires_collect_confirm &&
+        !confirmCollectAdditional &&
+        (body.bedrooms != null || body.bathrooms != null || body.extras != null)
+      ) {
+        setToast({
+          kind: "error",
+          text: `Confirm additional collection (R ${(Math.max(0, editPricePreview.new_total_cents - editPricePreview.old_total_cents) / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) before saving.`,
+        });
+        return;
+      }
+      if (editPricePreview?.requires_collect_confirm && confirmCollectAdditional) {
+        body.confirm_collect_additional = true;
+      }
+    }
+    if (Object.keys(body).length <= 1) {
+      setToast({ kind: "info", text: "No changes to save." });
+      setEditDetailsModalOpen(false);
+      return;
+    }
+    setEditDetailsBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const idem = `edit-details:${fullBooking.id}:${editIdempotencyKey}`;
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/edit-details`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": idem,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        conflict?: boolean;
+        message?: string;
+        new_total?: number;
+        error?: string;
+        collect_additional_cents?: number;
+        payment_mismatch?: boolean;
+        idempotent?: boolean;
+      };
+      if (res.status === 409 && json.conflict) {
+        setToast({
+          kind: "info",
+          text: json.message ?? "Booking was updated elsewhere — refreshing this form with the latest values.",
+        });
+        setEditConflictResyncNonce((n) => n + 1);
+        setDetailRefresh((r) => r + 1);
+        return;
+      }
+      if (res.status === 409) {
+        setToast({ kind: "info", text: json.error ?? "Already processing. Wait a moment and try again." });
+        return;
+      }
+      if (!res.ok) {
+        const extra =
+          json.collect_additional_cents != null && Number.isFinite(json.collect_additional_cents)
+            ? ` Collect R ${(json.collect_additional_cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more after checking “confirm”.`
+            : "";
+        setToast({ kind: "error", text: `${json.error ?? "Could not update booking."}${extra}` });
+        return;
+      }
+      const nt = json.new_total;
+      const mm = json.payment_mismatch ? " payment_mismatch flagged for ops." : "";
+      const idemTxt = json.idempotent ? " (already applied)" : "";
+      setToast({
+        kind: "success",
+        text:
+          typeof nt === "number" && Number.isFinite(nt)
+            ? `Saved${idemTxt}. Visit total is now R ${(nt / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.${mm}`
+            : `Saved${idemTxt}.${mm}`,
+      });
+      setEditDetailsModalOpen(false);
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setEditDetailsBusy(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -717,6 +1169,82 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setDetailRefresh((n) => n + 1);
     } finally {
       setFixEarningsBusy(false);
+    }
+  };
+
+  const handleMarkPaidConfirm = async () => {
+    if (!fullBooking?.id) return;
+    setMarkPaidBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const body: { method: "cash" | "zoho"; reference?: string; amount_cents?: number } = { method: markPaidMethod };
+      if (markPaidMethod === "zoho" && markPaidReference.trim()) {
+        body.reference = markPaidReference.trim();
+      }
+      const zarRaw = markPaidAmountZar.trim();
+      if (zarRaw) {
+        const z = Number(zarRaw.replace(",", "."));
+        if (!Number.isFinite(z) || z <= 0) {
+          setToast({ kind: "error", text: "Enter a valid amount in ZAR." });
+          return;
+        }
+        body.amount_cents = Math.round(z * 100);
+      }
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/mark-paid`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        skipped?: boolean;
+        reason?: string;
+        error?: string;
+        settlement?: {
+          amount_cents: number;
+          total_paid_zar: number;
+          method: string;
+          payment_reference_external: string | null;
+          paystack_reference: string;
+        };
+      };
+      if (!res.ok) {
+        setToast({ kind: "error", text: json.error ?? "Could not mark as paid." });
+        return;
+      }
+      if (json.skipped && json.reason === "already_paid") {
+        setToast({ kind: "info", text: "Already recorded as paid." });
+        setMarkPaidModalOpen(false);
+        setDetailRefresh((n) => n + 1);
+        return;
+      }
+      const settlement = json.settlement;
+      if (settlement && fullBooking) {
+        const nowIso = new Date().toISOString();
+        setFullBooking({
+          ...fullBooking,
+          payment_completed_at: nowIso,
+          payment_status: "success",
+          payment_method: settlement.method,
+          payment_reference_external: settlement.payment_reference_external,
+          paystack_reference: settlement.paystack_reference,
+          amount_paid_cents: settlement.amount_cents,
+          total_paid_cents: settlement.amount_cents,
+          total_paid_zar: settlement.total_paid_zar,
+        });
+      }
+      setToast({ kind: "success", text: "Marked as paid." });
+      setMarkPaidModalOpen(false);
+      setMarkPaidReference("");
+      setMarkPaidAmountZar("");
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setMarkPaidBusy(false);
     }
   };
 
@@ -958,6 +1486,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     setToast({ kind: "error", text: "No contact details available" });
   };
 
+  const offPlatformPaidLabel = adminOffPlatformPaidBadgeLabel(fullBooking);
+
   return (
     <div className="min-h-dvh bg-zinc-50">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white">
@@ -979,6 +1509,14 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               <span className={["rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide", statusBadgeClass(fullBooking.status)].join(" ")}>
                 {(fullBooking.status ?? "pending").toUpperCase()}
               </span>
+              {offPlatformPaidLabel ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-200"
+                  title="Recorded via admin Mark as Paid (off-platform)"
+                >
+                  ✔ {offPlatformPaidLabel}
+                </span>
+              ) : null}
               {fullBooking.is_test ? (
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200">
                   TEST BOOKING
@@ -1039,6 +1577,9 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           </div>
         ) : null}
         <section className="col-span-12 space-y-6 lg:col-span-8">
+          <DetailCard title="Payment & lifecycle">
+            <BookingPaymentTimeline booking={fullBooking} />
+          </DetailCard>
           <DetailCard title="Customer">
             <p className="text-base font-medium text-zinc-900">{fullBooking.customer_email ?? userProfile?.email ?? "—"}</p>
             <DetailRow label="Phone" value={fullBooking.phone ?? userProfile?.phone ?? "—"} />
@@ -1143,6 +1684,12 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               </a>
             ) : null}
           </DetailCard>
+          <AdminBookingLiveLocation
+            bookingId={fullBooking.id}
+            status={fullBooking.status}
+            cleanerResponseStatus={fullBooking.cleaner_response_status ?? null}
+            cleanerId={fullBooking.cleaner_id}
+          />
           <DetailCard title="Pricing snapshot">
             {(() => {
               const snap = fullBooking ? parsePriceSnapshotV1(fullBooking.price_snapshot) : null;
@@ -1536,6 +2083,13 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
             </div>
           </DetailCard>
           <DetailCard title="Pricing">
+            {fullBooking.payment_mismatch ? (
+              <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">
+                payment_mismatch: visit total was raised after payment was recorded — collect the difference from the customer,
+                then use <strong>Mark as Paid</strong> for the full updated visit total. When the collected amount covers the
+                quote, this flag clears automatically.
+              </p>
+            ) : null}
             <DetailRow label="Base price" value={`R ${basePrice.toLocaleString("en-ZA")}`} />
             <DetailRow label="Extras total" value={`R ${extrasPrice.toLocaleString("en-ZA")}`} />
             <div className="my-2 border-t border-zinc-200" />
@@ -1574,8 +2128,33 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               <h2 className="text-lg font-semibold text-zinc-900">Actions</h2>
               <div className="mt-4 space-y-2">
                 <button type="button" onClick={() => void openAssignModal()} className="w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">{isAssigned ? "Reassign cleaner" : "Assign cleaner"}</button>
+                <button
+                  type="button"
+                  onClick={() => openEditDetailsModal()}
+                  disabled={
+                    Boolean(editBookingClientBlockReason) || editDetailsBusy || fixEarningsBusy || resetEarningsBusy || statusBusy !== null
+                  }
+                  title={editBookingClientBlockReason ?? undefined}
+                  className="w-full rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-900 transition hover:bg-violet-100 disabled:opacity-60"
+                >
+                  Edit booking
+                </button>
                 <button type="button" onClick={() => setRescheduleOpen(true)} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50">Reschedule</button>
                 <button type="button" onClick={handleContactCustomer} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50">Contact customer</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMarkPaidMethod("cash");
+                    setMarkPaidReference("");
+                    setMarkPaidAmountZar("");
+                    setMarkPaidModalOpen(true);
+                  }}
+                  disabled={!canMarkPaid || markPaidBusy || statusBusy !== null}
+                  title={!canMarkPaid ? "Already paid or booking cannot accept payment." : undefined}
+                  className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  Mark as Paid
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleFixEarnings()}
@@ -1616,6 +2195,282 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           </div>
         </aside>
       </main>
+
+      {editDetailsModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-zinc-900">Edit booking</h3>
+            <p className="mt-2 text-sm text-zinc-600">
+              New total will be recalculated automatically from the catalog snapshot locked on this booking.
+            </p>
+            {(fullBooking.status ?? "").trim().toLowerCase() === "in_progress" ? (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                This job is in progress — only admin notes can be edited.
+              </p>
+            ) : null}
+            {editPricePreviewLoading ? (
+              <p className="mt-3 flex items-center gap-2 text-sm text-zinc-600">
+                <Loader2 size={14} className="animate-spin" />
+                Calculating new total…
+              </p>
+            ) : editPricePreviewHttpError ? (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950">
+                <p>{editPricePreviewHttpError}</p>
+                <button
+                  type="button"
+                  className="mt-2 text-sm font-semibold text-rose-900 underline"
+                  onClick={() => setEditPricePreviewRetry((n) => n + 1)}
+                >
+                  Retry preview
+                </button>
+              </div>
+            ) : editPricePreview ? (
+              <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
+                <p>
+                  <span className="text-zinc-500">Old:</span>{" "}
+                  <strong>R {(editPricePreview.old_total_cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                  {" · "}
+                  <span className="text-zinc-500">New:</span>{" "}
+                  <strong>R {(editPricePreview.new_total_cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                  {editPricePreview.delta_cents !== 0 ? (
+                    <span className={editPricePreview.delta_cents > 0 ? " text-amber-800" : " text-emerald-800"}>
+                      {" "}
+                      ({editPricePreview.delta_cents > 0 ? "+" : ""}
+                      R{" "}
+                      {(Math.abs(editPricePreview.delta_cents) / 100).toLocaleString("en-ZA", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                      )
+                    </span>
+                  ) : null}
+                </p>
+                {editPricePreview.paid && editPricePreview.delta_cents > 0 ? (
+                  <p className="mt-2 text-xs text-amber-950">
+                    Customer has already paid R{" "}
+                    {(editPricePreview.old_total_cents / 100).toLocaleString("en-ZA", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                    . Collect an additional R{" "}
+                    {(editPricePreview.delta_cents / 100).toLocaleString("en-ZA", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    after repricing — tick the confirmation below.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="block text-sm font-medium text-zinc-800">
+                Bedrooms
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={editBedrooms}
+                  disabled={(fullBooking.status ?? "").trim().toLowerCase() === "in_progress"}
+                  onChange={(e) => setEditBedrooms(Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1))))}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:bg-zinc-100 disabled:text-zinc-500"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800">
+                Bathrooms
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={editBathrooms}
+                  disabled={(fullBooking.status ?? "").trim().toLowerCase() === "in_progress"}
+                  onChange={(e) => setEditBathrooms(Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1))))}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:bg-zinc-100 disabled:text-zinc-500"
+                />
+              </label>
+            </div>
+            <div className="mt-4">
+              <p className="text-sm font-medium text-zinc-800">Extras</p>
+              <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50/80 p-3">
+                {BOOKING_EXTRA_CHECKBOX_SLUGS.map((slug) => (
+                  <label
+                    key={slug}
+                    className={`flex items-center gap-2 text-sm text-zinc-800 ${
+                      (fullBooking.status ?? "").trim().toLowerCase() === "in_progress" ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={editExtrasSlugs.includes(slug)}
+                      disabled={(fullBooking.status ?? "").trim().toLowerCase() === "in_progress"}
+                      onChange={() => toggleEditExtra(slug)}
+                      className="rounded border-zinc-300"
+                    />
+                    <span className="font-mono text-xs">{slug}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {editPricePreview?.requires_collect_confirm ? (
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-zinc-800">
+                <input
+                  type="checkbox"
+                  checked={confirmCollectAdditional}
+                  onChange={(e) => setConfirmCollectAdditional(e.target.checked)}
+                  className="mt-1 rounded border-zinc-300"
+                />
+                <span>I confirm the customer should be asked to pay the additional amount above (repricing will flag payment_mismatch for ops).</span>
+              </label>
+            ) : null}
+            <label className="mt-4 block text-sm font-medium text-zinc-800">
+              Admin notes
+              <textarea
+                value={editAdminNotes}
+                onChange={(e) => setEditAdminNotes(e.target.value)}
+                rows={3}
+                className="mt-1 w-full resize-y rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                placeholder="Ops notes (stored on booking snapshot)"
+              />
+            </label>
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+              {editPricePreview && !editPricePreviewLoading && editPricePreview.delta_cents !== 0 && !editSaveBlockedByPreview ? (
+                <span
+                  className={`mr-auto text-sm font-semibold tabular-nums ${
+                    editPricePreview.delta_cents > 0 ? "text-amber-800" : "text-emerald-800"
+                  }`}
+                >
+                  Δ {editPricePreview.delta_cents > 0 ? "+" : "−"}R{" "}
+                  {(Math.abs(editPricePreview.delta_cents) / 100).toLocaleString("en-ZA", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                disabled={editDetailsBusy}
+                onClick={() => setEditDetailsModalOpen(false)}
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={editDetailsBusy || editSaveBlockedByPreview}
+                title={editSaveBlockedByPreview ? "Wait for preview or fix preview errors before saving." : undefined}
+                onClick={() => void handleEditDetailsConfirm()}
+                className="rounded-md bg-violet-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+              >
+                {editDetailsBusy ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    Saving…
+                  </span>
+                ) : (
+                  "Save changes"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {markPaidModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-zinc-900">Mark as paid</h3>
+            <p className="mt-2 text-sm text-zinc-600">
+              Record cash or Zoho settlement. By default the amount comes from <code className="text-xs">total_price</code>{" "}
+              (ZAR) then <code className="text-xs">total_paid_cents</code>. Use the field below if the quote is missing.
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-sm font-medium text-zinc-800">
+                Amount (ZAR), optional override
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={markPaidAmountZar}
+                  onChange={(e) => setMarkPaidAmountZar(e.target.value)}
+                  placeholder={fullBooking ? `e.g. ${money(fullBooking) > 0 ? String(money(fullBooking)) : "450"}` : "450"}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-800">
+                Method
+                <select
+                  value={markPaidMethod}
+                  onChange={(e) => setMarkPaidMethod(e.target.value === "zoho" ? "zoho" : "cash")}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="zoho">Zoho</option>
+                </select>
+              </label>
+              {markPaidMethod === "zoho" ? (
+                <label className="block text-sm font-medium text-zinc-800">
+                  Reference (optional)
+                  <input
+                    type="text"
+                    value={markPaidReference}
+                    onChange={(e) => setMarkPaidReference(e.target.value)}
+                    placeholder="Invoice or payment reference"
+                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              ) : null}
+            </div>
+            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
+              <p className="font-semibold text-zinc-900">Confirm</p>
+              <ul className="mt-1 list-inside list-disc text-xs text-zinc-700">
+                <li>
+                  Amount:{" "}
+                  <strong>
+                    {markPaidPreviewZar != null && markPaidPreviewZar > 0
+                      ? formatZar(markPaidPreviewZar)
+                      : "— (server will resolve from quote)"}
+                  </strong>
+                </li>
+                <li>
+                  Method: <strong>{markPaidMethod === "zoho" ? "Zoho" : "Cash"}</strong>
+                </li>
+                {markPaidMethod === "zoho" && markPaidReference.trim() ? (
+                  <li>
+                    Reference: <strong>{markPaidReference.trim().slice(0, 80)}</strong>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={markPaidBusy}
+                onClick={() => {
+                  setMarkPaidModalOpen(false);
+                  setMarkPaidReference("");
+                  setMarkPaidAmountZar("");
+                }}
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={markPaidBusy}
+                onClick={() => void handleMarkPaidConfirm()}
+                className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {markPaidBusy ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    Saving…
+                  </span>
+                ) : (
+                  "Confirm"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {resetEarningsModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

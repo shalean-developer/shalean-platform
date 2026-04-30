@@ -90,6 +90,17 @@ export async function runCleanerBookingLifecycleAction(params: {
       await syncCleanerBusyFromBookings(admin, cleanerId);
       return { status: 200, json: { ok: true, status: "assigned", cleaner_response_status: CLEANER_RESPONSE.ACCEPTED } };
     }
+    if (resp === CLEANER_RESPONSE.ON_MY_WAY || resp === CLEANER_RESPONSE.STARTED) {
+      await syncCleanerBusyFromBookings(admin, cleanerId);
+      return {
+        status: 200,
+        json: {
+          ok: true,
+          status: "assigned",
+          cleaner_response_status: String(bRow.cleaner_response_status ?? resp),
+        },
+      };
+    }
     const { error: accErr } = await admin
       .from("bookings")
       .update({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED })
@@ -156,15 +167,17 @@ export async function runCleanerBookingLifecycleAction(params: {
     }
     const rawResp = bRow.cleaner_response_status;
     const r = rawResp == null || rawResp === "" ? "" : String(rawResp).trim().toLowerCase();
-    const soloAssigned = !isTeamJob && String(bRow.cleaner_id ?? "").trim() === cleanerId;
-    const acceptedForTravel = r === CLEANER_RESPONSE.ACCEPTED || (soloAssigned && r === "");
+    const acceptedForTravel = r === CLEANER_RESPONSE.ACCEPTED;
     if (!acceptedForTravel) {
       return {
         status: 400,
         json: { error: "Accept the job before heading out.", code: CLEANER_LIFECYCLE_CODE.ACCEPT_REQUIRED_BEFORE_TRAVEL },
       };
     }
-    const { error: uErr } = await admin.from("bookings").update({ en_route_at: now }).eq("id", bookingId);
+    const { error: uErr } = await admin
+      .from("bookings")
+      .update({ en_route_at: now, cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY })
+      .eq("id", bookingId);
     if (uErr) return { status: 500, json: { error: uErr.message } };
     return { status: 200, json: { ok: true, status: st } };
   }
@@ -176,7 +189,11 @@ export async function runCleanerBookingLifecycleAction(params: {
         json: { error: "Start requires assigned state.", code: CLEANER_LIFECYCLE_CODE.START_REQUIRES_ASSIGNED },
       };
     }
-    if (!bRow.en_route_at) {
+    const startResp = String(bRow.cleaner_response_status ?? "")
+      .trim()
+      .toLowerCase();
+    const travelAcked = Boolean(bRow.en_route_at) || startResp === CLEANER_RESPONSE.ON_MY_WAY;
+    if (!travelAcked) {
       return {
         status: 400,
         json: { error: "Mark on the way before starting the job.", code: CLEANER_LIFECYCLE_CODE.EN_ROUTE_REQUIRED_BEFORE_START },
@@ -184,7 +201,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     }
     const { error: uErr } = await admin
       .from("bookings")
-      .update({ status: "in_progress", started_at: now })
+      .update({ status: "in_progress", started_at: now, cleaner_response_status: CLEANER_RESPONSE.STARTED })
       .eq("id", bookingId);
     if (uErr) return { status: 500, json: { error: uErr.message } };
     await syncCleanerBusyFromBookings(admin, cleanerId);

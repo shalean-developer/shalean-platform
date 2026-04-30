@@ -177,7 +177,7 @@ export function CleanerScheduleSection({
     bookingId: string,
     action: CleanerScheduleLifecycleAction,
     meta?: { teamAvailabilityConfirm?: boolean; date?: string | null; time?: string | null },
-  ) => Promise<void>;
+  ) => Promise<{ ok: boolean }>;
   onIssueReportSuccess?: () => void;
   completionTrustBannerSlot?: ReactNode;
   visibleSectionKeys?: CleanerScheduleSectionKey[];
@@ -289,7 +289,7 @@ export function CleanerScheduleSection({
                 earnCents != null && earnCents > 0
                   ? null
                   : cleanerUxEstimatedPayZar(cleanerCreatedAtIso ?? null, v.jobTotalZar, now);
-              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.address)}`;
+              const mapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(v.address)}`;
               const completedLook = key === "completed";
               const st = String(row.status ?? "").toLowerCase();
               const busy = actingId === row.id;
@@ -298,7 +298,10 @@ export function CleanerScheduleSection({
               const rec = row as Record<string, unknown>;
               const rawResp = rec.cleaner_response_status as string | null | undefined;
               const respLower = rawResp == null || rawResp === "" ? "" : String(rawResp).trim().toLowerCase();
-              const serverAccepted = respLower === "accepted";
+              const serverAccepted =
+                respLower === "accepted" ||
+                respLower === "on_my_way" ||
+                respLower === "started";
               const teamAcked = teamAvailabilityAckIds.has(row.id);
               const lifecycleSlot = deriveCleanerJobLifecycleSlot(row);
               const availChip = isTeam ? teamSelfAvailabilityChip(phase, serverAccepted, teamAcked) : null;
@@ -307,7 +310,8 @@ export function CleanerScheduleSection({
               const isNextOpen = !completedLook && String(row.id) === nextGlobalOpenId;
               const minutesUntil = !completedLook ? minutesUntilJobStartJohannesburg(v.date, v.time, now) : null;
               const scheduleChipKind = !completedLook ? upcomingScheduleStatusChip(row, minutesUntil) : null;
-              const microNudge = !completedLook && !isInProgressCard ? upcomingTravelMicroNudge(minutesUntil) : null;
+              const microNudge =
+                !completedLook && !isInProgressCard ? upcomingTravelMicroNudge(minutesUntil, row) : null;
               const postAcceptCta =
                 !completedLook && lifecycleSlot && lifecycleSlot.kind !== "accept_reject"
                   ? isInProgressCard
@@ -484,7 +488,17 @@ export function CleanerScheduleSection({
                           ) : null}
                           <div className="flex flex-col gap-2">
                             {lifecycleSlot?.kind === "accept_reject" ? (
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex w-full gap-2">
+                                {lifecycleSlot.canReject ? (
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void run(row.id, "reject")}
+                                    className="h-12 min-h-12 flex-1 rounded-xl border border-red-300 text-sm font-semibold text-red-800 hover:bg-red-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/40"
+                                  >
+                                    Decline
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
                                   disabled={busy}
@@ -495,64 +509,68 @@ export function CleanerScheduleSection({
                                       time: row.time,
                                     })
                                   }
-                                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                                  className={cn(
+                                    "h-12 min-h-12 rounded-xl bg-emerald-600 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+                                    lifecycleSlot.canReject ? "flex-1" : "w-full",
+                                  )}
                                 >
-                                  {isTeam ? "Confirm availability" : "Acknowledge"}
+                                  {busy ? "Saving…" : isTeam ? "Confirm availability" : "Accept"}
                                 </button>
-                                {lifecycleSlot.canReject ? (
-                                  <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => void run(row.id, "reject")}
-                                    className="rounded-xl border border-red-300 px-4 py-2.5 text-sm font-semibold text-red-800 dark:border-red-800 dark:text-red-200"
-                                  >
-                                    Reject
-                                  </button>
-                                ) : null}
                               </div>
                             ) : null}
                             {lifecycleSlot?.kind !== "accept_reject" && postAcceptCta.kind === "view_details" ? (
                               <Link
                                 href={jobHref}
-                                className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+                                className="text-center text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
                               >
-                                View details
+                                View job details
                               </Link>
                             ) : null}
                             {lifecycleSlot?.kind !== "accept_reject" && postAcceptCta.kind === "lifecycle" ? (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() =>
-                                  void run(row.id, postAcceptCta.action as CleanerScheduleLifecycleAction, postAcceptCta.opts)
-                                }
-                                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                              >
-                                {busy ? "Saving…" : postAcceptCta.label}
-                              </button>
+                              postAcceptCta.action === "en_route" ? (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={async () => {
+                                    const r = await run(row.id, "en_route", postAcceptCta.opts);
+                                    if (r.ok) {
+                                      window.open(mapsDirUrl, "_blank", "noopener,noreferrer");
+                                    }
+                                  }}
+                                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
+                                >
+                                  <Navigation className="h-4 w-4 shrink-0" aria-hidden />
+                                  {busy ? "Saving…" : "Navigate & On My Way"}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void run(row.id, postAcceptCta.action as CleanerScheduleLifecycleAction, postAcceptCta.opts)
+                                  }
+                                  className={cn(
+                                    "h-12 w-full rounded-xl text-sm font-semibold text-white shadow-sm disabled:opacity-60",
+                                    postAcceptCta.action === "complete"
+                                      ? "bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                                      : "bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500",
+                                  )}
+                                >
+                                  {busy ? "Saving…" : postAcceptCta.label}
+                                </button>
+                              )
                             ) : null}
                           </div>
                         </>
                       ) : null}
                       {!completedLook ? (
                         <div className="flex flex-col gap-2">
-                          <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 py-2 text-sm font-medium text-blue-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-blue-300 dark:hover:bg-zinc-800/80"
+                          <Link
+                            href={jobHref}
+                            className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
                           >
-                            <Navigation className="h-4 w-4" aria-hidden />
-                            Maps
-                          </a>
-                          {postAcceptCta.kind !== "view_details" ? (
-                            <Link
-                              href={jobHref}
-                              className="inline-flex items-center justify-center rounded-xl border border-zinc-200 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
-                            >
-                              View details
-                            </Link>
-                          ) : null}
+                            View job details
+                          </Link>
                           <CleanerReportJobIssueDialog
                             bookingId={row.id}
                             locationHint={v.address}

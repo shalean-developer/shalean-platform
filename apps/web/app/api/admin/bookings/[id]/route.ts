@@ -19,6 +19,7 @@ import {
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -374,6 +375,20 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       newCleanerId: newCleaner,
       },
     });
+  }
+
+  if (cleanerWasChanged && newCleaner) {
+    const bs = beforeStatus.toLowerCase();
+    if (bs === "pending" || bs === "pending_assignment" || bs === "assigned") {
+      (updates as Record<string, unknown>).cleaner_response_status = CLEANER_RESPONSE.PENDING;
+      (updates as Record<string, unknown>).en_route_at = null;
+      (updates as Record<string, unknown>).started_at = null;
+      (updates as Record<string, unknown>).status = "assigned";
+      (updates as Record<string, unknown>).dispatch_status = "assigned";
+      if (bs === "pending" || bs === "pending_assignment") {
+        (updates as Record<string, unknown>).assigned_at = new Date().toISOString();
+      }
+    }
   }
 
   const { error } = await admin.from("bookings").update(updates).eq("id", id);

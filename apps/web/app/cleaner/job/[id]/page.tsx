@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, MapPin, Navigation, TriangleAlert } from "lucide-react";
+import { ArrowLeft, MapPin, Navigation, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +29,9 @@ import { useTrustCompletionBanner } from "@/hooks/useTrustCompletionBanner";
 import { useCleanerPayoutSummary } from "@/hooks/useCleanerPayoutSummary";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { jobTotalZarFromCleanerBookingLike } from "@/lib/cleaner/cleanerUxEstimatedPayZar";
+import { cn } from "@/lib/utils";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { useCleanerLiveLocationSender } from "@/hooks/useCleanerLiveLocationSender";
 
 export default function CleanerJobDetailPage() {
   const params = useParams();
@@ -140,11 +143,11 @@ export default function CleanerJobDetailPage() {
   }, [row, clearTrustCompletionBanner]);
 
   const postJobAction = useCallback(
-    async (action: CleanerJobAction) => {
+    async (action: CleanerJobAction): Promise<{ ok: boolean }> => {
       const headers = await getCleanerAuthHeaders();
       if (!headers || !id) {
         setActionMsg("Not signed in.");
-        return;
+        return { ok: false };
       }
       setActionMsg(null);
       setActing(true);
@@ -157,7 +160,7 @@ export default function CleanerJobDetailPage() {
         const json = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok) {
           setActionMsg(json.error ?? "Could not update job.");
-          return;
+          return { ok: false };
         }
         if (action === "accept") {
           addTeamAvailabilityAck(id);
@@ -168,14 +171,26 @@ export default function CleanerJobDetailPage() {
           const sum = await refreshPayoutSummary();
           showTrustCompletionBanner({ ...base, todayTotalCents: sum?.today_cents ?? null });
         }
+        return { ok: true };
       } catch {
         setActionMsg("Network error.");
+        return { ok: false };
       } finally {
         setActing(false);
       }
     },
     [id, load, refreshPayoutSummary, showTrustCompletionBanner],
   );
+
+  const crsForTrack = String(row?.cleaner_response_status ?? "")
+    .trim()
+    .toLowerCase();
+  const trackBookingId = id && row && crsForTrack === CLEANER_RESPONSE.ON_MY_WAY ? id : null;
+  useCleanerLiveLocationSender({
+    bookingId: trackBookingId,
+    enabled: Boolean(trackBookingId),
+    online: true,
+  });
 
   if (loading) {
     return (
@@ -224,13 +239,12 @@ export default function CleanerJobDetailPage() {
 
   const showLifecycleActions = phase !== "completed";
   const isTeam = row.is_team_job === true;
-  const st = String(row.status ?? "").toLowerCase();
   const lifecycleSlot = deriveCleanerJobLifecycleSlot(row);
 
   const telDigits = view.phone.replace(/\s/g, "");
   const telHref = telDigits ? `tel:${telDigits}` : null;
   const phoneDisplay = view.phone?.trim() || "";
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(view.address)}`;
+  const mapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(view.address)}`;
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-zinc-50 dark:bg-zinc-950">
@@ -386,76 +400,72 @@ export default function CleanerJobDetailPage() {
               </p>
             ) : null}
 
-            <div className="flex flex-col gap-2.5 pt-2">
-              {showLifecycleActions && lifecycleSlot?.kind === "accept_reject" ? (
-                <div className="flex flex-col gap-2">
-                  <Button
-                    className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                    disabled={acting}
-                    onClick={() => void postJobAction("accept")}
-                  >
-                    <span className="flex w-full items-center justify-center gap-1">
-                      {acting ? "Saving…" : isTeam ? "Confirm availability" : "Acknowledge"}
-                      {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                    </span>
-                  </Button>
-                  {lifecycleSlot.canReject ? (
+            <div className="sticky bottom-0 z-10 -mx-4 border-t border-zinc-100 bg-white/95 px-4 py-3 shadow-[0_-8px_32px_-14px_rgba(0,0,0,0.12)] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95 md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:shadow-none md:backdrop-blur-none">
+              <div className="flex flex-col gap-2.5">
+                {showLifecycleActions && lifecycleSlot?.kind === "accept_reject" ? (
+                  <div className="flex w-full gap-2">
+                    {lifecycleSlot.canReject ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 min-h-14 flex-1 rounded-xl border-red-300 text-base font-semibold text-red-800 hover:bg-red-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/40"
+                        disabled={acting}
+                        onClick={() => void postJobAction("reject")}
+                      >
+                        Decline
+                      </Button>
+                    ) : null}
                     <Button
-                      variant="outline"
-                      className="h-12 w-full rounded-xl border-red-300 text-base font-medium text-red-800 dark:border-red-800 dark:text-red-200"
+                      type="button"
+                      className={cn(
+                        "h-14 min-h-14 rounded-xl text-base font-semibold text-white shadow-sm",
+                        "bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+                        lifecycleSlot.canReject ? "flex-1" : "w-full",
+                      )}
                       disabled={acting}
-                      onClick={() => void postJobAction("reject")}
+                      onClick={() => void postJobAction("accept")}
                     >
-                      Reject
+                      {acting ? "Saving…" : isTeam ? "Confirm availability" : "Accept"}
                     </Button>
-                  ) : null}
-                </div>
-              ) : null}
-              {showLifecycleActions && lifecycleSlot?.kind === "en_route" ? (
-                <Button
-                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                  disabled={acting}
-                  onClick={() => void postJobAction("en_route")}
-                >
-                  <span className="flex w-full items-center justify-center gap-1">
-                    {acting ? "Saving…" : "On the way"}
-                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                  </span>
-                </Button>
-              ) : null}
-              {showLifecycleActions && lifecycleSlot?.kind === "start" ? (
-                <Button
-                  className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                  disabled={acting}
-                  onClick={() => void postJobAction("start")}
-                >
-                  <span className="flex w-full items-center justify-center gap-1">
-                    {acting ? "Saving…" : "Start job"}
-                    {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                  </span>
-                </Button>
-              ) : null}
-              {showLifecycleActions && lifecycleSlot?.kind === "complete" ? (
-                <div className="space-y-2">
+                  </div>
+                ) : null}
+                {showLifecycleActions && lifecycleSlot?.kind === "en_route" ? (
                   <Button
-                    className="h-12 w-full rounded-xl bg-blue-600 text-base font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                    type="button"
+                    className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-base font-semibold text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                    disabled={acting}
+                    onClick={async () => {
+                      const r = await postJobAction("en_route");
+                      if (r.ok) {
+                        window.open(mapsDirUrl, "_blank", "noopener,noreferrer");
+                      }
+                    }}
+                  >
+                    <Navigation className="h-5 w-5 shrink-0" aria-hidden />
+                    {acting ? "Saving…" : "Navigate & On My Way"}
+                  </Button>
+                ) : null}
+                {showLifecycleActions && lifecycleSlot?.kind === "start" ? (
+                  <Button
+                    type="button"
+                    className="h-14 w-full rounded-xl bg-blue-600 text-base font-semibold text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                    disabled={acting}
+                    onClick={() => void postJobAction("start")}
+                  >
+                    {acting ? "Saving…" : "Start Job"}
+                  </Button>
+                ) : null}
+                {showLifecycleActions && lifecycleSlot?.kind === "complete" ? (
+                  <Button
+                    type="button"
+                    className="h-14 w-full rounded-xl bg-emerald-600 text-base font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                     disabled={acting}
                     onClick={() => void postJobAction("complete")}
                   >
-                    <span className="flex w-full items-center justify-center gap-1">
-                      {acting ? "Saving…" : "Complete job"}
-                      {!acting ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                    </span>
+                    {acting ? "Saving…" : "Complete Job"}
                   </Button>
-                </div>
-              ) : null}
-
-              <Button variant="outline" size="lg" className="h-12 w-full rounded-xl text-base" asChild>
-                <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
-                  <Navigation className="h-4 w-4" aria-hidden />
-                  Open directions
-                </a>
-              </Button>
+                ) : null}
+              </div>
             </div>
           </CardContent>
         </Card>

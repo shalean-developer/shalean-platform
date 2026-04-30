@@ -10,6 +10,8 @@ export type CleanerBookingLineItemWire = {
 export type CleanerBookingRow = {
   id: string;
   service: string | null;
+  /** Catalog slug (`bookings.service_slug`). */
+  service_slug?: string | null;
   /** Bedroom count when persisted on the row (mirrors checkout lock). */
   rooms?: number | null;
   /** Bathroom count when persisted on the row. */
@@ -56,4 +58,9 @@ export type CleanerBookingRow = {
   payout_frozen_cents?: number | null;
   /** True when this cleaner has at least one row in `cleaner_job_issue_reports` for this booking. */
   cleaner_has_issue_report?: boolean;
+  /** Snapshot-derived; added by cleaner jobs API for clients. */
+  duration_hours?: number | null;
+  job_notes?: string | null;
+  service_name?: string | null;
+  service_type?: string | null;
 };

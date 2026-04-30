@@ -33,6 +33,7 @@ import { predictCleanerAcceptanceSync } from "@/lib/ai-autonomy/predictions";
 import { computeAiDispatchDelta } from "@/lib/ai-autonomy/assignmentBlend";
 import { getAiAutonomyFlags } from "@/lib/ai-autonomy/flags";
 import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { getWhatsAppQueueStatusCounts } from "@/lib/whatsapp/queue";
 import {
@@ -1410,6 +1411,7 @@ export async function smartAssignCleaner(
         status: "assigned",
         dispatch_status: "assigned",
         assigned_at: now,
+        cleaner_response_status: CLEANER_RESPONSE.PENDING,
         ...assignMeta,
       })
       .eq("id", params.bookingId)

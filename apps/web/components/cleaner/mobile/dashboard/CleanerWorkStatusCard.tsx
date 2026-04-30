@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CleanerOffersPanel } from "@/components/cleaner/mobile/CleanerOffersPanel";
 import { CleanerJobCard } from "@/components/cleaner/mobile/dashboard/CleanerJobCard";
 import type { CleanerHomeJobFilter } from "@/components/cleaner/mobile/dashboard/CleanerHomeStatusStrip";
-import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
+import type { CleanerJobAction, PostJobActionResult } from "@/hooks/useCleanerMobileWorkspace";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { bookingRowToMobileView, groupCleanerScheduleRows } from "@/lib/cleaner/cleanerMobileBookingMap";
@@ -31,7 +31,7 @@ type Props = {
     bookingId: string,
     action: CleanerJobAction,
     opts?: { teamAvailabilityConfirm?: boolean; scheduleSummary?: string },
-  ) => Promise<void>;
+  ) => Promise<PostJobActionResult>;
   /** @deprecated Kept for parent compatibility; job card no longer shows rating. */
   cleanerRating: number;
   onIssueReportSuccess?: () => void;

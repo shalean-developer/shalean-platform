@@ -15,6 +15,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 /** Call sites for dispatch.assignment.* metrics and tracing. */
 export type EnsureAssignmentSource =
   | "paystack_checkout"
+  | "admin_mark_paid"
   | "admin_dispatch_api"
   | "cleaner_job_reject"
   | "offer_decline_redispatch"

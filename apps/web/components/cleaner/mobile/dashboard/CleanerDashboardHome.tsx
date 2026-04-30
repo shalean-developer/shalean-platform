@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
+import type { CleanerJobAction, PostJobActionResult } from "@/hooks/useCleanerMobileWorkspace";
 import { useCleanerPayoutSummary } from "@/hooks/useCleanerPayoutSummary";
 import type { CleanerMobileJobView } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { CleanerJobCard } from "@/components/cleaner/mobile/dashboard/CleanerJobCard";
@@ -21,7 +22,7 @@ type Props = {
     bookingId: string,
     action: CleanerJobAction,
     opts?: { teamAvailabilityConfirm?: boolean; scheduleSummary?: string },
-  ) => Promise<void>;
+  ) => Promise<PostJobActionResult>;
   todayPotentialZar: number;
   todayPotentialHasGap: boolean;
   weekEarnedZar: number;
@@ -45,10 +46,16 @@ export function CleanerDashboardHome({
   weekEarnedZar,
   monthEarnedZar,
   highlightJobId,
-  cleanerRating: _cleanerRating,
+  cleanerRating,
   onViewEarnings,
 }: Props) {
+  void cleanerRating;
   const payout = useCleanerPayoutSummary();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   if (loading) {
     return (
@@ -89,6 +96,7 @@ export function CleanerDashboardHome({
           actingId={actingId}
           availabilityAcked={teamAvailabilityAckIds.has(job.id)}
           highlightPulse={highlightJobId != null && highlightJobId === job.id}
+          nowMs={nowMs}
           onJobAction={onJobAction}
         />
       ) : !hasAnyJob ? (

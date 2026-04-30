@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { useCleanerLiveLocationSender } from "@/hooks/useCleanerLiveLocationSender";
 import { CleanerMobileShell } from "@/components/cleaner/mobile/CleanerMobileShell";
 import type { CleanerMobileTab } from "@/components/cleaner/mobile/CleanerBottomNav";
 import { CleanerHomeEarningsStrip } from "@/components/cleaner/mobile/dashboard/CleanerHomeEarningsStrip";
@@ -14,7 +16,7 @@ import type { CleanerRosterSnapshot } from "@/lib/cleaner/cleanerProfileTypes";
 import { CleanerProfileTab } from "@/components/cleaner/mobile/tabs/CleanerProfileTab";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { addTeamAvailabilityAck, readTeamAvailabilityAckSet } from "@/lib/cleaner/teamAvailabilitySession";
-import type { CleanerJobAction } from "@/hooks/useCleanerMobileWorkspace";
+import type { CleanerJobAction, PostJobActionResult } from "@/hooks/useCleanerMobileWorkspace";
 import { useCleanerMobileWorkspace } from "@/hooks/useCleanerMobileWorkspace";
 import { useTrustCompletionBanner } from "@/hooks/useTrustCompletionBanner";
 import { useCleanerPayoutSummary } from "@/hooks/useCleanerPayoutSummary";
@@ -83,6 +85,24 @@ export function CleanerWorkspaceClient() {
     [rows],
   );
 
+  const trackingBookingId = useMemo(() => {
+    for (const r of rows) {
+      const st = String(r.status ?? "").toLowerCase();
+      if (st === "completed" || st === "cancelled") continue;
+      const crs = String(r.cleaner_response_status ?? "")
+        .trim()
+        .toLowerCase();
+      if (crs === CLEANER_RESPONSE.ON_MY_WAY) return r.id;
+    }
+    return null;
+  }, [rows]);
+
+  useCleanerLiveLocationSender({
+    bookingId: trackingBookingId,
+    enabled: Boolean(trackingBookingId),
+    online,
+  });
+
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       void navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -93,7 +113,9 @@ export function CleanerWorkspaceClient() {
   }, []);
 
   useEffect(() => {
-    setTeamAvailabilityAckIds(readTeamAvailabilityAckSet());
+    queueMicrotask(() => {
+      setTeamAvailabilityAckIds(readTeamAvailabilityAckSet());
+    });
   }, [rows]);
 
   useEffect(() => {
@@ -124,13 +146,13 @@ export function CleanerWorkspaceClient() {
       bookingId: string,
       action: CleanerJobAction,
       opts?: { teamAvailabilityConfirm?: boolean; scheduleSummary?: string },
-    ) => {
+    ): Promise<PostJobActionResult> => {
       setActionBanner(null);
       setAvailabilityBanner(null);
       const r = await postJobAction(bookingId, action);
       if (!r.ok) {
         setActionBanner(r.error ?? "Something went wrong.");
-        return;
+        return r;
       }
       if (r.trustCompletion) {
         let fb = r.trustCompletion;
@@ -147,11 +169,13 @@ export function CleanerWorkspaceClient() {
           setAvailabilityBanner(opts.scheduleSummary ?? "✅ You're scheduled for this job.");
         }
       }
+      return r;
     },
     [postJobAction, refreshPayoutSummary, showTrustCompletionBanner],
   );
 
   const onOfferAcceptedUi = useCallback((_bookingId: string) => {
+    void _bookingId;
     window.setTimeout(() => {
       document.getElementById("cleaner-work-status")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 380);

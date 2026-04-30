@@ -1,5 +1,5 @@
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
+import { cleanerBookingCardDetailsFromRow, cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -19,6 +19,12 @@ export type CleanerMobileJobView = {
   durationHours: number;
   date: string;
   service: string;
+  /** Catalog slug when present (`bookings.service_slug`). */
+  serviceSlug: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  /** Extra add-on names for card bullets (from line items / extras / snapshot). */
+  extrasBulletNames: readonly string[];
   statusRaw: string;
   phase: CleanerMobilePhase;
   phone: string;
@@ -97,7 +103,8 @@ export function operationalNoteChipsFromText(notes: string): string[] {
     .map((k) => OPS_NOTE_CHIP_LABEL[k]);
 }
 
-function notesFromSnapshot(snap: unknown): string | null {
+/** Admin + customer + locked checkout notes (deduped). */
+export function mergedBookingNotesFromSnapshot(snap: unknown): string | null {
   const o = snap as {
     locked?: { notes?: string };
     admin_notes?: string;
@@ -147,11 +154,12 @@ export function deriveCleanerJobLifecycleSlot(row: CleanerBookingRow): CleanerJo
   const raw = rec.cleaner_response_status as string | null | undefined;
   const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
   const isTeam = row.is_team_job === true;
-  const soloAssigned = !isTeam && String(row.cleaner_id ?? "").trim().length > 0;
-  const accepted = r === CLEANER_RESPONSE.ACCEPTED || (soloAssigned && r === "");
+  const accepted = r === CLEANER_RESPONSE.ACCEPTED;
+  const onMyWay = r === CLEANER_RESPONSE.ON_MY_WAY;
   const hasEnRoute = Boolean(row.en_route_at);
   if (st === "assigned") {
-    if (hasEnRoute) return { kind: "start" };
+    const readyToStart = hasEnRoute || onMyWay;
+    if (readyToStart) return { kind: "start" };
     if (!accepted) return { kind: "accept_reject", canReject: !isTeam };
     return { kind: "en_route" };
   }
@@ -198,9 +206,12 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
       ? Math.floor(teamMemberCountRaw)
       : null;
 
-  const mergedNotes = notesFromSnapshot(row.booking_snapshot);
+  const mergedNotes = mergedBookingNotesFromSnapshot(row.booking_snapshot);
   const chips = mergedNotes ? operationalNoteChipsFromText(mergedNotes) : [];
   const scopeLines = cleanerBookingScopeLines(row);
+  const cardDetails = cleanerBookingCardDetailsFromRow(row);
+  const slugRaw = rec.service_slug as string | null | undefined;
+  const serviceSlug = typeof slugRaw === "string" && slugRaw.trim() ? slugRaw.trim().toLowerCase() : null;
 
   return {
     id: row.id,
@@ -211,6 +222,10 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     durationHours: durationHoursFromBookingSnapshot(row.booking_snapshot),
     date: row.date?.trim() || "",
     service: row.service?.trim() || "Cleaning",
+    serviceSlug,
+    bedrooms: cardDetails.bedrooms,
+    bathrooms: cardDetails.bathrooms,
+    extrasBulletNames: cardDetails.extraNames,
     statusRaw: st,
     phase,
     phone: row.customer_phone?.trim() || "",

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 /** Per-member team job payout (cents) — aligned with ops smoke / cleaner earnings expectations. */
@@ -195,6 +196,9 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
       cleaner_id: null,
       payout_owner_cleaner_id: payoutOwnerCleanerId,
       team_member_count_snapshot: rosterCount,
+      cleaner_response_status: CLEANER_RESPONSE.PENDING,
+      en_route_at: null,
+      started_at: null,
     })
     .eq("id", bookingId);
   if (updErr) {

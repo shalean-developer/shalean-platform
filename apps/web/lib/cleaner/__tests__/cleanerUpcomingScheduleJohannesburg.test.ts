@@ -4,6 +4,7 @@ import {
   minutesUntilJobStartJohannesburg,
   parseJobStartJohannesburgInstantMs,
   resolveUpcomingPrimaryCta,
+  upcomingScheduleStatusChip,
 } from "@/lib/cleaner/cleanerUpcomingScheduleJohannesburg";
 
 describe("parseJobStartJohannesburgInstantMs", () => {
@@ -35,19 +36,34 @@ describe("formatUpcomingSchedulePrimaryTimeLine", () => {
   });
 });
 
+describe("upcomingScheduleStatusChip", () => {
+  it("does not show late before cleaner has accepted", () => {
+    const row = { status: "assigned", cleaner_response_status: "pending", en_route_at: null };
+    expect(upcomingScheduleStatusChip(row, -30)).toBe("upcoming");
+  });
+
+  it("shows late after accept when past start", () => {
+    const row = { status: "assigned", cleaner_response_status: "accepted", en_route_at: null };
+    expect(upcomingScheduleStatusChip(row, -30)).toBe("late");
+  });
+});
+
 describe("resolveUpcomingPrimaryCta", () => {
-  it("returns view_details when en_route and more than 90 min", () => {
-    const r = resolveUpcomingPrimaryCta({ kind: "en_route" }, 91);
-    expect(r).toEqual({ kind: "view_details" });
-  });
-
-  it("returns Prepare to leave between 30 and 90 min", () => {
-    const r = resolveUpcomingPrimaryCta({ kind: "en_route" }, 45);
-    expect(r).toEqual({ kind: "lifecycle", action: "en_route", label: "Prepare to leave" });
-  });
-
-  it("returns Start travel at 30 min boundary", () => {
-    const r = resolveUpcomingPrimaryCta({ kind: "en_route" }, 30);
-    expect(r).toEqual({ kind: "lifecycle", action: "en_route", label: "Start travel" });
+  it("returns On my way for en_route regardless of minutes until start", () => {
+    expect(resolveUpcomingPrimaryCta({ kind: "en_route" }, 91)).toEqual({
+      kind: "lifecycle",
+      action: "en_route",
+      label: "On my way",
+    });
+    expect(resolveUpcomingPrimaryCta({ kind: "en_route" }, 45)).toEqual({
+      kind: "lifecycle",
+      action: "en_route",
+      label: "On my way",
+    });
+    expect(resolveUpcomingPrimaryCta({ kind: "en_route" }, -20)).toEqual({
+      kind: "lifecycle",
+      action: "en_route",
+      label: "On my way",
+    });
   });
 });

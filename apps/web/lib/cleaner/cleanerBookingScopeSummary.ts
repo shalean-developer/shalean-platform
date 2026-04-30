@@ -200,3 +200,68 @@ export function cleanerBookingScopeLines(row: CleanerBookingScopeSource): string
   }
   return lines;
 }
+
+function cardDetailsFromLineItems(items: readonly CleanerBookingLineItemWire[]): {
+  bedrooms: number | null;
+  bathrooms: number | null;
+  extraNames: string[];
+} {
+  let bedrooms = 0;
+  let bathrooms = 0;
+  const extraNames: string[] = [];
+
+  for (const it of items) {
+    const t = String(it.item_type ?? "").toLowerCase();
+    const q = typeof it.quantity === "number" && Number.isFinite(it.quantity) ? Math.max(1, Math.floor(it.quantity)) : 1;
+    if (t === "room") {
+      if (it.slug !== "extra-rooms") bedrooms += q;
+      continue;
+    }
+    if (t === "bathroom") {
+      bathrooms += q;
+      continue;
+    }
+    if (t === "extra") {
+      const label = it.name?.trim() || titleCaseFromSlug(String(it.slug ?? "").trim());
+      if (label) extraNames.push(label);
+    }
+  }
+
+  return {
+    bedrooms: bedrooms > 0 ? bedrooms : null,
+    bathrooms: bathrooms > 0 ? bathrooms : null,
+    extraNames,
+  };
+}
+
+/** Bedrooms, bathrooms, and extra labels for compact cleaner job cards (line items preferred). */
+export function cleanerBookingCardDetailsFromRow(row: CleanerBookingScopeSource): {
+  bedrooms: number | null;
+  bathrooms: number | null;
+  extraNames: string[];
+} {
+  const fromLi =
+    Array.isArray(row.lineItems) && row.lineItems.length > 0 ? cardDetailsFromLineItems(row.lineItems) : null;
+  if (fromLi) return fromLi;
+
+  const rec = row as Record<string, unknown>;
+  const snap = row.booking_snapshot as BookingSnapshotV1 | null | undefined;
+  const flat = snapshotFlat(snap);
+  const locked = snapshotLocked(snap);
+
+  const bedrooms =
+    positiveIntOrNull(rec.rooms) ?? positiveIntOrNull(flat?.rooms) ?? positiveIntOrNull(locked?.rooms);
+  const bathrooms =
+    positiveIntOrNull(rec.bathrooms) ??
+    positiveIntOrNull(flat?.bathrooms) ??
+    positiveIntOrNull(locked?.bathrooms);
+
+  const fromDbLabels = extrasShortLabelsFromDbJson(row.extras);
+  if (fromDbLabels.length > 0) {
+    return { bedrooms, bathrooms, extraNames: fromDbLabels };
+  }
+  if (locked) {
+    return { bedrooms, bathrooms, extraNames: extrasShortLabelsFromLocked(locked) };
+  }
+  return { bedrooms, bathrooms, extraNames: [] };
+}

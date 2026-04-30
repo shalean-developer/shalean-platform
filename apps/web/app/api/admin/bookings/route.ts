@@ -39,6 +39,7 @@ import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -657,6 +658,15 @@ export async function POST(request: Request) {
     const completedAtIso = adminMarkCompleted ? new Date().toISOString() : null;
     const assignedAtIso = selectedCleanerId ? new Date().toISOString() : null;
 
+    let rowStatus: "completed" | "assigned" | "pending" = adminMarkCompleted
+      ? "completed"
+      : selectedCleanerId
+        ? "assigned"
+        : "pending";
+    if (selectedCleanerId && !adminMarkCompleted && rowStatus === "pending") {
+      rowStatus = "assigned";
+    }
+
     // created_at is DB default (now); omit from insert so clustering stays deterministic.
     const ins = await insertBookingRowUnified(admin, {
       source: "admin_monthly",
@@ -669,7 +679,7 @@ export async function POST(request: Request) {
         amount_paid_cents: amountPaidCents,
         currency: "ZAR",
         service_slug: serviceSlug,
-        status: adminMarkCompleted ? "completed" : selectedCleanerId ? "assigned" : "pending",
+        status: rowStatus,
         dispatch_status: selectedCleanerId ? "assigned" : "searching",
         ...(adminMarkCompleted && completedAtIso ? { completed_at: completedAtIso } : {}),
         surge_multiplier: 1,
@@ -693,6 +703,7 @@ export async function POST(request: Request) {
               selected_cleaner_id: selectedCleanerId,
               assignment_type: "user_selected",
               cleaner_id: selectedCleanerId,
+              cleaner_response_status: CLEANER_RESPONSE.PENDING,
               ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
             }
           : {}),

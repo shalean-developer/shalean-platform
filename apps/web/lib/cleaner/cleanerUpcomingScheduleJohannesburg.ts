@@ -7,6 +7,7 @@ import { johannesburgCalendarYmd, johannesburgCalendarYmdAddDays } from "@/lib/d
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import type { CleanerJobLifecycleSlot } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 const JHB_OFFSET = "+02:00";
 
@@ -86,13 +87,30 @@ export function formatUpcomingSchedulePrimaryTimeLine(dateStr: string, timeStr: 
 
 export type UpcomingScheduleStatusChip = "starting_soon" | "upcoming" | "late" | "in_progress";
 
+/** “Late” / travel nudges only after the cleaner has accepted (or is already travelling / on site). */
+export function cleanerPastAcceptStageForSchedule(
+  row: Pick<CleanerBookingRow, "cleaner_response_status" | "en_route_at">,
+): boolean {
+  if (row.en_route_at) return true;
+  const r = String(row.cleaner_response_status ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    r === CLEANER_RESPONSE.ACCEPTED ||
+    r === CLEANER_RESPONSE.ON_MY_WAY ||
+    r === CLEANER_RESPONSE.STARTED
+  );
+}
+
 export function upcomingScheduleStatusChip(
-  row: Pick<CleanerBookingRow, "status">,
+  row: Pick<CleanerBookingRow, "status" | "cleaner_response_status" | "en_route_at">,
   minutesUntilStart: number | null,
 ): UpcomingScheduleStatusChip {
   const st = String(row.status ?? "").toLowerCase();
   if (st === "in_progress") return "in_progress";
-  if (minutesUntilStart != null && minutesUntilStart < 0) return "late";
+  const pastAccept = cleanerPastAcceptStageForSchedule(row);
+  if (minutesUntilStart != null && minutesUntilStart < 0 && pastAccept) return "late";
+  if (minutesUntilStart != null && minutesUntilStart < 0 && !pastAccept) return "upcoming";
   if (minutesUntilStart != null && minutesUntilStart <= 90) return "starting_soon";
   return "upcoming";
 }
@@ -104,8 +122,12 @@ export function upcomingScheduleStatusChipLabel(chip: UpcomingScheduleStatusChip
   return "Upcoming";
 }
 
-export function upcomingTravelMicroNudge(minutesUntilStart: number | null): string | null {
+export function upcomingTravelMicroNudge(
+  minutesUntilStart: number | null,
+  row?: Pick<CleanerBookingRow, "cleaner_response_status" | "en_route_at"> | null,
+): string | null {
   if (minutesUntilStart == null) return null;
+  if (row && !cleanerPastAcceptStageForSchedule(row)) return null;
   if (minutesUntilStart < 0) return "Start now to avoid delays";
   if (minutesUntilStart > 0 && minutesUntilStart <= 30) return "Start travel now";
   if (minutesUntilStart > 30 && minutesUntilStart <= 60) return "Leave soon to arrive on time";
@@ -128,35 +150,23 @@ export type UpcomingPrimaryCta =
 export function resolveInProgressPrimaryCta(lifecycle: CleanerJobLifecycleSlot): UpcomingPrimaryCta {
   if (!lifecycle) return { kind: "none" };
   if (lifecycle.kind === "complete") {
-    return { kind: "lifecycle", action: "complete", label: "Complete job" };
+    return { kind: "lifecycle", action: "complete", label: "Complete Job" };
   }
   if (lifecycle.kind === "start") {
-    return { kind: "lifecycle", action: "start", label: "Start job" };
+    return { kind: "lifecycle", action: "start", label: "Start Job" };
   }
   return { kind: "none" };
 }
 
 export function resolveUpcomingPrimaryCta(
   lifecycle: CleanerJobLifecycleSlot,
-  minutesUntilStart: number | null,
+  _minutesUntilStart: number | null,
 ): UpcomingPrimaryCta {
   if (!lifecycle) return { kind: "none" };
-  if (lifecycle.kind === "accept_reject") {
-    return { kind: "none" };
-  }
-  if (lifecycle.kind === "complete") {
-    return { kind: "lifecycle", action: "complete", label: "Complete job" };
-  }
-  if (lifecycle.kind === "start") {
-    return { kind: "lifecycle", action: "start", label: "Start job" };
-  }
-  if (lifecycle.kind === "en_route") {
-    const m = minutesUntilStart ?? 9999;
-    if (m > 90) return { kind: "view_details" };
-    if (m > 30) return { kind: "lifecycle", action: "en_route", label: "Prepare to leave" };
-    if (m > 0) return { kind: "lifecycle", action: "en_route", label: "Start travel" };
-    return { kind: "lifecycle", action: "en_route", label: "You're late — start now" };
-  }
+  if (lifecycle.kind === "accept_reject") return { kind: "none" };
+  if (lifecycle.kind === "complete") return { kind: "lifecycle", action: "complete", label: "Complete Job" };
+  if (lifecycle.kind === "start") return { kind: "lifecycle", action: "start", label: "Start Job" };
+  if (lifecycle.kind === "en_route") return { kind: "lifecycle", action: "en_route", label: "On my way" };
   return { kind: "none" };
 }
 
