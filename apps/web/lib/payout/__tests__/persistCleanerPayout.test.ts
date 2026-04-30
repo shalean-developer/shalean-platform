@@ -282,7 +282,12 @@ describe("persistCleanerPayoutIfUnset", () => {
     expect(first.ok).toBe(true);
     if (first.ok) expect(first.skipped).toBe(false);
     expect(second.ok).toBe(true);
-    if (second.ok) expect(second.skipped).toBe(true);
+    if (second.ok) {
+      expect(second.skipped).toBe(true);
+      if (second.skipped) {
+        expect(second.skipReason).toMatch(/display_earnings_already_set|solo_line_finalized_with_ledger/);
+      }
+    }
     expect(admin.updateCount.bookings ?? 0).toBe(1);
     expect(admin.serviceCapSelects).toBe(1);
   });

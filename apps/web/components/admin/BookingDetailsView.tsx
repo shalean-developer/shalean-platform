@@ -51,6 +51,8 @@ type BookingDetails = {
   admin_force_slot_override?: boolean | null;
   /** Immutable checkout / admin pricing snapshot (JSON). */
   price_snapshot?: unknown;
+  /** Invoice-style booking payout lifecycle (`pending` | `eligible` | `paid`). */
+  payout_status?: string | null;
 };
 
 type TeamSummary = { id: string; name: string; member_count: number | null };
@@ -95,6 +97,16 @@ type DispatchOfferAdminRow = {
 };
 
 type ToastState = { kind: "success" | "error" | "info"; text: string } | null;
+
+type EarningsPreviewResponse = {
+  current: {
+    display_earnings_cents: number | null;
+    cleaner_earnings_total_cents: number | null;
+    line_items_count: number;
+  };
+  computed_preview: { cleaner_earnings_total_cents: number; diff_cents: number } | null;
+  preview_unavailable_reason?: string;
+};
 
 type BookingNotificationLogRow = {
   id: string;
@@ -308,6 +320,13 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [assigningTeam, setAssigningTeam] = useState(false);
   const [detailRefresh, setDetailRefresh] = useState(0);
   const [resetDispatchBusy, setResetDispatchBusy] = useState(false);
+  const [fixEarningsBusy, setFixEarningsBusy] = useState(false);
+  const [resetEarningsBusy, setResetEarningsBusy] = useState(false);
+  const [resetEarningsModalOpen, setResetEarningsModalOpen] = useState(false);
+  /** From GET /api/admin/bookings/[id] — used to disable reset before hitting the API. */
+  const [ledgerCleanerEarnings, setLedgerCleanerEarnings] = useState<Array<{ id: string; status: string | null }>>([]);
+  const [earningsPreview, setEarningsPreview] = useState<EarningsPreviewResponse | null>(null);
+  const [earningsPreviewLoading, setEarningsPreviewLoading] = useState(false);
   const [issueResolveBusyId, setIssueResolveBusyId] = useState<string | null>(null);
   const [issueReportNowMs, setIssueReportNowMs] = useState(() => Date.now());
 
@@ -326,6 +345,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       }
       setLoading(true);
       setFleetBestUxVariant(null);
+      setLedgerCleanerEarnings([]);
       const sb = getSupabaseBrowser();
       const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
       const token = sessionData.session?.access_token;
@@ -349,6 +369,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           userProfile?: UserProfile | null;
           dispatch_offers?: DispatchOfferAdminRow[];
           cleaner_issue_reports?: CleanerIssueReportRow[];
+          cleaner_earnings?: Array<{ id: string; status?: string | null }>;
           supports_team_assignment?: boolean;
           team_summary?: TeamSummary | null;
           error?: string;
@@ -373,6 +394,13 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
         return;
       }
       setFullBooking(json.booking ?? null);
+      const ce = Array.isArray(json.cleaner_earnings)
+        ? json.cleaner_earnings.map((r) => ({
+            id: String((r as { id?: string }).id ?? ""),
+            status: (r as { status?: string | null }).status ?? null,
+          }))
+        : [];
+      setLedgerCleanerEarnings(ce.filter((r) => r.id));
       setCleaner(json.cleaner ?? null);
       setUserProfile(json.userProfile ?? null);
       setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
@@ -387,6 +415,47 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     }
     void loadDetails();
   }, [bookingId, detailRefresh]);
+
+  useEffect(() => {
+    if (!resetEarningsModalOpen || !bookingId) {
+      if (!resetEarningsModalOpen) {
+        setEarningsPreview(null);
+        setEarningsPreviewLoading(false);
+      }
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setEarningsPreviewLoading(true);
+      setEarningsPreview(null);
+      try {
+        const sb = getSupabaseBrowser();
+        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        if (!token) {
+          if (!cancelled) setEarningsPreviewLoading(false);
+          return;
+        }
+        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/earnings-preview`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const raw = await res.text();
+        let parsed: EarningsPreviewResponse | null = null;
+        if (raw) {
+          try {
+            parsed = JSON.parse(raw) as EarningsPreviewResponse;
+          } catch {
+            parsed = null;
+          }
+        }
+        if (!cancelled) setEarningsPreview(parsed);
+      } finally {
+        if (!cancelled) setEarningsPreviewLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resetEarningsModalOpen, bookingId]);
 
   useEffect(() => {
     if (!bookingId || !fullBooking) return;
@@ -462,6 +531,20 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     if (abs < 60) return `Started ${abs}m ago`;
     return `Started ${Math.floor(abs / 60)}h ${abs % 60}m ago`;
   }, [fullBooking?.date, fullBooking?.time]);
+
+  const resetEarningsClientBlockReason = useMemo(() => {
+    if (!fullBooking) return null;
+    const ps = String(fullBooking.payout_status ?? "").trim().toLowerCase();
+    if (ps === "eligible" || ps === "paid") {
+      return "This booking is already eligible or paid on the invoice payout path; reset is not allowed.";
+    }
+    for (const row of ledgerCleanerEarnings) {
+      const st = String(row.status ?? "").trim().toLowerCase();
+      if (!st || st === "pending") continue;
+      return `Cleaner earnings includes status "${st}"; only pending (or empty) rows allow reset.`;
+    }
+    return null;
+  }, [fullBooking, ledgerCleanerEarnings]);
 
   if (loading) {
     return (
@@ -586,6 +669,113 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setDetailRefresh((n) => n + 1);
     } finally {
       setResetDispatchBusy(false);
+    }
+  };
+
+  const handleFixEarnings = async () => {
+    if (!fullBooking?.id) return;
+    setFixEarningsBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/fix-earnings`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const raw = await res.text();
+      let json: Record<string, unknown> = {};
+      if (raw) {
+        try {
+          json = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          setToast({
+            kind: "error",
+            text: raw.length > 280 ? `${raw.slice(0, 280)}…` : raw || `Request failed (${res.status}).`,
+          });
+          return;
+        }
+      }
+      const err = typeof json.error === "string" ? json.error : null;
+      const code = typeof json.code === "string" ? json.code : null;
+      if (!res.ok) {
+        const parts = [err, code ? `(${code})` : null].filter(Boolean);
+        setToast({ kind: "error", text: parts.join(" ").trim() || `Request failed (${res.status}).` });
+        return;
+      }
+      if (json.skipped === true) {
+        setToast({
+          kind: "info",
+          text: `No changes applied (${typeof json.reason === "string" ? json.reason : "skipped"}).`,
+        });
+      } else {
+        setToast({ kind: "success", text: "Earnings updated." });
+      }
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setFixEarningsBusy(false);
+    }
+  };
+
+  const handleConfirmResetEarnings = async () => {
+    if (!fullBooking?.id) return;
+    setResetEarningsBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/reset-earnings`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const raw = await res.text();
+      let json: Record<string, unknown> = {};
+      if (raw) {
+        try {
+          json = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          setToast({
+            kind: "error",
+            text: raw.length > 280 ? `${raw.slice(0, 280)}…` : raw || `Request failed (${res.status}).`,
+          });
+          return;
+        }
+      }
+      const err = typeof json.error === "string" ? json.error : null;
+      const code = typeof json.code === "string" ? json.code : null;
+      const warn = typeof json.warning === "string" ? json.warning : null;
+      if (!res.ok) {
+        const parts = [err, code ? `(${code})` : null, warn].filter(Boolean);
+        setToast({ kind: "error", text: parts.join(" ").trim() || `Request failed (${res.status}).` });
+        return;
+      }
+      setResetEarningsModalOpen(false);
+      if (warn) {
+        setToast({ kind: "error", text: [warn, err].filter(Boolean).join(" — ") });
+      } else if (json.recomputed === true) {
+        setToast({ kind: "success", text: "Earnings reset and recalculated." });
+      } else if (json.recomputed === false) {
+        setToast({
+          kind: "info",
+          text: `Reset ran; persist skipped (${typeof json.reason === "string" ? json.reason : "unknown"}).`,
+        });
+      } else if (json.skipped === true) {
+        setToast({
+          kind: "info",
+          text: `Reset ran; persist skipped (${typeof json.reason === "string" ? json.reason : "unknown"}).`,
+        });
+      } else {
+        setToast({ kind: "success", text: "Earnings reset and recalculated." });
+      }
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setResetEarningsBusy(false);
     }
   };
   const startsInIsPast = startsInText.startsWith("Started");
@@ -1386,6 +1576,35 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 <button type="button" onClick={() => void openAssignModal()} className="w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">{isAssigned ? "Reassign cleaner" : "Assign cleaner"}</button>
                 <button type="button" onClick={() => setRescheduleOpen(true)} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50">Reschedule</button>
                 <button type="button" onClick={handleContactCustomer} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50">Contact customer</button>
+                <button
+                  type="button"
+                  onClick={() => void handleFixEarnings()}
+                  disabled={fixEarningsBusy || statusBusy !== null}
+                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 transition hover:bg-blue-100 disabled:opacity-60"
+                >
+                  {fixEarningsBusy ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin" />
+                      Fixing…
+                    </span>
+                  ) : (
+                    "Fix earnings"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResetEarningsModalOpen(true)}
+                  disabled={
+                    Boolean(resetEarningsClientBlockReason) || resetEarningsBusy || fixEarningsBusy || statusBusy !== null
+                  }
+                  title={resetEarningsClientBlockReason ?? undefined}
+                  className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+                >
+                  Reset & recompute
+                </button>
+                {resetEarningsClientBlockReason ? (
+                  <p className="text-xs leading-snug text-amber-900">{resetEarningsClientBlockReason}</p>
+                ) : null}
                 <button type="button" onClick={() => void setStatusOptimistic("completed")} disabled={statusBusy !== null} className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60">
                   {statusBusy === "completed" ? <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Saving…</span> : "Mark as completed"}
                 </button>
@@ -1397,6 +1616,73 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
           </div>
         </aside>
       </main>
+
+      {resetEarningsModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-zinc-900">Reset & recompute earnings</h3>
+            <p className="mt-3 text-sm text-zinc-700">
+              <span className="mr-1" aria-hidden>
+                ⚠️
+              </span>
+              This will recalculate earnings and may change payout amounts.
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">
+              Blocked if this booking is in a paid or frozen payout batch, or if any cleaner earnings row is no longer
+              pending.
+            </p>
+            {resetEarningsClientBlockReason ? (
+              <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-950">
+                {resetEarningsClientBlockReason}
+              </p>
+            ) : null}
+            {earningsPreviewLoading ? (
+              <p className="mt-3 flex items-center gap-2 text-sm text-zinc-600">
+                <Loader2 size={14} className="animate-spin" />
+                Loading earnings preview…
+              </p>
+            ) : earningsPreview?.preview_unavailable_reason === "team_job" ? (
+              <p className="mt-3 text-sm text-zinc-600">Dry-run preview is not available for team jobs.</p>
+            ) : earningsPreview?.preview_unavailable_reason === "no_line_items" ? (
+              <p className="mt-3 text-sm text-amber-900">
+                No line items on this booking — line-total preview cannot be computed.
+              </p>
+            ) : earningsPreview?.computed_preview ? (
+              <p className="mt-3 text-sm font-medium text-zinc-800">
+                After reset, line-based cleaner total would be about{" "}
+                {formatZar(centsToZar(earningsPreview.computed_preview.cleaner_earnings_total_cents) ?? 0)} (shown now{" "}
+                {formatZar(
+                  centsToZar(
+                    earningsPreview.current.display_earnings_cents ??
+                      earningsPreview.current.cleaner_earnings_total_cents ??
+                      0,
+                  ) ?? 0,
+                )}
+                , Δ {earningsPreview.computed_preview.diff_cents >= 0 ? "+" : ""}
+                {formatZar(centsToZar(Math.abs(earningsPreview.computed_preview.diff_cents)) ?? 0)}).
+              </p>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={resetEarningsBusy}
+                onClick={() => setResetEarningsModalOpen(false)}
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={resetEarningsBusy || Boolean(resetEarningsClientBlockReason)}
+                onClick={() => void handleConfirmResetEarnings()}
+                className="rounded-md bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+              >
+                {resetEarningsBusy ? "Working…" : "Confirm reset"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {teamModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

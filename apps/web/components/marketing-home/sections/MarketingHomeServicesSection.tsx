@@ -18,6 +18,12 @@ const OUR_SERVICE_FRESHNESS_2 = mimg("/images/marketing/house-deep-cleaning-cape
 const OUR_SERVICE_FRESHNESS_3 = mimg("/images/marketing/office-cleaning-workspace-cape-town.webp");
 const OUR_SERVICE_FRESHNESS_4 = mimg("/images/marketing/bathroom-kitchen-deep-clean-cape-town.webp");
 
+const FRESHNESS_SERVICE_LINK_PILL =
+  "inline-flex shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 backdrop-blur transition-all duration-200 hover:border-blue-300 hover:bg-white hover:text-blue-600";
+
+const FRESHNESS_SERVICE_VIEW_ALL_PILL =
+  "inline-flex shrink-0 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-all duration-200 hover:bg-blue-100";
+
 const OUR_SERVICES_CARDS = [
   {
     image: OUR_SERVICE_FRESHNESS_1,
@@ -51,6 +57,72 @@ export function MarketingHomeServicesSection() {
 
   return (
     <>
+      <section
+        id="our-services"
+        className="scroll-mt-24 border-t border-emerald-100/40 bg-gradient-to-b from-[#f3f8f1] via-[#f7faf6] to-[#fafaf8] py-16 sm:py-20"
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-2 lg:items-start lg:gap-12 xl:gap-16">
+            <div>
+              <p className="text-sm font-medium tracking-wide text-slate-500">— Our Services</p>
+              <h2 className="mt-3 text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl lg:text-left lg:text-[2.35rem] lg:leading-[1.12]">
+                Freshness At Your
+                <br />
+                Fingertips
+              </h2>
+            </div>
+            <p className="max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg lg:max-w-none lg:pt-1">
+              From everyday home cleaning to specialized care for carpets, sofas, and workspaces, our team makes every
+              corner shine. Choose the service that fits your space and let us do the rest.
+            </p>
+          </div>
+
+          <div className="mt-14 grid gap-10 sm:mt-16 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-12 lg:mt-20 lg:grid-cols-4 lg:gap-x-6 lg:gap-y-0 xl:gap-x-8">
+            {OUR_SERVICES_CARDS.map(({ image, alt, title, description }) => (
+              <article key={title} className="text-left">
+                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md ring-1 ring-black/[0.06] sm:rounded-[1.25rem]">
+                  <Image
+                    src={image}
+                    alt={alt}
+                    fill
+                    className="object-cover object-center"
+                    sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
+                  />
+                </div>
+                <h3 className="mt-4 text-lg font-bold leading-snug tracking-tight text-slate-900 sm:mt-5 sm:text-xl">
+                  {title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[0.9375rem]">{description}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-12 border-t border-slate-200/80 pt-10 sm:mt-14">
+            <p className="mb-2 text-xs text-slate-500">Our Services</p>
+            <nav
+              className="mt-4 flex flex-wrap gap-2 sm:gap-3"
+              aria-label="Bookable Cape Town service guides"
+            >
+              <Link href={p["standard-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_PILL}>
+                Home Cleaning
+              </Link>
+              <Link href={p["deep-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_PILL}>
+                Deep Cleaning
+              </Link>
+              <Link href={p["office-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_PILL}>
+                Office Cleaning
+              </Link>
+              <Link href={p["carpet-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_PILL}>
+                Sofa &amp; Carpet Care
+              </Link>
+              <Link href="/services" className={FRESHNESS_SERVICE_VIEW_ALL_PILL}>
+                View All Services
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </section>
+
       <section id="services" className="scroll-mt-24 bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-10 lg:grid-cols-2 lg:items-start lg:gap-12 xl:gap-16">
@@ -210,81 +282,6 @@ export function MarketingHomeServicesSection() {
               ))}
             </div>
           </div>
-        </div>
-      </section>
-
-      <section
-        id="our-services"
-        className="scroll-mt-24 border-t border-emerald-100/40 bg-gradient-to-b from-[#f3f8f1] via-[#f7faf6] to-[#fafaf8] py-16 sm:py-20"
-      >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-2 lg:items-start lg:gap-12 xl:gap-16">
-            <div>
-              <p className="text-sm font-medium tracking-wide text-slate-500">— Our Services</p>
-              <h2 className="mt-3 text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl lg:text-left lg:text-[2.35rem] lg:leading-[1.12]">
-                Freshness At Your
-                <br />
-                Fingertips
-              </h2>
-            </div>
-            <p className="max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg lg:max-w-none lg:pt-1">
-              From everyday home cleaning to specialized care for carpets, sofas, and workspaces, our team makes every
-              corner shine. Choose the service that fits your space and let us do the rest.
-            </p>
-          </div>
-
-          <div className="mt-14 grid gap-10 sm:mt-16 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-12 lg:mt-20 lg:grid-cols-4 lg:gap-x-6 lg:gap-y-0 xl:gap-x-8">
-            {OUR_SERVICES_CARDS.map(({ image, alt, title, description }) => (
-              <article key={title} className="text-left">
-                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md ring-1 ring-black/[0.06] sm:rounded-[1.25rem]">
-                  <Image
-                    src={image}
-                    alt={alt}
-                    fill
-                    className="object-cover object-center"
-                    sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
-                  />
-                </div>
-                <h3 className="mt-4 text-lg font-bold leading-snug tracking-tight text-slate-900 sm:mt-5 sm:text-xl">
-                  {title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[0.9375rem]">{description}</p>
-              </article>
-            ))}
-          </div>
-
-          <nav
-            className="mt-12 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-slate-200/80 pt-10 text-sm font-semibold text-blue-800 sm:mt-14"
-            aria-label="Bookable Cape Town service guides"
-          >
-            <Link href="/services" className="underline-offset-4 hover:underline">
-              All cleaning services
-            </Link>
-            <span className="text-slate-300" aria-hidden>
-              ·
-            </span>
-            <Link href={p["standard-cleaning-cape-town"].path} className="underline-offset-4 hover:underline">
-              Home cleaning
-            </Link>
-            <span className="text-slate-300" aria-hidden>
-              ·
-            </span>
-            <Link href={p["deep-cleaning-cape-town"].path} className="underline-offset-4 hover:underline">
-              Deep cleaning
-            </Link>
-            <span className="text-slate-300" aria-hidden>
-              ·
-            </span>
-            <Link href={p["office-cleaning-cape-town"].path} className="underline-offset-4 hover:underline">
-              Office cleaning
-            </Link>
-            <span className="text-slate-300" aria-hidden>
-              ·
-            </span>
-            <Link href={p["carpet-cleaning-cape-town"].path} className="underline-offset-4 hover:underline">
-              Sofa &amp; carpet care
-            </Link>
-          </nav>
         </div>
       </section>
     </>

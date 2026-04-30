@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AdminDisbursementRunsPanel } from "@/components/admin/payout-runs/AdminDisbursementRunsPanel";
 import { AdminInvoiceEligiblePayouts } from "@/components/admin/AdminInvoiceEligiblePayouts";
+import { AdminLedgerEarningsPanel } from "@/components/admin/payouts/AdminLedgerEarningsPanel";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type PayoutRow = {
@@ -140,11 +141,11 @@ async function readJsonResponse<T>(res: Response): Promise<T & { error?: string 
   }
 }
 
-type PayoutsHubTab = "invoice" | "batches" | "disbursements";
+type PayoutsHubTab = "invoice" | "batches" | "disbursements" | "ledger";
 
 function tabFromSearchParams(sp: ReturnType<typeof useSearchParams>): PayoutsHubTab {
   const t = sp.get("tab");
-  if (t === "batches" || t === "disbursements" || t === "invoice") return t;
+  if (t === "batches" || t === "disbursements" || t === "invoice" || t === "ledger") return t;
   return "invoice";
 }
 
@@ -382,11 +383,25 @@ export default function AdminPayoutsPage() {
         >
           Disbursement runs
         </button>
+        <button
+          type="button"
+          onClick={() => setHubTab("ledger")}
+          className={[
+            "rounded-lg px-4 py-2 text-sm font-semibold transition",
+            hubTab === "ledger"
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+          ].join(" ")}
+        >
+          Cleaner earnings
+        </button>
       </div>
 
       {hubTab === "invoice" ? <AdminInvoiceEligiblePayouts /> : null}
 
       {hubTab === "disbursements" ? <AdminDisbursementRunsPanel /> : null}
+
+      {hubTab === "ledger" ? <AdminLedgerEarningsPanel /> : null}
 
       {hubTab === "batches" ? (
         <>

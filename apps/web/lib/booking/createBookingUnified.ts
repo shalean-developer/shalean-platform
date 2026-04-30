@@ -14,6 +14,7 @@ import {
   sumLineItemsCents,
 } from "@/lib/booking/priceSnapshotBooking";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculateCatalogPrice";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
@@ -165,12 +166,24 @@ export async function insertBookingRowUnified(
         })
       : null;
 
+  const rb = args.rowBase as Record<string, unknown>;
+  const cleanerIdForSnap = String(rb.cleaner_id ?? rb.selected_cleaner_id ?? "").trim() || null;
+  const dateYmd = String(rb.date ?? args.dateForFlat ?? "").trim() || null;
+  const timeHm = String(rb.time ?? args.timeForFlat ?? "").trim() || null;
+  const tenureShare = await resolveTenureBasedCleanerShareForBookingRow({
+    admin,
+    cleanerId: cleanerIdForSnap,
+    bookingDate: dateYmd,
+    bookingTime: timeHm,
+  });
+
   const insertRow = {
     ...args.rowBase,
     rooms,
     bathrooms,
     extras: extrasPersist,
     booking_snapshot,
+    ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
     ...(price_snapshot ? { price_snapshot } : {}),
   };
 

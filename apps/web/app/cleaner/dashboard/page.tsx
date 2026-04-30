@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default function CleanerDashboardRedirectPage() {
-  redirect("/cleaner");
+import { CleanerDashboardEarnings } from "@/components/cleaner/mobile/dashboard/CleanerDashboardEarnings";
+
+export default function CleanerDashboardPage() {
+  return (
+    <main className="min-h-dvh">
+      <CleanerDashboardEarnings />
+    </main>
+  );
 }

@@ -36,6 +36,7 @@ import { metrics } from "@/lib/metrics/counters";
 import { pickUserSelectedCleanerId } from "@/lib/booking/userSelectedCleanerFromSnapshot";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
 function buildAutoAssignmentPatch(
   autoAssignmentTag: "auto_dispatch" | "auto_fallback",
@@ -258,6 +259,17 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? adminBookingServiceSlug(String(locked.service))
       : null;
 
+  const pickedTrim = pickedCleanerUuid != null ? String(pickedCleanerUuid).trim() : "";
+  const cleanerIdForTenureSnap =
+    userConfirmedCleanerId ??
+    (/^[0-9a-f-]{36}$/i.test(pickedTrim) ? pickedTrim : null);
+  const tenureShareLine = await resolveTenureBasedCleanerShareForBookingRow({
+    admin: supabase,
+    cleanerId: cleanerIdForTenureSnap,
+    bookingDate: locked?.date != null ? String(locked.date) : null,
+    bookingTime: locked?.time != null ? String(locked.time) : null,
+  });
+
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -302,6 +314,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     payment_assist_channels: paymentAttribution.assistChannels,
     ...checkoutIntentRow,
     ...userSelectedRow,
+    ...(tenureShareLine != null ? { cleaner_share_percentage: tenureShareLine } : {}),
   };
 
   type PersistedRow = { id: string; created_at?: string; user_id?: string | null };

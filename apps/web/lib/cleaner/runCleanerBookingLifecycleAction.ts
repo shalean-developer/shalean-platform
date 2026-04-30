@@ -12,6 +12,7 @@ import {
   hasPersistedDisplayEarningsBasis,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { CLEANER_LIFECYCLE_CODE } from "@/lib/cleaner/cleanerLifecycleErrors";
@@ -257,6 +258,15 @@ export async function runCleanerBookingLifecycleAction(params: {
       .from("bookings")
       .update({ status: "completed", completed_at: now })
       .eq("id", bookingId);
+    if (!uErr) {
+      const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
+      if (!led.ok) {
+        void reportOperationalIssue("warn", "cleaner/jobs/complete", `ensureCleanerEarningsLedgerRow: ${led.error}`, {
+          bookingId,
+          cleanerId,
+        });
+      }
+    }
 
     if (uErr) return { status: 500, json: { error: uErr.message } };
 

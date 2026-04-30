@@ -21,6 +21,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const EARNINGS_MODEL_VERSION_FALLBACK = "v1_2026_earnings";
 
+/** Result of {@link persistCleanerPayoutIfUnset}; when `skipped`, `skipReason` is a stable machine-readable code (often with a suffix). */
+export type PersistCleanerPayoutIfUnsetResult =
+  | { ok: true; skipped: false; payout?: CleanerPayoutResult }
+  | { ok: true; skipped: true; skipReason: string }
+  | { ok: false; error: string };
+
 function resolveServiceId(snapshot: unknown, serviceLabel: string | null | undefined): string {
   if (snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
     const locked = (snapshot as { locked?: unknown }).locked;
@@ -155,9 +161,10 @@ async function buildFallbackEarnings(params: {
 }
 
 async function persistCleanerPayoutIfUnsetCore(
-  params: { admin: SupabaseClient; bookingId: string; cleanerId: string },
-): Promise<{ ok: true; skipped: boolean; payout?: CleanerPayoutResult } | { ok: false; error: string }> {
-  const { admin, bookingId, cleanerId: expectedCleanerId } = params;
+  params: { admin: SupabaseClient; bookingId: string; cleanerId: string; forceDisplayRecompute?: boolean },
+): Promise<PersistCleanerPayoutIfUnsetResult> {
+  const { admin, bookingId, cleanerId: expectedCleanerId, forceDisplayRecompute } = params;
+  const forceDisplay = forceDisplayRecompute === true;
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(bookingsPersistSelectListForPersist())
@@ -195,7 +202,7 @@ async function persistCleanerPayoutIfUnsetCore(
   };
 
   if (!(await isCleanerAllowedForPersist(admin, r, expectedCleanerId))) {
-    return { ok: true, skipped: true };
+    return { ok: true, skipped: true, skipReason: "cleaner_not_eligible" };
   }
 
   const isTeamJob = r.is_team_job === true;
@@ -214,12 +221,18 @@ async function persistCleanerPayoutIfUnsetCore(
       .trim()
       .toLowerCase();
     if (frozenAt || st === "frozen" || st === "approved" || st === "paid") {
-      return { ok: true, skipped: true };
+      return { ok: true, skipped: true, skipReason: "weekly_payout_locked" };
     }
   }
 
   const recomputeZeroDisplay = shouldRecomputeZeroDisplayEarnings(r);
-  if (r.display_earnings_cents != null && Number.isFinite(Number(r.display_earnings_cents)) && !recomputeZeroDisplay) {
+  if (
+    !forceDisplay &&
+    r.display_earnings_cents != null &&
+    Number.isFinite(Number(r.display_earnings_cents)) &&
+    !recomputeZeroDisplay
+  ) {
+    let lineEarlyReason: string | null = null;
     if (!isTeamJob) {
       const lineEarly = await computeCleanerEarningsForBooking({
         admin,
@@ -231,6 +244,9 @@ async function persistCleanerPayoutIfUnsetCore(
           bookingId,
           cleanerId: expectedCleanerId,
         });
+        lineEarlyReason = `compute_error:${lineEarly.error}`;
+      } else if (lineEarly.skipped) {
+        lineEarlyReason = lineEarly.reason;
       }
       if (String(r.status ?? "").toLowerCase() === "completed") {
         const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
@@ -241,7 +257,12 @@ async function persistCleanerPayoutIfUnsetCore(
         }
       }
     }
-    return { ok: true, skipped: true };
+    const skipReason = isTeamJob
+      ? "display_earnings_already_set_team"
+      : lineEarlyReason
+        ? `display_earnings_already_set:${lineEarlyReason}`
+        : "display_earnings_already_set";
+    return { ok: true, skipped: true, skipReason };
   }
 
   const { payoutBaseCents, serviceFeeCents } = resolvePayoutBaseAndServiceFeeCents({
@@ -387,7 +408,11 @@ async function persistCleanerPayoutIfUnsetCore(
       })
       .eq("id", bookingId)
       .eq("team_id", teamId);
-    teamUp = recomputeZeroDisplay ? teamUp.eq("display_earnings_cents", 0) : teamUp.is("display_earnings_cents", null);
+    teamUp = forceDisplay
+      ? teamUp
+      : recomputeZeroDisplay
+        ? teamUp.eq("display_earnings_cents", 0)
+        : teamUp.is("display_earnings_cents", null);
     const { data: updatedTeam, error: teamUpErr } = await teamUp.select("id");
     if (teamUpErr) {
       await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", teamUpErr.message, {
@@ -397,7 +422,7 @@ async function persistCleanerPayoutIfUnsetCore(
       return { ok: false, error: teamUpErr.message };
     }
     if (!updatedTeam?.length) {
-      return { ok: true, skipped: true };
+      return { ok: true, skipped: true, skipReason: "team_display_update_noop" };
     }
     const teamVerify = await verifyDisplayEarningsRowAfterWrite(admin, bookingId, "team_booking");
     if (!teamVerify.ok) {
@@ -449,7 +474,11 @@ async function persistCleanerPayoutIfUnsetCore(
     })
     .eq("id", bookingId)
     .eq("cleaner_id", expectedCleanerId);
-  soloUp = recomputeZeroDisplay ? soloUp.eq("display_earnings_cents", 0) : soloUp.is("display_earnings_cents", null);
+  soloUp = forceDisplay
+    ? soloUp
+    : recomputeZeroDisplay
+      ? soloUp.eq("display_earnings_cents", 0)
+      : soloUp.is("display_earnings_cents", null);
   const { data: updated, error: upErr } = await soloUp.select("id");
 
   if (upErr) {
@@ -461,7 +490,7 @@ async function persistCleanerPayoutIfUnsetCore(
   }
 
   if (!updated?.length) {
-    return { ok: true, skipped: true };
+    return { ok: true, skipped: true, skipReason: "solo_display_update_noop" };
   }
 
   const soloVerify = await verifyDisplayEarningsRowAfterWrite(admin, bookingId, "solo_booking");
@@ -565,8 +594,8 @@ async function finalizePersistResult(
   admin: SupabaseClient,
   bookingId: string,
   cleanerId: string,
-  core: Awaited<ReturnType<typeof persistCleanerPayoutIfUnsetCore>>,
-): Promise<{ ok: true; skipped: boolean; payout?: CleanerPayoutResult } | { ok: false; error: string }> {
+  core: PersistCleanerPayoutIfUnsetResult,
+): Promise<PersistCleanerPayoutIfUnsetResult> {
   if (!core.ok) return core;
   if (!core.skipped) return core;
 
@@ -592,8 +621,8 @@ async function finalizePersistResult(
  * non-null value **≥ 0**, returns `{ ok: false, error: "Earnings not written" }` (no silent success).
  */
 export async function persistCleanerPayoutIfUnset(
-  params: { admin: SupabaseClient; bookingId: string; cleanerId: string },
-): Promise<{ ok: true; skipped: boolean; payout?: CleanerPayoutResult } | { ok: false; error: string }> {
+  params: { admin: SupabaseClient; bookingId: string; cleanerId: string; forceDisplayRecompute?: boolean },
+): Promise<PersistCleanerPayoutIfUnsetResult> {
   try {
     const { data: idemRow } = await params.admin
       .from("bookings")
@@ -618,7 +647,7 @@ export async function persistCleanerPayoutIfUnset(
             message: "skip_idempotent_solo_ledger_and_lines_finalized",
             context: { bookingId: params.bookingId, cleanerId: params.cleanerId },
           });
-          return { ok: true, skipped: true };
+          return { ok: true, skipped: true, skipReason: "solo_line_finalized_with_ledger" };
         }
       }
     }

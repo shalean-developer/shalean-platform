@@ -153,6 +153,35 @@ export function MarketingHomeFooter() {
             </div>
           </div>
         </div>
+
+        <div
+          className="mt-12 border-t border-white/15 pt-10"
+          aria-labelledby="footer-areas-heading"
+        >
+          <h4 id="footer-areas-heading" className="text-sm font-bold text-white">
+            Areas we serve
+          </h4>
+          <nav
+            className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-white/90"
+            aria-label="Cape Town suburbs we serve"
+          >
+            <Link href="/locations/claremont-cleaning-services" className="transition hover:text-white">
+              Claremont
+            </Link>
+            <span className="text-white/30" aria-hidden>
+              ·
+            </span>
+            <Link href="/locations/sea-point-cleaning-services" className="transition hover:text-white">
+              Sea Point
+            </Link>
+            <span className="text-white/30" aria-hidden>
+              ·
+            </span>
+            <Link href="/locations/observatory-cleaning-services" className="transition hover:text-white">
+              Observatory
+            </Link>
+          </nav>
+        </div>
       </div>
 
       <a

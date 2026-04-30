@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://www.shalean.co.za" },
   openGraph: {
     type: "website",
-    url: "https://www.shalean.co.za/",
+    url: "https://www.shalean.co.za",
     title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
     description:
       "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
@@ -64,8 +64,8 @@ export default async function MarketingHomePage() {
           <MarketingHomeServicesSection />
           <MarketingHomeAboutSection />
           <MarketingHomeCtaSection />
-          <MarketingHomeFaqSection faqs={faqs} />
           <MarketingHomeHowItWorksSection />
+          <MarketingHomeFaqSection faqs={faqs} />
           <MarketingHomeLocationsSection locations={locations} />
           <MarketingHomePopularAreasSection />
         </main>

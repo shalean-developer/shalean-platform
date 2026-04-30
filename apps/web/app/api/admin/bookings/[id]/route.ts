@@ -17,6 +17,8 @@ import {
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
+import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,18 +101,37 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     .order("created_at", { ascending: false })
     .limit(50);
 
+  const bookingLineItemsPromise = admin.from("booking_line_items").select("*").eq("booking_id", id);
+
+  const cleanerEarningsPromise = admin.from("cleaner_earnings").select("*").eq("booking_id", id);
+
   const [
     { data: cleaner },
     { data: userProfile },
     { data: dispatchOffers, error: offersErr },
     { data: cleanerIssueReportsRaw, error: issueErr },
-  ] = await Promise.all([cleanerPromise, userProfilePromise, offersPromise, issueReportsPromise]);
+    { data: booking_line_items, error: lineItemsErr },
+    { data: cleaner_earnings, error: earningsErr },
+  ] = await Promise.all([
+    cleanerPromise,
+    userProfilePromise,
+    offersPromise,
+    issueReportsPromise,
+    bookingLineItemsPromise,
+    cleanerEarningsPromise,
+  ]);
 
   if (offersErr) {
     return NextResponse.json({ error: offersErr.message }, { status: 500 });
   }
   if (issueErr) {
     return NextResponse.json({ error: issueErr.message }, { status: 500 });
+  }
+  if (lineItemsErr) {
+    return NextResponse.json({ error: lineItemsErr.message }, { status: 500 });
+  }
+  if (earningsErr) {
+    return NextResponse.json({ error: earningsErr.message }, { status: 500 });
   }
 
   const cleanerIssueReports = [...(cleanerIssueReportsRaw ?? [])].sort((a, b) => {
@@ -153,6 +174,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   return NextResponse.json({
     booking,
+    booking_line_items: booking_line_items ?? [],
+    cleaner_earnings: cleaner_earnings ?? [],
     cleaner: cleaner ?? null,
     userProfile: userProfile ?? null,
     dispatch_offers: dispatchOffers ?? [],
@@ -356,6 +379,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { error } = await admin.from("bookings").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  if (cleanerWasChanged) {
+    await resetBookingCleanerLineEarnings(admin, id);
+  }
+
   if (newCleaner && cleanerWasChanged) {
     await notifyCleanerAssignedBooking(admin, id, newCleaner);
   }
@@ -532,6 +559,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         { status: 422 },
       );
     }
+  }
+
+  const { data: postPatchStatus } = await admin.from("bookings").select("status").eq("id", id).maybeSingle();
+  if (String((postPatchStatus as { status?: string | null } | null)?.status ?? "").toLowerCase() === "completed") {
+    void ensureCleanerEarningsLedgerRow({ admin, bookingId: id });
   }
 
   if (beforeRow) {

@@ -17,6 +17,13 @@ type ProcessingTransferRow = {
   created_at: string;
 };
 
+type ProcessingEarningsTransferRow = {
+  id: string;
+  disbursement_id: string;
+  transfer_code: string | null;
+  created_at: string;
+};
+
 type PaystackTransferLookup = {
   status?: boolean;
   message?: string;
@@ -76,18 +83,30 @@ export async function POST(request: Request) {
   const batchSize = positiveNumberFromEnv("PAYSTACK_TRANSFER_RECONCILE_BATCH_SIZE", DEFAULT_BATCH_SIZE, 100);
   const cutoff = new Date(Date.now() - stuckMinutes * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
-    .from("payout_transfers")
-    .select("id, payout_id, transfer_code, created_at")
-    .eq("status", "processing")
-    .lt("created_at", cutoff)
-    .not("transfer_code", "is", null)
-    .order("created_at", { ascending: true })
-    .limit(batchSize);
+  const [{ data, error }, { data: earnData, error: earnErr }] = await Promise.all([
+    supabase
+      .from("payout_transfers")
+      .select("id, payout_id, transfer_code, created_at")
+      .eq("status", "processing")
+      .lt("created_at", cutoff)
+      .not("transfer_code", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(batchSize),
+    supabase
+      .from("earnings_disbursement_transfers")
+      .select("id, disbursement_id, transfer_code, created_at")
+      .eq("status", "processing")
+      .lt("created_at", cutoff)
+      .not("transfer_code", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(batchSize),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (earnErr) return NextResponse.json({ error: earnErr.message }, { status: 500 });
 
   const transfers = (data ?? []) as ProcessingTransferRow[];
+  const earningsTransfers = (earnData ?? []) as ProcessingEarningsTransferRow[];
   let checked = 0;
   let confirmed = 0;
   let failed = 0;
@@ -131,11 +150,58 @@ export async function POST(request: Request) {
     }
   }
 
+  for (const transfer of earningsTransfers) {
+    const transferCode = transfer.transfer_code?.trim();
+    if (!transferCode) continue;
+
+    checked++;
+    const lookup = await fetchPaystackTransfer(transferCode);
+    if (!lookup.ok) {
+      errors.push({ transferCode, error: lookup.error });
+      continue;
+    }
+
+    const paystackStatus = lookup.json.data?.status?.toLowerCase().trim() ?? "";
+    const payload = {
+      event: "transfer.reconciled",
+      source: "cron/reconcile-paystack-transfers",
+      data: lookup.json.data,
+      checked_at: new Date().toISOString(),
+    };
+
+    if (paystackStatus === "success") {
+      await applyTransferSuccess(supabase, { transfer_code: transferCode }, payload);
+      confirmed++;
+    } else if (["failed", "reversed"].includes(paystackStatus)) {
+      await applyTransferFailed(
+        supabase,
+        {
+          transfer_code: transferCode,
+          reason: lookup.json.data?.reason ?? lookup.json.data?.failures ?? `Paystack status: ${paystackStatus}`,
+        },
+        payload,
+      );
+      failed++;
+    } else {
+      stillProcessing++;
+    }
+  }
+
   await logSystemEvent({
     level: errors.length ? "warn" : "info",
     source: "cron/reconcile-paystack-transfers",
     message: "Paystack transfer reconciliation finished",
-    context: { stuckMinutes, batchSize, checked, confirmed, failed, stillProcessing, errors },
+    context: {
+      stuckMinutes,
+      batchSize,
+      checked,
+      confirmed,
+      failed,
+      stillProcessing,
+      payoutTransferCandidates: transfers.length,
+      earningsTransferCandidates: earningsTransfers.length,
+      errors,
+    },
   });
 
   return NextResponse.json({
@@ -145,6 +211,8 @@ export async function POST(request: Request) {
     confirmed,
     failed,
     stillProcessing,
+    payoutTransferCandidates: transfers.length,
+    earningsTransferCandidates: earningsTransfers.length,
     errors,
   });
 }

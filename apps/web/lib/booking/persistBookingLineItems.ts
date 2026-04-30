@@ -14,11 +14,15 @@ export async function persistBookingLineItems(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (items.length === 0) return { ok: true };
 
-  const rows: BookingLineItemRow[] = items.map((r) => ({
-    ...r,
-    booking_id: bookingId,
-    metadata: r.metadata ?? {},
-  }));
+  const rows: BookingLineItemRow[] = items.map((r) => {
+    const earns_cleaner = r.earns_cleaner ?? r.item_type !== "adjustment";
+    return {
+      ...r,
+      earns_cleaner,
+      booking_id: bookingId,
+      metadata: r.metadata ?? {},
+    };
+  });
 
   const { error } = await admin.from("booking_line_items").insert(rows);
   if (error) {

@@ -8,6 +8,7 @@ import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
 const DUPLICATE_PENDING_EMAIL_WINDOW_MIN = 20;
 
@@ -136,6 +137,37 @@ export async function updatePendingPaymentBookingForInit(
     where: "updatePendingPaymentBookingForInit",
     bookingId: params.bookingId,
   });
+
+  const { data: row0, error: row0Err } = await admin
+    .from("bookings")
+    .select("date, time, cleaner_id, selected_cleaner_id")
+    .eq("id", params.bookingId)
+    .maybeSingle();
+  if (row0Err) {
+    return { ok: false, error: row0Err.message, pgCode: row0Err.code };
+  }
+  if (!row0) {
+    return { ok: false, error: "Booking not found for pending update.", pgCode: undefined };
+  }
+  const r0 = row0 as {
+    date?: string | null;
+    time?: string | null;
+    cleaner_id?: string | null;
+    selected_cleaner_id?: string | null;
+  } | null;
+  const cleanerForTenure =
+    (params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
+      ? params.selected_cleaner_id
+      : null) ??
+    (r0?.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(String(r0.selected_cleaner_id)) ? String(r0.selected_cleaner_id) : null) ??
+    (r0?.cleaner_id && /^[0-9a-f-]{36}$/i.test(String(r0.cleaner_id)) ? String(r0.cleaner_id) : null);
+  const tenureShare = await resolveTenureBasedCleanerShareForBookingRow({
+    admin,
+    cleanerId: cleanerForTenure,
+    bookingDate: r0?.date ?? null,
+    bookingTime: r0?.time ?? null,
+  });
+
   const { error } = await admin
     .from("bookings")
     .update({
@@ -162,6 +194,7 @@ export async function updatePendingPaymentBookingForInit(
             assignment_type: params.assignment_type ?? "user_selected",
           }
         : {}),
+      ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
     })
     .eq("id", params.bookingId)
     .eq("status", "pending_payment");

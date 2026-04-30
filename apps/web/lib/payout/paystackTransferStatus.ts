@@ -11,23 +11,42 @@ export type PaystackStatusPayload = {
   [key: string]: unknown;
 };
 
-type TransferRow = {
+type PayoutTransferRow = {
   id: string;
   payout_id: string;
   status: string;
 };
 
-async function getTransferByCode(
+type EarningsTransferRow = {
+  id: string;
+  disbursement_id: string;
+  status: string;
+};
+
+async function getPayoutTransferByCode(
   supabase: SupabaseClient,
   transferCode: string,
-): Promise<{ transfer: TransferRow | null; error: string | null }> {
+): Promise<{ transfer: PayoutTransferRow | null; error: string | null }> {
   const { data, error } = await supabase
     .from("payout_transfers")
     .select("id, payout_id, status")
     .eq("transfer_code", transferCode)
     .maybeSingle();
 
-  return { transfer: (data as TransferRow | null) ?? null, error: error?.message ?? null };
+  return { transfer: (data as PayoutTransferRow | null) ?? null, error: error?.message ?? null };
+}
+
+async function getEarningsDisbursementTransferByCode(
+  supabase: SupabaseClient,
+  transferCode: string,
+): Promise<{ transfer: EarningsTransferRow | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from("earnings_disbursement_transfers")
+    .select("id, disbursement_id, status")
+    .eq("transfer_code", transferCode)
+    .maybeSingle();
+
+  return { transfer: (data as EarningsTransferRow | null) ?? null, error: error?.message ?? null };
 }
 
 async function maybeMarkPayoutPaid(supabase: SupabaseClient, payoutId: string) {
@@ -79,17 +98,12 @@ async function maybeMarkPayoutRunPaid(supabase: SupabaseClient, payoutId: string
   await tryCloseDisbursementRunIfComplete(supabase, runId);
 }
 
-export async function applyTransferSuccess(
+async function applyPayoutTransferSuccess(
   supabase: SupabaseClient,
+  transfer: PayoutTransferRow,
   data: PaystackTransferData,
   payload?: PaystackStatusPayload,
 ) {
-  const transferCode = data.transfer_code?.trim();
-  if (!transferCode) return { ignored: "missing transfer_code" };
-
-  const { transfer, error } = await getTransferByCode(supabase, transferCode);
-  if (error) throw new Error(error);
-  if (!transfer) return { ignored: "unknown transfer_code" };
   if (transfer.status === "success") return { ignored: "already successful" };
 
   const { error: updateError } = await supabase
@@ -107,20 +121,64 @@ export async function applyTransferSuccess(
 
   await maybeMarkPayoutPaid(supabase, transfer.payout_id);
   await maybeMarkPayoutRunPaid(supabase, transfer.payout_id);
-  return { transferCode, payoutId: transfer.payout_id };
+  return { transferCode: data.transfer_code, payoutId: transfer.payout_id, kind: "cleaner_payout" as const };
 }
 
-export async function applyTransferFailed(
+async function applyEarningsDisbursementTransferSuccess(
   supabase: SupabaseClient,
+  transfer: EarningsTransferRow,
   data: PaystackTransferData,
   payload?: PaystackStatusPayload,
 ) {
-  const transferCode = data.transfer_code?.trim();
-  if (!transferCode) return { ignored: "missing transfer_code" };
+  if (transfer.status === "success") return { ignored: "already successful" };
 
-  const { transfer, error } = await getTransferByCode(supabase, transferCode);
-  if (error) throw new Error(error);
-  if (!transfer) return { ignored: "unknown transfer_code" };
+  const now = new Date().toISOString();
+
+  const { error: updateError } = await supabase
+    .from("earnings_disbursement_transfers")
+    .update({
+      status: "success",
+      error: null,
+      webhook_payload: payload ?? null,
+      webhook_processed_at: now,
+    })
+    .eq("id", transfer.id)
+    .neq("status", "success");
+
+  if (updateError) throw new Error(updateError.message);
+
+  const { error: disbErr } = await supabase
+    .from("cleaner_earnings_disbursements")
+    .update({
+      status: "paid",
+      paid_at: now,
+      updated_at: now,
+    })
+    .eq("id", transfer.disbursement_id)
+    .eq("status", "processing");
+
+  if (disbErr) throw new Error(disbErr.message);
+
+  const { error: earnErr } = await supabase
+    .from("cleaner_earnings")
+    .update({
+      status: "paid",
+      paid_at: now,
+    })
+    .eq("disbursement_id", transfer.disbursement_id)
+    .eq("status", "processing");
+
+  if (earnErr) throw new Error(earnErr.message);
+
+  return { transferCode: data.transfer_code, disbursementId: transfer.disbursement_id, kind: "cleaner_earnings" as const };
+}
+
+async function applyPayoutTransferFailed(
+  supabase: SupabaseClient,
+  transfer: PayoutTransferRow,
+  data: PaystackTransferData,
+  payload?: PaystackStatusPayload,
+) {
   if (transfer.status === "success") return { ignored: "already successful" };
 
   const { error: updateError } = await supabase
@@ -153,5 +211,93 @@ export async function applyTransferFailed(
 
   if (payoutError) throw new Error(payoutError.message);
 
-  return { transferCode, payoutId: transfer.payout_id };
+  return { transferCode: data.transfer_code, payoutId: transfer.payout_id, kind: "cleaner_payout" as const };
+}
+
+async function applyEarningsDisbursementTransferFailed(
+  supabase: SupabaseClient,
+  transfer: EarningsTransferRow,
+  data: PaystackTransferData,
+  payload?: PaystackStatusPayload,
+) {
+  if (transfer.status === "success") return { ignored: "already successful" };
+
+  const now = new Date().toISOString();
+
+  const { error: updateError } = await supabase
+    .from("earnings_disbursement_transfers")
+    .update({
+      status: "failed",
+      error: data.reason?.trim() || "Transfer failed",
+      webhook_payload: payload ?? null,
+      webhook_processed_at: now,
+    })
+    .eq("id", transfer.id)
+    .neq("status", "success");
+
+  if (updateError) throw new Error(updateError.message);
+
+  const { error: earnErr } = await supabase
+    .from("cleaner_earnings")
+    .update({ status: "approved", disbursement_id: null })
+    .eq("disbursement_id", transfer.disbursement_id)
+    .eq("status", "processing");
+
+  if (earnErr) throw new Error(earnErr.message);
+
+  const { error: disbErr } = await supabase
+    .from("cleaner_earnings_disbursements")
+    .update({ status: "failed", updated_at: now })
+    .eq("id", transfer.disbursement_id)
+    .eq("status", "processing");
+
+  if (disbErr) throw new Error(disbErr.message);
+
+  return { transferCode: data.transfer_code, disbursementId: transfer.disbursement_id, kind: "cleaner_earnings" as const };
+}
+
+export async function applyTransferSuccess(
+  supabase: SupabaseClient,
+  data: PaystackTransferData,
+  payload?: PaystackStatusPayload,
+) {
+  const transferCode = data.transfer_code?.trim();
+  if (!transferCode) return { ignored: "missing transfer_code" };
+
+  const { transfer: payoutTransfer, error: payoutErr } = await getPayoutTransferByCode(supabase, transferCode);
+  if (payoutErr) throw new Error(payoutErr);
+  if (payoutTransfer) {
+    return applyPayoutTransferSuccess(supabase, payoutTransfer, data, payload);
+  }
+
+  const { transfer: earningsTransfer, error: earnErr } = await getEarningsDisbursementTransferByCode(supabase, transferCode);
+  if (earnErr) throw new Error(earnErr);
+  if (earningsTransfer) {
+    return applyEarningsDisbursementTransferSuccess(supabase, earningsTransfer, data, payload);
+  }
+
+  return { ignored: "unknown transfer_code" };
+}
+
+export async function applyTransferFailed(
+  supabase: SupabaseClient,
+  data: PaystackTransferData,
+  payload?: PaystackStatusPayload,
+) {
+  const transferCode = data.transfer_code?.trim();
+  if (!transferCode) return { ignored: "missing transfer_code" };
+
+  const { transfer: payoutTransfer, error: payoutErr } = await getPayoutTransferByCode(supabase, transferCode);
+  if (payoutErr) throw new Error(payoutErr);
+  if (payoutTransfer) {
+    return applyPayoutTransferFailed(supabase, payoutTransfer, data, payload);
+  }
+
+  const { transfer: earningsTransfer, error: earnErr } = await getEarningsDisbursementTransferByCode(supabase, transferCode);
+  if (earnErr) throw new Error(earnErr);
+  if (earningsTransfer) {
+    return applyEarningsDisbursementTransferFailed(supabase, earningsTransfer, data, payload);
+  }
+
+  return { ignored: "unknown transfer_code" };
 }
