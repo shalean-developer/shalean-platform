@@ -9,94 +9,20 @@ import { persistLastOpsQuick, readLastOpsQuick } from "@/lib/admin/lastOpsQuickF
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { AdminAssignForm, type CleanerOption } from "@/components/admin/AdminAssignForm";
-import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
+import { BookingCard } from "@/components/admin/BookingCard";
 import BookingDetailsSheet from "@/components/admin/BookingDetailsSheet";
+import { adminRowFlags } from "@/lib/admin/adminBookingsListDerived";
+import type { AdminBookingsListRow } from "@/lib/admin/adminBookingsListRow";
 import {
   rowMatchesAttentionFilter,
   sortRowsForAttentionQueue,
   type AttentionQueueFilter,
 } from "@/lib/admin/opsSnapshot";
-import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
-import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
-import {
-  adminBookingInvoiceHint,
-  adminBookingPaymentPrimaryLabel,
-} from "@/lib/admin/adminBookingListPaymentDisplay";
 
-type BookingRow = {
-  id: string;
-  customer_name: string | null;
-  customer_email: string | null;
-  service: string | null;
-  date: string | null;
-  time: string | null;
-  location: string | null;
-  total_paid_zar: number | null;
-  amount_paid_cents: number | null;
-  cleaner_payout_cents?: number | null;
-  cleaner_bonus_cents?: number | null;
-  company_revenue_cents?: number | null;
-  payout_percentage?: number | null;
-  payout_type?: string | null;
-  is_test?: boolean | null;
-  status: string | null;
-  dispatch_status: "searching" | "offered" | "assigned" | "failed" | "no_cleaner" | "unassignable" | null;
-  surge_multiplier?: number | null;
-  surge_reason?: string | null;
-  user_id: string | null;
-  cleaner_id: string | null;
-  selected_cleaner_id?: string | null;
-  assignment_type?: string | null;
-  fallback_reason?: string | null;
-  attempted_cleaner_id?: string | null;
-  became_pending_at?: string | null;
-  assigned_at: string | null;
-  en_route_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  created_at: string;
-  paystack_reference: string;
-  duration_minutes?: number | null;
-  dispatch_attempt_count?: number | null;
-  payment_needs_follow_up?: boolean | null;
-  payment_link_send_count?: number | null;
-  payment_conversion_seconds?: number | null;
-  payment_conversion_bucket?: string | null;
-  payment_status?: string | null;
-  monthly_invoice_id?: string | null;
-  customer_billing_type?: string | null;
-  customer_schedule_type?: string | null;
-  admin_force_slot_override?: boolean | null;
-};
-
-function dispatchStateLabel(dispatchStatus: BookingRow["dispatch_status"], status: string | null): string {
-  const ds = String(dispatchStatus ?? "").toLowerCase();
-  if (ds === "searching") return "Searching for cleaner...";
-  if (ds === "offered") return "Dispatching to 3 cleaners...";
-  if (ds === "assigned") return "Assigned";
-  if (ds === "failed") return "Failed";
-  if (ds === "no_cleaner") return "No cleaner (area)";
-  if (ds === "unassignable") return "No cleaner accepted — assign manually";
-  const s = String(status ?? "").toLowerCase();
-  if (s === "assigned") return "Assigned";
-  return status ?? "—";
-}
+type BookingRow = AdminBookingsListRow;
 
 type ToastState = { kind: "success" | "error" | "info"; text: string } | null;
 type CityOption = { id: string; name: string; is_active: boolean };
-
-function cleanerDisplayName(cleanerId: string | null, cleaners: CleanerOption[]): string | null {
-  if (!cleanerId) return null;
-  const hit = cleaners.find((c) => c.id === cleanerId);
-  return hit?.full_name ?? cleanerId;
-}
-
-function cleanerSelectEmptyLabel(r: BookingRow): string {
-  const st = (r.status ?? "").toLowerCase();
-  const ds = (r.dispatch_status ?? "").toLowerCase();
-  if (!r.cleaner_id && st === "pending" && ds === "searching") return "Assigning…";
-  return "Unassigned";
-}
 
 type FailedJob = {
   id: string;
@@ -148,57 +74,6 @@ type AdminRouteRow = {
   };
 };
 
-function zar(r: BookingRow): number {
-  if (typeof r.total_paid_zar === "number") return r.total_paid_zar;
-  return Math.round((r.amount_paid_cents ?? 0) / 100);
-}
-
-function centsToZar(cents: number | null | undefined): number | null {
-  if (cents == null || !Number.isFinite(Number(cents))) return null;
-  return Math.round(Number(cents) / 100);
-}
-
-function formatWhen(date: string | null, time: string | null): string {
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "—";
-  const [y, m, d] = date.split("-").map(Number);
-  const label = new Date(y, m - 1, d).toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-  return time ? `${label} ${time}` : label;
-}
-
-function parseBookingDateTime(date: string | null, time: string | null): Date | null {
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const safeTime = time && /^\d{2}:\d{2}/.test(time) ? `${time.slice(0, 5)}:00` : "00:00:00";
-  return new Date(`${date}T${safeTime}+02:00`);
-}
-
-function startsInMinutes(date: string | null, time: string | null): number | null {
-  const dt = parseBookingDateTime(date, time);
-  if (!dt) return null;
-  return Math.round((dt.getTime() - Date.now()) / (60 * 1000));
-}
-
-function formatStartsIn(mins: number | null): string {
-  if (mins == null) return "—";
-  if (mins < 0) {
-    const a = Math.abs(mins);
-    if (a < 60) return `${a}m ago`;
-    return `${Math.floor(a / 60)}h ${a % 60}m ago`;
-  }
-  if (mins < 60) return `${mins}m`;
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
-
-function startsInClass(mins: number | null): string {
-  if (mins == null) return "text-zinc-600 dark:text-zinc-400";
-  if (mins >= 0 && mins < 60) return "font-semibold text-red-700 dark:text-red-300";
-  if (mins >= 0 && mins < 180) return "font-semibold text-orange-700 dark:text-orange-300";
-  return "text-zinc-700 dark:text-zinc-300";
-}
-
 function attentionKeyFromAction(
   f:
     | "all"
@@ -219,27 +94,6 @@ function attentionKeyFromAction(
 
 function attentionUrlValue(key: AttentionQueueFilter): string {
   return key === "starting-soon" ? "starting-soon" : key;
-}
-
-function adminRowFlags(r: BookingRow, today: string) {
-  const cents = r.amount_paid_cents ?? 0;
-  const tzar = r.total_paid_zar ?? 0;
-  const paymentMissing = cents <= 0 && tzar <= 0;
-  const st = (r.status ?? "").toLowerCase();
-  const d = r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : null;
-  const active = st === "pending" || st === "assigned" || st === "in_progress";
-  const statusInconsistent = active && d !== null && d < today;
-  const missingEmail = !r.customer_email?.trim();
-  return { paymentMissing, statusInconsistent, missingEmail };
-}
-
-function rowHighlightClass(r: BookingRow, today: string): string {
-  const f = adminRowFlags(r, today);
-  if (f.paymentMissing) return "bg-red-50/90 dark:bg-red-950/30";
-  if (f.statusInconsistent) return "bg-orange-50/85 dark:bg-orange-950/25";
-  if (r.user_id == null) return "bg-amber-50/85 dark:bg-amber-950/25";
-  if (f.missingEmail) return "bg-rose-50/80 dark:bg-rose-950/20";
-  return "";
 }
 
 function VipDistributionCard({
@@ -1217,287 +1071,79 @@ export default function AdminBookingsPage() {
         </div>
 
         <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-          Today ({today}) uses Africa/Johannesburg. Row tint: red = no payment, orange = past date but job still active
-          (pending/assigned/in progress), amber = no user_id, rose = no email.
+          Today ({today}) uses Africa/Johannesburg. Card tint: red = no payment, orange = past date but job still active
+          (pending/assigned/in progress), amber = no user_id, rose = no email. Click a card to open details; roster comes
+          from <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">booking_cleaners</code>.
         </p>
 
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">
-              <tr>
-                <th className="px-3 py-3">Customer</th>
-                <th className="px-3 py-3">Service</th>
-                <th className="px-3 py-3">When</th>
-                <th className="px-3 py-3">Starts in</th>
-                <th className="px-3 py-3">Price</th>
-                <th className="px-3 py-3">Payment</th>
-                <th className="px-3 py-3">Workflow</th>
-                <th className="px-3 py-3">Cleaner</th>
-                <th className="px-3 py-3">Quick actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {visibleRows.map((r, idx) => {
-                const startMins = startsInMinutes(r.date, r.time);
-                const assignSourceLine = assignmentSourceLabel(r);
-                const cleanerPayoutZar = centsToZar(r.cleaner_payout_cents);
-                const cleanerBonusZar = centsToZar(r.cleaner_bonus_cents) ?? 0;
-                const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
-                const companyRevenueZar = centsToZar(r.company_revenue_cents);
-                return (
-                  <Fragment key={r.id}>
-                    <tr
-                      className={[
-                        rowHighlightClass(r, today),
-                        idx % 2 === 0 ? "bg-white dark:bg-zinc-900" : "bg-zinc-50/60 dark:bg-zinc-900/70",
-                        "cursor-pointer transition hover:bg-zinc-100 dark:hover:bg-zinc-800/80",
-                      ].join(" ")}
-                      onClick={() => openDetails(r.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          openDetails(r.id);
-                        }
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {visibleRows.map((r) => (
+            <Fragment key={r.id}>
+              <BookingCard
+                row={r}
+                today={today}
+                sortedCleaners={sortedCleaners}
+                retryDispatchBookingId={retryDispatchBookingId}
+                onOpenDetails={openDetails}
+                onPatchStatus={(id, next) => void patchBookingStatus(id, next)}
+                onPatchCleaner={(id, cleanerId) => void patchBookingCleaner(id, cleanerId)}
+                onToggleAssign={(id) => setAssignBookingId((cur) => (cur === id ? null : id))}
+                onRetryDispatch={(id) => void retryDispatchFailed(id)}
+                onBookingActionsReschedule={() =>
+                  setToast({
+                    kind: "info",
+                    text: "Reschedule isn’t available here yet — use booking details to edit.",
+                  })
+                }
+                onBookingActionsCancel={() =>
+                  setToast({
+                    kind: "info",
+                    text: "Cancel from booking details or your cancellation endpoint when wired.",
+                  })
+                }
+              />
+              {assignBookingId === r.id ? (
+                <div className="col-span-full">
+                  <div className="mx-auto max-w-lg pb-2">
+                    <AdminAssignForm
+                      booking={r}
+                      bookingId={r.id}
+                      cleaners={cleaners}
+                      onDone={({ cleanerId: _assignedCleanerId, assignAttempts }) => {
+                        setRows((cur) =>
+                          cur.map((row) =>
+                            row.id === r.id
+                              ? {
+                                  ...row,
+                                  cleaner_id: null,
+                                  status: "pending",
+                                  dispatch_status: "offered",
+                                  assigned_at: null,
+                                }
+                              : row,
+                          ),
+                        );
+                        setAssignBookingId(null);
+                        emitAdminToast(
+                          typeof assignAttempts === "number" && assignAttempts > 1
+                            ? `Offer sent ✓ (after ${assignAttempts} tries)`
+                            : "Offer sent ✓",
+                          "success",
+                        );
                       }}
-                      tabIndex={0}
-                      role="link"
-                      aria-label={`Open booking ${r.id}`}
-                    >
-                      <td className="max-w-[200px] truncate px-3 py-2 text-zinc-800 dark:text-zinc-200">
-                        <span className="font-medium">{r.customer_name?.trim() || "—"}</span>
-                        {r.is_test ? (
-                          <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:ring-amber-800">
-                            TEST BOOKING
-                          </span>
-                        ) : null}
-                        {r.admin_force_slot_override ? (
-                          <span
-                            className="ml-2 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-900 ring-1 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-100 dark:ring-rose-800"
-                            title="Created with duplicate-slot force override — review if unsure."
-                          >
-                            Force slot
-                          </span>
-                        ) : null}
-                        <span className="mt-0.5 block truncate text-xs text-zinc-500">{r.customer_email ?? ""}</span>
-                        {r.customer_billing_type || r.customer_schedule_type ? (
-                          <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
-                            Billing: {r.customer_billing_type === "monthly" ? "Monthly" : r.customer_billing_type === "per_booking" ? "Per booking" : (r.customer_billing_type ?? "—")}
-                            {" · "}
-                            Schedule:{" "}
-                            {r.customer_schedule_type === "fixed_schedule"
-                              ? "Fixed"
-                              : r.customer_schedule_type === "on_demand"
-                                ? "On-demand"
-                                : (r.customer_schedule_type ?? "—")}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">{r.service ?? "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{formatWhen(r.date, r.time)}</td>
-                      <td className={["whitespace-nowrap px-3 py-2 tabular-nums", startsInClass(startMins)].join(" ")}>
-                        {formatStartsIn(startMins)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
-                        <div className="font-medium">Customer R {zar(r).toLocaleString("en-ZA")}</div>
-                        <div className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                          Cleaner{" "}
-                          {cleanerTotalZar == null ? (
-                            <span className="font-medium text-amber-700 dark:text-amber-300">Pending payout calculation</span>
-                          ) : (
-                            <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                              R {cleanerTotalZar.toLocaleString("en-ZA")}
-                            </span>
-                          )}
-                        </div>
-                        {cleanerPayoutZar != null ? (
-                          <div className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-                            Payout R {cleanerPayoutZar.toLocaleString("en-ZA")}
-                            {cleanerBonusZar > 0 ? ` + bonus R ${cleanerBonusZar.toLocaleString("en-ZA")}` : ""}
-                            {companyRevenueZar != null ? ` · company R ${companyRevenueZar.toLocaleString("en-ZA")}` : ""}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="max-w-[140px] px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300">
-                        <div className="font-medium">{adminBookingPaymentPrimaryLabel(r)}</div>
-                        {adminBookingInvoiceHint(r.monthly_invoice_id) ? (
-                          <div className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-300">
-                            {adminBookingInvoiceHint(r.monthly_invoice_id)}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={(() => {
-                            const st = (r.status ?? "pending").toLowerCase();
-                            if (st === "assigned") return "confirmed";
-                            const allowed = new Set(["pending", "in_progress", "completed", "cancelled", "failed"]);
-                            return allowed.has(st) ? st : "pending";
-                          })()}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            void patchBookingStatus(r.id, v);
-                          }}
-                          className="mb-1 w-full max-w-[140px] rounded border border-zinc-200 bg-white px-1 py-1 text-[11px] dark:border-zinc-600 dark:bg-zinc-950"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="confirmed">Confirmed</option>
-                          <option value="in_progress">In progress</option>
-                          <option value="completed">Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                          <option value="failed">Failed</option>
-                        </select>
-                        <div className="text-[11px] text-zinc-500">
-                          {dispatchStateLabel(r.dispatch_status, r.status)}
-                          {typeof r.surge_multiplier === "number" && r.surge_multiplier > 1 ? (
-                            <span className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
-                              Surge x{r.surge_multiplier.toFixed(1)}
-                            </span>
-                          ) : null}
-                        </div>
-                        {assignSourceLine ? (
-                          <div className="mt-0.5 text-[10px] font-semibold leading-snug text-emerald-800 dark:text-emerald-300/90">
-                            {assignSourceLine}
-                          </div>
-                        ) : null}
-                        {(r.status ?? "").toLowerCase() === "pending" &&
-                        !r.cleaner_id &&
-                        ["failed", "unassignable", "no_cleaner"].includes((r.dispatch_status ?? "").toLowerCase()) ? (
-                          <div
-                            className="mt-1.5 flex flex-wrap items-center gap-1.5"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            role="group"
-                            aria-label="Dispatch needs attention"
-                          >
-                            <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
-                              Needs attention
-                            </span>
-                            <button
-                              type="button"
-                              className="rounded border border-zinc-300 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                              onClick={() => setAssignBookingId((id) => (id === r.id ? null : r.id))}
-                            >
-                              Manually assign
-                            </button>
-                            <button
-                              type="button"
-                              disabled={retryDispatchBookingId === r.id}
-                              className="rounded border border-emerald-600 bg-emerald-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50 dark:border-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-                              onClick={() => void retryDispatchFailed(r.id)}
-                            >
-                              {retryDispatchBookingId === r.id ? "Retrying…" : "Retry now"}
-                            </button>
-                            <div className="w-full min-w-0 text-[10px] leading-snug text-zinc-600 dark:text-zinc-400">
-                              <span className="font-medium text-zinc-700 dark:text-zinc-300">Attempts:</span>{" "}
-                              {metricAttemptBucket(Number(r.dispatch_attempt_count ?? 0) || 0)}
-                              <span className="mx-1.5 text-zinc-400">·</span>
-                              <span className="font-medium text-zinc-700 dark:text-zinc-300">Fallback:</span>{" "}
-                              <span className="break-words" title={r.fallback_reason ?? undefined}>
-                                {r.fallback_reason?.trim() || "—"}
-                              </span>
-                            </div>
-                          </div>
-                        ) : null}
-                        {r.attempted_cleaner_id?.trim() &&
-                        r.attempted_cleaner_id.trim() !== (r.cleaner_id ?? "").trim() ? (
-                          <div
-                            className="mt-0.5 text-[10px] leading-snug text-zinc-600 dark:text-zinc-400"
-                            title={r.attempted_cleaner_id}
-                          >
-                            Selected at checkout:{" "}
-                            {cleanerDisplayName(r.attempted_cleaner_id.trim(), sortedCleaners) ??
-                              `ID ${r.attempted_cleaner_id.slice(0, 8)}…`}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={r.cleaner_id ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            void patchBookingCleaner(r.id, v ? v : null);
-                          }}
-                          className="w-full max-w-[180px] rounded border border-zinc-200 bg-white px-1 py-1 text-[11px] dark:border-zinc-600 dark:bg-zinc-950"
-                        >
-                          <option value="">{cleanerSelectEmptyLabel(r)}</option>
-                          {sortedCleaners.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.full_name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                        <BookingActionsDropdown
-                          booking={r}
-                          onAssign={(booking) => {
-                            setAssignBookingId((id) => (id === booking.id ? null : booking.id));
-                          }}
-                          onReschedule={() => {
-                            setToast({
-                              kind: "info",
-                              text: "Reschedule isn’t available here yet — use booking details to edit.",
-                            });
-                          }}
-                          onCancel={() => {
-                            setToast({
-                              kind: "info",
-                              text: "Cancel from booking details or your cancellation endpoint when wired.",
-                            });
-                          }}
-                          onView={(booking) => {
-                            openDetails(booking.id);
-                          }}
-                        />
-                      </td>
-                    </tr>
-                    {assignBookingId === r.id ? (
-                      <tr className="bg-zinc-50 dark:bg-zinc-900/80">
-                        <td colSpan={8} className="px-3 py-2">
-                          <div className="max-w-sm">
-                            <AdminAssignForm
-                              booking={r}
-                              bookingId={r.id}
-                              cleaners={cleaners}
-                              onDone={({ cleanerId: _assignedCleanerId, assignAttempts }) => {
-                                setRows((cur) =>
-                                  cur.map((row) =>
-                                    row.id === r.id
-                                      ? {
-                                          ...row,
-                                          cleaner_id: null,
-                                          status: "pending",
-                                          dispatch_status: "offered",
-                                          assigned_at: null,
-                                        }
-                                      : row,
-                                  ),
-                                );
-                                setAssignBookingId(null);
-                                emitAdminToast(
-                                  typeof assignAttempts === "number" && assignAttempts > 1
-                                    ? `Offer sent ✓ (after ${assignAttempts} tries)`
-                                    : "Offer sent ✓",
-                                  "success",
-                                );
-                              }}
-                              onError={(message) => {
-                                emitAdminToast(message || "Failed to assign cleaner", "error");
-                              }}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          {visibleRows.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-zinc-500">No rows for this filter.</p>
-          ) : null}
+                      onError={(message) => {
+                        emitAdminToast(message || "Failed to assign cleaner", "error");
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </Fragment>
+          ))}
         </div>
+        {visibleRows.length === 0 ? (
+          <p className="mt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No bookings for this filter.</p>
+        ) : null}
       </main>
       <BookingDetailsSheet bookingId={selectedBookingId} onClose={closeDetails} />
       {toast ? (

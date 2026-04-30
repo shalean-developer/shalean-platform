@@ -41,7 +41,13 @@ export type CleanerMobileJobView = {
   payoutStatus: "paid" | "pending" | "eligible" | "invalid";
   /** Team-assigned booking (cleaner_id may be null on server). */
   isTeamJob: boolean;
-  /** Active cleaners on roster for booking date; null if unknown or not a team job. */
+  /** You are the designated team lead (payout owner) for this job. */
+  isLeadCleaner: boolean;
+  /** Other teammates on the canonical roster (excludes you); null when solo on roster or not a team job. */
+  teamRosterSummary: string | null;
+  /** Full roster with roles for detail / coordination. */
+  teamRoster: readonly { cleaner_id: string; full_name: string | null; role: string }[];
+  /** Active cleaners on booking date; null if unknown or not a team job (legacy snapshot / template). */
   teamMemberCount: number | null;
   /** From `bookings.cleaner_response_status` (snake_case on wire). */
   cleanerResponseStatus?: string | null;
@@ -236,6 +242,12 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     earningsIsEstimate: estimateFlag,
     payoutStatus,
     isTeamJob: row.is_team_job === true,
+    isLeadCleaner: (row as { is_lead_cleaner?: boolean | null }).is_lead_cleaner === true,
+    teamRosterSummary:
+      typeof row.team_roster_summary === "string" && row.team_roster_summary.trim()
+        ? row.team_roster_summary.trim()
+        : null,
+    teamRoster: Array.isArray(row.team_roster) ? row.team_roster : [],
     teamMemberCount,
     cleanerResponseStatus: crsRaw != null && crsRaw !== "" ? String(crsRaw) : null,
     enRouteAt: row.en_route_at ? String(row.en_route_at) : null,

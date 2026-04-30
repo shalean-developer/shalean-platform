@@ -1,4 +1,6 @@
 /** Row shape returned by GET `/api/cleaner/jobs` and `/api/cleaner/jobs/[id]`. */
+import type { TeamRosterMemberWire } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
+
 /** Slim wire shape from cleaner APIs / `booking_line_items` join. */
 export type CleanerBookingLineItemWire = {
   item_type: string;
@@ -63,4 +65,10 @@ export type CleanerBookingRow = {
   job_notes?: string | null;
   service_name?: string | null;
   service_type?: string | null;
+  /** True when the authenticated cleaner is the team payroll lead for this job. */
+  is_lead_cleaner?: boolean | null;
+  /** Canonical job roster (team jobs); names from `cleaners.full_name`. */
+  team_roster?: TeamRosterMemberWire[] | null;
+  /** Short “other teammates” line for cards (excludes viewer). */
+  team_roster_summary?: string | null;
 };

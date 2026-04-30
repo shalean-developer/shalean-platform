@@ -69,6 +69,7 @@ export async function POST(request: Request) {
 
   const b = row as Record<string, unknown>;
   const canAccess = await cleanerHasBookingAccess(admin, cleanerId, {
+    id: bookingId,
     cleaner_id: (b.cleaner_id as string | null | undefined) ?? null,
     payout_owner_cleaner_id: (b.payout_owner_cleaner_id as string | null | undefined) ?? null,
     team_id: (b.team_id as string | null | undefined) ?? null,

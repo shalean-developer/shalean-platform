@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
@@ -433,48 +434,49 @@ async function finalizeBookingTeamAssignment(
     cleaner_response_status: CLEANER_RESPONSE.PENDING,
   };
 
-  let upd = await supabase
-    .from("bookings")
-    .update({
-      ...baseUpdate,
-      team_member_count_snapshot: rosterSnapshot,
-    })
-    .eq("id", bookingId)
-    .eq("status", "pending")
-    .is("cleaner_id", null)
-    .select("id")
-    .maybeSingle();
+  let snapshotArg: number | null = rosterSnapshot;
+  let atomic = await assignTeamAndSyncRoster(supabase, {
+    bookingId,
+    teamId: selected.id,
+    payoutOwnerCleanerId,
+    teamMemberCountSnapshot: snapshotArg,
+    variant: "dispatch",
+    source: "dispatch",
+    assignedAtIso: nowIso,
+  });
 
-  if (upd.error && isMissingTeamSnapshotColumnError(upd.error)) {
+  if (!atomic.ok && snapshotArg != null && isMissingTeamSnapshotColumnError({ message: atomic.message })) {
     void logSystemEvent({
       level: "warn",
       source: "TEAM_SNAPSHOT_WRITE_FAILED",
-      message: "team_member_count_snapshot not writable; continuing assignment without snapshot",
+      message: "team_member_count_snapshot not writable; retrying assign without snapshot column",
       context: {
         bookingId,
         teamId: selected.id,
-        pgCode: upd.error.code ?? null,
-        detail: upd.error.message ?? null,
+        detail: atomic.message,
       },
     });
-    upd = await supabase
-      .from("bookings")
-      .update({ ...baseUpdate })
-      .eq("id", bookingId)
-      .eq("status", "pending")
-      .is("cleaner_id", null)
-      .select("id")
-      .maybeSingle();
+    snapshotArg = null;
+    atomic = await assignTeamAndSyncRoster(supabase, {
+      bookingId,
+      teamId: selected.id,
+      payoutOwnerCleanerId,
+      teamMemberCountSnapshot: null,
+      variant: "dispatch",
+      source: "dispatch",
+      assignedAtIso: nowIso,
+    });
   }
 
-  const { data: updated, error: uErr } = upd;
-  if (uErr || !updated) {
+  if (!atomic.ok) {
     await supabase.rpc("release_team_capacity_slot", {
       p_team_id: selected.id,
       p_booking_date: dateYmd,
     });
-    if (uErr) return { ok: false, error: "db_error", message: uErr.message };
-    return { ok: false, error: "booking_not_pending", message: "booking_update_failed" };
+    if (atomic.noRowUpdated) {
+      return { ok: false, error: "booking_not_pending", message: "booking_update_failed" };
+    }
+    return { ok: false, error: "db_error", message: atomic.message };
   }
 
   const { error: insErr } = await supabase.from("booking_team_assignments").insert({

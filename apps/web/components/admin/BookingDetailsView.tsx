@@ -16,8 +16,13 @@ import {
 import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { issueReportReasonDisplay } from "@/lib/cleaner/cleanerJobIssueReasons";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
+import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { AdminBookingLiveLocation } from "@/components/admin/AdminBookingLiveLocation";
+import {
+  EmergencyRosterReassignModal,
+  type EmergencyRosterCleanerRow,
+} from "@/components/admin/EmergencyRosterReassignModal";
 
 type BookingSeed = { id: string };
 
@@ -88,6 +93,17 @@ type TeamAssignCandidate = {
   used_slots_today: number;
   remaining_slots_today: number;
   assignable: boolean;
+};
+
+type BookingCleanerRow = {
+  id: string;
+  cleaner_id: string;
+  role: string;
+  assigned_at: string;
+  payout_weight: number;
+  lead_bonus_cents: number;
+  source: string | null;
+  cleaner_name?: string | null;
 };
 
 type Cleaner = {
@@ -463,6 +479,9 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [teamCandidates, setTeamCandidates] = useState<TeamAssignCandidate[]>([]);
   const [teamPickId, setTeamPickId] = useState<string | null>(null);
   const [assigningTeam, setAssigningTeam] = useState(false);
+  const [bookingCleaners, setBookingCleaners] = useState<BookingCleanerRow[]>([]);
+  const [emergencyRosterOpen, setEmergencyRosterOpen] = useState(false);
+  const [repairRosterBusy, setRepairRosterBusy] = useState(false);
   const [detailRefresh, setDetailRefresh] = useState(0);
   const [resetDispatchBusy, setResetDispatchBusy] = useState(false);
   const [fixEarningsBusy, setFixEarningsBusy] = useState(false);
@@ -580,6 +599,17 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setIssueReportNowMs(Date.now());
       setSupportsTeamAssignment(json.supports_team_assignment === true);
       setTeamSummary(json.team_summary ?? null);
+      let roster: BookingCleanerRow[] = [];
+      try {
+        const cr = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/cleaners`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const cj = (await cr.json()) as { booking_cleaners?: BookingCleanerRow[] };
+        if (cr.ok && Array.isArray(cj.booking_cleaners)) roster = cj.booking_cleaners;
+      } catch {
+        roster = [];
+      }
+      setBookingCleaners(roster);
       setDraftDate(json.booking?.date ?? "");
       setDraftTime((json.booking?.time ?? "").slice(0, 5));
       setError(null);
@@ -1413,6 +1443,32 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     }
   };
 
+  const repairRosterFromTeam = async () => {
+    if (!fullBooking?.id || !fullBooking.team_id) return;
+    setRepairRosterBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) throw new Error("Please sign in as an admin.");
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/repair-roster`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string; hint?: string; booking_cleaners?: BookingCleanerRow[] };
+      if (!res.ok) {
+        const msg = res.status === 409 ? (j.hint ?? j.error ?? BOOKING_ROSTER_LOCKED_HINT) : (j.error ?? "Repair failed");
+        throw new Error(msg);
+      }
+      setBookingCleaners(Array.isArray(j.booking_cleaners) ? j.booking_cleaners : []);
+      setToast({ kind: "success", text: "Roster rebuilt from team template." });
+      setDetailRefresh((n) => n + 1);
+    } catch (e) {
+      setToast({ kind: "error", text: e instanceof Error ? e.message : "Repair failed" });
+    } finally {
+      setRepairRosterBusy(false);
+    }
+  };
+
   const handleAssignCleaner = async (selected: AdminCleanerRow) => {
     if (!fullBooking?.id || !selected?.id) {
       const msg = "Missing booking or cleaner id.";
@@ -2068,13 +2124,70 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
               ) : (
                 <p className="text-sm text-zinc-600">No team assigned yet.</p>
               )}
-              <button
-                type="button"
-                onClick={() => void openTeamModal()}
-                className="mt-3 w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
-              >
-                Change team
-              </button>
+              <div className="mt-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Job roster</p>
+                {bookingCleaners.length > 0 ? (
+                  <ul className="mt-2 space-y-1.5">
+                    {bookingCleaners.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-center justify-between gap-2 rounded-md border border-zinc-100 bg-zinc-50 px-2 py-1.5"
+                      >
+                        <span className="truncate text-sm font-medium text-zinc-900">
+                          {r.cleaner_name ?? r.cleaner_id}
+                        </span>
+                        <span
+                          className={
+                            String(r.role).toLowerCase() === "lead"
+                              ? "shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+                              : "shrink-0 rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-700"
+                          }
+                        >
+                          {String(r.role).toLowerCase() === "lead" ? "Lead" : "Member"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    No roster rows yet. Assign a team or use &quot;Edit job roster&quot; to add cleaners.
+                  </p>
+                )}
+                {fullBooking.team_id && bookingCleaners.length === 0 ? (
+                  <button
+                    type="button"
+                    disabled={repairRosterBusy}
+                    onClick={() => void repairRosterFromTeam()}
+                    className="mt-2 w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    {repairRosterBusy ? "Repairing roster…" : "Repair roster from team"}
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50/80 p-3 dark:border-red-900/50 dark:bg-red-950/20">
+                <p className="text-xs font-bold uppercase tracking-wide text-red-900 dark:text-red-200">
+                  Emergency reassign
+                </p>
+                <p className="mt-1 text-xs text-red-900/90 dark:text-red-100/90">
+                  Last-minute roster changes on this booking only. Does not edit team templates.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setEmergencyRosterOpen(true)}
+                  className="mt-2 w-full rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-950 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-50 dark:hover:bg-red-950/70"
+                >
+                  Edit roster
+                </button>
+              </div>
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => void openTeamModal()}
+                  className="w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
+                >
+                  Change team
+                </button>
+              </div>
             </DetailCard>
           ) : null}
           <DetailCard title="Flags">
@@ -2537,6 +2650,23 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
             </div>
           </div>
         </div>
+      ) : null}
+
+      {fullBooking?.id ? (
+        <EmergencyRosterReassignModal
+          open={emergencyRosterOpen}
+          onOpenChange={setEmergencyRosterOpen}
+          bookingId={fullBooking.id}
+          locked={Boolean(
+            (fullBooking.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0,
+          )}
+          initialRoster={bookingCleaners as EmergencyRosterCleanerRow[]}
+          onSaved={(roster) => {
+            setBookingCleaners(roster as BookingCleanerRow[]);
+            setToast({ kind: "success", text: "Team updated successfully" });
+            setDetailRefresh((n) => n + 1);
+          }}
+        />
       ) : null}
 
       {teamModalOpen ? (

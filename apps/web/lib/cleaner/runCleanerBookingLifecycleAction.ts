@@ -35,7 +35,9 @@ export async function runCleanerBookingLifecycleAction(params: {
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, cleaner_id, team_id, is_team_job, status, assignment_attempts, cleaner_response_status, en_route_at")
+    .select(
+      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, assignment_attempts, cleaner_response_status, en_route_at",
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -44,7 +46,9 @@ export async function runCleanerBookingLifecycleAction(params: {
   }
 
   const bRow = booking as {
+    id?: string;
     cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
     is_team_job?: boolean | null;
     status?: string | null;
@@ -53,7 +57,9 @@ export async function runCleanerBookingLifecycleAction(params: {
     en_route_at?: string | null;
   };
   const canAccess = await cleanerHasBookingAccess(admin, cleanerId, {
+    id: bRow.id ?? bookingId,
     cleaner_id: bRow.cleaner_id ?? null,
+    payout_owner_cleaner_id: bRow.payout_owner_cleaner_id ?? null,
     team_id: bRow.team_id ?? null,
     is_team_job: bRow.is_team_job === true,
   });

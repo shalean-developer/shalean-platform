@@ -1,6 +1,7 @@
 import crypto from "crypto";
 
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { finalizeAdminPaystackCheckout } from "@/lib/admin/adminPaystackPostInitialize";
 import {
@@ -37,6 +38,7 @@ import { aggregatePaymentLinkDeliveryStats } from "@/lib/pay/paymentLinkDelivery
 import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
+import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -132,6 +134,12 @@ type Row = {
   created_by_admin_id?: string | null;
   ignore_cleaner_conflict?: boolean | null;
   cleaner_slot_override_reason?: string | null;
+  team_id?: string | null;
+  is_team_job?: boolean | null;
+  /** Joined for list UI; null when no `team_id`. */
+  team?: { id: string; name: string | null } | null;
+  /** Canonical roster rows for list (from `booking_cleaners` + cleaner names). */
+  booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
 };
 
 function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
@@ -147,6 +155,41 @@ function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
     total_paid_zar: r.total_paid_zar,
     amount_paid_cents: r.amount_paid_cents,
   };
+}
+
+const ADMIN_LIST_ROSTER_CHUNK = 120;
+
+async function attachTeamAndRosterToBookings(admin: SupabaseClient, bookings: Row[]): Promise<Row[]> {
+  if (!bookings.length) return bookings;
+  const ids = bookings.map((r) => r.id).filter(Boolean);
+  const rosterMap = new Map<string, Array<{ cleaner_id: string; full_name: string | null; role: string }>>();
+  for (let i = 0; i < ids.length; i += ADMIN_LIST_ROSTER_CHUNK) {
+    const slice = ids.slice(i, i + ADMIN_LIST_ROSTER_CHUNK);
+    const chunk = await fetchTeamRosterByBookingIds(admin, slice);
+    for (const [bid, members] of chunk) rosterMap.set(bid, [...members]);
+  }
+
+  const teamIds = [...new Set(bookings.map((r) => String(r.team_id ?? "").trim()).filter(Boolean))];
+  const teamNameMap = new Map<string, string | null>();
+  for (let i = 0; i < teamIds.length; i += ADMIN_LIST_ROSTER_CHUNK) {
+    const slice = teamIds.slice(i, i + ADMIN_LIST_ROSTER_CHUNK);
+    const { data: teamRows, error: teamErr } = await admin.from("teams").select("id, name").in("id", slice);
+    if (teamErr) continue;
+    for (const t of teamRows ?? []) {
+      const row = t as { id?: string; name?: string | null };
+      const id = String(row.id ?? "").trim();
+      if (id) teamNameMap.set(id, row.name?.trim() ? row.name.trim() : null);
+    }
+  }
+
+  return bookings.map((r) => {
+    const tid = String(r.team_id ?? "").trim();
+    return {
+      ...r,
+      team: tid ? { id: tid, name: teamNameMap.get(tid) ?? null } : null,
+      booking_cleaners: rosterMap.get(r.id) ?? [],
+    };
+  });
 }
 
 function classifyBooking(row: Row, today: string): "today" | "upcoming" | "completed" {
@@ -203,7 +246,7 @@ export async function GET(request: Request) {
   const opsQuick = (searchParams.get("opsQuick") ?? "").trim().toLowerCase();
 
   const bookingSelect =
-    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override";
+    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect);
 
@@ -369,8 +412,10 @@ export async function GET(request: Request) {
     enriched = enriched.filter((r) => classifyBooking(r, today) === "today");
   }
 
+  const withRoster = await attachTeamAndRosterToBookings(admin, enriched);
+
   return NextResponse.json({
-    bookings: enriched,
+    bookings: withRoster,
     metrics: {
       totalBookingsToday,
       revenueTodayZar,

@@ -83,6 +83,30 @@ export async function fetchCleaners(search?: string) {
   return json.cleaners ?? [];
 }
 
+/** Cleaners for “add to team” picker: optional search, excludes current roster, capped server-side. */
+export async function fetchAdminCleanersForTeamAdd(opts: {
+  excludeTeamId: string;
+  search?: string;
+  limit?: number;
+  /** Omit or `available` (is_available) | `high_rated` (rating ≥ 4). */
+  filter?: "available" | "high_rated";
+}): Promise<AdminCleanerRow[]> {
+  const token = await getAdminToken();
+  const params = new URLSearchParams();
+  params.set("excludeTeamId", opts.excludeTeamId.trim());
+  const s = opts.search?.trim();
+  if (s) params.set("search", s);
+  if (opts.limit != null) params.set("limit", String(Math.min(200, Math.max(1, opts.limit))));
+  const f = opts.filter ?? "all";
+  if (f !== "all") params.set("filter", f);
+  const res = await fetch(`/api/admin/cleaners?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as { cleaners?: AdminCleanerRow[]; error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch cleaners.");
+  return json.cleaners ?? [];
+}
+
 /** Matches `GET /api/admin/teams` row shape (extends minimal `Team` with dispatch fields). */
 export type AdminTeamRow = {
   id: string;
@@ -100,6 +124,11 @@ export type AdminTeamMemberRow = {
   name: string;
   phone: string | null;
   joined_at: string | null;
+  /** From joined `cleaners` row for ops UI. */
+  rating?: number | null;
+  jobs_completed?: number | null;
+  is_available?: boolean | null;
+  status?: string | null;
 };
 
 export async function fetchAdminTeams(): Promise<AdminTeamRow[]> {
@@ -204,6 +233,23 @@ export async function addAdminTeamMembers(
   return typeof json.inserted === "number" ? json.inserted : 0;
 }
 
+const TEAM_ADD_CHUNK = 20;
+
+/** POST allows at most 20 IDs per request; splits larger batches with fresh idempotency keys. */
+export async function addAdminTeamMembersBatched(teamId: string, cleanerIds: string[]): Promise<number> {
+  const unique = [...new Set(cleanerIds.map((id) => id.trim()).filter(Boolean))];
+  let total = 0;
+  for (let i = 0; i < unique.length; i += TEAM_ADD_CHUNK) {
+    const chunk = unique.slice(i, i + TEAM_ADD_CHUNK);
+    const idempotencyKey =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    total += await addAdminTeamMembers(teamId, chunk, { idempotencyKey });
+  }
+  return total;
+}
+
 export async function removeAdminTeamMember(teamId: string, cleanerId: string): Promise<void> {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}/members`, {
@@ -258,8 +304,11 @@ export async function assignTeamToBookingAdmin(bookingId: string, teamId: string
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ teamId }),
   });
-  const json = (await res.json()) as { error?: string };
-  if (!res.ok) throw new Error(json.error ?? "Failed to assign team.");
+  const json = (await res.json()) as { error?: string; hint?: string };
+  if (!res.ok) {
+    const msg = res.status === 409 && json.hint ? json.hint : json.error ?? "Failed to assign team.";
+    throw new Error(msg);
+  }
 }
 
 export async function updateBookingStatus(id: string, status: string) {

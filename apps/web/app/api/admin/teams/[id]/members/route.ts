@@ -33,19 +33,43 @@ async function ensureAdmin(request: Request): Promise<AdminAuth> {
   return { ok: true, adminUserId: user.id, adminEmail: user.email ?? null };
 }
 
-type CleanerJoin = { full_name?: string | null; phone?: string | null; phone_number?: string | null } | null;
+type CleanerJoin = {
+  full_name?: string | null;
+  phone?: string | null;
+  phone_number?: string | null;
+  rating?: number | null;
+  jobs_completed?: number | null;
+  is_available?: boolean | null;
+  status?: string | null;
+} | null;
 
 function mapJoinedRow(
   cleanerId: string,
   activeFrom: string | null,
   c: CleanerJoin,
-): { cleaner_id: string; name: string; phone: string | null; joined_at: string | null } {
+): {
+  cleaner_id: string;
+  name: string;
+  phone: string | null;
+  joined_at: string | null;
+  rating: number | null;
+  jobs_completed: number | null;
+  is_available: boolean | null;
+  status: string | null;
+} {
   const phoneRaw = (c?.phone_number ?? c?.phone ?? "").trim();
+  const rating = typeof c?.rating === "number" && Number.isFinite(c.rating) ? c.rating : null;
+  const jobs =
+    typeof c?.jobs_completed === "number" && Number.isFinite(c.jobs_completed) ? Math.floor(c.jobs_completed) : null;
   return {
     cleaner_id: cleanerId,
     name: (c?.full_name ?? "").trim() || "Unknown cleaner",
     phone: phoneRaw.length > 0 ? phoneRaw : null,
     joined_at: activeFrom,
+    rating,
+    jobs_completed: jobs,
+    is_available: typeof c?.is_available === "boolean" ? c.is_available : null,
+    status: typeof c?.status === "string" && c.status.trim() ? c.status.trim() : null,
   };
 }
 
@@ -59,7 +83,9 @@ async function loadTeamMembersRoster(admin: SupabaseClient, teamId: string, page
 
   let embed = admin
     .from("team_members")
-    .select("cleaner_id, active_from, cleaners ( full_name, phone, phone_number )")
+    .select(
+      "cleaner_id, active_from, cleaners ( full_name, phone, phone_number, rating, jobs_completed, is_available, status )",
+    )
     .eq("team_id", teamId)
     .not("cleaner_id", "is", null)
     .order("active_from", { ascending: false });
@@ -91,7 +117,10 @@ async function loadTeamMembersRoster(admin: SupabaseClient, teamId: string, page
   const ids = [...new Set(rows.map((r) => String((r as { cleaner_id?: string }).cleaner_id ?? "").trim()).filter(Boolean))];
   if (ids.length === 0) return [];
 
-  const cleanRes = await admin.from("cleaners").select("id, full_name, phone, phone_number").in("id", ids);
+  const cleanRes = await admin
+    .from("cleaners")
+    .select("id, full_name, phone, phone_number, rating, jobs_completed, is_available, status")
+    .in("id", ids);
   if (cleanRes.error) {
     throw new Error(cleanRes.error.message);
   }
@@ -108,8 +137,6 @@ async function loadTeamMembersRoster(admin: SupabaseClient, teamId: string, page
     })
     .filter((m) => m.cleaner_id);
 }
-
-const ACTIVE_TEAM_JOB_STATUSES = ["pending", "assigned", "in_progress"] as const;
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await ensureAdmin(request);
@@ -447,18 +474,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     );
   }
 
-  const { data: blocking, error: activeErr } = await admin
-    .from("bookings")
-    .select("id")
-    .eq("team_id", teamId)
-    .eq("is_team_job", true)
-    .in("status", [...ACTIVE_TEAM_JOB_STATUSES])
-    .limit(1)
-    .maybeSingle();
-  if (activeErr) return NextResponse.json({ error: activeErr.message }, { status: 500 });
-  if (blocking) {
-    return NextResponse.json({ error: "Cannot modify team with active jobs." }, { status: 409 });
-  }
+  // Roster (team_members) is for future capacity / dispatch; live assignments live on booking_cleaners.
+  // Do not block removal on team bookings — existing jobs keep their roster via booking_cleaners.
 
   const { error } = await admin.from("team_members").delete().eq("team_id", teamId).eq("cleaner_id", cleanerId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

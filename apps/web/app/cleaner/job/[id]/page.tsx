@@ -269,6 +269,11 @@ export default function CleanerJobDetailPage() {
                   Team job
                 </Badge>
               ) : null}
+              {row.is_team_job && row.is_lead_cleaner ? (
+                <Badge className="border-violet-200 bg-violet-100 font-medium text-violet-950 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-100">
+                  Team lead
+                </Badge>
+              ) : null}
             </div>
             <div>
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{view.customerName}</h2>
@@ -327,6 +332,23 @@ export default function CleanerJobDetailPage() {
                 <ul className="mt-2 list-inside list-disc space-y-1 text-zinc-800 dark:text-zinc-100">
                   {view.scopeLines.map((line, i) => (
                     <li key={`${i}-${line}`}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {row.is_team_job && Array.isArray(row.team_roster) && row.team_roster.length > 0 ? (
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/40">
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Team on this job</p>
+                <ul className="mt-2 space-y-2">
+                  {row.team_roster.map((m) => (
+                    <li key={m.cleaner_id} className="flex flex-wrap items-center gap-2 text-zinc-800 dark:text-zinc-100">
+                      <span className="font-medium">{m.full_name?.trim() || "Cleaner"}</span>
+                      {m.role === "lead" ? (
+                        <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wide">
+                          Lead
+                        </Badge>
+                      ) : null}
+                    </li>
                   ))}
                 </ul>
               </div>

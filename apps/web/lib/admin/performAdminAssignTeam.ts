@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
-import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-
-/** Per-member team job payout (cents) — aligned with ops smoke / cleaner earnings expectations. */
-export const ADMIN_TEAM_MEMBER_PAYOUT_CENTS = 25_000;
+import {
+  buildTeamJobMemberPayoutInsertRows,
+  resolveTeamCleanerPoolCents,
+} from "@/lib/payout/teamRosterPayoutAllocation";
 
 type BookingRow = {
   id: string;
@@ -188,21 +189,17 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     };
   }
 
-  const { error: updErr } = await admin
-    .from("bookings")
-    .update({
-      team_id: tid,
-      is_team_job: true,
-      cleaner_id: null,
-      payout_owner_cleaner_id: payoutOwnerCleanerId,
-      team_member_count_snapshot: rosterCount,
-      cleaner_response_status: CLEANER_RESPONSE.PENDING,
-      en_route_at: null,
-      started_at: null,
-    })
-    .eq("id", bookingId);
-  if (updErr) {
-    return { ok: false, httpStatus: 500, error: updErr.message };
+  const atomic = await assignTeamAndSyncRoster(admin, {
+    bookingId,
+    teamId: tid,
+    payoutOwnerCleanerId,
+    teamMemberCountSnapshot: rosterCount,
+    variant: "admin",
+    source: "admin",
+  });
+  if (!atomic.ok) {
+    const locked = /finalized|roster locked|cleaner line earnings finalized/i.test(atomic.message);
+    return { ok: false, httpStatus: locked ? 409 : 500, error: atomic.message };
   }
 
   const { error: delPayErr } = await admin.from("team_job_member_payouts").delete().eq("booking_id", bookingId);
@@ -215,13 +212,23 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     return { ok: false, httpStatus: 500, error: `Failed clearing team assignment rows: ${delAssignErr.message}` };
   }
 
-  const payoutRows = activeCleanerIds.map((cleaner_id) => ({
-    booking_id: bookingId,
-    team_id: tid,
-    cleaner_id,
-    payout_cents: ADMIN_TEAM_MEMBER_PAYOUT_CENTS,
-    status: "pending",
-  }));
+  const poolCents = await resolveTeamCleanerPoolCents(admin, bookingId);
+  const { data: rosterRows, error: rosterErr } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id, role, payout_weight, lead_bonus_cents")
+    .eq("booking_id", bookingId)
+    .order("cleaner_id", { ascending: true });
+  if (rosterErr) {
+    return { ok: false, httpStatus: 500, error: `Failed loading roster for payout split: ${rosterErr.message}` };
+  }
+
+  const payoutRows = buildTeamJobMemberPayoutInsertRows({
+    bookingId,
+    teamId: tid,
+    poolCents,
+    rosterRows: rosterRows ?? [],
+    fallbackCleanerIds: activeCleanerIds,
+  });
   if (payoutRows.length > 0) {
     const { error: insPayErr } = await admin.from("team_job_member_payouts").insert(payoutRows);
     if (insPayErr) {

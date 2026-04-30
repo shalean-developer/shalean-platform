@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { HomeLocation } from "@/lib/home/data";
+import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
 
 type LocationsProps = {
   locations: HomeLocation[];
@@ -17,7 +18,12 @@ export function Locations({ locations }: LocationsProps) {
         </div>
         <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {locations.map((location) => {
-            const href = location.slug ? `/cleaning-services/${location.slug}` : "#hero-booking";
+            const href = location.slug
+              ? location.slug === "cape-town"
+                ? "/services"
+                : (locationSeoPathFromLegacyAreaSlug(location.slug) ??
+                  `/locations/${location.slug.replace(/\/$/, "")}-cleaning-services`)
+              : "#hero-booking";
             return (
               <Link
                 key={location.id}

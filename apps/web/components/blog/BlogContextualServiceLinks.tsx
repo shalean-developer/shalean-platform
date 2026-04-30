@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BLOG_CONTEXT_SERVICE_LINKS } from "@/lib/blog/blogServiceContextLinks";
 
 const proseArticle =
-  "prose prose-zinc max-w-3xl prose-headings:scroll-mt-24 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline";
+  "prose prose-zinc max-w-3xl prose-headings:scroll-mt-24 prose-a:text-slate-700 prose-a:no-underline prose-a:transition-colors prose-a:duration-200 hover:prose-a:text-blue-600 hover:prose-a:underline prose-a:underline-offset-4";
 
 export function BlogContextualServiceLinks() {
   return (

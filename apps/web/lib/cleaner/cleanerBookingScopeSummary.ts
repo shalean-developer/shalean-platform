@@ -154,19 +154,8 @@ export function cleanerBookingScopeLinesFromLineItems(items: readonly CleanerBoo
   return lines.length > 0 ? lines : null;
 }
 
-/**
- * Human-readable scope for cleaner UI — **only** from persisted booking columns and
- * `booking_snapshot.locked` / `flat` / `extras` JSON. Never merges a full service catalog.
- */
-export function cleanerBookingScopeLines(row: CleanerBookingScopeSource): string[] {
-  const fromLi =
-    Array.isArray(row.lineItems) && row.lineItems.length > 0
-      ? cleanerBookingScopeLinesFromLineItems(row.lineItems)
-      : null;
-  if (fromLi?.length) {
-    return fromLi;
-  }
-
+/** Scope lines from `bookings` columns + snapshot only (no `booking_line_items`). */
+function buildScopeLinesFromColumnsAndSnapshot(row: CleanerBookingScopeSource): string[] {
   const rec = row as Record<string, unknown>;
   const snap = row.booking_snapshot as BookingSnapshotV1 | null | undefined;
   const flat = snapshotFlat(snap);
@@ -199,6 +188,34 @@ export function cleanerBookingScopeLines(row: CleanerBookingScopeSource): string
     }
   }
   return lines;
+}
+
+/**
+ * Human-readable scope for cleaner UI — persisted booking columns, snapshot, and
+ * `booking_line_items` when they carry room/extra detail. Bundled monthly line items
+ * (base + extra rows only) do not replace bedroom/bathroom counts on the booking row.
+ */
+export function cleanerBookingScopeLines(row: CleanerBookingScopeSource): string[] {
+  const baseLines = buildScopeLinesFromColumnsAndSnapshot(row);
+
+  const lineItems = Array.isArray(row.lineItems) && row.lineItems.length > 0 ? row.lineItems : null;
+  const liLines = lineItems ? cleanerBookingScopeLinesFromLineItems(lineItems) : null;
+  if (!liLines?.length) {
+    return baseLines;
+  }
+
+  const liRoom = liLines.find((l) => l.startsWith("Rooms:"));
+  const baseRoom = baseLines.find((l) => l.startsWith("Rooms:"));
+  const liExtras = liLines.find((l) => l.startsWith("Extras:"));
+  const baseExtras = baseLines.find((l) => l.startsWith("Extras:"));
+
+  const merged: string[] = [];
+  if (liRoom) merged.push(liRoom);
+  else if (baseRoom) merged.push(baseRoom);
+  if (liExtras) merged.push(liExtras);
+  else if (baseExtras) merged.push(baseExtras);
+
+  return merged.length > 0 ? merged : baseLines;
 }
 
 function cardDetailsFromLineItems(items: readonly CleanerBookingLineItemWire[]): {
@@ -240,28 +257,35 @@ export function cleanerBookingCardDetailsFromRow(row: CleanerBookingScopeSource)
   bathrooms: number | null;
   extraNames: string[];
 } {
-  const fromLi =
-    Array.isArray(row.lineItems) && row.lineItems.length > 0 ? cardDetailsFromLineItems(row.lineItems) : null;
-  if (fromLi) return fromLi;
-
   const rec = row as Record<string, unknown>;
   const snap = row.booking_snapshot as BookingSnapshotV1 | null | undefined;
   const flat = snapshotFlat(snap);
   const locked = snapshotLocked(snap);
 
-  const bedrooms =
+  const bedroomsBase =
     positiveIntOrNull(rec.rooms) ?? positiveIntOrNull(flat?.rooms) ?? positiveIntOrNull(locked?.rooms);
-  const bathrooms =
+  const bathroomsBase =
     positiveIntOrNull(rec.bathrooms) ??
     positiveIntOrNull(flat?.bathrooms) ??
     positiveIntOrNull(locked?.bathrooms);
 
+  let extraNamesBase: string[] = [];
   const fromDbLabels = extrasShortLabelsFromDbJson(row.extras);
   if (fromDbLabels.length > 0) {
-    return { bedrooms, bathrooms, extraNames: fromDbLabels };
+    extraNamesBase = fromDbLabels;
+  } else if (locked) {
+    extraNamesBase = extrasShortLabelsFromLocked(locked);
   }
-  if (locked) {
-    return { bedrooms, bathrooms, extraNames: extrasShortLabelsFromLocked(locked) };
+
+  const lineItems = Array.isArray(row.lineItems) && row.lineItems.length > 0 ? row.lineItems : null;
+  if (!lineItems) {
+    return { bedrooms: bedroomsBase, bathrooms: bathroomsBase, extraNames: extraNamesBase };
   }
-  return { bedrooms, bathrooms, extraNames: [] };
+
+  const fromLi = cardDetailsFromLineItems(lineItems);
+  return {
+    bedrooms: fromLi.bedrooms ?? bedroomsBase,
+    bathrooms: fromLi.bathrooms ?? bathroomsBase,
+    extraNames: fromLi.extraNames.length > 0 ? fromLi.extraNames : extraNamesBase,
+  };
 }

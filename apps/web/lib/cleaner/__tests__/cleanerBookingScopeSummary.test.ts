@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
+import {
+  cleanerBookingCardDetailsFromRow,
+  cleanerBookingScopeLines,
+} from "@/lib/cleaner/cleanerBookingScopeSummary";
 
 describe("cleanerBookingScopeLines", () => {
   it("prefers top-level rooms/bathrooms and extras JSON from the row", () => {
@@ -60,6 +63,28 @@ describe("cleanerBookingScopeLines", () => {
       booking_snapshot: null,
     });
     expect(lines).toEqual(["Rooms: 2 bedrooms, 1 bathroom", "Extras: Inside Oven"]);
+  });
+
+  it("merges row/snapshot rooms with bundled line items that omit room rows", () => {
+    const row = {
+      rooms: 3,
+      bathrooms: 2,
+      extras: [{ slug: "inside-oven", name: "Inside Oven", price: 59 }],
+      lineItems: [
+        { item_type: "base", slug: "monthly-bundle", name: "Monthly clean", quantity: 1 },
+        { item_type: "extra", slug: "inside-oven", name: "Inside Oven", quantity: 1 },
+      ],
+      booking_snapshot: null,
+    };
+    expect(cleanerBookingScopeLines(row)).toEqual([
+      "Rooms: 3 bedrooms, 2 bathrooms",
+      "Extras: Inside Oven",
+    ]);
+    expect(cleanerBookingCardDetailsFromRow(row)).toEqual({
+      bedrooms: 3,
+      bathrooms: 2,
+      extraNames: ["Inside Oven"],
+    });
   });
 
   it("title-cases locked extra slugs when line items are missing", () => {

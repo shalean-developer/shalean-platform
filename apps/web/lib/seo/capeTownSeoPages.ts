@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import {
+  getProgrammaticLocation,
+  PROGRAMMATIC_LOCATIONS,
+  type ProgrammaticLocationSlug,
+} from "@/lib/seo/locations";
 
 const SITE = "https://www.shalean.co.za";
 
@@ -13,18 +18,10 @@ export const CAPE_TOWN_SEO_SERVICE_SLUGS = [
 
 export type CapeTownSeoServiceSlug = (typeof CAPE_TOWN_SEO_SERVICE_SLUGS)[number];
 
-export const LOCATION_SEO_SLUGS = [
-  "claremont-cleaning-services",
-  "wynberg-cleaning-services",
-  "rondebosch-cleaning-services",
-  "kenilworth-cleaning-services",
-  "observatory-cleaning-services",
-  "newlands-cleaning-services",
-  "rosebank-cleaning-services",
-  "sea-point-cleaning-services",
-] as const;
+/** Canonical slugs for `/locations/[slug]` — driven by `PROGRAMMATIC_LOCATIONS`. */
+export const LOCATION_SEO_SLUGS = PROGRAMMATIC_LOCATIONS.map((l) => l.slug) as readonly ProgrammaticLocationSlug[];
 
-export type LocationSeoSlug = (typeof LOCATION_SEO_SLUGS)[number];
+export type LocationSeoSlug = ProgrammaticLocationSlug;
 
 export type CapeTownServiceSeoBlock = {
   slug: CapeTownSeoServiceSlug;
@@ -65,6 +62,8 @@ export type LocationSeoBlock = {
   localAngle: string[];
   whyChoose: string[];
   bookingLabel: string;
+  /** Optional extra FAQs; page falls back to programmatic defaults when omitted. */
+  faqs?: { q: string; a: string }[];
 };
 
 export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServiceSeoBlock> = {
@@ -656,19 +655,372 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Support if something is missed—especially important before guest check-ins or lease inspections.",
     ],
   },
+  "green-point-cleaning-services": {
+    slug: "green-point-cleaning-services",
+    path: "/locations/green-point-cleaning-services",
+    title: "Green Point Cleaning Cape Town | Atlantic Seaboard | Shalean",
+    description:
+      "Green Point cleaning in Cape Town for Atlantic Seaboard apartments, promenade living, and busy hosts. Standard, deep, and Airbnb-ready cleaning—book Shalean online.",
+    ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
+    h1: "Green Point cleaning services in Cape Town for Seaboard apartments and walkable living",
+    bookingLabel: "cleaning in Green Point",
+    intro: [
+      "Green Point pairs compact Atlantic Seaboard blocks with Main Road energy—sea breeze, wind-blown grit, and kitchens that work hard between gym runs and dinner guests.",
+      "Shalean dispatches vetted cleaners across Green Point with metro-wide transparent quoting: bedrooms, bathrooms, extras, and intensity are locked in online before checkout.",
+      "Whether you need house cleaning Cape Town hosts rely on between stays or a deeper reset before a handover, scoped visits keep bathrooms and kitchens aligned with your quote.",
+    ],
+    localAngle: [
+      "Lifts, intercoms, and basement bays differ by block—pin your entrance and note remotes or concierge steps so teams arrive on time.",
+      "Promenade-facing balconies collect salt spray—flag outdoor areas in your booking when you want them in scope.",
+    ],
+    whyChoose: [
+      "Host-friendly turnover cleans plus dependable standard cycles for busy Green Point households.",
+      "Clear totals before you pay—built for real apartment layouts across Cape Town.",
+      "Support if something is missed before check-ins or inspections.",
+    ],
+  },
+  "woodstock-cleaning-services": {
+    slug: "woodstock-cleaning-services",
+    path: "/locations/woodstock-cleaning-services",
+    title: "Woodstock Cleaning Cape Town | City Bowl | Shalean",
+    description:
+      "Woodstock cleaning in Cape Town for creative studios, loft apartments, and mixed-use streets. Standard, deep, and move-out cleaning—book vetted Shalean teams online.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "Woodstock cleaning services in Cape Town for lofts, studios, and fast-moving households",
+    bookingLabel: "cleaning in Woodstock",
+    intro: [
+      "Woodstock blends creative studios, loft conversions, and walkable streets where dust from nearby builds and high-use kitchens stack up fast between professional visits.",
+      "Shalean serves Woodstock with the same Cape Town booking flow: address, rooms, extras, and service tier produce an instant total before you confirm.",
+      "From compact flats to split-level homes, scoped house cleaning Cape Town residents book here stays honest about time on site—especially when move-out professional cleaning services need agency-ready detail.",
+    ],
+    localAngle: [
+      "Street parking and loading zones vary—precise pins and access notes prevent delays on busy arterials.",
+      "If you are near ongoing construction, mention dust levels so vacuum time matches reality.",
+    ],
+    whyChoose: [
+      "Move-out and deep options mapped to rental and loft layouts common in Woodstock.",
+      "Online booking with Cape Town-wide pricing logic and clear scope before checkout.",
+      "Vetted cleaners and post-visit feedback so quality stays accountable.",
+    ],
+  },
+  "gardens-cleaning-services": {
+    slug: "gardens-cleaning-services",
+    path: "/locations/gardens-cleaning-services",
+    title: "Gardens Cleaning Cape Town | City Bowl | Shalean",
+    description:
+      "Gardens cleaning in Cape Town for heritage blocks, student-adjacent flats, and City Bowl professionals. Standard, deep, and Airbnb cleaning—book Shalean online.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Gardens cleaning services in Cape Town for City Bowl apartments and heritage corridors",
+    bookingLabel: "cleaning in Gardens",
+    intro: [
+      "Gardens mixes heritage apartment blocks, steep streets, and professionals who want predictable resets between Cape Town’s festival weeks and ordinary work nights.",
+      "Shalean schedules cleaners across Gardens with transparent quoting: you set rooms, bathrooms, extras, and intensity, then confirm pricing before checkout.",
+      "Hosts near Kloof Street corridors often need home cleaning services Cape Town guests judge on photos first—flag linen resets and balcony dust so professional cleaning services match your calendar.",
+    ],
+    localAngle: [
+      "Heritage blocks often mean stairs and narrow passages—note equipment carry constraints in booking comments.",
+      "Short-stay hosts should flag tight check-in windows so turnover cleans match guest expectations.",
+    ],
+    whyChoose: [
+      "Guest-ready Airbnb cleans and dependable standard cycles for busy Gardens households.",
+      "Cape Town-wide pricing with suburb-aware notes for access and pets.",
+      "Support channel if something is missed before handovers or guest arrivals.",
+    ],
+  },
+  "plumstead-cleaning-services": {
+    slug: "plumstead-cleaning-services",
+    path: "/locations/plumstead-cleaning-services",
+    title: "Plumstead Cleaning Cape Town | Southern Suburbs | Shalean",
+    description:
+      "Plumstead cleaning in Cape Town for family homes, gardens, and busy school-week calendars. Standard, deep, and move-out cleaning—book Shalean online.",
+    ogImage: "/images/marketing/house-deep-cleaning-cape-town.webp",
+    h1: "Plumstead cleaning services in Cape Town for Southern Suburb homes and leafy streets",
+    bookingLabel: "cleaning in Plumstead",
+    intro: [
+      "Plumstead sits where Southern Suburb gardens, pets, and school-week traffic shape how homes accumulate dust, sand, and kitchen grease between visits.",
+      "Shalean supports Plumstead with metro-consistent online booking: choose bedrooms, bathrooms, extras, and intensity, then lock a slot that fits lifts and errands.",
+      "Whether you compare home cleaning services Cape Town wide or want suburb-aware notes for driveways and dogs, scoped professional cleaning services keep quotes aligned with on-the-day time.",
+    ],
+    localAngle: [
+      "Many properties have side drives or shared walls—clear gate codes and parking notes help teams arrive without circling cul-de-sacs.",
+      "Leafy streets mean outdoor dust—mention pets and floor types so vacuum time stays realistic.",
+    ],
+    whyChoose: [
+      "Structured checklists from standard upkeep through deep and move-out cleans tuned to suburban layouts.",
+      "Transparent Cape Town pricing before checkout.",
+      "Feedback after visits so missed details can be corrected quickly.",
+    ],
+  },
+  "bergvliet-cleaning-services": {
+    slug: "bergvliet-cleaning-services",
+    path: "/locations/bergvliet-cleaning-services",
+    title: "Bergvliet Cleaning Cape Town | Southern Suburbs | Shalean",
+    description:
+      "Bergvliet cleaning in Cape Town for family homes, leafy streets, and busy school-week calendars. Standard, deep, and move-out cleaning—book Shalean online.",
+    ogImage: "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+    h1: "Bergvliet cleaning services in Cape Town for Southern Suburb homes near parks and schools",
+    bookingLabel: "cleaning in Bergvliet",
+    intro: [
+      "Bergvliet pairs established gardens with quiet residential pockets where pets, weekend sport, and kitchen traffic add up between professional visits.",
+      "Shalean schedules vetted cleaners across Bergvliet with the same transparent Cape Town quoting model: bedrooms, bathrooms, extras, and intensity are confirmed online before checkout.",
+      "Whether you need recurring standard visits or move-out professional cleaning services aligned with agency checklists, scoped quotes keep time on site honest for real Bergvliet layouts.",
+    ],
+    localAngle: [
+      "Driveways and side gates vary—clear access notes and parking guidance help teams arrive without circling narrow streets.",
+      "Leaf litter and outdoor dust spike in windy weeks—mention pets and floor finishes so vacuum time matches your home.",
+    ],
+    whyChoose: [
+      "Deep and standard options mapped to suburban homes common in Bergvliet.",
+      "Instant totals before you pay—built for Cape Town addresses and real room counts.",
+      "Support if something is missed so quality stays visible to operations.",
+    ],
+  },
+  "fresnaye-cleaning-services": {
+    slug: "fresnaye-cleaning-services",
+    path: "/locations/fresnaye-cleaning-services",
+    title: "Fresnaye Cleaning Cape Town | Atlantic Seaboard | Shalean",
+    description:
+      "Fresnaye cleaning in Cape Town for hillside homes, sea views, and busy Atlantic Seaboard schedules. Standard, deep, and Airbnb-ready cleaning—book Shalean online.",
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Fresnaye cleaning services in Cape Town for Seaboard homes and high-traffic kitchens",
+    bookingLabel: "cleaning in Fresnaye",
+    intro: [
+      "Fresnaye blends hillside homes with Atlantic Seaboard exposure—wind-blown grit, salt air, and kitchens that work hard between guests and family weeks.",
+      "Shalean dispatches vetted cleaners across Fresnaye with metro-wide transparent quoting: you set rooms, bathrooms, extras, and intensity, then confirm pricing before checkout.",
+      "Hosts comparing home cleaning services Cape Town wide still benefit from suburb-aware notes—balcony resets, linen, and tight check-in windows shape how professional cleaning services allocate time.",
+    ],
+    localAngle: [
+      "Split levels and steep drives are common—precise pins and parking guidance prevent delays on narrow roads.",
+      "Sea-facing decks collect salt spray—flag outdoor areas when you want them included in scope.",
+    ],
+    whyChoose: [
+      "Turnover-friendly Airbnb cleans and dependable standard cycles for busy Fresnaye households.",
+      "Clear totals before you pay—built for real Cape Town apartment and freestanding layouts.",
+      "Support if something is missed before guest arrivals or handovers.",
+    ],
+  },
+  "bantry-bay-cleaning-services": {
+    slug: "bantry-bay-cleaning-services",
+    path: "/locations/bantry-bay-cleaning-services",
+    title: "Bantry Bay Cleaning Cape Town | Atlantic Seaboard | Shalean",
+    description:
+      "Bantry Bay cleaning in Cape Town for cliff-side homes, luxury apartments, and wind-exposed balconies. Standard, deep, and Airbnb cleaning—book Shalean online.",
+    ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
+    h1: "Bantry Bay cleaning services in Cape Town for Atlantic Seaboard homes and compact luxury layouts",
+    bookingLabel: "cleaning in Bantry Bay",
+    intro: [
+      "Bantry Bay sits where Atlantic Seaboard exposure meets compact luxury layouts—salt breeze, wind-blown dust, and high-use kitchens stack up fast between professional visits.",
+      "Shalean supports Bantry Bay with the same Cape Town booking flow: address, rooms, extras, and service tier produce an instant total before you confirm.",
+      "Whether you need house cleaning Cape Town hosts rely on between stays or a deeper reset before a handover, scoped visits keep bathrooms and kitchens aligned with your quote.",
+    ],
+    localAngle: [
+      "Security gates and intercoms vary by block—note remotes, concierge steps, and loading bays so teams arrive smoothly.",
+      "Wind-exposed balconies collect grit quickly—mention outdoor areas in your booking when you want them included.",
+    ],
+    whyChoose: [
+      "Host-ready turnover cleans plus dependable standard cycles for busy Bantry Bay households.",
+      "Transparent Cape Town pricing before checkout.",
+      "Feedback after visits so missed details can be corrected quickly.",
+    ],
+  },
+  "camps-bay-cleaning-services": {
+    slug: "camps-bay-cleaning-services",
+    path: "/locations/camps-bay-cleaning-services",
+    title: "Camps Bay Cleaning Cape Town | Atlantic Seaboard | Shalean",
+    description:
+      "Camps Bay cleaning in Cape Town for beach-adjacent apartments, villas, and busy holiday calendars. Standard, deep, and Airbnb-ready cleaning—book Shalean online.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Camps Bay cleaning services in Cape Town for Seaboard villas, apartments, and guest-ready homes",
+    bookingLabel: "cleaning in Camps Bay",
+    intro: [
+      "Camps Bay combines beach-adjacent living with high-turnover guest calendars—sand, salt air, and kitchens that reset fast between check-ins.",
+      "Shalean schedules cleaners across Camps Bay with transparent quoting: bedrooms, bathrooms, extras, and intensity are locked in online before checkout.",
+      "When you compare home cleaning services Cape Town hosts rely on for photos-first impressions, flag linen resets, balcony dust, and pool-adjacent grit so professional cleaning services match your calendar.",
+    ],
+    localAngle: [
+      "Hillside drives and stepped access are common—precise pins and parking notes prevent delays during peak season traffic.",
+      "Short-stay hosts should flag tight turnover windows so teams can sequence bathrooms, kitchens, and outdoor areas realistically.",
+    ],
+    whyChoose: [
+      "Guest-ready Airbnb cleans and dependable standard cycles for busy Camps Bay households.",
+      "Cape Town-wide pricing logic with suburb-aware notes for access and pets.",
+      "Support channel if something is missed before guest arrivals.",
+    ],
+  },
+  "tamboerskloof-cleaning-services": {
+    slug: "tamboerskloof-cleaning-services",
+    path: "/locations/tamboerskloof-cleaning-services",
+    title: "Tamboerskloof Cleaning Cape Town | City Bowl | Shalean",
+    description:
+      "Tamboerskloof cleaning in Cape Town for Victorian terraces, compact flats, and Kloof-adjacent living. Standard, deep, and move-out cleaning—book Shalean online.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "Tamboerskloof cleaning services in Cape Town for City Bowl terraces, flats, and walkable streets",
+    bookingLabel: "cleaning in Tamboerskloof",
+    intro: [
+      "Tamboerskloof blends Victorian terraces with compact flats where stairs, pets, and busy weeknight kitchens add up between professional visits.",
+      "Shalean serves Tamboerskloof with the same Cape Town booking model: set your address, room count, and add-ons, then see an instant total before you pay.",
+      "Whether you need recurring standard visits or move-out professional cleaning services aligned with agency checklists, scoped quotes keep time on site honest for real City Bowl layouts.",
+    ],
+    localAngle: [
+      "Street parking and loading zones vary—precise pins and access notes prevent delays on busy arterials.",
+      "Heritage homes often mean stairs and narrow passages—note equipment carry constraints in booking comments.",
+    ],
+    whyChoose: [
+      "Move-out and deep options mapped to rental and terrace layouts common in Tamboerskloof.",
+      "Online booking with clear scope before checkout.",
+      "Vetted cleaners and post-visit feedback so quality stays accountable.",
+    ],
+  },
+  "vredehoek-cleaning-services": {
+    slug: "vredehoek-cleaning-services",
+    path: "/locations/vredehoek-cleaning-services",
+    title: "Vredehoek Cleaning Cape Town | City Bowl | Shalean",
+    description:
+      "Vredehoek cleaning in Cape Town for hillside apartments, wind-exposed balconies, and City Bowl professionals. Standard, deep, and Airbnb cleaning—book Shalean online.",
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Vredehoek cleaning services in Cape Town for hillside flats and wind-exposed City Bowl homes",
+    bookingLabel: "cleaning in Vredehoek",
+    intro: [
+      "Vredehoek sits on City Bowl slopes where wind-blown dust, compact kitchens, and balcony exposure add up fast between professional visits.",
+      "Shalean supports Vredehoek customers with metro-consistent online booking: choose rooms, bathrooms, extras, and intensity, then confirm pricing before checkout.",
+      "Hosts near Kloof-adjacent corridors often need home cleaning services Cape Town guests judge on photos first—flag linen resets and balcony dust so professional cleaning services match your calendar.",
+    ],
+    localAngle: [
+      "Split-level apartments and stepped access are common—precise pins and parking guidance prevent delays.",
+      "Short-stay hosts should flag tight check-in windows so turnover cleans match guest expectations.",
+    ],
+    whyChoose: [
+      "Guest-ready Airbnb cleans and dependable standard cycles for busy Vredehoek households.",
+      "Transparent Cape Town pricing with suburb-aware notes for access and pets.",
+      "Support channel if something is missed before handovers or guest arrivals.",
+    ],
+  },
+  "zonnebloem-cleaning-services": {
+    slug: "zonnebloem-cleaning-services",
+    path: "/locations/zonnebloem-cleaning-services",
+    title: "Zonnebloem Cleaning Cape Town | City Bowl | Shalean",
+    description:
+      "Zonnebloem cleaning in Cape Town for apartment blocks, mixed-use streets, and City Bowl commuters. Standard, deep, and move-out cleaning—book Shalean online.",
+    ogImage: "/images/marketing/house-deep-cleaning-cape-town.webp",
+    h1: "Zonnebloem cleaning services in Cape Town for City Bowl apartments and mixed-use corridors",
+    bookingLabel: "cleaning in Zonnebloem",
+    intro: [
+      "Zonnebloem blends apartment blocks with mixed-use streets where lifts, compact kitchens, and commuter-heavy weeks mean predictable cleaning resets matter.",
+      "Shalean schedules cleaners across Zonnebloem with transparent quoting: you set rooms, bathrooms, extras, and intensity, then confirm pricing before checkout.",
+      "Whether you need house cleaning Cape Town renters split fairly or move-out professional cleaning services aligned with agency checklists, scoped visits keep quotes aligned with on-the-day time.",
+    ],
+    localAngle: [
+      "Building access and basement parking vary—pin your entrance and mention remotes or security desks so teams arrive without delays.",
+      "If you are near arterial roads, mention dust levels so vacuum time matches reality.",
+    ],
+    whyChoose: [
+      "Move-out and deep options mapped to rental layouts common in Zonnebloem.",
+      "Online booking with Cape Town-wide pricing logic and clear scope before checkout.",
+      "Vetted cleaners and post-visit feedback so quality stays accountable.",
+    ],
+  },
+  "constantia-cleaning-services": {
+    slug: "constantia-cleaning-services",
+    path: "/locations/constantia-cleaning-services",
+    title: "Constantia Cleaning Cape Town | Large Homes | Shalean",
+    description:
+      "Constantia cleaning in Cape Town for spacious homes, family kitchens, and recurring deep resets. Book vetted Shalean cleaners online with clear scope.",
+    ogImage: "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+    h1: "Constantia cleaning services in Cape Town for leafy Southern Suburb homes",
+    bookingLabel: "cleaning in Constantia",
+    intro: [
+      "Constantia combines larger plots, tree canopy, and entertainment-heavy kitchens—dust, pollen, and pet traffic add up between visits.",
+      "Shalean schedules Constantia with the same transparent Cape Town flow: bedrooms, bathrooms, extras, and tier—then confirm pricing before checkout.",
+      "Whether you need house cleaning Cape Town families rely on between terms or deep professional cleaning services before guests, scoped visits keep time honest for real layouts.",
+    ],
+    localAngle: [
+      "Driveways, side access, and pool areas vary—mention parking and any equipment that should stay dry on mop day.",
+      "Older wooden floors and stone finishes benefit from notes on preferred products when you have sensitivities.",
+    ],
+    whyChoose: [
+      "Standard, deep, and move-out options sized for larger Constantia homes.",
+      "Vetted teams with structured checklists suited to Southern Suburb dust and pet traffic.",
+      "Clear totals online before you confirm—no surprise surcharges for agreed scope.",
+    ],
+  },
+  "table-view-cleaning-services": {
+    slug: "table-view-cleaning-services",
+    path: "/locations/table-view-cleaning-services",
+    title: "Table View Cleaning Cape Town | Coastal Homes | Shalean",
+    description:
+      "Table View cleaning in Cape Town for family houses, coastal apartments, and Airbnb turnovers. Standard, deep, and move-out—book Shalean online.",
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Table View cleaning services in Cape Town near the beach and Blouberg corridor",
+    bookingLabel: "cleaning in Table View",
+    intro: [
+      "Table View pairs beach sand with busy family calendars—balconies, passages, and open-plan kitchens need realistic vacuum and mop time.",
+      "Shalean supports Table View with metro-wide booking: set rooms, bathrooms, extras, and intensity, then lock a slot that fits coastal humidity and drying.",
+      "Hosts and residents alike use home cleaning services Cape Town trusts when turnovers are tight—flag guest linen and balcony grit so professional cleaning services match the clock.",
+    ],
+    localAngle: [
+      "Windy weeks push grit through sliders—mention tracks and outdoor mats so crews plan dry passes before wet work.",
+      "Estate and complex rules differ—leave intercom, remotes, and visitor parking notes in your booking.",
+    ],
+    whyChoose: [
+      "Airbnb-ready turnovers and dependable standard cycles for Table View households.",
+      "Transparent Cape Town pricing with suburb-aware notes for sand, pets, and access.",
+      "Support channel if something is missed before guests or handovers.",
+    ],
+  },
+  "durbanville-cleaning-services": {
+    slug: "durbanville-cleaning-services",
+    path: "/locations/durbanville-cleaning-services",
+    title: "Durbanville Cleaning Cape Town | Family Homes | Shalean",
+    description:
+      "Durbanville cleaning in Cape Town for larger houses, townhouses, and school-week schedules. Book standard, deep, or move-out cleaning online.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "Durbanville cleaning services in Cape Town for Northern Suburb family homes",
+    bookingLabel: "cleaning in Durbanville",
+    intro: [
+      "Durbanville skews toward multi-bedroom homes, townhouses, and busy school-week kitchens—bathrooms and floors work harder than compact flats.",
+      "Shalean dispatches vetted cleaners across Durbanville with scoped quotes: you choose rooms, bathrooms, extras, and tier before checkout.",
+      "From recurring house cleaning Cape Town families split fairly to move-out professional cleaning services before handovers, Durbanville bookings stay tied to real on-site time.",
+    ],
+    localAngle: [
+      "Driveways and estate gates vary—precise pins and remotes prevent half-slot delays.",
+      "Garden dust and pet hair are common—note pets and floor types so vacuum passes match reality.",
+    ],
+    whyChoose: [
+      "Deep and move-out options mapped to larger Northern Suburb layouts.",
+      "Online booking with clear Cape Town totals before you pay.",
+      "Feedback loop after visits so quality stays visible to operations.",
+    ],
+  },
+  "bellville-cleaning-services": {
+    slug: "bellville-cleaning-services",
+    path: "/locations/bellville-cleaning-services",
+    title: "Bellville Cleaning Cape Town | Rentals & Homes | Shalean",
+    description:
+      "Bellville cleaning in Cape Town for apartments, family houses, and end-of-lease handovers. Standard, deep, and move-out—book Shalean online.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Bellville cleaning services in Cape Town for practical Northern Suburb households",
+    bookingLabel: "cleaning in Bellville",
+    intro: [
+      "Bellville balances rentals, family houses, and move-out pressure—kitchens, bathrooms, and floors need dependable scope without guesswork.",
+      "Shalean supports Bellville with the same Cape Town booking model: rooms, bathrooms, extras, and tier—then confirm pricing before checkout.",
+      "Whether you need home cleaning services Cape Town renters book weekly or move-out professional cleaning services aligned with agencies, notes on access keep visits smooth.",
+    ],
+    localAngle: [
+      "Complex security and visitor parking vary—mention boom gates, remotes, and basement bays.",
+      "End-of-lease windows are tight—flag oven and fridge add-ons early so time stays honest.",
+    ],
+    whyChoose: [
+      "Move-out and deep options suited to rental and family layouts common in Bellville.",
+      "Transparent pricing with clear scope before you confirm.",
+      "Vetted cleaners and structured checklists for high-traffic wet rooms.",
+    ],
+  },
 };
 
 /** Short suburb label for keyword-rich cross-links (e.g. “Airbnb cleaning in Claremont”). */
-export const LOCATION_SEO_SHORT_PLACE: Record<LocationSeoSlug, string> = {
-  "claremont-cleaning-services": "Claremont",
-  "wynberg-cleaning-services": "Wynberg",
-  "rondebosch-cleaning-services": "Rondebosch",
-  "kenilworth-cleaning-services": "Kenilworth",
-  "observatory-cleaning-services": "Observatory",
-  "newlands-cleaning-services": "Newlands",
-  "rosebank-cleaning-services": "Rosebank",
-  "sea-point-cleaning-services": "Sea Point",
-};
+export const LOCATION_SEO_SHORT_PLACE = Object.fromEntries(
+  PROGRAMMATIC_LOCATIONS.map((l) => [l.slug, l.name]),
+) as Record<LocationSeoSlug, string>;
 
 const SERVICE_HUB_PHRASE: Record<CapeTownSeoServiceSlug, string> = {
   "deep-cleaning-cape-town": "Deep cleaning",
@@ -682,10 +1034,12 @@ const SERVICE_HUB_PHRASE: Record<CapeTownSeoServiceSlug, string> = {
 /** Service SEO page → suburb hubs: “{Service} in Claremont” etc. */
 export function serviceHubLocationLinks(serviceSlug: CapeTownSeoServiceSlug): { href: string; label: string }[] {
   const phrase = SERVICE_HUB_PHRASE[serviceSlug];
-  return (Object.keys(LOCATION_SEO_SHORT_PLACE) as LocationSeoSlug[]).map((locSlug) => ({
-    href: LOCATION_SEO_PAGES[locSlug].path,
-    label: `${phrase} in ${LOCATION_SEO_SHORT_PLACE[locSlug]}`,
-  }));
+  return LOCATION_SEO_SLUGS.flatMap((locSlug) => {
+    const block = LOCATION_SEO_PAGES[locSlug];
+    const place = LOCATION_SEO_SHORT_PLACE[locSlug] ?? getProgrammaticLocation(locSlug)?.name;
+    if (!block?.path || !place) return [];
+    return [{ href: block.path, label: `${phrase} in ${place}` }];
+  });
 }
 
 /**
@@ -754,21 +1108,30 @@ export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Met
 
 export function buildLocationSeoMetadata(data: LocationSeoBlock): Metadata {
   const url = `${SITE}${data.path}`;
+  const loc = getProgrammaticLocation(data.slug);
+  const suburb = loc?.name ?? data.h1.split(" ")[0] ?? "Cape Town";
+  const metaTitle = `Cleaning Services in ${suburb} | Shalean`;
+  const prefix = `Book trusted cleaning services in ${suburb}, Cape Town.`;
+  const combined = `${prefix} ${data.description}`.replace(/\s+/g, " ").trim();
+  const metaDescription =
+    combined.length <= 158
+      ? combined
+      : `${prefix} ${data.description.slice(0, Math.max(40, 158 - prefix.length - 1)).trim()}…`;
   return {
-    title: data.title,
-    description: data.description,
+    title: metaTitle,
+    description: metaDescription,
     alternates: { canonical: data.path },
     openGraph: {
       type: "website",
       url,
-      title: data.title,
-      description: data.description,
+      title: metaTitle,
+      description: metaDescription,
       images: [{ url: data.ogImage, alt: data.h1 }],
     },
     twitter: {
       card: "summary_large_image",
-      title: data.title,
-      description: data.description,
+      title: metaTitle,
+      description: metaDescription,
       images: [data.ogImage],
     },
   };
@@ -786,19 +1149,27 @@ export function locationPageServiceLinks(): { href: string; label: string }[] {
 }
 
 export function capeTownSeoLocationLinks(): { href: string; label: string }[] {
-  return (Object.keys(LOCATION_SEO_SHORT_PLACE) as LocationSeoSlug[]).map((locSlug) => ({
-    href: LOCATION_SEO_PAGES[locSlug].path,
-    label: `Cleaning services in ${LOCATION_SEO_SHORT_PLACE[locSlug]}`,
-  }));
+  return LOCATION_SEO_SLUGS.flatMap((locSlug) => {
+    const block = LOCATION_SEO_PAGES[locSlug];
+    const place = LOCATION_SEO_SHORT_PLACE[locSlug] ?? getProgrammaticLocation(locSlug)?.name;
+    if (!block?.path || !place) return [];
+    return [{ href: block.path, label: `Cleaning services in ${place}` }];
+  });
 }
 
-/** Screen-reader + crawler internal links from the marketing homepage (not visible). */
-export const HOMEPAGE_INTERNAL_SEO_LINKS: { href: string; label: string }[] = (() => [
-  { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
-  { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning Cape Town" },
-  { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
-  { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
-  { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
-  { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning Cape Town" },
-  ...capeTownSeoLocationLinks(),
-])();
+let homepageInternalSeoLinksCache: { href: string; label: string }[] | undefined;
+
+/** Screen-reader + crawler internal links from the marketing homepage (not visible). Lazy-built to avoid init-order issues with Turbopack. */
+export function getHomepageInternalSeoLinks(): { href: string; label: string }[] {
+  if (homepageInternalSeoLinksCache) return homepageInternalSeoLinksCache;
+  homepageInternalSeoLinksCache = [
+    { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning Cape Town" },
+    ...capeTownSeoLocationLinks(),
+  ];
+  return homepageInternalSeoLinksCache;
+}

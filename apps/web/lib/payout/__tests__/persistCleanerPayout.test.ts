@@ -10,7 +10,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 class QueryBuilder {
   private filters: Array<{ kind: "eq" | "is" | "not_is"; column: string; value: unknown }> = [];
-  private op: "select" | "update" | "insert" = "select";
+  private op: "select" | "update" | "insert" | "delete" = "select";
   private patch: Row = {};
   private insertRows: Row[] = [];
   private single = false;
@@ -36,6 +36,11 @@ class QueryBuilder {
   insert(values: Row[] | Row) {
     this.op = "insert";
     this.insertRows = Array.isArray(values) ? values.map((v) => ({ ...v })) : [{ ...values }];
+    return this;
+  }
+
+  delete() {
+    this.op = "delete";
     return this;
   }
 
@@ -80,6 +85,13 @@ class QueryBuilder {
       if (!Array.isArray(this.db.tables[this.table])) this.db.tables[this.table] = [];
       (this.db.tables[this.table] as Row[]).push(...this.insertRows.map((r) => ({ ...r })));
       return { data: this.insertRows, error: null };
+    }
+
+    if (this.op === "delete") {
+      const rows = (this.db.tables[this.table] as Row[] | undefined) ?? [];
+      const next = rows.filter((row) => !this.matches(row));
+      this.db.tables[this.table] = next;
+      return { data: null, error: null };
     }
 
     const rows = (this.db.tables[this.table] as Row[] | undefined) ?? [];
@@ -133,6 +145,7 @@ class MockSupabaseClient {
       service_earning_caps: [],
       team_members: [],
       team_job_member_payouts: [],
+      booking_cleaners: [],
       ...(seed ?? {}),
     };
   }
@@ -198,12 +211,18 @@ describe("persistCleanerPayoutIfUnset", () => {
   });
 
   it("creates team member payouts and writes team-fixed booking values", async () => {
+    const teamBookingId = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb";
+    const teamId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+    const cLead = "11111111-1111-4111-8111-111111111111";
+    const cMem2 = "22222222-2222-4222-8222-222222222222";
+    const cMem3 = "33333333-3333-4333-8333-333333333333";
+
     const admin = new MockSupabaseClient({
       bookings: [
         {
-          id: "b2",
-          cleaner_id: "c1",
-          team_id: "t1",
+          id: teamBookingId,
+          cleaner_id: cLead,
+          team_id: teamId,
           is_team_job: true,
           date: "2026-04-20",
           time: "11:00:00",
@@ -221,15 +240,20 @@ describe("persistCleanerPayoutIfUnset", () => {
         },
       ],
       team_members: [
-        { team_id: "t1", cleaner_id: "c1", active_from: null, active_to: null },
-        { team_id: "t1", cleaner_id: "c2", active_from: null, active_to: null },
-        { team_id: "t1", cleaner_id: "c3", active_from: null, active_to: null },
+        { team_id: teamId, cleaner_id: cLead, active_from: null, active_to: null },
+        { team_id: teamId, cleaner_id: cMem2, active_from: null, active_to: null },
+        { team_id: teamId, cleaner_id: cMem3, active_from: null, active_to: null },
+      ],
+      booking_cleaners: [
+        { booking_id: teamBookingId, cleaner_id: cLead, role: "lead", payout_weight: 1, lead_bonus_cents: 0 },
+        { booking_id: teamBookingId, cleaner_id: cMem2, role: "member", payout_weight: 1, lead_bonus_cents: 0 },
+        { booking_id: teamBookingId, cleaner_id: cMem3, role: "member", payout_weight: 1, lead_bonus_cents: 0 },
       ],
     });
     mockState.admin = admin;
 
     const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
-    const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b2", cleanerId: "c1" });
+    const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: teamBookingId, cleanerId: cLead });
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.skipped).toBe(false);
@@ -244,7 +268,12 @@ describe("persistCleanerPayoutIfUnset", () => {
 
     const payouts = admin.tables.team_job_member_payouts;
     expect(payouts).toHaveLength(3);
-    expect(payouts.every((row) => row.payout_cents === 25_000)).toBe(true);
+    const sum = payouts.reduce((s, row) => s + Number((row as { payout_cents?: number }).payout_cents ?? 0), 0);
+    expect(sum).toBe(25_000);
+    const byId = new Map(payouts.map((row) => [(row as { cleaner_id: string }).cleaner_id, row as { payout_cents: number }]));
+    expect(byId.get(cLead)!.payout_cents).toBe(8334);
+    expect(byId.get(cMem2)!.payout_cents).toBe(8333);
+    expect(byId.get(cMem3)!.payout_cents).toBe(8333);
   });
 
   it("freezes on rerun and avoids second write", async () => {

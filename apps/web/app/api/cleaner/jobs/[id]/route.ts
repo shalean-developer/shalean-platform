@@ -13,12 +13,17 @@ import {
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
+import {
+  fetchTeamRosterByBookingIds,
+  teamRosterPeersSummary,
+  type TeamRosterMemberWire,
+} from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -40,7 +45,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const record = row as Record<string, unknown>;
   const canAccess = await cleanerHasBookingAccess(admin, session.cleanerId, {
+    id: bookingId,
     cleaner_id: (record.cleaner_id as string | null | undefined) ?? null,
+    payout_owner_cleaner_id: (record.payout_owner_cleaner_id as string | null | undefined) ?? null,
     team_id: (record.team_id as string | null | undefined) ?? null,
     is_team_job: record.is_team_job === true,
   });
@@ -102,6 +109,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const lineMap = await fetchBookingLineItemsByBookingIds(admin, [bookingId]);
   const lineItems = lineMap.get(bookingId) ?? null;
 
+  let team_roster: TeamRosterMemberWire[] = [];
+  let team_roster_summary: string | null = null;
+  if (record.is_team_job === true) {
+    const rosterMap = await fetchTeamRosterByBookingIds(admin, [bookingId]);
+    team_roster = rosterMap.get(bookingId) ?? [];
+    team_roster_summary = teamRosterPeersSummary(team_roster, session.cleanerId);
+  }
+
   return NextResponse.json({
     job: {
       ...safe,
@@ -111,8 +126,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       earnings_cents: displayEarningsCents,
       earnings_estimated: displayEarningsIsEstimate,
       teamMemberCount,
+      team_roster,
+      team_roster_summary,
       cleaner_has_issue_report,
-      ...augmentCleanerBookingWire(record as Record<string, unknown>),
+      ...augmentCleanerBookingWire(record as Record<string, unknown>, session.cleanerId),
     },
   });
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { relatedGuidesServiceTrio } from "@/lib/blog/blogServiceContextLinks";
+import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { resolveRelatedPosts } from "@/lib/blog/resolveRelatedPosts";
 import type { BlogPostMeta, BlogPostSlug } from "@/lib/blog/posts";
 
@@ -20,7 +21,7 @@ export function BlogRelatedGuidesSection({ post }: { post: BlogPostMeta }) {
       <ul className="mt-4 list-inside list-disc space-y-2 text-sm font-medium text-zinc-800">
         {related.map((r) => (
           <li key={r.slug}>
-            <Link href={`/blog/${r.slug}`} className="text-blue-600 hover:text-blue-700 hover:underline">
+            <Link href={`/blog/${r.slug}`} className={linkInNavClassName}>
               {r.title}
             </Link>
           </li>
@@ -31,7 +32,7 @@ export function BlogRelatedGuidesSection({ post }: { post: BlogPostMeta }) {
       <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium">
         {trio.map((item) => (
           <li key={item.href}>
-            <Link href={item.href} className="text-blue-600 transition hover:text-blue-700 hover:underline">
+            <Link href={item.href} className={linkInNavClassName}>
               {item.anchor}
             </Link>
           </li>

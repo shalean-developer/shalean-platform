@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import {
   CAPE_TOWN_SERVICE_SEO,
   LOCATION_SEO_PAGES,
   LOCATION_SEO_SHORT_PLACE,
+  LOCATION_SEO_SLUGS,
 } from "@/lib/seo/capeTownSeoPages";
 import type { CapeTownSeoServiceSlug, LocationSeoSlug } from "@/lib/seo/capeTownSeoPages";
+import { linkInParagraphClassName } from "@/lib/ui/linkClassNames";
 
 const SITE = "https://www.shalean.co.za";
 const CANONICAL = "/services";
@@ -24,13 +27,10 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "office-cleaning-cape-town",
 ];
 
-const HUB_AREA_SLUGS: LocationSeoSlug[] = [
-  "claremont-cleaning-services",
-  "wynberg-cleaning-services",
-  "rondebosch-cleaning-services",
-];
+/** All suburb hubs — kept in sync with `CAPE_TOWN_LOCATIONS` via `LOCATION_SEO_SLUGS`. */
+const HUB_AREA_SLUGS: LocationSeoSlug[] = [...LOCATION_SEO_SLUGS];
 
-const linkClass = "font-medium text-blue-600 underline decoration-blue-600/30 underline-offset-2 transition hover:text-blue-700 hover:decoration-blue-700";
+const linkClass = linkInParagraphClassName;
 
 const popularCleaningLinks: { href: string; label: string }[] = [
   { href: "/booking?step=entry", label: "Same day cleaning Cape Town" },
@@ -301,8 +301,8 @@ export default function ServicesHubPage() {
             Areas we serve
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
-            We provide cleaning services across Cape Town, including Claremont, Wynberg, and Rondebosch—alongside the
-            wider metro routes our teams already run.
+            We provide cleaning services across Cape Town—from the Southern Suburbs and City Bowl to the Atlantic
+            Seaboard—alongside the wider metro routes our teams already run.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
             Suburb pages explain local access, typical homes, and how{" "}
@@ -367,6 +367,10 @@ export default function ServicesHubPage() {
             <li>Coverage across Cape Town with suburb hubs for Southern Suburbs addresses.</li>
           </ul>
         </section>
+
+        <div className="mt-14">
+          <RelatedLinks placement="services_hub" />
+        </div>
       </article>
     </MarketingLayout>
   );

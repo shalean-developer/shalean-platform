@@ -166,19 +166,25 @@ export function MarketingHomeFooter() {
             aria-label="Cape Town suburbs we serve"
           >
             <Link href="/locations/claremont-cleaning-services" className="transition hover:text-white">
-              Claremont
+              Cleaning services in Claremont
             </Link>
             <span className="text-white/30" aria-hidden>
               ·
             </span>
             <Link href="/locations/sea-point-cleaning-services" className="transition hover:text-white">
-              Sea Point
+              Cleaning services in Sea Point
             </Link>
             <span className="text-white/30" aria-hidden>
               ·
             </span>
             <Link href="/locations/observatory-cleaning-services" className="transition hover:text-white">
-              Observatory
+              Cleaning services in Observatory
+            </Link>
+            <span className="text-white/30" aria-hidden>
+              ·
+            </span>
+            <Link href="/services#hub-areas-heading" className="transition hover:text-white">
+              All Cape Town areas
             </Link>
           </nav>
         </div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
+import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import type { BlogServiceLinkKind } from "@/lib/blog/getBlogServiceType";
 
 type Props = { service?: BlogServiceLinkKind };
@@ -35,7 +36,7 @@ export function BlogServiceLinks({ service = "standard" }: Props) {
       <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-zinc-800">
         {items.map((item) => (
           <li key={item.href}>
-            <Link href={item.href} className="text-blue-600 transition hover:text-blue-700 hover:underline">
+            <Link href={item.href} className={linkInNavClassName}>
               {item.label}
             </Link>
           </li>

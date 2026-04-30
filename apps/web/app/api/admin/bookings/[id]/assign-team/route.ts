@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
 import { listTeamAssignCandidatesForBooking, performAdminAssignTeam } from "@/lib/admin/performAdminAssignTeam";
 import { isAdmin } from "@/lib/auth/admin";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
@@ -89,7 +90,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   });
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.httpStatus });
+    const locked = result.httpStatus === 409;
+    return NextResponse.json(
+      { error: result.error, ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT } : {}) },
+      { status: result.httpStatus },
+    );
   }
 
   return NextResponse.json({

@@ -5,6 +5,8 @@ import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
+import { marketingPrimaryCtaClassName } from "@/lib/marketing/marketingHomeCtaClasses";
+import { cn } from "@/lib/utils";
 
 function hash(h: string) {
   return `/${h}`;
@@ -18,7 +20,7 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-blue-900/25 bg-[#1e4fd4] shadow-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:py-3.5">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5">
         <Link
           href="/"
           className="flex shrink-0 items-center rounded-lg px-1 py-0.5 transition hover:bg-white/10"
@@ -55,9 +57,9 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
           <GrowthCtaLink
             href={bookingHref}
             source="marketing_header_book"
-            className="inline-flex min-h-10 items-center rounded-xl bg-white px-5 py-2 text-sm font-semibold text-[#1e4fd4] shadow-sm transition hover:bg-blue-50"
+            className={cn(marketingPrimaryCtaClassName, "ring-2 ring-white/90 ring-offset-2 ring-offset-[#1e4fd4]")}
           >
-            Book now
+            Book a cleaner
           </GrowthCtaLink>
         </div>
 
@@ -103,9 +105,9 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
             <GrowthCtaLink
               href={bookingHref}
               source="marketing_header_mobile_book"
-              className="mt-2 flex min-h-12 items-center justify-center rounded-xl bg-white py-3 text-sm font-semibold text-[#1e4fd4] transition hover:bg-blue-50"
+              className={cn(marketingPrimaryCtaClassName, "mt-2 w-full ring-2 ring-white/90 ring-offset-2 ring-offset-[#1e4fd4]")}
             >
-              Book now
+              Book a cleaner
             </GrowthCtaLink>
           </div>
         </div>

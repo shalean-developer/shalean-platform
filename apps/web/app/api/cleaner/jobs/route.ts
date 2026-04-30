@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
+  appendRosterBookingIdsToOrFilter,
   bookingsVisibilityOrFilter,
+  fetchBookingIdsWhereCleanerOnRoster,
   fetchCleanerTeamIds,
 } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -15,6 +17,7 @@ import {
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
+import { fetchTeamRosterByBookingIds, teamRosterPeersSummary } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,19 +29,24 @@ export async function GET(request: Request) {
   }
   const session = await resolveCleanerIdFromRequest(request, admin);
   if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
+  const viewerCleanerId = session.cleanerId;
 
-  const { data: c } = await admin.from("cleaners").select("id").eq("id", session.cleanerId).maybeSingle();
+  const { data: c } = await admin.from("cleaners").select("id").eq("id", viewerCleanerId).maybeSingle();
   if (!c) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
 
-  const teamIds = await fetchCleanerTeamIds(admin, session.cleanerId);
-  const visibilityOr = bookingsVisibilityOrFilter(session.cleanerId, teamIds);
+  const teamIds = await fetchCleanerTeamIds(admin, viewerCleanerId);
+  const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, viewerCleanerId);
+  const visibilityOr = appendRosterBookingIdsToOrFilter(
+    bookingsVisibilityOrFilter(viewerCleanerId, teamIds),
+    rosterBookingIds,
+  );
 
   const { data: jobs, error } = await admin
     .from("bookings")
     .select(
-      "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents",
+      "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents",
     )
     .or(visibilityOr)
     .not("status", "eq", "failed")
@@ -152,7 +160,7 @@ export async function GET(request: Request) {
       .from("cleaner_job_issue_reports")
       .select("booking_id")
       .in("booking_id", bookingIds)
-      .eq("cleaner_id", session.cleanerId);
+      .eq("cleaner_id", viewerCleanerId);
     if (!repErr && repRows?.length) {
       for (const r of repRows as { booking_id?: string }[]) {
         const bid = String(r.booking_id ?? "").trim();
@@ -168,10 +176,27 @@ export async function GET(request: Request) {
 
   const jobsOut = jobsWithIssueFlag.map((j) => ({
     ...j,
-    ...augmentCleanerBookingWire(j as Record<string, unknown>),
+    ...augmentCleanerBookingWire(j as Record<string, unknown>, viewerCleanerId),
   }));
 
-  for (const j of jobsOut) {
+  const teamBookingIds = jobsOut
+    .filter((j) => (j as { is_team_job?: boolean }).is_team_job === true)
+    .map((j) => String((j as { id?: string }).id ?? "").trim())
+    .filter(Boolean);
+  const rosterByBooking = await fetchTeamRosterByBookingIds(admin, teamBookingIds);
+  const jobsWithRoster = jobsOut.map((j) => {
+    const rec = j as Record<string, unknown>;
+    const id = String(rec.id ?? "").trim();
+    if (rec.is_team_job !== true || !id) return j;
+    const roster = rosterByBooking.get(id) ?? [];
+    return {
+      ...j,
+      team_roster: roster,
+      team_roster_summary: teamRosterPeersSummary(roster, viewerCleanerId),
+    };
+  });
+
+  for (const j of jobsWithRoster) {
     const rec = j as Record<string, unknown>;
     const id = String(rec.id ?? "").trim();
     if (!id) continue;
@@ -181,11 +206,11 @@ export async function GET(request: Request) {
       scheduleStuckEarningsRecomputeDebounced({
         admin,
         bookingId: id,
-        cleanerId: session.cleanerId,
+        cleanerId: viewerCleanerId,
         recomputeSource: "jobs_list",
       });
     }
   }
 
-  return NextResponse.json({ jobs: jobsOut });
+  return NextResponse.json({ jobs: jobsWithRoster });
 }

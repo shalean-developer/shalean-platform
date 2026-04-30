@@ -1,9 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  appendRosterBookingIdsToOrFilter,
   bookingsVisibilityOrFilter,
   cleanerHasBookingAccess,
   fetchCleanerTeamIds,
 } from "@/lib/cleaner/cleanerBookingAccess";
+
+describe("appendRosterBookingIdsToOrFilter", () => {
+  it("appends id.in when roster ids present", () => {
+    const base = "cleaner_id.eq.a";
+    const out = appendRosterBookingIdsToOrFilter(base, ["11111111-1111-4111-8111-111111111111"]);
+    expect(out).toContain("cleaner_id.eq.a");
+    expect(out).toContain("id.in.(11111111-1111-4111-8111-111111111111)");
+  });
+
+  it("ignores invalid uuid tokens", () => {
+    expect(appendRosterBookingIdsToOrFilter("x", ["not-a-uuid"])).toBe("x");
+  });
+});
 
 describe("bookingsVisibilityOrFilter", () => {
   it("uses cleaner_id and payout_owner when no teams", () => {
@@ -63,7 +77,7 @@ describe("cleanerHasBookingAccess", () => {
 
   it("denies team job when not a member", async () => {
     const admin = {
-      from: () => ({
+      from: vi.fn(() => ({
         select: () => ({
           eq: () => ({
             eq: () => ({
@@ -71,19 +85,22 @@ describe("cleanerHasBookingAccess", () => {
             }),
           }),
         }),
-      }),
+      })),
     };
     const ok = await cleanerHasBookingAccess(admin as never, "c1", {
+      id: "b1",
       cleaner_id: null,
+      payout_owner_cleaner_id: null,
       team_id: "t9",
       is_team_job: true,
     });
     expect(ok).toBe(false);
+    expect(admin.from).toHaveBeenCalledWith("booking_cleaners");
   });
 
   it("allows team job when member", async () => {
     const admin = {
-      from: () => ({
+      from: vi.fn(() => ({
         select: () => ({
           eq: () => ({
             eq: () => ({
@@ -91,13 +108,44 @@ describe("cleanerHasBookingAccess", () => {
             }),
           }),
         }),
-      }),
+      })),
     };
     const ok = await cleanerHasBookingAccess(admin as never, "c1", {
+      id: "b1",
       cleaner_id: null,
+      payout_owner_cleaner_id: null,
       team_id: "t9",
       is_team_job: true,
     });
     expect(ok).toBe(true);
+    expect(admin.from).toHaveBeenCalledWith("booking_cleaners");
+  });
+
+  it("allows access when listed on booking_cleaners roster", async () => {
+    const admin = {
+      from: vi.fn((table: string) => {
+        if (table === "booking_cleaners") {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  maybeSingle: () => Promise.resolve({ data: { id: "bc1" }, error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      }),
+    };
+    const ok = await cleanerHasBookingAccess(admin as never, "c1", {
+      id: "b1",
+      cleaner_id: null,
+      payout_owner_cleaner_id: null,
+      team_id: "t9",
+      is_team_job: true,
+    });
+    expect(ok).toBe(true);
+    expect(admin.from).toHaveBeenCalledWith("booking_cleaners");
   });
 });

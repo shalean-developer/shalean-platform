@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
+import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
 const bookingHref = "/booking?step=entry";
@@ -100,7 +101,10 @@ export function GlobalTopNav() {
     router.refresh();
   }
 
-  const navLinkClass = "rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-blue-50 hover:text-blue-700";
+  const navLinkClass = cn(
+    "rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-blue-50/80",
+    linkInNavClassName,
+  );
   const loggedIn = Boolean(user || cleanerLoggedIn);
   const accountHref = user ? "/dashboard" : "/cleaner";
   const avatarName = user ? userDisplayName(user) : "Cleaner account";

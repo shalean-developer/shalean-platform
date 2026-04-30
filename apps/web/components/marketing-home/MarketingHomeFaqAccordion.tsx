@@ -9,7 +9,7 @@ export function MarketingHomeFaqAccordion({ faqs }: { faqs: HomeFaq[] }) {
   const [openFaqId, setOpenFaqId] = useState<string | null>(null);
 
   return (
-    <div className="mt-14 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-black/[0.03] sm:mt-16 lg:mt-20">
+    <div className="mt-14 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm sm:mt-16 lg:mt-20">
       {faqs.map((faq) => {
         const open = openFaqId === faq.id;
         return (
@@ -25,7 +25,7 @@ export function MarketingHomeFaqAccordion({ faqs }: { faqs: HomeFaq[] }) {
               <ChevronDown className={cn("h-5 w-5 shrink-0 text-slate-500 transition", open && "rotate-180")} />
             </button>
             {open ? (
-              <div className="border-t border-slate-100 bg-slate-50/40 px-5 pb-5 pt-3 text-sm leading-relaxed text-slate-600 sm:px-6 sm:text-[0.9375rem]">
+              <div className="border-t border-slate-100 bg-slate-50/40 px-5 pb-5 pt-3 text-base leading-relaxed text-slate-600 sm:px-6">
                 {faq.answer}
               </div>
             ) : null}

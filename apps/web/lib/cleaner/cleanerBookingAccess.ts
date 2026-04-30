@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BookingAccessRow = {
+  /** Booking id — enables roster membership checks via `booking_cleaners`. */
+  id?: string | null;
   cleaner_id?: string | null;
   payout_owner_cleaner_id?: string | null;
   team_id?: string | null;
@@ -27,6 +29,38 @@ export async function fetchCleanerTeamIds(admin: SupabaseClient, cleanerId: stri
  * PostgREST `.or()` expression for bookings the cleaner may see:
  * assigned solo cleaner, payroll owner (team / admin paths), OR team job on a team they belong to.
  */
+/**
+ * Booking ids where the cleaner appears on `booking_cleaners` (for PostgREST `.or()` visibility).
+ */
+export async function fetchBookingIdsWhereCleanerOnRoster(
+  admin: SupabaseClient,
+  cleanerId: string,
+  limit = 500,
+): Promise<string[]> {
+  const { data, error } = await admin
+    .from("booking_cleaners")
+    .select("booking_id")
+    .eq("cleaner_id", cleanerId)
+    .limit(limit);
+  if (error || !data?.length) return [];
+  const out = new Set<string>();
+  for (const raw of data) {
+    const id = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
+    if (id) out.add(id);
+  }
+  return [...out];
+}
+
+/** Append `id.in.(...)` for roster-only bookings to a PostgREST `.or()` filter string. */
+export function appendRosterBookingIdsToOrFilter(baseOr: string, bookingIds: readonly string[]): string {
+  const ids = [...new Set(bookingIds.map((x) => String(x ?? "").trim()).filter(Boolean))];
+  if (!ids.length) return baseOr;
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const safe = ids.filter((id) => uuidRe.test(id));
+  if (!safe.length) return baseOr;
+  return `${baseOr},id.in.(${safe.join(",")})`;
+}
+
 export function bookingsVisibilityOrFilter(cleanerId: string, teamIds: string[]): string {
   const c = cleanerId.trim();
   if (!c) return `cleaner_id.eq.${c}`;
@@ -43,6 +77,16 @@ export async function cleanerHasBookingAccess(
 ): Promise<boolean> {
   if (String(row.cleaner_id ?? "").trim() === cleanerId.trim()) return true;
   if (String(row.payout_owner_cleaner_id ?? "").trim() === cleanerId.trim()) return true;
+  const bid = String(row.id ?? "").trim();
+  if (bid) {
+    const { data: rosterHit, error: rosterErr } = await admin
+      .from("booking_cleaners")
+      .select("id")
+      .eq("booking_id", bid)
+      .eq("cleaner_id", cleanerId)
+      .maybeSingle();
+    if (!rosterErr && rosterHit) return true;
+  }
   if (row.is_team_job !== true) return false;
   const teamId = String(row.team_id ?? "").trim();
   if (!teamId) return false;

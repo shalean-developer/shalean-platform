@@ -43,7 +43,7 @@ function inferChannel(payload: Record<string, unknown>): Channel {
   const pageType = String(payload.page_type ?? "").toLowerCase();
   if (source.includes("ads_lp") || pageType === "google_ads_lp" || pathname.startsWith("/lp/cleaning")) return "google_ads";
   if (source.includes("facebook")) return "facebook_ads";
-  if (pathname.startsWith("/cleaning-services/")) return "organic_seo";
+  if (pathname.startsWith("/locations/") || pathname.startsWith("/cleaning-services/")) return "organic_seo";
   return "direct";
 }
 

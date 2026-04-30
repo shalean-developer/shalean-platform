@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
+  appendRosterBookingIdsToOrFilter,
   bookingsVisibilityOrFilter,
+  fetchBookingIdsWhereCleanerOnRoster,
   fetchCleanerTeamIds,
 } from "@/lib/cleaner/cleanerBookingAccess";
 import { earningsPeriodCentsFromRows } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
@@ -127,7 +129,11 @@ export async function GET(request: Request) {
     statusParam === "pending" || statusParam === "approved" || statusParam === "paid" ? statusParam : "all";
 
   const teamIds = await fetchCleanerTeamIds(admin, session.cleanerId);
-  const visibilityOr = bookingsVisibilityOrFilter(session.cleanerId, teamIds);
+  const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, session.cleanerId);
+  const visibilityOr = appendRosterBookingIdsToOrFilter(
+    bookingsVisibilityOrFilter(session.cleanerId, teamIds),
+    rosterBookingIds,
+  );
 
   const ledgerTotalsQuery = admin
     .from("cleaner_earnings")

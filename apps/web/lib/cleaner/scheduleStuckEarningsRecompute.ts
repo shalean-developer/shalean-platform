@@ -14,7 +14,9 @@ export type StuckEarningsRecomputeSource =
   | "job_detail"
   | "admin_patch_already_completed_persist_failed"
   | "admin_patch_already_completed_persist_threw"
-  | "admin_patch_final_integrity";
+  | "admin_patch_final_integrity"
+  | "admin_booking_roster_replace"
+  | "admin_booking_roster_emergency_put";
 
 type SkippedReason =
   | "cooldown"

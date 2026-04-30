@@ -34,6 +34,16 @@ const nextConfig: NextConfig = {
         destination: "/services/deep-cleaning-cape-town",
         permanent: true,
       },
+      /**
+       * Legacy flat location URLs (short suburb slug, e.g. `sea-point`).
+       * Middleware 308 runs first and uses `locationSeoPathFromLegacyAreaSlug` so slugs that
+       * already include `-cleaning-services` map correctly; this rule covers short-slug bookmarks.
+       */
+      {
+        source: "/cleaning-services/:slug",
+        destination: "/locations/:slug-cleaning-services",
+        permanent: true,
+      },
     ];
   },
   images: {

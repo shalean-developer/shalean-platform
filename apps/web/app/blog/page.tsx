@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { getAllHighConversionBlogPosts } from "@/lib/blog/highConversionPosts";
 import { getAllBlogPosts } from "@/lib/blog/posts";
 
 const SITE = "https://www.shalean.co.za";
@@ -40,8 +41,43 @@ function formatDate(iso: string) {
   }).format(new Date(iso));
 }
 
+type BlogIndexCard = {
+  slug: string;
+  title: string;
+  excerpt: string;
+  /** SEO / JSON-LD body description */
+  description: string;
+  publishedAt: string;
+  dateModified?: string;
+  readingTimeMinutes: number;
+  heroImage: { src: string; alt: string };
+};
+
 export default function BlogIndexPage() {
-  const posts = getAllBlogPosts();
+  const editorial: BlogIndexCard[] = getAllBlogPosts().map((post) => ({
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt,
+    description: post.description,
+    publishedAt: post.publishedAt,
+    dateModified: post.dateModified,
+    readingTimeMinutes: post.readingTimeMinutes,
+    heroImage: post.heroImage,
+  }));
+  const highConversion: BlogIndexCard[] = getAllHighConversionBlogPosts().map((post) => ({
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.description.length > 200 ? `${post.description.slice(0, 197)}…` : post.description,
+    description: post.description,
+    publishedAt: post.publishedAt,
+    dateModified: post.dateModified,
+    readingTimeMinutes: post.readingTimeMinutes ?? 6,
+    heroImage: post.heroImage,
+  }));
+  const posts = [...editorial, ...highConversion].sort(
+    (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+  );
+
   const blogIndexJsonLd = {
     "@context": "https://schema.org",
     "@type": "Blog",

@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
-import { getLocationsByCity } from "@/lib/locations";
 import { locationPageServiceLinks } from "@/lib/seo/capeTownSeoPages";
+import { PROGRAMMATIC_LOCATIONS } from "@/lib/seo/locations";
 
 const waHref = "https://wa.me/27215550123?text=Hi%20Shalean%20Cleaning%20Services";
 
 const footerServices = locationPageServiceLinks();
-
-const footerLocations = getLocationsByCity("cape-town").slice(0, 6);
 
 export function FooterSection() {
   return (
@@ -45,13 +43,18 @@ export function FooterSection() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">Locations</p>
             <ul className="mt-3 space-y-2 text-sm">
-              {footerLocations.map((l) => (
+              {PROGRAMMATIC_LOCATIONS.map((l) => (
                 <li key={l.slug}>
-                  <Link href={`/cleaning-services/${l.slug}`} className="text-zinc-300 transition hover:text-white">
-                    {l.name}
+                  <Link href={`/locations/${l.slug}`} className="text-zinc-300 transition hover:text-white">
+                    Cleaning services in {l.name}
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link href="/services#hub-areas-heading" className="text-zinc-300 transition hover:text-white">
+                  All Cape Town areas
+                </Link>
+              </li>
             </ul>
           </div>
 

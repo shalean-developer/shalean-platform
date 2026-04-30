@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ADMIN_TEAM_MEMBER_PAYOUT_CENTS,
-  performAdminAssignTeam,
-} from "@/lib/admin/performAdminAssignTeam";
+import { performAdminAssignTeam } from "@/lib/admin/performAdminAssignTeam";
 
 vi.mock("@/lib/logging/systemLog", () => ({
   logSystemEvent: vi.fn(),
@@ -66,9 +63,13 @@ function createMockAdmin(opts: {
   let bookingsFrom = 0;
   let teamsFrom = 0;
 
-  const rpc = vi.fn(async (name: string) => {
+  const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
     if (name === "release_team_capacity_slot" || name === "claim_team_capacity_slot") {
       return { data: true, error: null };
+    }
+    if (name === "assign_team_and_sync_roster") {
+      bookingUpdates.push({ rpc: name, args: args ?? {} });
+      return { data: { ok: true, variant: (args as { p_variant?: string })?.p_variant ?? "admin" }, error: null };
     }
     return { data: null, error: new Error(`unexpected rpc ${name}`) };
   });
@@ -98,11 +99,18 @@ function createMockAdmin(opts: {
         }
         if (bookingsFrom === 3) {
           return {
-            update: (patch: unknown) => ({
-              eq: (_k: string, id: string) => {
-                bookingUpdates.push({ patch, id });
-                return Promise.resolve({ error: null });
-              },
+            select: () => ({
+              eq: () => ({
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: {
+                      cleaner_earnings_total_cents: 60_000,
+                      display_earnings_cents: null,
+                      cleaner_payout_cents: null,
+                    },
+                    error: null,
+                  }),
+              }),
             }),
           };
         }
@@ -135,6 +143,23 @@ function createMockAdmin(opts: {
           select: () => ({
             eq: () => ({
               not: () => Promise.resolve({ data: members, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "booking_cleaners") {
+        const sorted = [...members].sort((a, b) => a.cleaner_id.localeCompare(b.cleaner_id));
+        const leadId = sorted[0]!.cleaner_id;
+        const rosterData = sorted.map((m) => ({
+          cleaner_id: m.cleaner_id,
+          role: m.cleaner_id === leadId ? "lead" : "member",
+          payout_weight: 1,
+          lead_bonus_cents: 0,
+        }));
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => Promise.resolve({ data: rosterData, error: null }),
             }),
           }),
         };
@@ -179,10 +204,6 @@ describe("performAdminAssignTeam", () => {
     vi.mocked(logSystemEvent).mockClear();
   });
 
-  it("uses fixed per-member payout cents for admin team overrides", () => {
-    expect(ADMIN_TEAM_MEMBER_PAYOUT_CENTS).toBe(25_000);
-  });
-
   it("assigns team successfully: updates booking, payouts per member, assignment row, logs override", async () => {
     const { admin, rpc, payoutInserts, bookingUpdates } = createMockAdmin({
       booking: baseBooking(),
@@ -200,18 +221,28 @@ describe("performAdminAssignTeam", () => {
       expect.objectContaining({ p_team_id: newTeamId, p_booking_date: "2026-06-01" }),
     );
     expect(rpc).not.toHaveBeenCalledWith("release_team_capacity_slot", expect.anything());
+    expect(rpc).toHaveBeenCalledWith(
+      "assign_team_and_sync_roster",
+      expect.objectContaining({
+        p_booking_id: bookingId,
+        p_team_id: newTeamId,
+        p_variant: "admin",
+        p_source: "admin",
+        p_team_member_count_snapshot: 2,
+      }),
+    );
     expect(bookingUpdates[0]).toMatchObject({
-      id: bookingId,
-      patch: expect.objectContaining({
-        team_id: newTeamId,
-        is_team_job: true,
-        cleaner_id: null,
-        team_member_count_snapshot: 2,
+      rpc: "assign_team_and_sync_roster",
+      args: expect.objectContaining({
+        p_payout_owner_cleaner_id: twoMembers[0]!.cleaner_id,
       }),
     });
     const rows = payoutInserts[0] as Array<{ cleaner_id: string; payout_cents: number; team_id: string }>;
     expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.payout_cents === 25_000 && r.team_id === newTeamId)).toBe(true);
+    const sum = rows.reduce((s, r) => s + r.payout_cents, 0);
+    expect(sum).toBe(60_000);
+    expect(rows.every((r) => r.team_id === newTeamId)).toBe(true);
+    expect(rows.every((r) => r.payout_cents === 30_000)).toBe(true);
     expect(vi.mocked(logSystemEvent)).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "ADMIN_TEAM_OVERRIDE",

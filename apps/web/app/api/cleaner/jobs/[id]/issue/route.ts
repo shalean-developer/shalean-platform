@@ -92,7 +92,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const { data: row, error } = await admin
     .from("bookings")
-    .select("id, cleaner_id, team_id, is_team_job")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -101,7 +101,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const record = row as Record<string, unknown>;
   const canAccess = await cleanerHasBookingAccess(admin, cleanerId, {
+    id: bookingId,
     cleaner_id: (record.cleaner_id as string | null | undefined) ?? null,
+    payout_owner_cleaner_id: (record.payout_owner_cleaner_id as string | null | undefined) ?? null,
     team_id: (record.team_id as string | null | undefined) ?? null,
     is_team_job: record.is_team_job === true,
   });

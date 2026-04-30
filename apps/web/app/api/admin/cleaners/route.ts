@@ -34,8 +34,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  const search = new URL(request.url).searchParams.get("search")?.trim() ?? "";
+  const urlObj = new URL(request.url);
+  const search = urlObj.searchParams.get("search")?.trim() ?? "";
   const escaped = search.replace(/%/g, "\\%").replace(/,/g, "");
+  const excludeTeamId = urlObj.searchParams.get("excludeTeamId")?.trim() ?? "";
+  const rosterFilter = urlObj.searchParams.get("filter")?.trim().toLowerCase() ?? "all";
+  const limitRaw = urlObj.searchParams.get("limit");
+  const defaultLimit = excludeTeamId.length > 0 ? 20 : 80;
+  const limit = Math.min(200, Math.max(1, parseInt(limitRaw ?? String(defaultLimit), 10) || defaultLimit));
 
   const selectWithWeekdays = `
       id,
@@ -73,10 +79,45 @@ export async function GET(request: Request) {
       availability_end
     `;
 
+  let excludeIds: string[] = [];
+  if (excludeTeamId.length > 0) {
+    const { data: tm, error: tmErr } = await admin
+      .from("team_members")
+      .select("cleaner_id")
+      .eq("team_id", excludeTeamId)
+      .not("cleaner_id", "is", null);
+    if (tmErr) {
+      return NextResponse.json({ error: tmErr.message }, { status: 500 });
+    }
+    excludeIds = [
+      ...new Set(
+        (tm ?? [])
+          .map((r: { cleaner_id?: string | null }) => String(r.cleaner_id ?? "").trim())
+          .filter((id) => id.length > 0),
+      ),
+    ];
+  }
+
   const build = (columns: string) => {
-    let q = admin.from("cleaners").select(columns).order("full_name", { ascending: true });
+    let q = admin.from("cleaners").select(columns);
+    if (rosterFilter === "available") {
+      q = q.eq("is_available", true);
+    } else if (rosterFilter === "high_rated") {
+      q = q.gte("rating", 4);
+    }
     if (escaped.length > 0) {
       q = q.or(`full_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`);
+    }
+    if (excludeIds.length > 0) {
+      q = q.not("id", "in", `(${excludeIds.join(",")})`);
+    }
+    if (rosterFilter === "high_rated") {
+      q = q.order("rating", { ascending: false, nullsFirst: true }).order("full_name", { ascending: true });
+    } else {
+      q = q.order("full_name", { ascending: true });
+    }
+    if (excludeTeamId.length > 0 || escaped.length > 0) {
+      q = q.limit(limit);
     }
     return q;
   };

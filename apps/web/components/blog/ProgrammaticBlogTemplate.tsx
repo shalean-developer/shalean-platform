@@ -97,14 +97,15 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
           </li>
         </ul>
 
-        <h2>When to use it</h2>
+        <h2>When to book {svc} in {loc}</h2>
+        <h3 className="!mt-3 text-base font-semibold text-zinc-800">Seasonal demand &amp; inspection windows</h3>
         <p>{whenBookBody(post)}</p>
         <p>
           Busy households, student digs, and furnished rentals around {loc} often align cleans with handovers, guests,
           or inspection calendars—book early in peak season when slots tighten across Cape Town.
         </p>
 
-        <h2>Why choose professional cleaners</h2>
+        <h2>Why hire professional cleaners in Cape Town</h2>
         <p>{whyProBody(post)}</p>
         <p>
           Compare{" "}
@@ -118,7 +119,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
           before you open the booking flow.
         </p>
 
-        <h2>Same-day availability</h2>
+        <h2>Same-day cleaning availability in {loc}</h2>
         <p>{sameDayBody(post)}</p>
         <p>
           <GrowthCtaLink

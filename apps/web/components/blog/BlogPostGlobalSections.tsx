@@ -2,7 +2,7 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { BlogPostMeta } from "@/lib/blog/posts";
 
 const proseArticle =
-  "prose prose-zinc max-w-3xl prose-headings:scroll-mt-24 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline";
+  "prose prose-zinc max-w-3xl prose-headings:scroll-mt-24 prose-h2:text-zinc-900 prose-h3:text-zinc-800 prose-a:text-slate-700 prose-a:no-underline prose-a:transition-colors prose-a:duration-200 hover:prose-a:text-blue-600 hover:prose-a:underline prose-a:underline-offset-4";
 
 const midCtaWrap = "not-prose my-10 rounded-2xl border border-blue-100 bg-blue-50/60 px-6 py-8 text-center";
 
@@ -12,14 +12,15 @@ export function BlogPostGlobalSections({ post }: { post: BlogPostMeta }) {
   return (
     <>
       <div className={proseArticle}>
-        <h2>Quick Summary</h2>
+        <h2>Quick summary — Cape Town cleaning takeaways</h2>
         <ul>
           {post.quickSummary.map((line, i) => (
             <li key={i}>{line}</li>
           ))}
         </ul>
 
-        <h2>When should you use this in Cape Town?</h2>
+        <h2>When this guide applies in Cape Town</h2>
+        <h3 className="!mt-4 text-base font-semibold text-zinc-800">Southern Suburbs, Atlantic Seaboard &amp; CBD</h3>
         {post.whenToUseParagraphs.map((p, i) => (
           <p key={i}>{p}</p>
         ))}

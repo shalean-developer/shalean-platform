@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,16 +12,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  addAdminTeamMembers,
   createAdminTeam,
-  fetchAdminTeamMembers,
   fetchAdminTeams,
   patchAdminTeamIsActive,
-  removeAdminTeamMember,
-  type AdminTeamMemberRow,
   type AdminTeamRow,
 } from "@/lib/admin/dashboard";
 import { emitAdminToast } from "@/lib/admin/toastBus";
+import { ManageTeamDialog } from "@/components/admin/teams/ManageTeamDialog";
 import { cn } from "@/lib/utils";
 
 /** Minimal team fields for display (API returns additional columns). */
@@ -50,14 +46,6 @@ function serviceLabel(st: string): string {
   return st;
 }
 
-function formatJoined(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function teamHealthLabel(memberCount: number, capacity: number): { text: string; className: string } {
   if (memberCount > capacity) {
     return { text: "Over capacity", className: "text-rose-600 dark:text-rose-400" };
@@ -84,13 +72,6 @@ export default function AdminTeamsPage() {
   const [createBusy, setCreateBusy] = useState(false);
 
   const [manageTeam, setManageTeam] = useState<TeamRow | null>(null);
-  const [memberIdsInput, setMemberIdsInput] = useState("");
-  const [membersBusy, setMembersBusy] = useState(false);
-  const [roster, setRoster] = useState<AdminTeamMemberRow[]>([]);
-  const [rosterLoading, setRosterLoading] = useState(false);
-  const [rosterSearch, setRosterSearch] = useState("");
-  const [removeTarget, setRemoveTarget] = useState<{ cleanerId: string; name: string } | null>(null);
-  const [removeBusy, setRemoveBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -136,40 +117,6 @@ export default function AdminTeamsPage() {
     });
   }, [rows]);
 
-  useEffect(() => {
-    const teamId = manageTeam?.id;
-    if (!teamId) {
-      setRoster([]);
-      return;
-    }
-    let cancelled = false;
-    setRosterLoading(true);
-    void (async () => {
-      try {
-        const m = await fetchAdminTeamMembers(teamId);
-        if (!cancelled) setRoster(m);
-      } catch {
-        if (!cancelled) setRoster([]);
-      } finally {
-        if (!cancelled) setRosterLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [manageTeam?.id]);
-
-  const filteredRoster = useMemo(() => {
-    const q = rosterSearch.trim().toLowerCase();
-    if (!q) return roster;
-    return roster.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.cleaner_id.toLowerCase().includes(q) ||
-        (m.phone ?? "").toLowerCase().includes(q),
-    );
-  }, [roster, rosterSearch]);
-
   async function onCreateTeam() {
     setCreateBusy(true);
     setError(null);
@@ -204,47 +151,6 @@ export default function AdminTeamsPage() {
     }
   }
 
-  async function onAddMembers() {
-    if (!manageTeam || membersBusy) return;
-    const parts = memberIdsInput
-      .split(/[\s,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (parts.length === 0) {
-      emitAdminToast("Enter at least one cleaner UUID.", "error");
-      return;
-    }
-    const uuidCandidates = [...new Set(parts)].filter((id) => UUID_RE.test(id));
-    const current = manageTeam.member_count ?? 0;
-    if (uuidCandidates.length > 0 && current + uuidCandidates.length > manageTeam.capacity_per_day) {
-      emitAdminToast("Will exceed team capacity. Remove members or raise capacity first.", "error");
-      return;
-    }
-    setMembersBusy(true);
-    setError(null);
-    try {
-      const idempotencyKey =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const n = await addAdminTeamMembers(manageTeam.id, parts, { idempotencyKey });
-      setMemberIdsInput("");
-      if (n === 0) {
-        emitAdminToast("No new members added (already on team or invalid IDs).", "info");
-      } else {
-        emitAdminToast(n === 1 ? "Added 1 member." : `Added ${n} members.`, "success");
-      }
-      setRoster(await fetchAdminTeamMembers(manageTeam.id));
-      await load();
-    } catch (e) {
-      const msg = mapErrorMessage(e);
-      setError(msg);
-      emitAdminToast(msg, "error");
-    } finally {
-      setMembersBusy(false);
-    }
-  }
-
   async function onToggleTeamActive(row: TeamRow) {
     setTeamToggleBusyId(row.id);
     setError(null);
@@ -258,34 +164,6 @@ export default function AdminTeamsPage() {
       emitAdminToast(msg, "error");
     } finally {
       setTeamToggleBusyId(null);
-    }
-  }
-
-  async function onConfirmRemoveMember() {
-    if (!manageTeam || !removeTarget) return;
-    setRemoveBusy(true);
-    setError(null);
-    try {
-      await removeAdminTeamMember(manageTeam.id, removeTarget.cleanerId);
-      setRemoveTarget(null);
-      emitAdminToast("Member removed.", "success");
-      setRoster(await fetchAdminTeamMembers(manageTeam.id));
-      await load();
-    } catch (e) {
-      const msg = mapErrorMessage(e);
-      setError(msg);
-      emitAdminToast(msg, "error");
-    } finally {
-      setRemoveBusy(false);
-    }
-  }
-
-  async function copyCleanerId(id: string) {
-    try {
-      await navigator.clipboard.writeText(id);
-      emitAdminToast("UUID copied.", "success");
-    } catch {
-      emitAdminToast("Could not copy to clipboard.", "error");
     }
   }
 
@@ -380,11 +258,7 @@ export default function AdminTeamsPage() {
                         variant="outline"
                         size="sm"
                         className="rounded-lg"
-                        onClick={() => {
-                          setManageTeam(row);
-                          setMemberIdsInput("");
-                          setRosterSearch("");
-                        }}
+                        onClick={() => setManageTeam(row)}
                       >
                         Manage
                       </Button>
@@ -452,136 +326,15 @@ export default function AdminTeamsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={manageTeam != null} onOpenChange={(o) => !o && setManageTeam(null)}>
-        <DialogContent className="max-h-[min(90vh,640px)] max-w-lg overflow-y-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Manage team</DialogTitle>
-            {manageTeam ? (
-              <p className="text-left text-sm font-normal text-zinc-600 dark:text-zinc-400">
-                {manageTeam.name} · {serviceLabel(manageTeam.service_type)} ·{" "}
-                <span className="tabular-nums">{manageTeam.member_count ?? roster.length}</span> members / capacity{" "}
-                <span className="tabular-nums">{manageTeam.capacity_per_day}</span>
-                {(manageTeam.member_count ?? roster.length) > manageTeam.capacity_per_day ? (
-                  <span className="ml-2 font-semibold text-amber-700 dark:text-amber-300">· Over capacity</span>
-                ) : null}
-              </p>
-            ) : null}
-          </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  Team members ({rosterLoading ? "…" : roster.length})
-                </h3>
-                <Input
-                  value={rosterSearch}
-                  onChange={(e) => setRosterSearch(e.target.value)}
-                  placeholder="Search name, phone, UUID…"
-                  className="max-w-xs rounded-lg text-sm"
-                />
-              </div>
-              {rosterLoading ? (
-                <p className="mt-2 text-sm text-zinc-500">Loading roster…</p>
-              ) : filteredRoster.length === 0 ? (
-                <p className="mt-2 text-sm text-zinc-500">
-                  {roster.length === 0 ? "No members on this team yet." : "No matches for this search."}
-                </p>
-              ) : (
-                <ul className="mt-2 max-h-52 space-y-2 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
-                  {filteredRoster.map((m) => (
-                    <li
-                      key={m.cleaner_id}
-                      className="flex flex-col gap-2 rounded-lg border border-transparent bg-white/60 p-2 dark:bg-zinc-900/50 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0 flex-1 text-sm">
-                        <div className="font-medium text-zinc-900 dark:text-zinc-100">{m.name}</div>
-                        {m.phone ? <div className="text-xs text-zinc-600 dark:text-zinc-400">{m.phone}</div> : null}
-                        <div className="mt-0.5 flex items-center gap-1 font-mono text-[11px] text-zinc-500">
-                          <span className="truncate">{m.cleaner_id}</span>
-                        </div>
-                        {m.joined_at ? (
-                          <div className="text-[11px] text-zinc-400">Joined {formatJoined(m.joined_at)}</div>
-                        ) : null}
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-8 w-8 shrink-0 rounded-lg p-0"
-                          title="Copy UUID"
-                          onClick={() => void copyCleanerId(m.cleaner_id)}
-                        >
-                          <Copy className="h-3.5 w-3.5" aria-hidden />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-8 w-8 shrink-0 rounded-lg border-rose-300 p-0 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/40"
-                          title="Remove from team"
-                          onClick={() => setRemoveTarget({ cleanerId: m.cleaner_id, name: m.name })}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Add cleaners by UUID (from{" "}
-              <a href="/admin/cleaners" className="font-medium text-blue-600 underline dark:text-blue-400">
-                Cleaners
-              </a>
-              ). Separate multiple IDs with commas or spaces.
-            </p>
-            <div className="grid gap-2">
-              <Label htmlFor="member-ids">Cleaner UUID(s)</Label>
-              <Input
-                id="member-ids"
-                value={memberIdsInput}
-                onChange={(e) => setMemberIdsInput(e.target.value)}
-                placeholder="uuid …"
-                disabled={membersBusy}
-                className="rounded-lg font-mono text-xs"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" className="rounded-lg" onClick={() => setManageTeam(null)}>
-              Close
-            </Button>
-            <Button type="button" className="rounded-lg" disabled={membersBusy} onClick={() => void onAddMembers()}>
-              {membersBusy ? "Adding…" : "Add members"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={removeTarget != null} onOpenChange={(o) => !o && setRemoveTarget(null)}>
-        <DialogContent className="max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Remove member</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Remove <span className="font-medium text-zinc-900 dark:text-zinc-100">{removeTarget?.name}</span> from this
-            team? This cannot be undone from the app if the member has active team jobs (the server will block it).
-          </p>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" className="rounded-lg" onClick={() => setRemoveTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="rounded-lg bg-rose-600 text-white hover:bg-rose-700 dark:bg-rose-600 dark:hover:bg-rose-500"
-              disabled={removeBusy}
-              onClick={() => void onConfirmRemoveMember()}
-            >
-              {removeBusy ? "Removing…" : "Remove"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ManageTeamDialog
+        team={manageTeam}
+        open={manageTeam != null}
+        onOpenChange={(next) => {
+          if (!next) setManageTeam(null);
+        }}
+        onTeamUpdated={() => void load()}
+        serviceLabel={serviceLabel}
+      />
     </div>
   );
 }

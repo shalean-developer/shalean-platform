@@ -7,6 +7,7 @@ import { getAreaProgrammaticBlogLinksForCapeTownService } from "@/lib/blog/progr
 import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
+import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { CAPE_TOWN_SERVICE_SEO, serviceHubLocationLinks } from "@/lib/seo/capeTownSeoPages";
 
 type Props = { slug: CapeTownSeoServiceSlug; trustStats: PublicReviewBannerStats | null };
@@ -220,6 +221,12 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           </div>
         </section>
       ) : null}
+
+      <section className="border-b border-zinc-100 py-16">
+        <div className="mx-auto max-w-4xl px-4">
+          <RelatedLinks placement="service" currentServiceSlug={slug} />
+        </div>
+      </section>
 
       <section className="bg-blue-600 py-16 text-center text-white">
         <h2 className="text-3xl font-bold tracking-tight">Ready to book {data.bookingLabel}?</h2>

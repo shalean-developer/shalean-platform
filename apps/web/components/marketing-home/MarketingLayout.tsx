@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { FooterSection } from "@/components/home/sections/FooterSection";
-import { HOMEPAGE_INTERNAL_SEO_LINKS } from "@/lib/seo/capeTownSeoPages";
+import { getHomepageInternalSeoLinks } from "@/lib/seo/capeTownSeoPages";
 
 type Props = Readonly<{
   children: ReactNode;
@@ -16,7 +16,7 @@ export default function MarketingLayout({ children }: Props) {
     <>
       <nav className="sr-only" aria-label="Cape Town service and suburb pages">
         <ul>
-          {HOMEPAGE_INTERNAL_SEO_LINKS.map((item) => (
+          {getHomepageInternalSeoLinks().map((item) => (
             <li key={item.href}>
               <Link href={item.href}>{item.label}</Link>
             </li>

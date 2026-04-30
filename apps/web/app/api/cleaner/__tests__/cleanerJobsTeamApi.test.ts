@@ -15,6 +15,13 @@ vi.mock("@/lib/cleaner/session", () => ({
 function rowMatchesVisibilityOr(row: Row, expr: string): boolean {
   const head = /^cleaner_id\.eq\.([^,]+)/.exec(expr);
   if (head && String(row.cleaner_id ?? "") === head[1]) return true;
+  const po = /payout_owner_cleaner_id\.eq\.([^,]+)/.exec(expr);
+  if (po && String(row.payout_owner_cleaner_id ?? "") === po[1]) return true;
+  const idIn = /id\.in\.\(([^)]*)\)/.exec(expr);
+  if (idIn) {
+    const list = idIn[1].split(",").map((s) => s.trim()).filter(Boolean);
+    if (list.includes(String(row.id ?? ""))) return true;
+  }
   if (!expr.includes("team_id.in.")) return false;
   const inMatch = /team_id\.in\.\(([^)]*)\)/.exec(expr);
   if (!inMatch) return false;
@@ -63,18 +70,93 @@ class BookingsQuery {
 }
 
 class CleanersQuery {
+  private mode: "eq" | "in" = "eq";
   private idEq: unknown;
+  private idIn: string[] = [];
   constructor(private db: MockSupabase) {}
   select() {
     return this;
   }
   eq(_col: string, value: unknown) {
+    this.mode = "eq";
     this.idEq = value;
     return this;
   }
+  in(_col: string, values: unknown[]) {
+    this.mode = "in";
+    this.idIn = values.map((v) => String(v ?? ""));
+    return this;
+  }
   maybeSingle() {
+    if (this.mode !== "eq") return Promise.resolve({ data: null, error: null });
     const hit = this.db.tables.cleaners.find((r) => r.id === this.idEq);
     return Promise.resolve({ data: hit ?? null, error: null });
+  }
+  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+    if (this.mode === "in") {
+      const rows = this.idIn
+        .map((id) => this.db.tables.cleaners.find((r) => String(r.id) === id))
+        .filter((r): r is Row => Boolean(r));
+      const payload = { data: rows, error: null as null };
+      if (onfulfilled) onfulfilled(payload);
+      return Promise.resolve(payload);
+    }
+    const payload = { data: [] as Row[], error: null as null };
+    if (onfulfilled) onfulfilled(payload);
+    return Promise.resolve(payload);
+  }
+}
+
+class BookingCleanersQuery {
+  private bookingIdsIn: string[] | null = null;
+  private cleanerIdEq: string | null = null;
+  constructor(private db: MockSupabase) {}
+  select() {
+    return this;
+  }
+  eq(col: string, value: unknown) {
+    if (col === "cleaner_id") this.cleanerIdEq = String(value ?? "");
+    return this;
+  }
+  in(col: string, values: unknown[]) {
+    if (col === "booking_id") {
+      this.bookingIdsIn = values.map((v) => String(v ?? "").trim()).filter(Boolean);
+    }
+    return this;
+  }
+  limit() {
+    return this;
+  }
+  order() {
+    return this;
+  }
+  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+    let rows = [...(this.db.tables.booking_cleaners ?? [])];
+    if (this.cleanerIdEq) rows = rows.filter((r) => String(r.cleaner_id ?? "") === this.cleanerIdEq);
+    if (this.bookingIdsIn?.length) {
+      const set = new Set(this.bookingIdsIn);
+      rows = rows.filter((r) => set.has(String(r.booking_id ?? "")));
+    }
+    const payload = { data: rows, error: null as null };
+    if (onfulfilled) onfulfilled(payload);
+    return Promise.resolve(payload);
+  }
+}
+
+class BookingLineItemsEmptyQuery {
+  select() {
+    return this;
+  }
+  in() {
+    return this;
+  }
+  order() {
+    return this;
+  }
+  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+    const payload = { data: [] as Row[], error: null as null };
+    if (onfulfilled) onfulfilled(payload);
+    return Promise.resolve(payload);
   }
 }
 
@@ -145,13 +227,14 @@ class IssueReportsEmptyQuery {
 }
 
 class MockSupabase {
-  tables: { cleaners: Row[]; team_members: Row[]; bookings: Row[] };
+  tables: { cleaners: Row[]; team_members: Row[]; bookings: Row[]; booking_cleaners: Row[] };
 
-  constructor(seed: { cleaners?: Row[]; team_members?: Row[]; bookings?: Row[] }) {
+  constructor(seed: { cleaners?: Row[]; team_members?: Row[]; bookings?: Row[]; booking_cleaners?: Row[] }) {
     this.tables = {
       cleaners: seed.cleaners ?? [],
       team_members: seed.team_members ?? [],
       bookings: seed.bookings ?? [],
+      booking_cleaners: seed.booking_cleaners ?? [],
     };
   }
 
@@ -159,6 +242,8 @@ class MockSupabase {
     if (table === "bookings") return new BookingsQuery(this.tables.bookings) as unknown as CleanersQuery;
     if (table === "cleaners") return new CleanersQuery(this);
     if (table === "team_members") return new TeamMembersQuery(this);
+    if (table === "booking_cleaners") return new BookingCleanersQuery(this);
+    if (table === "booking_line_items") return new BookingLineItemsEmptyQuery() as unknown as CleanersQuery;
     if (table === "cleaner_job_issue_reports") return new IssueReportsEmptyQuery() as unknown as CleanersQuery;
     throw new Error(`unexpected table ${table}`);
   }

@@ -5,7 +5,7 @@ import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeo
 
 const BASE = "https://www.shalean.co.za";
 
-/** Public index URLs only: `/`, `/services`, `/services/*`, `/locations/*`, `/blog/*`. Legacy `/cape-town/cleaning-services/*` is excluded (308 → `/locations/…`). */
+/** Public index URLs only: `/`, `/services`, `/services/*`, `/locations/*`, `/blog/*`. Legacy `/cape-town/cleaning-services/*` and `/cleaning-services/*` redirect (308) to `/locations/{suburb}-cleaning-services`. */
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 

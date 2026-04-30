@@ -334,7 +334,22 @@ export function CleanerJobCard({
           )}
 
           {job.isTeamJob ? (
-            <p className="text-xs text-zinc-600 dark:text-zinc-300">{teamJobAssignmentHeadline(job.teamMemberCount)}</p>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs text-zinc-600 dark:text-zinc-300">{teamJobAssignmentHeadline(job.teamMemberCount)}</p>
+                {job.isLeadCleaner ? (
+                  <span className="inline-flex rounded-full border border-violet-300/90 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-950 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-100">
+                    Team lead
+                  </span>
+                ) : null}
+              </div>
+              {job.teamRosterSummary ? (
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  <span className="font-medium text-zinc-600 dark:text-zinc-300">With: </span>
+                  {job.teamRosterSummary}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           {job.isTeamJob && teamChip ? (

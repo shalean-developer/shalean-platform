@@ -14,6 +14,7 @@ import { sumEligibleLineItemsSubtotalCents } from "@/lib/payout/computeEarningsF
 import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
 import { computeCleanerEarningsForBooking } from "@/lib/payout/computeCleanerEarningsForBooking";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
+import { buildTeamJobMemberPayoutInsertRows } from "@/lib/payout/teamRosterPayoutAllocation";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
@@ -86,6 +87,7 @@ async function isCleanerAllowedForPersist(
     is_team_job?: boolean | null;
   },
   expectedCleanerId: string,
+  bookingId: string,
 ): Promise<boolean> {
   const exp = expectedCleanerId.trim();
   if (r.is_team_job === true) {
@@ -94,6 +96,16 @@ async function isCleanerAllowedForPersist(
     if (r.cleaner_id != null && String(r.cleaner_id).trim() === exp) return true;
     const owner = String(r.payout_owner_cleaner_id ?? "").trim();
     if (owner && owner === exp) return true;
+    const bid = String(bookingId ?? "").trim();
+    if (bid) {
+      const { data: bc, error: bcErr } = await admin
+        .from("booking_cleaners")
+        .select("id")
+        .eq("booking_id", bid)
+        .eq("cleaner_id", expectedCleanerId)
+        .maybeSingle();
+      if (!bcErr && bc) return true;
+    }
     const { data, error } = await admin
       .from("team_members")
       .select("cleaner_id")
@@ -201,7 +213,7 @@ async function persistCleanerPayoutIfUnsetCore(
   refund_status?: string | null;
   };
 
-  if (!(await isCleanerAllowedForPersist(admin, r, expectedCleanerId))) {
+  if (!(await isCleanerAllowedForPersist(admin, r, expectedCleanerId, bookingId))) {
     return { ok: true, skipped: true, skipReason: "cleaner_not_eligible" };
   }
 
@@ -366,28 +378,64 @@ async function persistCleanerPayoutIfUnsetCore(
       });
     if (!activeMembers.length) return { ok: false, error: "No active team members for payout" };
 
-    const { data: existingRows, error: existingErr } = await admin
+    const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
+    const activeIds = activeMembers.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean);
+
+    const { data: rosterRows, error: rosterErr } = await admin
+      .from("booking_cleaners")
+      .select("cleaner_id, role, payout_weight, lead_bonus_cents")
+      .eq("booking_id", bookingId)
+      .order("cleaner_id", { ascending: true });
+    if (rosterErr) return { ok: false, error: rosterErr.message };
+
+    const { data: statusRows, error: statusErr } = await admin
       .from("team_job_member_payouts")
-      .select("cleaner_id")
+      .select("status")
       .eq("booking_id", bookingId)
       .eq("team_id", teamId);
-    if (existingErr) return { ok: false, error: existingErr.message };
-    const existingCleanerIds = new Set(
-      (existingRows ?? []).map((row) => String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim()).filter(Boolean),
+    if (statusErr) return { ok: false, error: statusErr.message };
+    const hasLockedMemberPayout = (statusRows ?? []).some(
+      (row) => String((row as { status?: string | null }).status ?? "").toLowerCase() !== "pending",
     );
-    const inserts = activeMembers
-      .map((m) => String(m.cleaner_id ?? "").trim())
-      .filter((cid) => cid && !existingCleanerIds.has(cid))
-      .map((cid) => ({
-        booking_id: bookingId,
-        team_id: teamId,
-        cleaner_id: cid,
-        payout_cents: earnings.payout_earnings_cents,
-        status: "pending",
-      }));
-    if (inserts.length > 0) {
-      const { error: insErr } = await admin.from("team_job_member_payouts").insert(inserts);
-      if (insErr) return { ok: false, error: insErr.message };
+
+    if ((rosterRows ?? []).length > 0 && !hasLockedMemberPayout) {
+      const payoutRows = buildTeamJobMemberPayoutInsertRows({
+        bookingId,
+        teamId,
+        poolCents,
+        rosterRows: rosterRows ?? [],
+        fallbackCleanerIds: activeIds,
+      });
+      const { error: delErr } = await admin.from("team_job_member_payouts").delete().eq("booking_id", bookingId).eq("team_id", teamId);
+      if (delErr) return { ok: false, error: delErr.message };
+      if (payoutRows.length > 0) {
+        const { error: insErr } = await admin.from("team_job_member_payouts").insert(payoutRows);
+        if (insErr) return { ok: false, error: insErr.message };
+      }
+    } else {
+      const { data: existingRows, error: existingErr } = await admin
+        .from("team_job_member_payouts")
+        .select("cleaner_id")
+        .eq("booking_id", bookingId)
+        .eq("team_id", teamId);
+      if (existingErr) return { ok: false, error: existingErr.message };
+      const existingCleanerIds = new Set(
+        (existingRows ?? []).map((row) => String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim()).filter(Boolean),
+      );
+      const perMember = activeIds.length > 0 ? Math.max(0, Math.floor(poolCents / activeIds.length)) : 0;
+      const inserts = activeIds
+        .filter((cid) => cid && !existingCleanerIds.has(cid))
+        .map((cid) => ({
+          booking_id: bookingId,
+          team_id: teamId,
+          cleaner_id: cid,
+          payout_cents: perMember,
+          status: "pending",
+        }));
+      if (inserts.length > 0) {
+        const { error: insErr } = await admin.from("team_job_member_payouts").insert(inserts);
+        if (insErr) return { ok: false, error: insErr.message };
+      }
     }
 
     let teamUp = admin
