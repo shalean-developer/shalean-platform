@@ -7,6 +7,10 @@ import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
+import {
+  fetchBookingDisplayEarningsCents,
+  hasPersistedDisplayEarningsBasis,
+} from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -196,19 +200,12 @@ export async function runCleanerBookingLifecycleAction(params: {
         },
       };
     }
-    const { error: uErr } = await admin
-      .from("bookings")
-      .update({ status: "completed", completed_at: now })
-      .eq("id", bookingId);
-
-    if (uErr) return { status: 500, json: { error: uErr.message } };
 
     try {
       const payout = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
-      /** Fail closed: no successful completion when persist returns hard failure (`skipped` only applies when ok). */
       if (payout.ok === false) {
         const error_id = newPayoutMoneyPathErrorId();
-        await reportOperationalIssue("error", "cleaner/jobs/complete", `payout missing after completion: ${payout.error}`, {
+        await reportOperationalIssue("error", "cleaner/jobs/complete", `payout before completion: ${payout.error}`, {
           bookingId,
           cleanerId,
           error_id,
@@ -223,10 +220,28 @@ export async function runCleanerBookingLifecycleAction(params: {
           },
         };
       }
+      const displayCents = await fetchBookingDisplayEarningsCents(admin, bookingId);
+      if (!hasPersistedDisplayEarningsBasis(displayCents)) {
+        const error_id = newPayoutMoneyPathErrorId();
+        await reportOperationalIssue("error", "cleaner/jobs/complete", "display_earnings_cents missing after persist (pre-complete verify)", {
+          bookingId,
+          cleanerId,
+          error_id,
+          code: "payout_verify_failed",
+        });
+        return {
+          status: 500,
+          json: {
+            error: "Could not record earnings for this job.",
+            code: "payout_verify_failed",
+            error_id,
+          },
+        };
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const error_id = newPayoutMoneyPathErrorId();
-      await reportOperationalIssue("error", "cleaner/jobs/complete", `payout persist threw after completion: ${msg}`, {
+      await reportOperationalIssue("error", "cleaner/jobs/complete", `payout persist threw before completion: ${msg}`, {
         bookingId,
         cleanerId,
         error_id,
@@ -237,6 +252,13 @@ export async function runCleanerBookingLifecycleAction(params: {
         json: { error: "Could not record earnings for this job.", code: "payout_persist_failed", error_id },
       };
     }
+
+    const { error: uErr } = await admin
+      .from("bookings")
+      .update({ status: "completed", completed_at: now })
+      .eq("id", bookingId);
+
+    if (uErr) return { status: 500, json: { error: uErr.message } };
 
     void notifyBookingEvent({ type: "completed", supabase: admin, bookingId });
 

@@ -6,13 +6,16 @@ import {
 } from "@/lib/cleaner/cleanerBookingAccess";
 
 describe("bookingsVisibilityOrFilter", () => {
-  it("uses only cleaner_id when no teams", () => {
-    expect(bookingsVisibilityOrFilter("cleaner-a", [])).toBe("cleaner_id.eq.cleaner-a");
+  it("uses cleaner_id and payout_owner when no teams", () => {
+    expect(bookingsVisibilityOrFilter("cleaner-a", [])).toBe(
+      "cleaner_id.eq.cleaner-a,payout_owner_cleaner_id.eq.cleaner-a",
+    );
   });
 
   it("adds team OR branch when cleaner has teams", () => {
     const f = bookingsVisibilityOrFilter("cleaner-a", ["t1", "t2"]);
     expect(f).toContain("cleaner_id.eq.cleaner-a");
+    expect(f).toContain("payout_owner_cleaner_id.eq.cleaner-a");
     expect(f.includes("is_team_job.is.true") || f.includes("is_team_job.eq.true")).toBe(true);
     expect(f).toContain("team_id.in.(t1,t2)");
   });

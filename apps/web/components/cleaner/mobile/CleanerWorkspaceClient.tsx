@@ -283,6 +283,7 @@ export function CleanerWorkspaceClient() {
               pendingCents={payout.summary?.pending_cents ?? 0}
               paidCents={payout.summary?.paid_cents ?? 0}
               invalidCents={payout.summary?.invalid_cents ?? 0}
+              completedEarningsRowCount={payout.rows?.length ?? 0}
               loading={loading || payout.loading}
               missingBankDetails={payout.missingBankDetails}
               onViewEarnings={() => setTab("earnings")}

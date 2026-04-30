@@ -86,6 +86,7 @@ export default function CleanerEarningsPage() {
         pendingJobCount={pendingJobCount}
         missingBankDetails={missingBankDetails}
         paidRowsSorted={paidRowsSorted}
+        completedEarningsRowCount={rows.length}
       />
     </main>
   );

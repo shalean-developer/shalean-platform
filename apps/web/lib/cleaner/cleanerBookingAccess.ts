@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BookingAccessRow = {
   cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
   team_id?: string | null;
   is_team_job?: boolean | null;
 };
@@ -24,14 +25,15 @@ export async function fetchCleanerTeamIds(admin: SupabaseClient, cleanerId: stri
 
 /**
  * PostgREST `.or()` expression for bookings the cleaner may see:
- * assigned to them individually OR team job on a team they belong to.
+ * assigned solo cleaner, payroll owner (team / admin paths), OR team job on a team they belong to.
  */
 export function bookingsVisibilityOrFilter(cleanerId: string, teamIds: string[]): string {
   const c = cleanerId.trim();
   if (!c) return `cleaner_id.eq.${c}`;
+  const soloOrOwner = `cleaner_id.eq.${c},payout_owner_cleaner_id.eq.${c}`;
   const list = teamIds.map((t) => t.trim()).filter(Boolean);
-  if (!list.length) return `cleaner_id.eq.${c}`;
-  return `cleaner_id.eq.${c},and(is_team_job.is.true,team_id.in.(${list.join(",")}))`;
+  if (!list.length) return soloOrOwner;
+  return `${soloOrOwner},and(is_team_job.is.true,team_id.in.(${list.join(",")}))`;
 }
 
 export async function cleanerHasBookingAccess(
@@ -40,6 +42,7 @@ export async function cleanerHasBookingAccess(
   row: BookingAccessRow,
 ): Promise<boolean> {
   if (String(row.cleaner_id ?? "").trim() === cleanerId.trim()) return true;
+  if (String(row.payout_owner_cleaner_id ?? "").trim() === cleanerId.trim()) return true;
   if (row.is_team_job !== true) return false;
   const teamId = String(row.team_id ?? "").trim();
   if (!teamId) return false;

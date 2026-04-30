@@ -9,7 +9,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const COOLDOWN_SECONDS = 120;
 
-export type StuckEarningsRecomputeSource = "jobs_list" | "job_detail";
+export type StuckEarningsRecomputeSource =
+  | "jobs_list"
+  | "job_detail"
+  | "admin_patch_already_completed_persist_failed"
+  | "admin_patch_already_completed_persist_threw"
+  | "admin_patch_final_integrity";
 
 type SkippedReason =
   | "cooldown"

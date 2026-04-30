@@ -1,17 +1,20 @@
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
 
 /**
- * Single cleaner-facing earnings amount for jobs and offers: frozen (when set) then stored display.
- * Returns null until amounts exist — no estimates or customer-total fallbacks.
+ * Single cleaner-facing earnings amount for jobs and offers: positive frozen (settlement lock)
+ * then display. `payout_frozen_cents = 0` does not override a positive `display_earnings_cents`
+ * (legacy / inconsistent rows); 0/0 remains zero.
  */
 export function resolveCleanerEarningsCents(row: {
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
 }): number | null {
   const frozen = optionalCentsFromDb(row.payout_frozen_cents);
-  if (frozen != null && frozen > 0) return frozen;
   const display = optionalCentsFromDb(row.display_earnings_cents);
-  if (display != null && display > 0) return display;
+  if (frozen !== null && frozen > 0) return frozen;
+  if (frozen === 0 && display !== null && display > 0) return display;
+  if (frozen !== null) return frozen;
+  if (display !== null) return display;
   return null;
 }
 
@@ -21,8 +24,8 @@ export function resolveCleanerFrozenCentsForSettlement(row: {
   cleaner_payout_cents?: unknown;
 }): number | null {
   const d = optionalCentsFromDb(row.display_earnings_cents);
-  if (d != null && d > 0) return d;
+  if (d !== null) return d;
   const c = optionalCentsFromDb(row.cleaner_payout_cents);
-  if (c != null && c > 0) return c;
+  if (c !== null) return c;
   return null;
 }

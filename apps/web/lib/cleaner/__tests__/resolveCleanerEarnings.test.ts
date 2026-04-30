@@ -11,13 +11,31 @@ describe("resolveCleanerEarningsCents", () => {
     ).toBe(30_000);
   });
 
-  it("uses display when frozen missing or zero", () => {
+  it("uses display when frozen missing", () => {
     expect(
       resolveCleanerEarningsCents({
         payout_frozen_cents: null,
         display_earnings_cents: 25_000,
       }),
     ).toBe(25_000);
+  });
+
+  it("ignores zero frozen when display is positive (inconsistent legacy rows)", () => {
+    expect(
+      resolveCleanerEarningsCents({
+        payout_frozen_cents: 0,
+        display_earnings_cents: 25_000,
+      }),
+    ).toBe(25_000);
+  });
+
+  it("returns zero display when frozen missing", () => {
+    expect(
+      resolveCleanerEarningsCents({
+        payout_frozen_cents: null,
+        display_earnings_cents: 0,
+      }),
+    ).toBe(0);
   });
 
   it("returns null when neither is set", () => {
@@ -47,5 +65,14 @@ describe("resolveCleanerFrozenCentsForSettlement", () => {
         cleaner_payout_cents: 15_000,
       }),
     ).toBe(15_000);
+  });
+
+  it("accepts zero display for settlement basis", () => {
+    expect(
+      resolveCleanerFrozenCentsForSettlement({
+        display_earnings_cents: 0,
+        cleaner_payout_cents: 15_000,
+      }),
+    ).toBe(0);
   });
 });

@@ -1,14 +1,8 @@
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { earningsPeriodBucketYmd } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
 import { cleanerFacingDisplayEarningsCents } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { addDaysYmd, isoWeekdayFromYmd } from "@/lib/recurring/johannesburgCalendar";
-
-function jhbYmdFromCompletedAt(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return null;
-  return johannesburgCalendarYmd(t);
-}
 
 /** Completed bookings (any pay state) whose completion instant falls on today’s JHB calendar date. */
 export function completedJobCountTodayJohannesburg(rows: CleanerBookingRow[], now = new Date()): number {
@@ -16,7 +10,7 @@ export function completedJobCountTodayJohannesburg(rows: CleanerBookingRow[], no
   let n = 0;
   for (const r of rows) {
     if (String(r.status ?? "").toLowerCase() !== "completed") continue;
-    const d = jhbYmdFromCompletedAt(r.completed_at);
+    const d = earningsPeriodBucketYmd({ completed_at: r.completed_at, schedule_date: r.date, amount_cents: 0 });
     if (d === todayY) n += 1;
   }
   return n;
@@ -39,7 +33,7 @@ export function completedJobEarningsPeriodFromRows(rows: CleanerBookingRow[], no
 
   for (const r of rows) {
     if (String(r.status ?? "").toLowerCase() !== "completed") continue;
-    const d = jhbYmdFromCompletedAt(r.completed_at);
+    const d = earningsPeriodBucketYmd({ completed_at: r.completed_at, schedule_date: r.date, amount_cents: 0 });
     if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
     const cents = cleanerFacingDisplayEarningsCents(r);
     if (cents == null || cents <= 0) continue;

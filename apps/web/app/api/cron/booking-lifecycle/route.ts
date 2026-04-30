@@ -8,6 +8,12 @@ import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import {
+  fetchBookingDisplayEarningsCents,
+  hasPersistedDisplayEarningsBasis,
+  resolvePersistCleanerIdForBooking,
+} from "@/lib/payout/bookingEarningsIntegrity";
+import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +28,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
   const today = todayYmdJohannesburg();
   const { data: past, error } = await admin
     .from("bookings")
-    .select("id, user_id, cleaner_id, date, status, customer_email")
+    .select("id, user_id, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email")
     .in("status", ["pending", "assigned", "in_progress"])
     .not("date", "is", null)
     .lt("date", today)
@@ -45,10 +51,54 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
     if (ev) continue;
 
     const uid = typeof b.user_id === "string" ? b.user_id : null;
-    const cleanerId = typeof (b as { cleaner_id?: unknown }).cleaner_id === "string" ? String((b as { cleaner_id?: string }).cleaner_id) : null;
+    const row = b as {
+      cleaner_id?: string | null;
+      payout_owner_cleaner_id?: string | null;
+      is_team_job?: boolean | null;
+    };
+    const cleanerId = typeof row.cleaner_id === "string" ? row.cleaner_id.trim() : null;
+    const persistCleanerId = resolvePersistCleanerIdForBooking(row);
     const dateYmd = typeof b.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : null;
     const rawEmail = typeof b.customer_email === "string" ? b.customer_email : "";
     const completedAt = new Date().toISOString();
+
+    if (!persistCleanerId) {
+      await reportOperationalIssue("warn", "cron/booking-lifecycle", "auto-complete skipped: no cleaner / payout owner for earnings", {
+        bookingId: id,
+      });
+      continue;
+    }
+
+    try {
+      const payout = await persistCleanerPayoutIfUnset({
+        admin,
+        bookingId: id,
+        cleanerId: persistCleanerId,
+      });
+      if (!payout.ok) {
+        await reportOperationalIssue("error", "cron/booking-lifecycle", `CRITICAL persist before auto-complete failed: ${payout.error}`, {
+          bookingId: id,
+          cleanerId: persistCleanerId,
+        });
+        continue;
+      }
+      const displayCents = await fetchBookingDisplayEarningsCents(admin, id);
+      if (!hasPersistedDisplayEarningsBasis(displayCents)) {
+        await reportOperationalIssue("error", "cron/booking-lifecycle", "CRITICAL display_earnings_cents still missing after persist (pre-complete)", {
+          bookingId: id,
+          cleanerId: persistCleanerId,
+        });
+        continue;
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue("error", "cron/booking-lifecycle", `CRITICAL persist threw before auto-complete: ${msg}`, {
+        bookingId: id,
+        cleanerId: persistCleanerId,
+      });
+      continue;
+    }
+
     const { error: upErr } = await admin
       .from("bookings")
       .update({ status: "completed", completed_at: completedAt })

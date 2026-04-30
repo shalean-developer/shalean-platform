@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "ops:smoke": "node scripts/ops-smoke-checklist.mjs"
+    "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
+    "process-favicons": "node scripts/process-favicons-transparent.mjs",
+    "generate-favicons": "node scripts/generate-favicons-from-logo.mjs"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",
@@ -47,6 +49,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
+    "to-ico": "^1.1.5",
     "typescript": "^5",
     "vitest": "^3.2.4"
   }

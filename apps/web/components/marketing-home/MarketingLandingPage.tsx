@@ -23,6 +23,7 @@ import {
 import type { HomeFaq, HomeLocation } from "@/lib/home/data";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { MarketingFreshHero } from "@/components/marketing-home/MarketingFreshHero";
 import {
@@ -181,20 +182,13 @@ export function MarketingLandingPage({ locations, faqs, reviewBanner = null }: M
     <div className="bg-white text-slate-900">
       {/* Site header (design-specific; GlobalTopNav hidden on `/`) */}
       <header className="sticky top-0 z-40 border-b border-blue-900/25 bg-[#1e4fd4] shadow-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:py-3.5">
           <Link
             href="/"
-            className="flex shrink-0 items-center rounded-lg bg-white/95 px-2 py-1 shadow-sm ring-1 ring-white/30"
+            className="flex shrink-0 items-center rounded-lg px-1 py-0.5 transition hover:bg-white/10"
             aria-label="Shalean home"
           >
-            <Image
-              src="/images/shalean-logo.png"
-              alt="Shalean Cleaning Services"
-              width={152}
-              height={40}
-              className="h-8 w-auto max-w-[min(168px,52vw)] sm:h-9 sm:max-w-[180px]"
-              priority
-            />
+            <ShaleanNavLogo className="h-10 w-10" />
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">

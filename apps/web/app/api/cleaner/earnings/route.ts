@@ -162,7 +162,11 @@ export async function GET(request: Request) {
   });
 
   const { today_cents, week_cents, month_cents } = earningsPeriodCentsFromRows(
-    rows.map((b) => ({ completed_at: b.completed_at, amount_cents: amountCentsForRow(b) })),
+    rows.map((b) => ({
+      completed_at: b.completed_at,
+      schedule_date: b.date,
+      amount_cents: amountCentsForRow(b),
+    })),
     new Date(),
   );
 

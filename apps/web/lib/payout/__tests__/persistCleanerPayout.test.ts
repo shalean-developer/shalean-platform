@@ -373,4 +373,40 @@ describe("persistCleanerPayoutIfUnset", () => {
       expect.objectContaining({ serviceId: "standard", reason: "no_active_cap" }),
     );
   });
+
+  it("recomputes solo display when stuck at 0 but customer payment columns show paid amount", async () => {
+    const admin = new MockSupabaseClient({
+      bookings: [
+        {
+          id: "b-zero-stuck",
+          cleaner_id: "c1",
+          team_id: null,
+          is_team_job: false,
+          date: "2026-04-20",
+          time: "10:00:00",
+          total_paid_zar: 500,
+          total_paid_cents: 50_000,
+          amount_paid_cents: 50_000,
+          base_amount_cents: 50_000,
+          service_fee_cents: 0,
+          service: "Standard Cleaning",
+          booking_snapshot: { locked: { service: "standard" } },
+          cleaner_payout_cents: null,
+          cleaner_bonus_cents: null,
+          company_revenue_cents: null,
+          display_earnings_cents: 0,
+        },
+      ],
+      cleaners: [{ id: "c1", joined_at: "2026-03-01T00:00:00.000Z", created_at: "2026-03-01T00:00:00.000Z" }],
+      service_earning_caps: [{ service_id: "standard", cap_cents: 25_000, is_active: true }],
+    });
+    mockState.admin = admin;
+
+    const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
+    const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b-zero-stuck", cleanerId: "c1" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.skipped).toBe(false);
+    expect(admin.tables.bookings[0]!.display_earnings_cents).toBe(25_000);
+  });
 });

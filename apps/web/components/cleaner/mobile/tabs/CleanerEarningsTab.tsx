@@ -92,6 +92,7 @@ export function CleanerEarningsTab({
       pendingJobCount={pendingJobCount}
       missingBankDetails={missingBankDetails}
       paidRowsSorted={paidRowsSorted}
+      completedEarningsRowCount={rows.length}
       className="py-2"
     />
   );

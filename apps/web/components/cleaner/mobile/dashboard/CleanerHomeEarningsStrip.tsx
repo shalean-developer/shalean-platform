@@ -15,6 +15,8 @@ type Props = {
   pendingCents: number;
   paidCents: number;
   invalidCents?: number;
+  /** From `/api/cleaner/earnings` row count — show R0.00 when jobs exist but buckets are zero. */
+  completedEarningsRowCount?: number;
   loading?: boolean;
   /** When true, hide next-payout line and show bank setup hint. */
   missingBankDetails?: boolean;
@@ -26,18 +28,22 @@ export function CleanerHomeEarningsStrip({
   pendingCents,
   paidCents,
   invalidCents = 0,
+  completedEarningsRowCount = 0,
   loading,
   missingBankDetails = false,
   onViewEarnings,
 }: Props) {
   const noEarningsYet =
     !loading &&
-    cleanerEarningsFullyEmpty({
-      pending_cents: pendingCents,
-      eligible_cents: eligibleCents,
-      paid_cents: paidCents,
-      invalid_cents: invalidCents,
-    });
+    cleanerEarningsFullyEmpty(
+      {
+        pending_cents: pendingCents,
+        eligible_cents: eligibleCents,
+        paid_cents: paidCents,
+        invalid_cents: invalidCents,
+      },
+      { completedEarningsRowCount },
+    );
 
   return (
     <div className="flex flex-col gap-2 border-b border-zinc-200/80 pb-4 dark:border-zinc-800">

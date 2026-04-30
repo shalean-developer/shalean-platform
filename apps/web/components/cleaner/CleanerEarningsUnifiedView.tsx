@@ -60,6 +60,7 @@ export function CleanerEarningsUnifiedView({
   pendingJobCount,
   missingBankDetails,
   paidRowsSorted,
+  completedEarningsRowCount = 0,
   className = "",
 }: {
   todayCents: number;
@@ -72,15 +73,20 @@ export function CleanerEarningsUnifiedView({
   pendingJobCount: number;
   missingBankDetails: boolean;
   paidRowsSorted: CleanerPayoutSummaryRow[];
+  /** From GET /api/cleaner/earnings `rows.length` — avoids “No earnings yet” when totals are R0 but jobs exist. */
+  completedEarningsRowCount?: number;
   className?: string;
 }) {
   const periodAllZero = todayCents + weekCents + monthCents === 0;
-  const noEarningsYet = cleanerEarningsFullyEmpty({
-    pending_cents: pendingCents,
-    eligible_cents: eligibleCents,
-    paid_cents: paidCents,
-    invalid_cents: invalidCents,
-  });
+  const noEarningsYet = cleanerEarningsFullyEmpty(
+    {
+      pending_cents: pendingCents,
+      eligible_cents: eligibleCents,
+      paid_cents: paidCents,
+      invalid_cents: invalidCents,
+    },
+    { completedEarningsRowCount },
+  );
 
   const [firstEarnCelebrate, setFirstEarnCelebrate] = useState<{ cents: number } | null>(null);
   const prevWalletSumRef = useRef<number | null>(null);

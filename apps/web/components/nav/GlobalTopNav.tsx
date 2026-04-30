@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -19,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { cn } from "@/lib/utils";
 
 const bookingHref = "/booking?step=entry";
@@ -156,14 +156,7 @@ export function GlobalTopNav() {
     <header className="sticky top-0 z-50 border-b border-blue-100 bg-white/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Shalean home">
-          <Image
-            src="/images/shalean-logo.png"
-            alt="Shalean Cleaning Services"
-            width={152}
-            height={40}
-            className="h-8 w-auto max-w-[min(168px,52vw)] sm:h-9 sm:max-w-[180px]"
-            priority
-          />
+          <ShaleanNavLogo className="h-10 w-10" />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">

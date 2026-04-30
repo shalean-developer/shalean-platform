@@ -5,9 +5,25 @@ export function parseYmdSast(ymd: string): Date {
   return new Date(`${ymd}T12:00:00+02:00`);
 }
 
-/** ISO weekday 1 = Monday … 7 = Sunday (Africa/Johannesburg calendar day). */
+const JHB_WEEKDAY_SHORT_TO_ISO: Record<string, number> = {
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+  Sun: 7,
+};
+
+/** ISO weekday 1 = Monday … 7 = Sunday for civil `ymd` in Africa/Johannesburg (not `getUTCDay`). */
 export function isoWeekdayFromYmd(ymd: string): number {
   const d = parseYmdSast(ymd);
+  const short = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Johannesburg",
+    weekday: "short",
+  }).format(d);
+  const mapped = JHB_WEEKDAY_SHORT_TO_ISO[short];
+  if (mapped != null) return mapped;
   const n = d.getUTCDay();
   return n === 0 ? 7 : n;
 }

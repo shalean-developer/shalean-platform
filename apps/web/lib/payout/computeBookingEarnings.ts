@@ -134,6 +134,7 @@ export async function computeBookingEarnings({
   isTeamJob,
   bookingDate,
 }: ComputeBookingEarningsInput): Promise<ComputeBookingEarningsOutput> {
+  /** When this is 0, all returned *_cents are 0 — ensure {@link persistCleanerPayout} passes paid `payoutBaseCents`, not missing totals. */
   const normalizedServicePriceCents = Math.max(0, Math.floor(servicePriceCents));
 
   if (isTeamJob) {

@@ -1,12 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isAdmin } from "@/lib/auth/admin";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
+import {
+  fetchBookingDisplayEarningsCents,
+  hasPersistedDisplayEarningsBasis,
+  resolvePersistCleanerIdForBooking,
+} from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 export const runtime = "nodejs";
@@ -217,7 +223,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const { data: before } = await admin.from("bookings").select("user_id, cleaner_id").eq("id", id).maybeSingle();
+  const { data: before } = await admin
+    .from("bookings")
+    .select("user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job")
+    .eq("id", id)
+    .maybeSingle();
+  const beforeRow = before as {
+    cleaner_id?: string | null;
+    status?: string | null;
+    completed_at?: string | null;
+    payout_owner_cleaner_id?: string | null;
+    is_team_job?: boolean | null;
+  } | null;
+  const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
+  const beforeCompletedAt =
+    beforeRow?.completed_at != null && String(beforeRow.completed_at).trim()
+      ? String(beforeRow.completed_at).trim()
+      : null;
   const oldCleaner =
     before && typeof before === "object"
       ? String((before as { cleaner_id?: string | null }).cleaner_id ?? "").trim() || null
@@ -247,28 +269,178 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (newCleaner && cleanerWasChanged) {
     await notifyCleanerAssignedBooking(admin, id, newCleaner);
   }
+
   const completedViaPatch = updates.status === "completed";
-  const effectiveCleaner = newCleaner ?? oldCleaner;
-  if (completedViaPatch && effectiveCleaner) {
-    try {
-      const payout = await persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId: effectiveCleaner });
-      if (!payout.ok) {
+  const wasAlreadyCompleted = String(beforeStatus).toLowerCase() === "completed";
+  const needsEarningsIntegrityGate = completedViaPatch && !wasAlreadyCompleted;
+
+  async function revertBookingCompletionOnly(adminClient: SupabaseClient): Promise<void> {
+    await adminClient
+      .from("bookings")
+      .update({ status: beforeStatus, completed_at: beforeCompletedAt })
+      .eq("id", id);
+  }
+
+  if (completedViaPatch) {
+    const { data: postRow, error: postErr } = await admin
+      .from("bookings")
+      .select("cleaner_id, payout_owner_cleaner_id, is_team_job, display_earnings_cents")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (postErr || !postRow) {
+      if (needsEarningsIntegrityGate) {
+        await revertBookingCompletionOnly(admin);
+        await reportOperationalIssue("error", "admin_bookings_patch", "post-update booking refetch failed (completion gate)", {
+          bookingId: id,
+          error: postErr?.message ?? "null_row",
+        });
+        return NextResponse.json({ error: "Booking refetch failed after update." }, { status: 500 });
+      }
+    } else {
+      const persistCleanerId = resolvePersistCleanerIdForBooking(
+        postRow as {
+          cleaner_id?: string | null;
+          payout_owner_cleaner_id?: string | null;
+          is_team_job?: boolean | null;
+        },
+      );
+
+      if (needsEarningsIntegrityGate && !persistCleanerId) {
+        await revertBookingCompletionOnly(admin);
         await logSystemEvent({
           level: "error",
           source: "admin_booking_completed",
-          message: `Payout missing after admin completion: ${payout.error}`,
-          context: { bookingId: id, cleanerId: effectiveCleaner },
+          message: "Cannot complete without cleaner / payout owner for earnings",
+          context: { bookingId: id },
         });
+        return NextResponse.json(
+          { error: "Cannot mark completed without a cleaner or team payout owner for earnings." },
+          { status: 400 },
+        );
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("admin bookings PATCH persistCleanerPayoutIfUnset", { bookingId: id, cleanerId: effectiveCleaner, error: msg });
-      await logSystemEvent({
-        level: "error",
-        source: "admin_booking_completed",
-        message: `Payout persist threw after admin completion: ${msg}`,
-        context: { bookingId: id, cleanerId: effectiveCleaner },
+
+      if (persistCleanerId) {
+        try {
+          const payout = await persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId: persistCleanerId });
+          if (needsEarningsIntegrityGate && !payout.ok) {
+            await revertBookingCompletionOnly(admin);
+            await logSystemEvent({
+              level: "error",
+              source: "admin_booking_completed",
+              message: `Payout missing after admin completion (reverted): ${payout.error}`,
+              context: { bookingId: id, cleanerId: persistCleanerId },
+            });
+            return NextResponse.json({ error: payout.error ?? "Earnings persist failed." }, { status: 500 });
+          }
+          if (needsEarningsIntegrityGate) {
+            const displayCents = await fetchBookingDisplayEarningsCents(admin, id);
+            if (!hasPersistedDisplayEarningsBasis(displayCents)) {
+              await revertBookingCompletionOnly(admin);
+              await reportOperationalIssue("error", "admin_booking_completed", "CRITICAL display_earnings missing after persist (reverted completion)", {
+                bookingId: id,
+                cleanerId: persistCleanerId,
+              });
+              await logSystemEvent({
+                level: "error",
+                source: "admin_booking_completed",
+                message: "Earnings verification failed after completion (reverted)",
+                context: { bookingId: id, cleanerId: persistCleanerId },
+              });
+              return NextResponse.json({ error: "Earnings verification failed after completion." }, { status: 500 });
+            }
+          } else if (!payout.ok) {
+            scheduleStuckEarningsRecomputeDebounced({
+              admin,
+              bookingId: id,
+              cleanerId: persistCleanerId,
+              recomputeSource: "admin_patch_already_completed_persist_failed",
+            });
+            await reportOperationalIssue("error", "admin_booking_completed", `Payout persist failed on already-completed booking: ${payout.error}`, {
+              bookingId: id,
+              cleanerId: persistCleanerId,
+            });
+            return NextResponse.json(
+              {
+                error: "Completed booking has missing earnings — integrity violation.",
+                code: "INTEGRITY_COMPLETED_MISSING_EARNINGS",
+              },
+              { status: 422 },
+            );
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (needsEarningsIntegrityGate) {
+            await revertBookingCompletionOnly(admin);
+            await logSystemEvent({
+              level: "error",
+              source: "admin_booking_completed",
+              message: `Payout persist threw after admin completion (reverted): ${msg}`,
+              context: { bookingId: id, cleanerId: persistCleanerId },
+            });
+            return NextResponse.json({ error: "Earnings persist failed." }, { status: 500 });
+          }
+          scheduleStuckEarningsRecomputeDebounced({
+            admin,
+            bookingId: id,
+            cleanerId: persistCleanerId,
+            recomputeSource: "admin_patch_already_completed_persist_threw",
+          });
+          await reportOperationalIssue("error", "admin_booking_completed", `Payout persist threw (already completed): ${msg}`, {
+            bookingId: id,
+            cleanerId: persistCleanerId,
+          });
+          return NextResponse.json(
+            {
+              error: "Completed booking has missing earnings — integrity violation.",
+              code: "INTEGRITY_COMPLETED_MISSING_EARNINGS",
+            },
+            { status: 422 },
+          );
+        }
+      }
+    }
+  }
+
+  const { data: intr0 } = await admin
+    .from("bookings")
+    .select("status, display_earnings_cents, cleaner_id, payout_owner_cleaner_id, is_team_job")
+    .eq("id", id)
+    .maybeSingle();
+  const intrStatus = String(intr0?.status ?? "").toLowerCase();
+  if (intrStatus === "completed" && !hasPersistedDisplayEarningsBasis((intr0 as { display_earnings_cents?: unknown }).display_earnings_cents)) {
+    const intrPid = resolvePersistCleanerIdForBooking(
+      intr0 as {
+        cleaner_id?: string | null;
+        payout_owner_cleaner_id?: string | null;
+        is_team_job?: boolean | null;
+      },
+    );
+    if (intrPid) {
+      try {
+        await persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId: intrPid });
+      } catch {
+        /* final gate will still fail below if row unchanged */
+      }
+      scheduleStuckEarningsRecomputeDebounced({
+        admin,
+        bookingId: id,
+        cleanerId: intrPid,
+        recomputeSource: "admin_patch_final_integrity",
       });
+    }
+    const { data: intr1 } = await admin.from("bookings").select("display_earnings_cents").eq("id", id).maybeSingle();
+    if (!hasPersistedDisplayEarningsBasis((intr1 as { display_earnings_cents?: unknown } | null)?.display_earnings_cents)) {
+      await reportOperationalIssue("error", "admin_bookings_patch", "INTEGRITY: completed booking missing display_earnings_cents after PATCH", {
+        bookingId: id,
+      });
+      return NextResponse.json(
+        {
+          error: "Completed booking has missing earnings — integrity violation.",
+          code: "INTEGRITY_COMPLETED_MISSING_EARNINGS",
+        },
+        { status: 422 },
+      );
     }
   }
 
