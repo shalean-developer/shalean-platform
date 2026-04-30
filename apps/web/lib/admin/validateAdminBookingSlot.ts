@@ -1,5 +1,6 @@
 import {
   BOOKING_MIN_LEAD_MINUTES,
+  allStandardDaySlots,
   filterBookableTimeSlots,
   johannesburgTodayYmd,
 } from "@/lib/dashboard/bookingSlotTimes";
@@ -39,10 +40,19 @@ export function assertAdminBookingSlotAllowed(params: {
   dateYmd: string;
   timeHm: string;
   now?: Date;
+  /** Past dates, same-day short lead, and any business-hour slot (admin walk-ins / corrections). */
+  adminSlotOverride?: boolean;
 }): { ok: true } | { ok: false; error: string } {
-  const { dateYmd, timeHm, now = new Date() } = params;
+  const { dateYmd, timeHm, now = new Date(), adminSlotOverride = false } = params;
   if (!isYmd(dateYmd) || !isHm(timeHm)) {
     return { ok: false, error: "date (YYYY-MM-DD) and time (HH:MM) are required." };
+  }
+  if (adminSlotOverride) {
+    const grid = allStandardDaySlots();
+    if (!grid.includes(timeHm)) {
+      return { ok: false, error: "Time must be on the standard 15-minute business grid (07:00–19:00 Johannesburg)." };
+    }
+    return { ok: true };
   }
   const todayJhb = johannesburgTodayYmd(now);
   if (dateYmd < todayJhb) {

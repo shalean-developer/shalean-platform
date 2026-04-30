@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { findAuthUserIdByEmail } from "@/lib/cleaner/linkCleanerAuth";
+import { customerGeneratedLoginEmailFromAnyPhone } from "@/lib/customer/customerIdentity";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listAuthUsersMatchingNeedle } from "@/lib/admin/searchAuthUsersForAdminCustomerLookup";
@@ -72,6 +74,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const idParam = (searchParams.get("id") ?? "").trim();
   const q = (searchParams.get("q") ?? "").trim();
+  const phoneParam = (searchParams.get("phone") ?? "").trim();
 
   const admin = getSupabaseAdmin();
   if (!admin) {
@@ -80,6 +83,21 @@ export async function GET(request: Request) {
 
   const out: AdminCustomerSearchRow[] = [];
   const seen = new Set<string>();
+
+  if (phoneParam.length >= 5) {
+    const norm = normalizeSouthAfricaPhone(phoneParam);
+    if (norm) {
+      const gen = customerGeneratedLoginEmailFromAnyPhone(norm);
+      if (gen) {
+        const uid = await findAuthUserIdByEmail(admin, gen);
+        if (uid) {
+          await pushRowFromProfileAndAuth(admin, out, seen, uid, { email: gen });
+          return NextResponse.json({ customers: out });
+        }
+      }
+    }
+    return NextResponse.json({ customers: [] });
+  }
 
   if (/^[0-9a-f-]{36}$/i.test(idParam)) {
     const { data: authData, error: authErr } = await admin.auth.admin.getUserById(idParam);
@@ -109,6 +127,21 @@ export async function GET(request: Request) {
       schedule_type: String(p?.schedule_type ?? "on_demand"),
     });
     return NextResponse.json({ customers: out });
+  }
+
+  const qDigits = q.replace(/\D/g, "");
+  if (!phoneParam && q.length >= 5 && qDigits.length >= 9 && !q.includes("@")) {
+    const norm = normalizeSouthAfricaPhone(q);
+    if (norm) {
+      const gen = customerGeneratedLoginEmailFromAnyPhone(norm);
+      if (gen) {
+        const uid = await findAuthUserIdByEmail(admin, gen);
+        if (uid) {
+          await pushRowFromProfileAndAuth(admin, out, seen, uid, { email: gen });
+          return NextResponse.json({ customers: out });
+        }
+      }
+    }
   }
 
   if (q.length < 2) {

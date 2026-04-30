@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { SeoLocationCleaningPage } from "@/components/seo/SeoLocationCleaningPage";
+import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import {
   buildLocationSeoMetadata,
   getLocationSeo,
@@ -24,9 +25,10 @@ export default async function LocationSeoPage({ params }: Props) {
   const { slug } = await params;
   const data = getLocationSeo(slug);
   if (!data) notFound();
+  const trustStats = await getPublicReviewBannerStats();
   return (
     <MarketingLayout>
-      <SeoLocationCleaningPage slug={data.slug} />
+      <SeoLocationCleaningPage slug={data.slug} trustStats={trustStats} />
     </MarketingLayout>
   );
 }

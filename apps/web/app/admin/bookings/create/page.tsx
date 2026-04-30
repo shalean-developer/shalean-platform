@@ -1,15 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
-import { BOOKING_MIN_LEAD_MINUTES, filterBookableTimeSlots, johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
+import {
+  allStandardDaySlots,
+  BOOKING_MIN_LEAD_MINUTES,
+  filterBookableTimeSlots,
+  johannesburgTodayYmd,
+} from "@/lib/dashboard/bookingSlotTimes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatInvoiceMonthLabel, previewInvoiceBucketMonth } from "@/lib/monthlyInvoice/previewInvoiceBucketMonth";
@@ -19,6 +26,8 @@ import { extractNotesPreviewTags } from "@/lib/admin/adminCreateBookingNotesPrev
 import { AdminPropertySelector } from "@/components/admin/create-booking/AdminPropertySelector";
 import { AdminCustomerBillingSwitch } from "@/components/admin/create-booking/AdminCustomerBillingSwitch";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
+import { fetchCleaners, type AdminCleanerRow } from "@/lib/admin/dashboard";
+import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 
 const LAST_BOOKING_STORAGE = "admin_create_booking_last_v1";
 const LAST_SAVED_ADDRESS_KEY = "admin_create_booking_last_saved_address_v1";
@@ -92,6 +101,12 @@ type FormState = {
   location: string;
   notes: string;
   totalPaidZar: string;
+  /** Admin: allow past dates and same-day slots inside the business grid without the usual lead time. */
+  allowAdminSlotOverride: boolean;
+  /** Extra slugs aligned with `pricing_extras.slug` / booking lock. */
+  selectedExtras: string[];
+  /** Optional `cleaners.id` — stored as `selected_cleaner_id` for dispatch. */
+  selectedCleanerId: string;
 };
 
 function emptyForm(): FormState {
@@ -108,6 +123,9 @@ function emptyForm(): FormState {
     location: "",
     notes: "",
     totalPaidZar: "",
+    allowAdminSlotOverride: false,
+    selectedExtras: [],
+    selectedCleanerId: "",
   };
 }
 
@@ -208,7 +226,16 @@ async function openAdminBookingAndCopyUrl(bookingId: string): Promise<void> {
 }
 
 export default function AdminCreateBookingPage() {
+  const searchParams = useSearchParams();
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [pricingExtras, setPricingExtras] = useState<{ slug: string; name: string; price: number }[]>([]);
+  const [cleaners, setCleaners] = useState<AdminCleanerRow[]>([]);
+  /** When loaded, preferred-cleaner dropdown is grouped (available vs busy). */
+  const [slotAvailability, setSlotAvailability] = useState<{
+    available: AdminCleanerRow[];
+    busy: (AdminCleanerRow & { conflicting_booking_id: string })[];
+  } | null>(null);
+  const [slotAvailabilityLoading, setSlotAvailabilityLoading] = useState(false);
   const [searchHits, setSearchHits] = useState<CustomerHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -226,6 +253,10 @@ export default function AdminCreateBookingPage() {
   const [duplicateOverrideAck, setDuplicateOverrideAck] = useState(false);
   const [duplicateCreatedAt, setDuplicateCreatedAt] = useState<string | null>(null);
   const [duplicateOverrideReason, setDuplicateOverrideReason] = useState("");
+  const [cleanerSlotConflictId, setCleanerSlotConflictId] = useState<string | null>(null);
+  const [cleanerSlotConflictAck, setCleanerSlotConflictAck] = useState(false);
+  /** Optional ops note when submitting with cleaner slot overlap acknowledged. */
+  const [cleanerSlotOverrideReason, setCleanerSlotOverrideReason] = useState("");
   const [smsResendWarning, setSmsResendWarning] = useState<string | null>(null);
   const [resendPreferEmailOnly, setResendPreferEmailOnly] = useState(false);
   const [slotAdjustHint, setSlotAdjustHint] = useState<string | null>(null);
@@ -234,6 +265,7 @@ export default function AdminCreateBookingPage() {
   const [lastVisitPriceZar, setLastVisitPriceZar] = useState<number | null>(null);
   const submitGuard = useRef(false);
   const forceDuplicateNextSubmit = useRef(false);
+  const forceIgnoreCleanerSlotConflictNextSubmit = useRef(false);
   /** Soft debounce: rapid resubmits of the same customer slot without force (reduces duplicate 409/log noise). */
   const lastSlotConflictSigRef = useRef<string | null>(null);
   const lastSlotConflictAtRef = useRef(0);
@@ -245,8 +277,79 @@ export default function AdminCreateBookingPage() {
   const todayJhb = useMemo(() => johannesburgTodayYmd(), []);
   const slotOptions = useMemo(() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date.trim())) return [];
+    if (form.allowAdminSlotOverride) return allStandardDaySlots();
     return filterBookableTimeSlots(form.date.trim(), { leadMinutes: BOOKING_MIN_LEAD_MINUTES });
-  }, [form.date]);
+  }, [form.date, form.allowAdminSlotOverride]);
+
+  const userPrefill = searchParams.get("user")?.trim() ?? "";
+  useEffect(() => {
+    if (!userPrefill || !/^[0-9a-f-]{36}$/i.test(userPrefill)) return;
+    let cancelled = false;
+    void (async () => {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token || cancelled) return;
+      const res = await fetch(`/api/admin/bookings/customers?id=${encodeURIComponent(userPrefill)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as { customers?: CustomerHit[] };
+      const hit = (json.customers ?? [])[0];
+      if (!hit || cancelled) return;
+      setForm((s) => {
+        if (s.selectedCustomer?.id === hit.id) return s;
+        return {
+          ...s,
+          selectedCustomer: hit,
+          customerQuery: hit.email ?? hit.full_name ?? hit.id,
+          service:
+            (hit.schedule_type ?? "").toLowerCase() === "on_demand" && s.service === "standard"
+              ? ("airbnb" as BookingServiceId)
+              : s.service,
+        };
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userPrefill]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await fetchCleaners();
+        if (!cancelled) setCleaners(list ?? []);
+      } catch {
+        if (!cancelled) setCleaners([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/admin/pricing-extras", { headers: { Authorization: `Bearer ${token}` } });
+      const json = (await res.json().catch(() => ({}))) as { extras?: { slug?: string; name?: string; price?: number }[] };
+      if (!res.ok || cancelled) return;
+      const rows = (json.extras ?? [])
+        .filter((r) => typeof r.slug === "string" && BOOKING_EXTRA_ID_SET.has(String(r.slug)))
+        .map((r) => ({
+          slug: String(r.slug),
+          name: typeof r.name === "string" ? r.name : String(r.slug),
+          price: typeof r.price === "number" && Number.isFinite(r.price) ? Math.round(r.price) : 0,
+        }));
+      if (!cancelled) setPricingExtras(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!form.date || !/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return;
@@ -276,6 +379,56 @@ export default function AdminCreateBookingPage() {
   }, [form.date, form.time, slotOptions]);
 
   useEffect(() => {
+    setCleanerSlotConflictId(null);
+    setCleanerSlotConflictAck(false);
+    setCleanerSlotOverrideReason("");
+  }, [form.selectedCleanerId, form.date, form.time]);
+
+  useEffect(() => {
+    const d = form.date.trim();
+    const timeHm = normalizeTimeHm(form.time);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{2}:\d{2}$/.test(timeHm)) {
+      setSlotAvailability(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setSlotAvailabilityLoading(true);
+      try {
+        const sb = getSupabaseBrowser();
+        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        if (!token) {
+          if (!cancelled) setSlotAvailability(null);
+          return;
+        }
+        const res = await fetch(
+          `/api/admin/cleaners/available?date=${encodeURIComponent(d)}&time=${encodeURIComponent(timeHm)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const json = (await res.json().catch(() => ({}))) as {
+          available?: AdminCleanerRow[];
+          busy?: (AdminCleanerRow & { conflicting_booking_id: string })[];
+        };
+        if (!res.ok || cancelled) {
+          if (!cancelled) setSlotAvailability(null);
+          return;
+        }
+        setSlotAvailability({
+          available: Array.isArray(json.available) ? json.available : [],
+          busy: Array.isArray(json.busy) ? json.busy : [],
+        });
+      } catch {
+        if (!cancelled) setSlotAvailability(null);
+      } finally {
+        if (!cancelled) setSlotAvailabilityLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.date, form.time]);
+
+  useEffect(() => {
     if (!perBookingPay?.bookingId) return;
     const ch = readResendPrimaryPreference(perBookingPay.bookingId);
     if (ch === "email") setResendPreferEmailOnly(true);
@@ -293,7 +446,12 @@ export default function AdminCreateBookingPage() {
     if (!token) return;
     setSearching(true);
     try {
-      const res = await fetch(`/api/admin/bookings/customers?q=${encodeURIComponent(t)}`, {
+      const digits = t.replace(/\D/g, "");
+      const looksLikePhone = digits.length >= 9 || t.trim().startsWith("+");
+      const url = looksLikePhone
+        ? `/api/admin/bookings/customers?phone=${encodeURIComponent(t)}`
+        : `/api/admin/bookings/customers?q=${encodeURIComponent(t)}`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = (await res.json().catch(() => ({}))) as { customers?: CustomerHit[]; error?: string };
@@ -431,10 +589,12 @@ export default function AdminCreateBookingPage() {
   function validateForm(f: FormState): string | null {
     if (!f.selectedCustomer) return "Select an existing customer.";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date.trim())) return "Pick a valid date.";
-    if (f.date.trim() < todayJhb) return "Date cannot be in the past (Johannesburg).";
+    if (!f.allowAdminSlotOverride && f.date.trim() < todayJhb) return "Date cannot be in the past (Johannesburg).";
     if (!f.time || !/^\d{2}:\d{2}$/.test(f.time)) return "Pick a valid time.";
     if (!slotOptions.includes(f.time)) {
-      return `Time must be at least ${BOOKING_MIN_LEAD_MINUTES / 60} hours from now (Johannesburg) and within business hours.`;
+      return f.allowAdminSlotOverride
+        ? "Time must fall on the standard business grid (07:00–19:00, 15-minute steps)."
+        : `Time must be at least ${BOOKING_MIN_LEAD_MINUTES / 60} hours from now (Johannesburg) and within business hours.`;
     }
     if (!f.location.trim()) {
       return f.useCustomAddress
@@ -471,6 +631,9 @@ export default function AdminCreateBookingPage() {
         notes: f.notes.trim(),
         totalPaidZar: Number(f.totalPaidZar),
         saved_address_id: f.savedAddressId || null,
+        allow_admin_slot_override: f.allowAdminSlotOverride,
+        selected_extras: f.selectedExtras,
+        selected_cleaner_id: f.selectedCleanerId.trim() || null,
       };
       window.sessionStorage.setItem(LAST_BOOKING_STORAGE, JSON.stringify(payload));
       if (f.savedAddressId) {
@@ -557,6 +720,10 @@ export default function AdminCreateBookingPage() {
             : storedService;
         const sid = typeof o.saved_address_id === "string" ? o.saved_address_id : "";
         const loc = typeof o.location === "string" ? o.location : "";
+        const extrasRaw = o.selected_extras;
+        const extrasFromStore = Array.isArray(extrasRaw)
+          ? extrasRaw.filter((x): x is string => typeof x === "string" && BOOKING_EXTRA_ID_SET.has(x))
+          : [];
         setForm({
           customerQuery: hit.email ?? hit.full_name ?? userId,
           selectedCustomer: hit,
@@ -576,6 +743,9 @@ export default function AdminCreateBookingPage() {
           location: loc,
           notes: typeof o.notes === "string" ? o.notes : "",
           totalPaidZar: typeof o.totalPaidZar === "number" ? String(o.totalPaidZar) : "",
+          allowAdminSlotOverride: o.allow_admin_slot_override === true,
+          selectedExtras: extrasFromStore,
+          selectedCleanerId: typeof o.selected_cleaner_id === "string" ? o.selected_cleaner_id : "",
         });
       })();
     } catch {
@@ -631,6 +801,8 @@ export default function AdminCreateBookingPage() {
       submitGuard.current = true;
       const sendForce = forceDuplicateNextSubmit.current;
       forceDuplicateNextSubmit.current = false;
+      const sendIgnoreCleanerSlot = forceIgnoreCleanerSlotConflictNextSubmit.current;
+      forceIgnoreCleanerSlotConflictNextSubmit.current = false;
       setDuplicateExistingId(null);
       setDuplicateRecent(false);
       setDuplicateRaceRollback(false);
@@ -682,6 +854,17 @@ export default function AdminCreateBookingPage() {
         location: form.location.trim(),
         notes: form.notes.trim(),
         totalPaidZar: Math.round(Number(form.totalPaidZar)),
+        ...(form.selectedExtras.length > 0 ? { extras: form.selectedExtras } : {}),
+        ...(form.allowAdminSlotOverride ? { admin_slot_override: true } : {}),
+        ...(form.selectedCleanerId.trim() ? { selected_cleaner_id: form.selectedCleanerId.trim() } : {}),
+        ...(sendIgnoreCleanerSlot
+          ? {
+              ignore_cleaner_slot_conflict: true,
+              ...(cleanerSlotOverrideReason.trim().length > 0
+                ? { cleaner_slot_override_reason: cleanerSlotOverrideReason.trim().slice(0, 500) }
+                : {}),
+            }
+          : {}),
         ...(sendForce
           ? {
               force: true,
@@ -716,9 +899,26 @@ export default function AdminCreateBookingPage() {
           recent_duplicate?: boolean;
           existing_booking_created_at?: string | null;
           race_rolled_back?: boolean;
+          cleaner_slot_conflict?: boolean;
+          conflicting_booking_id?: string;
         };
         if (!res.ok) {
+          if (res.status === 409 && json.cleaner_slot_conflict) {
+            setCleanerSlotConflictId(
+              typeof json.conflicting_booking_id === "string" ? json.conflicting_booking_id : null,
+            );
+            setCleanerSlotConflictAck(false);
+            setDuplicateExistingId(null);
+            setDuplicateRecent(false);
+            setDuplicateRaceRollback(false);
+            setDuplicateCreatedAt(null);
+            setApiError(null);
+            return;
+          }
           if (res.status === 409 && json.duplicate) {
+            setCleanerSlotConflictId(null);
+            setCleanerSlotConflictAck(false);
+            setCleanerSlotOverrideReason("");
             lastSlotConflictSigRef.current = slotConflictSig;
             lastSlotConflictAtRef.current = Date.now();
             if (typeof json.existing_booking_id === "string") {
@@ -742,9 +942,15 @@ export default function AdminCreateBookingPage() {
           setDuplicateRecent(false);
           setDuplicateRaceRollback(false);
           setDuplicateCreatedAt(null);
+          setCleanerSlotConflictId(null);
+          setCleanerSlotConflictAck(false);
+          setCleanerSlotOverrideReason("");
           setApiError(typeof json.error === "string" ? json.error : "Request failed.");
           return;
         }
+        setCleanerSlotConflictId(null);
+        setCleanerSlotConflictAck(false);
+        setCleanerSlotOverrideReason("");
         setDuplicateExistingId(null);
         setDuplicateRecent(false);
         setDuplicateRaceRollback(false);
@@ -1072,7 +1278,28 @@ export default function AdminCreateBookingPage() {
                   ))}
                 </ul>
               ) : form.customerQuery.trim().length >= 2 && !form.selectedCustomer ? (
-                <p className="text-xs text-zinc-500">No matches.</p>
+                <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+                  <p className="text-zinc-600 dark:text-zinc-400">No matches.</p>
+                  {(() => {
+                    const raw = form.customerQuery.trim();
+                    const digits = raw.replace(/\D/g, "");
+                    const looksLikePhone = digits.length >= 9 || raw.startsWith("+");
+                    const href = looksLikePhone
+                      ? `/admin/customers/create?phone=${encodeURIComponent(raw)}`
+                      : `/admin/customers/create?full_name=${encodeURIComponent(raw)}`;
+                    return (
+                      <p>
+                        <Link
+                          href={href}
+                          className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                        >
+                          Create new customer with this {looksLikePhone ? "phone" : "name"}
+                        </Link>
+                        <span className="text-zinc-500"> — then return here to book.</span>
+                      </p>
+                    );
+                  })()}
+                </div>
               ) : null}
               {form.selectedCustomer ? (
                 <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900/60">
@@ -1155,7 +1382,7 @@ export default function AdminCreateBookingPage() {
                   ref={dateInputRef}
                   id="date"
                   type="date"
-                  min={todayJhb}
+                  {...(form.allowAdminSlotOverride ? {} : { min: todayJhb })}
                   value={form.date}
                   onChange={(e) => {
                     setSlotAdjustHint(null);
@@ -1195,6 +1422,28 @@ export default function AdminCreateBookingPage() {
                 ⚡ Limited slots available today
               </p>
             ) : null}
+
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-400"
+                checked={form.allowAdminSlotOverride}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setSlotAdjustHint(null);
+                  slotAutoFixTargetRef.current = null;
+                  setForm((s) => ({ ...s, allowAdminSlotOverride: on }));
+                }}
+                disabled={submitting}
+              />
+              <span>
+                <span className="font-medium text-zinc-900 dark:text-zinc-50">Allow past / short-lead slot (admin)</span>
+                <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">
+                  Walk-ins and manual corrections: unlocks historical dates and the full 07:00–19:00 grid without the
+                  usual {BOOKING_MIN_LEAD_MINUTES / 60}h same-day notice.
+                </span>
+              </span>
+            </label>
 
             <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
               <Select
@@ -1249,6 +1498,113 @@ export default function AdminCreateBookingPage() {
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Shown to cleaners on the job card. Required for per-booking payment links.
             </p>
+
+            <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
+              <Label htmlFor="admin-cleaner">Preferred cleaner (optional)</Label>
+              <Select
+                id="admin-cleaner"
+                label=""
+                value={form.selectedCleanerId}
+                onChange={(e) => setForm((s) => ({ ...s, selectedCleanerId: e.target.value }))}
+                disabled={submitting}
+              >
+                <option value="">Dispatch later / no preference</option>
+                {(() => {
+                  const sel = form.selectedCleanerId.trim();
+                  const hasBuckets =
+                    slotAvailability != null &&
+                    (slotAvailability.available.length > 0 || slotAvailability.busy.length > 0);
+                  const inBuckets =
+                    hasBuckets &&
+                    [...slotAvailability!.available, ...slotAvailability!.busy].some((c) => c.id === sel);
+                  const orphan = sel && hasBuckets && !inBuckets ? cleaners.find((c) => c.id === sel) : null;
+                  if (hasBuckets) {
+                    return (
+                      <>
+                        <optgroup label="Available">
+                          {slotAvailability!.available.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.full_name}
+                              {c.phone ? ` · ${c.phone}` : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Busy at this time">
+                          {slotAvailability!.busy.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.full_name}
+                              {c.phone ? ` · ${c.phone}` : ""} (busy)
+                            </option>
+                          ))}
+                        </optgroup>
+                        {orphan ? (
+                          <optgroup label="Other">
+                            <option value={orphan.id}>
+                              {orphan.full_name}
+                              {orphan.phone ? ` · ${orphan.phone}` : ""}
+                            </option>
+                          </optgroup>
+                        ) : null}
+                      </>
+                    );
+                  }
+                  return cleaners.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                      {c.phone ? ` · ${c.phone}` : ""}
+                    </option>
+                  ));
+                })()}
+              </Select>
+              {slotAvailabilityLoading ? (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Checking cleaner availability…</p>
+              ) : null}
+              {slotAvailability?.busy.some((c) => c.id === form.selectedCleanerId.trim()) ? (
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-200/90">
+                  Cleaner already has a booking at this time. You can still submit — you&apos;ll see the overlap flow
+                  if required.
+                </p>
+              ) : null}
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Stored as the customer&apos;s chosen cleaner for dispatch (including before payment on per-booking
+                links).
+              </p>
+            </div>
+
+            {pricingExtras.length > 0 ? (
+              <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Extras</span>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {pricingExtras.map((ex) => {
+                    const on = form.selectedExtras.includes(ex.slug);
+                    return (
+                      <li key={ex.slug}>
+                        <label className="flex cursor-pointer items-start gap-2 rounded-md border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400"
+                            checked={on}
+                            disabled={submitting}
+                            onChange={() => {
+                              setForm((s) => ({
+                                ...s,
+                                selectedExtras: on
+                                  ? s.selectedExtras.filter((x) => x !== ex.slug)
+                                  : [...s.selectedExtras, ex.slug],
+                              }));
+                            }}
+                          />
+                          <span>
+                            <span className="font-medium text-zinc-900 dark:text-zinc-50">{ex.name}</span>
+                            <span className="ml-1 text-zinc-600 dark:text-zinc-400">(+R{ex.price})</span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
 
             {form.selectedCustomer ? (
               <div className="border-l-4 border-amber-400/80 pl-3">
@@ -1325,6 +1681,76 @@ export default function AdminCreateBookingPage() {
                 </p>
               ) : null}
             </div>
+
+            {cleanerSlotConflictId ? (
+              <div
+                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100"
+                role="status"
+              >
+                <p className="font-medium">This cleaner already has an active booking at this date and time.</p>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                  <Link
+                    href={`/admin/bookings/${cleanerSlotConflictId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-rose-900 underline decoration-rose-800/40 hover:decoration-rose-800 dark:text-rose-100"
+                  >
+                    View conflicting booking
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 border-rose-800/30 bg-white px-2 py-0 text-[11px] text-rose-950 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-50"
+                    onClick={() => void openAdminBookingAndCopyUrl(cleanerSlotConflictId)}
+                  >
+                    Open & copy link
+                  </Button>
+                </div>
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-snug">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-rose-800/40"
+                    checked={cleanerSlotConflictAck}
+                    onChange={(e) => setCleanerSlotConflictAck(e.target.checked)}
+                  />
+                  <span>I understand the cleaner may be double-booked for this slot.</span>
+                </label>
+                <div className="mt-3 space-y-1.5">
+                  <Label htmlFor="cleaner-slot-override-reason" className="text-xs font-medium text-rose-900 dark:text-rose-100">
+                    Reason for overlap (optional)
+                  </Label>
+                  <Textarea
+                    id="cleaner-slot-override-reason"
+                    rows={2}
+                    maxLength={500}
+                    value={cleanerSlotOverrideReason}
+                    onChange={(e) => setCleanerSlotOverrideReason(e.target.value)}
+                    disabled={submitting}
+                    placeholder="e.g. Cleaner agreed · Urgent client · Manual correction"
+                    className="min-h-[60px] resize-y border-rose-800/25 bg-white text-sm dark:border-rose-800 dark:bg-rose-950/40"
+                  />
+                  <p className="text-[11px] text-rose-900/75 dark:text-rose-100/70">
+                    Stored on the booking for ops when you use &quot;Create with overlap&quot;.
+                  </p>
+                </div>
+                <div className="mt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-rose-800/30 bg-white text-rose-950 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-50"
+                    disabled={submitting || !cleanerSlotConflictAck}
+                    onClick={() => {
+                      forceIgnoreCleanerSlotConflictNextSubmit.current = true;
+                      formRef.current?.requestSubmit();
+                    }}
+                  >
+                    Create with overlap
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {fieldError ? (
               <p className="text-sm text-red-600 dark:text-red-400" role="alert">

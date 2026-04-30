@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
+import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { LocationSeoSlug } from "@/lib/seo/capeTownSeoPages";
 import {
   LOCATION_SEO_PAGES,
@@ -9,12 +11,14 @@ import {
   locationHubServiceLinksCapeTownAnchors,
 } from "@/lib/seo/capeTownSeoPages";
 
-type Props = { slug: LocationSeoSlug };
+type Props = { slug: LocationSeoSlug; trustStats: PublicReviewBannerStats | null };
 
-export function SeoLocationCleaningPage({ slug }: Props) {
+export function SeoLocationCleaningPage({ slug, trustStats }: Props) {
   const data = LOCATION_SEO_PAGES[slug];
   const placeName = LOCATION_SEO_SHORT_PLACE[slug];
   const hubServiceLinks = locationHubServiceLinksCapeTownAnchors();
+  const regionEyebrow =
+    slug === "sea-point-cleaning-services" ? "Cape Town · Atlantic Seaboard" : "Cape Town · Southern Suburbs";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -36,9 +40,12 @@ export function SeoLocationCleaningPage({ slug }: Props) {
 
       <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/60 via-white to-white py-14">
         <div className="mx-auto max-w-4xl px-4">
-          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">Cape Town · Southern Suburbs</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{regionEyebrow}</p>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{data.h1}</h1>
           <p className="mt-4 text-lg leading-relaxed text-zinc-600">{data.description}</p>
+          <p className="mt-3 text-sm font-medium text-zinc-700">
+            {publicTrustRatingBadgeLine(trustStats)} · 4,500+ homes cleaned across Cape Town
+          </p>
           <GrowthCtaLink
             href="/booking?step=entry"
             source={`seo_loc_${slug}_hero`}

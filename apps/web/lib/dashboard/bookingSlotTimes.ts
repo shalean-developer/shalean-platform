@@ -24,6 +24,11 @@ function baseDaySlots(): string[] {
   return slots;
 }
 
+/** Full business grid (07:00–19:00, 15-minute steps) for admin overrides and offline entry. */
+export function allStandardDaySlots(): string[] {
+  return baseDaySlots();
+}
+
 function hmToMinutes(hm: string): number | null {
   if (!/^\d{2}:\d{2}$/.test(hm)) return null;
   const [h, m] = hm.split(":").map(Number);

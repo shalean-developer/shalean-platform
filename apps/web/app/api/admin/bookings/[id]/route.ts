@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { invalidateCleanerAvailabilityCache } from "@/lib/admin/cleanerAvailabilityCache";
+import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
+import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isAdmin } from "@/lib/auth/admin";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
@@ -177,9 +180,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   } = await pub.auth.getUser(token);
   if (!user?.email || !isAdmin(user.email)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
 
-  let body: { status?: string; date?: string; time?: string; cleaner_id?: string | null };
+  type PatchBody = {
+    status?: string;
+    date?: string;
+    time?: string;
+    cleaner_id?: string | null;
+    selected_cleaner_id?: string | null;
+    ignore_cleaner_slot_conflict?: boolean;
+    cleaner_slot_override_reason?: string | null;
+  };
+  let body: PatchBody;
   try {
-    body = (await request.json()) as { status?: string; date?: string; time?: string; cleaner_id?: string | null };
+    body = (await request.json()) as PatchBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -216,16 +228,91 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       updates.cleaner_id = cid;
     }
   }
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: "No valid fields provided." }, { status: 400 });
-  }
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
+  const wantsPreferredCleaner = "selected_cleaner_id" in body;
+
+  if (wantsPreferredCleaner) {
+    const { data: prefRow, error: prefErr } = await admin
+      .from("bookings")
+      .select("date, time, status")
+      .eq("id", id)
+      .maybeSingle();
+    if (prefErr || !prefRow) {
+      return NextResponse.json({ error: prefErr?.message ?? "Booking not found." }, { status: 500 });
+    }
+    const pst = String((prefRow as { status?: string | null }).status ?? "").toLowerCase();
+    if (pst !== "pending_payment" && pst !== "pending") {
+      return NextResponse.json(
+        { error: "Preferred cleaner can only be set while the booking is pending or awaiting payment." },
+        { status: 400 },
+      );
+    }
+    const dateYmd = String((prefRow as { date?: string | null }).date ?? "").trim();
+    const timeRaw = String((prefRow as { time?: string | null }).time ?? "").trim();
+    const timeHm = normalizeTimeHm(timeRaw);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd) || !/^\d{2}:\d{2}$/.test(timeHm)) {
+      return NextResponse.json({ error: "Booking must have a valid date and time before assigning a preferred cleaner." }, { status: 400 });
+    }
+
+    const ignoreConflict = body.ignore_cleaner_slot_conflict === true;
+
+    if ("selected_cleaner_id" in body) {
+      const rawSel = body.selected_cleaner_id;
+      if (rawSel === null || rawSel === "") {
+        updates.selected_cleaner_id = null;
+        (updates as Record<string, unknown>).assignment_type = null;
+      } else if (typeof rawSel === "string") {
+        const sid = rawSel.trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid)) {
+          return NextResponse.json({ error: "Invalid selected_cleaner_id." }, { status: 400 });
+        }
+        const { data: clOk } = await admin.from("cleaners").select("id").eq("id", sid).maybeSingle();
+        if (!clOk) {
+          return NextResponse.json({ error: "Cleaner not found." }, { status: 404 });
+        }
+        if (!ignoreConflict) {
+          const conflictId = await findCleanerSlotConflict(admin, {
+            cleanerId: sid,
+            dateYmd,
+            timeHm,
+            excludeBookingId: id,
+          });
+          if (conflictId) {
+            return NextResponse.json(
+              {
+                error:
+                  "This cleaner already has an active booking at this time. Confirm overlap or pass ignore_cleaner_slot_conflict=true with an optional cleaner_slot_override_reason.",
+                cleaner_slot_conflict: true,
+                conflicting_booking_id: conflictId,
+              },
+              { status: 409 },
+            );
+          }
+        }
+        updates.selected_cleaner_id = sid;
+        updates.assignment_type = "user_selected";
+        if (ignoreConflict) {
+          updates.ignore_cleaner_conflict = true;
+          const reasonRaw =
+            typeof body.cleaner_slot_override_reason === "string" ? body.cleaner_slot_override_reason.trim().slice(0, 500) : "";
+          if (reasonRaw.length > 0) {
+            updates.cleaner_slot_override_reason = reasonRaw;
+          }
+        }
+      }
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "No valid fields provided." }, { status: 400 });
+  }
+
   const { data: before } = await admin
     .from("bookings")
-    .select("user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job")
+    .select("user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, date, time, selected_cleaner_id")
     .eq("id", id)
     .maybeSingle();
   const beforeRow = before as {
@@ -234,6 +321,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     completed_at?: string | null;
     payout_owner_cleaner_id?: string | null;
     is_team_job?: boolean | null;
+    date?: string | null;
+    time?: string | null;
+    selected_cleaner_id?: string | null;
   } | null;
   const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
   const beforeCompletedAt =
@@ -441,6 +531,27 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         },
         { status: 422 },
       );
+    }
+  }
+
+  if (beforeRow) {
+    const bd = typeof beforeRow.date === "string" ? beforeRow.date.trim() : "";
+    const bt = normalizeTimeHm(String(beforeRow.time ?? ""));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(bd) && /^\d{2}:\d{2}$/.test(bt)) {
+      invalidateCleanerAvailabilityCache(bd, bt);
+    }
+    const nd = typeof updates.date === "string" ? String(updates.date).trim() : bd;
+    const ntSource = typeof updates.time === "string" ? updates.time : beforeRow.time;
+    const nt = normalizeTimeHm(String(ntSource ?? ""));
+    if (
+      (updates.date != null ||
+        updates.time != null ||
+        "selected_cleaner_id" in updates ||
+        "cleaner_id" in updates) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(nd) &&
+      /^\d{2}:\d{2}$/.test(nt)
+    ) {
+      invalidateCleanerAvailabilityCache(nd, nt);
     }
   }
 

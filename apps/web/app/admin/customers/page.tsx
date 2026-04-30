@@ -35,7 +35,13 @@ export default function AdminCustomersPage() {
 
   return (
     <div>
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-4">
+        <Link
+          href="/admin/customers/create"
+          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+        >
+          Create customer
+        </Link>
         <Link
           href="/admin/bookings"
           className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"

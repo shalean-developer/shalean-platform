@@ -4,12 +4,14 @@ import { CheckCircle2, MapPin, Sparkles } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { getAreaProgrammaticBlogLinksForCapeTownService } from "@/lib/blog/programmaticPosts";
+import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
+import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { CAPE_TOWN_SERVICE_SEO, serviceHubLocationLinks } from "@/lib/seo/capeTownSeoPages";
 
-type Props = { slug: CapeTownSeoServiceSlug };
+type Props = { slug: CapeTownSeoServiceSlug; trustStats: PublicReviewBannerStats | null };
 
-export function SeoCapeTownServicePage({ slug }: Props) {
+export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
   const bookingPath = data.bookingPath ?? "/booking?step=entry";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
@@ -97,7 +99,9 @@ export function SeoCapeTownServicePage({ slug }: Props) {
               />
               <div className="absolute bottom-2.5 left-2.5 z-[2] rounded-xl bg-white px-3 py-1.5 shadow-lg sm:bottom-4 sm:left-4 sm:px-4 sm:py-2">
                 <p className="text-xs font-semibold leading-snug text-zinc-900 sm:text-sm">4,500+ Homes Cleaned</p>
-                <p className="mt-0.5 text-[10px] leading-snug text-gray-500 sm:text-xs">⭐ 4.9 Rating</p>
+                <p className="mt-0.5 text-[10px] leading-snug text-gray-500 sm:text-xs">
+                  {publicTrustRatingBadgeLine(trustStats)}
+                </p>
               </div>
             </div>
           </div>

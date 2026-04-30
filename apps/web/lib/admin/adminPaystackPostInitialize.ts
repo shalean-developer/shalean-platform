@@ -46,8 +46,17 @@ export async function finalizeAdminPaystackCheckout(params: {
   result: PaystackInitializeSuccess;
   locked: unknown;
   notificationMode?: "chain" | "chain_plus_email";
+  /** Set when admin acknowledged cleaner double-book risk on create. */
+  ignoreCleanerSlotConflict?: boolean;
+  /** Stored on the booking when `ignoreCleanerSlotConflict` (optional ops note). */
+  cleanerSlotOverrideReason?: string | null;
 }): Promise<{ ok: true; expiresAt: string } | { ok: false; error: string }> {
   const { admin, adminUserId, result, locked } = params;
+  const ignoreCleanerSlotConflict = Boolean(params.ignoreCleanerSlotConflict);
+  const cleanerSlotOverrideReason =
+    typeof params.cleanerSlotOverrideReason === "string" && params.cleanerSlotOverrideReason.trim()
+      ? params.cleanerSlotOverrideReason.trim().slice(0, 500)
+      : null;
   const notificationMode = params.notificationMode ?? "chain_plus_email";
 
   if (!result.bookingId) {
@@ -68,6 +77,14 @@ export async function finalizeAdminPaystackCheckout(params: {
     .update({
       created_by_admin: true,
       created_by: adminUserId,
+      booking_source: "admin",
+      created_by_admin_id: adminUserId,
+      ...(ignoreCleanerSlotConflict
+        ? {
+            ignore_cleaner_conflict: true,
+            ...(cleanerSlotOverrideReason ? { cleaner_slot_override_reason: cleanerSlotOverrideReason } : {}),
+          }
+        : {}),
       payment_link: result.authorizationUrl,
       payment_link_expires_at: expiresAt,
       ...(serviceSlugUpdate ? { service_slug: serviceSlugUpdate } : {}),
@@ -80,6 +97,22 @@ export async function finalizeAdminPaystackCheckout(params: {
       bookingId: result.bookingId,
     });
     return { ok: false, error: "Could not tag admin booking." };
+  }
+
+  const { data: invRow } = await admin
+    .from("bookings")
+    .select("booking_source, created_by_admin_id")
+    .eq("id", result.bookingId)
+    .maybeSingle();
+  const inv = invRow as { booking_source?: string | null; created_by_admin_id?: string | null } | null;
+  if (
+    inv &&
+    String(inv.booking_source ?? "").toLowerCase() === "admin" &&
+    !String(inv.created_by_admin_id ?? "").trim()
+  ) {
+    void reportOperationalIssue("warn", "adminPaystackPostInitialize", "admin booking missing created_by_admin_id", {
+      bookingId: result.bookingId,
+    });
   }
 
   const { data: row, error: rowErr } = await admin.from("bookings").select(HEAD_SELECT).eq("id", result.bookingId).maybeSingle();

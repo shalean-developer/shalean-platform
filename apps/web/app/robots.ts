@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/admin", "/api"],
+      disallow: ["/admin", "/api", "/dashboard", "/account", "/auth", "/cleaner"],
     },
     sitemap: "https://www.shalean.co.za/sitemap.xml",
   };

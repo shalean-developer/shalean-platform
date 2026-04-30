@@ -10,6 +10,8 @@ import {
 } from "@/lib/admin/adminBookingCreateIdempotency";
 import { adminBookingLocationFingerprint, adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import { resolveMonthlyBookingDuplicateRace } from "@/lib/admin/adminBookingPostInsertRace";
+import { invalidateCleanerAvailabilityCache } from "@/lib/admin/cleanerAvailabilityCache";
+import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
 import { applyActiveAdminBookingSlotFilters } from "@/lib/booking/activeAdminBookingSlot";
 import { buildAdminPaystackLockedPayload } from "@/lib/admin/buildAdminPaystackLockedPayload";
 import { assertAdminBookingSlotAllowed, normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
@@ -100,6 +102,7 @@ type Row = {
   duration_minutes: number | null;
   dispatch_attempt_count: number | null;
   created_by_admin: boolean | null;
+  created_by?: string | null;
   payment_link: string | null;
   payment_link_expires_at: string | null;
   payment_link_last_sent_at: string | null;
@@ -123,6 +126,10 @@ type Row = {
   customer_billing_type?: string | null;
   customer_schedule_type?: string | null;
   admin_force_slot_override?: boolean | null;
+  booking_source?: string | null;
+  created_by_admin_id?: string | null;
+  ignore_cleaner_conflict?: boolean | null;
+  cleaner_slot_override_reason?: string | null;
 };
 
 function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
@@ -194,7 +201,7 @@ export async function GET(request: Request) {
   const opsQuick = (searchParams.get("opsQuick") ?? "").trim().toLowerCase();
 
   const bookingSelect =
-    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override";
+    "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect);
 
@@ -471,9 +478,24 @@ export async function POST(request: Request) {
     where: "POST /api/admin/bookings",
   });
 
+  const adminSlotOverride =
+    body.admin_slot_override === true ||
+    body.admin_slot_override === "true" ||
+    (typeof body.admin_slot_override === "string" && body.admin_slot_override.trim().toLowerCase() === "true");
+  const selectedCleanerRaw = typeof body.selected_cleaner_id === "string" ? body.selected_cleaner_id.trim() : "";
+  const ignoreCleanerSlotConflict =
+    body.ignore_cleaner_slot_conflict === true ||
+    body.ignore_cleaner_slot_conflict === "true" ||
+    (typeof body.ignore_cleaner_slot_conflict === "string" &&
+      body.ignore_cleaner_slot_conflict.trim().toLowerCase() === "true");
+  const cleanerSlotOverrideReasonRaw =
+    typeof body.cleaner_slot_override_reason === "string" ? body.cleaner_slot_override_reason.trim().slice(0, 500) : "";
+  const cleanerSlotOverrideReasonForDb =
+    ignoreCleanerSlotConflict && cleanerSlotOverrideReasonRaw.length > 0 ? cleanerSlotOverrideReasonRaw : null;
+
   const amountPaidCents = Math.round(totalPaidZar * 100);
 
-  const slot = assertAdminBookingSlotAllowed({ dateYmd: date, timeHm });
+  const slot = assertAdminBookingSlotAllowed({ dateYmd: date, timeHm, adminSlotOverride });
   if (!slot.ok) {
     return NextResponse.json({ error: slot.error }, { status: 400 });
   }
@@ -481,6 +503,33 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  let selectedCleanerId: string | null = null;
+  if (selectedCleanerRaw && /^[0-9a-f-]{36}$/i.test(selectedCleanerRaw)) {
+    const { data: clRow } = await admin.from("cleaners").select("id").eq("id", selectedCleanerRaw).maybeSingle();
+    if (clRow && typeof (clRow as { id?: unknown }).id === "string") {
+      selectedCleanerId = selectedCleanerRaw;
+    }
+  }
+
+  if (selectedCleanerId && !ignoreCleanerSlotConflict) {
+    const conflictBookingId = await findCleanerSlotConflict(admin, {
+      cleanerId: selectedCleanerId,
+      dateYmd: date,
+      timeHm,
+    });
+    if (conflictBookingId) {
+      return NextResponse.json(
+        {
+          error:
+            "This cleaner already has an active booking (or reserved slot) at this date and time. Open the conflicting row, or submit again with ignore_cleaner_slot_conflict=true after acknowledging the overlap.",
+          cleaner_slot_conflict: true,
+          conflicting_booking_id: conflictBookingId,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const serviceSlug = adminBookingServiceSlug(serviceRaw);
@@ -577,6 +626,27 @@ export async function POST(request: Request) {
   const paymentLinkTtlHours = Math.max(1, Math.round(adminPaymentLinkTtlMs() / (60 * 60 * 1000)));
 
   if (billingType === "monthly") {
+    if (selectedCleanerId && !ignoreCleanerSlotConflict) {
+      const lateConflictMonthly = await findCleanerSlotConflict(admin, {
+        cleanerId: selectedCleanerId,
+        dateYmd: date,
+        timeHm,
+      });
+      if (lateConflictMonthly) {
+        return bail(
+          NextResponse.json(
+            {
+              error:
+                "Another booking took this cleaner for this slot while you were submitting. Try again, or acknowledge the overlap.",
+              cleaner_slot_conflict: true,
+              conflicting_booking_id: lateConflictMonthly,
+            },
+            { status: 409 },
+          ),
+        );
+      }
+    }
+
     const paystackReference = `adm_mi_${crypto.randomUUID()}`;
 
     // created_at is DB default (now); omit from insert so clustering stays deterministic.
@@ -607,6 +677,19 @@ export async function POST(request: Request) {
         total_price: null,
         created_by_admin: true,
         created_by: auth.userId,
+        booking_source: "admin",
+        created_by_admin_id: auth.userId,
+        ...(selectedCleanerId
+          ? { selected_cleaner_id: selectedCleanerId, assignment_type: "user_selected" }
+          : {}),
+        ...(ignoreCleanerSlotConflict
+          ? {
+              ignore_cleaner_conflict: true,
+              ...(cleanerSlotOverrideReasonForDb
+                ? { cleaner_slot_override_reason: cleanerSlotOverrideReasonForDb }
+                : {}),
+            }
+          : {}),
         ...(force
           ? {
               slot_duplicate_exempt: true,
@@ -625,6 +708,9 @@ export async function POST(request: Request) {
         admin_notes: notes,
         customer_notes: notes,
         service_slug: serviceSlug,
+        ...(ignoreCleanerSlotConflict && cleanerSlotOverrideReasonForDb
+          ? { cleaner_slot_override_reason: cleanerSlotOverrideReasonForDb }
+          : {}),
       },
       select: "id, monthly_invoice_id, created_at",
       logInsert: false,
@@ -838,6 +924,7 @@ export async function POST(request: Request) {
       amount_paid_cents: amountPaidCents,
     };
     if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 200, monthlyBody);
+    invalidateCleanerAvailabilityCache(date, timeHm);
     return NextResponse.json(monthlyBody);
   }
 
@@ -872,6 +959,27 @@ export async function POST(request: Request) {
     );
   }
 
+  if (selectedCleanerId && !ignoreCleanerSlotConflict) {
+    const lateConflictPaystack = await findCleanerSlotConflict(admin, {
+      cleanerId: selectedCleanerId,
+      dateYmd: date,
+      timeHm,
+    });
+    if (lateConflictPaystack) {
+      return bail(
+        NextResponse.json(
+          {
+            error:
+              "Another booking took this cleaner for this slot while you were submitting. Try again, or acknowledge the overlap.",
+            cleaner_slot_conflict: true,
+            conflicting_booking_id: lateConflictPaystack,
+          },
+          { status: 409 },
+        ),
+      );
+    }
+  }
+
   let locked: Record<string, unknown>;
   try {
     locked = buildAdminPaystackLockedPayload({
@@ -895,6 +1003,7 @@ export async function POST(request: Request) {
     locked,
     relaxedLockValidation: true,
     tip: 0,
+    ...(selectedCleanerId ? { cleanerId: selectedCleanerId } : {}),
   };
 
   const paystackResult = await processPaystackInitializeBody(paystackBody, {
@@ -937,6 +1046,8 @@ export async function POST(request: Request) {
     result: paystackResult,
     locked,
     notificationMode: "chain_plus_email",
+    ignoreCleanerSlotConflict,
+    cleanerSlotOverrideReason: cleanerSlotOverrideReasonForDb,
   });
   if (!finalized.ok) {
     return bail(NextResponse.json({ error: finalized.error }, { status: 500 }));
@@ -971,5 +1082,6 @@ export async function POST(request: Request) {
       },
     });
   }
+  invalidateCleanerAvailabilityCache(date, timeHm);
   return NextResponse.json(perBody);
 }

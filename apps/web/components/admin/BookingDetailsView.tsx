@@ -49,6 +49,8 @@ type BookingDetails = {
   phone?: string | null;
   /** Admin bypassed duplicate-slot guard (intentional second row on same slot). */
   admin_force_slot_override?: boolean | null;
+  /** Immutable checkout / admin pricing snapshot (JSON). */
+  price_snapshot?: unknown;
 };
 
 type TeamSummary = { id: string; name: string; member_count: number | null };
@@ -167,6 +169,39 @@ function money(booking: BookingDetails): number {
 function centsToZar(cents: number | null | undefined): number | null {
   if (cents == null || !Number.isFinite(Number(cents))) return null;
   return Math.round(Number(cents) / 100);
+}
+
+type PriceSnapshotV1View = {
+  v: 1;
+  service_type: string;
+  base_price: number;
+  extras: { id: string; name: string; price: number }[];
+  total_price: number;
+};
+
+function parsePriceSnapshotV1(raw: unknown): PriceSnapshotV1View | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.v !== 1) return null;
+  const service_type = typeof o.service_type === "string" ? o.service_type : "";
+  const base_price = typeof o.base_price === "number" && Number.isFinite(o.base_price) ? Math.round(o.base_price) : NaN;
+  const total_price = typeof o.total_price === "number" && Number.isFinite(o.total_price) ? Math.round(o.total_price) : NaN;
+  if (!service_type || !Number.isFinite(base_price) || !Number.isFinite(total_price)) return null;
+  const extrasRaw = Array.isArray(o.extras) ? o.extras : [];
+  const extras: { id: string; name: string; price: number }[] = [];
+  for (const x of extrasRaw) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const e = x as Record<string, unknown>;
+    const id = typeof e.id === "string" ? e.id : "";
+    const name = typeof e.name === "string" ? e.name : id || "Extra";
+    const price = typeof e.price === "number" && Number.isFinite(e.price) ? Math.round(e.price) : 0;
+    extras.push({ id: id || "extra", name, price });
+  }
+  return { v: 1, service_type, base_price, extras, total_price };
+}
+
+function formatZar(n: number): string {
+  return `R ${n.toLocaleString("en-ZA")}`;
 }
 
 function statusBadgeClass(status: string | null): string {
@@ -917,6 +952,58 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 <MapPin size={14} />Open in maps
               </a>
             ) : null}
+          </DetailCard>
+          <DetailCard title="Pricing snapshot">
+            {(() => {
+              const snap = fullBooking ? parsePriceSnapshotV1(fullBooking.price_snapshot) : null;
+              if (!snap) {
+                return (
+                  <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-50">
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <TriangleAlert size={14} aria-hidden />
+                      No snapshot (legacy)
+                    </span>
+                    <p className="mt-1 text-xs font-normal text-amber-900/90 dark:text-amber-100/85">
+                      This booking was created before immutable pricing snapshots were stored. Totals on the booking
+                      row still apply; this section does not recompute from current catalog prices.
+                    </p>
+                  </div>
+                );
+              }
+              return (
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-zinc-500">Service type</dt>
+                    <dd className="font-mono text-zinc-900 dark:text-zinc-100">{snap.service_type}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-zinc-500">Base (rooms &amp; core)</dt>
+                    <dd className="font-medium text-zinc-900 dark:text-zinc-100">{formatZar(snap.base_price)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-500">Extras</dt>
+                    <dd className="mt-1">
+                      {snap.extras.length === 0 ? (
+                        <p className="text-zinc-500">None</p>
+                      ) : (
+                        <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">
+                          {snap.extras.map((ex) => (
+                            <li key={`${ex.id}-${ex.name}`} className="flex justify-between gap-4 px-2 py-1.5 text-zinc-800 dark:text-zinc-200">
+                              <span>{ex.name}</span>
+                              <span className="font-medium tabular-nums">{formatZar(ex.price)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                    <dt className="font-medium text-zinc-800 dark:text-zinc-200">Total (visit)</dt>
+                    <dd className="font-semibold text-zinc-900 dark:text-zinc-50">{formatZar(snap.total_price)}</dd>
+                  </div>
+                </dl>
+              );
+            })()}
           </DetailCard>
           {snapshotNotesText ? (
             <DetailCard title="Ops & booking notes">

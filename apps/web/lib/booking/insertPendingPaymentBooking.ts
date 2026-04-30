@@ -2,8 +2,10 @@ import "server-only";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
+import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 
@@ -117,6 +119,17 @@ export async function updatePendingPaymentBookingForInit(
     /** Admin "Create anyway" — excluded from partial unique slot index; audit flag. */
     slotDuplicateExempt?: boolean;
     adminForceSlotOverride?: boolean;
+    /** Admin create: preferred cleaner before payment (`cleaners.id`). */
+    selected_cleaner_id?: string | null;
+    assignment_type?: string | null;
+    price_snapshot?: Record<string, unknown> | null;
+    /** When set, persisted to `booking_line_items` after the row update (must sum to `totalPriceZar` in cents). */
+    checkoutLineItems?: readonly BookingLineItemInsert[] | null;
+    /**
+     * When false, line-item persist failure does not delete the booking row (reuse / backfill path).
+     * Default true (new pending row from Paystack init).
+     */
+    deleteRowOnLineItemPersistFail?: boolean;
   },
 ): Promise<{ ok: true } | { ok: false; error: string; pgCode?: string }> {
   const extrasPersist = sanitizeBookingExtrasForPersist(params.extrasSnapshot, {
@@ -129,6 +142,9 @@ export async function updatePendingPaymentBookingForInit(
       booking_snapshot: params.bookingSnapshot,
       price_breakdown: params.priceBreakdown,
       total_price: params.totalPriceZar,
+      ...(params.price_snapshot && typeof params.price_snapshot === "object"
+        ? { price_snapshot: params.price_snapshot }
+        : {}),
       total_paid_zar: params.totalPaidZar,
       customer_name: params.customerName,
       customer_phone: params.customerPhone,
@@ -140,10 +156,42 @@ export async function updatePendingPaymentBookingForInit(
       extras: extrasPersist,
       ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
       ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
+      ...(params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
+        ? {
+            selected_cleaner_id: params.selected_cleaner_id,
+            assignment_type: params.assignment_type ?? "user_selected",
+          }
+        : {}),
     })
     .eq("id", params.bookingId)
     .eq("status", "pending_payment");
 
   if (error) return { ok: false, error: error.message, pgCode: error.code };
+
+  const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
+  const lineItems = params.checkoutLineItems;
+  if (lineItems && lineItems.length > 0) {
+    const { count, error: ctErr } = await admin
+      .from("booking_line_items")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", params.bookingId);
+    const existing = typeof count === "number" ? count : 0;
+    if (ctErr) {
+      if (deleteOnFail) {
+        await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
+      }
+      return { ok: false, error: ctErr.message || "Could not verify booking line items." };
+    }
+    if (existing === 0) {
+      const persisted = await persistBookingLineItems(admin, params.bookingId, lineItems);
+      if (!persisted.ok) {
+        if (deleteOnFail) {
+          await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
+        }
+        return { ok: false, error: persisted.error || "Could not save booking line items." };
+      }
+    }
+  }
+
   return { ok: true };
 }

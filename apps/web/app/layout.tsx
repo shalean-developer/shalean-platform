@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
@@ -24,6 +24,9 @@ export const metadata: Metadata = {
   description: "Book vetted home cleaners across Cape Town with instant pricing and secure online checkout.",
   // Tab + PWA icons: `app/favicon.ico`, `app/icon.png`, `app/apple-icon.png` (same-origin; avoids metadataBase pinning icons to production in dev).
   manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
   themeColor: "#5A73D8",
 };
 

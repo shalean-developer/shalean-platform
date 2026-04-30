@@ -21,6 +21,7 @@ export const LOCATION_SEO_SLUGS = [
   "observatory-cleaning-services",
   "newlands-cleaning-services",
   "rosebank-cleaning-services",
+  "sea-point-cleaning-services",
 ] as const;
 
 export type LocationSeoSlug = (typeof LOCATION_SEO_SLUGS)[number];
@@ -631,6 +632,30 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Card payment and email confirmation so agents, tenants, and flatmates stay aligned.",
     ],
   },
+  "sea-point-cleaning-services": {
+    slug: "sea-point-cleaning-services",
+    path: "/locations/sea-point-cleaning-services",
+    title: "Sea Point Cleaning Cape Town | Atlantic Seaboard | Shalean",
+    description:
+      "Sea Point cleaning in Cape Town for apartments, sea-facing homes, and busy Atlantic Seaboard schedules. Standard, deep, and Airbnb-ready cleaning—book Shalean online.",
+    ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
+    h1: "Sea Point cleaning services in Cape Town for Atlantic Seaboard apartments and busy households",
+    bookingLabel: "cleaning in Sea Point",
+    intro: [
+      "Sea Point combines compact Atlantic Seaboard apartments, older blocks with sea air exposure, and walkable Main Road living—salt breeze, wind-blown dust, and high-use kitchens add up fast between professional visits.",
+      "Shalean schedules vetted cleaners across Sea Point with the same transparent quoting used citywide: bedrooms, bathrooms, extras, and service tier are confirmed online before checkout.",
+      "Whether you need house cleaning Cape Town hosts rely on between guests or professional cleaning services before a handover, scoped visits keep kitchens and bathrooms aligned with what your quote shows.",
+    ],
+    localAngle: [
+      "Building access, lifts, and basement parking vary—pin your entrance and mention remotes or security desks so Cape Town teams arrive without delays.",
+      "Sea-facing balconies collect salt and grit—note outdoor areas in your booking when you want them included in scope.",
+    ],
+    whyChoose: [
+      "Turnover-friendly Airbnb cleans and dependable standard cycles for busy Sea Point households.",
+      "Online booking with clear totals before you pay—built for Cape Town addresses and real apartment layouts.",
+      "Support if something is missed—especially important before guest check-ins or lease inspections.",
+    ],
+  },
 };
 
 /** Short suburb label for keyword-rich cross-links (e.g. “Airbnb cleaning in Claremont”). */
@@ -642,6 +667,7 @@ export const LOCATION_SEO_SHORT_PLACE: Record<LocationSeoSlug, string> = {
   "observatory-cleaning-services": "Observatory",
   "newlands-cleaning-services": "Newlands",
   "rosebank-cleaning-services": "Rosebank",
+  "sea-point-cleaning-services": "Sea Point",
 };
 
 const SERVICE_HUB_PHRASE: Record<CapeTownSeoServiceSlug, string> = {
@@ -683,6 +709,25 @@ export function getCapeTownServiceSeo(slug: string): CapeTownServiceSeoBlock | n
 
 export function getLocationSeo(slug: string): LocationSeoBlock | null {
   return LOCATION_SEO_PAGES[slug as LocationSeoSlug] ?? null;
+}
+
+const LOCATION_SEO_SLUG_SET = new Set<string>(LOCATION_SEO_SLUGS);
+
+/**
+ * Map legacy `/cape-town/cleaning-services/{area}` short slugs (e.g. `claremont`, `sea-point`)
+ * to canonical `/locations/{suburb}-cleaning-services` when that hub exists.
+ */
+export function locationSeoPathFromLegacyAreaSlug(areaSlug: string): string | null {
+  const key = areaSlug.trim().toLowerCase().replace(/^\/+|\/+$/g, "");
+  if (!key) return null;
+  if (LOCATION_SEO_SLUG_SET.has(key)) {
+    return LOCATION_SEO_PAGES[key as LocationSeoSlug].path;
+  }
+  const suffixed = key.endsWith("-cleaning-services") ? key : `${key}-cleaning-services`;
+  if (LOCATION_SEO_SLUG_SET.has(suffixed)) {
+    return LOCATION_SEO_PAGES[suffixed as LocationSeoSlug].path;
+  }
+  return null;
 }
 
 export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Metadata {

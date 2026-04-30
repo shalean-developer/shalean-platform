@@ -22,6 +22,20 @@ const imageRemotePatterns = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/home-cleaning",
+        destination: "/services/standard-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/deep-cleaning",
+        destination: "/services/deep-cleaning-cape-town",
+        permanent: true,
+      },
+    ];
+  },
   images: {
     remotePatterns: imageRemotePatterns,
     /**

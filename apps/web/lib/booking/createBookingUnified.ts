@@ -5,8 +5,14 @@ import {
   buildHomeWidgetCatalogLineItems,
   buildMonthlyBundledZarLineItems,
 } from "@/lib/booking/buildBookingLineItems";
+import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
+import {
+  buildPriceSnapshotV1FromLineItems,
+  extractDeclaredTotalCentsFromRowBase,
+  sumLineItemsCents,
+} from "@/lib/booking/priceSnapshotBooking";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculateCatalogPrice";
@@ -60,6 +66,33 @@ export type InsertBookingRowUnifiedResult =
   | { ok: true; id: string; row: Record<string, unknown> | null }
   | { ok: false; error: string; pgCode?: string };
 
+function buildLineItemsForUnifiedInsert(
+  args: InsertBookingRowUnifiedArgs,
+  rooms: number,
+  bathrooms: number,
+  extrasPersist: ReturnType<typeof sanitizeBookingExtrasForPersist>,
+): BookingLineItemInsert[] | null {
+  if (!args.lineItemsPricing) return null;
+  if (args.lineItemsPricing.mode === "home_widget_catalog") {
+    return buildHomeWidgetCatalogLineItems({
+      snapshot: args.lineItemsPricing.snapshot,
+      widgetService: args.lineItemsPricing.widgetService,
+      bedrooms: rooms,
+      bathrooms: bathrooms,
+      extraRooms: args.lineItemsPricing.extraRooms,
+      extraSlugs: extrasPersist.map((e) => e.slug),
+    });
+  }
+  if (args.lineItemsPricing.mode === "monthly_bundled_zar") {
+    return buildMonthlyBundledZarLineItems({
+      quotedTotalZar: args.lineItemsPricing.quotedTotalZar,
+      bundleLabel: args.lineItemsPricing.bundleLabel,
+      extras: extrasPersist,
+    });
+  }
+  return null;
+}
+
 function clampRoomCount(n: number): number {
   return Math.min(20, Math.max(1, Math.round(n)));
 }
@@ -101,12 +134,44 @@ export async function insertBookingRowUnified(
     ...(args.snapshotExtension && typeof args.snapshotExtension === "object" ? args.snapshotExtension : {}),
   } as BookingSnapshotV1;
 
+  const prebuiltLineItems = buildLineItemsForUnifiedInsert(args, rooms, bathrooms, extrasPersist);
+  if (prebuiltLineItems) {
+    if (prebuiltLineItems.length === 0) {
+      return { ok: false, error: "Pricing line items are required (empty quote)." };
+    }
+    const declaredCents = extractDeclaredTotalCentsFromRowBase(args.rowBase);
+    if (declaredCents == null) {
+      return { ok: false, error: "Declared total is missing for priced booking (total_paid_zar / total_price)." };
+    }
+    const sumCents = sumLineItemsCents(prebuiltLineItems);
+    if (sumCents !== declaredCents) {
+      return {
+        ok: false,
+        error: `Price mismatch: line items sum to ${(sumCents / 100).toFixed(2)} ZAR but declared total is ${(declaredCents / 100).toFixed(2)} ZAR.`,
+      };
+    }
+  }
+
+  const totalZarForSnapshot =
+    prebuiltLineItems != null
+      ? Math.round(sumLineItemsCents(prebuiltLineItems) / 100)
+      : null;
+  const price_snapshot =
+    prebuiltLineItems != null && totalZarForSnapshot != null
+      ? buildPriceSnapshotV1FromLineItems({
+          serviceTypeSlug: String(args.serviceSlugForFlat ?? "standard").trim() || "standard",
+          lineItems: prebuiltLineItems,
+          totalPriceZar: totalZarForSnapshot,
+        })
+      : null;
+
   const insertRow = {
     ...args.rowBase,
     rooms,
     bathrooms,
     extras: extrasPersist,
     booking_snapshot,
+    ...(price_snapshot ? { price_snapshot } : {}),
   };
 
   const selectList = (args.select ?? "id").trim() || "id";
@@ -122,23 +187,12 @@ export async function insertBookingRowUnified(
     return { ok: false, error: "Insert returned no id." };
   }
 
-  if (args.lineItemsPricing?.mode === "home_widget_catalog") {
-    const li = buildHomeWidgetCatalogLineItems({
-      snapshot: args.lineItemsPricing.snapshot,
-      widgetService: args.lineItemsPricing.widgetService,
-      bedrooms: rooms,
-      bathrooms: bathrooms,
-      extraRooms: args.lineItemsPricing.extraRooms,
-      extraSlugs: extrasPersist.map((e) => e.slug),
-    });
-    await persistBookingLineItems(admin, id, li);
-  } else if (args.lineItemsPricing?.mode === "monthly_bundled_zar") {
-    const li = buildMonthlyBundledZarLineItems({
-      quotedTotalZar: args.lineItemsPricing.quotedTotalZar,
-      bundleLabel: args.lineItemsPricing.bundleLabel,
-      extras: extrasPersist,
-    });
-    await persistBookingLineItems(admin, id, li);
+  if (prebuiltLineItems && prebuiltLineItems.length > 0) {
+    const persisted = await persistBookingLineItems(admin, id, prebuiltLineItems);
+    if (!persisted.ok) {
+      await admin.from("bookings").delete().eq("id", id);
+      return { ok: false, error: persisted.error || "Could not save booking line items." };
+    }
   }
 
   if (args.logInsert !== false) {

@@ -4,6 +4,11 @@ import { notFound } from "next/navigation";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { cityNameFromSlug, locationNameForCity, SERVICE_LOCATIONS } from "@/lib/growth/locations";
+import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
+import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
+import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+
+const SITE_ORIGIN = "https://www.shalean.co.za";
 
 type Props = { params: Promise<{ city: string; location: string }> };
 
@@ -16,10 +21,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const cityName = cityNameFromSlug(city);
   const locationName = locationNameForCity(city, location);
   if (!cityName || !locationName) return { title: "Cleaning Services | Shalean" };
+  const primaryPath = city === "cape-town" ? locationSeoPathFromLegacyAreaSlug(location) : null;
   return {
     title: `House Cleaning in ${locationName}, ${cityName} | Shalean`,
     description: `Book trusted house cleaning in ${locationName}, ${cityName}. Fast quotes, vetted cleaners, secure checkout.`,
+    ...(primaryPath ? { alternates: { canonical: `${SITE_ORIGIN}${primaryPath}` } } : {}),
   };
+}
+
+function areaHref(citySlug: string, areaSlug: string): string {
+  if (citySlug === "cape-town") {
+    const primary = locationSeoPathFromLegacyAreaSlug(areaSlug);
+    if (primary) return primary;
+  }
+  return `/${citySlug}/cleaning-services/${areaSlug}`;
 }
 
 export default async function CityLocationCleaningPage({ params }: Props) {
@@ -27,6 +42,9 @@ export default async function CityLocationCleaningPage({ params }: Props) {
   const cityName = cityNameFromSlug(city);
   const locationName = locationNameForCity(city, location);
   if (!cityName || !locationName) notFound();
+
+  const trustStats = await getPublicReviewBannerStats();
+  const avgDisplay = publicTrustAverageDisplay(trustStats);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -51,7 +69,7 @@ export default async function CityLocationCleaningPage({ params }: Props) {
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold">Why customers choose Shalean</h2>
         <ul className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
-          <li>4.8★ average rating</li>
+          <li>{avgDisplay}★ average rating (verified reviews)</li>
           <li>Secure payment</li>
           <li>Vetted cleaners in your city</li>
         </ul>
@@ -61,7 +79,7 @@ export default async function CityLocationCleaningPage({ params }: Props) {
         {SERVICE_LOCATIONS.filter((loc) => loc.citySlug === city && loc.slug !== location).map((loc) => (
           <Link
             key={loc.slug}
-            href={`/${city}/cleaning-services/${loc.slug}`}
+            href={areaHref(city, loc.slug)}
             className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700"
           >
             Cleaning in {loc.name}

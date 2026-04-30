@@ -2,6 +2,7 @@ import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import type { BookingExtraPersistRow } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
+import type { JobSubtotalSplitZar } from "@/lib/pricing/pricingEngineSnapshot";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculateCatalogPrice";
 import {
   computeBundledExtrasTotalZarSnapshot,
@@ -13,6 +14,7 @@ import { normalizePricingJobInput, resolveServiceForPricing, type PricingJobInpu
 
 const PRICING_HOME_WIDGET = "home_widget_catalog_v1" as const;
 const PRICING_MONTHLY_BUNDLED = "monthly_bundled_zar_v1" as const;
+const PRICING_CHECKOUT_LOCK = "checkout_lock_catalog_v1" as const;
 
 /** Integer ZAR → Paystack-style minor units (cents). */
 export function zarToCents(zar: number): number {
@@ -154,6 +156,68 @@ export function buildHomeWidgetCatalogLineItems(params: {
     });
   }
 
+  return items;
+}
+
+/**
+ * Paystack checkout visit: job subtotal split + optional adjustment so line cents equal `visitTotalZar`.
+ */
+export function buildCheckoutVisitLineItems(params: {
+  serviceTypeSlug: string | null;
+  job: JobSubtotalSplitZar;
+  subtotalZar: number;
+  visitTotalZar: number;
+}): BookingLineItemInsert[] {
+  const slug = params.serviceTypeSlug?.trim() || null;
+  const items: BookingLineItemInsert[] = [
+    {
+      item_type: "base",
+      slug,
+      name: "Service base",
+      quantity: 1,
+      unit_price_cents: zarToCents(params.job.serviceBaseZar),
+      total_price_cents: zarToCents(params.job.serviceBaseZar),
+      pricing_source: PRICING_CHECKOUT_LOCK,
+      metadata: {},
+    },
+    {
+      item_type: "room",
+      slug: null,
+      name: "Rooms, bathrooms & duration",
+      quantity: 1,
+      unit_price_cents: zarToCents(params.job.roomsZar),
+      total_price_cents: zarToCents(params.job.roomsZar),
+      pricing_source: PRICING_CHECKOUT_LOCK,
+      metadata: {},
+    },
+    {
+      item_type: "extra",
+      slug: null,
+      name: "Add-ons (subtotal)",
+      quantity: 1,
+      unit_price_cents: zarToCents(params.job.extrasZar),
+      total_price_cents: zarToCents(params.job.extrasZar),
+      pricing_source: PRICING_CHECKOUT_LOCK,
+      metadata: {},
+    },
+  ];
+
+  const visit = Math.round(params.visitTotalZar);
+  const sumCents = items.reduce((s, r) => s + r.total_price_cents, 0);
+  const expectedCents = zarToCents(visit);
+  const delta = expectedCents - sumCents;
+  if (delta !== 0) {
+    items.push({
+      item_type: "adjustment",
+      slug: null,
+      name: "Surge, slot demand & fees",
+      quantity: 1,
+      unit_price_cents: delta,
+      total_price_cents: delta,
+      pricing_source: PRICING_CHECKOUT_LOCK,
+      metadata: { subtotalZar: Math.round(params.subtotalZar), visitTotalZar: visit },
+    });
+  }
   return items;
 }
 

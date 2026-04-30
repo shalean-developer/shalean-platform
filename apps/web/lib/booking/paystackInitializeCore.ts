@@ -2,6 +2,8 @@ import "server-only";
 
 import crypto from "crypto";
 
+import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
+import { buildCheckoutVisitLineItems, zarToCents } from "@/lib/booking/buildBookingLineItems";
 import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
@@ -20,6 +22,42 @@ import {
   updatePendingPaymentBookingForInit,
 } from "@/lib/booking/insertPendingPaymentBooking";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { JobSubtotalSplitZar } from "@/lib/pricing/pricingEngineSnapshot";
+
+type OkCheckoutForPricing = {
+  ok: true;
+  serverQuote: { subtotalZar: number };
+  visitTotalZar: number;
+  jobSubtotalSplit: JobSubtotalSplitZar;
+};
+
+async function resolvePendingCheckoutPricingTarget(
+  admin: SupabaseClient,
+  createdPendingBookingId: string | null,
+  bookingIdFromBody: string | null,
+  checkout: OkCheckoutForPricing,
+): Promise<{ bookingId: string; skipLineItemInsert: boolean } | null> {
+  if (!checkout.serverQuote) return null;
+  if (createdPendingBookingId) {
+    return { bookingId: createdPendingBookingId, skipLineItemInsert: false };
+  }
+  const bid = bookingIdFromBody?.trim() ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(bid)) return null;
+  const { data: row } = await admin.from("bookings").select("id, price_snapshot, status").eq("id", bid).maybeSingle();
+  if (!row) return null;
+  const st = String((row as { status?: string | null }).status ?? "").toLowerCase();
+  if (st !== "pending_payment") return null;
+  const snap = (row as { price_snapshot?: unknown }).price_snapshot;
+  const hasSnap = snap != null && typeof snap === "object";
+  const { count, error: ctErr } = await admin
+    .from("booking_line_items")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", bid);
+  if (ctErr) return null;
+  const hasLi = (count ?? 0) > 0;
+  if (hasSnap && hasLi) return null;
+  return { bookingId: bid, skipLineItemInsert: hasLi };
+}
 import { metrics } from "@/lib/metrics/counters";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
 import { resolveBookingLocationContext } from "@/lib/booking/resolveLocationId";
@@ -29,6 +67,7 @@ import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackErrorCodes";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { buildPriceSnapshotV1Checkout, sumLineItemsCents } from "@/lib/booking/priceSnapshotBooking";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
@@ -473,7 +512,8 @@ export async function processPaystackInitializeBody(
     }
   }
 
-  const cleanerId = typeof b.cleanerId === "string" ? b.cleanerId : null;
+  const cleanerIdRaw = typeof b.cleanerId === "string" ? b.cleanerId.trim() : "";
+  const cleanerId = /^[0-9a-f-]{36}$/i.test(cleanerIdRaw) ? cleanerIdRaw : null;
   const cleanerName = typeof b.cleanerName === "string" ? b.cleanerName.trim() : null;
   const subscriptionFrequency =
     (b as { metadata?: { subscriptionFrequency?: unknown } }).metadata?.subscriptionFrequency === "weekly" ||
@@ -497,7 +537,16 @@ export async function processPaystackInitializeBody(
     subscriptionFrequency,
   });
 
-  if (createdPendingBookingId && checkout.serverQuote) {
+  const pricingTarget = checkout.ok
+    ? await resolvePendingCheckoutPricingTarget(
+        admin,
+        createdPendingBookingId,
+        bookingIdFromBody,
+        checkout as OkCheckoutForPricing,
+      )
+    : null;
+
+  if (pricingTarget && checkout.ok && checkout.serverQuote) {
     const flat = buildSnapshotFlat(locked);
     const bookingSnapshotMerged = mergeSnapshotWithFlat(snapshot, flat);
     const locationContext = await resolveBookingLocationContext(admin, locked);
@@ -512,10 +561,59 @@ export async function processPaystackInitializeBody(
       locked.extras ?? [],
       locked.service ?? null,
     ).map(({ slug, name, price }) => ({ slug, name, price }));
+    const visitRounded = Math.round(checkout.visitTotalZar);
+    const visitCents = zarToCents(visitRounded);
+    const checkoutLineItems = buildCheckoutVisitLineItems({
+      serviceTypeSlug: locked.service ? adminBookingServiceSlug(String(locked.service)) : null,
+      job: checkout.jobSubtotalSplit,
+      subtotalZar: checkout.serverQuote.subtotalZar,
+      visitTotalZar: checkout.visitTotalZar,
+    });
+    if (checkoutLineItems.length === 0) {
+      if (createdPendingBookingId) {
+        await deletePendingPaymentBooking(admin, createdPendingBookingId);
+      }
+      return {
+        ok: false,
+        status: 400,
+        errorCode: "VALIDATION",
+        error: "Pricing could not be prepared for this checkout. Try again or re-lock your visit.",
+      };
+    }
+    const lineSumCents = sumLineItemsCents(checkoutLineItems);
+    if (lineSumCents !== visitCents) {
+      if (createdPendingBookingId) {
+        await deletePendingPaymentBooking(admin, createdPendingBookingId);
+      }
+      void reportOperationalIssue("error", "processPaystackInitializeBody", "checkout line sum != visit total", {
+        bookingId: pricingTarget.bookingId,
+        visitCents,
+        lineSumCents,
+      });
+      return {
+        ok: false,
+        status: 400,
+        errorCode: "PRICE_MISMATCH",
+        error: "Checkout total does not match pricing breakdown. Please refresh and pick your slot again.",
+      };
+    }
+    const price_snapshot = buildPriceSnapshotV1Checkout({
+      service_type: locked.service ? adminBookingServiceSlug(String(locked.service)) : "standard",
+      base_price: checkout.jobSubtotalSplit.serviceBaseZar + checkout.jobSubtotalSplit.roomsZar,
+      extras: extrasSnapshot.map((x) => ({
+        id: String(x.slug ?? "").trim() || "extra",
+        name: typeof x.name === "string" ? x.name : String(x.slug ?? "Extra"),
+        price: Math.round(Number(x.price) || 0),
+      })),
+      total_price: visitRounded,
+    });
     const priceBreakdown = { ...checkout.serverQuote, job: checkout.jobSubtotalSplit };
     const slotF = initOptions?.adminSlotFlags;
+    const deleteRowOnLineItemPersistFail = Boolean(
+      createdPendingBookingId && createdPendingBookingId === pricingTarget.bookingId,
+    );
     const upd = await updatePendingPaymentBookingForInit(admin, {
-      bookingId: createdPendingBookingId,
+      bookingId: pricingTarget.bookingId,
       bookingSnapshot: bookingSnapshotMerged,
       priceBreakdown,
       totalPriceZar: checkout.visitTotalZar,
@@ -528,11 +626,17 @@ export async function processPaystackInitializeBody(
       surgeMultiplier,
       surgeReason,
       extrasSnapshot,
+      price_snapshot,
+      checkoutLineItems: pricingTarget.skipLineItemInsert ? null : checkoutLineItems,
+      deleteRowOnLineItemPersistFail,
       ...(slotF?.slotDuplicateExempt ? { slotDuplicateExempt: true } : {}),
       ...(slotF?.adminForceSlotOverride ? { adminForceSlotOverride: true } : {}),
+      ...(cleanerId ? { selected_cleaner_id: cleanerId, assignment_type: "user_selected" } : {}),
     });
     if (!upd.ok) {
-      await deletePendingPaymentBooking(admin, createdPendingBookingId);
+      if (createdPendingBookingId && createdPendingBookingId === pricingTarget.bookingId) {
+        await deletePendingPaymentBooking(admin, createdPendingBookingId);
+      }
       const dupSlot =
         Boolean(trustedCustomerUid) &&
         (upd.pgCode === "23505" ||

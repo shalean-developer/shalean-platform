@@ -110,6 +110,11 @@ export async function POST(request: Request) {
   const resendNotifications = boolish(body.resendNotifications);
   const notificationMode =
     body.notificationMode === "chain" ? ("chain" as const) : ("chain_plus_email" as const);
+  const ignoreCleanerSlotConflict = boolish(body.ignore_cleaner_slot_conflict);
+  const cleanerSlotOverrideReasonRaw =
+    typeof body.cleaner_slot_override_reason === "string" ? body.cleaner_slot_override_reason.trim().slice(0, 500) : "";
+  const cleanerSlotOverrideReasonForDb =
+    ignoreCleanerSlotConflict && cleanerSlotOverrideReasonRaw.length > 0 ? cleanerSlotOverrideReasonRaw : null;
 
   if (bookingIdFromBody && !forceNewCheckout) {
     const { data: existing, error: exErr } = await admin.from("bookings").select(HEAD_SELECT).eq("id", bookingIdFromBody).maybeSingle();
@@ -218,6 +223,8 @@ export async function POST(request: Request) {
     result,
     locked: body.locked,
     notificationMode,
+    ignoreCleanerSlotConflict,
+    cleanerSlotOverrideReason: cleanerSlotOverrideReasonForDb,
   });
   if (!finalized.ok) {
     return NextResponse.json({ error: finalized.error }, { status: 500 });
