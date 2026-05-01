@@ -357,7 +357,6 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         showTopProgress={false}
         summary={summaryCard}
         desktopFooter={desktopFooter}
-        trustFooterClearMobileDock={showStepNav}
         main={
           <AnimatePresence mode="wait">
             <motion.div

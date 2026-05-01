@@ -17,11 +17,6 @@ export type BookingLayoutProps = {
   /** Back / Continue row — desktop only; mobile uses `MobileBottomBar` checkout dock */
   desktopFooter?: React.ReactNode;
   className?: string;
-  /**
-   * When true (mobile step nav + fixed bottom chrome), trust footer sticks above that stack.
-   * When false (e.g. payment), footer sticks flush to the viewport bottom on small screens.
-   */
-  trustFooterClearMobileDock?: boolean;
 };
 
 /**
@@ -36,7 +31,6 @@ export function BookingLayout({
   summary,
   desktopFooter,
   className,
-  trustFooterClearMobileDock = false,
 }: BookingLayoutProps) {
   return (
     <div className={cn("bg-zinc-50 dark:bg-zinc-950", className)}>
@@ -71,7 +65,7 @@ export function BookingLayout({
         </div>
       </div>
 
-      <BookingCheckoutTrustFooter clearMobileDock={trustFooterClearMobileDock} />
+      <BookingCheckoutTrustFooter />
     </div>
   );
 }
