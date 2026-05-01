@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { UpsellRecommendations } from "@/components/booking/UpsellRecommendations";
 import { useRouter } from "next/navigation";
@@ -26,6 +27,7 @@ import {
   cleaningFrequencyDiscountFraction,
   cleaningFrequencyPlanDisplayLabel,
 } from "@/lib/booking/cleaningFrequencyDisplayDiscount";
+import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
 
 const ExtrasSection = lazy(() =>
   import("@/components/booking/ExtrasSection").then((m) => ({ default: m.ExtrasSection })),
@@ -39,7 +41,7 @@ export function StepDetailsForm() {
   const { state, setState, maxRooms, blockedExtras, canContinue, hydrated } = booking;
 
   const { tier: vipTier } = useBookingVipTier();
-  const { canonicalTotalZar } = useBookingPrice();
+  const { canonicalTotalZar, canonicalDurationHours } = useBookingPrice();
   const pastHints = usePastBookingHints();
   const locked = useLockedBooking();
   const isLocked = locked != null;
@@ -100,6 +102,8 @@ export function StepDetailsForm() {
         amountDisplayOverride: estimateZar == null ? "—" : null,
         planPriceBreakdown,
         totalCaption: "From",
+        mobileHoursLine:
+          canonicalDurationHours != null ? formatBookingHoursCompact(canonicalDurationHours) : null,
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       }}
@@ -108,7 +112,7 @@ export function StepDetailsForm() {
       onContinue={goWhen}
       continueLabel={copy.cta}
     >
-      <div className="w-full max-w-none space-y-5 pb-6 max-lg:space-y-5 lg:space-y-6">
+      <div className="w-full max-w-none space-y-4 pb-6 lg:space-y-6">
         {isLocked ? (
           <div
             className="rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
@@ -127,7 +131,7 @@ export function StepDetailsForm() {
 
         <fieldset
           disabled={isLocked}
-          className="w-full max-w-none min-w-0 space-y-5 border-0 p-0 disabled:pointer-events-none disabled:opacity-[0.55] max-lg:space-y-4 lg:space-y-5"
+          className="w-full max-w-none min-w-0 space-y-4 border-0 p-0 disabled:pointer-events-none disabled:opacity-[0.55] lg:space-y-5"
         >
           <SectionCard title={copy.homeDetailsTitle} description={copy.homeDetailsHint} descriptionDesktopOnly>
             <MobileFullWidth insideSectionCard>
@@ -158,11 +162,29 @@ export function StepDetailsForm() {
               </div>
             }
           >
-            <SectionCard id="extras" title={copy.extrasTitle} description={copy.reassurance} descriptionDesktopOnly>
-              <MobileFullWidth insideSectionCard>
-                <ExtrasSection state={state} blockedExtras={blockedExtras} setState={setState} />
-              </MobileFullWidth>
-            </SectionCard>
+            <div id="extras" className="scroll-mt-24">
+            <details className="group w-full rounded-2xl border border-zinc-200/80 bg-white shadow-sm shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20 lg:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-base font-semibold tracking-tight text-zinc-900 marker:content-none dark:text-zinc-50 [&::-webkit-details-marker]:hidden">
+                <span>{copy.extrasTitle}</span>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180 dark:text-zinc-400"
+                  aria-hidden
+                />
+              </summary>
+              <div className="border-t border-zinc-200/80 px-3 pb-4 pt-2 dark:border-zinc-800">
+                <MobileFullWidth insideSectionCard>
+                  <ExtrasSection state={state} blockedExtras={blockedExtras} setState={setState} />
+                </MobileFullWidth>
+              </div>
+            </details>
+            <div className="hidden lg:block">
+              <SectionCard title={copy.extrasTitle} description={copy.reassurance} descriptionDesktopOnly>
+                <MobileFullWidth insideSectionCard>
+                  <ExtrasSection state={state} blockedExtras={blockedExtras} setState={setState} />
+                </MobileFullWidth>
+              </SectionCard>
+            </div>
+            </div>
           </Suspense>
 
           {state.service ? (

@@ -45,8 +45,13 @@ function avatarImageUrl(user: User): string | null {
 
 const menuContentClass = "min-w-[200px] rounded-xl border border-zinc-200 bg-white py-2 shadow-lg";
 
-export function BookingHeader() {
-  const { step } = useBookingFlow();
+export type BookingHeaderProps = {
+  /** When true, hides the small Home/Back control on the left (max-lg) — e.g. booking footer provides Back. */
+  hideMobileBackLink?: boolean;
+};
+
+export function BookingHeader({ hideMobileBackLink = false }: BookingHeaderProps) {
+  const { step, handleBack } = useBookingFlow();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -85,6 +90,14 @@ export function BookingHeader() {
     router.push("/");
     router.refresh();
   }
+
+  const onMobileNavBack = useCallback(() => {
+    if (step === "entry") {
+      router.push("/");
+      return;
+    }
+    handleBack();
+  }, [step, handleBack, router]);
 
   const authSlot = loading ? (
     <div className="h-7 w-14 shrink-0 animate-pulse rounded-md bg-gray-200" aria-hidden />
@@ -153,7 +166,23 @@ export function BookingHeader() {
   return (
     <header className="sticky top-0 z-50 flex h-[80px] items-center border-b border-gray-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <div className="mx-auto flex w-full max-w-7xl items-center px-6">
-        <div className="flex w-[160px] shrink-0 min-w-0 items-center justify-start">
+        <div className="flex w-[160px] shrink-0 min-w-0 items-center justify-start gap-1.5 sm:gap-2">
+          {hideMobileBackLink ? null : step === "entry" ? (
+            <Link
+              href="/"
+              className="shrink-0 rounded-md px-1.5 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 lg:hidden dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              Home
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={onMobileNavBack}
+              className="shrink-0 rounded-md px-1.5 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 lg:hidden dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              Back
+            </button>
+          )}
           <Link
             href="/"
             className="min-w-0 truncate text-lg font-semibold tracking-tight text-gray-900 dark:text-zinc-50"
@@ -163,7 +192,7 @@ export function BookingHeader() {
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-2 sm:px-4">
-          <ProgressBar currentStep={currentStepNumber} className="max-w-2xl flex-1" />
+          <ProgressBar currentStep={currentStepNumber} className="mx-auto w-full max-w-[576px]" />
         </div>
 
         <div className="flex w-[160px] shrink-0 items-center justify-end">{authSlot}</div>

@@ -11,7 +11,7 @@ const rows = [
 ] as const;
 
 export function PricingPreview() {
-  const quoteHref = `${bookingFlowHref("quote", bookingFlowPromoExtra("SAVE10"))}&source=cape_town_main_pricing`;
+  const quoteHref = bookingFlowHref("quote", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "cape_town_main_pricing" });
 
   return (
     <section aria-labelledby="pricing-heading" className="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 md:p-8">

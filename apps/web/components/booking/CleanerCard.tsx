@@ -12,6 +12,8 @@ type CleanerCardProps = {
   showTrustBadges?: boolean;
   /** Featured-only: microcopy under title */
   recommendHint?: string;
+  /** Tighter mobile layout (standalone cleaner step). */
+  compactMobile?: boolean;
 };
 
 export function CleanerCard({
@@ -21,6 +23,7 @@ export function CleanerCard({
   variant,
   showTrustBadges = false,
   recommendHint,
+  compactMobile = false,
 }: CleanerCardProps) {
   const isFeatured = variant === "featured";
 
@@ -35,7 +38,13 @@ export function CleanerCard({
         selected
           ? "z-[1] scale-[1.02] border-primary bg-primary/5 shadow-lg ring-1 ring-primary/20 motion-reduce:scale-100"
           : "border-zinc-200/90 bg-white hover:border-primary/50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-zinc-500",
-        isFeatured ? "p-5 sm:p-6" : "p-4",
+        isFeatured
+          ? compactMobile
+            ? "p-4 max-lg:rounded-xl max-lg:p-3 sm:p-6"
+            : "p-5 sm:p-6"
+          : compactMobile
+            ? "p-4 max-lg:rounded-xl max-lg:p-2.5 max-lg:py-3"
+            : "p-4",
       ].join(" ")}
     >
       {selected ? (
@@ -44,11 +53,27 @@ export function CleanerCard({
         </span>
       ) : null}
 
-      <div className={isFeatured ? "flex flex-col gap-4 sm:flex-row sm:items-start" : "flex gap-3"}>
+      <div
+        className={
+          isFeatured
+            ? compactMobile
+              ? "flex flex-col gap-3 max-lg:gap-2 sm:flex-row sm:items-start"
+              : "flex flex-col gap-4 sm:flex-row sm:items-start"
+            : compactMobile
+              ? "flex gap-2.5 max-lg:items-center"
+              : "flex gap-3"
+        }
+      >
         <div
           className={[
             "relative shrink-0 overflow-hidden rounded-full bg-zinc-100 ring-2 ring-white dark:bg-zinc-800 dark:ring-zinc-900",
-            isFeatured ? "h-20 w-20 sm:h-24 sm:w-24" : "h-14 w-14",
+            isFeatured
+              ? compactMobile
+                ? "h-20 w-20 max-lg:h-12 max-lg:w-12 sm:h-24 sm:w-24"
+                : "h-20 w-20 sm:h-24 sm:w-24"
+              : compactMobile
+                ? "h-14 w-14 max-lg:h-11 max-lg:w-11"
+                : "h-14 w-14",
           ].join(" ")}
         >
           {/* External avatar URLs — avoid next/image remotePatterns churn */}
@@ -107,7 +132,14 @@ export function CleanerCard({
             ) : null}
           </p>
 
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p
+            className={[
+              "mt-2 text-sm text-zinc-600 max-lg:inline max-lg:text-xs max-lg:leading-snug dark:text-zinc-400",
+              compactMobile ? "max-lg:mt-1" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             <span className="font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
               {cleaner.jobs_completed.toLocaleString("en-ZA")}
             </span>{" "}
@@ -142,7 +174,10 @@ export function CleanerCard({
               className={[
                 "space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800",
                 isFeatured ? "mt-4" : "mt-3",
-              ].join(" ")}
+                compactMobile ? "max-lg:hidden" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
             >
               {cleaner.recent_reviews.slice(0, 3).map((r, i) => (
                 <li key={`${r.rating}-${i}`} className="text-xs leading-snug text-zinc-600 dark:text-zinc-400">

@@ -65,7 +65,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
           pick up coastal dust fast. This page explains how professional {svc} works here, what is typically included,
           and how to{" "}
           <GrowthCtaLink
-            href="/booking?step=entry"
+            href="/booking/details"
             source={`blog_programmatic_${post.slug}_intro`}
             className="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700"
           >
@@ -123,7 +123,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
         <p>{sameDayBody(post)}</p>
         <p>
           <GrowthCtaLink
-            href="/booking?step=entry"
+            href="/booking/details"
             source={`blog_programmatic_${post.slug}_same_day`}
             className="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700"
           >
@@ -134,7 +134,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
         </p>
         <div className="not-prose my-8 rounded-2xl border border-blue-100 bg-blue-50/60 p-6 text-center">
           <GrowthCtaLink
-            href="/booking?step=entry"
+            href="/booking/details"
             source={`blog_programmatic_${post.slug}_cta`}
             className={ctaBtnClass}
           >

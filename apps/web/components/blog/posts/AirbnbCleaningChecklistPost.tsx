@@ -194,7 +194,7 @@ export function AirbnbCleaningChecklistPost() {
       <p>
         You can also{" "}
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source="blog_airbnb-cleaning-checklist_inline"
           className="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700"
         >

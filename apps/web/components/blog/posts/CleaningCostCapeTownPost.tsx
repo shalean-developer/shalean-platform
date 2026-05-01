@@ -45,7 +45,7 @@ export function CleaningCostCapeTownPost() {
       <p>
         For an exact price based on your home, you can{" "}
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source="blog_cleaning_cost_cape-town_prices"
           className="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700"
         >
@@ -158,7 +158,7 @@ export function CleaningCostCapeTownPost() {
       <p>
         The best way to check is to{" "}
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source="blog_cleaning_cost_cape-town_same_day"
           className="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700"
         >

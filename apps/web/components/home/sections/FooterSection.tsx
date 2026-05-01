@@ -104,7 +104,7 @@ export function FooterSection() {
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-zinc-800 pt-8 text-xs text-zinc-500 sm:flex-row">
           <p>© {new Date().getFullYear()} Shalean Cleaning Services. All rights reserved.</p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/booking?step=entry" className="transition hover:text-zinc-300">
+            <Link href="/booking/details" className="transition hover:text-zinc-300">
               Book now
             </Link>
             <Link href="/login?role=customer" className="transition hover:text-zinc-300">

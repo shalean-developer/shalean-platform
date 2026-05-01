@@ -32,7 +32,7 @@ export type CapeTownServiceSeoBlock = {
   h1: string;
   /** Short booking label for CTAs */
   bookingLabel: string;
-  /** Defaults to `/booking?step=entry` in the page component */
+  /** Defaults to `/booking/details` in the page component */
   bookingPath?: string;
   /** Defaults to "How this service works in Cape Town" */
   introSectionHeading?: string;

@@ -196,7 +196,7 @@ export function ConversionBookingFlow() {
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-10 lg:py-10">
-        <div className={cn("min-w-0", "pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-0")}>
+        <div className={cn("mx-auto min-w-0 w-full max-w-[576px]", "pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-0")}>
           {step === 1 ? (
             <ConversionBookingStep1
               form={form}

@@ -17,7 +17,16 @@ export async function POST(request: Request) {
   const { relaxedLockValidation: _relaxed, ...safeBody } = raw;
   void _relaxed;
 
-  const result = await processPaystackInitializeBody(safeBody);
+  const forwarded = request.headers.get("x-forwarded-for");
+  const clientIp =
+    (typeof forwarded === "string" && forwarded.split(",")[0]?.trim()) ||
+    request.headers.get("x-real-ip")?.trim() ||
+    null;
+  const userAgent = request.headers.get("user-agent")?.trim() || null;
+
+  const result = await processPaystackInitializeBody(safeBody, {
+    checkoutTrustSignals: { clientIp, userAgent },
+  });
   if (!result.ok) {
     return NextResponse.json(
       {

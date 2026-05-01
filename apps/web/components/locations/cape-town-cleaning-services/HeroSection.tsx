@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 const HERO_SRC = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
 
 export function HeroSection() {
-  const quoteHref = `${bookingFlowHref("quote", bookingFlowPromoExtra("SAVE10"))}&source=cape_town_main`;
-  const bookHref = `${bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"))}&source=cape_town_main`;
+  const quoteHref = bookingFlowHref("quote", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "cape_town_main" });
+  const bookHref = bookingFlowHref("entry", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "cape_town_main" });
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-gradient-to-br from-zinc-50 via-white to-blue-50/40 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950/20">

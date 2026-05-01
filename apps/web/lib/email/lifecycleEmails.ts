@@ -76,7 +76,7 @@ async function sendLifecycle(
 export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
   const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
 
   const inner = `
@@ -104,7 +104,7 @@ export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Prom
 export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
   const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
   const externalReview = process.env.NEXT_PUBLIC_REVIEW_URL?.trim();
 
@@ -131,7 +131,7 @@ export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promis
 export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
   const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
 
   const inner = `
@@ -159,7 +159,7 @@ export async function sendRebookReminderEmail(
 ): Promise<{ sent: boolean; error?: string }> {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
 
   const inner = `
   <h1 style="font-size: 22px; margin: 0 0 12px;">Time for your next clean?</h1>

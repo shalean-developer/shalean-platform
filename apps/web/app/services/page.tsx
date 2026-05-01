@@ -33,7 +33,7 @@ const HUB_AREA_SLUGS: LocationSeoSlug[] = [...LOCATION_SEO_SLUGS];
 const linkClass = linkInParagraphClassName;
 
 const popularCleaningLinks: { href: string; label: string }[] = [
-  { href: "/booking?step=entry", label: "Same day cleaning Cape Town" },
+  { href: "/booking/details", label: "Same day cleaning Cape Town" },
   { href: p["standard-cleaning-cape-town"].path, label: "House cleaning Cape Town" },
   { href: p["standard-cleaning-cape-town"].path, label: "Apartment cleaning Cape Town" },
   { href: p["standard-cleaning-cape-town"].path, label: "Weekly cleaning services Cape Town" },
@@ -132,7 +132,7 @@ export default function ServicesHubPage() {
             handover-ready finish at the end of a lease, you can compare scope online and lock pricing before anyone is
             dispatched. Customers across the Southern Suburbs and wider metro use us for flexible booking, clear
             totals, and cleaners who arrive briefed for the job you actually booked. When you are ready, you can{" "}
-            <Link href="/booking?step=entry" className={linkClass}>
+            <Link href="/booking/details" className={linkClass}>
               check pricing and availability instantly
             </Link>{" "}
             in our online booking system—adjust rooms and extras until the total matches what you need, then confirm
@@ -162,7 +162,7 @@ export default function ServicesHubPage() {
             </Link>{" "}
             is scoped against what agencies and landlords typically inspect first. Need something sooner? Start a
             booking to see the soonest open slots—many customers searching for{" "}
-            <Link href="/booking?step=entry" className={linkClass}>
+            <Link href="/booking/details" className={linkClass}>
               same day cleaning in Cape Town
             </Link>{" "}
             begin there, then adjust bedrooms, bathrooms, and extras so the quote matches the visit.

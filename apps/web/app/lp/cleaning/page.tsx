@@ -11,7 +11,7 @@ export default function CleaningAdLandingPage() {
         <p className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">From R300</p>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">Trusted by homeowners in Cape Town • 4.8★ average rating • Secure payment</p>
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source="ads_lp_primary"
           className="flex min-h-12 w-full items-center justify-center rounded-lg bg-emerald-600 text-sm font-semibold text-white"
         >

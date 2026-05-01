@@ -156,7 +156,8 @@ export async function createPendingCustomerReferral(params: {
   });
 }
 
-async function countPaidBookingsForCustomer(
+/** Count non–pending-payment bookings for referral eligibility (referee first booking, etc.). */
+export async function countPaidBookingsForCustomer(
   admin: SupabaseClient,
   bookingUserId: string | null,
   customerEmail: string,

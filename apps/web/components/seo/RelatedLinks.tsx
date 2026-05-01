@@ -116,7 +116,7 @@ export function RelatedLinks({ placement, currentServiceSlug, currentLocationSlu
       <div className="mt-8 border-t border-zinc-200 pt-6 text-center">
         <p className="text-sm font-medium text-zinc-800">Ready to book?</p>
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source={bookingSource}
           className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >

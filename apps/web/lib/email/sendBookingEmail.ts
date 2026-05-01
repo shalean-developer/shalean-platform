@@ -93,7 +93,7 @@ async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: Bookin
   const renderOpts = { allowedKeys: allow.length ? allow : undefined, escapeHtmlValues: true as const };
   const html = renderTemplate(template.content, data, renderOpts);
   const subjectRaw =
-    template.subject?.trim() ? template.subject : "Booking confirmed — {{customer_name}}";
+    template.subject?.trim() ? template.subject : "Your booking is confirmed — {{customer_name}}";
   const subject = renderTemplate(subjectRaw, data, renderOpts);
 
   const from = getDefaultFromAddress();
@@ -179,6 +179,83 @@ async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: Bookin
   }
 }
 
+const BOOKING_PAYMENT_PROCESSING_EVENT = "booking_payment_processing";
+
+/**
+ * Sent when Paystack succeeded but the booking row is not yet persisted — not a confirmed booking.
+ */
+export async function sendCustomerBookingPaymentProcessingEmail(input: {
+  customerEmail: string;
+  paymentReference: string;
+}): Promise<{ sent: boolean; error?: string }> {
+  const resend = getResend();
+  const to = normalizeEmail(input.customerEmail.trim());
+  if (!to) {
+    return { sent: false, error: "Invalid email" };
+  }
+  if (!resend) {
+    await reportOperationalIssue("warn", "sendCustomerBookingPaymentProcessingEmail", "RESEND_API_KEY not set", {
+      reference: input.paymentReference,
+    });
+    return { sent: false, error: "Email not configured" };
+  }
+  const greet = (to.split("@")[0]?.replace(/[.+_]/g, " ").trim() || "there").slice(0, 120);
+  const html = `
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+  <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
+  <p>We’ve received your payment and are finalising your booking. You’ll receive a confirmation email shortly.</p>
+  <p style="font-size:12px;color:#6b7280;">Reference: <span style="font-family:monospace;">${escapeHtml(input.paymentReference)}</span></p>
+</div>`;
+  const from = getDefaultFromAddress();
+  const subject = "We’re finalising your booking";
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject,
+      html,
+    });
+    if (error) {
+      await reportOperationalIssue("error", "sendCustomerBookingPaymentProcessingEmail", error.message, {
+        reference: input.paymentReference,
+      });
+      await writeNotificationLog({
+        booking_id: null,
+        channel: "email",
+        template_key: "booking_payment_processing",
+        recipient: to,
+        status: "failed",
+        error: error.message,
+        provider: "resend",
+        role: "customer",
+        event_type: BOOKING_PAYMENT_PROCESSING_EVENT,
+        payload: { payment_reference: input.paymentReference },
+      });
+      return { sent: false, error: error.message };
+    }
+    await writeNotificationLog({
+      booking_id: null,
+      channel: "email",
+      template_key: "booking_payment_processing",
+      recipient: to,
+      status: "sent",
+      error: null,
+      provider: "resend",
+      role: "customer",
+      event_type: BOOKING_PAYMENT_PROCESSING_EVENT,
+      payload: { payment_reference: input.paymentReference },
+    });
+    return { sent: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await reportOperationalIssue("error", "sendCustomerBookingPaymentProcessingEmail", msg, {
+      reference: input.paymentReference,
+    });
+    return { sent: false, error: msg };
+  }
+}
+
 export async function sendBookingConfirmationEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
   const dbAttempt = await sendBookingConfirmationFromDbTemplateIfConfigured(payload);
   if (dbAttempt.usedRow && dbAttempt.sent) return { sent: true };
@@ -232,7 +309,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   const total = payload.totalPaidZar.toLocaleString("en-ZA");
   const appUrl = getPublicAppUrlBase();
   const accountBookingsUrl = `${appUrl}/dashboard/bookings`;
-  const bookAgainUrl = `${appUrl}/booking?step=details`;
+  const bookAgainUrl = `${appUrl}/booking/details`;
 
   const service = escapeHtml(payload.serviceLabel);
   const date = escapeHtml(payload.dateLabel);
@@ -250,7 +327,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   </h2>
 
   <h1 style="font-size: 22px; margin: 0 0 12px;">
-    Booking confirmed ✅
+    Your booking is confirmed ✅
   </h1>
 
   <p style="color:#6b7280; margin-bottom: 20px;">
@@ -312,7 +389,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
 `;
 
   const legacyBid = bookingIdForNotificationLog(payload);
-  const legacySubject = "Booking confirmed";
+  const legacySubject = "Your booking is confirmed";
   const legacyPayloadMeta: Record<string, unknown> = customerPaymentPayload({
     subject: legacySubject,
     html,

@@ -11,8 +11,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
-const DUPLICATE_PENDING_EMAIL_WINDOW_MIN = 20;
-
 function provisionalPriceSnapshotFromLocked(locked: LockedBooking): Record<string, unknown> {
   const total = Math.round(
     typeof locked.finalPrice === "number" && Number.isFinite(locked.finalPrice) ? locked.finalPrice : 0,
@@ -27,17 +25,14 @@ function provisionalPriceSnapshotFromLocked(locked: LockedBooking): Record<strin
   }) as Record<string, unknown>;
 }
 
-/** Avoid duplicate pending_payment rows from double-submit: drop same-email pre-checkout rows in a short window. */
-export async function deleteRecentPendingPaymentsForEmail(admin: SupabaseClient, email: string): Promise<void> {
-  const e = email.trim().toLowerCase();
-  if (!e) return;
-  const since = new Date(Date.now() - DUPLICATE_PENDING_EMAIL_WINDOW_MIN * 60 * 1000).toISOString();
-  await admin
-    .from("bookings")
-    .delete()
-    .eq("status", "pending_payment")
-    .eq("customer_email", e)
-    .gte("created_at", since);
+/** Removes a stale `pending_payment` row for the same Paystack reference only (never scoped by email). */
+export async function deletePendingPaymentBookingsWithPaystackReference(
+  admin: SupabaseClient,
+  paystackReference: string,
+): Promise<void> {
+  const ref = paystackReference.trim();
+  if (!ref) return;
+  await admin.from("bookings").delete().eq("status", "pending_payment").eq("paystack_reference", ref);
 }
 
 export type PendingPaymentInsertResult =

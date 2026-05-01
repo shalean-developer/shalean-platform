@@ -1,5 +1,6 @@
 import { loadBookingStep1FromStorage } from "@/components/booking/useBookingStep1";
 import { readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
+import { copyAllowedBookingParams } from "@/lib/booking/bookingUrl";
 
 export const BOOKING_STEP_QUERY = "step";
 export const BOOKING_STEP_LS_KEY = "booking_step";
@@ -104,13 +105,36 @@ export function getBookingStepGateRedirect(step: BookingFlowStep): BookingFlowSt
   return null;
 }
 
+export const BOOKING_FLOW_STEP_PATH: Record<BookingFlowStep, string> = {
+  entry: "/booking/details",
+  quote: "/booking/details",
+  details: "/booking/details",
+  when: "/booking/schedule",
+  checkout: "/booking/payment",
+};
+
+/**
+ * Map legacy `?step=` values (including aliases) to the path-based checkout route.
+ * Used by `/booking` index redirect.
+ */
+export function legacyFlowStepQueryToCheckoutPath(stepRaw: string | null | undefined): string {
+  const s = stepRaw?.trim().toLowerCase() ?? "";
+  if (s === "cleaner") return "/booking/cleaner";
+  if (s === "payment") return "/booking/payment";
+  const normalized = normalizeBookingStepParam(stepRaw ?? null);
+  return BOOKING_FLOW_STEP_PATH[normalized];
+}
+
+/** Canonical path-based booking URLs (no `?step=`). Extra keys are filtered to allowed booking query params. */
 export function bookingFlowHref(step: BookingFlowStep, extra?: Record<string, string>): string {
-  const q = step === "when" ? BOOKING_STEP_SCHEDULE_ALIAS : step;
-  const params = new URLSearchParams({ [BOOKING_STEP_QUERY]: q });
+  const path = BOOKING_FLOW_STEP_PATH[step];
+  const merged = new URLSearchParams();
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
-      if (v) params.set(k, v);
+      if (v) merged.set(k, v);
     }
   }
-  return `/booking?${params.toString()}`;
+  const allowed = copyAllowedBookingParams(merged);
+  const q = allowed.toString();
+  return q ? `${path}?${q}` : path;
 }

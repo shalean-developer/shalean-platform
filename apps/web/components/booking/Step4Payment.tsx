@@ -2,7 +2,16 @@
 
 import { ChevronDown } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { forwardRef, startTransition, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  startTransition,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -157,6 +166,20 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   const [authError, setAuthError] = useState<string | null>(null);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
   const { user } = useAuth();
+
+  const [isLg, setIsLg] = useState(false);
+  const [mobileFullQuote, setMobileFullQuote] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsLg(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  useEffect(() => {
+    if (isLg) setMobileFullQuote(false);
+  }, [isLg]);
+  const showCheckoutSummaryFull = isLg || mobileFullQuote;
 
   useEffect(() => {
     if (!authOverride) return;
@@ -724,27 +747,56 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   );
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:p-6">
-      <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
-        <h2 className="sr-only">Booking summary</h2>
-        <dl className="space-y-2.5 text-sm">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhat}</dt>
-            <dd className="min-w-0 font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhere}</dt>
-            <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{locked.location || "Address on file"}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhen}</dt>
-            <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{formatLockedAppointmentLabel(locked)}</dd>
-          </div>
-        </dl>
-      </section>
+    <div className="mx-auto w-full max-w-[576px] space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:p-6">
+      {showCheckoutSummaryFull ? (
+        <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
+          <h2 className="sr-only">Booking summary</h2>
+          <dl className="space-y-2.5 text-sm">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhat}</dt>
+              <dd className="min-w-0 font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</dd>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhere}</dt>
+              <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{locked.location || "Address on file"}</dd>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhen}</dt>
+              <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{formatLockedAppointmentLabel(locked)}</dd>
+            </div>
+          </dl>
+        </section>
+      ) : (
+        <div className="rounded-xl border border-zinc-200/80 p-3 dark:border-zinc-700 lg:hidden">
+          <h2 className="sr-only">Booking summary</h2>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-400">{locked.location || "Address on file"}</p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{formatLockedAppointmentLabel(locked)}</p>
+          <p className="mt-2 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+            Visit total · R {formatZar(visitTotalZar)}
+          </p>
+          <button
+            type="button"
+            className="mt-2 text-sm font-medium text-primary underline-offset-2 hover:underline"
+            onClick={() => setMobileFullQuote(true)}
+          >
+            View full quote
+          </button>
+        </div>
+      )}
 
+      {showCheckoutSummaryFull ? (
       <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Price breakdown</h2>
+        {!isLg && mobileFullQuote ? (
+          <button
+            type="button"
+            className="mb-2 mt-1 text-sm font-medium text-primary lg:hidden"
+            onClick={() => setMobileFullQuote(false)}
+          >
+            Hide full quote
+          </button>
+        ) : null}
         <p className="mt-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
           Your visit total is the final price for this booking.
         </p>
@@ -854,7 +906,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Total to pay
             </span>
-            <span className="text-[1.85rem] font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl">
+            <span className="text-2xl font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl">
               R {formatZar(totalZar)}
             </span>
           </div>
@@ -868,6 +920,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
           {checkoutMicro.extrasGuarantee}
         </p>
       </section>
+      ) : null}
 
       <Dialog open={contactDialogOpen} onOpenChange={handleContactDialogOpenChange}>
         <DialogContent className="max-w-md">

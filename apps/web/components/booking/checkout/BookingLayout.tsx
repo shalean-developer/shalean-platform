@@ -14,7 +14,7 @@ export type BookingLayoutProps = {
   main: React.ReactNode;
   /** Desktop sticky quote column */
   summary: React.ReactNode;
-  /** Back / Continue row — desktop only; mobile uses BottomCTA */
+  /** Back / Continue row — desktop only; mobile uses `MobileBottomBar` checkout dock */
   desktopFooter?: React.ReactNode;
   className?: string;
   /**
@@ -46,7 +46,7 @@ export function BookingLayout({
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
               Step {stepCurrent} of {stepTotal}
             </p>
-            <div className="mt-3 w-full max-w-2xl">
+            <div className="mx-auto mt-3 w-full max-w-[576px]">
               <ProgressBar step={stepCurrent} totalSteps={stepTotal} />
             </div>
           </header>
@@ -54,15 +54,18 @@ export function BookingLayout({
           <div className="mb-6 h-2 shrink-0 sm:h-3" aria-hidden />
         )}
 
-        {/* Default grid align-items is `stretch`: sidebar column must match main row height or
-            `position: sticky` has no tall containing block and scrolls away with the page. */}
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0">
-            {main}
-            {desktopFooter ? <div className="hidden lg:block">{desktopFooter}</div> : null}
+        {/* Full-width first grid cell + inner max-width keeps row height = main content height so
+            the aside can stretch with the row; otherwise `mx-auto` on the grid item can shrink the
+            row to the short column and `position: sticky` on the summary scrolls away. */}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-stretch">
+          <div className="flex min-w-0 justify-center">
+            <div className="w-full min-w-0 max-w-[576px]">
+              {main}
+              {desktopFooter ? <div className="hidden lg:block">{desktopFooter}</div> : null}
+            </div>
           </div>
 
-          <aside className="relative hidden min-w-0 lg:block" aria-label="Quote summary">
+          <aside className="relative hidden min-w-0 self-stretch lg:block" aria-label="Quote summary">
             <BookingCheckoutSidebarStickyPanel>{summary}</BookingCheckoutSidebarStickyPanel>
           </aside>
         </div>

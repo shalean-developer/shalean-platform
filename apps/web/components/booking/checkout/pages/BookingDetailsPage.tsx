@@ -77,7 +77,7 @@ export function BookingDetailsPage() {
             transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
             className="space-y-8 transition-all duration-300 ease-in-out"
           >
-            <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:px-5">
               <p className="text-sm text-gray-700 dark:text-zinc-200">
                 <span className="font-medium text-gray-500 dark:text-zinc-400">Selected service:</span>{" "}
                 <span className="font-semibold text-zinc-900 dark:text-zinc-50">{selectedLabel}</span>
@@ -86,7 +86,7 @@ export function BookingDetailsPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-9 shrink-0 self-start rounded-lg border-gray-200 font-semibold sm:self-auto dark:border-zinc-600"
+                className="h-9 shrink-0 rounded-lg border-gray-200 font-semibold dark:border-zinc-600"
                 onClick={() => patch({ detailsFlowPhase: "pick-service" })}
               >
                 Change service

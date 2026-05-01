@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { enqueueFailedJob, FAILED_JOBS_ENQUEUE_ERROR } from "@/lib/booking/failedJobs";
+import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import { resolvePaystackUserId } from "@/lib/booking/resolvePaystackUserId";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
 import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
-import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
+import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { metrics } from "@/lib/metrics/counters";
 import {
@@ -14,18 +15,21 @@ import {
   pricingVersionIdFromLocked,
   recordPaystackPricingMismatch,
 } from "@/lib/metrics/pricingMismatch";
-import {
-  buildBookingEmailPayload,
-  sendAdminNewBookingEmail,
-  sendBookingConfirmationEmail,
-} from "@/lib/email/sendBookingEmail";
-import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { sendCustomerBookingPaymentProcessingEmail } from "@/lib/email/sendBookingEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
+
+function paystackChargeUpsertState(r: UpsertBookingFromPaystackResult): string {
+  if (r.reason === "amount_mismatch") return "payment_mismatch";
+  if (r.reason === "finalization_failed") return "payment_reconciliation_required";
+  if (r.error && !r.bookingId) return "payment_reconciliation_required";
+  return "paid";
+}
 
 type PaystackVerifyData = {
   status?: string;
@@ -58,6 +62,10 @@ export async function GET(request: Request) {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) {
     return NextResponse.json({ error: "Paystack is not configured." }, { status: 503 });
+  }
+
+  if (!allowPaystackVerifyRequest(paystackVerifyRateLimitKey(request))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -111,6 +119,13 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     return NextResponse.json(
       { success: false, ok: false, paymentStatus: "unknown", error: "Paystack is not configured." },
       { status: 503 },
+    );
+  }
+
+  if (!allowPaystackVerifyRequest(paystackVerifyRateLimitKey(request))) {
+    return NextResponse.json(
+      { success: false, ok: false, paymentStatus: "unknown", error: "Too many requests." },
+      { status: 429 },
     );
   }
 
@@ -232,26 +247,18 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     "";
   const email = emailRaw ? normalizeEmail(emailRaw) : "";
 
-  let result: Awaited<ReturnType<typeof upsertBookingFromPaystack>>;
-  try {
-    result = await upsertBookingFromPaystack({
-      paystackReference: ref,
-      amountCents: amount,
-      currency,
-      customerEmail: email,
-      snapshot,
-      paystackMetadata: metadata,
-      paystackAuthorizationCode: authorizationCode || null,
-      paystackCustomerCode: customerCode || null,
-      paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await reportOperationalIssue("critical", "paystack/verify", `payment verified success but upsert threw: ${msg}`, {
-      reference: ref,
-    });
-    result = { skipped: false, bookingId: null, error: msg };
-  }
+  const result = await finalizePaystackChargeSuccess({
+    source: "verify",
+    paystackReference: ref,
+    amountCents: amount,
+    currency,
+    customerEmail: email,
+    snapshot,
+    paystackMetadata: metadata,
+    paystackAuthorizationCode: authorizationCode || null,
+    paystackCustomerCode: customerCode || null,
+    paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+  });
 
   const adm = getSupabaseAdmin();
   let assignmentType: string | null = null;
@@ -291,76 +298,38 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     });
   }
 
-  const bookingSaved = result.bookingId != null;
+  const bookingInDatabase = result.bookingInDatabase ?? Boolean(result.bookingId);
+  const chargeState = paystackChargeUpsertState(result);
   const alreadyExists = Boolean(result.skipped && result.bookingId);
 
-  if (!bookingSaved) {
-    try {
-      await enqueueFailedJob("booking_insert", {
-        paystackReference: ref,
-        amountCents: amount,
-        currency,
-        customerEmail: email,
-        snapshot,
-        paystackMetadata: metadata,
-      });
-    } catch (e) {
-      const cause = e instanceof Error ? e.message : String(e);
-      await reportOperationalIssue(
-        "critical",
-        "paystack/verify",
-        "Payment verified success but booking not saved and failed_jobs enqueue failed",
-        { reference: ref, cause },
-      );
-      return NextResponse.json(
-        {
-          success: false,
-          ok: false,
-          paymentStatus: "unknown",
-          error: FAILED_JOBS_ENQUEUE_ERROR,
-          reference: ref,
-        },
-        { status: 500 },
-      );
-    }
-  }
-
-  if (result.bookingId && email && !alreadyExists && adm) {
-    try {
-      await notifyBookingEvent({
-        type: "payment_confirmed",
-        supabase: adm,
-        bookingId: result.bookingId,
-        snapshot,
-        customerEmail: email,
-        amountCents: amount,
-        paymentReference: ref,
-      });
-    } catch (e) {
-      await reportOperationalIssue("error", "paystack/verify/notifyBookingEvent", String(e), {
-        reference: ref,
-        bookingId: result.bookingId,
-      });
-    }
-  } else if (email && !result.bookingId) {
-    const payload = buildBookingEmailPayload({
-      paymentReference: ref,
+  await enqueuePaystackRecoveryFailedJobs({
+    reference: ref,
+    result,
+    basePayload: {
+      paystackReference: ref,
       amountCents: amount,
+      currency,
       customerEmail: email,
       snapshot,
+      paystackMetadata: metadata,
+    },
+  });
+
+  if (email && !result.bookingId) {
+    const cust = await sendCustomerBookingPaymentProcessingEmail({
+      customerEmail: email,
+      paymentReference: ref,
     });
-    const cust = await sendBookingConfirmationEmail(payload);
     if (!cust.sent && cust.error) {
-      await reportOperationalIssue("error", "paystack/verify", `confirmation email not sent: ${cust.error}`, {
+      await reportOperationalIssue("error", "paystack/verify", `processing ack email not sent: ${cust.error}`, {
         reference: ref,
       });
     }
-    await sendAdminNewBookingEmail(payload);
   }
 
   const userId = resolvePaystackUserId(snapshot, metadata);
 
-  if (!bookingSaved) {
+  if (!result.bookingId) {
     return NextResponse.json({
       success: true,
       ok: true,
@@ -374,7 +343,9 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       bookingSnapshot: snapshot ?? null,
       bookingInDatabase: false,
       bookingId: null,
+      state: chargeState,
       alreadyExists: false,
+      skipped: Boolean(result.skipped),
       upsertError: result.error ?? "Could not save booking.",
       assignmentType: null,
       fallbackReason: null,
@@ -396,10 +367,12 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     customerName: snapshot?.customer?.name?.trim() ?? null,
     userId,
     bookingSnapshot: snapshot ?? null,
-    bookingInDatabase: true,
+    bookingInDatabase,
     bookingId: result.bookingId,
+    state: chargeState,
     alreadyExists,
-    upsertError: null,
+    skipped: Boolean(result.skipped),
+    upsertError: result.error ?? null,
     assignmentType,
     fallbackReason,
     showCleanerSubstitutionNotice,

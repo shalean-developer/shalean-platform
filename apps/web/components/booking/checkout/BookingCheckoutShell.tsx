@@ -2,8 +2,8 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BottomCTA } from "@/components/booking/BottomCTA";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MobileBottomBar } from "@/components/booking/MobileBottomBar";
 import { PriceSummaryCard } from "@/components/booking/PriceSummaryCard";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,7 +22,9 @@ import {
 import { formatCheckoutWhenLabel } from "@/components/booking/summary/formatCheckoutWhenLabel";
 import type { PriceSummaryCardProps } from "@/components/booking/PriceSummaryCard";
 import { checkoutSidebarPriceDisplay } from "@/lib/booking/checkoutSidebarPricing";
-import { findLocationBySlug, normalizeLocationSlugParam } from "@/lib/booking/bookingFlowLocationCatalog";
+import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
+import { bookingEntryPatchFromSearchParams, withBookingQuery } from "@/lib/booking/bookingUrl";
+import { reconcileCheckoutPersistedSlice, validateCheckoutStoreForPayment } from "@/lib/booking/reconcileBookingState";
 import {
   BOOKING_CHECKOUT_SEGMENTS,
   BOOKING_SEGMENT_INDEX,
@@ -34,7 +36,6 @@ import {
   scheduleStepComplete,
   type BookingCheckoutSegment,
 } from "@/lib/booking/bookingCheckoutGuards";
-import type { BookingCheckoutState } from "@/lib/booking/bookingCheckoutStore";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
 import { todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
@@ -50,41 +51,6 @@ const SEGMENT_TITLES: Record<BookingCheckoutSegment, string> = {
 
 const TOTAL = BOOKING_CHECKOUT_SEGMENTS.length;
 
-function serviceFromSearchParam(raw: string | null | undefined): string | undefined {
-  if (raw == null) return undefined;
-  const t = raw.trim().toLowerCase().replace(/_/g, "-");
-  if (!t) return undefined;
-  if (t === "deep" || t === "deep-cleaning" || t === "deep-clean" || t === "deep_cleaning") return "deep";
-  if (t === "standard" || t === "standard-cleaning" || t === "standard_cleaning") return "standard";
-  if (t === "move" || t === "move-out" || t === "move-out-cleaning" || t === "move_out_cleaning" || t === "move-cleaning")
-    return "move";
-  const parsed = parseBookingServiceId(t);
-  return parsed ?? undefined;
-}
-
-function locationPatchFromSearchParam(
-  raw: string | null | undefined,
-): Partial<
-  Pick<
-    BookingCheckoutState,
-    "location" | "locationSlug" | "serviceAreaLocationId" | "serviceAreaCityId" | "serviceAreaName"
-  >
-> | undefined {
-  if (raw == null) return undefined;
-  const s = raw.trim();
-  if (!s) return undefined;
-  const hit = findLocationBySlug(normalizeLocationSlugParam(s.replace(/\+/g, "-")));
-  if (hit) {
-    return {
-      locationSlug: hit.slug,
-      serviceAreaName: hit.name,
-      serviceAreaLocationId: null,
-      serviceAreaCityId: null,
-    };
-  }
-  return { location: s };
-}
-
 export function BookingCheckoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -92,11 +58,25 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const { data: catalog, loading: catalogLoading } = usePricingCatalog();
   const snapshot = catalog?.snapshot ?? null;
 
-  const state = useBookingCheckoutStore();
+  const service = useBookingCheckoutStore((s) => s.service);
+  const bedrooms = useBookingCheckoutStore((s) => s.bedrooms);
+  const bathrooms = useBookingCheckoutStore((s) => s.bathrooms);
+  const extraRooms = useBookingCheckoutStore((s) => s.extraRooms);
+  const extras = useBookingCheckoutStore((s) => s.extras);
+  const date = useBookingCheckoutStore((s) => s.date);
+  const time = useBookingCheckoutStore((s) => s.time);
+  const location = useBookingCheckoutStore((s) => s.location);
+  const detailsFlowPhase = useBookingCheckoutStore((s) => s.detailsFlowPhase);
+  const serviceAreaName = useBookingCheckoutStore((s) => s.serviceAreaName);
+  const cleanerId = useBookingCheckoutStore((s) => s.cleanerId);
+  const customerName = useBookingCheckoutStore((s) => s.customerName);
+  const customerEmail = useBookingCheckoutStore((s) => s.customerEmail);
+  const customerPhone = useBookingCheckoutStore((s) => s.customerPhone);
   const patch = useBookingCheckoutStore((s) => s.patch);
 
   const [summaryOpen, setSummaryOpen] = useState(false);
   const openSummarySheet = useCallback(() => setSummaryOpen(true), []);
+  const hydratedFromUrlRef = useRef(false);
 
   const segment: BookingCheckoutSegment = useMemo(() => {
     const parts = pathname.split("/").filter(Boolean);
@@ -107,15 +87,32 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const stepIndex = BOOKING_SEGMENT_INDEX[segment];
 
   useEffect(() => {
-    const locPatch = locationPatchFromSearchParam(searchParams.get("location"));
-    const svc = serviceFromSearchParam(searchParams.get("service"));
-    if (locPatch !== undefined || svc !== undefined) {
-      patch({
-        ...(locPatch !== undefined ? locPatch : {}),
-        ...(svc !== undefined ? { service: svc } : {}),
-      });
+    const unsub = useBookingCheckoutStore.persist.onFinishHydration(() => {
+      if (hydratedFromUrlRef.current) return;
+      hydratedFromUrlRef.current = true;
+      if (typeof window === "undefined") return;
+      const entry = bookingEntryPatchFromSearchParams(new URLSearchParams(window.location.search));
+      if (Object.keys(entry).length > 0) {
+        const merged = reconcileCheckoutPersistedSlice({
+          urlState: entry,
+          storeState: useBookingCheckoutStore.getState(),
+        });
+        useBookingCheckoutStore.getState().patch(merged);
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (segment !== "payment") return;
+    if (catalogLoading || !catalog?.services?.length) return;
+    try {
+      validateCheckoutStoreForPayment(useBookingCheckoutStore.getState());
+      console.log("[BOOKING STATE VALIDATED]", { step: "payment", valid: true });
+    } catch {
+      router.replace(withBookingQuery(checkoutSegmentPath("details"), searchParams));
     }
-  }, [searchParams, patch]);
+  }, [segment, catalogLoading, catalog?.services?.length, router, searchParams]);
 
   useEffect(() => {
     if (!catalog?.services?.length) return;
@@ -140,7 +137,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
       next.push(id);
     }
     if (next.length !== cur.extras.length) patch({ extras: next });
-  }, [catalog, state.service, patch]);
+  }, [catalog, service, patch]);
 
   useEffect(() => {
     if (segment !== "schedule") return;
@@ -152,50 +149,51 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
     () =>
       getMaxReachableCheckoutSegmentIndex(
         {
-          service: state.service,
-          bedrooms: state.bedrooms,
-          bathrooms: state.bathrooms,
-          date: state.date,
-          time: state.time,
-          location: state.location,
+          service,
+          bedrooms,
+          bathrooms,
+          date,
+          time,
+          location,
         },
         catalog?.services?.map((x) => x.id),
+        { catalogLoading, currentSegmentIndex: stepIndex },
       ),
-    [state.service, state.bedrooms, state.bathrooms, state.date, state.time, state.location, catalog?.services],
+    [service, bedrooms, bathrooms, date, time, location, catalog?.services, catalogLoading, stepIndex],
   );
 
   useEffect(() => {
     if (stepIndex > maxIdx) {
       const target = BOOKING_CHECKOUT_SEGMENTS[maxIdx];
       if (target && checkoutSegmentPath(target) !== pathname) {
-        router.replace(checkoutSegmentPath(target));
+        router.replace(withBookingQuery(checkoutSegmentPath(target), searchParams));
       }
     }
-  }, [stepIndex, maxIdx, pathname, router]);
+  }, [stepIndex, maxIdx, pathname, router, searchParams]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [segment]);
 
-  const sid = parseBookingServiceId(state.service);
+  const sid = parseBookingServiceId(service);
   const serviceValid = useMemo(() => {
     if (!catalog?.services?.length) return false;
     const ids = new Set(catalog.services.map((s) => s.id));
-    return Boolean(state.service && sid && ids.has(state.service));
-  }, [catalog, state.service, sid]);
+    return Boolean(service && sid && ids.has(service));
+  }, [catalog, service, sid]);
 
   const extrasRows = useMemo(() => {
-    if (!state.extras.length) return [];
+    if (!extras.length) return [];
     if (!snapshot) {
-      return state.extras.map((id) => ({
+      return extras.map((id) => ({
         id,
         label: id.replace(/-/g, " "),
         priceZar: undefined as number | undefined,
       }));
     }
-    const lines = extrasLineItemsFromSnapshot(snapshot, state.extras, sid);
+    const lines = extrasLineItemsFromSnapshot(snapshot, extras, sid);
     const bySlug = new Map(lines.map((l) => [l.slug, l] as const));
-    return state.extras.map((id) => {
+    return extras.map((id) => {
       const row = bySlug.get(id);
       return {
         id,
@@ -203,7 +201,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         priceZar: row?.price,
       };
     });
-  }, [state.extras, snapshot, sid]);
+  }, [extras, snapshot, sid]);
 
   const sidebarPricing = useMemo(
     () =>
@@ -211,18 +209,18 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         snapshot,
         segment,
         service: sid,
-        bedrooms: state.bedrooms,
-        bathrooms: state.bathrooms,
-        extraRooms: state.extraRooms,
-        extras: state.extras,
-        time: state.time,
+        bedrooms,
+        bathrooms,
+        extraRooms,
+        extras,
+        time,
       }),
-    [snapshot, segment, sid, state.bedrooms, state.bathrooms, state.extraRooms, state.extras, state.time],
+    [snapshot, segment, sid, bedrooms, bathrooms, extraRooms, extras, time],
   );
 
   const whereLabel = useMemo(
-    () => state.serviceAreaName?.trim() || state.location?.trim() || "Not set yet",
-    [state.serviceAreaName, state.location],
+    () => serviceAreaName?.trim() || location?.trim() || "Not set yet",
+    [serviceAreaName, location],
   );
 
   const whatLabel = useMemo(
@@ -230,37 +228,42 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
     [sid],
   );
 
-  const whenLabel = useMemo(() => formatCheckoutWhenLabel(state.date, state.time), [state.date, state.time]);
+  const whenLabel = useMemo(() => formatCheckoutWhenLabel(date, time), [date, time]);
 
   const pricingLoading = catalogLoading || !snapshot;
 
-  const detailsHome = state.detailsFlowPhase === "home-details";
-  const propertyValid = state.bedrooms >= 1 && state.bathrooms >= 1;
+  const detailsHome = detailsFlowPhase === "home-details";
+  const propertyValid = bedrooms >= 1 && bathrooms >= 1;
+
+  const scheduleComplete = useMemo(
+    () => scheduleStepComplete({ date, time, location }),
+    [date, time, location],
+  );
 
   const continueDisabled = useMemo(() => {
     if (segment === "details") return !serviceValid || !detailsHome || !propertyValid;
-    if (segment === "schedule") return !scheduleStepComplete(state);
+    if (segment === "schedule") return !scheduleComplete;
     return false;
-  }, [segment, serviceValid, detailsHome, propertyValid, state]);
+  }, [segment, serviceValid, detailsHome, propertyValid, scheduleComplete]);
 
   const nextSeg = nextCheckoutSegment(segment);
   const prevSeg = prevCheckoutSegment(segment);
 
   const goNext = useCallback(() => {
     if (continueDisabled || !nextSeg) return;
-    router.push(checkoutSegmentPath(nextSeg));
-  }, [continueDisabled, nextSeg, router]);
+    router.push(withBookingQuery(checkoutSegmentPath(nextSeg), searchParams));
+  }, [continueDisabled, nextSeg, router, searchParams]);
 
   const goBack = useCallback(() => {
     if (!prevSeg) return;
-    router.push(checkoutSegmentPath(prevSeg));
-  }, [prevSeg, router]);
+    router.push(withBookingQuery(checkoutSegmentPath(prevSeg), searchParams));
+  }, [prevSeg, router, searchParams]);
 
   const onRemoveExtra = useCallback(
     (id: string) => {
-      patch({ extras: state.extras.filter((x) => x !== id) });
+      patch({ extras: extras.filter((x) => x !== id) });
     },
-    [patch, state.extras],
+    [patch, extras],
   );
 
   const showStepNav = segment !== "payment";
@@ -270,58 +273,48 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
       whereLabel,
       whatLabel,
       whenLabel,
-      editWhereHref: checkoutSegmentPath("details"),
-      editWhatHref: checkoutSegmentPath("details"),
-      editWhenHref: checkoutSegmentPath("schedule"),
+      editWhereHref: withBookingQuery(checkoutSegmentPath("details"), searchParams),
+      editWhatHref: withBookingQuery(checkoutSegmentPath("details"), searchParams),
+      editWhenHref: withBookingQuery(checkoutSegmentPath("schedule"), searchParams),
       checkoutStep: sidebarPricing.step,
       summaryHours: sidebarPricing.hours,
       summaryTotalZar: sidebarPricing.totalZar,
       extrasRows,
       onRemoveExtra,
       loading: pricingLoading,
-      bedrooms: state.bedrooms,
-      bathrooms: state.bathrooms,
-      extraRooms: state.extraRooms,
-      bookingDate: state.date,
-      bookingTime: state.time,
-      cleanerId: state.cleanerId,
-      customerName: state.customerName,
-      customerEmail: state.customerEmail,
-      customerPhone: state.customerPhone,
+      bedrooms,
+      bathrooms,
+      extraRooms,
+      bookingDate: date,
+      bookingTime: time,
+      cleanerId,
+      customerName,
+      customerEmail,
+      customerPhone,
     };
   }, [
     whereLabel,
     whatLabel,
     whenLabel,
+    searchParams,
     sidebarPricing.step,
     sidebarPricing.hours,
     sidebarPricing.totalZar,
     extrasRows,
     onRemoveExtra,
     pricingLoading,
-    state.bedrooms,
-    state.bathrooms,
-    state.extraRooms,
-    state.date,
-    state.time,
-    state.cleanerId,
-    state.customerName,
-    state.customerEmail,
-    state.customerPhone,
+    bedrooms,
+    bathrooms,
+    extraRooms,
+    date,
+    time,
+    cleanerId,
+    customerName,
+    customerEmail,
+    customerPhone,
   ]);
 
   const summaryCard = useMemo(() => <PriceSummaryCard {...sharedSummaryProps} />, [sharedSummaryProps]);
-
-  const summaryMobileDock = useMemo(
-    () => (
-      <PriceSummaryCard
-        {...sharedSummaryProps}
-        layoutMode="mobile-dock-compact"
-        onMobileDockOpen={openSummarySheet}
-      />
-    ),
-    [sharedSummaryProps, openSummarySheet],
-  );
 
   const hideContinueOnDetailsPick = segment === "details" && !detailsHome;
 
@@ -373,7 +366,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className={cn("space-y-6 lg:space-y-8", showStepNav ? "pb-[13.5rem] lg:pb-0" : "pb-6 lg:pb-0")}
+              className={cn("space-y-4 lg:space-y-8", showStepNav ? "pb-28 lg:pb-0" : "pb-6 lg:pb-0")}
             >
               <StepHeader title={SEGMENT_TITLES[segment]} />
               {children}
@@ -384,20 +377,24 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
 
       {showStepNav ? (
         <>
-          <div className="fixed inset-x-0 bottom-0 z-50 lg:hidden">
-            <div className="border-t border-gray-200 bg-white/95 px-4 pb-1 pt-2 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95">
-              {summaryMobileDock}
-            </div>
-            <BottomCTA
-              embedded
-              onBack={goBack}
-              onNext={goNext}
-              backDisabled={!prevSeg}
-              nextDisabled={continueDisabled}
-              hideNext={hideContinueOnDetailsPick}
-              nextLabel="Continue"
-              total={sidebarPricing.totalZar}
-              priceLoading={pricingLoading}
+          <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/95 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95 lg:hidden">
+            <MobileBottomBar
+              variant="flat"
+              omitCta
+              checkoutDock={{
+                onBack: goBack,
+                backDisabled: !prevSeg,
+                onContinue: goNext,
+                continueDisabled: continueDisabled,
+                hideContinue: hideContinueOnDetailsPick,
+                continueLabel: "Continue",
+              }}
+              estimatedHoursLabel={formatBookingHoursCompact(sidebarPricing.hours)}
+              totalDisplay={
+                pricingLoading ? "…" : `R ${Math.round(sidebarPricing.totalZar).toLocaleString("en-ZA")}`
+              }
+              totalZar={sidebarPricing.totalZar}
+              onAmountClick={openSummarySheet}
             />
           </div>
           <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>

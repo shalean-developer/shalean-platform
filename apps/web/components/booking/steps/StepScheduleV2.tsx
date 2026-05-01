@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { AvailabilityMessage } from "@/components/booking/AvailabilityMessage";
 import { BOOKING_CALENDAR_DAYS, generateNextDates } from "@/components/booking/BookingDateStrip";
@@ -41,6 +41,7 @@ import { ScheduleUpsellBar } from "@/components/booking/ScheduleUpsellBar";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
 import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
 import { bookingExtrasClientLimitMessage, bookingExtrasOverClientLimit } from "@/lib/booking/bookingExtrasLimits";
 
@@ -198,6 +199,17 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   const defaultPickCardRef = useRef<HTMLButtonElement | null>(null);
   const scheduleAbVariantRef = useRef(readScheduleDefaultPickVariant());
   const visibleSlotCap = useMemo(() => readScheduleVisibleSlotCap(VISIBLE_SLOT_FALLBACK), []);
+  const [viewportCompact, setViewportCompact] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setViewportCompact(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const visibleSlotCapEffective = viewportCompact ? Math.min(4, visibleSlotCap) : visibleSlotCap;
+
+  const [todayTick, setTodayTick] = useState(0);
 
   const [lockConfirmPhase, setLockConfirmPhase] = useState<"idle" | "checking" | "confirmed">("idle");
   const [lockingTime, setLockingTime] = useState<string | null>(null);
@@ -210,9 +222,16 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
 
   const isToday = selectedDate === ymdTodayLocal();
   const nowPlusOneHour = useMemo(() => {
+    void todayTick;
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes() + 60;
-  }, [selectedDate]);
+  }, [selectedDate, todayTick]);
+
+  useEffect(() => {
+    if (!isToday) return;
+    const id = window.setInterval(() => setTodayTick((t) => t + 1), 45_000);
+    return () => window.clearInterval(id);
+  }, [isToday]);
   /** Recomputed when date or slot data changes — used only for conversion scoring (client). */
   const nowMinutes = useMemo(() => {
     const d = new Date();
@@ -461,8 +480,8 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
   );
 
   const visibleSlotTimes = useMemo(
-    () => (showAllTimes ? combinedDisplayTimes : combinedDisplayTimes.slice(0, visibleSlotCap)),
-    [combinedDisplayTimes, showAllTimes, visibleSlotCap],
+    () => (showAllTimes ? combinedDisplayTimes : combinedDisplayTimes.slice(0, visibleSlotCapEffective)),
+    [combinedDisplayTimes, showAllTimes, visibleSlotCapEffective],
   );
 
   const maxCleanersInGrid = useMemo(() => {
@@ -665,6 +684,11 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
 
   const stickyBar = useMemo(() => {
     if (!lockBaseState) return undefined;
+    const mobileHoursLine = locked
+      ? formatBookingHoursCompact(locked.finalHours)
+      : canonicalDurationHours != null
+        ? formatBookingHoursCompact(canonicalDurationHours)
+        : null;
     if (locked) {
       const totalZar = getLockedBookingDisplayPrice(locked);
       const ctaTime =
@@ -673,6 +697,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
         totalZar,
         compareFromZar: canonicalTotalZar != null && canonicalTotalZar > totalZar ? canonicalTotalZar : null,
         totalCaption: "Final price",
+        mobileHoursLine,
         ctaShort: ctaTime,
         openSummarySheetOnAmountTap: true,
       };
@@ -681,10 +706,11 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       totalZar: canonicalTotalZar ?? 0,
       totalCaption: "Estimated price (before time selection)",
       amountDisplayOverride: canonicalTotalZar == null ? "Select a time" : null,
+      mobileHoursLine,
       ctaShort: "Continue →",
       openSummarySheetOnAmountTap: true,
     };
-  }, [lockBaseState, locked, canonicalTotalZar, selectedDate]);
+  }, [lockBaseState, locked, canonicalTotalZar, canonicalDurationHours, selectedDate]);
 
   const handleSelectSlot = useCallback(
     async (time: string, opts?: { fromAutoPick?: boolean }) => {
@@ -1011,10 +1037,10 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       footerTotalZar={locked ? getLockedBookingDisplayPrice(locked) : undefined}
       footerSubcopy={!locked ? <p className="text-center">{bookingCopy.errors.time}</p> : undefined}
     >
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{bookingCopy.when.title}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{bookingCopy.when.intro}</p>
+          <p className="mt-2 max-w-[576px] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{bookingCopy.when.intro}</p>
           <p className="mt-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">{bookingCopy.when.scheduleMicroBenefit}</p>
           {isToday && windowedAvailableSlots.length > 0 && windowedAvailableSlots.length <= 4 ? (
             <p className="mt-2 text-sm font-medium text-amber-800 dark:text-amber-300/90" role="status">
@@ -1022,7 +1048,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
             </p>
           ) : null}
           {lockBaseState && lockBaseState.extraRooms > 0 ? (
-            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 max-w-[576px] text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
               Slot prices include{" "}
               <span className="font-medium tabular-nums">
                 {lockBaseState.extraRooms} extra room{lockBaseState.extraRooms === 1 ? "" : "s"}
@@ -1070,7 +1096,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                 <div className="space-y-2" role="status" aria-live="polite">
                   <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{bookingCopy.when.loadingAvailability}</p>
                   {canonicalTotalZar != null ? (
-                    <p className="text-sm font-medium tabular-nums text-zinc-500 opacity-70 dark:text-zinc-400">
+                    <p className="hidden text-sm font-medium tabular-nums text-zinc-500 opacity-70 dark:text-zinc-400 lg:block">
                       Current estimate: R {canonicalTotalZar.toLocaleString("en-ZA")}
                     </p>
                   ) : null}
@@ -1325,13 +1351,14 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                       {bookingCopy.when.showLaterTimes}
                     </button>
                   ) : null}
-                  {combinedDisplayTimes.length > visibleSlotCap && !showAllTimes ? (
+                  {combinedDisplayTimes.length > visibleSlotCapEffective && !showAllTimes ? (
                     <button
                       type="button"
                       onClick={() => setShowAllTimes(true)}
                       className="w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-200"
                     >
-                      {bookingCopy.when.seeMoreTimes}
+                      <span className="lg:hidden">More</span>
+                      <span className="hidden lg:inline">{bookingCopy.when.seeMoreTimes}</span>
                     </button>
                   ) : null}
                 </div>
@@ -1462,12 +1489,12 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                                 }
                               }}
                               className={[
-                                "relative flex min-h-[11rem] w-full origin-top flex-col rounded-xl border-2 px-4 py-4 text-left shadow-sm transition duration-200 active:scale-[1.01] sm:min-h-[10.5rem]",
+                                "relative flex min-h-[11rem] w-full origin-top flex-col rounded-xl border-2 px-4 py-4 text-left shadow-sm transition duration-200 active:scale-[1.01] max-lg:min-h-0 max-lg:px-3 max-lg:py-3 sm:min-h-[10.5rem]",
                                 premiumGlow,
                                 autoAssignCleaner
                                   ? "scale-100 border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
                                   : [
-                                      "scale-[1.02] sm:scale-[1.03]",
+                                      "max-lg:scale-100 scale-[1.02] sm:scale-[1.03]",
                                       isSelected
                                         ? "border-blue-500 bg-blue-50 text-blue-950 ring-2 ring-blue-400/50 dark:border-blue-500 dark:bg-blue-950/45 dark:text-blue-50 dark:ring-blue-500/35"
                                         : c.isPremium
@@ -1504,8 +1531,8 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                                     ⭐ {c.rating.toFixed(1)} · {jobsLine}
                                   </p>
                                   {c.priceDelta != null && c.priceDelta > 0 ? (
-                                    <>
-                                      <p className="mt-2 text-xs font-medium text-zinc-800 dark:text-zinc-100">
+                                    <div className="mt-2 hidden lg:block">
+                                      <p className="text-xs font-medium text-zinc-800 dark:text-zinc-100">
                                         {bookingCopy.cleaner.betterResultsLine}
                                       </p>
                                       <p className="mt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">
@@ -1514,18 +1541,18 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
                                       <p className="mt-0.5 text-[11px] italic text-zinc-500 dark:text-zinc-500">
                                         {bookingCopy.cleaner.worthItLine}
                                       </p>
-                                    </>
+                                    </div>
                                   ) : null}
-                                  <p className="mt-2 text-[11px] font-medium leading-snug text-zinc-700 dark:text-zinc-300">
+                                  <p className="mt-2 hidden text-[11px] font-medium leading-snug text-zinc-700 dark:text-zinc-300 lg:block">
                                     {bookingCopy.cleaner.trustLine}
                                   </p>
                                   {c.isPremium ? (
-                                    <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                                    <p className="mt-1 hidden text-[11px] text-zinc-600 dark:text-zinc-400 lg:block">
                                       {bookingCopy.cleaner.premiumSocialProof}
                                     </p>
                                   ) : null}
                                   {c.isPremium && c.showStrongDefaultBias ? (
-                                    <p className="mt-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                                    <p className="mt-1 hidden text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 lg:block">
                                       {bookingCopy.cleaner.mostCustomers}
                                     </p>
                                   ) : null}

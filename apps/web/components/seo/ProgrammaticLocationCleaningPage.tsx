@@ -108,7 +108,7 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
             {publicTrustRatingBadgeLine(trustStats)} · Thousands of Cape Town cleans completed through Shalean
           </p>
           <GrowthCtaLink
-            href="/booking?step=entry"
+            href="/booking/details"
             source={`seo_loc_${slug}_hero`}
             className="mt-8 inline-flex min-h-12 items-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
           >
@@ -238,7 +238,7 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
           {location.city}-wide coverage with suburb-aware quoting—confirm your total before you pay.
         </p>
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source={`seo_loc_${slug}_footer`}
           className="mt-6 inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-zinc-900 transition hover:bg-zinc-100"
         >

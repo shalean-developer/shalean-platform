@@ -19,5 +19,5 @@ export function marketingHeroImage(filename: string): string {
 
 /** Booking entry URL with promo + default UTM-style source (matches previous marketing home). */
 export function marketingHomeBookingHref(): string {
-  return `${bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"))}&source=marketing_home`;
+  return bookingFlowHref("entry", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "marketing_home" });
 }

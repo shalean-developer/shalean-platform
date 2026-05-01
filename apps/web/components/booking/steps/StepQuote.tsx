@@ -20,6 +20,7 @@ import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { extrasLineItemsForService } from "@/lib/pricing/extrasConfig";
 import { bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
 
 export function StepQuote() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export function StepQuote() {
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
   const { tier } = useBookingVipTier();
-  const { canonicalTotalZar, catalog } = useBookingPrice();
+  const { canonicalTotalZar, canonicalDurationHours, catalog } = useBookingPrice();
 
   const estimateZar = canonicalTotalZar;
 
@@ -106,6 +107,8 @@ export function StepQuote() {
         totalZar: estimateZar ?? 0,
         amountDisplayOverride: estimateZar == null ? "—" : null,
         totalCaption: "From",
+        mobileHoursLine:
+          canonicalDurationHours != null ? formatBookingHoursCompact(canonicalDurationHours) : null,
         ctaShort: "Continue →",
         openSummarySheetOnAmountTap: true,
       }}
@@ -118,7 +121,7 @@ export function StepQuote() {
       }}
       continueLabel={copy.cta}
     >
-      <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-8 lg:pb-6">
+      <div className="mx-auto w-full max-w-[576px] space-y-4 pb-4 lg:space-y-8 lg:pb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             {copy.title}

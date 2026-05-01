@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeLifecycleScheduledIso } from "@/lib/booking/lifecycleSchedule";
+import { scheduleBookingLifecycleJobs } from "@/lib/booking/bookingLifecycleJobs";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
@@ -82,41 +82,26 @@ export async function recordBookingSideEffects(params: Params): Promise<void> {
 
   if (!email || email.length < 3) return;
 
-  const times = computeLifecycleScheduledIso({
-    dateYmd: params.appointmentDateYmd,
-    timeHm: params.appointmentTimeHm,
-  });
-
-  if (!times) {
-    await reportOperationalIssue("warn", "recordBookingSideEffects", "No valid appointment date; skipping lifecycle jobs", {
+  try {
+    await scheduleBookingLifecycleJobs(params.supabase, {
       bookingId: params.bookingId,
+      userId: params.userId,
+      customerEmail: email,
+      amountCents: params.amountCents,
+      paystackReference: params.paystackReference,
+      appointmentDateYmd: params.appointmentDateYmd,
+      appointmentTimeHm: params.appointmentTimeHm,
     });
-    return;
-  }
-
-  const jobs = [
-    { job_type: "reminder_24h" as const, scheduled_for: times.reminder24h },
-    { job_type: "review_request" as const, scheduled_for: times.reviewRequest },
-    { job_type: "rebook_offer" as const, scheduled_for: times.rebookOffer },
-  ];
-
-  for (const j of jobs) {
-    const { error: jobErr } = await params.supabase.from("booking_lifecycle_jobs").insert({
-      booking_id: params.bookingId,
-      user_id: params.userId,
-      customer_email: email,
-      job_type: j.job_type,
-      scheduled_for: j.scheduled_for,
-      status: "pending",
-      attempts: 0,
-      payload: payloadCommon,
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[REMINDER JOB FAILED]", { bookingId: params.bookingId, err });
+    await logSystemEvent({
+      level: "error",
+      source: "booking_lifecycle",
+      message: "Reminder job scheduling failed",
+      context: { bookingId: params.bookingId, error: msg.slice(0, 2000) },
     });
-    if (jobErr && jobErr.code !== "23505") {
-      await reportOperationalIssue("warn", "recordBookingSideEffects", `lifecycle job insert: ${jobErr.message}`, {
-        bookingId: params.bookingId,
-        jobType: j.job_type,
-      });
-    }
+    await params.supabase.from("bookings").update({ lifecycle_issue: true }).eq("id", params.bookingId);
   }
 }
 

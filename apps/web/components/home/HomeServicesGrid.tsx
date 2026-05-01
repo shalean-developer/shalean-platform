@@ -8,25 +8,25 @@ const services = [
     title: "Regular Cleaning",
     desc: "Weekly or bi-weekly upkeep to keep your home consistently fresh.",
     icon: Sparkles,
-    href: "/booking?step=entry",
+    href: "/booking/details",
   },
   {
     title: "Deep Cleaning",
     desc: "Detailed top-to-bottom clean — perfect for spring refreshes.",
     icon: Layers,
-    href: "/booking?step=entry",
+    href: "/booking/details",
   },
   {
     title: "Move Out Cleaning",
     desc: "Handover-ready shine for tenants, landlords, and movers.",
     icon: Brush,
-    href: "/booking?step=entry",
+    href: "/booking/details",
   },
   {
     title: "Carpet Cleaning",
     desc: "Refresh high-traffic areas and revive tired fibres.",
     icon: Wind,
-    href: "/booking?step=entry",
+    href: "/booking/details",
   },
 ] as const;
 

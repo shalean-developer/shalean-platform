@@ -37,6 +37,8 @@ export type BookingSummaryProps = {
   /** Mobile-only: thin dock row; opens full sheet via `onMobileDockOpen`. */
   layoutMode?: "default" | "mobile-dock-compact";
   onMobileDockOpen?: () => void;
+  /** Omit the “Booking summary” title + subtitle (e.g. payment page already has “Quote”). */
+  hideSummaryHeading?: boolean;
 };
 
 function BookingSummaryInner({
@@ -65,6 +67,7 @@ function BookingSummaryInner({
   customerPhone,
   layoutMode = "default",
   onMobileDockOpen,
+  hideSummaryHeading = false,
 }: BookingSummaryProps) {
   const extrasCount = extrasRows.length;
   const [selectionInfoOpen, setSelectionInfoOpen] = useState(false);
@@ -116,10 +119,12 @@ function BookingSummaryInner({
         className,
       )}
     >
-      <div>
-        <h2 className="text-sm font-semibold tracking-wide text-gray-800 dark:text-zinc-100">Booking summary</h2>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">Updates as you adjust your visit.</p>
-      </div>
+      {hideSummaryHeading ? null : (
+        <div>
+          <h2 className="text-sm font-semibold tracking-wide text-gray-800 dark:text-zinc-100">Booking summary</h2>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">Updates as you adjust your visit.</p>
+        </div>
+      )}
 
       <div className="space-y-1">
         <DetailRow label="Where" value={whereLabel} editHref={editWhereHref} />

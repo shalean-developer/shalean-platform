@@ -93,7 +93,7 @@ export function ScheduleTimeSlots({ dateYmd, value, onChange, availability }: Sc
         type="button"
         onClick={() => onChange(slot)}
         className={cn(
-          "rounded-xl border py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:py-3 dark:focus-visible:ring-blue-400/35",
+          "min-h-[44px] rounded-xl border py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:py-3 dark:focus-visible:ring-blue-400/35",
           isSelected
             ? "border-blue-600 bg-blue-50 text-blue-900 dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-100"
             : "border-gray-200 bg-white text-zinc-900 hover:border-gray-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500",

@@ -22,7 +22,7 @@ import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
-const bookingHref = "/booking?step=entry";
+const bookingHref = "/booking/details";
 
 function hashLink(hash: string, pathname: string) {
   return pathname === "/" ? hash : `/${hash}`;

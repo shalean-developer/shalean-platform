@@ -3,7 +3,7 @@
  *
  * `success: true` — Paystack reports payment success. `bookingInDatabase` is true when a `bookings` row
  * exists (inserted now or already present). If the row could not be saved, `bookingInDatabase` is false
- * but confirmation email may still have been sent (failsafe). Only `reference` is trusted from the client.
+ * and the customer may receive a **processing** email only (never a confirmed-booking template). Only `reference` is trusted from the client.
  */
 export type PaystackVerifyPostSuccess = {
   success: true;
@@ -19,8 +19,12 @@ export type PaystackVerifyPostSuccess = {
   bookingSnapshot: unknown;
   bookingInDatabase: boolean;
   bookingId: string | null;
+  /** `paid` | `payment_mismatch` | `payment_reconciliation_required` — Paystack success path only. */
+  state?: string;
   /** True when row already existed (idempotent; no duplicate insert). */
   alreadyExists: boolean;
+  /** True when upsert was a no-op because another worker or prior verify already persisted this reference. */
+  skipped?: boolean;
   upsertError: string | null;
   /** Populated when `bookingInDatabase` and row was loaded (checkout assignment audit). */
   assignmentType?: string | null;

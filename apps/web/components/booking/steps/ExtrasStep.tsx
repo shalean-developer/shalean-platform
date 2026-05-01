@@ -39,7 +39,7 @@ function ExtraGridItem({ id, label, selected, onToggle }: ExtraGridItemProps) {
       onClick={() => onToggle(id)}
       aria-pressed={selected}
       aria-label={label}
-      className="group flex cursor-pointer flex-col items-center text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:focus-visible:ring-blue-400/35"
+      className="group flex min-h-[44px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl py-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:focus-visible:ring-blue-400/35"
     >
       <div
         className={cn(
@@ -51,7 +51,7 @@ function ExtraGridItem({ id, label, selected, onToggle }: ExtraGridItemProps) {
       >
         <Icon size={20} className="shrink-0" aria-hidden />
       </div>
-      <p className="mt-2 text-sm leading-tight text-blue-900 dark:text-blue-200">{label}</p>
+      <p className="text-sm leading-tight text-blue-900 dark:text-blue-200">{label}</p>
     </button>
   );
 }
@@ -63,7 +63,7 @@ export function ExtrasStep({ value, onChange, extras, loading }: ExtrasStepProps
 
   if (loading) {
     return (
-      <div className="grid grid-cols-3 gap-6 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: 9 }, (_, i) => (
           <div key={i} className="flex flex-col items-center" aria-hidden>
             <div className="h-14 w-14 animate-pulse rounded-full border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800" />
@@ -75,7 +75,7 @@ export function ExtrasStep({ value, onChange, extras, loading }: ExtrasStepProps
   }
 
   return (
-    <div className="grid grid-cols-3 gap-6 sm:grid-cols-4 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 md:grid-cols-4 lg:grid-cols-6">
       {extras.map((extra) => {
         const selected = value.includes(extra.id);
         const label = LABEL_BY_SLUG[extra.id] ?? extra.name;

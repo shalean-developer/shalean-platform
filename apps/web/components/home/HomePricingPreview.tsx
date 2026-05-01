@@ -37,7 +37,7 @@ export function HomePricingPreview() {
                   </li>
                 ))}
               </ul>
-              <GrowthCtaLink href="/booking?step=entry" source="home_pricing_card" className={ctaClass}>
+              <GrowthCtaLink href="/booking/details" source="home_pricing_card" className={ctaClass}>
                 Get your exact price
               </GrowthCtaLink>
             </CardContent>

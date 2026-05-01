@@ -18,10 +18,13 @@ import {
   mergeCleanerIdIntoLockedBooking,
   parseLockedBookingFromUnknown,
   readLockedBookingFromStorage,
+  type LockedBooking,
 } from "@/lib/booking/lockedBooking";
 import { bookingCopy } from "@/lib/booking/copy";
+import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { validateLockedBookingBeforePayment } from "@/lib/booking/reconcileBookingState";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -153,6 +156,65 @@ export function StepPayment() {
       const lockedForValidate = freshLock
         ? { ...freshLock, cleaner_id: cleanerId ?? freshLock.cleaner_id ?? null }
         : { ...locked, cleaner_id: cleanerId ?? locked.cleaner_id ?? null };
+
+      try {
+        validateLockedBookingBeforePayment(lockedForValidate as LockedBooking, cleanerId);
+      } catch (ve) {
+        setPaying(false);
+        payInitInFlight.current = false;
+        const msg = ve instanceof Error ? ve.message : "Invalid booking";
+        trackBookingFunnelEvent("payment", "error", { message: `client_state:${msg}`, action: "validate_booking_state" });
+        show({
+          tone: "danger",
+          title: "Incomplete booking",
+          description: msg,
+          autoDismissMs: 6000,
+          cta: { label: "Go back", onClick: () => router.push(bookingHref("details")) },
+        });
+        return;
+      }
+
+      console.log("[BOOKING STATE VALIDATED]", { step: "checkout", valid: true });
+
+      const revalidateRes = await fetch("/api/booking/revalidate-lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingDraft: {
+            locked: lockedForValidate,
+            cleaner_id: cleanerId,
+            cleanerId,
+            date: lockedForValidate.date,
+            time: lockedForValidate.time,
+            duration_minutes: Math.round(lockedForValidate.finalHours * 60),
+          },
+        }),
+      });
+      let revalidateJson: { ok?: boolean; valid?: boolean; reason?: string } = {};
+      try {
+        revalidateJson = (await revalidateRes.json()) as typeof revalidateJson;
+      } catch {
+        revalidateJson = {};
+      }
+      if (!revalidateRes.ok || revalidateJson.ok === false || revalidateJson.valid === false) {
+        setPaying(false);
+        payInitInFlight.current = false;
+        trackBookingFunnelEvent("payment", "error", {
+          message: `revalidate_lock:${revalidateJson.reason ?? revalidateRes.status}`,
+          action: "revalidate_lock",
+        });
+        show({
+          tone: "danger",
+          title: "Could not confirm booking",
+          description:
+            revalidateJson.reason === "extras_mismatch"
+              ? "Your add-ons are out of sync with the locked price. Go back to home details, then pick your time again."
+              : "We could not verify this visit on the server. Go back and try again, or pick another time.",
+          autoDismissMs: 7000,
+          cta: { label: "Choose another time", onClick: goChooseAnotherTime },
+        });
+        return;
+      }
 
       const parsedForExtras = parseLockedBookingFromUnknown(lockedForValidate);
       if (!parsedForExtras || !extrasSnapshotAligned(parsedForExtras)) {
@@ -356,7 +418,9 @@ export function StepPayment() {
         totalZar: totals?.totalZar ?? 0,
         amountDisplayOverride: totals?.totalZar ? null : "—",
         totalCaption: "Total",
+        mobileHoursLine: locked ? formatBookingHoursCompact(locked.finalHours) : null,
         ctaShort: "Confirm →",
+        hideMobilePrice: true,
       }}
       footerTotalZar={totals?.totalZar}
     >
@@ -379,27 +443,14 @@ export function StepPayment() {
         onLocked={dismiss}
       />
       {!locked ? (
-        <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-6 lg:pb-6">
+        <div className="mx-auto w-full max-w-[576px] space-y-5 pb-4 max-lg:space-y-5 lg:space-y-6 lg:pb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
           <p className="text-sm text-amber-800 dark:text-amber-400/90">
             Choose a time first — then you can confirm and pay here.
           </p>
         </div>
       ) : (
-        <div className="w-full max-w-none space-y-5 pb-4 max-lg:space-y-5 md:mx-auto md:max-w-2xl lg:mx-0 lg:space-y-6 lg:pb-6">
-          <CheckoutSideBadge
-            mode="mobile"
-            className="lg:hidden"
-            lockedAt={locked.lockedAt}
-            showCountdown={totalReadyForPay}
-            totalZar={totals?.totalZar ?? null}
-            amountDisplayOverride={totals?.totalZar ? null : "—"}
-            canPay={canPay}
-            paying={paying}
-            onPay={runPaymentFlow}
-            onBack={handleBack}
-            continueLabel={continueLabel}
-          />
+        <div className="mx-auto w-full max-w-[576px] space-y-4 pb-4 lg:space-y-6 lg:pb-6">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.title}</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{copy.subtitle}</p>

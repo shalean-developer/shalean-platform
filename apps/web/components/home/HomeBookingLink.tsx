@@ -4,7 +4,7 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
-const bookingHref = "/booking?step=entry";
+const bookingHref = "/booking/details";
 
 export function HomeBookingLink({
   children,

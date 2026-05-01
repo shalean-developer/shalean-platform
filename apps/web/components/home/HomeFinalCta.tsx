@@ -18,7 +18,7 @@ export function HomeFinalCta() {
             pricing before you pay.
           </p>
           <div className="mt-8 flex justify-center">
-            <GrowthCtaLink href="/booking?step=entry" source="home_final_cta" className={btnClass}>
+            <GrowthCtaLink href="/booking/details" source="home_final_cta" className={btnClass}>
               Book Now
             </GrowthCtaLink>
           </div>

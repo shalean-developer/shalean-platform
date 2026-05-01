@@ -341,7 +341,7 @@ function SuccessContent() {
             Retry
           </button>
           <Link
-            href={`${bookingFlowHref("checkout")}&register=1`}
+            href={bookingFlowHref("checkout", { register: "1" })}
             className="mt-3 block text-sm font-medium text-primary"
           >
             Back to payment

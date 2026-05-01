@@ -1,11 +1,11 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { enqueueFailedJob, FAILED_JOBS_ENQUEUE_ERROR } from "@/lib/booking/failedJobs";
+import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
-import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
 import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
 import { metrics } from "@/lib/metrics/counters";
 import {
@@ -14,7 +14,6 @@ import {
   recordPaystackPricingMismatch,
 } from "@/lib/metrics/pricingMismatch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 
@@ -148,18 +147,6 @@ export async function POST(request: Request) {
     ) {
       return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
-
-    const { data: existing } = await supabase
-      .from("bookings")
-      .select("id, status")
-      .eq("paystack_reference", reference)
-      .maybeSingle();
-    if (existing && typeof existing === "object" && "id" in existing) {
-      const st = String((existing as { status?: string }).status ?? "");
-      if (st !== "pending_payment") {
-        return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-      }
-    }
   }
 
   const amount = typeof data.amount === "number" ? data.amount : 0;
@@ -206,58 +193,43 @@ export async function POST(request: Request) {
     await reportOperationalIssue("warn", "paystack/webhook", "No customer email on charge.success", { reference });
   }
 
-  let result: Awaited<ReturnType<typeof upsertBookingFromPaystack>>;
-  try {
-    result = await upsertBookingFromPaystack({
+  const result = await finalizePaystackChargeSuccess({
+    source: "webhook",
+    paystackReference: reference,
+    amountCents: amount,
+    currency,
+    customerEmail: email,
+    snapshot,
+    paystackMetadata: metadata,
+    paystackAuthorizationCode:
+      data.authorization && typeof data.authorization === "object"
+        ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+        : null,
+    paystackCustomerCode:
+      customerBlock && typeof customerBlock === "object"
+        ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+        : null,
+    paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+  });
+
+  if (result.error) {
+    await reportOperationalIssue("critical", "paystack/webhook", `charge.success: booking upsert failed: ${result.error}`, {
+      reference,
+    });
+  }
+
+  await enqueuePaystackRecoveryFailedJobs({
+    reference,
+    result,
+    basePayload: {
       paystackReference: reference,
       amountCents: amount,
       currency,
       customerEmail: email,
       snapshot,
       paystackMetadata: metadata,
-      paystackAuthorizationCode:
-        data.authorization && typeof data.authorization === "object"
-          ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
-          : null,
-      paystackCustomerCode:
-        customerBlock && typeof customerBlock === "object"
-          ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
-          : null,
-      paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await reportOperationalIssue("critical", "paystack/webhook", `charge.success: upsert threw: ${msg}`, { reference });
-    result = { skipped: false, bookingId: null, error: msg };
-  }
-
-  if (result.error) {
-    await reportOperationalIssue("critical", "paystack/webhook", `charge.success: booking upsert failed: ${result.error}`, {
-      reference,
-    });
-    try {
-      await enqueueFailedJob("booking_insert", {
-        paystackReference: reference,
-        amountCents: amount,
-        currency,
-        customerEmail: email,
-        snapshot,
-        paystackMetadata: metadata,
-      });
-    } catch (e) {
-      const cause = e instanceof Error ? e.message : String(e);
-      await reportOperationalIssue(
-        "critical",
-        "paystack/webhook",
-        "charge.success: booking upsert failed and failed_jobs enqueue also failed",
-        { reference, cause },
-      );
-      return NextResponse.json(
-        { success: false, error: FAILED_JOBS_ENQUEUE_ERROR, reference },
-        { status: 500 },
-      );
-    }
-  }
+    },
+  });
 
   if (result.bookingId && !result.error) {
     await logSystemEvent({
@@ -266,25 +238,6 @@ export async function POST(request: Request) {
       message: "paystack.booking.created",
       context: { reference, bookingId: result.bookingId, skipped: result.skipped },
     });
-  }
-
-  if (!result.skipped && email && result.bookingId && supabase) {
-    try {
-      await notifyBookingEvent({
-        type: "payment_confirmed",
-        supabase,
-        bookingId: result.bookingId,
-        snapshot,
-        customerEmail: email,
-        amountCents: amount,
-        paymentReference: reference,
-      });
-    } catch (e) {
-      await reportOperationalIssue("error", "paystack/webhook/notifyBookingEvent", String(e), {
-        reference,
-        bookingId: result.bookingId,
-      });
-    }
   }
 
   return NextResponse.json({ received: true });

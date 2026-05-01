@@ -169,7 +169,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
             <Link href={`${base}/dashboard/bookings`}>Your bookings</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-xl">
-            <Link href={`${base}/booking?step=details`}>Book again</Link>
+            <Link href={`${base}/booking/details`}>Book again</Link>
           </Button>
         </div>
       </div>

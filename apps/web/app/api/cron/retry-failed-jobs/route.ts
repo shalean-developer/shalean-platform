@@ -3,9 +3,11 @@ import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { formatFailedJobPayloadPreview } from "@/lib/booking/failedJobPayloadPreview";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
+import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
-import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import { retryLifecycleJobsForBooking } from "@/lib/booking/bookingLifecycleJobs";
 import { emitSqlExpiredOfferTimeoutMetrics } from "@/lib/dispatch/offerTimeoutMetric";
 import { reportPendingBookingSlaBreaches } from "@/lib/dispatch/dispatchSlaWatchdog";
 import { processDispatchRetryQueue } from "@/lib/dispatch/dispatchRetryQueue";
@@ -13,7 +15,6 @@ import { runOfferExpiryMaintenance } from "@/lib/dispatch/processUserSelectedOff
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckoutReminder";
-import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logDailyOpsSummaryIfNeeded } from "@/lib/ops/dailyOpsSummary";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { syncCleanerQualityFlags } from "@/lib/ops/enforceCleanerQualityReview";
@@ -31,10 +32,15 @@ const MAX_LIFECYCLE_RETRY = 20;
 
 /** `failed_jobs.type` for Paystack booking retries (cron selector). */
 const FAILED_JOB_TYPE_BOOKING_INSERT = "booking_insert";
+/** Same retry body as `booking_insert`, but created when finalize threw after payment (row in `payment_reconciliation_required`). */
+const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION = "payment_reconciliation";
+/** One-shot ops signal for amount mismatch (drained below; not retried as insert). */
+const FAILED_JOB_TYPE_PAYMENT_MISMATCH = "payment_mismatch";
 /** Quarantined: payload cannot be retried; row kept for ops (not deleted). */
 const FAILED_JOB_TYPE_BOOKING_INSERT_INVALID = "booking_insert_invalid_payload";
 /** Terminal: retries exhausted; excluded from cron selector (payload includes last_error / reference / attempts). */
 const FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED = "booking_insert_exhausted";
+const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED = "payment_reconciliation_exhausted";
 /** Max upsert failures before row stops being auto-selected; escalated via critical log. */
 const BOOKING_INSERT_MAX_ATTEMPTS = 25;
 
@@ -90,7 +96,18 @@ export async function POST(request: Request) {
 
   const failedJobsThreshold = Number(process.env.FAILED_JOBS_ALERT_THRESHOLD ?? "5");
   const thresholdJobs = Number.isFinite(failedJobsThreshold) && failedJobsThreshold > 0 ? failedJobsThreshold : 5;
-  const { count: failedJobsOpen } = await supabase.from("failed_jobs").select("id", { count: "exact", head: true });
+  const { count: failedJobsOpen } = await supabase
+    .from("failed_jobs")
+    .select("id", { count: "exact", head: true })
+    .in("type", [
+      FAILED_JOB_TYPE_BOOKING_INSERT,
+      FAILED_JOB_TYPE_PAYMENT_RECONCILIATION,
+      FAILED_JOB_TYPE_BOOKING_INSERT_INVALID,
+      FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
+      FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+      "notification_delivery",
+      "booking_finalize",
+    ]);
   if ((failedJobsOpen ?? 0) > thresholdJobs) {
     await postDispatchControlAlert(
       {
@@ -125,10 +142,37 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: mismatchJobs, error: mmSelErr } = await supabase
+    .from("failed_jobs")
+    .select("id, payload")
+    .eq("type", FAILED_JOB_TYPE_PAYMENT_MISMATCH)
+    .order("created_at", { ascending: true })
+    .limit(MAX_BOOKING_INSERT_BATCH);
+
+  if (mmSelErr) {
+    await reportOperationalIssue("warn", "cron/retry-failed-jobs", `payment_mismatch select: ${mmSelErr.message}`);
+  } else {
+    for (const row of mismatchJobs ?? []) {
+      const id = typeof row.id === "string" ? row.id : null;
+      if (!id) continue;
+      await reportOperationalIssue("warn", "cron/retry-failed-jobs", "payment_mismatch failed_job (logged; row deleted)", {
+        errorType: "payment_mismatch_failed_job",
+        failedJobId: id,
+        payload: row.payload,
+      });
+      const { error: mmDelErr } = await supabase.from("failed_jobs").delete().eq("id", id);
+      if (mmDelErr) {
+        await reportOperationalIssue("error", "cron/retry-failed-jobs", `payment_mismatch delete failed: ${mmDelErr.message}`, {
+          failedJobId: id,
+        });
+      }
+    }
+  }
+
   const { data: insertJobs, error: selErr } = await supabase
     .from("failed_jobs")
     .select("id, type, payload, attempts")
-    .eq("type", FAILED_JOB_TYPE_BOOKING_INSERT)
+    .in("type", [FAILED_JOB_TYPE_BOOKING_INSERT, FAILED_JOB_TYPE_PAYMENT_RECONCILIATION])
     .lt("attempts", BOOKING_INSERT_MAX_ATTEMPTS)
     .order("created_at", { ascending: true })
     .limit(MAX_BOOKING_INSERT_BATCH);
@@ -151,6 +195,7 @@ export async function POST(request: Request) {
     const id = typeof row.id === "string" ? row.id : null;
     if (!id) continue;
     const attempts = typeof row.attempts === "number" ? row.attempts : 0;
+    const jobType = typeof row.type === "string" ? row.type : FAILED_JOB_TYPE_BOOKING_INSERT;
 
     try {
       const payload = row.payload as BookingInsertFailedPayload | null;
@@ -181,24 +226,31 @@ export async function POST(request: Request) {
       bookingInsertRetried++;
       const snapshot = (payload.snapshot ?? null) as BookingSnapshotV1 | null;
 
-      let result: Awaited<ReturnType<typeof upsertBookingFromPaystack>>;
+      const emRetry =
+        typeof payload.customerEmail === "string" ? normalizeEmail(payload.customerEmail) : "";
+      const metaFlat = normalizePaystackMetadata(payload.paystackMetadata ?? null);
+
+      let result: Awaited<ReturnType<typeof finalizePaystackChargeSuccess>>;
       try {
-        result = await upsertBookingFromPaystack({
+        result = await finalizePaystackChargeSuccess({
+          source: "retry",
           paystackReference: payload.paystackReference,
           amountCents: payload.amountCents,
           currency: typeof payload.currency === "string" ? payload.currency : "ZAR",
-          customerEmail:
-            typeof payload.customerEmail === "string" ? normalizeEmail(payload.customerEmail) : "",
+          customerEmail: emRetry,
           snapshot,
-          paystackMetadata: payload.paystackMetadata ?? null,
+          paystackMetadata: metaFlat,
+          paystackAuthorizationCode: null,
+          paystackCustomerCode: null,
+          paidAtIso: null,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        await reportOperationalIssue("error", "cron/retry-failed-jobs", `upsert threw: ${msg}`, {
+        await reportOperationalIssue("error", "cron/retry-failed-jobs", `finalize threw: ${msg}`, {
           paystackReference: payload.paystackReference,
           failedJobId: id,
         });
-        result = { skipped: false, bookingId: null, error: msg };
+        result = { ok: false, skipped: false, bookingId: null, error: msg };
       }
 
       if (result.bookingId && !result.error) {
@@ -217,27 +269,6 @@ export async function POST(request: Request) {
         } else {
           bookingInsertSucceeded++;
         }
-        if (!result.skipped) {
-          const em =
-            typeof payload.customerEmail === "string" ? normalizeEmail(payload.customerEmail) : "";
-          if (em) {
-            try {
-              await notifyBookingEvent({
-                type: "payment_confirmed",
-                supabase,
-                bookingId: result.bookingId,
-                snapshot,
-                customerEmail: em,
-                amountCents: payload.amountCents,
-                paymentReference: payload.paystackReference,
-              });
-            } catch (e) {
-              await reportOperationalIssue("error", "cron/retry-failed-jobs/notifyBookingEvent", String(e), {
-                bookingId: result.bookingId,
-              });
-            }
-          }
-        }
       } else {
         const nextAttempts = attempts + 1;
         const lastError = result.error ?? "unknown";
@@ -252,10 +283,14 @@ export async function POST(request: Request) {
               at: new Date().toISOString(),
             },
           };
+          const exhaustedType =
+            jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION
+              ? FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED
+              : FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED;
           const { error: exErr } = await supabase
             .from("failed_jobs")
             .update({
-              type: FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
+              type: exhaustedType,
               attempts: nextAttempts,
               payload: terminalPayload,
             })
@@ -271,9 +306,9 @@ export async function POST(request: Request) {
             await reportOperationalIssue(
               "critical",
               "cron/retry-failed-jobs",
-              "booking_insert retry attempts exhausted; job moved to booking_insert_exhausted",
+              `${jobType} retry attempts exhausted; job moved to terminal type`,
               {
-                errorType: "booking_insert_exhausted",
+                errorType: exhaustedType,
                 failedJobId: id,
                 paystackReference: payload.paystackReference,
                 attempts: nextAttempts,
@@ -334,6 +369,24 @@ export async function POST(request: Request) {
     if (r === "terminal") lifecycleTerminal++;
   }
 
+  let lifecycleIssueRepairs = 0;
+  const { data: issueRows, error: issueSelErr } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("lifecycle_issue", true)
+    .order("updated_at", { ascending: true })
+    .limit(20);
+  if (issueSelErr) {
+    await reportOperationalIssue("warn", "cron/retry-failed-jobs", `lifecycle_issue select: ${issueSelErr.message}`);
+  } else {
+    for (const row of issueRows ?? []) {
+      const bid = typeof row.id === "string" ? row.id : null;
+      if (!bid) continue;
+      const { repaired } = await retryLifecycleJobsForBooking(supabase, bid);
+      if (repaired) lifecycleIssueRepairs++;
+    }
+  }
+
   const offerExpiryMaintenance = await runOfferExpiryMaintenance(supabase);
   const dispatchRetry = await processDispatchRetryQueue(supabase);
   const dispatchSla = await reportPendingBookingSlaBreaches(supabase);
@@ -350,7 +403,11 @@ export async function POST(request: Request) {
     const { data: deletedRows, error: cleanupErr } = await supabase
       .from("failed_jobs")
       .delete()
-      .in("type", [FAILED_JOB_TYPE_BOOKING_INSERT_INVALID, FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED])
+      .in("type", [
+        FAILED_JOB_TYPE_BOOKING_INSERT_INVALID,
+        FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
+        FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+      ])
       .lt("created_at", cutoffIso)
       .select("id");
     if (cleanupErr) {
@@ -367,6 +424,7 @@ export async function POST(request: Request) {
     lifecycleRetried,
     lifecycleSent,
     lifecycleTerminal,
+    lifecycleIssueRepairs,
     dispatchRetry,
     offerExpiryMaintenance,
     dispatchSla,
@@ -395,6 +453,7 @@ export async function POST(request: Request) {
       retried: lifecycleRetried,
       sent: lifecycleSent,
       terminalFailures: lifecycleTerminal,
+      issueRepairs: lifecycleIssueRepairs,
     },
     dispatchRetry,
     offerExpiryMaintenance,

@@ -16,7 +16,7 @@ export type BookingFlowContextValue = {
   step: BookingFlowStep;
   /** Normalized promo from `?promo=` when present. */
   promoParam: string | null;
-  /** Build `/booking?…` href preserving `promo` and merging optional extra params. */
+  /** Build `/booking/{segment}` href preserving `promo` and merging optional extra params. */
   bookingHref: (step: BookingFlowStep, extra?: Record<string, string>) => string;
   lockedBooking: LockedBooking | null;
   handleResetBooking: () => void;

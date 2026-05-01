@@ -79,7 +79,7 @@ export function HeroBookingWidgetCard() {
     } catch {
       /* ignore */
     }
-    const href = `${bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"))}&source=home_hero_widget`;
+    const href = bookingFlowHref("entry", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "home_hero_widget" });
     router.push(href);
   }
 

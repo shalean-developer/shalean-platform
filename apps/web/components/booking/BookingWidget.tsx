@@ -96,7 +96,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
     } catch {
       /* Storage can be unavailable in private browsing. */
     }
-    router.push(`${bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"))}&source=home_hero_widget`);
+    router.push(bookingFlowHref("entry", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "home_hero_widget" }));
   }
 
   return (

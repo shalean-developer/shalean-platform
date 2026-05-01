@@ -24,6 +24,8 @@ export type BookingCheckoutState = {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  /** Sanitized promo from URL / marketing; carried through checkout. */
+  promo: string;
 };
 
 const initialState: BookingCheckoutState = {
@@ -44,6 +46,7 @@ const initialState: BookingCheckoutState = {
   customerName: "",
   customerEmail: "",
   customerPhone: "",
+  promo: "",
 };
 
 export type BookingCheckoutStore = BookingCheckoutState & {
@@ -70,6 +73,7 @@ function persistedSlice(s: BookingCheckoutStore): BookingCheckoutState {
     customerName: s.customerName,
     customerEmail: s.customerEmail,
     customerPhone: s.customerPhone,
+    promo: s.promo,
   };
 }
 
@@ -100,6 +104,7 @@ export const useBookingCheckoutStore = create<BookingCheckoutStore>()(
         return {
           ...current,
           ...p,
+          promo: typeof p.promo === "string" ? p.promo : current.promo,
           detailsFlowPhase: phase,
           patch: current.patch,
           reset: current.reset,

@@ -16,11 +16,24 @@ export function isBookingCheckoutSegment(s: string | null | undefined): s is Boo
   return s != null && (BOOKING_CHECKOUT_SEGMENTS as readonly string[]).includes(s);
 }
 
+export type MaxReachableCheckoutOpts = {
+  /** While the pricing catalog is loading, do not down-rank the path (avoids bogus redirects from deep links). */
+  catalogLoading?: boolean;
+  /** Current path segment index (0–3); used only with `catalogLoading`. */
+  currentSegmentIndex?: number;
+};
+
 /** Highest segment index allowed (0–3) without skipping required intake. */
 export function getMaxReachableCheckoutSegmentIndex(
   state: Pick<BookingCheckoutState, "service" | "bedrooms" | "bathrooms" | "date" | "time" | "location">,
   catalogServiceIds: readonly string[] | undefined,
+  opts?: MaxReachableCheckoutOpts,
 ): number {
+  if (opts?.catalogLoading) {
+    const i = opts.currentSegmentIndex;
+    if (typeof i === "number" && i >= 0 && i <= 3) return i;
+  }
+
   if (!catalogServiceIds?.length) return 0;
 
   const sid = parseBookingServiceId(state.service);

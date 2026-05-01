@@ -9,6 +9,7 @@ import { BookingHeader } from "@/components/booking/BookingHeader";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import BookingSummary from "./BookingSummary";
 import { StickyPriceBar, type StickyPlanPriceBreakdown } from "@/components/booking/StickyPriceBar";
+import { MobileBottomBar } from "@/components/booking/MobileBottomBar";
 import { BookingFooterInsightBanner, readFooterInsightDismissed } from "@/components/booking/BookingFooterInsightBanner";
 import { bookingCopy } from "@/lib/booking/copy";
 import type { BookingStep1State } from "./useBookingStep1";
@@ -64,6 +65,10 @@ type BookingLayoutProps = {
     openSummarySheetOnAmountTap?: boolean;
     /** Details step: list + plan-discounted preview (UI only). */
     planPriceBreakdown?: StickyPlanPriceBreakdown | null;
+    /** Mobile bottom bar: compact hours line (e.g. `6.3 hrs`). */
+    mobileHoursLine?: string | null;
+    /** Mobile sticky bar: omit currency (e.g. payment step). */
+    hideMobilePrice?: boolean;
   };
   /**
    * When `stickyMobileBar` is set and this is `false`, the wide desktop footer row is hidden
@@ -186,7 +191,7 @@ export default function BookingLayout({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
-      <BookingHeader />
+      <BookingHeader hideMobileBackLink={Boolean(stickyMobileBar)} />
 
       <main
         className={[
@@ -194,13 +199,13 @@ export default function BookingLayout({
           footerSplit || stickyMobileBar
             ? stickyMobileBar && !showStickyPriceBarDesktop
               ? footerInsightBanner && !footerInsightDismissed
-                ? "pb-44 sm:pb-40 lg:pb-8"
-                : "pb-32 sm:pb-28 lg:pb-8"
+                ? "pb-40 sm:pb-36 lg:pb-8"
+                : "pb-28 sm:pb-24 lg:pb-8"
               : footerInsightBanner && !footerInsightDismissed
                 ? "pb-44 sm:pb-40"
                 : "pb-32 sm:pb-28"
             : "",
-          mobileEntryFooter && !footerSplit && !stickyMobileBar ? "max-lg:pb-36" : "",
+          mobileEntryFooter && !footerSplit && !stickyMobileBar ? "max-lg:pb-28" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -254,6 +259,7 @@ export default function BookingLayout({
       <footer
         className={cn(
           "z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95",
+          stickyMobileBar && "max-lg:z-50",
           mobileEntryFooter &&
             !footerSplit &&
             !stickyMobileBar &&
@@ -261,8 +267,7 @@ export default function BookingLayout({
           (footerSplit || stickyMobileBar) &&
             (stickyMobileBar && !showStickyPriceBarDesktop
               ? cn(
-                  "max-lg:fixed max-lg:bottom-0 max-lg:left-0 max-lg:right-0 max-lg:border-t max-lg:border-zinc-200/80 max-lg:bg-white/95 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:backdrop-blur-md max-lg:dark:border-zinc-800 max-lg:dark:bg-zinc-950/95",
-                  stickyMobileBar?.openSummarySheetOnAmountTap ? "max-lg:pt-2" : "max-lg:pt-4",
+                  "max-lg:fixed max-lg:bottom-0 max-lg:left-0 max-lg:right-0 max-lg:border-t max-lg:border-zinc-200/80 max-lg:bg-white max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:pt-0 max-lg:backdrop-blur-md max-lg:dark:border-zinc-800 max-lg:dark:bg-zinc-950",
                   "lg:static lg:border-transparent lg:bg-transparent lg:pb-0 lg:pt-0 lg:shadow-none lg:backdrop-blur-none",
                 )
               : cn(
@@ -277,7 +282,7 @@ export default function BookingLayout({
           className={cn(
             "mx-auto max-w-7xl px-4 lg:px-6",
             mobileEntryFooter && !footerSplit && !stickyMobileBar && "max-lg:max-w-none max-lg:px-0",
-            stickyMobileBar?.openSummarySheetOnAmountTap && "max-lg:max-w-none max-lg:px-0",
+            stickyMobileBar && "max-lg:max-w-none max-lg:px-0",
           )}
         >
           {footerPreCta ? (
@@ -293,13 +298,33 @@ export default function BookingLayout({
 
           {stickyMobileBar ? (
             <div className="lg:hidden">
-              <StickyPriceBar
-                totalZar={stickyMobileBar.totalZar}
+              <MobileBottomBar
+                estimatedHoursLabel={stickyMobileBar.mobileHoursLine ?? null}
+                totalCaption={stickyMobileBar.mobileHoursLine ? null : stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total}
+                totalSectionLabel={
+                  stickyMobileBar.mobileHoursLine
+                    ? "Total"
+                    : (stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total)
+                }
+                onMobileBack={onFooterBack}
+                mobileBackLabel={step === "entry" ? "Home" : "Back"}
+                totalDisplay={(() => {
+                  if (stickyMobileBar.amountDisplayOverride) return stickyMobileBar.amountDisplayOverride;
+                  const z =
+                    typeof footerTotalZar === "number" && Number.isFinite(footerTotalZar)
+                      ? footerTotalZar
+                      : stickyMobileBar.totalZar;
+                  return Number.isFinite(z) ? `R ${z.toLocaleString("en-ZA")}` : "—";
+                })()}
+                totalZar={
+                  typeof footerTotalZar === "number" && Number.isFinite(footerTotalZar)
+                    ? footerTotalZar
+                    : stickyMobileBar.totalZar
+                }
                 compareFromZar={stickyMobileBar.compareFromZar ?? null}
                 amountDisplayOverride={stickyMobileBar.amountDisplayOverride}
                 planPriceBreakdown={stickyMobileBar.planPriceBreakdown ?? null}
-                totalCaption={stickyMobileBar.totalCaption ?? bookingCopy.stickyBar.total}
-                subline={stickyMobileBar.subline}
+                subline={stickyMobileBar.subline ?? null}
                 ctaLabel={stickyMobileBar.ctaShort ?? bookingCopy.stickyBar.cta}
                 ctaUrgency={stickyMobileBar.ctaUrgency}
                 onCta={() => onContinue?.()}
@@ -309,8 +334,7 @@ export default function BookingLayout({
                 onAmountClick={
                   stickyMobileBar.openSummarySheetOnAmountTap ? () => setSummarySheetOpen(true) : undefined
                 }
-                captionUppercase={!stickyMobileBar.openSummarySheetOnAmountTap}
-                ctaStartSlot={footerBackButton}
+                hideMobilePrice={stickyMobileBar.hideMobilePrice}
               />
             </div>
           ) : null}
@@ -434,7 +458,7 @@ export default function BookingLayout({
                   {footerEntryLead}
                 </p>
               ) : null}
-              {footerBackButton}
+              <div className={mobileEntryFooter ? "hidden shrink-0 lg:block" : "shrink-0"}>{footerBackButton}</div>
               <button
                 type="button"
                 onClick={() => onContinue?.()}

@@ -64,7 +64,7 @@ export async function sendGrowthRetentionReminderEmail(params: {
   supabaseAdmin?: SupabaseClient | null;
 }): Promise<boolean> {
   const base = getPublicAppUrlBase();
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
   let short = false;
   if (params.supabaseAdmin) {
     const { variant } = await assignConversionExperimentVariant(params.supabaseAdmin, {
@@ -98,7 +98,7 @@ export async function sendGrowthWinBackEmail(params: {
   supabaseAdmin?: SupabaseClient | null;
 }): Promise<boolean> {
   const base = getPublicAppUrlBase();
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
   let short = false;
   if (params.supabaseAdmin) {
     const { variant } = await assignConversionExperimentVariant(params.supabaseAdmin, {
@@ -149,7 +149,7 @@ export async function sendGrowthTouchSms(params: {
     return false;
   }
   const base = getPublicAppUrlBase();
-  const bookUrl = `${base}/booking?step=details`;
+  const bookUrl = `${base}/booking/details`;
   const body =
     params.variant === "win_back"
       ? `Shalean: We'd love you back — book a clean in a tap: ${bookUrl}`.slice(0, SMS_MAX)

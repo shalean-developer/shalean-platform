@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Briefcase, Building2, Home, Info, MapPin, PanelsTopLeft, type LucideIcon } from "lucide-react";
+import { Briefcase, Building2, ChevronDown, Home, Info, MapPin, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { bookingCopy } from "@/lib/booking/copy";
@@ -152,12 +152,12 @@ export function StepEntry() {
       continueLabel={copy.cta}
       showContinueArrow
     >
-      <div className="w-full max-w-none space-y-4 pb-2 max-lg:space-y-4 md:mx-auto md:max-w-2xl lg:mx-auto lg:max-w-2xl lg:space-y-6 lg:pb-6">
+      <div className="mx-auto w-full max-w-[576px] space-y-4 pb-2 max-lg:space-y-4 lg:space-y-6 lg:pb-6">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 lg:text-3xl">
             {copy.title}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 lg:mt-3 lg:text-base">
+          <p className="mt-2 max-w-[576px] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 lg:mt-3 lg:text-base">
             {copy.addressMicrocopy}
           </p>
         </div>
@@ -248,39 +248,53 @@ export function StepEntry() {
         </div>
 
         <div className="space-y-2 lg:space-y-3">
-          <div>
+          <div className="hidden lg:block">
             <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 lg:text-sm">{copy.propertyLabel}</p>
             <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 lg:text-xs">{copy.propertyHint}</p>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 lg:hidden">
-            {PROPERTY_OPTIONS.map(({ id, label, Icon }) => {
-              const active = state.propertyType === id;
-              return (
-                <button
-                  key={`m-${id}`}
-                  type="button"
-                  onClick={() => setPropertyType(id)}
-                  suppressHydrationWarning
-                  className={cn(
-                    "flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 py-2 text-center text-[11px] font-medium leading-tight transition-all",
-                    active
-                      ? "border-blue-600 bg-blue-50 text-blue-900 shadow-sm ring-1 ring-blue-600/10 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
-                      : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "mb-1 h-7 w-7 shrink-0",
-                      active ? "text-blue-700 dark:text-blue-200" : "text-zinc-600 dark:text-zinc-300",
-                    )}
-                    aria-hidden
-                  />
-                  <span className="line-clamp-2 w-full min-w-0 break-words">{label}</span>
-                </button>
-              );
-            })}
-          </div>
+          <details className="group rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-left marker:content-none [&::-webkit-details-marker]:hidden">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{copy.propertyLabel}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">{copy.propertyHint}</p>
+              </div>
+              <ChevronDown
+                className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180 dark:text-zinc-400"
+                aria-hidden
+              />
+            </summary>
+            <div className="border-t border-zinc-200/80 px-2 pb-3 pt-2 dark:border-zinc-800">
+              <div className="grid grid-cols-4 gap-2">
+                {PROPERTY_OPTIONS.map(({ id, label, Icon }) => {
+                  const active = state.propertyType === id;
+                  return (
+                    <button
+                      key={`m-${id}`}
+                      type="button"
+                      onClick={() => setPropertyType(id)}
+                      suppressHydrationWarning
+                      className={cn(
+                        "flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded-lg border px-1 py-2 text-center text-[11px] font-medium leading-tight transition-all",
+                        active
+                          ? "border-blue-600 bg-blue-50 text-blue-900 shadow-sm ring-1 ring-blue-600/10 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-50"
+                          : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600",
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "mb-1 h-7 w-7 shrink-0",
+                          active ? "text-blue-700 dark:text-blue-200" : "text-zinc-600 dark:text-zinc-300",
+                        )}
+                        aria-hidden
+                      />
+                      <span className="line-clamp-2 w-full min-w-0 break-words">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </details>
 
           <div className="hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-4">
             {PROPERTY_OPTIONS.map(({ id, label, Icon }) => {

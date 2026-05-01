@@ -35,13 +35,16 @@ import {
 import { parseTrimmedBookingId } from "@/lib/booking/bookingIds";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { enqueueFailedJob } from "@/lib/booking/failedJobs";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import {
   notifyCustomerBookingPlaced,
   notifyCustomerCleanerAssigned,
 } from "@/lib/notifications/customerUserNotifications";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
+import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
 import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
@@ -96,12 +99,6 @@ type AdminMailEventType =
   | "rescheduled"
   | "sla_breach";
 
-function assertCriticalAdminNotificationEmailEnv(): void {
-  if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
-    throw new Error("CRITICAL: ADMIN_NOTIFICATION_EMAIL not set");
-  }
-}
-
 /**
  * `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to high-signal ops events.
  * Default `all` (or unset) keeps every admin notification.
@@ -118,10 +115,14 @@ async function sendAdminIfConfigured(
   send: () => Promise<void>,
 ): Promise<void> {
   if (!shouldSendAdminBookingMail(adminType)) return;
-  assertCriticalAdminNotificationEmailEnv();
+  if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
+    console.warn("Admin email not configured");
+    return;
+  }
   try {
     await send();
   } catch (e) {
+    console.error("Admin notification failed", e);
     await reportOperationalIssue("error", `notifyBookingEvent/${adminType}/admin`, String(e), context);
   }
 }
@@ -238,17 +239,40 @@ function adminBaseBlock(b: {
 </div>`;
 }
 
+async function enqueueNotificationDeliveryFailure(payload: {
+  bookingId: string;
+  eventType: string;
+  channel: string;
+  error: string;
+}): Promise<void> {
+  const ok = await enqueueFailedJob("notification_delivery", {
+    bookingId: payload.bookingId,
+    eventType: payload.eventType,
+    channel: payload.channel,
+    error: payload.error.slice(0, 4000),
+    at: new Date().toISOString(),
+  });
+  if (!ok) {
+    await reportOperationalIssue("warn", "notifyBookingEvent/notification_delivery", "failed_jobs insert failed", {
+      bookingId: payload.bookingId,
+      channel: payload.channel,
+    });
+  }
+}
+
 /**
  * Central orchestration for booking lifecycle notifications (customer email + in-app, cleaner WhatsApp + SMS fallback, admin email).
- * Admin mail: requires `ADMIN_NOTIFICATION_EMAIL` when an admin notification is sent — missing env throws `CRITICAL: ADMIN_NOTIFICATION_EMAIL not set`.
+ * Admin mail: skips admin HTML when `ADMIN_NOTIFICATION_EMAIL` is unset (logged); never throws.
  * Optional `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to payment_confirmed, sla_breach, and cancelled.
  *
  * Channel fallbacks are documented in `notificationChannelRules.ts` (cleaner: WhatsApp → SMS; customer payment_confirmed: email first, SMS only if email missing or failed; no customer WhatsApp).
  *
  * Idempotency: `reminder_2h_sent`, `assigned_sent`, `completed_sent`, `sla_breach_sent` claims use migration
- * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). Future: cleaner read receipts / opened tracking.
+ * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). `payment_confirmed` customer/admin/SMS/in-app
+ * uses `notification_idempotency_claims` (Day 5) so verify + webhook + retries cannot double-send.
  */
 export async function notifyBookingEvent(event: NotifyBookingEventInput): Promise<void> {
+  try {
   const { supabase } = event;
 
   if (event.type === "payment_confirmed") {
@@ -312,73 +336,130 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     });
     let cust: { sent: boolean; error?: string } = { sent: false };
     if (hasEmail) {
-      cust = await sendBookingConfirmationEmail(payload);
-      if (!cust.sent && cust.error) {
-        await reportOperationalIssue("error", "notifyBookingEvent/payment_confirmed", cust.error, {
+      const claimedCustomerEmail = await tryClaimNotificationIdempotency(supabase, {
+        bookingId: event.bookingId,
+        eventType: "payment_confirmed",
+        channel: "email",
+      });
+      if (claimedCustomerEmail) {
+        try {
+          cust = await sendBookingConfirmationEmail(payload);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[EMAIL FAILED]", { bookingId: event.bookingId, err });
+          await enqueueNotificationDeliveryFailure({
+            bookingId: event.bookingId,
+            eventType: "payment_confirmed",
+            channel: "email",
+            error: msg,
+          });
+        }
+        if (!cust.sent && cust.error) {
+          await reportOperationalIssue("error", "notifyBookingEvent/payment_confirmed", cust.error, {
+            bookingId: event.bookingId,
+          });
+          await enqueueNotificationDeliveryFailure({
+            bookingId: event.bookingId,
+            eventType: "payment_confirmed",
+            channel: "email",
+            error: cust.error,
+          });
+        }
+        await logPipelineEmailTelemetry({
+          role: "customer",
+          channel: "payment_confirmation",
+          sent: cust.sent,
+          error: cust.error,
+          bookingId: event.bookingId,
+        });
+        if (cust.sent) {
+          logPaymentStructured("notification_sent", {
+            booking_id: event.bookingId,
+            channel: "email",
+            event_type: "payment_confirmed",
+          });
+        }
+      } else {
+        await logPipelineEmailTelemetry({
+          role: "customer",
+          channel: "payment_confirmation",
+          sent: false,
+          error: "dedupe_skip",
           bookingId: event.bookingId,
         });
       }
-      await logPipelineEmailTelemetry({
-        role: "customer",
-        channel: "payment_confirmation",
-        sent: cust.sent,
-        error: cust.error,
-        bookingId: event.bookingId,
-      });
     }
 
     const emailSent = hasEmail && cust.sent;
     if (custPhone && (!hasEmail || !cust.sent)) {
-      const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
-      const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
-      const contactHealth = await getCustomerContactHealthScore({
+      const claimedSms = await tryClaimNotificationIdempotency(supabase, {
         bookingId: event.bookingId,
-        phoneHint: custPhone,
+        eventType: "payment_confirmed",
+        channel: "sms",
       });
-      const forceSmsFromHealth =
-        contactHealth != null && contactHealth.sampleSize >= 3 && contactHealth.score < 0.5;
-      const healthFields: Pick<
-        CustomerOutboundDecisionTrace,
-        "contact_health_score" | "contact_health_sample_size"
-      > =
-        contactHealth != null
-          ? {
-              contact_health_score: Math.round(contactHealth.score * 1000) / 1000,
-              contact_health_sample_size: contactHealth.sampleSize,
-            }
-          : {};
-      const baseDecision: Pick<CustomerOutboundDecisionTrace, "country" | "preferred_channel"> = {
-        country,
-        preferred_channel: preferredNotificationChannel,
-      };
-      const decision: CustomerOutboundDecisionTrace["decision"] = !hasEmail
-        ? "sms_primary_no_customer_email"
-        : forceSmsFromHealth
-          ? "email_failed_sms_fallback_contact_health"
-          : "email_failed_sms_fallback";
+      if (claimedSms) {
+        const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
+        const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
+        const contactHealth = await getCustomerContactHealthScore({
+          bookingId: event.bookingId,
+          phoneHint: custPhone,
+        });
+        const forceSmsFromHealth =
+          contactHealth != null && contactHealth.sampleSize >= 3 && contactHealth.score < 0.5;
+        const healthFields: Pick<
+          CustomerOutboundDecisionTrace,
+          "contact_health_score" | "contact_health_sample_size"
+        > =
+          contactHealth != null
+            ? {
+                contact_health_score: Math.round(contactHealth.score * 1000) / 1000,
+                contact_health_sample_size: contactHealth.sampleSize,
+              }
+            : {};
+        const baseDecision: Pick<CustomerOutboundDecisionTrace, "country" | "preferred_channel"> = {
+          country,
+          preferred_channel: preferredNotificationChannel,
+        };
+        const decision: CustomerOutboundDecisionTrace["decision"] = !hasEmail
+          ? "sms_primary_no_customer_email"
+          : forceSmsFromHealth
+            ? "email_failed_sms_fallback_contact_health"
+            : "email_failed_sms_fallback";
 
-      const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
-      await applyFallbackDelayIfNeeded(supabase, {
-        userId: payUserId || null,
-        bookingId: event.bookingId,
-        priceHint: event.amountCents / 100,
-        flow: "payment",
-      });
-      await sendCustomerSmsFromTemplate({
-        phone: custPhone,
-        templateKey: "booking_confirmed",
-        payload,
-        smsRole: paymentSmsRole,
-        context: {
-          ...phoneNotifyCtx,
-          channel: hasEmail ? "customer_sms_email_fallback" : "customer_sms_phone_only",
-        },
-        decisionTrace: {
-          decision,
-          ...baseDecision,
-          ...healthFields,
-        },
-      });
+        const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
+        try {
+          await applyFallbackDelayIfNeeded(supabase, {
+            userId: payUserId || null,
+            bookingId: event.bookingId,
+            priceHint: event.amountCents / 100,
+            flow: "payment",
+          });
+          await sendCustomerSmsFromTemplate({
+            phone: custPhone,
+            templateKey: "booking_confirmed",
+            payload,
+            smsRole: paymentSmsRole,
+            context: {
+              ...phoneNotifyCtx,
+              channel: hasEmail ? "customer_sms_email_fallback" : "customer_sms_phone_only",
+            },
+            decisionTrace: {
+              decision,
+              ...baseDecision,
+              ...healthFields,
+            },
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[SMS FAILED]", { bookingId: event.bookingId, err });
+          await enqueueNotificationDeliveryFailure({
+            bookingId: event.bookingId,
+            eventType: "payment_confirmed",
+            channel: "sms",
+            error: msg,
+          });
+        }
+      }
     } else if (custPhone && emailSent) {
       await logSystemEvent({
         level: "info",
@@ -399,6 +480,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       "payment_confirmed",
       { bookingId: event.bookingId },
       async () => {
+        const claimedAdminEmail = await tryClaimNotificationIdempotency(supabase, {
+          bookingId: event.bookingId,
+          eventType: "payment_confirmed_admin",
+          channel: "email",
+        });
+        if (!claimedAdminEmail) return;
         const adminAssignmentNote =
           payload.showCleanerSubstitutionNotice && payload.fallbackReason
             ? `<p style="font-family:system-ui,sans-serif;font-size:14px;color:#92400e"><strong>Checkout assignment:</strong> auto_fallback — ${escapeHtml(payload.fallbackReason)}</p>`
@@ -424,15 +511,38 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
 
     const uid = head ? String(head.user_id ?? "").trim() : "";
     if (uid) {
-      const locked = event.snapshot?.locked;
-      await notifyCustomerBookingPlaced(supabase, {
+      const claimedInApp = await tryClaimNotificationIdempotency(supabase, {
         bookingId: event.bookingId,
-        userId: uid,
-        serviceLabel: locked?.service != null ? getServiceLabel(locked.service) : payload.serviceLabel,
-        dateYmd: locked?.date ?? null,
-        timeHm: locked?.time ?? null,
+        eventType: "payment_confirmed",
+        channel: "in_app",
       });
+      if (claimedInApp) {
+        try {
+          const locked = event.snapshot?.locked;
+          await notifyCustomerBookingPlaced(supabase, {
+            bookingId: event.bookingId,
+            userId: uid,
+            serviceLabel: locked?.service != null ? getServiceLabel(locked.service) : payload.serviceLabel,
+            dateYmd: locked?.date ?? null,
+            timeHm: locked?.time ?? null,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[IN_APP NOTIFY FAILED]", { bookingId: event.bookingId, err });
+          await enqueueNotificationDeliveryFailure({
+            bookingId: event.bookingId,
+            eventType: "payment_confirmed",
+            channel: "in_app",
+            error: msg,
+          });
+        }
+      }
     }
+
+    console.log("[NOTIFY PAYMENT_CONFIRMED]", {
+      reference: event.paymentReference,
+      bookingId: event.bookingId,
+    });
     return;
   }
 
@@ -993,5 +1103,13 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         }
       }
     }
+  }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[notifyBookingEvent] unhandled failure", msg);
+    await reportOperationalIssue("error", "notifyBookingEvent/unhandled", msg, {
+      eventType: event.type,
+      bookingId: "bookingId" in event ? (event as { bookingId?: string }).bookingId : undefined,
+    });
   }
 }

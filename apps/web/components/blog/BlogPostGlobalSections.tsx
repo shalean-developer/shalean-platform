@@ -31,7 +31,7 @@ export function BlogPostGlobalSections({ post }: { post: BlogPostMeta }) {
           Check pricing and availability instantly for your home in Cape Town
         </p>
         <GrowthCtaLink
-          href="/booking?step=entry"
+          href="/booking/details"
           source={sourceMid}
           className="mt-4 inline-flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
@@ -39,7 +39,7 @@ export function BlogPostGlobalSections({ post }: { post: BlogPostMeta }) {
         </GrowthCtaLink>
         <p className="mt-3 text-xs text-zinc-600">
           <GrowthCtaLink
-            href="/booking?step=entry"
+            href="/booking/details"
             source={`${sourceMid}_text`}
             className="font-medium text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700"
           >

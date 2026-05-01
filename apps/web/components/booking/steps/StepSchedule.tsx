@@ -515,14 +515,14 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             {bookingCopy.when.title}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 max-w-[576px] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
             {bookingCopy.when.intro}
           </p>
-          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 max-w-[576px] text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
             Prices vary by time based on demand.
           </p>
           {lockBaseState && lockBaseState.extraRooms > 0 ? (
-            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 max-w-[576px] text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
               Slot prices include{" "}
               <span className="font-medium tabular-nums">
                 {lockBaseState.extraRooms} extra room{lockBaseState.extraRooms === 1 ? "" : "s"}
@@ -532,7 +532,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           ) : null}
           {recommendations?.personalizationNote ? (
             <p
-              className="mt-3 max-w-2xl rounded-xl border border-sky-200/90 bg-sky-50/95 px-4 py-3 text-sm font-medium text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-50"
+              className="mt-3 max-w-[576px] rounded-xl border border-sky-200/90 bg-sky-50/95 px-4 py-3 text-sm font-medium text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-50"
               role="status"
             >
               {recommendations.personalizationNote}
@@ -540,7 +540,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
           ) : null}
           {urgencyLine ? (
             <p
-              className="mt-3 max-w-2xl rounded-xl border border-amber-200/90 bg-amber-50/95 px-4 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-50"
+              className="mt-3 max-w-[576px] rounded-xl border border-amber-200/90 bg-amber-50/95 px-4 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-50"
               role="status"
             >
               {urgencyLine}

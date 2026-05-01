@@ -13,7 +13,7 @@ export type ServiceGridCardProps = {
   onSelect: (id: string) => void;
 };
 
-/** Compact horizontal service tile for `ServiceGrid` (checkout funnel). */
+/** Full service tile for checkout step 1 — `lg+` only (see {@link ServiceGrid} mobile icon grid). */
 export function ServiceGridCard({
   id,
   name,
@@ -32,7 +32,7 @@ export function ServiceGridCard({
       aria-disabled={disabled}
       aria-label={`${name}. ${description}`}
       className={cn(
-        "flex h-full min-h-[5.5rem] w-full flex-col cursor-pointer rounded-xl border border-gray-200 bg-white p-4 text-left transition-all",
+        "flex h-full min-h-[5.5rem] w-full min-w-0 cursor-pointer flex-col rounded-xl border border-gray-200 bg-white p-4 text-left transition-all",
         "hover:border-blue-500 hover:shadow-sm",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:shadow-none",
@@ -43,11 +43,13 @@ export function ServiceGridCard({
     >
       <div className="mb-2 flex items-center gap-3">
         <div className="shrink-0 rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
-          <Icon size={18} className="shrink-0" aria-hidden />
+          <Icon size={18} className="h-[18px] w-[18px] shrink-0" aria-hidden />
         </div>
-        <p className="min-w-0 font-semibold text-gray-900 dark:text-zinc-50">{name}</p>
+        <p className="min-w-0 break-words font-semibold text-gray-900 dark:text-zinc-50">{name}</p>
       </div>
-      <p className="text-sm leading-snug text-gray-500 dark:text-zinc-400">{description}</p>
+      <p className="min-w-0 flex-1 break-words text-sm leading-snug text-gray-500 dark:text-zinc-400">
+        {description}
+      </p>
     </button>
   );
 }

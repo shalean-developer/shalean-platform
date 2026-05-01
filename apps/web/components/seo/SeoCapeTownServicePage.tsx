@@ -14,7 +14,7 @@ type Props = { slug: CapeTownSeoServiceSlug; trustStats: PublicReviewBannerStats
 
 export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
-  const bookingPath = data.bookingPath ?? "/booking?step=entry";
+  const bookingPath = data.bookingPath ?? "/booking/details";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
   const areasHeading = "Areas we serve";
   const areasIntro =

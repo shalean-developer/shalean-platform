@@ -17,7 +17,7 @@ import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
 import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
 import {
   deletePendingPaymentBooking,
-  deleteRecentPendingPaymentsForEmail,
+  deletePendingPaymentBookingsWithPaystackReference,
   insertPendingPaymentBookingRow,
   updatePendingPaymentBookingForInit,
 } from "@/lib/booking/insertPendingPaymentBooking";
@@ -65,10 +65,17 @@ import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshot
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buildReferralCheckoutFingerprint, type CheckoutTrustSignals } from "@/lib/referrals/checkoutFingerprint";
+import { validateReferralForCheckout } from "@/lib/referrals/validateReferral";
 import { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE } from "@/lib/booking/paystackErrorCodes";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
-import { buildPriceSnapshotV1Checkout, sumLineItemsCents } from "@/lib/booking/priceSnapshotBooking";
+import {
+  buildCheckoutPriceSnapshotV1FromInit,
+  buildPriceSnapshotV1Checkout,
+  sumLineItemsCents,
+} from "@/lib/booking/priceSnapshotBooking";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
 
@@ -184,6 +191,8 @@ export type ProcessPaystackInitializeBodyOptions = {
   adminTrustedCustomerUserId?: string | null;
   /** Admin duplicate-slot force: set on the pending_payment row with user_id before checkout returns. */
   adminSlotFlags?: { slotDuplicateExempt: boolean; adminForceSlotOverride: boolean };
+  /** Optional IP + User-Agent for referral checkout fingerprint (customer `/api/paystack/initialize` only). */
+  checkoutTrustSignals?: CheckoutTrustSignals;
 };
 
 /**
@@ -262,8 +271,8 @@ export async function processPaystackInitializeBody(
   let createdPendingBookingId: string | null = null;
   let paystackReferenceOverride: string | null = null;
   if (!bookingIdFromBody) {
-    await deleteRecentPendingPaymentsForEmail(admin, email);
     const paystackRef = crypto.randomUUID();
+    await deletePendingPaymentBookingsWithPaystackReference(admin, paystackRef);
     const ins = await insertPendingPaymentBookingRow(admin, {
       paystackReference: paystackRef,
       locked,
@@ -321,51 +330,6 @@ export async function processPaystackInitializeBody(
   const visitZar = checkout.visitTotalZar;
 
   const tip = clamp(Math.round(Number(b.tip) || 0), 0, MAX_TIP_ZAR);
-
-  const promoCode = typeof b.promoCode === "string" ? b.promoCode.trim() : "";
-  const promo = promoCode ? getPromoDiscountZar(promoCode, visitZar) : null;
-  const promoDiscountZar = promo?.discountZar ?? 0;
-
-  const referralCode = typeof b.referralCode === "string" ? b.referralCode.trim().toUpperCase() : "";
-  const referralDiscountZar = referralCode ? 50 : 0;
-
-  const freq = locked.cleaningFrequency ?? "one_time";
-  let planDiscountZar = 0;
-  if (freq === "weekly") {
-    planDiscountZar = Math.round(visitZar * 0.1);
-  } else if (freq === "biweekly") {
-    planDiscountZar = Math.round(visitZar * 0.05);
-  }
-
-  const discountLines: BookingSnapshotDiscountLineV1[] = [];
-  if (promoDiscountZar > 0 && promoCode) {
-    const desc = promo?.description;
-    discountLines.push({
-      id: "promo",
-      label: desc
-        ? `Promo · ${promoCode.trim().toUpperCase()} — ${desc}`
-        : `Promo · ${promoCode.trim().toUpperCase()}`,
-      amount_zar: promoDiscountZar,
-    });
-  }
-  if (referralDiscountZar > 0) {
-    discountLines.push({ id: "referral", label: "Referral credit", amount_zar: referralDiscountZar });
-  }
-  if (planDiscountZar > 0) {
-    const planLabel =
-      freq === "weekly"
-        ? "Weekly plan (10% off this visit)"
-        : freq === "biweekly"
-          ? "Every 2 weeks plan (5% off this visit)"
-          : "Plan savings";
-    discountLines.push({ id: "plan", label: planLabel, amount_zar: planDiscountZar });
-  }
-
-  const discountZar = promoDiscountZar + referralDiscountZar + planDiscountZar;
-
-  /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
-  const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
-  const amountCents = totalZar * 100;
 
   const accessToken = typeof b.accessToken === "string" ? b.accessToken.trim() : "";
 
@@ -511,6 +475,103 @@ export async function processPaystackInitializeBody(
       };
     }
   }
+
+  const promoCode = typeof b.promoCode === "string" ? b.promoCode.trim() : "";
+  const promo = promoCode ? getPromoDiscountZar(promoCode, visitZar) : null;
+  const promoDiscountZar = promo?.discountZar ?? 0;
+
+  const referralCodeInput = typeof b.referralCode === "string" ? b.referralCode.trim().toUpperCase() : "";
+  const referralValidation = referralCodeInput
+    ? await validateReferralForCheckout({
+        admin,
+        code: referralCodeInput,
+        userId: customer.user_id,
+        customerEmail: customer.email,
+      })
+    : ({ valid: false as const } satisfies { valid: false });
+  const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;
+  const referralCheckoutFingerprint = referralValidation.valid
+    ? buildReferralCheckoutFingerprint(initOptions?.checkoutTrustSignals)
+    : null;
+  const referralLockValidatedAtMs = referralValidation.valid ? Date.now() : 0;
+
+  const freq = locked.cleaningFrequency ?? "one_time";
+  let planDiscountZar = 0;
+  if (freq === "weekly") {
+    planDiscountZar = Math.round(visitZar * 0.1);
+  } else if (freq === "biweekly") {
+    planDiscountZar = Math.round(visitZar * 0.05);
+  }
+
+  const discountLines: BookingSnapshotDiscountLineV1[] = [];
+  if (promoDiscountZar > 0 && promoCode) {
+    const desc = promo?.description;
+    discountLines.push({
+      id: "promo",
+      label: desc
+        ? `Promo · ${promoCode.trim().toUpperCase()} — ${desc}`
+        : `Promo · ${promoCode.trim().toUpperCase()}`,
+      amount_zar: promoDiscountZar,
+    });
+  }
+  if (referralDiscountZar > 0) {
+    discountLines.push({ id: "referral", label: "Referral credit", amount_zar: referralDiscountZar });
+  }
+  if (planDiscountZar > 0) {
+    const planLabel =
+      freq === "weekly"
+        ? "Weekly plan (10% off this visit)"
+        : freq === "biweekly"
+          ? "Every 2 weeks plan (5% off this visit)"
+          : "Plan savings";
+    discountLines.push({ id: "plan", label: planLabel, amount_zar: planDiscountZar });
+  }
+
+  const discountZar = promoDiscountZar + referralDiscountZar + planDiscountZar;
+
+  /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
+  const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
+  const amountCents = totalZar * 100;
+
+  const checkoutForSnap = checkout as OkCheckoutForPricing;
+  const visitLineItemsForMetadata = buildCheckoutVisitLineItems({
+    serviceTypeSlug: locked.service ? adminBookingServiceSlug(String(locked.service)) : null,
+    job: checkoutForSnap.jobSubtotalSplit,
+    subtotalZar: checkoutForSnap.serverQuote.subtotalZar,
+    visitTotalZar: checkoutForSnap.visitTotalZar,
+  });
+  const lineItemsSummary =
+    visitLineItemsForMetadata.length > 0
+      ? visitLineItemsForMetadata.map((r) => ({
+          id: String(r.slug ?? r.item_type ?? "line"),
+          name: r.name,
+          amount_zar: Math.round(r.total_price_cents / 100),
+        }))
+      : [
+          {
+            id: "visit_total",
+            name: "Visit total",
+            amount_zar: Math.round(checkoutForSnap.visitTotalZar),
+          },
+        ];
+  const extrasSumZarMeta = Math.round(Number(checkoutForSnap.jobSubtotalSplit.extrasZar) || 0);
+  const checkoutPriceSnapshotForMetadata = buildCheckoutPriceSnapshotV1FromInit({
+    total_zar: totalZar,
+    visit_total_zar: visitZar,
+    subtotal_zar: Math.round(checkoutForSnap.serverQuote.subtotalZar),
+    extras_total_zar: extrasSumZarMeta,
+    discount_zar: discountZar,
+    tip_zar: tip,
+    duration_hours: locked.finalHours ?? locked.duration ?? 0,
+    cleaners_count: locked.cleanersCount ?? 1,
+    pricing_version_id: locked.pricing_version_id?.trim() ?? null,
+    line_items: lineItemsSummary,
+  });
+  console.log("[PRICE SNAPSHOT USED]", {
+    phase: "initialize",
+    bookingId: createdPendingBookingId ?? bookingIdFromBody,
+    total: checkoutPriceSnapshotForMetadata.total_zar,
+  });
 
   const cleanerIdRaw = typeof b.cleanerId === "string" ? b.cleanerId.trim() : "";
   const cleanerId = /^[0-9a-f-]{36}$/i.test(cleanerIdRaw) ? cleanerIdRaw : null;
@@ -681,7 +742,14 @@ export async function processPaystackInitializeBody(
     lock_expires_at: locked.lockExpiresAt ?? "",
     cleaner_id: cleanerId ?? "",
     cleaner_name: cleanerName ?? "",
-    referral_code: referralCode || "",
+    referral_code: referralCodeInput || "",
+    referral_checkout_applied: referralValidation.valid ? "1" : "0",
+    referral_checkout_code: referralValidation.valid ? referralValidation.normalizedCode : "",
+    referral_checkout_referrer_type: referralValidation.valid ? referralValidation.referrerType : "",
+    referral_checkout_referrer_id: referralValidation.valid ? referralValidation.referrerId : "",
+    referral_checkout_discount_zar: referralValidation.valid ? String(referralValidation.discountZar) : "0",
+    referral_lock_validated_at: referralValidation.valid ? String(referralLockValidatedAtMs) : "",
+    referral_checkout_fingerprint: referralCheckoutFingerprint ?? "",
     customer_email: customer.email,
     customer_name: customer.name,
     customer_phone: customer.phone,
@@ -703,6 +771,7 @@ export async function processPaystackInitializeBody(
   const metadataPayload: Record<string, unknown> = {
     ...paystackMetadata,
     userId: customer.user_id ?? "",
+    price_snapshot: checkoutPriceSnapshotForMetadata,
     booking: {
       service: locked.service,
       rooms: locked.rooms,
@@ -772,6 +841,12 @@ export async function processPaystackInitializeBody(
       reference,
     });
   }
+
+  logPaymentStructured("payment_initialize", {
+    reference,
+    amount_cents: amountCents,
+    booking_id: createdPendingBookingId ?? bookingIdFromBody ?? null,
+  });
 
   return {
     ok: true,

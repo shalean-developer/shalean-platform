@@ -85,7 +85,7 @@ export function HomeHeroBookingPreview({ className }: { className?: string }) {
           Continue booking
         </GrowthCtaLink>
         <p className="mt-3 text-center text-xs text-zinc-500 dark:text-zinc-400">
-          <Link href="/booking?source=home_hero" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
+          <Link href="/booking/details?source=home_hero" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
             Open full booking page
           </Link>
         </p>

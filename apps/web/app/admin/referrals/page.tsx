@@ -9,14 +9,21 @@ type Row = {
   referrer_type: "customer" | "cleaner";
   referred_email_or_phone: string;
   referred_user_id: string | null;
-  status: "pending" | "completed";
+  status: "pending" | "completed" | "rewarded";
   reward_amount: number;
   created_at: string;
   completed_at: string | null;
 };
 
+type CheckoutDiscountRow = {
+  referralCode: string;
+  redemptionCount: number;
+  totalDiscountZar: number;
+};
+
 export default function AdminReferralsPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [checkoutDiscounts, setCheckoutDiscounts] = useState<CheckoutDiscountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +41,11 @@ export default function AdminReferralsPage() {
         return;
       }
       const res = await fetch("/api/admin/referrals", { headers: { Authorization: `Bearer ${token}` } });
-      const json = (await res.json()) as { referrals?: Row[]; error?: string };
+      const json = (await res.json()) as {
+        referrals?: Row[];
+        checkoutDiscounts?: CheckoutDiscountRow[];
+        error?: string;
+      };
       if (!active) return;
       if (!res.ok) {
         setError(json.error ?? "Failed to load referrals.");
@@ -42,6 +53,7 @@ export default function AdminReferralsPage() {
         return;
       }
       setRows(json.referrals ?? []);
+      setCheckoutDiscounts(json.checkoutDiscounts ?? []);
       setLoading(false);
     };
     void run();
@@ -83,7 +95,14 @@ export default function AdminReferralsPage() {
                   <td className="px-3 py-2">{r.referrer_type}</td>
                   <td className="px-3 py-2">{r.referred_email_or_phone}</td>
                   <td className="px-3 py-2">
-                    <span className={["rounded-full px-2 py-0.5 text-xs font-semibold", r.status === "completed" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"].join(" ")}>
+                    <span
+                      className={[
+                        "rounded-full px-2 py-0.5 text-xs font-semibold",
+                        r.status === "completed" || r.status === "rewarded"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800",
+                      ].join(" ")}
+                    >
                       {r.status}
                     </span>
                   </td>
@@ -94,6 +113,39 @@ export default function AdminReferralsPage() {
             )}
           </tbody>
         </table>
+      </section>
+
+      <section>
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Checkout referral discounts (Paystack)</h3>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Successful checkout redemptions per code — total discount liability (ZAR).
+        </p>
+        <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <table className="w-full min-w-[480px] text-left text-sm">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <tr>
+                <th className="px-3 py-3">Code</th>
+                <th className="px-3 py-3">Redemptions</th>
+                <th className="px-3 py-3">Total discount (ZAR)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {loading ? (
+                <tr><td colSpan={3} className="px-3 py-6 text-zinc-500">Loading…</td></tr>
+              ) : error ? null : checkoutDiscounts.length === 0 ? (
+                <tr><td colSpan={3} className="px-3 py-6 text-zinc-500">No checkout redemptions yet.</td></tr>
+              ) : (
+                checkoutDiscounts.map((c) => (
+                  <tr key={c.referralCode}>
+                    <td className="px-3 py-2 font-mono text-xs font-semibold">{c.referralCode}</td>
+                    <td className="px-3 py-2">{c.redemptionCount}</td>
+                    <td className="px-3 py-2">R {Number(c.totalDiscountZar ?? 0).toLocaleString("en-ZA")}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );

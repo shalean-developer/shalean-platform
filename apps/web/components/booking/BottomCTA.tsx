@@ -20,6 +20,8 @@ type BottomCTAProps = {
   className?: string;
   /** Stack under a fixed mobile quote strip (no `position: fixed` on this root). */
   embedded?: boolean;
+  /** When true, omits the “Total” row (e.g. hours + total shown in a parent strip). */
+  hideTotal?: boolean;
 };
 
 export function BottomCTA({
@@ -34,6 +36,7 @@ export function BottomCTA({
   priceLoading,
   className,
   embedded,
+  hideTotal = false,
 }: BottomCTAProps) {
   return (
     <div
@@ -45,12 +48,14 @@ export function BottomCTA({
       )}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 sm:px-6">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">Total</p>
-          <p className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50" aria-live="polite">
-            {priceLoading ? "…" : formatZar(total)}
-          </p>
-        </div>
+        {!hideTotal ? (
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">Total</p>
+            <p className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50" aria-live="polite">
+              {priceLoading ? "…" : formatZar(total)}
+            </p>
+          </div>
+        ) : null}
         <div className={cn("flex gap-3", hideNext && "justify-stretch")}>
           <button
             type="button"

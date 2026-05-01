@@ -76,10 +76,10 @@ export function SubServicesSelector({
   const count = OPTIONS.length;
 
   return (
-    <div className="grid min-w-0 grid-cols-4 gap-2 pt-2.5 lg:grid-cols-5 lg:gap-3 lg:pt-3">
+    <div className="grid min-w-0 grid-cols-2 gap-2 pt-2.5 lg:grid-cols-5 lg:gap-3 lg:pt-3">
       {OPTIONS.map(({ id, title, subtitle, Icon }, index) => {
         const active = selectedService === id;
-        const isLastRemainder = index === count - 1 && count % 4 !== 0;
+        const isLastOddTwoCol = index === count - 1 && count % 2 !== 0;
         const isPopular = id === popularId;
         const isRecommended = recommendedId != null && id === recommendedId;
         const hasBadge = isPopular || isRecommended;
@@ -98,7 +98,7 @@ export function SubServicesSelector({
               "max-lg:min-h-[78px] max-lg:rounded-lg max-lg:px-1 max-lg:pb-2 max-lg:text-[11px] max-lg:font-medium max-lg:leading-tight",
               "lg:min-h-[120px] lg:rounded-xl lg:px-3 lg:pb-3 lg:text-sm lg:font-semibold",
               hasBadge ? "max-lg:pt-5 lg:pt-6" : "max-lg:pt-4 lg:pt-4",
-              isLastRemainder && "max-lg:col-span-4 max-lg:mx-auto max-lg:max-w-[140px] max-lg:w-full",
+              isLastOddTwoCol && "max-lg:col-span-2 max-lg:mx-auto max-lg:max-w-[11rem] max-lg:w-full",
               dominant &&
                 "z-[1] border-amber-300/90 bg-gradient-to-b from-amber-50/90 to-white shadow-md ring-2 ring-amber-400/35 dark:border-amber-700/50 dark:from-amber-950/40 dark:to-zinc-900 dark:ring-amber-600/25",
               active

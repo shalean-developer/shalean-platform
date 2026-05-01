@@ -21,7 +21,7 @@ export function BlogArticleEndCta({ trackingSlug }: EndCtaProps) {
         Tell us your Cape Town address and home details—pricing updates before you confirm, with vetted Shalean teams.
       </p>
       <GrowthCtaLink
-        href="/booking?step=entry"
+        href="/booking/details"
         source={`blog_${trackingSlug}_end_cta_book`}
         className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
       >

@@ -77,12 +77,12 @@ export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) 
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           Choose your cleaner
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 max-w-[576px] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           We&apos;ve recommended the best match for you.
         </p>
       </div>
@@ -99,6 +99,7 @@ export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) 
             onSelect={() => selectCleaner(recommended)}
             showTrustBadges
             recommendHint={RECOMMEND_HINT}
+            compactMobile
           />
         </section>
       ) : null}
@@ -111,7 +112,7 @@ export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) 
           >
             Other cleaners available
           </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
             {others.map((c) => (
               <CleanerCard
                 key={c.id}
@@ -119,6 +120,7 @@ export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) 
                 variant="compact"
                 selected={selected?.id === c.id}
                 onSelect={() => selectCleaner(c)}
+                compactMobile
               />
             ))}
           </div>

@@ -29,7 +29,7 @@ export type BookingCheckoutHeaderStepDef = {
 export const BOOKING_CHECKOUT_HEADER_STEPS = [
   { number: 1, label: "Details" },
   { number: 2, label: "Schedule" },
-  { number: 3, label: "Worker" },
+  { number: 3, label: "Cleaner" },
   { number: 4, label: "Payment" },
 ] as const satisfies readonly BookingCheckoutHeaderStepDef[];
 

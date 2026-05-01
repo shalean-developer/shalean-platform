@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:critical": "vitest run lib/referrals/validateReferral.test.ts lib/booking/paymentAmountVsSnapshot.test.ts lib/booking/upsertBookingFromPaystack.test.ts lib/booking/finalizePaystackChargeSuccess.test.ts lib/booking/failedJobs.test.ts lib/booking/enqueuePaystackRecoveryFailedJobs.test.ts lib/booking/runBookingLockValidation.test.ts lib/notifications/notificationIdempotencyClaim.test.ts lib/rateLimit/paystackVerifyIpLimit.test.ts",
     "repair:booking-extras-overflow": "node scripts/repair-booking-extras-overflow.mjs",
     "backfill:booking-line-items": "tsx scripts/backfillBookingLineItems.ts",
     "backfill:booking-earnings-snapshots": "tsx scripts/backfillBookingEarningsSnapshots.ts",

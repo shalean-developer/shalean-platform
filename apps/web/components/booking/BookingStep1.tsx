@@ -57,7 +57,7 @@ export function BookingStep1({ booking }: BookingStep1Props) {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             What do you need cleaned?
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 max-w-[576px] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
             Select your service and home details.
           </p>
         </div>

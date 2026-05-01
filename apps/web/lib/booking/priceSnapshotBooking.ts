@@ -85,3 +85,146 @@ export function buildPriceSnapshotV1Checkout(params: {
     total_price: Math.round(params.total_price),
   };
 }
+
+/** Line persisted on Paystack `metadata.price_snapshot` — verify/upsert must not recompute totals. */
+export type CheckoutPriceSnapshotLineV1 = { id: string; name: string; amount_zar: number };
+
+/**
+ * Immutable checkout totals at initialize time (`metadata.price_snapshot` + optional DB row fallback).
+ * `total_zar` is the Paystack charge (visit + fees − discounts + tip).
+ */
+export type CheckoutPriceSnapshotV1 = {
+  version: 1;
+  currency: "ZAR";
+  total_zar: number;
+  subtotal_zar: number;
+  extras_total_zar: number;
+  discount_zar: number;
+  tip_zar: number;
+  visit_total_zar: number;
+  duration_hours: number;
+  cleaners_count: number;
+  line_items: CheckoutPriceSnapshotLineV1[];
+  pricing_version_id?: string | null;
+};
+
+function finiteZar(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+export function buildCheckoutPriceSnapshotV1FromInit(params: {
+  total_zar: number;
+  visit_total_zar: number;
+  subtotal_zar: number;
+  extras_total_zar: number;
+  discount_zar: number;
+  tip_zar: number;
+  duration_hours: number;
+  cleaners_count: number;
+  pricing_version_id: string | null;
+  line_items: readonly CheckoutPriceSnapshotLineV1[];
+}): CheckoutPriceSnapshotV1 {
+  return {
+    version: 1,
+    currency: "ZAR",
+    total_zar: Math.round(params.total_zar),
+    subtotal_zar: Math.round(params.subtotal_zar),
+    extras_total_zar: Math.round(params.extras_total_zar),
+    discount_zar: Math.round(params.discount_zar),
+    tip_zar: Math.round(params.tip_zar),
+    visit_total_zar: Math.round(params.visit_total_zar),
+    duration_hours: Math.max(0, Number.isFinite(params.duration_hours) ? params.duration_hours : 0),
+    cleaners_count: Math.max(1, Math.round(Number.isFinite(params.cleaners_count) ? params.cleaners_count : 1)),
+    line_items: params.line_items.map((r) => ({
+      id: String(r.id ?? "").trim() || "line",
+      name: String(r.name ?? "").trim() || "Line",
+      amount_zar: Math.round(Number.isFinite(r.amount_zar) ? r.amount_zar : 0),
+    })),
+    pricing_version_id: params.pricing_version_id?.trim() || null,
+  };
+}
+
+function isCheckoutPriceSnapshotV1(o: unknown): o is CheckoutPriceSnapshotV1 {
+  if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+  const r = o as Record<string, unknown>;
+  if (r.version !== 1) return false;
+  if (r.currency !== "ZAR") return false;
+  return (
+    finiteZar(r.total_zar) != null &&
+    finiteZar(r.subtotal_zar) != null &&
+    finiteZar(r.visit_total_zar) != null
+  );
+}
+
+/** Coerce legacy {@link PriceSnapshotV1} JSONB into checkout snapshot shape for upsert. */
+export function checkoutPriceSnapshotFromLegacyPriceSnapshotV1(raw: unknown): CheckoutPriceSnapshotV1 | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.version === 1 && o.currency === "ZAR") return isCheckoutPriceSnapshotV1(o) ? (o as CheckoutPriceSnapshotV1) : null;
+  if (o.v !== 1) return null;
+  const total = finiteZar(o.total_price);
+  const base = finiteZar(o.base_price);
+  if (total == null) return null;
+  const extrasArr = Array.isArray(o.extras) ? o.extras : [];
+  const extrasZar = extrasArr.reduce((s, e) => {
+    if (!e || typeof e !== "object") return s;
+    const p = finiteZar((e as { price?: unknown }).price);
+    return s + (p ?? 0);
+  }, 0);
+  const sub = base ?? Math.max(0, total - extrasZar);
+  return {
+    version: 1,
+    currency: "ZAR",
+    total_zar: Math.round(total),
+    subtotal_zar: Math.round(sub),
+    extras_total_zar: Math.round(extrasZar),
+    discount_zar: 0,
+    tip_zar: 0,
+    visit_total_zar: Math.round(sub + extrasZar),
+    duration_hours: 0,
+    cleaners_count: 1,
+    line_items: [],
+    pricing_version_id: null,
+  };
+}
+
+/**
+ * Read `price_snapshot` from Paystack metadata (stringified JSON) or raw webhook object.
+ */
+export function parseCheckoutPriceSnapshotV1FromMeta(
+  meta: Record<string, string | undefined> | null | undefined,
+  rawMeta?: Record<string, unknown> | null,
+): CheckoutPriceSnapshotV1 | null {
+  const tryParse = (val: unknown): CheckoutPriceSnapshotV1 | null => {
+    if (val == null) return null;
+    if (typeof val === "string" && val.trim()) {
+      try {
+        const o = JSON.parse(val) as unknown;
+        if (isCheckoutPriceSnapshotV1(o)) return o;
+        return checkoutPriceSnapshotFromLegacyPriceSnapshotV1(o);
+      } catch {
+        return null;
+      }
+    }
+    if (typeof val === "object") {
+      if (isCheckoutPriceSnapshotV1(val)) return val;
+      return checkoutPriceSnapshotFromLegacyPriceSnapshotV1(val);
+    }
+    return null;
+  };
+
+  const fromMetaKey = meta?.price_snapshot;
+  const a = tryParse(fromMetaKey);
+  if (a) return a;
+
+  if (rawMeta && typeof rawMeta === "object" && "price_snapshot" in rawMeta) {
+    const b = tryParse((rawMeta as { price_snapshot?: unknown }).price_snapshot);
+    if (b) return b;
+  }
+  return null;
+}
