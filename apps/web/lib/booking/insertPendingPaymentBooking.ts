@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
+import { buildPriceSnapshotV1Checkout } from "@/lib/booking/priceSnapshotBooking";
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -11,6 +12,20 @@ import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingEx
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
 const DUPLICATE_PENDING_EMAIL_WINDOW_MIN = 20;
+
+function provisionalPriceSnapshotFromLocked(locked: LockedBooking): Record<string, unknown> {
+  const total = Math.round(
+    typeof locked.finalPrice === "number" && Number.isFinite(locked.finalPrice) ? locked.finalPrice : 0,
+  );
+  const st =
+    locked.service && String(locked.service).trim() ? adminBookingServiceSlug(String(locked.service)) : "standard";
+  return buildPriceSnapshotV1Checkout({
+    service_type: st,
+    base_price: total,
+    extras: [],
+    total_price: total,
+  }) as Record<string, unknown>;
+}
 
 /** Avoid duplicate pending_payment rows from double-submit: drop same-email pre-checkout rows in a short window. */
 export async function deleteRecentPendingPaymentsForEmail(admin: SupabaseClient, email: string): Promise<void> {
@@ -39,6 +54,9 @@ export async function insertPendingPaymentBookingRow(
     paystackReference: string;
     locked: LockedBooking;
     customerEmail: string;
+    /** When known at insert time, dispatch / assignCleaner can match cleaners immediately. */
+    locationId?: string | null;
+    cityId?: string | null;
   },
 ): Promise<PendingPaymentInsertResult> {
   const email = params.customerEmail.trim().toLowerCase();
@@ -55,6 +73,15 @@ export async function insertPendingPaymentBookingRow(
 
   const serviceSlug =
     typeof locked.service === "string" && locked.service.trim() ? adminBookingServiceSlug(locked.service) : null;
+
+  const lid =
+    typeof params.locationId === "string" && /^[0-9a-f-]{36}$/i.test(params.locationId.trim())
+      ? params.locationId.trim().toLowerCase()
+      : null;
+  const cid =
+    typeof params.cityId === "string" && /^[0-9a-f-]{36}$/i.test(params.cityId.trim())
+      ? params.cityId.trim().toLowerCase()
+      : null;
 
   const { data, error } = await admin
     .from("bookings")
@@ -77,14 +104,15 @@ export async function insertPendingPaymentBookingRow(
       bathrooms: locked.bathrooms ?? null,
       extras: [],
       location: locked.location?.trim() || null,
-      location_id: null,
-      city_id: null,
+      location_id: lid,
+      city_id: cid,
       date: locked.date ?? null,
       time: locked.time ?? null,
       total_paid_zar: null,
       pricing_version_id,
       price_breakdown: null,
       total_price: null,
+      price_snapshot: provisionalPriceSnapshotFromLocked(locked),
     })
     .select("id")
     .maybeSingle();

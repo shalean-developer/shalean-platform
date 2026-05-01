@@ -38,7 +38,7 @@ export function CleanerWorkspaceClient() {
   const { trustCompletion, showTrustCompletionBanner } = useTrustCompletionBanner();
   const [teamAvailabilityAckIds, setTeamAvailabilityAckIds] = useState<Set<string>>(() => new Set());
   const [now, setNow] = useState(() => new Date());
-  const [homeJobFilter, setHomeJobFilter] = useState<CleanerHomeJobFilter>("today");
+  const [homeJobFilter, setHomeJobFilter] = useState<CleanerHomeJobFilter>("active");
   const [roster, setRoster] = useState<CleanerRosterSnapshot | null>(null);
 
   useEffect(() => {

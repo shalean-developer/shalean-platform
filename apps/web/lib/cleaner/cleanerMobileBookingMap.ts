@@ -23,6 +23,7 @@ export type CleanerMobileJobView = {
   serviceSlug: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  extraRooms: number | null;
   /** Extra add-on names for card bullets (from line items / extras / snapshot). */
   extrasBulletNames: readonly string[];
   statusRaw: string;
@@ -231,6 +232,7 @@ export function bookingRowToMobileView(row: CleanerBookingRow): CleanerMobileJob
     serviceSlug,
     bedrooms: cardDetails.bedrooms,
     bathrooms: cardDetails.bathrooms,
+    extraRooms: cardDetails.extraRooms,
     extrasBulletNames: cardDetails.extraNames,
     statusRaw: st,
     phase,

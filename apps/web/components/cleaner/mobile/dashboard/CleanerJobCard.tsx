@@ -40,7 +40,8 @@ function CleanerJobCardDetails({ job }: { job: CleanerMobileJobView }) {
   const noteRaw = job.notes?.replace(/\s+/g, " ").trim() ?? "";
   const noteDisp =
     noteRaw.length > JOB_CARD_NOTE_CHARS ? `${noteRaw.slice(0, JOB_CARD_NOTE_CHARS - 1)}…` : noteRaw;
-  const hasRooms = job.bedrooms != null || job.bathrooms != null;
+  const hasRooms =
+    job.bedrooms != null || job.bathrooms != null || (job.extraRooms != null && job.extraRooms > 0);
 
   return (
     <div className="line-clamp-5 overflow-hidden rounded-md border border-zinc-100/90 bg-zinc-50/60 px-2 py-1.5 text-[11px] leading-snug text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/35 dark:text-zinc-300">
@@ -64,6 +65,11 @@ function CleanerJobCardDetails({ job }: { job: CleanerMobileJobView }) {
               • {job.bathrooms} Bathroom{job.bathrooms === 1 ? "" : "s"}
             </p>
           ) : null}
+          {job.extraRooms != null && job.extraRooms > 0 ? (
+            <p className="pl-1">
+              • {job.extraRooms} Extra room{job.extraRooms === 1 ? "" : "s"}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {extras.length > 0 ? (
@@ -78,6 +84,9 @@ function CleanerJobCardDetails({ job }: { job: CleanerMobileJobView }) {
           ))}
           {moreExtras > 0 ? <p className="pl-1 text-zinc-500 dark:text-zinc-400">• +{moreExtras} more</p> : null}
         </div>
+      ) : null}
+      {job.jobTotalZar != null && job.jobTotalZar > 0 ? (
+        <p className="mt-0.5 font-medium text-zinc-800 dark:text-zinc-200">Job total: {formatZarWhole(job.jobTotalZar)}</p>
       ) : null}
       {durLine ? <p className="mt-0.5 text-zinc-600 dark:text-zinc-400">Duration: {durLine}</p> : null}
       {noteDisp ? (

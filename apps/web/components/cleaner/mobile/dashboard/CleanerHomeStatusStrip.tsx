@@ -2,12 +2,11 @@
 
 import { cn } from "@/lib/utils";
 
-export type CleanerHomeJobFilter = "today" | "upcoming" | "past" | "new";
+export type CleanerHomeJobFilter = "new" | "active" | "past";
 
 const FILTERS: { key: CleanerHomeJobFilter; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "upcoming", label: "Upcoming" },
   { key: "new", label: "New" },
+  { key: "active", label: "Active" },
   { key: "past", label: "Past" },
 ];
 
@@ -28,7 +27,7 @@ export function CleanerHomeStatusStrip({
 }: Props) {
   if (layout === "grid") {
     return (
-      <div className="grid w-full min-w-0 grid-cols-4 gap-2 sm:gap-3" role="tablist" aria-label="Job filters">
+      <div className="grid w-full min-w-0 grid-cols-3 gap-2 sm:gap-3" role="tablist" aria-label="Job filters">
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}

@@ -3,14 +3,14 @@
 import { motion } from "framer-motion";
 import {
   AppWindow,
+  Boxes,
+  BrickWall,
   Home,
-  Layers,
-  LayoutGrid,
   Leaf,
+  Microwave,
   Refrigerator,
   Shirt,
   Sparkles,
-  UtensilsCrossed,
   WashingMachine,
   type LucideIcon,
 } from "lucide-react";
@@ -25,19 +25,20 @@ export type AddOn = {
 const ADD_ON_ICONS: Record<string, LucideIcon> = {
   fridge: Refrigerator,
   "inside-fridge": Refrigerator,
-  oven: UtensilsCrossed,
-  "inside-oven": UtensilsCrossed,
-  cabinets: LayoutGrid,
-  "inside-cabinets": LayoutGrid,
+  oven: Microwave,
+  "inside-oven": Microwave,
+  cabinets: Boxes,
+  "inside-cabinets": Boxes,
   windows: AppWindow,
   "interior-windows": AppWindow,
-  walls: Layers,
-  "interior-walls": Layers,
+  walls: BrickWall,
+  "interior-walls": BrickWall,
   plants: Leaf,
   "water-plants": Leaf,
   ironing: Shirt,
   laundry: WashingMachine,
   flatlet: Home,
+  "small-flatlet": Home,
 };
 
 export function iconForAddOn(id: string): LucideIcon {

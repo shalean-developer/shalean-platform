@@ -32,6 +32,16 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Invisible scrollbar: keeps overflow scrolling without gutter (Chrome, Safari, Firefox, IE/Edge). */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Subtle periodic shimmer over “available jobs” area (cleaner home). */
 @keyframes cleaner-offers-shimmer {
   0% {

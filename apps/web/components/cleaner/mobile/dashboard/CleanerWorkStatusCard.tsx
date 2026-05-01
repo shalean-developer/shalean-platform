@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CleanerOffersPanel } from "@/components/cleaner/mobile/CleanerOffersPanel";
 import { CleanerJobCard } from "@/components/cleaner/mobile/dashboard/CleanerJobCard";
@@ -9,9 +9,37 @@ import type { CleanerHomeJobFilter } from "@/components/cleaner/mobile/dashboard
 import type { CleanerJobAction, PostJobActionResult } from "@/hooks/useCleanerMobileWorkspace";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { bookingRowToMobileView, groupCleanerScheduleRows } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { bookingRowToMobileView } from "@/lib/cleaner/cleanerMobileBookingMap";
+import {
+  filterActiveJobs,
+  filterCompletedJobs,
+  filterNewJobsNeedingResponse,
+} from "@/lib/cleaner/cleanerDashboardBookingBuckets";
 import { earliestOpenBookingId } from "@/lib/cleaner/cleanerUpcomingScheduleJohannesburg";
 import { cn } from "@/lib/utils";
+
+function sortByScheduleAsc(rows: CleanerBookingRow[]): CleanerBookingRow[] {
+  return [...rows].sort((a, b) => {
+    const da = a.date ?? "";
+    const db = b.date ?? "";
+    if (da !== db) return da.localeCompare(db);
+    const ta = a.time ?? "";
+    const tb = b.time ?? "";
+    return ta.localeCompare(tb);
+  });
+}
+
+function sortCompletedDesc(rows: CleanerBookingRow[]): CleanerBookingRow[] {
+  return [...rows].sort((a, b) => {
+    const ca = a.completed_at ?? "";
+    const cb = b.completed_at ?? "";
+    if (ca !== cb) return cb.localeCompare(ca);
+    const da = a.date ?? "";
+    const db = b.date ?? "";
+    if (da !== db) return db.localeCompare(da);
+    return (b.time ?? "").localeCompare(a.time ?? "");
+  });
+}
 
 type Props = {
   loading: boolean;
@@ -42,15 +70,6 @@ type Props = {
   /** From `/api/cleaner/me` `created_at` — UX-only pay hints when display earnings are missing. */
   cleanerCreatedAtIso?: string | null;
 };
-
-function dedupeRowsById(list: CleanerBookingRow[]): CleanerBookingRow[] {
-  const m = new Map<string, CleanerBookingRow>();
-  for (const r of list) {
-    const id = String(r.id ?? "").trim();
-    if (id) m.set(id, r);
-  }
-  return [...m.values()];
-}
 
 function JobCardsOnly({
   rows,
@@ -130,16 +149,20 @@ export function CleanerWorkStatusCard({
 }: Props) {
   if (loading) {
     return (
-      <div id="cleaner-work-status" className="rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/50" aria-hidden>
-        <div className="h-3 w-36 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
-        <div className="mt-4 h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/80" />
+      <div
+        id="cleaner-work-status"
+        className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200/80 bg-white p-8 dark:border-zinc-700 dark:bg-zinc-900/50"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" aria-hidden />
+        <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Loading jobs…</p>
       </div>
     );
   }
 
   if (!isAvailable) {
-    const { sections } = groupCleanerScheduleRows(rows, new Date(nowMs));
-    const upcomingN = (sections.find((s) => s.key === "upcoming")?.rows ?? []).length;
+    const activeN = filterActiveJobs(rows).length;
     return (
       <Card
         id="cleaner-work-status"
@@ -153,67 +176,89 @@ export function CleanerWorkStatusCard({
           <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
             You won&apos;t receive new job offers until you turn availability on in Profile.
           </p>
-          {upcomingN > 0 ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">You still have upcoming visits on your roster.</p>
+          {activeN > 0 ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">You still have active jobs on your roster.</p>
           ) : null}
         </CardContent>
       </Card>
     );
   }
 
-  const { sections } = groupCleanerScheduleRows(rows, new Date(nowMs));
-  const todayRows = sections.find((s) => s.key === "today")?.rows ?? [];
-  const overdueRows = sections.find((s) => s.key === "overdue")?.rows ?? [];
-  const upcomingRows = sections.find((s) => s.key === "upcoming")?.rows ?? [];
-  const todayAndOverdue = dedupeRowsById([...overdueRows, ...todayRows]);
-  const nextJobInTodayBucket = earliestOpenBookingId(todayAndOverdue);
-  const nextJobInUpcomingBucket = earliestOpenBookingId(upcomingRows);
-  const pastRows = sections.find((s) => s.key === "completed")?.rows ?? [];
+  const newJobRows = sortByScheduleAsc(filterNewJobsNeedingResponse(rows));
+  const activeJobRows = sortByScheduleAsc(filterActiveJobs(rows));
+  const completedJobRows = sortCompletedDesc(filterCompletedJobs(rows));
 
   if (jobFilter === "new") {
-    if (rankedSoloOffers.length > 0) {
+    const hasOffers = rankedSoloOffers.length > 0;
+    const hasAssigned = newJobRows.length > 0;
+    if (!hasOffers && !hasAssigned) {
       return (
-        <div
-          id="cleaner-work-status"
-          className="rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80"
-        >
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">New jobs available</h2>
-          <div className="mt-3">
-            <CleanerOffersPanel
-              rankedSoloOffers={rankedSoloOffers}
-              busy={Boolean(offerActingId)}
-              busyOfferId={offerActingId}
-              cleanerCreatedAtIso={cleanerCreatedAtIso}
-              moreJobsTodayCount={extraSoloOffersTodayCount}
-              hideSectionHeading
-              onAccept={onAcceptOffer}
-              onDecline={onDeclineOffer}
-              onAcceptSuccess={onOfferAcceptedUi}
-            />
-          </div>
-        </div>
+        <EmptyWork>
+          <span className="block font-medium text-zinc-800 dark:text-zinc-200">No new jobs available</span>
+          <span className="mt-1 block text-zinc-600 dark:text-zinc-400">
+            Assigned jobs needing a response and offer-pool jobs will show here.
+          </span>
+        </EmptyWork>
       );
     }
-    return <EmptyWork>No new offers right now.</EmptyWork>;
+    return (
+      <div
+        id="cleaner-work-status"
+        className="space-y-4 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80"
+      >
+        {hasOffers ? (
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Offer pool</h2>
+            <div className="mt-3">
+              <CleanerOffersPanel
+                rankedSoloOffers={rankedSoloOffers}
+                busy={Boolean(offerActingId)}
+                busyOfferId={offerActingId}
+                cleanerCreatedAtIso={cleanerCreatedAtIso}
+                moreJobsTodayCount={extraSoloOffersTodayCount}
+                hideSectionHeading
+                onAccept={onAcceptOffer}
+                onDecline={onDeclineOffer}
+                onAcceptSuccess={onOfferAcceptedUi}
+              />
+            </div>
+          </div>
+        ) : null}
+        {hasAssigned ? (
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Assigned — respond
+            </h2>
+            <div className="mt-3">
+              <JobCardsOnly
+                rows={newJobRows}
+                actingId={actingId}
+                teamAvailabilityAckIds={teamAvailabilityAckIds}
+                nextJobCalloutId={earliestOpenBookingId(newJobRows)}
+                nowMs={nowMs}
+                cleanerCreatedAtIso={cleanerCreatedAtIso}
+                onJobAction={onJobAction}
+                onIssueReportSuccess={onIssueReportSuccess}
+              />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
-  if (jobFilter === "today") {
-    if (todayAndOverdue.length > 0) {
+  if (jobFilter === "active") {
+    if (activeJobRows.length > 0) {
       return (
         <JobCardsOnly
-          rows={todayAndOverdue}
+          rows={activeJobRows}
           actingId={actingId}
           teamAvailabilityAckIds={teamAvailabilityAckIds}
-          nextJobCalloutId={nextJobInTodayBucket}
+          nextJobCalloutId={earliestOpenBookingId(activeJobRows)}
           nowMs={nowMs}
           cleanerCreatedAtIso={cleanerCreatedAtIso}
           onJobAction={onJobAction}
           onIssueReportSuccess={onIssueReportSuccess}
-          variantClassName={
-            overdueRows.length > 0
-              ? "rounded-2xl border border-amber-200/90 bg-amber-50/20 p-3 dark:border-amber-900/40 dark:bg-amber-950/15"
-              : undefined
-          }
         />
       );
     }
@@ -228,47 +273,24 @@ export function CleanerWorkStatusCard({
           </p>
           <p className="mt-3 text-base font-semibold text-zinc-900 dark:text-zinc-50">Welcome</p>
           <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            You&apos;ll see jobs here once you&apos;re assigned.
+            You&apos;ll see active jobs here once you accept an assignment.
           </p>
         </div>
       );
     }
     return (
       <EmptyWork>
-        <span className="block font-medium text-zinc-800 dark:text-zinc-200">No jobs yet today</span>
-        <span className="mt-1 block text-zinc-600 dark:text-zinc-400">Check offers to start earning</span>
-      </EmptyWork>
-    );
-  }
-
-  if (jobFilter === "upcoming") {
-    if (upcomingRows.length > 0) {
-      return (
-        <JobCardsOnly
-          rows={upcomingRows}
-          actingId={actingId}
-          teamAvailabilityAckIds={teamAvailabilityAckIds}
-          nextJobCalloutId={nextJobInUpcomingBucket}
-          nowMs={nowMs}
-          cleanerCreatedAtIso={cleanerCreatedAtIso}
-          onJobAction={onJobAction}
-          onIssueReportSuccess={onIssueReportSuccess}
-        />
-      );
-    }
-    return (
-      <EmptyWork>
-        <span className="block font-medium text-zinc-800 dark:text-zinc-200">No upcoming jobs</span>
-        <span className="mt-1 block text-zinc-600 dark:text-zinc-400">Check offers to keep earning</span>
+        <span className="block font-medium text-zinc-800 dark:text-zinc-200">No active jobs</span>
+        <span className="mt-1 block text-zinc-600 dark:text-zinc-400">Check New for assignments and offers.</span>
       </EmptyWork>
     );
   }
 
   if (jobFilter === "past") {
-    if (pastRows.length > 0) {
+    if (completedJobRows.length > 0) {
       return (
         <JobCardsOnly
-          rows={pastRows}
+          rows={completedJobRows}
           actingId={actingId}
           teamAvailabilityAckIds={teamAvailabilityAckIds}
           nextJobCalloutId={null}
@@ -281,10 +303,8 @@ export function CleanerWorkStatusCard({
     }
     return (
       <EmptyWork>
-        <span className="block font-medium text-zinc-800 dark:text-zinc-200">No past jobs yet</span>
-        <span className="mt-1 block text-zinc-600 dark:text-zinc-400">
-          Completed and cancelled visits will show here.
-        </span>
+        <span className="block font-medium text-zinc-800 dark:text-zinc-200">No completed jobs yet</span>
+        <span className="mt-1 block text-zinc-600 dark:text-zinc-400">Completed visits will show here.</span>
       </EmptyWork>
     );
   }

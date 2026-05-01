@@ -255,6 +255,7 @@ function cardDetailsFromLineItems(items: readonly CleanerBookingLineItemWire[]):
 export function cleanerBookingCardDetailsFromRow(row: CleanerBookingScopeSource): {
   bedrooms: number | null;
   bathrooms: number | null;
+  extraRooms: number | null;
   extraNames: string[];
 } {
   const rec = row as Record<string, unknown>;
@@ -268,6 +269,10 @@ export function cleanerBookingCardDetailsFromRow(row: CleanerBookingScopeSource)
     positiveIntOrNull(rec.bathrooms) ??
     positiveIntOrNull(flat?.bathrooms) ??
     positiveIntOrNull(locked?.bathrooms);
+  const extraRoomsRaw =
+    positiveIntOrNull(locked?.extraRooms) ??
+    positiveIntOrNull((flat as { extraRooms?: unknown } | null)?.extraRooms);
+  const extraRoomsBase = extraRoomsRaw != null && extraRoomsRaw > 0 ? extraRoomsRaw : null;
 
   let extraNamesBase: string[] = [];
   const fromDbLabels = extrasShortLabelsFromDbJson(row.extras);
@@ -279,13 +284,14 @@ export function cleanerBookingCardDetailsFromRow(row: CleanerBookingScopeSource)
 
   const lineItems = Array.isArray(row.lineItems) && row.lineItems.length > 0 ? row.lineItems : null;
   if (!lineItems) {
-    return { bedrooms: bedroomsBase, bathrooms: bathroomsBase, extraNames: extraNamesBase };
+    return { bedrooms: bedroomsBase, bathrooms: bathroomsBase, extraRooms: extraRoomsBase, extraNames: extraNamesBase };
   }
 
   const fromLi = cardDetailsFromLineItems(lineItems);
   return {
     bedrooms: fromLi.bedrooms ?? bedroomsBase,
     bathrooms: fromLi.bathrooms ?? bathroomsBase,
+    extraRooms: extraRoomsBase,
     extraNames: fromLi.extraNames.length > 0 ? fromLi.extraNames : extraNamesBase,
   };
 }

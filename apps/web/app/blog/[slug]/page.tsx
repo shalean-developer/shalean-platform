@@ -17,6 +17,14 @@ import { MoveOutCleaningGuidePost } from "@/components/blog/posts/MoveOutCleanin
 import { DeepVsStandardCleaningCapeTownPost } from "@/components/blog/posts/DeepVsStandardCleaningCapeTownPost";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
+import { BlogPostLayout } from "@/components/blog/BlogPostLayout";
+import {
+  absoluteUrlFromCanonicalPath,
+  buildDbBlogGraphJsonLd,
+  collectFaqItemsFromContent,
+} from "@/lib/blog/db-blog-jsonld";
+import { getPostBySlug, getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
 import type { HighConversionBlogArticle } from "@/lib/blog/highConversionBlogArticle";
 import {
   getHighConversionBlogPost,
@@ -35,6 +43,12 @@ import { cn } from "@/lib/utils";
 
 const SITE = "https://www.shalean.co.za";
 
+function toAbsoluteAssetUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${SITE}${path}`;
+}
+
 const POST_BODIES: Record<BlogPostSlug, ComponentType> = {
   "airbnb-cleaning-checklist": AirbnbCleaningChecklistPost,
   "cleaning-cost-cape-town": CleaningCostCapeTownPost,
@@ -49,16 +63,51 @@ const PROGRAMMATIC_HERO_SRC = "/images/marketing/cape-town-house-cleaning-kitche
 
 type Props = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return [
-    ...BLOG_POST_SLUGS.map((slug) => ({ slug })),
-    ...HIGH_CONVERSION_POSTS.map((post) => ({ slug: post.slug })),
-    ...PROGRAMMATIC_POSTS.map((post) => ({ slug: post.slug })),
-  ];
+export async function generateStaticParams() {
+  const dbSlugs = await getPublishedBlogSlugs();
+  const map = new Map<string, { slug: string }>();
+  for (const slug of dbSlugs) map.set(slug, { slug });
+  for (const slug of BLOG_POST_SLUGS) map.set(slug, { slug });
+  for (const post of HIGH_CONVERSION_POSTS) map.set(post.slug, { slug: post.slug });
+  for (const post of PROGRAMMATIC_POSTS) map.set(post.slug, { slug: post.slug });
+  return [...map.values()];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
+
+  const dbPost = await getPostBySlug(slug);
+  if (dbPost) {
+    const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
+    const titleBase = dbPost.metaTitle?.trim() || dbPost.title;
+    const description = dbPost.metaDescription?.trim() || dbPost.excerpt || dbPost.title;
+    const heroSrc = dbPost.featuredImageUrl
+      ? toAbsoluteAssetUrl(dbPost.featuredImageUrl)
+      : `${SITE}${PROGRAMMATIC_HERO_SRC}`;
+    const heroAlt = dbPost.featuredImageAlt?.trim() || dbPost.h1;
+    return {
+      title: `${titleBase} | Shalean Blog`,
+      description,
+      alternates: { canonical: canonicalAbsolute },
+      robots: dbPost.noindex ? { index: false, follow: true } : undefined,
+      openGraph: {
+        title: `${titleBase} | Shalean Blog`,
+        description,
+        url: canonicalAbsolute,
+        type: "article",
+        publishedTime: dbPost.publishedAt,
+        modifiedTime: dbPost.updatedAt,
+        images: [{ url: heroSrc, alt: heroAlt }],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: `${titleBase} | Shalean Blog`,
+        description,
+        images: [heroSrc],
+      },
+    };
+  }
+
   const editorial = getBlogPost(slug);
   if (editorial) {
     const path = `/blog/${editorial.slug}`;
@@ -362,6 +411,61 @@ function buildHighConversionGraphJsonLd(post: HighConversionBlogArticle) {
 
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
+
+  const dbPost = await getPostBySlug(slug);
+  if (dbPost) {
+    const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
+    const heroSrcAbs = dbPost.featuredImageUrl
+      ? toAbsoluteAssetUrl(dbPost.featuredImageUrl)
+      : `${SITE}${PROGRAMMATIC_HERO_SRC}`;
+    const faqItems = collectFaqItemsFromContent(dbPost.content);
+    const jsonLd = buildDbBlogGraphJsonLd({
+      headline: dbPost.h1,
+      description: dbPost.metaDescription?.trim() || dbPost.excerpt || dbPost.title,
+      publishedAt: dbPost.publishedAt,
+      dateModified: dbPost.updatedAt,
+      pageUrl,
+      imageUrls: [heroSrcAbs],
+      faqItems,
+    });
+    const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+
+    const hero =
+      dbPost.featuredImageUrl != null && dbPost.featuredImageUrl !== ""
+        ? {
+            src: dbPost.featuredImageUrl,
+            alt: dbPost.featuredImageAlt?.trim() || dbPost.h1,
+          }
+        : {
+            src: PROGRAMMATIC_HERO_SRC,
+            alt: `${dbPost.h1} — Shalean professional cleaning in Cape Town`,
+          };
+
+    return (
+      <MarketingLayout>
+        <main className="bg-white text-zinc-900">
+          <GrowthTracking event="page_view" payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
+
+          <BlogPostLayout
+            breadcrumbCurrentLabel={dbPost.title}
+            h1={dbPost.h1}
+            lede={dbPost.excerpt}
+            publishedAtIso={dbPost.publishedAt}
+            updatedAtIso={dbPost.updatedAt}
+            readingTimeMinutes={dbPost.readingTimeMinutes}
+            hero={hero}
+            trackingSlug={dbPost.slug}
+            relatedLinksSlot={<RelatedLinks placement="blog" />}
+          >
+            <BlogContextualServiceLinks />
+            <BlogContentRenderer content={dbPost.content} />
+            <BlogServiceLinks service={getBlogServiceType(dbPost.slug)} />
+          </BlogPostLayout>
+        </main>
+      </MarketingLayout>
+    );
+  }
 
   const editorial = getBlogPost(slug);
   if (editorial) {

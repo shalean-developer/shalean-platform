@@ -112,7 +112,7 @@ export function useCleanerMobileWorkspace() {
     const seq = ++loadSeq.current;
     try {
       const [jobsRes, meRes, offersRes] = await Promise.all([
-        cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers }),
+        cleanerAuthenticatedFetch("/api/cleaner/jobs?assignments=direct", { headers }),
         cleanerAuthenticatedFetch("/api/cleaner/me", { headers }),
         cleanerAuthenticatedFetch("/api/cleaner/offers", { headers }),
       ]);
@@ -152,7 +152,7 @@ export function useCleanerMobileWorkspace() {
   }, [load]);
 
   useEffect(() => {
-    const t = window.setInterval(() => void load(), 22_000);
+    const t = window.setInterval(() => void load(), 25_000);
     return () => window.clearInterval(t);
   }, [load]);
 
@@ -228,32 +228,51 @@ export function useCleanerMobileWorkspace() {
     };
   }, [load, teamIdsForRealtime, cleaner?.id, realtimeAuthEpoch, scheduleRealtimeReload]);
 
-  const postJobAction = useCallback(async (bookingId: string, action: CleanerJobAction): Promise<PostJobActionResult> => {
-    const o = assertOnline();
-    if (!o.ok) return { ok: false, error: o.error };
-    const headers = await getCleanerAuthHeaders();
-    if (!headers) return { ok: false, error: "Not signed in." };
-    setActingId(bookingId);
-    try {
-      const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) return { ok: false, error: json.error ?? "Action failed." };
-      const payload = await load();
-      if (action === "complete" && payload?.jobsOk) {
-        const row = payload.jobs.find((x) => x.id === bookingId);
-        if (row) return { ok: true, trustCompletion: trustJobCompletionFeedbackFromRow(row) };
+  const postJobAction = useCallback(
+    async (bookingId: string, action: CleanerJobAction): Promise<PostJobActionResult> => {
+      const o = assertOnline();
+      if (!o.ok) return { ok: false, error: o.error };
+      const headers = await getCleanerAuthHeaders();
+      if (!headers) return { ok: false, error: "Not signed in." };
+      setActingId(bookingId);
+      try {
+        if (action === "accept" || action === "reject") {
+          const res = await cleanerAuthenticatedFetch("/api/cleaner/respond", {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              bookingId,
+              action,
+              ...(cleaner?.id ? { cleanerId: cleaner.id } : {}),
+            }),
+          });
+          const json = (await res.json()) as { ok?: boolean; error?: string };
+          if (!res.ok) return { ok: false, error: json.error ?? "Action failed." };
+          await load();
+          return { ok: true };
+        }
+
+        const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const json = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok) return { ok: false, error: json.error ?? "Action failed." };
+        const payload = await load();
+        if (action === "complete" && payload?.jobsOk) {
+          const row = payload.jobs.find((x) => x.id === bookingId);
+          if (row) return { ok: true, trustCompletion: trustJobCompletionFeedbackFromRow(row) };
+        }
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Network error." };
+      } finally {
+        setActingId(null);
       }
-      return { ok: true };
-    } catch {
-      return { ok: false, error: "Network error." };
-    } finally {
-      setActingId(null);
-    }
-  }, [load]);
+    },
+    [load, cleaner?.id],
+  );
 
   const respondToOffer = useCallback(
     async (offerId: string, action: "accept" | "decline", uxVariant?: string | null) => {

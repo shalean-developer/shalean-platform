@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LocationSelect } from "@/components/locations/LocationSelect";
 import { getLocationsByCity } from "@/lib/locations";
 import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
 
@@ -16,6 +17,11 @@ export function AreasWeServeSection() {
             Book cleaning services in Sea Point, Claremont, Gardens, Table View, Durbanville, and more Cape Town areas.
             Tap a suburb to explore local cleaning pages.
           </p>
+          <LocationSelect
+            className="mt-8 max-w-xl"
+            label="Search your suburb"
+            navigateOnSelect
+          />
         </div>
 
         <nav className="mt-10" aria-label="Service areas">

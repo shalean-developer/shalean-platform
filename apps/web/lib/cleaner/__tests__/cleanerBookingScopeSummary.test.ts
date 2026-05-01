@@ -83,6 +83,7 @@ describe("cleanerBookingScopeLines", () => {
     expect(cleanerBookingCardDetailsFromRow(row)).toEqual({
       bedrooms: 3,
       bathrooms: 2,
+      extraRooms: null,
       extraNames: ["Inside Oven"],
     });
   });

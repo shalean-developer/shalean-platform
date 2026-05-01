@@ -36,25 +36,53 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
 
-  const teamIds = await fetchCleanerTeamIds(admin, viewerCleanerId);
-  const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, viewerCleanerId);
-  const visibilityOr = appendRosterBookingIdsToOrFilter(
-    bookingsVisibilityOrFilter(viewerCleanerId, teamIds),
-    rosterBookingIds,
-  );
+  const url = new URL(request.url);
+  const directAssignments = url.searchParams.get("assignments") === "direct";
 
-  const { data: jobs, error } = await admin
-    .from("bookings")
-    .select(
-      "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents",
-    )
-    .or(visibilityOr)
-    .not("status", "eq", "failed")
-    .not("status", "eq", "pending_payment")
-    .not("status", "eq", "payment_expired")
-    .order("date", { ascending: true })
-    .order("time", { ascending: true })
-    .limit(100);
+  if (process.env.TRACE_BOOKING_ASSIGN === "1") {
+    console.log(
+      "[TRACE_BOOKING_ASSIGN]",
+      JSON.stringify({
+        at: new Date().toISOString(),
+        step: "cleaner/jobs GET",
+        viewerCleanerId,
+        directAssignments,
+      }),
+    );
+  }
+
+  const bookingSelect =
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+
+  const { data: jobs, error } = directAssignments
+    ? await admin
+        .from("bookings")
+        .select(bookingSelect)
+        .eq("cleaner_id", viewerCleanerId)
+        .not("status", "eq", "failed")
+        .not("status", "eq", "pending_payment")
+        .not("status", "eq", "payment_expired")
+        .order("date", { ascending: true })
+        .order("time", { ascending: true })
+        .limit(100)
+    : await (async () => {
+        const teamIds = await fetchCleanerTeamIds(admin, viewerCleanerId);
+        const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, viewerCleanerId);
+        const visibilityOr = appendRosterBookingIdsToOrFilter(
+          bookingsVisibilityOrFilter(viewerCleanerId, teamIds),
+          rosterBookingIds,
+        );
+        return admin
+          .from("bookings")
+          .select(bookingSelect)
+          .or(visibilityOr)
+          .not("status", "eq", "failed")
+          .not("status", "eq", "pending_payment")
+          .not("status", "eq", "payment_expired")
+          .order("date", { ascending: true })
+          .order("time", { ascending: true })
+          .limit(100);
+      })();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

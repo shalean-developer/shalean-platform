@@ -5,6 +5,9 @@ import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/ca
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
+const CAPE_TOWN_SEO_HUB_HREF = "/locations/cape-town-cleaning-services";
+const CAPE_TOWN_SEO_HUB_LABEL = "Cleaning services Cape Town (overview)";
+
 export type RelatedLinksPlacement = "blog" | "location" | "service" | "services_hub";
 
 type Props = {
@@ -28,20 +31,36 @@ function pickServiceLinks(exclude?: CapeTownSeoServiceSlug) {
   return rows.slice(0, 3);
 }
 
-function pickLocationLinks(excludeSlug?: string) {
+function pickLocationLinks(excludeSlug?: string, max = 3) {
   if (excludeSlug) {
-    return nearbyProgrammaticLocations(excludeSlug, 3).map((loc) => ({
+    return nearbyProgrammaticLocations(excludeSlug, max).map((loc) => ({
       slug: loc.slug,
       href: `/locations/${loc.slug}`,
-      label: `Cleaning services in ${loc.name}`,
+      label: `${loc.name} cleaning services`,
     }));
   }
   const rows = PROGRAMMATIC_LOCATIONS.map((loc) => ({
     slug: loc.slug,
     href: `/locations/${loc.slug}`,
-    label: `Cleaning services in ${loc.name}`,
+    label: `${loc.name} cleaning services`,
   }));
-  return rows.slice(0, 3);
+  return rows.slice(0, max);
+}
+
+function capeTownHubFirst(
+  placement: RelatedLinksPlacement,
+  currentLocationSlug: string | undefined,
+): { slug: string; href: string; label: string }[] {
+  if (placement === "blog") {
+    return [{ slug: "cape-town-hub", href: CAPE_TOWN_SEO_HUB_HREF, label: CAPE_TOWN_SEO_HUB_LABEL }];
+  }
+  if (placement === "location" && currentLocationSlug && currentLocationSlug !== CAPE_TOWN_SEO_HUB_HREF.replace("/locations/", "")) {
+    return [{ slug: "cape-town-hub", href: CAPE_TOWN_SEO_HUB_HREF, label: CAPE_TOWN_SEO_HUB_LABEL }];
+  }
+  if (placement === "service" || placement === "services_hub") {
+    return [{ slug: "cape-town-hub", href: CAPE_TOWN_SEO_HUB_HREF, label: CAPE_TOWN_SEO_HUB_LABEL }];
+  }
+  return [];
 }
 
 /**
@@ -50,7 +69,9 @@ function pickLocationLinks(excludeSlug?: string) {
  */
 export function RelatedLinks({ placement, currentServiceSlug, currentLocationSlug }: Props) {
   const services = pickServiceLinks(currentServiceSlug);
-  const locations = pickLocationLinks(currentLocationSlug);
+  const hubRows = capeTownHubFirst(placement, currentLocationSlug);
+  const nearbyCount = placement === "location" && currentLocationSlug ? 3 : placement === "blog" ? 2 : 3;
+  const locations = [...hubRows, ...pickLocationLinks(currentLocationSlug, nearbyCount)];
   const bookingSource = `related_links_${placement}`;
 
   return (
