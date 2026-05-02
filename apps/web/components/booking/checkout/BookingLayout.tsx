@@ -34,7 +34,7 @@ export function BookingLayout({
 }: BookingLayoutProps) {
   return (
     <div className={cn("bg-zinc-50 dark:bg-zinc-950", className)}>
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <div className="mx-auto max-w-6xl px-3 py-6 sm:px-6 sm:py-8">
         {showTopProgress ? (
           <header className="mb-8 border-b border-gray-100 pb-6 dark:border-zinc-800">
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
@@ -53,7 +53,7 @@ export function BookingLayout({
             row to the short column and `position: sticky` on the summary scrolls away. */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-stretch">
           <div className="flex min-w-0 justify-center">
-            <div className="w-full min-w-0 max-w-[576px]">
+            <div className="w-full min-w-0 max-w-none lg:max-w-[576px]">
               {main}
               {desktopFooter ? <div className="hidden lg:block">{desktopFooter}</div> : null}
             </div>

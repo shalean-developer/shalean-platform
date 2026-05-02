@@ -16,8 +16,8 @@ export function BookingSectionCard({ eyebrow, children, className }: BookingSect
   return (
     <section
       className={cn(
-        "rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-200 sm:p-6",
-        "hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none dark:hover:shadow-md dark:hover:shadow-zinc-950/40",
+        "w-full rounded-2xl border border-transparent bg-transparent p-4 shadow-none transition-all duration-200 sm:border-gray-100 sm:bg-white sm:p-5 sm:shadow-sm sm:hover:shadow-md md:p-6",
+        "dark:border-transparent dark:bg-transparent dark:shadow-none sm:dark:border-zinc-800 sm:dark:bg-zinc-900 sm:dark:shadow-none sm:dark:hover:shadow-md sm:dark:hover:shadow-zinc-950/40",
         className,
       )}
     >

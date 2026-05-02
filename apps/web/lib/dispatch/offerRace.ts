@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { reorderSmartDispatchCandidatesByV2 } from "@/lib/dispatch/dispatchV2Ranking";
 import { MAX_PARALLEL_OFFERS_PEAK } from "@/lib/dispatch/dispatchConstants";
 import type { DispatchTierWindowPlan } from "@/lib/dispatch/planDispatchTierWindows";
 import type { SmartDispatchCandidate } from "@/lib/dispatch/types";
@@ -112,7 +114,16 @@ export async function runParallelDispatchOfferRace(params: {
 }): Promise<OfferRaceWinner | null> {
   const { supabase, bookingId, offerTimeoutMs, ttlSeconds, rankOffset } = params;
   const parallelCount = Math.max(1, Math.min(MAX_PARALLEL_OFFERS_PEAK, params.parallelCount));
-  const slice = params.batch.slice(0, parallelCount);
+  const v2RankEnabled = process.env.DISPATCH_V2_RANK_ENABLED !== "false";
+  const orderedBatch = v2RankEnabled ? reorderSmartDispatchCandidatesByV2(params.batch) : [...params.batch];
+  const slice = orderedBatch.slice(0, parallelCount);
+  const batchId = randomUUID();
+  const notifyCapRaw = process.env.DISPATCH_V2_IMMEDIATE_NOTIFY_CAP?.trim();
+  const notifyCap = (() => {
+    const n = notifyCapRaw ? Number(notifyCapRaw) : 2;
+    if (!Number.isFinite(n) || n < 0) return 2;
+    return Math.min(50, Math.floor(n));
+  })();
 
   const tStart = Date.now();
   /** Spread row creation + per-offer WhatsApp over ~1–2s to avoid Meta/DB bursts (Phase 8F). */
@@ -126,13 +137,19 @@ export async function runParallelDispatchOfferRace(params: {
   const created: Awaited<ReturnType<typeof createDispatchOfferRow>>[] = [];
   for (let i = 0; i < slice.length; i++) {
     if (i > 0 && gapMs > 0) await sleep(gapMs);
+    const c = slice[i]!;
     const row = await createDispatchOfferRow({
       supabase,
       bookingId,
-      cleanerId: slice[i]!.id,
+      cleanerId: c.id,
       rankIndex: rankOffset + i,
       ttlSeconds,
       metricAttemptNumber: params.metricAttemptNumber,
+      batchId,
+      priorityScore: typeof c.priority_score === "number" && Number.isFinite(c.priority_score) ? c.priority_score : c.score,
+      sentRank: i,
+      attempts: params.metricAttemptNumber ?? 0,
+      skipImmediateNotification: notifyCap > 0 ? i >= notifyCap : false,
     });
     created.push(row);
   }
@@ -299,6 +316,7 @@ export async function runTieredParallelDispatchOfferRace(params: {
   const gapMs = gapCount > 0 ? Math.max(80, Math.floor(spreadMs / gapCount)) : 0;
 
   const ordered = [...params.plans].sort((a, b) => a.plan.rankIndex - b.plan.rankIndex);
+  const tieredBatchId = randomUUID();
   const created: Awaited<ReturnType<typeof createDispatchOfferRow>>[] = [];
   for (let i = 0; i < ordered.length; i++) {
     if (i > 0 && gapMs > 0) await sleep(gapMs);
@@ -313,6 +331,10 @@ export async function runTieredParallelDispatchOfferRace(params: {
       dispatchTier: plan.tier,
       dispatchVisibleAtIso: plan.dispatchVisibleAtIso,
       dispatchTierWindowEndAtIso: plan.dispatchTierWindowEndAtIso,
+      batchId: tieredBatchId,
+      priorityScore: typeof candidate.priority_score === "number" && Number.isFinite(candidate.priority_score) ? candidate.priority_score : candidate.score,
+      sentRank: i,
+      attempts: params.metricAttemptNumber ?? 0,
     });
     created.push(row);
   }

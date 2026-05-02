@@ -1,5 +1,20 @@
 # Runbook: Payments & bookings (Paystack + Supabase)
 
+## Verify APIs — do not mix these up
+
+| Route | Use case | Reference in body |
+|-------|----------|-------------------|
+| **`POST /api/paystack/verify`** | **Web checkout** after Paystack: `/booking/success` calls this with the **Paystack transaction reference** (string from redirect URL). Finalizes via `finalizePaystackChargeSuccess` → `upsertBookingFromPaystack`. | `{ "reference": "<paystack_reference>" }` |
+| **`POST /api/payments/verify`** | **Different flow**: an existing `bookings` row in **`pending_payment`**, looked up by **booking UUID** (must match UUID format). Updates that row after Paystack verify; not the primary public checkout path. | `{ "reference": "<booking_uuid>", "tipZar"?: number }` |
+
+**Default for support:** customer completed checkout on the website → use **`/api/paystack/verify`** and the **Paystack** reference (from email, SMS, or `?reference=` on the success URL). Do not send them to the UUID-based route unless you are debugging that specific integration.
+
+**Code:** `apps/web/app/api/paystack/verify/route.ts`, `apps/web/app/api/payments/verify/route.ts`.
+
+**Customer-facing states:** If Paystack paid but the row is not saved yet, `/booking/success` shows **persist-pending** (not “booking confirmed”) and the customer may get **`sendCustomerBookingPaymentProcessingEmail`** (“We’re finalising your booking”) before the full confirmation email.
+
+---
+
 ## Case: Customer paid but booking not visible
 
 1. In Paystack Dashboard, search the transaction by **reference** or customer email; confirm `success` and note **amount** and **reference**.

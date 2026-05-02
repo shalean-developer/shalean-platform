@@ -16,6 +16,8 @@ export type CleanerRow = {
   accepted_offers?: number | null;
   avg_response_time_ms?: number | null;
   last_response_at?: string | null;
+  /** Optional app activity timestamp for Dispatch v2 ranking. */
+  last_active_at?: string | null;
   tier?: string | null;
   priority_score?: number | null;
   marketplace_outcome_ema?: number | null;

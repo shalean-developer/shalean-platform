@@ -43,15 +43,15 @@ function ExtraGridItem({ id, label, selected, onToggle }: ExtraGridItemProps) {
     >
       <div
         className={cn(
-          "flex h-14 w-14 items-center justify-center rounded-full border border-blue-500 text-blue-600 transition-all dark:border-blue-500 dark:text-blue-400",
+          "flex h-11 w-11 items-center justify-center rounded-full border border-blue-500 text-blue-600 transition-all sm:h-14 sm:w-14 dark:border-blue-500 dark:text-blue-400",
           selected
             ? "border-blue-600 bg-blue-50 shadow-sm dark:border-blue-500 dark:bg-blue-950/50"
             : "bg-white group-hover:bg-blue-50/90 dark:bg-zinc-900 dark:group-hover:bg-blue-950/35",
         )}
       >
-        <Icon size={20} className="shrink-0" aria-hidden />
+        <Icon className="size-[18px] shrink-0 sm:size-5" aria-hidden />
       </div>
-      <p className="text-sm leading-tight text-blue-900 dark:text-blue-200">{label}</p>
+      <p className="line-clamp-2 text-[11px] leading-tight text-blue-900 sm:text-sm dark:text-blue-200">{label}</p>
     </button>
   );
 }
@@ -63,11 +63,11 @@ export function ExtrasStep({ value, onChange, extras, loading }: ExtrasStepProps
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 md:grid-cols-4 lg:grid-cols-6">
-        {Array.from({ length: 9 }, (_, i) => (
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+        {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="flex flex-col items-center" aria-hidden>
-            <div className="h-14 w-14 animate-pulse rounded-full border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800" />
-            <div className="mt-2 h-3.5 w-20 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+            <div className="h-11 w-11 animate-pulse rounded-full border border-zinc-200 bg-zinc-100 sm:h-14 sm:w-14 dark:border-zinc-700 dark:bg-zinc-800" />
+            <div className="mt-1.5 h-3 w-14 animate-pulse rounded bg-zinc-200 sm:mt-2 sm:h-3.5 sm:w-20 dark:bg-zinc-700" />
           </div>
         ))}
       </div>
@@ -75,7 +75,7 @@ export function ExtrasStep({ value, onChange, extras, loading }: ExtrasStepProps
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 md:grid-cols-4 lg:grid-cols-6">
+    <div className="grid grid-cols-4 gap-2 sm:gap-3 md:gap-4">
       {extras.map((extra) => {
         const selected = value.includes(extra.id);
         const label = LABEL_BY_SLUG[extra.id] ?? extra.name;

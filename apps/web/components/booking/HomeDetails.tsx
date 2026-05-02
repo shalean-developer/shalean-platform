@@ -49,7 +49,7 @@ export function HomeDetails({
         </div>
       ) : null}
 
-      <div className="grid w-full max-w-none min-w-0 grid-cols-3 gap-2 lg:gap-3 lg:items-stretch">
+      <div className="grid w-full max-w-none min-w-0 grid-cols-3 items-stretch gap-2 sm:gap-4 md:gap-6 lg:gap-8">
         <StepperInput
           label="Bedrooms"
           description={

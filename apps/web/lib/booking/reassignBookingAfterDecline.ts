@@ -1,8 +1,8 @@
 import "server-only";
 
-import { type CreatedBookingRecord, sendCleanerJobAssignedWhatsApp } from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { pickAvailableCleaner } from "@/lib/booking/pickAvailableCleaner";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -22,7 +22,7 @@ export async function reassignBookingAfterDecline(admin: SupabaseClient, booking
 
 /**
  * One immediate reassignment attempt after a cleaner declines (excludes decliner).
- * DB update is awaited; WhatsApp to the new cleaner is fire-and-forget. Never throws.
+ * DB update is awaited; assignment SMS runs via `notifyCleanerAssignedBooking` (fire-and-forget). Never throws.
  */
 export async function tryOnceReassignAfterDecline(
   admin: SupabaseClient,
@@ -68,11 +68,7 @@ export async function tryOnceReassignAfterDecline(
       return;
     }
 
-    void sendCleanerJobAssignedWhatsApp(data as CreatedBookingRecord, {
-      recipientPhone: cleaner.phone,
-      cleanerDisplayName: cleaner.fullName,
-      cleanerId: cleaner.id,
-    });
+    void notifyCleanerAssignedBooking(admin, params.bookingId, cleaner.id);
   } catch (err) {
     console.error("[reassignAfterDecline] unexpected error", {
       bookingId: params.bookingId,

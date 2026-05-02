@@ -32,6 +32,7 @@ vi.mock("@/lib/booking/failedJobs", () => ({
 }));
 
 import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
+import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 describe("finalizePaystackChargeSuccess", () => {
   beforeEach(() => {
@@ -59,6 +60,7 @@ describe("finalizePaystackChargeSuccess", () => {
     };
     await Promise.all([finalizePaystackChargeSuccess(params), finalizePaystackChargeSuccess(params)]);
     expect(upsertMock).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(notifyBookingEvent)).toHaveBeenCalledTimes(2);
   });
 
   it("surfaces amount_mismatch from upsert", async () => {
@@ -83,5 +85,6 @@ describe("finalizePaystackChargeSuccess", () => {
       paidAtIso: null,
     });
     expect(out.reason).toBe("amount_mismatch");
+    expect(vi.mocked(notifyBookingEvent)).not.toHaveBeenCalled();
   });
 });

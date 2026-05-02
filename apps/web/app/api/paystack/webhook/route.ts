@@ -4,7 +4,12 @@ import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystack
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
-import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
+import {
+  bookingIdForPaystackReference,
+  PaystackDecoupledMetadataError,
+  resolveInternalBookingIdFromPaystackReference,
+  assertDecoupledPaystackMetadataAllowsFinalize,
+} from "@/lib/booking/paystackBookingIdLookup";
 import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
 import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
 import { metrics } from "@/lib/metrics/counters";
@@ -73,6 +78,14 @@ export async function POST(request: Request) {
     if (admin && reference) {
       const { data: b } = await admin.from("bookings").select("id").eq("paystack_reference", reference).maybeSingle();
       if (b && typeof (b as { id?: string }).id === "string") bookingId = (b as { id: string }).id;
+      else {
+        const meta = normalizePaystackMetadata(d.metadata);
+        const internalId = resolveInternalBookingIdFromPaystackReference(reference, meta);
+        if (internalId) {
+          const { data: b2 } = await admin.from("bookings").select("id").eq("id", internalId).maybeSingle();
+          if (b2 && typeof (b2 as { id?: string }).id === "string") bookingId = (b2 as { id: string }).id;
+        }
+      }
     }
     await postDispatchControlAlert(
       {
@@ -159,11 +172,7 @@ export async function POST(request: Request) {
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: amount });
 
   const expectedZar = expectedCheckoutZarFromVerify(snapshot, metadata);
-  const bookingIdFromMeta =
-    typeof metadata.shalean_booking_id === "string" && metadata.shalean_booking_id.trim()
-      ? metadata.shalean_booking_id.trim()
-      : null;
-  let bookingIdForTrace = bookingIdFromMeta;
+  let bookingIdForTrace = resolveInternalBookingIdFromPaystackReference(reference, metadata);
   if (!bookingIdForTrace && supabase) {
     bookingIdForTrace = await bookingIdForPaystackReference(supabase, reference);
     if (bookingIdForTrace) {
@@ -191,6 +200,19 @@ export async function POST(request: Request) {
 
   if (!email) {
     await reportOperationalIssue("warn", "paystack/webhook", "No customer email on charge.success", { reference });
+  }
+
+  try {
+    assertDecoupledPaystackMetadataAllowsFinalize(reference, metadata);
+  } catch (e) {
+    if (e instanceof PaystackDecoupledMetadataError) {
+      await reportOperationalIssue("critical", "paystack/webhook", e.message, {
+        reference,
+        errorType: "paystack_decoupled_metadata_missing",
+      });
+      return NextResponse.json({ received: true });
+    }
+    throw e;
   }
 
   const result = await finalizePaystackChargeSuccess({

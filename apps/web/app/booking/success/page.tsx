@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { BadgeCheck, Calendar, Mail, MapPin, Sparkles, UserRound } from "lucide-react";
+import { BadgeCheck, Calendar, Clock, Mail, MapPin, Sparkles, UserRound } from "lucide-react";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { formatLockedAppointmentLabel } from "@/lib/booking/lockedBooking";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
@@ -99,6 +99,11 @@ function parseDiscountLinesFromSnapshot(bookingSnapshot: unknown): BookingSnapsh
   return out;
 }
 
+/** Paystack paid and a `bookings` row exists — safe to show “booking confirmed” funnel and copy. */
+function isBookingPersisted(data: PaystackVerifyPostSuccess): boolean {
+  return Boolean(data.bookingId?.trim()) && data.bookingInDatabase === true;
+}
+
 function mapVerifySuccessToStatus(data: PaystackVerifyPostSuccess): StatusPayload {
   return {
     verified: true,
@@ -128,7 +133,7 @@ function SuccessContent() {
   const reference = searchParams.get("reference") ?? searchParams.get("trxref");
 
   const [phase, setPhase] = useState<
-    "missing" | "finalizing" | "success" | "needs_retry" | "failed"
+    "missing" | "finalizing" | "success" | "persist_pending" | "needs_retry" | "failed"
   >(() => (reference ? "finalizing" : "missing"));
 
   const [statusData, setStatusData] = useState<StatusPayload | null>(null);
@@ -163,53 +168,92 @@ function SuccessContent() {
         const data = (await res.json()) as PaystackVerifyPostResponse;
 
         if (res.ok && data.success && data.paymentStatus === "success") {
-          setStatusData(mapVerifySuccessToStatus(data));
+          const okData = data as PaystackVerifyPostSuccess;
+          setStatusData(mapVerifySuccessToStatus(okData));
           setErrorMessage(null);
           setWaitNote(false);
           markRetargetingCandidate(false);
           clearStoredReferral("customer");
-          trackGrowthEvent("complete_booking", {
-            reference: data.reference ?? null,
-            booking_id: data.bookingId ?? null,
-            assignment_type: data.assignmentType ?? null,
-            fallback_reason: data.fallbackReason ?? null,
-            attempted_cleaner_id: data.attemptedCleanerId ?? null,
-            assigned_cleaner_id: data.assignedCleanerId ?? null,
-            selected_cleaner_id: data.selectedCleanerId ?? null,
-          });
-          trackGrowthEvent("booking_completed", {
-            reference: data.reference ?? null,
-            booking_id: data.bookingId ?? null,
-            assignment_type: data.assignmentType ?? null,
-            fallback_reason: data.fallbackReason ?? null,
-            attempted_cleaner_id: data.attemptedCleanerId ?? null,
-            assigned_cleaner_id: data.assignedCleanerId ?? null,
-            selected_cleaner_id: data.selectedCleanerId ?? null,
-          });
+
+          if (isBookingPersisted(okData)) {
+            trackGrowthEvent("complete_booking", {
+              reference: okData.reference ?? null,
+              booking_id: okData.bookingId ?? null,
+              assignment_type: okData.assignmentType ?? null,
+              fallback_reason: okData.fallbackReason ?? null,
+              attempted_cleaner_id: okData.attemptedCleanerId ?? null,
+              assigned_cleaner_id: okData.assignedCleanerId ?? null,
+              selected_cleaner_id: okData.selectedCleanerId ?? null,
+            });
+            trackGrowthEvent("booking_completed", {
+              reference: okData.reference ?? null,
+              booking_id: okData.bookingId ?? null,
+              assignment_type: okData.assignmentType ?? null,
+              fallback_reason: okData.fallbackReason ?? null,
+              attempted_cleaner_id: okData.attemptedCleanerId ?? null,
+              assigned_cleaner_id: okData.assignedCleanerId ?? null,
+              selected_cleaner_id: okData.selectedCleanerId ?? null,
+            });
+            try {
+              const refKey = String(okData.reference ?? reference ?? "").trim();
+              const k = refKey ? `shalean_payment_completed_${refKey}` : "";
+              if (typeof sessionStorage !== "undefined" && k) {
+                if (!sessionStorage.getItem(k)) {
+                  sessionStorage.setItem(k, "1");
+                  trackGrowthEvent("payment_completed", {
+                    reference: okData.reference ?? null,
+                    booking_id: okData.bookingId ?? null,
+                    booking_saved: true,
+                  });
+                }
+              } else {
+                trackGrowthEvent("payment_completed", {
+                  reference: okData.reference ?? null,
+                  booking_id: okData.bookingId ?? null,
+                  booking_saved: true,
+                });
+              }
+            } catch {
+              trackGrowthEvent("payment_completed", {
+                reference: okData.reference ?? null,
+                booking_id: okData.bookingId ?? null,
+                booking_saved: true,
+              });
+            }
+            setPhase("success");
+            return true;
+          }
+
           try {
-            const refKey = String(data.reference ?? reference ?? "").trim();
-            const k = refKey ? `shalean_payment_completed_${refKey}` : "";
+            const refKey = String(okData.reference ?? reference ?? "").trim();
+            const k = refKey ? `shalean_payment_persist_pending_${refKey}` : "";
             if (typeof sessionStorage !== "undefined" && k) {
               if (!sessionStorage.getItem(k)) {
                 sessionStorage.setItem(k, "1");
                 trackGrowthEvent("payment_completed", {
-                  reference: data.reference ?? null,
-                  booking_id: data.bookingId ?? null,
+                  reference: okData.reference ?? null,
+                  booking_id: null,
+                  persist_pending: true,
+                  booking_saved: false,
                 });
               }
             } else {
               trackGrowthEvent("payment_completed", {
-                reference: data.reference ?? null,
-                booking_id: data.bookingId ?? null,
+                reference: okData.reference ?? null,
+                booking_id: null,
+                persist_pending: true,
+                booking_saved: false,
               });
             }
           } catch {
             trackGrowthEvent("payment_completed", {
-              reference: data.reference ?? null,
-              booking_id: data.bookingId ?? null,
+              reference: okData.reference ?? null,
+              booking_id: null,
+              persist_pending: true,
+              booking_saved: false,
             });
           }
-          setPhase("success");
+          setPhase("persist_pending");
           return true;
         }
 
@@ -404,6 +448,139 @@ function SuccessContent() {
     );
   }
 
+  if (phase === "persist_pending" && statusData?.paymentStatus === "success") {
+    const snapP = isSnapshot(statusData.bookingSnapshot)
+      ? (statusData.bookingSnapshot as BookingSnapshotV1)
+      : null;
+    const lockedP = snapP?.locked;
+    const serviceLabelP =
+      lockedP?.service != null ? getServiceLabel(lockedP.service) : "Cleaning service";
+    const whenP =
+      lockedP && lockedP.date && lockedP.time
+        ? formatLockedAppointmentLabel(lockedP as LockedBooking)
+        : null;
+    const totalZarP =
+      typeof snapP?.total_zar === "number"
+        ? snapP.total_zar
+        : typeof statusData.amountCents === "number" && statusData.amountCents > 0
+          ? Math.round(statusData.amountCents / 100)
+          : null;
+
+    return (
+      <BookingContainer className="py-8 sm:py-12">
+        <div className="mx-auto max-w-lg space-y-6 md:max-w-xl">
+          <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-sky-50/40 px-6 py-10 text-center shadow-sm dark:border-amber-900/40 dark:from-amber-950/35 dark:via-zinc-950 dark:to-zinc-900/90">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md shadow-amber-600/25 ring-4 ring-amber-400/20 dark:bg-amber-600 dark:ring-amber-500/15">
+              <Clock className="h-7 w-7" strokeWidth={2} aria-hidden />
+            </div>
+            <h1 className="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Payment received — we&apos;re saving your booking
+            </h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Your payment went through successfully. Our system is still creating your booking record; this usually
+              completes within a minute. You do not need to pay again.
+            </p>
+            {statusData.customerEmail ? (
+              <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Check your inbox at{" "}
+                <span className="font-medium text-zinc-800 dark:text-zinc-200">{statusData.customerEmail}</span> for an
+                email titled{" "}
+                <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                  We&apos;re finalising your booking
+                </span>
+                . That message is an update only — not your final booking confirmation yet.
+              </p>
+            ) : (
+              <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                When your booking is saved, we&apos;ll send your confirmation email.
+              </p>
+            )}
+            {statusData.upsertError ? (
+              <p className="mx-auto mt-4 max-w-md rounded-xl border border-amber-200/80 bg-white/80 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-800/50 dark:bg-zinc-900/60 dark:text-amber-100/95">
+                Technical detail: {statusData.upsertError}
+              </p>
+            ) : null}
+          </div>
+
+          {(whenP || totalZarP != null) && (
+            <div
+              className="rounded-2xl border border-zinc-200/90 bg-white p-5 text-left shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 sm:p-6"
+              aria-labelledby="persist-visit-heading"
+            >
+              <h2 id="persist-visit-heading" className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                Visit details (from checkout)
+              </h2>
+              <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+                Shown for your records until the booking is fully saved.
+              </p>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Service</dt>
+                  <dd className="font-semibold text-zinc-900 dark:text-zinc-100">{serviceLabelP}</dd>
+                </div>
+                {whenP ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-zinc-500 dark:text-zinc-400">Date &amp; time</dt>
+                    <dd className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{whenP}</dd>
+                  </div>
+                ) : null}
+                {totalZarP != null ? (
+                  <div className="flex justify-between gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-800/80">
+                    <dt className="text-zinc-500 dark:text-zinc-400">Amount paid</dt>
+                    <dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                      R {totalZarP.toLocaleString("en-ZA")}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </div>
+          )}
+
+          {statusData.reference ? (
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/90 px-4 py-4 dark:border-zinc-600 dark:bg-zinc-900/50">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Payment reference</p>
+              <p className="mt-1 break-all font-mono text-xs leading-relaxed text-zinc-800 dark:text-zinc-200">
+                {statusData.reference}
+              </p>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Include this reference if you contact support.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setPhase("finalizing");
+                void finalizeBooking();
+              }}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm sm:w-auto sm:min-w-[200px]"
+            >
+              Check again
+            </button>
+            <Link
+              href="/"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 shadow-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 sm:w-auto sm:min-w-[140px]"
+            >
+              Home
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Still stuck?</p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Our team can locate your payment and complete the booking manually.
+            </p>
+            <div className="mt-4">
+              <SupportContactLinks layout="row" />
+            </div>
+          </div>
+        </div>
+      </BookingContainer>
+    );
+  }
+
   if (phase !== "success" || !statusData || statusData.paymentStatus !== "success") {
     return (
       <BookingContainer className="py-12 sm:py-16">
@@ -537,14 +714,7 @@ function SuccessContent() {
             Your selected cleaner isn&apos;t available at that time — we&apos;ve assigned a similar top-rated cleaner.
           </p>
         ) : null}
-        {statusData.bookingInDatabase === false ? (
-          <p className="rounded-2xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
-            Your payment succeeded. We&apos;re still saving your booking to our system — you should receive a confirmation
-            email. If anything looks wrong, contact support with your reference below.
-            {statusData.upsertError ? ` (${statusData.upsertError})` : ""}
-          </p>
-        ) : null}
-        {statusData.bookingInDatabase !== false && statusData.upsertError ? (
+        {statusData.upsertError ? (
           <p className="rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/45 dark:bg-amber-950/35 dark:text-amber-100/95">
             Payment is confirmed, but we couldn&apos;t save all booking details automatically ({statusData.upsertError}).
             Contact support with your reference below.

@@ -13,11 +13,20 @@ export type InitializePaymentParams = {
   email: string;
   amount: number;
   reference: string;
+  /** Flat string map — Paystack inline checkout forwards this on the charge. */
+  metadata?: Record<string, string>;
   onSuccess: (transaction: PaystackTransaction) => void;
   onCancel?: () => void;
 };
 
-export function initializePayment({ email, amount, reference, onSuccess, onCancel }: InitializePaymentParams): void {
+export function initializePayment({
+  email,
+  amount,
+  reference,
+  metadata,
+  onSuccess,
+  onCancel,
+}: InitializePaymentParams): void {
   const key = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
   if (!key || !key.trim()) {
     throw new Error("NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not configured.");
@@ -29,6 +38,7 @@ export function initializePayment({ email, amount, reference, onSuccess, onCance
     amount,
     reference,
     currency: "ZAR",
+    ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
     onSuccess,
     onCancel,
   });

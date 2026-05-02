@@ -25,6 +25,10 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   const supabase = createServerClient(url, anon, {
+    auth: {
+      /** Default 5s can time out under parallel navigations + refresh; align with browser client. */
+      lockAcquireTimeout: process.env.NODE_ENV === "development" ? 60_000 : 15_000,
+    },
     cookieOptions: {
       path: "/",
       sameSite: "lax",

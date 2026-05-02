@@ -24,6 +24,22 @@ const imageRemotePatterns = [
 const nextConfig: NextConfig = {
   async redirects() {
     return [
+      /**
+       * Canonical host: `.co.za` only. Apex + `www` `.com` → `https://www.shalean.co.za` with path + query preserved.
+       * Next uses **308** for `permanent: true` (same semantics as 301 for SEO; method/body preserved).
+       */
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "shalean.com" }],
+        destination: "https://www.shalean.co.za/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.shalean.com" }],
+        destination: "https://www.shalean.co.za/:path*",
+        permanent: true,
+      },
       {
         source: "/home-cleaning",
         destination: "/services/standard-cleaning-cape-town",

@@ -1151,7 +1151,7 @@ export async function smartAssignCleaner(
   }
 
   const st = String((booking as { status?: string }).status ?? "").toLowerCase();
-  if (st !== "pending") {
+  if (st !== "pending" && st !== "pending_assignment") {
     return { ok: false, error: "booking_not_pending" };
   }
   if ((booking as { cleaner_id?: string | null }).cleaner_id) {

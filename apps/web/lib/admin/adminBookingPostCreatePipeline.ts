@@ -37,12 +37,19 @@ export async function ensureBookingAssignedStatusInvariant(
 ): Promise<void> {
   const { data: r, error } = await admin
     .from("bookings")
-    .select("cleaner_id, selected_cleaner_id, status, assigned_at, cleaner_response_status, dispatch_status")
+    .select(
+      "cleaner_id, selected_cleaner_id, status, assigned_at, cleaner_response_status, dispatch_status, assignment_type",
+    )
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !r) return;
 
   const st = String((r as { status?: string | null }).status ?? "").trim().toLowerCase();
+  const asgType = String((r as { assignment_type?: string | null }).assignment_type ?? "").trim().toLowerCase();
+  /** Marketplace user-pick: assignment only via {@link acceptDispatchOffer}; do not mirror selected → cleaner_id here. */
+  if (asgType === "user_selected" || st === "pending_assignment") {
+    return;
+  }
   const cleanerId = String((r as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
   const selectedId = String((r as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim();
   const cleanerOk = UUID_RE.test(cleanerId);

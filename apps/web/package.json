@@ -14,6 +14,7 @@
     "backfill:booking-line-items": "tsx scripts/backfillBookingLineItems.ts",
     "backfill:booking-earnings-snapshots": "tsx scripts/backfillBookingEarningsSnapshots.ts",
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
+    "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",
     "process-favicons": "node scripts/process-favicons-transparent.mjs",
     "generate-favicons": "node scripts/generate-favicons-from-logo.mjs"
   },

@@ -1,17 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
-import {
-  type CreatedBookingRecord,
-  sendCleanerJobAssignedWhatsApp,
-  sendCleanerJobReminderWhatsApp,
-} from "@/lib/booking/cleanerJobAssignedWhatsApp";
 import { sendCleanerNewJobEmail } from "@/lib/email/sendCleanerNotification";
-import {
-  buildBookingNotifyMessageFields,
-  buildCleanerAssignedNotifyHeadline,
-  formatBookingNotifyPlainLines,
-  notifyAreaShortForHeadline,
-} from "@/lib/notifications/bookingNotifyFormat";
+import { buildBookingNotifyMessageFields, formatBookingNotifyPlainLines } from "@/lib/notifications/bookingNotifyFormat";
 import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
 import {
   buildBookingEmailPayload,
@@ -32,7 +22,6 @@ import {
   type CustomerOutboundDecisionTrace,
   type SmsRole,
 } from "@/lib/templates/customerOutbound";
-import { parseTrimmedBookingId } from "@/lib/booking/bookingIds";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { enqueueFailedJob } from "@/lib/booking/failedJobs";
@@ -45,6 +34,7 @@ import {
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
 import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
+import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
 import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
@@ -127,91 +117,6 @@ async function sendAdminIfConfigured(
   }
 }
 
-/**
- * Ensures `bookingId` when only `bookingIds[0]` was provided (timeline + alert rep picker).
- * Non-string or whitespace-only `bookingId` is treated as missing for fallback; frozen object only when mutating.
- */
-function withBookingIdOnNotificationContext(ctx: Record<string, unknown>): Record<string, unknown> {
-  const bid = parseTrimmedBookingId(ctx.bookingId);
-  if (bid) {
-    if (ctx.bookingId === bid) return ctx;
-    return Object.freeze({ ...ctx, bookingId: bid });
-  }
-
-  if (Array.isArray(ctx.bookingIds)) {
-    const candidate = parseTrimmedBookingId(ctx.bookingIds[0]);
-    if (candidate) {
-      return Object.freeze({
-        ...ctx,
-        bookingId: candidate,
-        bookingIdSource: "bookingIds_fallback",
-      });
-    }
-  }
-
-  if (typeof ctx.bookingId === "string" && !bid) {
-    const { bookingId: _omit, ...rest } = ctx;
-    return Object.freeze(rest);
-  }
-  return ctx;
-}
-
-/** Prefer wall time from `eventTriggeredAtIso` so slow logs match pipeline semantics if callers pass both. */
-function pipelineLatencyMsForSlowLog(context: Record<string, unknown>): number {
-  const triggered = context.eventTriggeredAtIso;
-  if (typeof triggered === "string" && triggered.trim()) {
-    const t0 = new Date(triggered).getTime();
-    if (Number.isFinite(t0)) return Date.now() - t0;
-  }
-  const raw = context.pipelineLatencyMs;
-  return typeof raw === "number" ? raw : Number(raw);
-}
-
-async function reportSlowNotificationIfNeeded(context: Record<string, unknown>): Promise<void> {
-  const ctx = withBookingIdOnNotificationContext(context);
-  const ms = pipelineLatencyMsForSlowLog(ctx);
-  if (!Number.isFinite(ms) || ms <= 5000) return;
-  const rounded = Math.round(ms);
-  const out = Object.freeze({ ...ctx, pipelineLatencyMs: rounded });
-  await reportOperationalIssue("warn", "slow_notification", `Cleaner pipeline latency ${rounded}ms (>5000ms)`, out);
-  await logSystemEvent({
-    level: "warn",
-    source: "slow_notification",
-    message: `Cleaner notification pipeline exceeded 5000ms (${rounded}ms)`,
-    context: out,
-  });
-}
-
-async function logCleanerWhatsAppFailed(context: Record<string, unknown>, reason: string): Promise<void> {
-  await logSystemEvent({
-    level: "warn",
-    source: "cleaner_whatsapp_failed",
-    message: reason.slice(0, 2000),
-    context,
-  });
-  await reportSlowNotificationIfNeeded(context);
-}
-
-async function logCleanerSmsFallbackUsed(context: Record<string, unknown>): Promise<void> {
-  await logSystemEvent({
-    level: "info",
-    source: "cleaner_sms_fallback_used",
-    message: "SMS fallback sent after WhatsApp did not succeed",
-    context,
-  });
-  await reportSlowNotificationIfNeeded(context);
-}
-
-async function logCleanerWhatsAppSent(context: Record<string, unknown>): Promise<void> {
-  await logSystemEvent({
-    level: "info",
-    source: "cleaner_whatsapp_sent",
-    message: "WhatsApp message accepted by outbound pipeline",
-    context,
-  });
-  await reportSlowNotificationIfNeeded(context);
-}
-
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -261,23 +166,72 @@ async function enqueueNotificationDeliveryFailure(payload: {
 }
 
 /**
- * Central orchestration for booking lifecycle notifications (customer email + in-app, cleaner WhatsApp + SMS fallback, admin email).
+ * Central orchestration for booking lifecycle notifications (customer email + in-app, cleaner SMS for assign/reminder, admin email).
  * Admin mail: skips admin HTML when `ADMIN_NOTIFICATION_EMAIL` is unset (logged); never throws.
  * Optional `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to payment_confirmed, sla_breach, and cancelled.
  *
- * Channel fallbacks are documented in `notificationChannelRules.ts` (cleaner: WhatsApp → SMS; customer payment_confirmed: email first, SMS only if email missing or failed; no customer WhatsApp).
+ * Channel policy: `notificationChannelRules.ts` (cleaner: SMS only; no cleaner SMS on `payment_confirmed`; customer payment_confirmed: email first, SMS only if email missing or failed; no customer WhatsApp).
  *
  * Idempotency: `reminder_2h_sent`, `assigned_sent`, `completed_sent`, `sla_breach_sent` claims use migration
- * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). `payment_confirmed` customer/admin/SMS/in-app
- * uses `notification_idempotency_claims` (Day 5) so verify + webhook + retries cannot double-send.
+ * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). Cleaner assignment/reminder SMS also uses
+ * `notification_idempotency_claims` with stable synthetic references (`assigned_sms:v1:…`, `reminder_2h_sms:v1:…`).
+ * `payment_confirmed` customer/admin/SMS/in-app uses Paystack `paymentReference` + event + channel (migration
+ * `20260868_notification_idempotency_paystack_reference.sql`) so verify + webhook + retries cannot double-send.
  */
 export async function notifyBookingEvent(event: NotifyBookingEventInput): Promise<void> {
   try {
   const { supabase } = event;
 
+  notifyBookingDebug("notify_booking_event_start", {
+    type: event.type,
+    ...("bookingId" in event ? { bookingId: event.bookingId } : {}),
+    ...(event.type === "sla_breach" ? { bookingIds: event.bookingIds, minutes: event.minutes } : {}),
+    ...(event.type === "payment_confirmed" ? { paymentReference: event.paymentReference } : {}),
+  });
+
   if (event.type === "payment_confirmed") {
-    const hasEmail = Boolean(event.customerEmail.trim());
+    let debugEmailClaimed: boolean | null = null;
+    let debugSmsClaimed: boolean | null = null;
+    let debugCustomerSmsOk: boolean | null = null;
+    const { data: bookingHead } = await supabase
+      .from("bookings")
+      .select("user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id")
+      .eq("id", event.bookingId)
+      .maybeSingle();
+    const head =
+      bookingHead && typeof bookingHead === "object" ? (bookingHead as Record<string, unknown>) : null;
+    const rowCustomerEmailRaw = head ? String((head as { customer_email?: string | null }).customer_email ?? "") : "";
+    const emailCandidates = [
+      typeof event.customerEmail === "string" ? event.customerEmail : "",
+      event.snapshot?.customer?.email ?? "",
+      rowCustomerEmailRaw,
+    ];
+    let resolvedEmail = "";
+    for (const raw of emailCandidates) {
+      const n = normalizeEmail(raw);
+      if (n && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n)) {
+        resolvedEmail = n;
+        break;
+      }
+    }
+    const hasEmail = Boolean(resolvedEmail);
     const custPhone = event.snapshot?.customer?.phone?.trim();
+
+    if (!process.env.RESEND_API_KEY?.trim()) {
+      notifyBookingDebug("payment_confirmed_resend_missing", { bookingId: event.bookingId });
+    }
+
+    notifyBookingDebug("payment_confirmed_channels", {
+      bookingId: event.bookingId,
+      hasEmail,
+      hasPhone: Boolean(custPhone),
+      resendConfigured: Boolean(process.env.RESEND_API_KEY?.trim()),
+      twilioConfigured: Boolean(
+        process.env.TWILIO_ACCOUNT_SID?.trim() &&
+          process.env.TWILIO_AUTH_TOKEN?.trim() &&
+          process.env.TWILIO_FROM_NUMBER?.trim(),
+      ),
+    });
 
     if (!hasEmail && !custPhone) {
       await logSystemEvent({
@@ -295,13 +249,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, stage: "payment_confirmed" },
       });
     }
-    const { data: bookingHead } = await supabase
-      .from("bookings")
-      .select("user_id, assignment_type, fallback_reason")
-      .eq("id", event.bookingId)
-      .maybeSingle();
-    const head =
-      bookingHead && typeof bookingHead === "object" ? (bookingHead as Record<string, unknown>) : null;
     const assignmentType = head ? String(head.assignment_type ?? "").trim() || null : null;
     const fallbackReason = head ? String(head.fallback_reason ?? "").trim() || null : null;
 
@@ -328,7 +275,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const payload = buildBookingEmailPayload({
       paymentReference: event.paymentReference,
       amountCents: event.amountCents,
-      customerEmail: event.customerEmail,
+      customerEmail: resolvedEmail,
       snapshot: event.snapshot,
       bookingId: event.bookingId,
       assignmentType,
@@ -336,17 +283,20 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     });
     let cust: { sent: boolean; error?: string } = { sent: false };
     if (hasEmail) {
+      notifyBookingDebug("payment_confirmed_email_claim", { bookingId: event.bookingId });
       const claimedCustomerEmail = await tryClaimNotificationIdempotency(supabase, {
-        bookingId: event.bookingId,
+        reference: event.paymentReference,
         eventType: "payment_confirmed",
         channel: "email",
+        bookingId: event.bookingId,
       });
+      debugEmailClaimed = claimedCustomerEmail;
       if (claimedCustomerEmail) {
         try {
           cust = await sendBookingConfirmationEmail(payload);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.error("[EMAIL FAILED]", { bookingId: event.bookingId, err });
+          notifyBookingDebug("payment_confirmed_email_throw", { bookingId: event.bookingId, message: msg });
           await enqueueNotificationDeliveryFailure({
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
@@ -388,15 +338,23 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           bookingId: event.bookingId,
         });
       }
+      notifyBookingDebug("payment_confirmed_email_result", {
+        bookingId: event.bookingId,
+        claimed: claimedCustomerEmail,
+        sent: cust.sent,
+        error: cust.error ?? null,
+      });
     }
 
     const emailSent = hasEmail && cust.sent;
     if (custPhone && (!hasEmail || !cust.sent)) {
       const claimedSms = await tryClaimNotificationIdempotency(supabase, {
-        bookingId: event.bookingId,
+        reference: event.paymentReference,
         eventType: "payment_confirmed",
         channel: "sms",
+        bookingId: event.bookingId,
       });
+      debugSmsClaimed = claimedSms;
       if (claimedSms) {
         const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
         const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
@@ -434,7 +392,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             priceHint: event.amountCents / 100,
             flow: "payment",
           });
-          await sendCustomerSmsFromTemplate({
+          const smsRet = await sendCustomerSmsFromTemplate({
             phone: custPhone,
             templateKey: "booking_confirmed",
             payload,
@@ -449,9 +407,17 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
               ...healthFields,
             },
           });
+          debugCustomerSmsOk = smsRet.ok;
+          notifyBookingDebug("payment_confirmed_customer_sms_result", {
+            bookingId: event.bookingId,
+            ok: smsRet.ok,
+            smsRole: paymentSmsRole,
+            decision,
+          });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.error("[SMS FAILED]", { bookingId: event.bookingId, err });
+          debugCustomerSmsOk = false;
+          notifyBookingDebug("payment_confirmed_customer_sms_throw", { bookingId: event.bookingId, message: msg });
           await enqueueNotificationDeliveryFailure({
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
@@ -459,8 +425,14 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             error: msg,
           });
         }
+      } else {
+        notifyBookingDebug("payment_confirmed_customer_sms_dedupe_skip", { bookingId: event.bookingId });
       }
     } else if (custPhone && emailSent) {
+      notifyBookingDebug("payment_confirmed_customer_sms_skipped", {
+        bookingId: event.bookingId,
+        reason: "email_first_policy",
+      });
       await logSystemEvent({
         level: "info",
         source: "customer_sms_skipped",
@@ -468,6 +440,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, preferred_channel: preferredNotificationChannel },
       });
     }
+
+    // DO NOT notify cleaner on payment — SMS-only flow uses dispatch offer SMS + assigned SMS only.
 
     const payFields = buildBookingNotifyMessageFields({
       bookingId: event.bookingId,
@@ -481,9 +455,10 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       { bookingId: event.bookingId },
       async () => {
         const claimedAdminEmail = await tryClaimNotificationIdempotency(supabase, {
-          bookingId: event.bookingId,
+          reference: event.paymentReference,
           eventType: "payment_confirmed_admin",
           channel: "email",
+          bookingId: event.bookingId,
         });
         if (!claimedAdminEmail) return;
         const adminAssignmentNote =
@@ -512,9 +487,10 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const uid = head ? String(head.user_id ?? "").trim() : "";
     if (uid) {
       const claimedInApp = await tryClaimNotificationIdempotency(supabase, {
-        bookingId: event.bookingId,
+        reference: event.paymentReference,
         eventType: "payment_confirmed",
         channel: "in_app",
+        bookingId: event.bookingId,
       });
       if (claimedInApp) {
         try {
@@ -539,9 +515,16 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       }
     }
 
-    console.log("[NOTIFY PAYMENT_CONFIRMED]", {
-      reference: event.paymentReference,
+    notifyBookingDebug("payment_confirmed_pipeline_done", {
       bookingId: event.bookingId,
+      paymentReference: event.paymentReference,
+      hasEmail,
+      hasPhone: Boolean(custPhone),
+      emailClaimed: debugEmailClaimed,
+      emailSent: cust.sent,
+      emailError: cust.error ?? null,
+      smsClaimed: debugSmsClaimed,
+      customerSmsOk: debugCustomerSmsOk,
     });
     return;
   }
@@ -552,16 +535,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       cleanerId: event.cleanerId,
     });
     if (!assignedClaimed) return;
-
-    const assignedEventTriggeredAtIso = new Date().toISOString();
-    const assignedPipelineT0Ms = Date.now();
-    const assignedDeliveryCtx = (extra: Record<string, unknown>) => ({
-      ...extra,
-      bookingId: event.bookingId,
-      cleanerId: event.cleanerId,
-      eventTriggeredAtIso: assignedEventTriggeredAtIso,
-      pipelineLatencyMs: Date.now() - assignedPipelineT0Ms,
-    });
 
     await notifyCustomerCleanerAssigned(supabase, event.bookingId);
 
@@ -634,10 +607,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     });
     const cleanerPayZar =
       payResolved.cents != null && Number.isFinite(payResolved.cents) ? Math.round(payResolved.cents / 100) : null;
-    const assignedHeadline = buildCleanerAssignedNotifyHeadline(cleanerPayZar, payResolved.isEstimate, {
-      service: msgFields.service,
-      areaShort: notifyAreaShortForHeadline(msgFields.address),
-    });
 
     await sendAdminIfConfigured(
       "assigned",
@@ -662,78 +631,45 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const cleanerPhoneRaw =
       cRow && typeof cRow === "object" ? String((cRow as { phone_number?: string | null }).phone_number ?? "").trim() : "";
     const name = cleanerName || "Cleaner";
-    const msg = `${formatBookingNotifyPlainLines(msgFields, {
-      headline: assignedHeadline,
-      footerLines: ["", "Open the Shalean cleaner app for details."],
-    })}`;
-
-    const bookingRow = b as {
-      id: string;
-      customer_name?: string | null;
-      customer_phone?: string | null;
-      location?: string | null;
-      service?: string | null;
-      date?: string | null;
-      time?: string | null;
-      status?: string | null;
-      created_at?: string | null;
-    };
-    const bookingRecord: CreatedBookingRecord = {
-      id: bookingRow.id,
-      customer_name: bookingRow.customer_name ?? null,
-      customer_phone: bookingRow.customer_phone ?? null,
-      location: bookingRow.location ?? null,
-      service: bookingRow.service ?? null,
-      date: bookingRow.date ?? null,
-      time: bookingRow.time ?? null,
-      status: bookingRow.status ?? null,
-      created_at: bookingRow.created_at?.trim() ? bookingRow.created_at.trim() : new Date().toISOString(),
-    };
 
     if (!cleanerPhoneRaw) {
-      await logCleanerWhatsAppFailed(
-        assignedDeliveryCtx({
-          channel: "whatsapp_job_assigned",
-        }),
-        "missing_phone",
-      );
+      console.warn("[CLEANER SMS INVALID PHONE]", { bookingId: event.bookingId, raw: "" });
       await logSystemEvent({
         level: "warn",
         source: "notifyBookingEvent/assigned",
-        message: "No cleaner phone for WhatsApp/SMS",
-        context: assignedDeliveryCtx({}),
+        message: "No cleaner phone for assignment SMS",
+        context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
       });
     } else {
-      const cleanerFullNameForLog =
-        cRow && typeof cRow === "object"
-          ? String((cRow as { full_name?: string | null }).full_name ?? "").trim()
-          : "";
-      const waRes = await sendCleanerJobAssignedWhatsApp(bookingRecord, {
-        recipientPhone: cleanerPhoneRaw,
-        cleanerDisplayName: cleanerName ?? undefined,
-        cleanerId: event.cleanerId,
-      });
-      if (waRes.ok) {
-        await logCleanerWhatsAppSent(
-          assignedDeliveryCtx({
-            channel: "whatsapp_job_assigned",
-          }),
-        );
+      const e164 = customerPhoneToE164(cleanerPhoneRaw);
+      if (!e164) {
+        console.warn("[CLEANER SMS INVALID PHONE]", cleanerPhoneRaw);
+        await logSystemEvent({
+          level: "warn",
+          source: "notifyBookingEvent/assigned",
+          message: "Cleaner phone not normalizable to E.164 for assignment SMS",
+          context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
+        });
       } else {
-        await logCleanerWhatsAppFailed(
-          assignedDeliveryCtx({
-            channel: "whatsapp_job_assigned",
-            reason: "sendCleanerJobAssignedWhatsApp_failed",
-          }),
-          waRes.error ?? "WhatsApp send did not complete successfully",
-        );
-        const e164 = customerPhoneToE164(cleanerPhoneRaw);
-        if (e164) {
+        const assignedSmsIdemRef = `assigned_sms:v1:${event.bookingId}:${event.cleanerId}`;
+        const assignedSmsClaimed = await tryClaimNotificationIdempotency(supabase, {
+          reference: assignedSmsIdemRef,
+          eventType: "assigned",
+          channel: "sms",
+          bookingId: event.bookingId,
+        });
+        if (!assignedSmsClaimed) {
+          console.log("[ASSIGNED SMS SKIPPED — IDEMPOTENT]", { bookingId: event.bookingId, cleanerId: event.cleanerId });
+        } else {
+          const smsBody = formatBookingNotifyPlainLines(msgFields, {
+            headline: "Shalean: Job assigned to you",
+            footerLines: ["Open your app for details."],
+          }).slice(0, 1200);
           const smsRes = await sendSmsFallback({
             toE164: e164,
-            body: msg.slice(0, 1200),
+            body: smsBody,
             context: { bookingId: event.bookingId, cleanerId: event.cleanerId },
-            smsRole: "fallback",
+            smsRole: "primary",
             recipientKind: "cleaner",
             deliveryLog: {
               templateKey: "cleaner_assignment_sms_direct",
@@ -742,20 +678,15 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
               role: "cleaner",
             },
           });
-          if (smsRes.sent) {
-            await logCleanerSmsFallbackUsed(
-              assignedDeliveryCtx({
-                channel: "whatsapp_job_assigned",
-              }),
-            );
+          console.log("[ASSIGNED SMS RESULT]", smsRes);
+          if (!smsRes.sent && smsRes.error) {
+            await enqueueNotificationDeliveryFailure({
+              bookingId: event.bookingId,
+              eventType: "assigned",
+              channel: "sms",
+              error: smsRes.error,
+            });
           }
-        } else {
-          await logSystemEvent({
-            level: "warn",
-            source: "notifyBookingEvent/assigned",
-            message: "No cleaner phone for WhatsApp/SMS",
-            context: assignedDeliveryCtx({}),
-          });
         }
       }
     }
@@ -991,9 +922,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     });
     if (!reminderClaimed) return;
 
-    const reminderEventTriggeredAtIso = new Date().toISOString();
-    const reminderPipelineT0Ms = Date.now();
-
     const { data: b } = await supabase
       .from("bookings")
       .select("id, customer_email, service, date, time, location, cleaner_id")
@@ -1040,13 +968,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     }
     const cleanerId = String((b as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
     if (cleanerId) {
-      const reminderDeliveryCtx = (extra: Record<string, unknown>) => ({
-        ...extra,
-        bookingId: event.bookingId,
-        cleanerId,
-        eventTriggeredAtIso: reminderEventTriggeredAtIso,
-        pipelineLatencyMs: Date.now() - reminderPipelineT0Ms,
-      });
       const { data: c } = await supabase.from("cleaners").select("phone_number").eq("id", cleanerId).maybeSingle();
       const phone = c && typeof c === "object" ? String((c as { phone_number?: string | null }).phone_number ?? "") : "";
       const remFields = buildBookingNotifyMessageFields({
@@ -1057,34 +978,30 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         location,
       });
       const msg = formatBookingNotifyPlainLines(remFields, { headline: "⏰ Reminder: cleaning job soon" });
-      const wa = await sendCleanerJobReminderWhatsApp({
-        phone,
-        bookingId: event.bookingId,
-        cleanerId,
-        location: remFields.address,
-        timeForCleaner: remFields.time,
-      });
-      if (wa.ok) {
-        await logCleanerWhatsAppSent(
-          reminderDeliveryCtx({
-            channel: "whatsapp_job_reminder_2h",
-          }),
-        );
+      const e164 = customerPhoneToE164(phone);
+      if (!e164) {
+        await logSystemEvent({
+          level: "warn",
+          source: "notifyBookingEvent/reminder_2h",
+          message: "No usable cleaner phone for reminder SMS",
+          context: { bookingId: event.bookingId, cleanerId },
+        });
       } else {
-        await logCleanerWhatsAppFailed(
-          reminderDeliveryCtx({
-            channel: "whatsapp_job_reminder_2h",
-            reason: wa.error ?? "unknown",
-          }),
-          wa.error ?? "WhatsApp send did not succeed",
-        );
-        const e164 = customerPhoneToE164(phone);
-        if (e164) {
+        const reminderSmsRef = `reminder_2h_sms:v1:${event.bookingId}:${cleanerId}`;
+        const reminderSmsClaimed = await tryClaimNotificationIdempotency(supabase, {
+          reference: reminderSmsRef,
+          eventType: "reminder_2h",
+          channel: "sms",
+          bookingId: event.bookingId,
+        });
+        if (!reminderSmsClaimed) {
+          console.log("[REMINDER_2H SMS SKIPPED — IDEMPOTENT]", { bookingId: event.bookingId, cleanerId });
+        } else {
           const smsRes = await sendSmsFallback({
             toE164: e164,
             body: msg.slice(0, 1200),
             context: { bookingId: event.bookingId, cleanerId },
-            smsRole: "fallback",
+            smsRole: "primary",
             recipientKind: "cleaner",
             deliveryLog: {
               templateKey: "cleaner_reminder_2h_sms_direct",
@@ -1093,13 +1010,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
               role: "cleaner",
             },
           });
-          if (smsRes.sent) {
-            await logCleanerSmsFallbackUsed(
-              reminderDeliveryCtx({
-                channel: "whatsapp_job_reminder_2h",
-              }),
-            );
-          }
+          console.log("[REMINDER_2H SMS RESULT]", smsRes);
         }
       }
     }

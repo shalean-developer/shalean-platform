@@ -20,8 +20,40 @@ import {
   type CleanerWhatsappProductKey,
   resolveMetaTemplateName,
 } from "@/lib/whatsapp/cleanerWhatsappTemplates";
+import { metrics } from "@/lib/metrics/counters";
 
 export { sendViaMetaWhatsApp };
+
+const DEFAULT_NOTIFY_MAX_PER_10M = 3;
+
+async function shouldThrottleDispatchOfferNotify(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  cleanerId: string,
+): Promise<boolean> {
+  const raw = process.env.DISPATCH_OFFER_NOTIFY_MAX_PER_10M?.trim();
+  const cap = raw ? Number(raw) : DEFAULT_NOTIFY_MAX_PER_10M;
+  const maxPer = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : DEFAULT_NOTIFY_MAX_PER_10M;
+  if (maxPer <= 0) return false;
+
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("dispatch_offers")
+    .select("id", { count: "exact", head: true })
+    .eq("cleaner_id", cleanerId)
+    .gte("created_at", since);
+
+  if (error) {
+    await logSystemEvent({
+      level: "warn",
+      source: "dispatch_offer_notify_throttle_query",
+      message: error.message,
+      context: { cleanerId },
+    });
+    return false;
+  }
+
+  return (count ?? 0) > maxPer;
+}
 
 type NotifyParams = {
   bookingId: string;
@@ -274,6 +306,17 @@ export async function notifyCleanerOfDispatchOffer(params: NotifyParams): Promis
     return;
   }
 
+  if (await shouldThrottleDispatchOfferNotify(admin, params.cleanerId)) {
+    metrics.increment("dispatch.offer.notify_throttled", { cleanerId: params.cleanerId });
+    await logSystemEvent({
+      level: "info",
+      source: "dispatch_offer_notify_throttled",
+      message: "Skipped dispatch offer SMS — cleaner exceeded rolling 10m offer notify budget",
+      context: { bookingId: params.bookingId, offerId: params.offerId, cleanerId: params.cleanerId },
+    });
+    return;
+  }
+
   const offerToken = String(params.offerToken ?? "").trim();
   if (!offerToken || !isValidOfferTokenFormat(offerToken)) {
     await logSystemEvent({
@@ -376,6 +419,7 @@ export async function notifyCleanerOfDispatchOffer(params: NotifyParams): Promis
           cleanerName,
         },
       });
+      console.log("[OFFER SMS SENT]", params.cleanerId);
     } else {
       await writeNotificationLog({
         booking_id: params.bookingId,

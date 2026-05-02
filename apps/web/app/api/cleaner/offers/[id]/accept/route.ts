@@ -20,7 +20,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     offerId,
     cleanerId: session.cleanerId,
   });
-  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.error.includes("Not your") ? 403 : 400 });
+  if (!r.ok) {
+    return NextResponse.json(
+      { error: r.error, reason: r.machineReason },
+      { status: r.error.includes("Not your") ? 403 : 400 },
+    );
+  }
 
   return NextResponse.json({ ok: true, status: "accepted" });
 }

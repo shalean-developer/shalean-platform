@@ -223,11 +223,12 @@ export function BookingCheckoutHeader({ currentStep }: BookingCheckoutHeaderProp
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-9 gap-1 border-gray-200 bg-white px-3 font-semibold text-zinc-900 shadow-none hover:bg-gray-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                aria-label="Login or sign up"
+                className="h-9 gap-1 border-gray-200 bg-white px-2 font-semibold text-zinc-900 shadow-none hover:bg-gray-50 sm:gap-1.5 sm:px-3 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
               >
-                <UserRound className="h-4 w-4 opacity-70" aria-hidden />
-                Login
-                <ChevronDown className="h-3.5 w-3.5 opacity-50" aria-hidden />
+                <UserRound className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                <span className="hidden sm:inline">Login</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[10rem] dark:border-zinc-700 dark:bg-zinc-900">

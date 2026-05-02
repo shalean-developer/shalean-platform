@@ -1,4 +1,5 @@
 import { getServiceLabel } from "@/components/booking/serviceCategories";
+import type { CheckoutPriceSnapshotV1 } from "@/lib/booking/priceSnapshotBooking";
 import {
   checkoutPriceSnapshotFromLegacyPriceSnapshotV1,
   parseCheckoutPriceSnapshotV1FromMeta,
@@ -42,6 +43,10 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { recordSystemMetric } from "@/lib/observability/recordSystemMetric";
+import {
+  isInlineDecoupledPaystackReference,
+  resolveInternalBookingIdFromPaystackReference,
+} from "@/lib/booking/paystackBookingIdLookup";
 
 function buildAutoAssignmentPatch(
   autoAssignmentTag: "auto_dispatch" | "auto_fallback",
@@ -81,6 +86,20 @@ function boolish(raw: string | undefined): boolean {
   return v === "true" || v === "1" || v === "yes";
 }
 
+const traceUpsertMeta =
+  typeof process !== "undefined" &&
+  (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_METADATA === "1");
+
+/**
+ * `metadata.price_snapshot` / `booking` arrive as JSON strings from Paystack;
+ * {@link parseCheckoutPriceSnapshotV1FromMeta} unwraps; this keeps a single explicit call site in upsert.
+ */
+function resolveCheckoutPriceSnapshotFromPaystackMetadata(
+  meta: Record<string, string | undefined> | null | undefined,
+): CheckoutPriceSnapshotV1 | null {
+  return parseCheckoutPriceSnapshotV1FromMeta(meta ?? null);
+}
+
 /**
  * Idempotent insert by `paystack_reference`. Webhook is the source of truth for persistence.
  *
@@ -112,9 +131,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     return { ok: false, skipped: true, bookingId: null, error: "Supabase not configured" };
   }
 
-  const { data: existing, error: selectErr } = await supabase
+  const existingSelect = "id, status, is_recurring_generated, price_snapshot" as const;
+
+  const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
-    .select("id, status, is_recurring_generated, price_snapshot")
+    .select(existingSelect)
     .eq("paystack_reference", input.paystackReference)
     .maybeSingle();
 
@@ -123,6 +144,41 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       paystackReference: input.paystackReference,
     });
     return { ok: false, skipped: true, bookingId: null, error: selectErr.message };
+  }
+
+  let existing: typeof existingByRef = existingByRef;
+  /**
+   * When finalizing `pending_payment`, whether the row was matched by Paystack reference or by
+   * internal booking id (legacy `paystack_reference` still equals booking UUID while charge uses `pay_<uuid>`).
+   */
+  let pendingFinalizeMatch: "paystack_reference" | "id" | null = null;
+
+  if (existing && typeof existing === "object" && "id" in existing) {
+    pendingFinalizeMatch = "paystack_reference";
+  }
+
+  if (!existing) {
+    const internalId = resolveInternalBookingIdFromPaystackReference(
+      input.paystackReference,
+      input.paystackMetadata ?? null,
+    );
+    if (internalId) {
+      const { data: existingById, error: idSelErr } = await supabase
+        .from("bookings")
+        .select(existingSelect)
+        .eq("id", internalId)
+        .maybeSingle();
+      if (idSelErr) {
+        await reportOperationalIssue("error", "upsertBookingFromPaystack", `select by id failed: ${idSelErr.message}`, {
+          paystackReference: input.paystackReference,
+        });
+        return { ok: false, skipped: true, bookingId: null, error: idSelErr.message };
+      }
+      if (existingById && typeof existingById === "object" && "id" in existingById) {
+        existing = existingById;
+        pendingFinalizeMatch = "id";
+      }
+    }
   }
 
   let existingPendingPaymentId: string | null = null;
@@ -172,13 +228,25 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     console.warn("Lock invalid — using snapshot fallback");
   }
 
-  const priceSnapshotFromMeta = parseCheckoutPriceSnapshotV1FromMeta(input.paystackMetadata ?? null);
+  if (traceUpsertMeta) {
+    console.log("[UPSERT METADATA RAW]", input.paystackMetadata);
+  }
+  console.log("[SNAPSHOT RAW]", input.paystackMetadata);
+
+  const priceSnapshotFromMeta = resolveCheckoutPriceSnapshotFromPaystackMetadata(input.paystackMetadata ?? null);
+
+  if (traceUpsertMeta) {
+    console.log("[UPSERT SNAPSHOT PARSED]", priceSnapshotFromMeta);
+  }
+  console.log("[SNAPSHOT PARSED]", priceSnapshotFromMeta);
+
   let priceSnapshot =
     priceSnapshotFromMeta ??
     (existing && typeof existing === "object" && "price_snapshot" in existing
       ? checkoutPriceSnapshotFromLegacyPriceSnapshotV1((existing as { price_snapshot?: unknown }).price_snapshot)
       : null);
   if (!priceSnapshot) {
+    console.error("[MISSING SNAPSHOT]", input.paystackMetadata);
     throw new Error("Missing price snapshot — cannot safely finalize booking");
   }
 
@@ -220,7 +288,19 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       total_paid_zar: Math.round(paidZar),
       amount_paid_cents: input.amountCents,
     };
-    await supabase.from("bookings").update(mismatchPatch).eq("paystack_reference", input.paystackReference).eq("status", "pending_payment");
+    if (pendingFinalizeMatch === "id" && existingPendingPaymentId) {
+      await supabase
+        .from("bookings")
+        .update(mismatchPatch)
+        .eq("id", existingPendingPaymentId)
+        .eq("status", "pending_payment");
+    } else {
+      await supabase
+        .from("bookings")
+        .update(mismatchPatch)
+        .eq("paystack_reference", input.paystackReference)
+        .eq("status", "pending_payment");
+    }
     void enqueueFailedJob("booking_finalize", {
       paystackReference: input.paystackReference,
       error: "amount_mismatch",
@@ -311,17 +391,21 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? input.paidAtIso.trim()
       : new Date().toISOString();
 
-  const userSelectedRow =
+  /**
+   * Customer-chosen cleaner: must NOT assign on payment (DB + product require offer → accept).
+   * `bookings_assigned_requires_status` forbids `status=pending` with `selected_cleaner_id`; use
+   * `pending_assignment` until `acceptDispatchOffer` sets `assigned` + `cleaner_id`.
+   */
+  const userSelectedCheckoutRow =
     userConfirmedCleanerId != null
       ? {
           selected_cleaner_id: userConfirmedCleanerId,
           attempted_cleaner_id: userConfirmedCleanerId,
-          assignment_type: "user_selected",
-          cleaner_id: userConfirmedCleanerId,
-          status: "assigned",
-          dispatch_status: "assigned",
-          assigned_at: paidMoment,
-          cleaner_response_status: CLEANER_RESPONSE.PENDING,
+          assignment_type: "user_selected" as const,
+          cleaner_id: null as string | null,
+          status: "pending_assignment" as const,
+          dispatch_status: "searching",
+          cleaner_response_status: CLEANER_RESPONSE.NONE,
         }
       : {};
 
@@ -407,8 +491,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     payment_first_touch_channel: paymentAttribution.firstTouch,
     payment_last_touch_channel: paymentAttribution.lastTouch,
     payment_assist_channels: paymentAttribution.assistChannels,
+    /**
+     * `bookings_assigned_requires_status` forbids `status = pending` with stale `cleaner_id` /
+     * `selected_cleaner_id` from the pre-pay row. UPDATE must clear them unless this finalize
+     * sets user-selected checkout fields via {@link userSelectedCheckoutRow}.
+     */
+    ...(userConfirmedCleanerId == null ? { cleaner_id: null, selected_cleaner_id: null } : {}),
     ...checkoutIntentRow,
-    ...userSelectedRow,
+    ...userSelectedCheckoutRow,
     ...(tenureShareLine != null ? { cleaner_share_percentage: tenureShareLine } : {}),
   };
 
@@ -417,17 +507,43 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   let id: string | null = null;
   let inserted: PersistedRow | null = null;
 
+  const traceDbFinalize =
+    typeof process !== "undefined" &&
+    (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_FINALIZE === "1");
+
   try {
   if (existingPendingPaymentId) {
-    const { paystack_reference: _ref, ...updatePayload } = row;
-    void _ref;
-    const { data: updated, error: updateErr } = await supabase
-      .from("bookings")
-      .update(updatePayload)
-      .eq("paystack_reference", input.paystackReference)
-      .eq("status", "pending_payment")
-      .select("id, created_at, user_id")
-      .maybeSingle();
+    if (traceDbFinalize) {
+      console.log("[SETTING BOOKING POST_PAYMENT]", {
+        reference: input.paystackReference,
+        pendingFinalizeMatch,
+        status: row.status,
+        dispatch_status: row.dispatch_status,
+        cleaner_id: row.cleaner_id ?? null,
+        selected_cleaner_id: row.selected_cleaner_id ?? null,
+      });
+    }
+    const updateBuilder =
+      pendingFinalizeMatch === "id"
+        ? supabase
+            .from("bookings")
+            .update(row)
+            .eq("id", existingPendingPaymentId)
+            .eq("status", "pending_payment")
+            .select("id, created_at, user_id")
+            .maybeSingle()
+        : supabase
+            .from("bookings")
+            .update(row)
+            .eq("paystack_reference", input.paystackReference)
+            .eq("status", "pending_payment")
+            .select("id, created_at, user_id")
+            .maybeSingle();
+    const { data: updated, error: updateErr } = await updateBuilder;
+
+    if (traceDbFinalize) {
+      console.log("[DB UPDATE RESULT]", { data: updated, error: updateErr?.message ?? null });
+    }
 
     if (updateErr) {
       await reportOperationalIssue("error", "upsertBookingFromPaystack", `update pending_payment failed: ${updateErr.message}`, {
@@ -468,11 +584,42 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       }
     }
   } else {
+    if (isInlineDecoupledPaystackReference(input.paystackReference)) {
+      logPaymentStructured("finalize_rejected_no_pending_row", {
+        reference: input.paystackReference,
+        metadata_keys: Object.keys(input.paystackMetadata ?? {}),
+        source: input.paystackPersistSource ?? null,
+      });
+      await reportOperationalIssue("error", "upsertBookingFromPaystack", "decoupled_reference_without_pending_row", {
+        paystackReference: input.paystackReference,
+      });
+      return {
+        ok: false,
+        skipped: true,
+        bookingId: null,
+        error:
+          "No pending booking matched this payment. If money left your account, contact support with your Paystack reference.",
+        bookingInDatabase: false,
+      };
+    }
+    if (traceDbFinalize) {
+      console.log("[SETTING BOOKING POST_PAYMENT]", {
+        reference: input.paystackReference,
+        status: row.status,
+        dispatch_status: row.dispatch_status,
+        cleaner_id: row.cleaner_id ?? null,
+        selected_cleaner_id: row.selected_cleaner_id ?? null,
+      });
+    }
     const { data: ins, error: insertErr } = await supabase
       .from("bookings")
       .insert(row)
       .select("id, created_at, user_id")
       .maybeSingle();
+
+    if (traceDbFinalize) {
+      console.log("[DB INSERT RESULT]", { data: ins, error: insertErr?.message ?? null });
+    }
 
     if (insertErr) {
       if (insertErr.code === "23505") {
@@ -909,6 +1056,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     console.error("[BOOKING FINALIZATION FAILED]", err);
     if (finalizeId) {
       await supabase.from("bookings").update({ status: "payment_reconciliation_required" }).eq("id", finalizeId);
+    } else if (pendingFinalizeMatch === "id" && existingPendingPaymentId) {
+      await supabase
+        .from("bookings")
+        .update({ status: "payment_reconciliation_required" })
+        .eq("id", existingPendingPaymentId)
+        .eq("status", "pending_payment");
     } else {
       await supabase
         .from("bookings")

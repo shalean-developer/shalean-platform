@@ -13,7 +13,9 @@ let cached: SupabaseClient | null | undefined;
  * In development, auth uses {@link processLock} instead of the Web Locks API
  * (`navigator.locks` + `steal`). Next.js Fast Refresh / Strict Mode otherwise
  * often surfaces: `AbortError: Lock broken by another request with the 'steal' option`.
- * Production keeps the default `navigatorLock` for cross-tab session safety.
+ * **`lockAcquireTimeout`** is raised in dev so Turbopack + parallel auth calls do not hit the
+ * default 5s cap (`Acquiring process lock … timed out`). Production keeps default `navigatorLock`
+ * with a 15s acquire window.
  */
 export function getSupabaseBrowser(): SupabaseClient | null {
   if (typeof window === "undefined") return null;
@@ -24,13 +26,17 @@ export function getSupabaseBrowser(): SupabaseClient | null {
     cached = null;
     return null;
   }
+  const isDev = process.env.NODE_ENV === "development";
+  /**
+   * Default auth `lockAcquireTimeout` is 5s. Turbopack / Fast Refresh + parallel
+   * `getSession`/`getUser` can queue on `processLock` longer → "Acquiring process lock … timed out".
+   * Longer wait in dev; modest bump in prod so slow devices can still recover via steal.
+   */
   cached = createBrowserClient(url, key, {
-    auth:
-      process.env.NODE_ENV === "development"
-        ? {
-            lock: processLock,
-          }
-        : {},
+    auth: {
+      lockAcquireTimeout: isDev ? 60_000 : 15_000,
+      ...(isDev ? { lock: processLock } : {}),
+    },
   });
   return cached;
 }

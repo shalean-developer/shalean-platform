@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { CleanerWorkspaceClient } from "@/components/cleaner/mobile/CleanerWorkspaceClient";
-
-export default function CleanerWorkspacePage() {
-  return <CleanerWorkspaceClient />;
+export default function CleanerIndexPage() {
+  redirect("/cleaner/dashboard");
 }

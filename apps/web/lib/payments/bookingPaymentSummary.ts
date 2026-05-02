@@ -12,6 +12,11 @@ export type BookingPaymentSummary = {
   extras: { slug?: string; name?: string }[];
   /** Authoritative booking total in ZAR (before tip). */
   priceZar: number;
+  /**
+   * Serialized `booking_snapshot` for Paystack inline `metadata.booking_json` (finalize / upsert).
+   * Null when the row had no snapshot object.
+   */
+  bookingSnapshotJson: string | null;
   status: string | null;
   /** For subtitle e.g. `Sat · 5.5 hrs @ 07:00` */
   dateYmd: string | null;
@@ -26,6 +31,10 @@ export type BookingPaymentSummary = {
   serviceFeeZar: number;
   /** Visit line before extras/fees (display). */
   bookingCoreZar: number;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerUserId: string | null;
+  cleanersCount: number;
 };
 
 function extrasFromRow(raw: unknown): { slug?: string; name?: string }[] {
@@ -92,6 +101,17 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
   const hours = hoursRaw != null && Number.isFinite(Number(hoursRaw)) ? Number(hoursRaw) : null;
   const cleanerName =
     typeof snap?.cleaner_name === "string" && snap.cleaner_name.trim() ? snap.cleaner_name.trim() : null;
+  const customerName =
+    typeof snap?.customer?.name === "string" && snap.customer.name.trim() ? snap.customer.name.trim() : null;
+  const customerPhone =
+    typeof snap?.customer?.phone === "string" && snap.customer.phone.trim() ? snap.customer.phone.trim() : null;
+  const customerUserId =
+    typeof snap?.customer?.user_id === "string" && /^[0-9a-f-]{36}$/i.test(snap.customer.user_id.trim())
+      ? snap.customer.user_id.trim()
+      : null;
+  const cleanersRaw = locked?.cleanersCount;
+  const cleanersCount =
+    cleanersRaw != null && Number.isFinite(Number(cleanersRaw)) ? Math.max(1, Math.round(Number(cleanersRaw))) : 1;
 
   const extrasLines: ExtraLineItem[] = Array.isArray(locked?.extras_line_items) ? locked.extras_line_items : [];
   const extrasTotalZar = extrasLines.reduce((s, x) => s + (Number.isFinite(x.price) ? Math.round(x.price) : 0), 0);
@@ -125,6 +145,14 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
     serviceFeeZar = priceZar - bookingCoreZar - extrasTotalZar;
   }
 
+  const snapRaw = row.booking_snapshot;
+  const bookingSnapshotJson =
+    snapRaw != null && typeof snapRaw === "object"
+      ? JSON.stringify(snapRaw)
+      : typeof snapRaw === "string" && snapRaw.trim()
+        ? snapRaw.trim()
+        : null;
+
   return {
     id: row.id,
     email: row.customer_email ?? null,
@@ -134,6 +162,7 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
     extraRooms,
     extras,
     priceZar,
+    bookingSnapshotJson,
     status: row.status ?? null,
     dateYmd,
     timeHm,
@@ -143,6 +172,10 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
     extrasTotalZar,
     serviceFeeZar,
     bookingCoreZar,
+    customerName,
+    customerPhone,
+    customerUserId,
+    cleanersCount,
   };
 }
 

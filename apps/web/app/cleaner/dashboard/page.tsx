@@ -1,11 +1,5 @@
-"use client";
-
-import { CleanerDashboardEarnings } from "@/components/cleaner/mobile/dashboard/CleanerDashboardEarnings";
+import { CleanerDashboard } from "@/components/cleaner-dashboard/CleanerDashboard";
 
 export default function CleanerDashboardPage() {
-  return (
-    <main className="min-h-dvh">
-      <CleanerDashboardEarnings />
-    </main>
-  );
+  return <CleanerDashboard />;
 }

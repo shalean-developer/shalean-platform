@@ -56,7 +56,7 @@ export default function CleanerLoginPage() {
       }
     }
     const redirectRaw = searchParams.get("redirect")?.trim();
-    const fallback = "/cleaner";
+    const fallback = "/cleaner/dashboard";
     if (!redirectRaw) {
       router.replace(fallback);
       return;

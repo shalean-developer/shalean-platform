@@ -75,9 +75,9 @@ export function BookingDetailsPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-            className="space-y-8 transition-all duration-300 ease-in-out"
+            className="space-y-6 transition-all duration-300 ease-in-out sm:space-y-8"
           >
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:px-5">
+            <div className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl border border-transparent bg-transparent px-4 py-4 text-center shadow-none sm:border-gray-100 sm:bg-white sm:px-5 sm:shadow-sm dark:border-transparent dark:bg-transparent sm:dark:border-zinc-800 sm:dark:bg-zinc-900">
               <p className="text-sm text-gray-700 dark:text-zinc-200">
                 <span className="font-medium text-gray-500 dark:text-zinc-400">Selected service:</span>{" "}
                 <span className="font-semibold text-zinc-900 dark:text-zinc-50">{selectedLabel}</span>
@@ -94,7 +94,7 @@ export function BookingDetailsPage() {
             </div>
 
             <div ref={propertyRef} id="booking-property-section" className="scroll-mt-28 space-y-8">
-              <BookingSectionCard eyebrow="Property">
+              <BookingSectionCard eyebrow="Property" className="!px-0 sm:!px-5 md:!px-6">
                 <HomeDetailsStep value={{ bedrooms, bathrooms, extraRooms }} onChange={(v) => patch(v)} />
               </BookingSectionCard>
               <AddOnsSection />

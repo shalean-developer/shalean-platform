@@ -80,7 +80,7 @@ export function GlobalTopNav() {
     return () => window.clearTimeout(timer);
   }, [pathname]);
 
-  /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. Cleaner app uses `app/cleaner/layout.tsx` (workspace bar on sub-routes, full shell on home/job). */
+  /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. Cleaner app uses `app/cleaner/layout.tsx` (session shell + dashboard). */
   const hideMarketingNav =
     pathname === "/" ||
     pathname.startsWith("/admin") ||
@@ -106,7 +106,7 @@ export function GlobalTopNav() {
     linkInNavClassName,
   );
   const loggedIn = Boolean(user || cleanerLoggedIn);
-  const accountHref = user ? "/dashboard" : "/cleaner";
+  const accountHref = user ? "/dashboard" : "/cleaner/dashboard";
   const avatarName = user ? userDisplayName(user) : "Cleaner account";
   const avatarPhoto = user ? avatarImageUrl(user) : null;
   const avatarInitial = avatarLetter(user, cleanerLoggedIn);

@@ -768,20 +768,40 @@ export async function processPaystackInitializeBody(
     }
   }
 
-  const metadataPayload: Record<string, unknown> = {
+  const bookingContextForMeta = {
+    service: locked.service,
+    rooms: locked.rooms,
+    bathrooms: locked.bathrooms,
+    extras: Array.isArray(locked.extras) ? locked.extras : [],
+    location: locked.location,
+    date: locked.date,
+    time: locked.time,
+    cleaners: locked.cleanersCount ?? 1,
+  };
+
+  /** Paystack persists nested `metadata` objects inconsistently — send string fields only. */
+  const priceSnapshotJson = JSON.stringify(checkoutPriceSnapshotForMetadata);
+  const metadataForPaystack: Record<string, string> = {
     ...paystackMetadata,
     userId: customer.user_id ?? "",
-    price_snapshot: checkoutPriceSnapshotForMetadata,
-    booking: {
-      service: locked.service,
-      rooms: locked.rooms,
-      bathrooms: locked.bathrooms,
-      extras: locked.extras,
-      location: locked.location,
-      date: locked.date,
-      time: locked.time,
-    },
+    price_snapshot: priceSnapshotJson,
+    expected_total_zar: String(totalZar),
+    booking: JSON.stringify(bookingContextForMeta),
   };
+
+  if (typeof metadataForPaystack.price_snapshot !== "string" || !metadataForPaystack.price_snapshot.trim()) {
+    if (createdPendingBookingId) {
+      await deletePendingPaymentBooking(admin, createdPendingBookingId);
+    }
+    return {
+      ok: false,
+      status: 500,
+      errorCode: "VALIDATION",
+      error: "Checkout could not attach pricing to this payment. Please try again.",
+    };
+  }
+
+  console.log("[PAYSTACK INIT METADATA]", metadataForPaystack);
 
   const appUrl = getPublicAppUrlBase();
   const callbackUrl = `${appUrl}/booking/success`;
@@ -798,7 +818,7 @@ export async function processPaystackInitializeBody(
       currency: "ZAR",
       ...(paystackReferenceOverride ? { reference: paystackReferenceOverride } : {}),
       ...(callbackUrl ? { callback_url: callbackUrl } : {}),
-      metadata: metadataPayload,
+      metadata: metadataForPaystack,
     }),
   });
 

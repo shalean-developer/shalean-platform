@@ -149,11 +149,23 @@ export function buildCheckoutPriceSnapshotV1FromInit(params: {
   };
 }
 
+function versionIsCheckoutV1(v: unknown): boolean {
+  if (v === 1) return true;
+  if (typeof v === "string" && v.trim() === "1") return true;
+  const n = Number(v);
+  return Number.isFinite(n) && Math.round(n) === 1;
+}
+
+function currencyIsZar(v: unknown): boolean {
+  const s = typeof v === "string" ? v.trim().toUpperCase() : String(v ?? "").trim().toUpperCase();
+  return s === "ZAR";
+}
+
 function isCheckoutPriceSnapshotV1(o: unknown): o is CheckoutPriceSnapshotV1 {
   if (!o || typeof o !== "object" || Array.isArray(o)) return false;
   const r = o as Record<string, unknown>;
-  if (r.version !== 1) return false;
-  if (r.currency !== "ZAR") return false;
+  if (!versionIsCheckoutV1(r.version)) return false;
+  if (!currencyIsZar(r.currency)) return false;
   return (
     finiteZar(r.total_zar) != null &&
     finiteZar(r.subtotal_zar) != null &&
@@ -165,7 +177,8 @@ function isCheckoutPriceSnapshotV1(o: unknown): o is CheckoutPriceSnapshotV1 {
 export function checkoutPriceSnapshotFromLegacyPriceSnapshotV1(raw: unknown): CheckoutPriceSnapshotV1 | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
-  if (o.version === 1 && o.currency === "ZAR") return isCheckoutPriceSnapshotV1(o) ? (o as CheckoutPriceSnapshotV1) : null;
+  if (versionIsCheckoutV1(o.version) && currencyIsZar(o.currency))
+    return isCheckoutPriceSnapshotV1(o) ? (o as CheckoutPriceSnapshotV1) : null;
   if (o.v !== 1) return null;
   const total = finiteZar(o.total_price);
   const base = finiteZar(o.base_price);
@@ -202,18 +215,20 @@ export function parseCheckoutPriceSnapshotV1FromMeta(
 ): CheckoutPriceSnapshotV1 | null {
   const tryParse = (val: unknown): CheckoutPriceSnapshotV1 | null => {
     if (val == null) return null;
-    if (typeof val === "string" && val.trim()) {
+    /** Paystack metadata values are strings; some paths double-encode JSON. */
+    let cur: unknown = val;
+    for (let depth = 0; depth < 6 && typeof cur === "string" && cur.trim(); depth += 1) {
       try {
-        const o = JSON.parse(val) as unknown;
-        if (isCheckoutPriceSnapshotV1(o)) return o;
-        return checkoutPriceSnapshotFromLegacyPriceSnapshotV1(o);
+        cur = JSON.parse(cur) as unknown;
       } catch {
         return null;
       }
     }
-    if (typeof val === "object") {
-      if (isCheckoutPriceSnapshotV1(val)) return val;
-      return checkoutPriceSnapshotFromLegacyPriceSnapshotV1(val);
+    if (cur == null) return null;
+    if (typeof cur === "string") return null;
+    if (typeof cur === "object" && !Array.isArray(cur)) {
+      if (isCheckoutPriceSnapshotV1(cur)) return cur as CheckoutPriceSnapshotV1;
+      return checkoutPriceSnapshotFromLegacyPriceSnapshotV1(cur);
     }
     return null;
   };

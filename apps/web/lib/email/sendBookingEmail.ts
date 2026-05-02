@@ -105,6 +105,8 @@ async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: Bookin
       html,
     });
     if (error) {
+      console.log("[EMAIL DEBUG RESULT]", { sent: false, error: error.message, path: "db_template" });
+      console.error("[EMAIL FAILED HARD]", error.message);
       await reportOperationalIssue("error", "sendBookingConfirmationFromDbTemplateIfConfigured", error.message, {
         reference: payload.paymentReference,
         to: payload.customerEmail,
@@ -154,6 +156,8 @@ async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: Bookin
     return { usedRow: true, sent: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.log("[EMAIL DEBUG RESULT]", { sent: false, error: msg, path: "db_template" });
+    console.error("[EMAIL FAILED HARD]", msg);
     await reportOperationalIssue("error", "sendBookingConfirmationFromDbTemplateIfConfigured", msg, {
       reference: payload.paymentReference,
       to: payload.customerEmail,
@@ -257,13 +261,28 @@ export async function sendCustomerBookingPaymentProcessingEmail(input: {
 }
 
 export async function sendBookingConfirmationEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
-  const dbAttempt = await sendBookingConfirmationFromDbTemplateIfConfigured(payload);
-  if (dbAttempt.usedRow && dbAttempt.sent) return { sent: true };
+  const email = normalizeEmail(String(payload.customerEmail ?? ""));
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("No valid email provided");
+  }
+  const p: BookingEmailPayload = { ...payload, customerEmail: email };
+  const bookingId = bookingIdForNotificationLog(p);
+  console.log("[EMAIL DEBUG START]", {
+    email,
+    bookingId,
+    hasApiKey: Boolean(process.env.RESEND_API_KEY?.trim()),
+  });
+
+  const dbAttempt = await sendBookingConfirmationFromDbTemplateIfConfigured(p);
+  if (dbAttempt.usedRow && dbAttempt.sent) {
+    console.log("[EMAIL DEBUG RESULT]", { sent: true, error: null, path: "db_template" });
+    return { sent: true };
+  }
 
   if (dbAttempt.usedRow && !dbAttempt.sent) {
     await reportOperationalIssue("warn", "template_fallback", "Booking confirmation will use legacy HTML after DB template send failed", {
-      bookingId: bookingIdForNotificationLog(payload),
-      reference: payload.paymentReference,
+      bookingId,
+      reference: p.paymentReference,
       priorError: dbAttempt.error,
     });
     await logSystemEvent({
@@ -271,52 +290,40 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       source: "email",
       message: "Booking confirmation fell back to legacy HTML after DB template send failed",
       context: {
-        reference: payload.paymentReference,
-        to: payload.customerEmail,
+        reference: p.paymentReference,
+        to: p.customerEmail,
         priorError: dbAttempt.error,
       },
     });
   }
 
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    const errMsg = "RESEND_API_KEY missing at runtime";
+    console.log("[EMAIL DEBUG RESULT]", { sent: false, error: errMsg });
+    console.error("[EMAIL FAILED HARD]", errMsg);
+    throw new Error(errMsg);
+  }
+
   const resend = getResend();
   if (!resend) {
-    await reportOperationalIssue("warn", "sendBookingConfirmationEmail", "RESEND_API_KEY not set", {
-      reference: payload.paymentReference,
-    });
-    await writeNotificationLog({
-      booking_id: bookingIdForNotificationLog(payload),
-      channel: "email",
-      template_key: dbAttempt.usedRow ? "booking_confirmed" : "legacy_booking_confirmation_html",
-      recipient: payload.customerEmail,
-      status: "failed",
-      error: dbAttempt.usedRow ? dbAttempt.error ?? "resend_not_configured" : "resend_not_configured",
-      provider: "resend",
-      role: "customer",
-      event_type: CUSTOMER_PAYMENT_EVENT,
-      payload: customerPaymentPayload({
-        payment_reference: payload.paymentReference,
-        phase: "no_resend_client",
-        attempted_legacy_after_template: dbAttempt.usedRow && !dbAttempt.sent,
-      }),
-    });
-    return {
-      sent: false,
-      error: dbAttempt.usedRow ? dbAttempt.error ?? "Email not configured" : "Email not configured",
-    };
+    const errMsg = "RESEND_API_KEY missing at runtime";
+    console.log("[EMAIL DEBUG RESULT]", { sent: false, error: errMsg });
+    console.error("[EMAIL FAILED HARD]", errMsg);
+    throw new Error(errMsg);
   }
 
   const from = getDefaultFromAddress();
-  const total = payload.totalPaidZar.toLocaleString("en-ZA");
+  const total = p.totalPaidZar.toLocaleString("en-ZA");
   const appUrl = getPublicAppUrlBase();
   const accountBookingsUrl = `${appUrl}/dashboard/bookings`;
   const bookAgainUrl = `${appUrl}/booking/details`;
 
-  const service = escapeHtml(payload.serviceLabel);
-  const date = escapeHtml(payload.dateLabel);
-  const time = escapeHtml(payload.timeLabel);
-  const location = escapeHtml(payload.location?.trim() || "—");
-  const cleanerRow = payload.cleanerName?.trim()
-    ? `<p><strong>Cleaner:</strong> ${escapeHtml(payload.cleanerName.trim())}</p>`
+  const service = escapeHtml(p.serviceLabel);
+  const date = escapeHtml(p.dateLabel);
+  const time = escapeHtml(p.timeLabel);
+  const location = escapeHtml(p.location?.trim() || "—");
+  const cleanerRow = p.cleanerName?.trim()
+    ? `<p><strong>Cleaner:</strong> ${escapeHtml(p.cleanerName.trim())}</p>`
     : "";
 
   const html = `
@@ -335,7 +342,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   </p>
 
   ${
-    payload.showCleanerSubstitutionNotice
+    p.showCleanerSubstitutionNotice
       ? `<div style="border:1px solid #fcd34d; background:#fffbeb; border-radius:12px; padding:14px 16px; margin-bottom:18px; color:#78350f; font-size:14px; line-height:1.45;">
     <strong>Cleaner update:</strong> Your selected cleaner isn&apos;t available at that time — we&apos;ve assigned a similar top-rated cleaner.
   </div>`
@@ -357,8 +364,8 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       <span style="color:#059669;">R ${total}</span>
     </p>
     <p style="font-size:12px; color:#6b7280; margin:8px 0 0;">
-      ${payload.bookingId?.trim() ? `Booking ID: <span style="font-family:monospace;">${escapeHtml(payload.bookingId.trim())}</span><br/>` : ""}
-      Payment ref: <span style="font-family:monospace;">${escapeHtml(payload.paymentReference)}</span>
+      ${p.bookingId?.trim() ? `Booking ID: <span style="font-family:monospace;">${escapeHtml(p.bookingId.trim())}</span><br/>` : ""}
+      Payment ref: <span style="font-family:monospace;">${escapeHtml(p.paymentReference)}</span>
     </p>
   </div>
 
@@ -388,12 +395,12 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
 </div>
 `;
 
-  const legacyBid = bookingIdForNotificationLog(payload);
+  const legacyBid = bookingIdForNotificationLog(p);
   const legacySubject = "Your booking is confirmed";
   const legacyPayloadMeta: Record<string, unknown> = customerPaymentPayload({
     subject: legacySubject,
     html,
-    payment_reference: payload.paymentReference,
+    payment_reference: p.paymentReference,
     source: "legacy_html",
   });
   if (dbAttempt.usedRow && !dbAttempt.sent) {
@@ -404,21 +411,23 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   try {
     const { error } = await resend.emails.send({
       from,
-      to: payload.customerEmail,
+      to: p.customerEmail,
       subject: legacySubject,
       html,
     });
 
     if (error) {
+      console.log("[EMAIL DEBUG RESULT]", { sent: false, error: error.message, path: "legacy_html" });
+      console.error("[EMAIL FAILED HARD]", error.message);
       await reportOperationalIssue("error", "sendBookingConfirmationEmail", error.message, {
-        reference: payload.paymentReference,
-        to: payload.customerEmail,
+        reference: p.paymentReference,
+        to: p.customerEmail,
       });
       await writeNotificationLog({
         booking_id: legacyBid,
         channel: "email",
         template_key: "legacy_booking_confirmation_html",
-        recipient: payload.customerEmail,
+        recipient: p.customerEmail,
         status: "failed",
         error: error.message,
         provider: "resend",
@@ -428,17 +437,18 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       });
       return { sent: false, error: error.message };
     }
+    console.log("[EMAIL DEBUG RESULT]", { sent: true, error: null, path: "legacy_html" });
     await logSystemEvent({
       level: "info",
       source: "email",
       message: "Booking confirmation email sent",
-      context: { reference: payload.paymentReference, to: payload.customerEmail },
+      context: { reference: p.paymentReference, to: p.customerEmail },
     });
     await writeNotificationLog({
       booking_id: legacyBid,
       channel: "email",
       template_key: "legacy_booking_confirmation_html",
-      recipient: payload.customerEmail,
+      recipient: p.customerEmail,
       status: "sent",
       error: null,
       provider: "resend",
@@ -449,16 +459,18 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
     return { sent: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.log("[EMAIL DEBUG RESULT]", { sent: false, error: msg, path: "legacy_html" });
+    console.error("[EMAIL FAILED HARD]", msg);
     await reportOperationalIssue("error", "email", `Booking confirmation email failed: ${msg}`, {
       err: msg,
-      reference: payload.paymentReference,
-      to: payload.customerEmail,
+      reference: p.paymentReference,
+      to: p.customerEmail,
     });
     await writeNotificationLog({
       booking_id: legacyBid,
       channel: "email",
       template_key: "legacy_booking_confirmation_html",
-      recipient: payload.customerEmail,
+      recipient: p.customerEmail,
       status: "failed",
       error: msg,
       provider: "resend",

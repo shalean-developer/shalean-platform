@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
-import {
-  notifyCleanerOfDispatchOffer,
-  notifyCleanerOfferAccepted,
-  notifyCleanerOfferDeclined,
-} from "@/lib/dispatch/offerNotifications";
+import { notifyCleanerOfDispatchOffer, notifyCleanerOfferDeclined } from "@/lib/dispatch/offerNotifications";
 import { tryEmitDispatchOfferTimeoutMetric } from "@/lib/dispatch/offerTimeoutMetric";
 import {
   compactDispatchMetricTags,
@@ -45,6 +41,19 @@ export async function createDispatchOfferRow(params: {
   dispatchVisibleAtIso?: string | null;
   /** End of exclusive window for this wave (logging / analytics). */
   dispatchTierWindowEndAtIso?: string | null;
+  /** Dispatch v2: shared wave id for parallel offers. */
+  batchId?: string | null;
+  /** Dispatch v2: composite ranking score persisted on the row. */
+  priorityScore?: number | null;
+  /** Dispatch v2: order within batch (defaults to `rankIndex`). */
+  sentRank?: number | null;
+  /** Dispatch v2: attempt / wave number (defaults from `metricAttemptNumber` when set). */
+  attempts?: number | null;
+  /**
+   * When true, skip immediate SMS for this offer (cleaner still sees in-app + realtime).
+   * Used to cap outbound cost while parallel offers exist.
+   */
+  skipImmediateNotification?: boolean;
 }): Promise<CreateDispatchOfferRowResult> {
   const { data: bookingHead, error: headErr } = await params.supabase
     .from("bookings")
@@ -75,23 +84,42 @@ export async function createDispatchOfferRow(params: {
   const deferNotify = anchorMs > nowMs + 2500;
   const ux_variant = assignCleanerUxVariantForCleaner(params.cleanerId);
   const offer_token = randomUUID();
-  const { data, error } = await params.supabase
-    .from("dispatch_offers")
-    .insert({
-      booking_id: params.bookingId,
-      cleaner_id: params.cleanerId,
-      status: "pending",
-      rank_index: params.rankIndex,
-      expires_at: expiresAt,
-      ux_variant,
-      offer_token,
-      dispatch_tier: params.dispatchTier ?? null,
-      dispatch_visible_at: params.dispatchVisibleAtIso ?? null,
-      dispatch_tier_window_end_at: params.dispatchTierWindowEndAtIso ?? null,
-      offer_notification_deferred: deferNotify,
-    })
-    .select("id")
-    .single();
+  const attempts =
+    typeof params.attempts === "number" && Number.isFinite(params.attempts)
+      ? Math.max(0, Math.floor(params.attempts))
+      : typeof params.metricAttemptNumber === "number" && Number.isFinite(params.metricAttemptNumber)
+        ? Math.max(0, Math.floor(params.metricAttemptNumber))
+        : 0;
+  const sentRank =
+    typeof params.sentRank === "number" && Number.isFinite(params.sentRank)
+      ? Math.floor(params.sentRank)
+      : params.rankIndex;
+  const priorityScore =
+    typeof params.priorityScore === "number" && Number.isFinite(params.priorityScore)
+      ? params.priorityScore
+      : 0;
+
+  const insertRow: Record<string, unknown> = {
+    booking_id: params.bookingId,
+    cleaner_id: params.cleanerId,
+    status: "pending",
+    rank_index: params.rankIndex,
+    expires_at: expiresAt,
+    ux_variant,
+    offer_token,
+    dispatch_tier: params.dispatchTier ?? null,
+    dispatch_visible_at: params.dispatchVisibleAtIso ?? null,
+    dispatch_tier_window_end_at: params.dispatchTierWindowEndAtIso ?? null,
+    offer_notification_deferred: deferNotify,
+    attempts,
+    sent_rank: sentRank,
+    priority_score: priorityScore,
+  };
+  if (params.batchId && typeof params.batchId === "string" && params.batchId.trim()) {
+    insertRow.batch_id = params.batchId.trim();
+  }
+
+  const { data, error } = await params.supabase.from("dispatch_offers").insert(insertRow).select("id").single();
 
   if (error || !data?.id) {
     const msg = error?.message ?? "Insert dispatch_offers failed.";
@@ -198,7 +226,7 @@ export async function createDispatchOfferRow(params: {
   }
 
   try {
-    if (!deferNotify) {
+    if (!deferNotify && params.skipImmediateNotification !== true) {
       await notifyCleanerOfDispatchOffer({
         bookingId: params.bookingId,
         offerId,
@@ -340,9 +368,17 @@ export type AcceptDispatchOfferFailure =
   | "assigned_other"
   | "db";
 
+/** Stable machine codes for clients (HTTP JSON) — extends without breaking `failure`. */
+export type AcceptDispatchOfferMachineReason = "already_taken";
+
 export type AcceptDispatchOfferResult =
   | { ok: true }
-  | { ok: false; error: string; failure: AcceptDispatchOfferFailure };
+  | {
+      ok: false;
+      error: string;
+      failure: AcceptDispatchOfferFailure;
+      machineReason?: AcceptDispatchOfferMachineReason;
+    };
 
 export async function acceptDispatchOffer(params: {
   supabase: SupabaseClient;
@@ -375,6 +411,7 @@ export async function acceptDispatchOffer(params: {
     return { ok: false, error: "Not your offer.", failure: "wrong_cleaner" };
   }
   if (String(row.status) !== "pending") {
+    console.log("[OFFER ALREADY HANDLED]", { offerId: params.offerId, status: row.status, phase: "accept" });
     return { ok: false, error: "Offer is no longer pending.", failure: "not_pending" };
   }
   const visRaw = row.dispatch_visible_at;
@@ -413,7 +450,12 @@ export async function acceptDispatchOffer(params: {
       .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
       .eq("id", params.offerId)
       .eq("status", "pending");
-    return { ok: false, error: "Another cleaner was assigned.", failure: "assigned_other" };
+    return {
+      ok: false,
+      error: "Another cleaner was assigned.",
+      failure: "assigned_other",
+      machineReason: "already_taken",
+    };
   }
 
   const bsMeta = bookingBefore as {
@@ -443,6 +485,7 @@ export async function acceptDispatchOffer(params: {
       ...assignMeta,
     })
     .eq("id", bookingId)
+    .neq("status", "assigned")
     .in("status", ["pending", "pending_assignment"])
     .neq("dispatch_status", "assigned")
     .select("id");
@@ -456,7 +499,12 @@ export async function acceptDispatchOffer(params: {
       .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
       .eq("id", params.offerId)
       .eq("status", "pending");
-    return { ok: false, error: "Booking was already assigned.", failure: "booking_taken" };
+    return {
+      ok: false,
+      error: "Booking was already assigned.",
+      failure: "booking_taken",
+      machineReason: "already_taken",
+    };
   }
 
   const { error: exErr } = await params.supabase.rpc("dispatch_expire_peer_offers", {
@@ -520,12 +568,7 @@ export async function acceptDispatchOffer(params: {
     },
   });
 
-  await notifyCleanerOfferAccepted({
-    cleanerId: params.cleanerId,
-    bookingId,
-    offerId: params.offerId,
-  });
-
+  console.log("[ASSIGNMENT TRIGGERED]", { bookingId, cleanerId: params.cleanerId, offerId: params.offerId });
   void notifyCleanerAssignedBooking(params.supabase, bookingId, params.cleanerId);
 
   const seg = await loadDispatchMetricSegmentation(params.supabase, bookingId);
@@ -575,6 +618,36 @@ export async function acceptDispatchOffer(params: {
     cleanerId: params.cleanerId,
     bookingId,
   });
+
+  try {
+    const { count: sentCount, error: scErr } = await params.supabase
+      .from("dispatch_offers")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", bookingId);
+    if (!scErr) {
+      const { error: dmErr } = await params.supabase.from("dispatch_metrics").insert({
+        booking_id: bookingId,
+        cleaner_id: params.cleanerId,
+        time_to_accept_ms: Math.round(Math.min(2_147_483_647, Math.max(0, latencyMs))),
+        offers_sent: Math.min(2_147_483_647, Math.max(0, sentCount ?? 0)),
+      });
+      if (dmErr) {
+        await logSystemEvent({
+          level: "warn",
+          source: "dispatch_metrics_insert",
+          message: dmErr.message,
+          context: { bookingId, cleanerId: params.cleanerId, offerId: params.offerId },
+        });
+      }
+    }
+  } catch (e) {
+    await logSystemEvent({
+      level: "warn",
+      source: "dispatch_metrics_insert",
+      message: e instanceof Error ? e.message : String(e),
+      context: { bookingId, cleanerId: params.cleanerId },
+    });
+  }
 
   return { ok: true };
 }

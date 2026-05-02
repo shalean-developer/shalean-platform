@@ -3,7 +3,8 @@
  *
  * `success: true` — Paystack reports payment success. `bookingInDatabase` is true when a `bookings` row
  * exists (inserted now or already present). If the row could not be saved, `bookingInDatabase` is false
- * and the customer may receive a **processing** email only (never a confirmed-booking template). Only `reference` is trusted from the client.
+ * and `bookingId` may be null — the success page should use **persist-pending** UX (not “booking confirmed”);
+ * the customer may receive a **processing** email only (never a confirmed-booking template). Only `reference` is trusted from the client.
  */
 export type PaystackVerifyPostSuccess = {
   success: true;

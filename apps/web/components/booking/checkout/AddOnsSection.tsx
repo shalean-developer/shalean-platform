@@ -29,7 +29,7 @@ export function AddOnsSection() {
   }, [catalog, service]);
 
   return (
-    <div className="space-y-4 rounded-2xl border border-blue-100/90 bg-white p-6 shadow-sm dark:border-blue-900/40 dark:bg-zinc-900">
+    <div className="w-full space-y-4 rounded-2xl border border-transparent bg-transparent p-4 shadow-none sm:border-blue-100/90 sm:bg-white sm:p-5 sm:shadow-sm md:p-6 dark:border-transparent dark:bg-transparent sm:dark:border-blue-900/40 sm:dark:bg-zinc-900 sm:dark:shadow-none">
       <p className="text-xs font-semibold tracking-wide text-blue-800 dark:text-blue-300">ADD-ONS (OPTIONAL)</p>
       <ExtrasStep value={extras} onChange={(next) => patch({ extras: next })} extras={extrasForStep} loading={loading} />
     </div>

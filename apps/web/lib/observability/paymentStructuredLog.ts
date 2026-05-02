@@ -2,6 +2,7 @@ export type PaymentStructuredEvent =
   | "payment_initialize"
   | "payment_finalize"
   | "payment_mismatch"
+  | "finalize_rejected_no_pending_row"
   | "notification_sent"
   | "notification_skipped"
   | "lifecycle_failed";

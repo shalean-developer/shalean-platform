@@ -257,13 +257,13 @@ export async function buildAssignmentFieldsForPaidBookingRow(
     bookingAssignTrace({ step: "buildAssignmentFields", bookingId: booking.id, branch: "preferred", preferred, preferredOk: ok });
     if (ok) {
       return {
-        cleaner_id: preferred,
+        cleaner_id: null,
         selected_cleaner_id: preferred,
-        status: "assigned",
-        dispatch_status: "assigned",
+        status: "pending_assignment",
+        dispatch_status: "searching",
         assignment_type: "user_selected",
-        assigned_at: now,
-        cleaner_response_status: CLEANER_RESPONSE.PENDING,
+        assigned_at: null,
+        cleaner_response_status: CLEANER_RESPONSE.NONE,
         attempted_cleaner_id: preferred,
       };
     }
@@ -339,6 +339,15 @@ export async function assignCleaner(bookingId: string): Promise<AssignCleanerRes
     location_id: b.location_id ?? null,
     city_id: b.city_id ?? null,
   });
+  if (st === "pending_assignment") {
+    bookingAssignTrace({
+      step: "assignCleaner_skip",
+      bookingId,
+      reason: "awaiting_user_selected_offer_accept",
+      status: st,
+    });
+    return { ok: true, mode: "skipped", reason: "not_applicable_status" };
+  }
   if (st !== "pending") {
     bookingAssignTrace({ step: "assignCleaner_skip", bookingId, reason: "not_applicable_status", status: st });
     return { ok: true, mode: "skipped", reason: "not_applicable_status" };

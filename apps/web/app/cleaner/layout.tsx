@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { CleanerAppRouteLayout } from "@/components/cleaner/CleanerAppRouteLayout";
+import { CleanerRouteShell } from "@/components/cleaner-dashboard/CleanerRouteShell";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
 export default function CleanerLayout({ children }: { children: ReactNode }) {
-  return <CleanerAppRouteLayout>{children}</CleanerAppRouteLayout>;
+  return <CleanerRouteShell>{children}</CleanerRouteShell>;
 }

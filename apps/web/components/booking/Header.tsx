@@ -146,10 +146,11 @@ export function BookingHeader({ hideMobileBackLink = false }: BookingHeaderProps
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 underline-offset-4 transition hover:text-blue-700 hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:text-blue-400 dark:hover:text-blue-300"
+          aria-label="Login or sign up"
+          className="flex items-center gap-1 text-sm font-medium text-blue-600 underline-offset-4 transition hover:text-blue-700 hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:gap-1.5 dark:text-blue-400 dark:hover:text-blue-300"
         >
           <LogIn className="h-4 w-4 shrink-0 opacity-90" strokeWidth={2} aria-hidden />
-          Login
+          <span className="hidden sm:inline">Login</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={menuContentClass}>
