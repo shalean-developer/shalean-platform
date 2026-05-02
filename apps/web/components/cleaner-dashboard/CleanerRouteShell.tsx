@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { CleanerBottomNav } from "./CleanerBottomNav";
+import { CleanerNavBadgesProvider } from "./CleanerNavBadgesContext";
 
 const PUBLIC_PREFIXES = ["/cleaner/login", "/cleaner/apply"] as const;
 
@@ -73,5 +75,14 @@ export function CleanerRouteShell({ children }: { children: ReactNode }) {
     );
   }
 
-  return <div className="min-h-dvh bg-muted/30">{children}</div>;
+  const showBottomNav = isLoggedIn && !onPublicPage;
+
+  return (
+    <div className="min-h-dvh bg-muted/30">
+      <CleanerNavBadgesProvider>
+        <div className={showBottomNav ? "pb-[calc(4.25rem+env(safe-area-inset-bottom))]" : ""}>{children}</div>
+        {showBottomNav ? <CleanerBottomNav /> : null}
+      </CleanerNavBadgesProvider>
+    </div>
+  );
 }

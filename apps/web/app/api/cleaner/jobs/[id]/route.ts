@@ -3,6 +3,7 @@ import { cleanerHasBookingAccess } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { runCleanerBookingLifecycleAction, type CleanerLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import {
@@ -13,11 +14,13 @@ import {
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
+import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import {
   fetchTeamRosterByBookingIds,
   teamRosterPeersSummary,
   type TeamRosterMemberWire,
 } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
+import { metrics } from "@/lib/metrics/counters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,6 +76,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
   const { cleaner_payout_cents: _legacyPayout, display_earnings_cents: _displayRaw, team_member_count_snapshot: _snapOmit, ...safe } = record;
 
+  const snap = record.booking_snapshot;
+  const snapCust =
+    snap && typeof snap === "object" && !Array.isArray(snap)
+      ? (snap as { customer?: { name?: string; phone?: string } }).customer
+      : undefined;
+  const snapCustomerName = typeof snapCust?.name === "string" ? snapCust.name.trim() : "";
+  const snapCustomerPhone = typeof snapCust?.phone === "string" ? snapCust.phone.trim() : "";
+  const dbName = typeof safe.customer_name === "string" ? safe.customer_name.trim() : "";
+  const dbPhone = typeof safe.customer_phone === "string" ? safe.customer_phone.trim() : "";
+  const customer_name = snapCustomerName || dbName || null;
+  const customer_phone = snapCustomerPhone || dbPhone || null;
+
   let teamMemberCount: number | null = null;
   if (record.is_team_job === true) {
     if (snapCount != null) {
@@ -108,6 +123,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const lineMap = await fetchBookingLineItemsByBookingIds(admin, [bookingId]);
   const lineItems = lineMap.get(bookingId) ?? null;
+  const scope_lines = cleanerBookingScopeLines({
+    rooms: record.rooms,
+    bathrooms: record.bathrooms,
+    extras: record.extras,
+    booking_snapshot: record.booking_snapshot,
+    lineItems,
+  });
 
   let team_roster: TeamRosterMemberWire[] = [];
   let team_roster_summary: string | null = null;
@@ -120,6 +142,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   return NextResponse.json({
     job: {
       ...safe,
+      server_now_ms: Date.now(),
+      customer_name,
+      customer_phone,
+      scope_lines,
       lineItems: lineItems && lineItems.length > 0 ? lineItems : null,
       displayEarningsCents,
       displayEarningsIsEstimate,
@@ -143,9 +169,9 @@ export async function POST(
     return NextResponse.json({ error: "Missing booking id." }, { status: 400 });
   }
 
-  let body: { action?: string };
+  let body: { action?: string; idempotency_key?: string };
   try {
-    body = (await request.json()) as { action?: string };
+    body = (await request.json()) as { action?: string; idempotency_key?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -156,6 +182,18 @@ export async function POST(
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   }
 
+  /** Client-generated UUID per gesture; add a lifecycle phase token later if replays need stricter scoping. */
+  const idempotency_key = typeof body.idempotency_key === "string" ? body.idempotency_key.trim() : "";
+  if (idempotency_key.length < 10) {
+    void logSystemEvent({
+      level: "warn",
+      source: "cleaner_job_lifecycle",
+      message: "job_action_failed",
+      context: { reason: "missing_idempotency_key", booking_id: bookingId },
+    });
+    return NextResponse.json({ error: "Missing or invalid idempotency_key." }, { status: 400 });
+  }
+
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -163,11 +201,85 @@ export async function POST(
   const session = await resolveCleanerIdFromRequest(request, admin);
   if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
 
+  void logSystemEvent({
+    level: "info",
+    source: "cleaner_job_lifecycle",
+    message: "job_action_attempted",
+    context: {
+      booking_id: bookingId,
+      cleaner_id: session.cleanerId,
+      action,
+      idempotency_key,
+    },
+  });
+
+  const { error: claimErr } = await admin.from("cleaner_job_lifecycle_idempotency").insert({
+    cleaner_id: session.cleanerId,
+    booking_id: bookingId,
+    idempotency_key,
+    action,
+  });
+
+  if (claimErr) {
+    const dup =
+      claimErr.code === "23505" ||
+      /duplicate key|unique constraint/i.test(String(claimErr.message ?? ""));
+    if (dup) {
+      metrics.increment("cleaner_job_lifecycle_idempotency_conflict", { booking_id: bookingId, action });
+      void logSystemEvent({
+        level: "info",
+        source: "cleaner_job_lifecycle",
+        message: "job_action_duplicate_idempotency",
+        context: { booking_id: bookingId, cleaner_id: session.cleanerId, action, idempotency_key },
+      });
+      return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
+    }
+    void logSystemEvent({
+      level: "error",
+      source: "cleaner_job_lifecycle",
+      message: "job_action_failed",
+      context: {
+        booking_id: bookingId,
+        cleaner_id: session.cleanerId,
+        action,
+        idempotency_key,
+        code: claimErr.code,
+        message: claimErr.message,
+      },
+    });
+    return NextResponse.json({ error: claimErr.message ?? "Could not claim idempotency key." }, { status: 500 });
+  }
+
   const out = await runCleanerBookingLifecycleAction({
     admin,
     cleanerId: session.cleanerId,
     bookingId,
     action,
   });
+
+  if (out.status !== 200) {
+    await admin.from("cleaner_job_lifecycle_idempotency").delete().eq("idempotency_key", idempotency_key);
+    void logSystemEvent({
+      level: "warn",
+      source: "cleaner_job_lifecycle",
+      message: "job_action_failed",
+      context: {
+        booking_id: bookingId,
+        cleaner_id: session.cleanerId,
+        action,
+        idempotency_key,
+        http_status: out.status,
+        response: out.json,
+      },
+    });
+  } else {
+    void logSystemEvent({
+      level: "info",
+      source: "cleaner_job_lifecycle",
+      message: "job_action_success",
+      context: { booking_id: bookingId, cleaner_id: session.cleanerId, action, idempotency_key },
+    });
+  }
+
   return NextResponse.json(out.json, { status: out.status });
 }

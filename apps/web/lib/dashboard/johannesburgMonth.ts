@@ -8,6 +8,17 @@ export function johannesburgCalendarYmd(d = new Date()): string {
   return d.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
 }
 
+/**
+ * Civil “today” in Johannesburg as `[startUtc, endUtc]` instants (inclusive end).
+ * South Africa stays UTC+2 year-round (no DST) — fixed offset keeps midnight stable.
+ */
+export function getJhbTodayRange(now = new Date()): { todayYmd: string; startUtc: Date; endUtc: Date } {
+  const todayYmd = johannesburgCalendarYmd(now);
+  const startUtc = new Date(`${todayYmd}T00:00:00+02:00`);
+  const endUtc = new Date(`${todayYmd}T23:59:59.999+02:00`);
+  return { todayYmd, startUtc, endUtc };
+}
+
 /** Civil `YYYY-MM-DD` + N days (UTC calendar math; suitable for comparing booking `date` strings). */
 export function johannesburgCalendarYmdAddDays(ymd: string, deltaDays: number): string {
   const parts = ymd.split("-").map(Number);

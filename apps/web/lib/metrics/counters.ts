@@ -81,12 +81,31 @@ export const metrics = {
    * - `cleaner_issue_report_duplicate_ignored` — idempotency key replay or same reason within 2 min (fields: `kind`)
    *
    * Includes `legacy_cleaner_auth_used_count` (fields: `kind` = `x_cleaner_id_header` | `legacy_id_row_match`) for cutover tracking.
+   * Cleaner lifecycle idempotency: `cleaner_job_lifecycle_idempotency_conflict` — duplicate idempotency key (derive conflict rate vs `job_action_attempted` in logs).
    * Cleaner session refresh (single-flight): `cleaner_auth_refresh_attempt` | `cleaner_auth_refresh_success` | `cleaner_auth_refresh_failure`.
    *
    * --- Payout / earnings integrity (JSON `[metric]` logs) ---
    * - `payout.invalid_paid_rows_count` — GET `/api/cleaner/earnings` exposed ≥1 invalid / integrity row (`rows` = count that request).
    * - `payout.stuck_earnings_triggered` — DB claimed a stuck-null earnings recompute slot (`recompute_source` =
    *   `jobs_list` | `job_detail`).
+   * - `cleaner.earnings_fetch` — GET `/api/cleaner/earnings` completed; fields: `latency_ms`, `rows_count`,
+   *   `earnings_chart_points_count` (7-day chart bucket count, always 7).
+   * - `cleaner.earnings_negative_estimate_seen` — card row had `customer_paid_cents` strictly less than cleaner
+   *   `amount_cents`;
+   *   `platform_fee_cents` omitted (`null`); fields: `booking_id`, `customer_paid_cents`, `cleaner_amount_cents`.
+   * - `cleaner.earnings_invariant_mismatch` — GET `/api/cleaner/earnings/reconcile` intersection drift (card vs
+   *   `cleaner_earnings` for same booking ids); fields: `compared_bookings`, `intersection_booking_count`,
+   *   `amount_mismatch_booking_count`, `missing_ledger_row_count`, `sum_card_intersection_cents`,
+   *   `sum_ledger_intersection_cents`, `delta_intersection_cents`, `strict`.
+   * - `cleaner.earnings_shadow_totals_mismatch` — GET `/api/cleaner/earnings` card slice vs ledger slice bucket/delta
+   *   drift; fields: `booking_ids_in_slice`, `delta_all_cents`, `bucket_aligned`, `card_all_cents`, `ledger_all_cents`.
+   * - `cleaner.earnings_missing_ledger_rows` — solo slice rows with finalized `cleaner_earnings_total_cents` but no
+   *   `cleaner_earnings` row; fields: `count`.
+   * - `cleaner.earnings_cutoff_edge_case` — weekly payout batch scan: completions within ±5m of Thu 23:59:59.999 SAST
+   *   cutoff; fields: `count`, `period_start`, `period_end`, `source` (= `generateWeeklyPayouts`).
+   * - `cleaner.earnings_payout_request_clicked` — client opened “Request payout” info (fields optional).
+   * - `flush_cycle_metrics` logs (lifecycle telemetry): `flush_items_attempted`, `flush_items_succeeded`,
+   *   `flush_items_failed`, `flush_items_deferred` — derive success rate and starvation vs timeout.
    * - `payout.stuck_earnings_recompute_skipped_cooldown` — skipped path; fields: `reason` = `cooldown` (includes
    *   **`next_allowed_at_utc`**) | `missing_booking` | `deleted_booking` (prefetch miss) |
    *   `deleted_booking_after_prefetch` (TOCTOU after prefetch) | `recent_success` (reserved); `recompute_source` as above.

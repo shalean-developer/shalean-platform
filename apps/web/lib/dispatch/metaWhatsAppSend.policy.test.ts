@@ -19,18 +19,18 @@ import {
   sendViaMetaWhatsAppTemplateBody,
 } from "@/lib/dispatch/metaWhatsAppSend";
 
-describe("metaWhatsAppSend cleaner-only policy", () => {
-  it("sendViaMetaWhatsApp throws when recipientRole is not cleaner", async () => {
+describe("metaWhatsAppSend recipient role guard", () => {
+  it("sendViaMetaWhatsApp throws when recipientRole is not cleaner or customer", async () => {
     await expect(
       sendViaMetaWhatsApp({
         phone: "+27123456789",
         message: "x",
         recipientRole: "not-cleaner" as "cleaner",
       }),
-    ).rejects.toThrow("WhatsApp is restricted to cleaners only");
+    ).rejects.toThrow("Invalid WhatsApp recipient role");
   });
 
-  it("sendViaMetaWhatsAppTemplateBody throws when recipientRole is not cleaner", async () => {
+  it("sendViaMetaWhatsAppTemplateBody throws when recipientRole is not cleaner or customer", async () => {
     await expect(
       sendViaMetaWhatsAppTemplateBody({
         phone: "+27123456789",
@@ -39,6 +39,6 @@ describe("metaWhatsAppSend cleaner-only policy", () => {
         bodyParameters: ["a"],
         recipientRole: "not-cleaner" as "cleaner",
       }),
-    ).rejects.toThrow("WhatsApp is restricted to cleaners only");
+    ).rejects.toThrow("Invalid WhatsApp recipient role");
   });
 });

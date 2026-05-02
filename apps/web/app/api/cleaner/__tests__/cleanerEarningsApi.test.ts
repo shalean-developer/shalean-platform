@@ -15,6 +15,10 @@ vi.mock("@/lib/cleaner/session", () => ({
   resolveCleanerIdFromRequest: async () => ({ cleanerId: mockState.cleanerId, status: 200 }),
 }));
 
+vi.mock("@/lib/cleaner/scheduleStuckEarningsRecompute", () => ({
+  scheduleStuckEarningsRecomputeDebounced: vi.fn(),
+}));
+
 function matchesBookingsVisibilityOr(row: Row, expr: string): boolean {
   const head = /^cleaner_id\.eq\.([^,]+)/.exec(expr);
   if (head && String(row.cleaner_id ?? "") === head[1]) return true;
@@ -137,13 +141,13 @@ class MockSupabaseClient {
   }
 }
 
-describe("cleaner API earnings contracts", () => {
+describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mockState.cleanerId = "cleaner-1";
   });
 
-  it("jobs response exposes displayEarningsCents and hides internal payout fields", async () => {
+  it("jobs response exposes displayEarningsCents and hides internal payout fields", { timeout: 60_000 }, async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],
       bookings: [

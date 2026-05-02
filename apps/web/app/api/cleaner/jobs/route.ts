@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  appendRosterBookingIdsToOrFilter,
-  bookingsVisibilityOrFilter,
-  fetchBookingIdsWhereCleanerOnRoster,
-  fetchCleanerTeamIds,
-} from "@/lib/cleaner/cleanerBookingAccess";
+import { getCleanerVisibleBookingsOrFilter } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -15,9 +10,15 @@ import {
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
+import type { CleanerBookingLineItemWire, CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
-import { fetchTeamRosterByBookingIds, teamRosterPeersSummary } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
+import {
+  fetchTeamRosterByBookingIds,
+  teamRosterPeersSummary,
+  type TeamRosterMemberWire,
+} from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +38,18 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const directAssignments = url.searchParams.get("assignments") === "direct";
+  /**
+   * NOTE: `lite=1` is legacy for older clients that inlined jobs on a heavy home screen.
+   * Prefer `GET /api/cleaner/dashboard` for the mobile dashboard slice (capped jobs + today earnings).
+   * When set: full booking visibility without line items, roster names, issue flags, or recompute side-effects.
+   *
+   * `view=card` — jobs list / timeline: skips line-item join, issue flags, team roster fetch, and stuck-earnings
+   * side-effects; attaches `scope_lines` from persisted booking + snapshot (lighter mobile payload).
+   */
+  const lite = url.searchParams.get("lite") === "1" || url.searchParams.get("lite") === "true";
+  const cardView = url.searchParams.get("view") === "card";
+  const slimWire = lite || cardView;
+  const directAssignments = !slimWire && url.searchParams.get("assignments") === "direct";
 
   if (process.env.TRACE_BOOKING_ASSIGN === "1") {
     console.log(
@@ -47,6 +59,8 @@ export async function GET(request: Request) {
         step: "cleaner/jobs GET",
         viewerCleanerId,
         directAssignments,
+        lite,
+        cardView,
       }),
     );
   }
@@ -66,16 +80,11 @@ export async function GET(request: Request) {
         .order("time", { ascending: true })
         .limit(100)
     : await (async () => {
-        const teamIds = await fetchCleanerTeamIds(admin, viewerCleanerId);
-        const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, viewerCleanerId);
-        const visibilityOr = appendRosterBookingIdsToOrFilter(
-          bookingsVisibilityOrFilter(viewerCleanerId, teamIds),
-          rosterBookingIds,
-        );
+        const { orFilter } = await getCleanerVisibleBookingsOrFilter(admin, viewerCleanerId);
         return admin
           .from("bookings")
           .select(bookingSelect)
-          .or(visibilityOr)
+          .or(orFilter)
           .not("status", "eq", "failed")
           .not("status", "eq", "pending_payment")
           .not("status", "eq", "payment_expired")
@@ -171,8 +180,15 @@ export async function GET(request: Request) {
   const bookingIdsForLines = mappedWithTeamCounts
     .map((j) => String((j as { id?: string }).id ?? "").trim())
     .filter(Boolean);
-  const lineItemsByBooking = await fetchBookingLineItemsByBookingIds(admin, bookingIdsForLines);
+
+  const lineItemsByBooking = slimWire
+    ? new Map<string, CleanerBookingLineItemWire[]>()
+    : await fetchBookingLineItemsByBookingIds(admin, bookingIdsForLines);
+
   const mappedWithLineItems = mappedWithTeamCounts.map((j) => {
+    if (slimWire) {
+      return { ...j, lineItems: null as null };
+    }
     const id = String((j as { id?: string }).id ?? "").trim();
     const lineItems = id ? lineItemsByBooking.get(id) ?? null : null;
     return { ...j, lineItems: lineItems && lineItems.length > 0 ? lineItems : null };
@@ -183,7 +199,7 @@ export async function GET(request: Request) {
     .filter(Boolean);
 
   const reportedIds = new Set<string>();
-  if (bookingIds.length > 0) {
+  if (!slimWire && bookingIds.length > 0) {
     const { data: repRows, error: repErr } = await admin
       .from("cleaner_job_issue_reports")
       .select("booking_id")
@@ -199,7 +215,7 @@ export async function GET(request: Request) {
 
   const jobsWithIssueFlag = mappedWithLineItems.map((j) => {
     const id = String((j as { id?: string }).id ?? "").trim();
-    return { ...j, cleaner_has_issue_report: id ? reportedIds.has(id) : false };
+    return { ...j, cleaner_has_issue_report: slimWire ? false : id ? reportedIds.has(id) : false };
   });
 
   const jobsOut = jobsWithIssueFlag.map((j) => ({
@@ -211,11 +227,16 @@ export async function GET(request: Request) {
     .filter((j) => (j as { is_team_job?: boolean }).is_team_job === true)
     .map((j) => String((j as { id?: string }).id ?? "").trim())
     .filter(Boolean);
-  const rosterByBooking = await fetchTeamRosterByBookingIds(admin, teamBookingIds);
+  const rosterByBooking = slimWire
+    ? new Map<string, TeamRosterMemberWire[]>()
+    : await fetchTeamRosterByBookingIds(admin, teamBookingIds);
   const jobsWithRoster = jobsOut.map((j) => {
     const rec = j as Record<string, unknown>;
     const id = String(rec.id ?? "").trim();
     if (rec.is_team_job !== true || !id) return j;
+    if (slimWire) {
+      return { ...j, team_roster: [], team_roster_summary: null as string | null };
+    }
     const roster = rosterByBooking.get(id) ?? [];
     return {
       ...j,
@@ -224,21 +245,30 @@ export async function GET(request: Request) {
     };
   });
 
-  for (const j of jobsWithRoster) {
-    const rec = j as Record<string, unknown>;
-    const id = String(rec.id ?? "").trim();
-    if (!id) continue;
-    logEligibleOrPaidWithoutFrozen(id, rec);
-    maybeLogStuckNullEarnings(id, rec);
-    if (isStuckNullEarningsBooking(rec)) {
-      scheduleStuckEarningsRecomputeDebounced({
-        admin,
-        bookingId: id,
-        cleanerId: viewerCleanerId,
-        recomputeSource: "jobs_list",
-      });
+  if (!slimWire) {
+    for (const j of jobsWithRoster) {
+      const rec = j as Record<string, unknown>;
+      const id = String(rec.id ?? "").trim();
+      if (!id) continue;
+      logEligibleOrPaidWithoutFrozen(id, rec);
+      maybeLogStuckNullEarnings(id, rec);
+      if (isStuckNullEarningsBooking(rec)) {
+        scheduleStuckEarningsRecomputeDebounced({
+          admin,
+          bookingId: id,
+          cleanerId: viewerCleanerId,
+          recomputeSource: "jobs_list",
+        });
+      }
     }
   }
 
-  return NextResponse.json({ jobs: jobsWithRoster });
+  const jobsPayload = cardView
+    ? jobsWithRoster.map((j) => ({
+        ...j,
+        scope_lines: cleanerBookingScopeLines(j as CleanerBookingRow),
+      }))
+    : jobsWithRoster;
+
+  return NextResponse.json({ jobs: jobsPayload });
 }

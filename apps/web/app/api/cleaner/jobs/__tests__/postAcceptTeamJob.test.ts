@@ -12,6 +12,10 @@ vi.mock("@/lib/cleaner/syncCleanerStatus", () => ({
   syncCleanerBusyFromBookings: vi.fn(async () => {}),
 }));
 
+vi.mock("@/lib/logging/systemLog", () => ({
+  logSystemEvent: vi.fn(async () => {}),
+}));
+
 import { POST } from "../[id]/route";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -58,6 +62,25 @@ function adminForTeamAccept() {
           }),
         };
       }
+      if (table === "booking_cleaners") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({ data: { id: "bc-1" }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "cleaner_job_lifecycle_idempotency") {
+        return {
+          insert: () => Promise.resolve({ error: null }),
+          delete: () => ({
+            eq: () => Promise.resolve({ error: null }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   };
@@ -78,7 +101,7 @@ describe("POST /api/cleaner/jobs/[id] — team job Confirm availability (accept)
       new Request("http://localhost/api/cleaner/jobs/b1", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-cleaner-id": "cleaner-1" },
-        body: JSON.stringify({ action: "accept" }),
+        body: JSON.stringify({ action: "accept", idempotency_key: "test-key-accept-b1-1" }),
       }),
       { params: Promise.resolve({ id: "b1" }) },
     );

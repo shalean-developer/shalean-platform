@@ -1,13 +1,17 @@
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { addDaysYmd, isoWeekdayFromYmd } from "@/lib/recurring/johannesburgCalendar";
 
-export type EarningsPeriodRowInput = {
+/** Fields used only to map a row to a Johannesburg calendar day (no cents). */
+export type EarningsPeriodBucketInput = {
   completed_at: string | null;
   /**
    * `bookings.date` (service / wall day, `YYYY-MM-DD`) — used only when `completed_at` is null
    * so period totals are not blank for legacy rows.
    */
   schedule_date?: string | null;
+};
+
+export type EarningsPeriodRowInput = EarningsPeriodBucketInput & {
   amount_cents: number;
 };
 
@@ -29,7 +33,7 @@ function normalizeScheduleYmd(raw: string | null | undefined): string | null {
 }
 
 /** Bucket key for period filters: completion instant in JHB, else `schedule_date`, else null. */
-export function earningsPeriodBucketYmd(row: EarningsPeriodRowInput): string | null {
+export function earningsPeriodBucketYmd(row: EarningsPeriodBucketInput): string | null {
   const fromCompletion = johannesburgYmdFromCompletionField(row.completed_at);
   if (fromCompletion) return fromCompletion;
   return normalizeScheduleYmd(row.schedule_date ?? null);

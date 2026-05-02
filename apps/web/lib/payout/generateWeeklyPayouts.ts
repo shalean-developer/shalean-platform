@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { instantNearJhbThursdayPayoutCutoff } from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { metrics } from "@/lib/metrics/counters";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { completionDayYmd, getPreviousWeekDateBoundsUtc, isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
 
@@ -124,6 +126,8 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
   const preflight = await ensureNoMissingCompletedPayouts(admin);
   payoutsBackfilled += preflight.backfilled;
 
+  let jhbCutoffEdgeCaseBookings = 0;
+
   const { data: cleaners, error: cErr } = await admin.from("cleaners").select("id");
   if (cErr || !cleaners?.length) {
     await reportOperationalIssue("warn", "generateWeeklyPayouts", cErr?.message ?? "no cleaners", {});
@@ -154,6 +158,11 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
       if (!ymd) return false;
       return isYmdInInclusiveRange(ymd, periodStart, periodEnd);
     }) as BookingPayoutRow[];
+
+    for (const b of candidateBookings) {
+      const ms = Date.parse(String((b as BookingPayoutRow).completed_at ?? ""));
+      if (Number.isFinite(ms) && instantNearJhbThursdayPayoutCutoff(ms)) jhbCutoffEdgeCaseBookings += 1;
+    }
 
     const bookings: BookingPayoutRow[] = [];
     for (const booking of candidateBookings) {
@@ -281,11 +290,20 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
     });
   }
 
+  if (jhbCutoffEdgeCaseBookings > 0) {
+    metrics.increment("cleaner.earnings_cutoff_edge_case", {
+      count: jhbCutoffEdgeCaseBookings,
+      period_start: periodStart,
+      period_end: periodEnd,
+      source: "generateWeeklyPayouts",
+    });
+  }
+
   return {
     period: { start: periodStart, end: periodEnd },
     payoutsCreated,
     bookingsLinked,
-      payoutsBackfilled,
+    payoutsBackfilled,
     skippedCleaners,
   };
 }

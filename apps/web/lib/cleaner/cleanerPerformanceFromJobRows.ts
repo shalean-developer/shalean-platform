@@ -10,7 +10,7 @@ export function completedJobCountTodayJohannesburg(rows: CleanerBookingRow[], no
   let n = 0;
   for (const r of rows) {
     if (String(r.status ?? "").toLowerCase() !== "completed") continue;
-    const d = earningsPeriodBucketYmd({ completed_at: r.completed_at, schedule_date: r.date, amount_cents: 0 });
+    const d = earningsPeriodBucketYmd({ completed_at: r.completed_at, schedule_date: r.date });
     if (d === todayY) n += 1;
   }
   return n;
@@ -33,7 +33,7 @@ export function completedJobEarningsPeriodFromRows(rows: CleanerBookingRow[], no
 
   for (const r of rows) {
     if (String(r.status ?? "").toLowerCase() !== "completed") continue;
-    const d = earningsPeriodBucketYmd({ completed_at: r.completed_at, schedule_date: r.date, amount_cents: 0 });
+    const d = earningsPeriodBucketYmd({ completed_at: r.completed_at, schedule_date: r.date });
     if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
     const cents = cleanerFacingDisplayEarningsCents(r);
     if (cents == null || cents <= 0) continue;

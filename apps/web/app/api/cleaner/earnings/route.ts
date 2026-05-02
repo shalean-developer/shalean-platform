@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
+import { getCleanerVisibleBookingsOrFilter } from "@/lib/cleaner/cleanerBookingAccess";
 import {
-  appendRosterBookingIdsToOrFilter,
-  bookingsVisibilityOrFilter,
-  fetchBookingIdsWhereCleanerOnRoster,
-  fetchCleanerTeamIds,
-} from "@/lib/cleaner/cleanerBookingAccess";
+  suggestedDailyGoalCentsFromWireRows,
+  todayCentsAndBreakdownFromBookings,
+  type CleanerDashboardEarningsWireRow,
+} from "@/lib/cleaner/cleanerDashboardTodayCents";
 import { earningsPeriodCentsFromRows } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -12,6 +12,9 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { normalizeCleanerPayoutSummaryRow } from "@/lib/cleaner/normalizeCleanerPayoutSummaryRow";
 import { touchPayoutIntegrityFirstSeen } from "@/lib/cleaner/touchPayoutIntegrityFirstSeen";
 import { metrics } from "@/lib/metrics/counters";
+import { buildLast7DaysEarningsPoints } from "@/lib/cleaner/earningsInsightsSeries";
+import { computeEarningsFinanceShadow } from "@/lib/cleaner/earningsLedgerShadowTotals";
+import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummaryTypes";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -21,6 +24,7 @@ export const dynamic = "force-dynamic";
 
 type BookingEarningsRow = {
   id: string;
+  status: string | null;
   service: string | null;
   date: string | null;
   completed_at: string | null;
@@ -34,6 +38,8 @@ type BookingEarningsRow = {
   is_team_job: boolean | null;
   payout_paid_at: string | null;
   payout_run_id: string | null;
+  total_paid_zar?: unknown;
+  amount_paid_cents?: unknown;
 };
 
 type PaymentDetailsRow = {
@@ -121,6 +127,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
 
+  const earningsFetchStartedMs = performance.now();
+
   const url = new URL(request.url);
   const fromYmd = parseYmd(url.searchParams.get("from"));
   const toYmd = parseYmd(url.searchParams.get("to"));
@@ -128,16 +136,11 @@ export async function GET(request: Request) {
   const statusFilter =
     statusParam === "pending" || statusParam === "approved" || statusParam === "paid" ? statusParam : "all";
 
-  const teamIds = await fetchCleanerTeamIds(admin, session.cleanerId);
-  const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, session.cleanerId);
-  const visibilityOr = appendRosterBookingIdsToOrFilter(
-    bookingsVisibilityOrFilter(session.cleanerId, teamIds),
-    rosterBookingIds,
-  );
+  const { orFilter: visibilityOr } = await getCleanerVisibleBookingsOrFilter(admin, session.cleanerId);
 
   const ledgerTotalsQuery = admin
     .from("cleaner_earnings")
-    .select("amount_cents, status")
+    .select("amount_cents, status, booking_id")
     .eq("cleaner_id", session.cleanerId)
     .limit(10_000);
 
@@ -167,7 +170,7 @@ export async function GET(request: Request) {
     admin
       .from("bookings")
       .select(
-        "id, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id",
+        "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents",
       )
       .or(visibilityOr)
       .eq("status", "completed")
@@ -192,7 +195,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: ledgerErr.message }, { status: 500 });
   }
 
+  /** Wall-clock when this response bundle was assembled (bookings + ledger queries already completed). */
+  const as_of = new Date().toISOString();
+
   const rows = (bookings ?? []) as BookingEarningsRow[];
+
+  const now = new Date();
+  const goalWire: CleanerDashboardEarningsWireRow[] = rows.map((r) => ({
+    id: r.id,
+    status: "completed",
+    date: r.date,
+    completed_at: r.completed_at,
+    cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
+    payout_frozen_cents: r.payout_frozen_cents,
+    display_earnings_cents: r.display_earnings_cents,
+  }));
+  const suggested_daily_goal_cents = suggestedDailyGoalCentsFromWireRows(goalWire, now);
 
   const [{ data: lockedPayouts }, { data: failedTransfers }] = await Promise.all([
     admin.from("cleaner_payouts").select("id").eq("cleaner_id", session.cleanerId).in("status", ["frozen", "approved"]),
@@ -225,6 +243,20 @@ export async function GET(request: Request) {
       enqueuePayoutIntegrityAnomalyLog(admin, "eligible_or_paid_without_frozen", b.id, { payout_status: rawPs });
     }
     const cents = amountCentsForRow(b);
+    const customerPaid = bookingTotalCents(b);
+    const platformFee =
+      customerPaid != null
+        ? customerPaid < cents
+          ? null
+          : Math.max(0, customerPaid - cents)
+        : null;
+    if (customerPaid != null && customerPaid < cents) {
+      metrics.increment("cleaner.earnings_negative_estimate_seen", {
+        booking_id: b.id,
+        customer_paid_cents: customerPaid,
+        cleaner_amount_cents: cents,
+      });
+    }
     const normalized = normalizeCleanerPayoutSummaryRow(
       {
         booking_id: b.id,
@@ -264,17 +296,34 @@ export async function GET(request: Request) {
       payout_paid_at: normalized.payout_paid_at,
       payout_run_id: normalized.payout_run_id,
       in_frozen_batch: inLockedWeeklyBatch,
+      booking_status: String(b.status ?? "completed").trim().toLowerCase(),
+      customer_paid_cents: customerPaid,
+      platform_fee_cents: platformFee,
+      is_team_job: Boolean(b.is_team_job),
       ...(normalized.__invalid ? { __invalid: true as const } : {}),
     };
   });
 
-  const { today_cents, week_cents, month_cents } = earningsPeriodCentsFromRows(
+  const { today_cents } = todayCentsAndBreakdownFromBookings(
+    rows.map((b) => ({
+      id: b.id,
+      service: b.service,
+      status: "completed",
+      date: b.date,
+      completed_at: b.completed_at,
+      cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
+      payout_frozen_cents: b.payout_frozen_cents,
+      display_earnings_cents: b.display_earnings_cents,
+    })),
+    now,
+  );
+  const { week_cents, month_cents } = earningsPeriodCentsFromRows(
     rows.map((b) => ({
       completed_at: b.completed_at,
       schedule_date: b.date,
       amount_cents: amountCentsForRow(b),
     })),
-    new Date(),
+    now,
   );
 
   const ledgerList = (ledgerRows ?? []) as {
@@ -287,7 +336,11 @@ export async function GET(request: Request) {
     paid_at?: string | null;
   }[];
 
-  const totalsAll = (ledgerTotalsRows ?? []) as { amount_cents?: number | null; status?: string | null }[];
+  const totalsAll = (ledgerTotalsRows ?? []) as {
+    amount_cents?: number | null;
+    status?: string | null;
+    booking_id?: string | null;
+  }[];
   let total_pending = 0;
   let total_approved = 0;
   let total_paid = 0;
@@ -373,7 +426,54 @@ export async function GET(request: Request) {
     metrics.increment("payout.invalid_paid_rows_count", { rows: invalidPaidRowCount });
   }
 
+  const chartPoints = buildLast7DaysEarningsPoints(out as CleanerPayoutSummaryRow[], now);
+
+  const shadowCards = out.map((r, i) => {
+    const b = rows[i];
+    return {
+      booking_id: r.booking_id,
+      amount_cents: r.amount_cents,
+      payout_status: r.payout_status,
+      in_frozen_batch: Boolean(r.in_frozen_batch),
+      is_team_job: Boolean(b?.is_team_job),
+      cleaner_earnings_total_cents: b?.cleaner_earnings_total_cents ?? null,
+    };
+  });
+  const finance_shadow = computeEarningsFinanceShadow(
+    shadowCards,
+    totalsAll.map((le) => ({
+      booking_id: String(le.booking_id ?? ""),
+      amount_cents: Math.max(0, Math.round(Number(le.amount_cents) || 0)),
+      status: String(le.status ?? ""),
+    })),
+  );
+
+  if (finance_shadow.shadow_mismatch) {
+    metrics.increment("cleaner.earnings_shadow_totals_mismatch", {
+      booking_ids_in_slice: finance_shadow.booking_ids_in_slice,
+      delta_all_cents: finance_shadow.delta_all_cents,
+      bucket_aligned: finance_shadow.bucket_aligned,
+      card_all_cents: finance_shadow.card.all_cents,
+      ledger_all_cents: finance_shadow.ledger.all_cents,
+    });
+  }
+  if (finance_shadow.missing_ledger_expected_count > 0) {
+    metrics.increment("cleaner.earnings_missing_ledger_rows", {
+      count: finance_shadow.missing_ledger_expected_count,
+    });
+  }
+
+  metrics.increment("cleaner.earnings_fetch", {
+    latency_ms: Math.round(performance.now() - earningsFetchStartedMs),
+    rows_count: out.length,
+    earnings_chart_points_count: chartPoints.length,
+  });
+
   return NextResponse.json({
+    as_of,
+    /** Money for summary + `rows` is still booking-derived; flip to `"ledger"` when totals migrate. */
+    source_of_truth: "booking" as const,
+    finance_shadow,
     total_pending,
     total_approved,
     total_paid,
@@ -387,6 +487,8 @@ export async function GET(request: Request) {
       today_cents,
       week_cents,
       month_cents,
+      /** Same 7-day JHB logic as `GET /api/cleaner/dashboard` — single source for goal UI. */
+      suggested_daily_goal_cents,
     },
     line_item_ledger: {
       total_pending_cents: ledger_pending,

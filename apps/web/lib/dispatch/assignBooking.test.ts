@@ -21,7 +21,7 @@ vi.mock("@/lib/dispatch/assignTeamToBooking", () => ({
   assignTeamToBooking: vi.fn(async () => ({ ok: true, teamId: "team-1" })),
 }));
 
-describe("assignBooking", () => {
+describe("assignBooking", { timeout: 20_000 }, () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();

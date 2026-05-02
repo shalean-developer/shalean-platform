@@ -12,12 +12,12 @@ type JobOffersSectionProps = {
 export function JobOffersSection({ offers, actingOfferId, onAccept, onDecline, onOfferExpired }: JobOffersSectionProps) {
   return (
     <section aria-labelledby="cleaner-offers-heading">
-      <h2 id="cleaner-offers-heading" className="mb-2 text-lg font-semibold text-foreground">
-        🔥 New Job Offers
+      <h2 id="cleaner-offers-heading" className="mb-2 text-xl font-bold tracking-tight text-foreground">
+        New job offers
       </h2>
 
       {offers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No job offers right now.</p>
+        <p className="text-sm text-muted-foreground">No new offers right now.</p>
       ) : (
         <div className="space-y-3">
           {offers.map((offer) => (

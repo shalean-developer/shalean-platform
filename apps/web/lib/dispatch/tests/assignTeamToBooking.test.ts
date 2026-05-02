@@ -124,6 +124,29 @@ class MockSupabase {
     return new QueryBuilder(table, this);
   }
   async rpc(name: string, args: Record<string, unknown>) {
+    if (name === "assign_team_and_sync_roster") {
+      const bookingId = String(args.p_booking_id ?? "");
+      const teamId = String(args.p_team_id ?? "");
+      const payoutOwner = String(args.p_payout_owner_cleaner_id ?? "");
+      const snapRaw = args.p_team_member_count_snapshot;
+      const snap =
+        typeof snapRaw === "number" && Number.isFinite(snapRaw) ? Math.max(0, Math.floor(snapRaw)) : null;
+      const rows = this.tables.bookings ?? [];
+      const hit = rows.find((b) => String(b.id) === bookingId);
+      if (hit) {
+        Object.assign(hit, {
+          cleaner_id: null,
+          payout_owner_cleaner_id: payoutOwner,
+          is_team_job: true,
+          team_id: teamId,
+          status: "assigned",
+          dispatch_status: "assigned",
+          team_member_count_snapshot: snap,
+          cleaner_response_status: "pending",
+        });
+      }
+      return { data: { ok: true }, error: null };
+    }
     if (name === "claim_team_capacity_slot") {
       const teamId = String(args.p_team_id ?? "");
       if (this.claimAlwaysRejectTeamId && this.claimAlwaysRejectTeamId === teamId) {

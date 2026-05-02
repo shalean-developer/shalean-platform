@@ -112,7 +112,7 @@ export function useCleanerMobileWorkspace() {
     const seq = ++loadSeq.current;
     try {
       const [jobsRes, meRes, offersRes] = await Promise.all([
-        cleanerAuthenticatedFetch("/api/cleaner/jobs?assignments=direct", { headers }),
+        cleanerAuthenticatedFetch("/api/cleaner/jobs", { headers }),
         cleanerAuthenticatedFetch("/api/cleaner/me", { headers }),
         cleanerAuthenticatedFetch("/api/cleaner/offers", { headers }),
       ]);
@@ -175,6 +175,7 @@ export function useCleanerMobileWorkspace() {
     let chBookings: ReturnType<typeof sb.channel> | null = null;
     let chOffers: ReturnType<typeof sb.channel> | null = null;
     let chTeamMembers: ReturnType<typeof sb.channel> | null = null;
+    let chBookingCleaners: ReturnType<typeof sb.channel> | null = null;
 
     void sb.auth.getSession().then(({ data: { session } }) => {
       if (cancelled || !session?.user) return;
@@ -183,6 +184,11 @@ export function useCleanerMobileWorkspace() {
       chBookings.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${cleanerId}` },
+        scheduleRealtimeReload,
+      );
+      chBookings.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `payout_owner_cleaner_id=eq.${cleanerId}` },
         scheduleRealtimeReload,
       );
       for (const tid of teamIdsForRealtime) {
@@ -214,6 +220,15 @@ export function useCleanerMobileWorkspace() {
           scheduleRealtimeReload,
         )
         .subscribe();
+
+      chBookingCleaners = sb
+        .channel(`cleaner-mobile-booking-cleaners-${cleanerId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "booking_cleaners", filter: `cleaner_id=eq.${cleanerId}` },
+          scheduleRealtimeReload,
+        )
+        .subscribe();
     });
 
     return () => {
@@ -225,6 +240,7 @@ export function useCleanerMobileWorkspace() {
       if (chBookings) void sb.removeChannel(chBookings);
       if (chOffers) void sb.removeChannel(chOffers);
       if (chTeamMembers) void sb.removeChannel(chTeamMembers);
+      if (chBookingCleaners) void sb.removeChannel(chBookingCleaners);
     };
   }, [load, teamIdsForRealtime, cleaner?.id, realtimeAuthEpoch, scheduleRealtimeReload]);
 

@@ -32,6 +32,8 @@ export type CleanerBookingRow = {
   extras?: unknown[] | null;
   /** When present (cleaner APIs), preferred source for scope copy vs legacy `extras` JSON. */
   lineItems?: CleanerBookingLineItemWire[] | null;
+  /** Snapshot-derived scope lines (e.g. `GET /api/cleaner/jobs?view=card` when line items are omitted). */
+  scope_lines?: string[] | null;
   assigned_at: string | null;
   en_route_at: string | null;
   started_at: string | null;
@@ -51,6 +53,10 @@ export type CleanerBookingRow = {
   /** DB `cleaner_response_status` — `accepted` unlocks "On the way". */
   cleaner_response_status?: string | null;
   displayEarningsCents?: number | null;
+  /** Snake_case mirror from some APIs (e.g. dashboard select); prefer `displayEarningsCents` when both exist. */
+  display_earnings_cents?: number | null;
+  /** Line-ledger total from DB when exposed by cleaner APIs. */
+  cleaner_earnings_total_cents?: number | null;
   /** True when pay is the team-job placeholder until stored display earnings exist. */
   displayEarningsIsEstimate?: boolean;
   earnings_cents?: number | null;

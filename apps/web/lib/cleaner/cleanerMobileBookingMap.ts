@@ -145,6 +145,28 @@ export function deriveMobilePhase(row: CleanerBookingRow): CleanerMobilePhase {
   return "pending";
 }
 
+/** Short label for dashboard job chips (terminal statuses stay explicit). */
+export function mobilePhaseDisplayForDashboard(row: CleanerBookingRow): string {
+  const st = String(row.status ?? "").toLowerCase();
+  if (st === "cancelled") return "Cancelled";
+  if (st === "completed") return "Completed";
+  const ph = deriveMobilePhase(row);
+  switch (ph) {
+    case "pending":
+      return "Pending";
+    case "assigned":
+      return "Assigned";
+    case "en_route":
+      return "En route";
+    case "in_progress":
+      return "In progress";
+    case "completed":
+      return "Completed";
+    default:
+      return "Open";
+  }
+}
+
 /** At most one primary action group for schedule / job detail (matches server lifecycle rules). */
 export type CleanerJobLifecycleSlot =
   | { kind: "accept_reject"; canReject: boolean }
@@ -286,11 +308,14 @@ export type CleanerScheduleSectionKey = "overdue" | "today" | "upcoming" | "comp
 export function groupCleanerScheduleRows(
   rows: CleanerBookingRow[],
   now: Date,
+  /** Johannesburg `YYYY-MM-DD` for “today” sections; defaults from `now`. */
+  todayYmdOverride?: string,
 ): {
   todayYmd: string;
   sections: { key: CleanerScheduleSectionKey; title: string; rows: CleanerBookingRow[] }[];
 } {
-  const todayYmd = johannesburgCalendarYmd(now);
+  const ov = String(todayYmdOverride ?? "").trim().slice(0, 10);
+  const todayYmd = /^\d{4}-\d{2}-\d{2}$/.test(ov) ? ov : johannesburgCalendarYmd(now);
   const stOf = (r: CleanerBookingRow) => String(r.status ?? "").toLowerCase();
   const dOf = (r: CleanerBookingRow) => String(r.date ?? "").slice(0, 10);
   const sortBySchedule = (a: CleanerBookingRow, b: CleanerBookingRow) =>

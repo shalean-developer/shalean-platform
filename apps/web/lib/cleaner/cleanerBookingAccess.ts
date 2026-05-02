@@ -70,6 +70,20 @@ export function bookingsVisibilityOrFilter(cleanerId: string, teamIds: string[])
   return `${soloOrOwner},and(is_team_job.is.true,team_id.in.(${list.join(",")}))`;
 }
 
+/**
+ * PostgREST `.or(...)` filter for every booking a cleaner may see (solo, payout owner, team, roster).
+ * Use from `/api/cleaner/jobs`, `/api/cleaner/dashboard`, and anywhere else visibility must stay aligned.
+ */
+export async function getCleanerVisibleBookingsOrFilter(
+  admin: SupabaseClient,
+  cleanerId: string,
+): Promise<{ orFilter: string }> {
+  const teamIds = await fetchCleanerTeamIds(admin, cleanerId);
+  const rosterBookingIds = await fetchBookingIdsWhereCleanerOnRoster(admin, cleanerId);
+  const orFilter = appendRosterBookingIdsToOrFilter(bookingsVisibilityOrFilter(cleanerId, teamIds), rosterBookingIds);
+  return { orFilter };
+}
+
 export async function cleanerHasBookingAccess(
   admin: SupabaseClient,
   cleanerId: string,

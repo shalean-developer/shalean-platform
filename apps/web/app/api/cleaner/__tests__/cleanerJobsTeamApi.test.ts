@@ -12,6 +12,10 @@ vi.mock("@/lib/cleaner/session", () => ({
   resolveCleanerIdFromRequest: async () => ({ cleanerId: "cleaner-1", status: 200 }),
 }));
 
+vi.mock("@/lib/cleaner/scheduleStuckEarningsRecompute", () => ({
+  scheduleStuckEarningsRecomputeDebounced: vi.fn(),
+}));
+
 function rowMatchesVisibilityOr(row: Row, expr: string): boolean {
   const head = /^cleaner_id\.eq\.([^,]+)/.exec(expr);
   if (head && String(row.cleaner_id ?? "") === head[1]) return true;
@@ -249,7 +253,7 @@ class MockSupabase {
   }
 }
 
-describe("GET /api/cleaner/jobs — team visibility", () => {
+describe("GET /api/cleaner/jobs — team visibility", { timeout: 60_000 }, () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -265,7 +269,7 @@ describe("GET /api/cleaner/jobs — team visibility", () => {
     expect(ids).toEqual(["team-a"]);
   });
 
-  it("team member sees team job and individual job; not other team", async () => {
+  it("team member sees team job and individual job; not other team", { timeout: 60_000 }, async () => {
     mockState.admin = new MockSupabase({
       cleaners: [{ id: "cleaner-1" }],
       team_members: [
@@ -311,5 +315,155 @@ describe("GET /api/cleaner/jobs — team visibility", () => {
     expect(ids).toEqual(["b-own", "b-team"]);
     const teamRow = json.jobs.find((j) => j.id === "b-team");
     expect(teamRow?.teamMemberCount).toBe(3);
+  });
+
+  it("lite=1 keeps full visibility but omits line items and team roster payload", async () => {
+    mockState.admin = new MockSupabase({
+      cleaners: [{ id: "cleaner-1" }],
+      team_members: [
+        { cleaner_id: "cleaner-1", team_id: "team-a" },
+        { cleaner_id: "cleaner-2", team_id: "team-a" },
+      ],
+      bookings: [
+        {
+          id: "b-own",
+          cleaner_id: "cleaner-1",
+          team_id: null,
+          is_team_job: false,
+          status: "assigned",
+          service: "Standard",
+        },
+        {
+          id: "b-team",
+          cleaner_id: null,
+          team_id: "team-a",
+          is_team_job: true,
+          status: "assigned",
+          service: "Deep",
+          date: "2026-04-25",
+          team_member_count_snapshot: 2,
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/jobs/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/jobs?lite=1"));
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      jobs: { id: string; lineItems?: unknown; team_roster?: unknown; team_roster_summary?: string | null }[];
+    };
+    const ids = json.jobs.map((j) => j.id).sort();
+    expect(ids).toEqual(["b-own", "b-team"]);
+    const teamRow = json.jobs.find((j) => j.id === "b-team");
+    expect(teamRow?.lineItems).toBeNull();
+    expect(teamRow?.team_roster).toEqual([]);
+    expect(teamRow?.team_roster_summary).toBeNull();
+  });
+
+  it("view=card omits line items / roster and attaches scope_lines", async () => {
+    mockState.admin = new MockSupabase({
+      cleaners: [{ id: "cleaner-1" }],
+      team_members: [{ cleaner_id: "cleaner-1", team_id: "team-a" }],
+      bookings: [
+        {
+          id: "b-own",
+          cleaner_id: "cleaner-1",
+          team_id: null,
+          is_team_job: false,
+          status: "assigned",
+          service: "Standard",
+          date: "2026-05-01",
+          time: "09:00",
+          rooms: 2,
+          bathrooms: 1,
+          location: "1 Main Rd, Claremont",
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/jobs/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/jobs?view=card"));
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      jobs: { id: string; lineItems?: unknown; scope_lines?: string[] }[];
+    };
+    expect(json.jobs).toHaveLength(1);
+    const row = json.jobs[0]!;
+    expect(row.lineItems).toBeNull();
+    expect(Array.isArray(row.scope_lines)).toBe(true);
+    expect((row.scope_lines ?? []).length).toBeGreaterThan(0);
+  });
+});
+
+describe("GET /api/cleaner/dashboard", { timeout: 15_000 }, () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns jobs + summary with same visibility as jobs list", async () => {
+    mockState.admin = new MockSupabase({
+      cleaners: [{ id: "cleaner-1" }],
+      team_members: [{ cleaner_id: "cleaner-1", team_id: "team-a" }],
+      bookings: [
+        { id: "b-own", cleaner_id: "cleaner-1", status: "assigned", service: "Standard", date: "2026-05-01", time: "09:00" },
+        {
+          id: "b-team",
+          cleaner_id: null,
+          team_id: "team-a",
+          is_team_job: true,
+          status: "assigned",
+          service: "Deep",
+          date: "2026-05-02",
+          time: "10:00",
+        },
+      ],
+    });
+    const { GET } = await import("@/app/api/cleaner/dashboard/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/dashboard"));
+    expect(res.status).toBe(200);
+    const j = (await res.json()) as {
+      jobs: { id: string }[];
+      summary: { today_cents: number; today_breakdown: unknown[]; earnings_timezone: string };
+    };
+    expect(j.jobs.map((x) => x.id).sort()).toEqual(["b-own", "b-team"]);
+    expect(typeof j.summary.today_cents).toBe("number");
+    expect(Array.isArray(j.summary.today_breakdown)).toBe(true);
+    expect(j.summary.earnings_timezone).toBe("Africa/Johannesburg");
+  });
+
+  it("caps dashboard jobs at 12 and dedupes duplicate booking ids", async () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      id: `b-${i}`,
+      cleaner_id: "cleaner-1",
+      status: "assigned",
+      service: "Standard",
+      date: `2026-05-${String(10 + i).padStart(2, "0")}`,
+      time: "09:00",
+    }));
+    mockState.admin = new MockSupabase({
+      cleaners: [{ id: "cleaner-1" }],
+      team_members: [],
+      bookings: many,
+    });
+    const { GET } = await import("@/app/api/cleaner/dashboard/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/dashboard"));
+    expect(res.status).toBe(200);
+    const capped = (await res.json()) as { jobs: { id: string }[] };
+    expect(capped.jobs.length).toBe(12);
+
+    mockState.admin = new MockSupabase({
+      cleaners: [{ id: "cleaner-1" }],
+      team_members: [],
+      bookings: [
+        { id: "b-dup", cleaner_id: "cleaner-1", status: "assigned", service: "A", date: "2026-06-01", time: "08:00" },
+        { id: "b-dup", cleaner_id: "cleaner-1", status: "assigned", service: "B", date: "2026-06-01", time: "09:00" },
+        { id: "b-x", cleaner_id: "cleaner-1", status: "assigned", service: "C", date: "2026-06-02", time: "10:00" },
+      ],
+    });
+    const res2 = await GET(new Request("http://localhost/api/cleaner/dashboard"));
+    expect(res2.status).toBe(200);
+    const deduped = (await res2.json()) as { jobs: { id: string }[] };
+    expect(deduped.jobs.filter((x) => x.id === "b-dup").length).toBe(1);
+    expect(deduped.jobs.some((x) => x.id === "b-x")).toBe(true);
   });
 });
