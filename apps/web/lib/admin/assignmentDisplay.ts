@@ -12,7 +12,13 @@ export function assignmentSourceLabel(input: {
   const hasCleaner = Boolean(input.cleaner_id?.trim());
   const fr = String(input.fallback_reason ?? "").trim();
 
-  if (at === "user_selected" && !hasCleaner && st === "pending") return "Awaiting cleaner acceptance (user selected)";
+  if (
+    at === "user_selected" &&
+    !hasCleaner &&
+    (st === "pending" || st === "pending_assignment")
+  ) {
+    return "Awaiting cleaner acceptance (user selected)";
+  }
   if (at === "user_selected" && hasCleaner) return "Assigned (user selected)";
   if (at === "auto_fallback" && hasCleaner) {
     return fr ? `Assigned (fallback: ${fr})` : "Assigned (fallback)";

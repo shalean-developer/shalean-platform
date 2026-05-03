@@ -14,7 +14,7 @@ function shouldNoIndexEntireDeployment(): boolean {
   return v === "preview" || v === "development";
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);
   if (legacy) {

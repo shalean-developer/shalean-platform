@@ -22,6 +22,16 @@ describe("assignmentSourceLabel", () => {
     ).toBe("Awaiting cleaner acceptance (user selected)");
   });
 
+  it("labels user_selected pending_assignment (checkout offer path)", () => {
+    expect(
+      assignmentSourceLabel({
+        cleaner_id: null,
+        status: "pending_assignment",
+        assignment_type: "user_selected",
+      }),
+    ).toBe("Awaiting cleaner acceptance (user selected)");
+  });
+
   it("labels auto_dispatch and auto_fallback", () => {
     const cid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
     expect(assignmentSourceLabel({ cleaner_id: cid, status: "assigned", assignment_type: "auto_dispatch" })).toBe(

@@ -55,7 +55,7 @@ Action plan derived from the pre-launch audit (payments, SEO, ops). Treat each d
 
 ## Day 6 — Security, middleware, and observability
 
-- [ ] Confirm **middleware** only redirects legacy SEO URLs and refreshes Supabase session; **cleaner** routes still require auth as intended (`apps/web/middleware.ts`, `apps/web/lib/supabase/supabaseMiddleware.ts`).
+- [ ] Confirm **proxy** only redirects legacy SEO URLs and refreshes Supabase session; **cleaner** routes still require auth as intended (`apps/web/proxy.ts`, `apps/web/lib/supabase/supabaseMiddleware.ts`).
 - [ ] Spot-check **no accidental 403** on public routes (marketing, booking entry, location pages).
 - [ ] Ensure **`system_logs` / `reportOperationalIssue`** and Paystack **`logSystemEvent`** paths are monitored (Datadog, Vercel logs, or daily ops summary — `apps/web/lib/ops/dailyOpsSummary.ts`).
 - [ ] Optional hardening: **timing-safe** HMAC compare on **`/api/paystack/webhook`** (parity with `apps/web/app/api/webhooks/paystack/route.ts`).

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, Loader2, MapPin, Pencil, Phone, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import {
@@ -17,6 +17,7 @@ import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleane
 import { issueReportReasonDisplay } from "@/lib/cleaner/cleanerJobIssueReasons";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
+import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { AdminBookingLiveLocation } from "@/components/admin/AdminBookingLiveLocation";
 import {
@@ -48,6 +49,10 @@ type BookingDetails = {
   cleaner_response_status?: string | null;
   user_id: string | null;
   cleaner_id: string | null;
+  /** Customer checkout pick; assignment finalizes in `cleaner_id` after accept. */
+  selected_cleaner_id?: string | null;
+  assignment_type?: string | null;
+  fallback_reason?: string | null;
   team_id?: string | null;
   is_team_job?: boolean | null;
   booking_snapshot?: unknown;
@@ -503,6 +508,8 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [error, setError] = useState<string | null>(null);
   const [fullBooking, setFullBooking] = useState<BookingDetails | null>(null);
   const [cleaner, setCleaner] = useState<Cleaner | null>(null);
+  /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
+  const [selectedCleaner, setSelectedCleaner] = useState<Cleaner | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [cleanerOptions, setCleanerOptions] = useState<AdminCleanerRow[]>([]);
@@ -586,6 +593,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setLoading(true);
       setFleetBestUxVariant(null);
       setLedgerCleanerEarnings([]);
+      setSelectedCleaner(null);
       const sb = getSupabaseBrowser();
       const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
       const token = sessionData.session?.access_token;
@@ -606,6 +614,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
         res.json() as Promise<{
           booking?: BookingDetails;
           cleaner?: Cleaner | null;
+          selected_cleaner?: Cleaner | null;
           userProfile?: UserProfile | null;
           dispatch_offers?: DispatchOfferAdminRow[];
           cleaner_issue_reports?: CleanerIssueReportRow[];
@@ -642,6 +651,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
         : [];
       setLedgerCleanerEarnings(ce.filter((r) => r.id));
       setCleaner(json.cleaner ?? null);
+      setSelectedCleaner(json.selected_cleaner ?? null);
       setUserProfile(json.userProfile ?? null);
       setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
       setCleanerIssueReports(Array.isArray(json.cleaner_issue_reports) ? json.cleaner_issue_reports : []);
@@ -1126,6 +1136,14 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
   const companyRevenueZar = centsToZar(fullBooking.company_revenue_cents);
   const isAssigned = !!fullBooking.cleaner_id;
+  const assignmentSummaryLine = assignmentSourceLabel({
+    cleaner_id: fullBooking.cleaner_id ?? null,
+    status: fullBooking.status ?? null,
+    assignment_type: fullBooking.assignment_type ?? null,
+    fallback_reason: fullBooking.fallback_reason ?? null,
+  });
+  const selectedCleanerIdRaw = String(fullBooking.selected_cleaner_id ?? "").trim();
+  const hasSelectedCleanerUuid = /^[0-9a-f-]{36}$/i.test(selectedCleanerIdRaw);
   const dispatchSt = (fullBooking.dispatch_status ?? "").toLowerCase();
   const needsDispatchManualAttention =
     !isAssigned &&
@@ -1468,23 +1486,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setTeamModalOpen(false);
       setTeamPickId(null);
       setToast({ kind: "success", text: "Team assigned" });
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
-      if (token) {
-        const refresh = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const jr = (await refresh.json()) as {
-          booking?: BookingDetails;
-          team_summary?: TeamSummary | null;
-          supports_team_assignment?: boolean;
-        };
-        if (refresh.ok && jr.booking) {
-          setFullBooking(jr.booking);
-          setTeamSummary(jr.team_summary ?? null);
-          setSupportsTeamAssignment(jr.supports_team_assignment === true);
-        }
-      }
+      setDetailRefresh((n) => n + 1);
     } catch (e) {
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Team assignment failed" });
     } finally {
@@ -1546,6 +1548,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setAssignModalOpen(false);
       setEditingCleanerInline(false);
       setToast({ kind: "success", text: "Cleaner assigned" });
+      setDetailRefresh((n) => n + 1);
     } catch (e) {
       setFullBooking((p) => (p ? { ...p, cleaner_id: prevCleanerId } : p));
       setCleaner(prevCleaner);
@@ -2114,6 +2117,65 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 <DetailRow label="Rating" value={typeof cleaner?.rating === "number" ? `${cleaner.rating.toFixed(1)} ★` : "—"} />
                 <DetailRow label="Jobs completed" value={`${cleaner?.jobs_completed ?? 0}`} />
                 <DetailRow label="Status" value="Assigned" />
+                {assignmentSummaryLine ? (
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">{assignmentSummaryLine}</p>
+                ) : null}
+              </div>
+            ) : selectedCleaner || hasSelectedCleanerUuid ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-sky-200 bg-sky-50/90 p-3 dark:border-sky-900/60 dark:bg-sky-950/40">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-sky-900 dark:text-sky-200">
+                    Customer&apos;s choice (pending acceptance)
+                  </p>
+                  {selectedCleaner ? (
+                    <>
+                      <p className="mt-1 text-base font-medium text-zinc-900 dark:text-zinc-100">
+                        {selectedCleaner.full_name ?? selectedCleaner.id}
+                      </p>
+                      <DetailRow label="Rating" value={typeof selectedCleaner.rating === "number" ? `${selectedCleaner.rating.toFixed(1)} ★` : "—"} />
+                      <DetailRow label="Cleaner status" value={selectedCleaner.status?.trim() ? selectedCleaner.status : "—"} />
+                      {selectedCleaner.phone?.trim() ? (
+                        <DetailRow
+                          label="Phone"
+                          value={
+                            <a className="text-emerald-700 hover:underline" href={`tel:${selectedCleaner.phone}`}>
+                              {selectedCleaner.phone}
+                            </a>
+                          }
+                        />
+                      ) : null}
+                      {selectedCleaner.email?.trim() ? (
+                        <DetailRow
+                          label="Email"
+                          value={
+                            <a className="text-emerald-700 hover:underline" href={`mailto:${selectedCleaner.email}`}>
+                              {selectedCleaner.email}
+                            </a>
+                          }
+                        />
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      Recorded cleaner id{" "}
+                      <span className="font-mono text-xs">{selectedCleanerIdRaw}</span> (profile not found — may be removed
+                      or invalid).
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+                  <p className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
+                    <TriangleAlert size={14} />
+                    No cleaner assigned yet — job is offered until they accept.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void openCleanerPickerInline()}
+                    className="mt-3 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                  >
+                    Assign cleaner
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -2121,6 +2183,17 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 <button type="button" onClick={() => void openCleanerPickerInline()} className="mt-3 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700">Assign cleaner</button>
               </div>
             )}
+            {fullBooking.cleaner_id && selectedCleaner ? (
+              <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                  Customer originally requested
+                </p>
+                <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  {selectedCleaner.full_name ?? selectedCleaner.id}
+                </p>
+                <p className="mt-1 font-mono text-[11px] text-zinc-500">{selectedCleaner.id}</p>
+              </div>
+            ) : null}
             {editingCleanerInline ? (
               <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2 transition">
                 <div className="max-h-56 space-y-1 overflow-y-auto">
@@ -2836,7 +2909,7 @@ function DetailCard({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-function DetailRow({ label, value, mono = false, strong = false }: { label: string; value: string; mono?: boolean; strong?: boolean }) {
+function DetailRow({ label, value, mono = false, strong = false }: { label: string; value: ReactNode; mono?: boolean; strong?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <span className="text-xs text-zinc-500">{label}</span>

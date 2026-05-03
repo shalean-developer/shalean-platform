@@ -71,11 +71,28 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const cleanerId = typeof booking.cleaner_id === "string" ? booking.cleaner_id : null;
   const userId = typeof booking.user_id === "string" ? booking.user_id : null;
 
+  const selectedRaw =
+    typeof (booking as { selected_cleaner_id?: unknown }).selected_cleaner_id === "string"
+      ? String((booking as { selected_cleaner_id: string }).selected_cleaner_id).trim()
+      : "";
+  const selectedCleanerId = /^[0-9a-f-]{36}$/i.test(selectedRaw) ? selectedRaw : null;
+  /** Join row for checkout pick when it is not the same as the assigned cleaner (or no assign yet). */
+  const fetchSelectedCleanerRow =
+    selectedCleanerId != null && (cleanerId == null || selectedCleanerId !== cleanerId);
+
   const cleanerPromise = cleanerId
     ? admin
         .from("cleaners")
         .select("id, full_name, email, phone, status, rating")
         .eq("id", cleanerId)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+
+  const selectedCleanerPromise = fetchSelectedCleanerRow
+    ? admin
+        .from("cleaners")
+        .select("id, full_name, email, phone, status, rating")
+        .eq("id", selectedCleanerId)
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
@@ -108,6 +125,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const [
     { data: cleaner },
+    { data: selected_cleaner },
     { data: userProfile },
     { data: dispatchOffers, error: offersErr },
     { data: cleanerIssueReportsRaw, error: issueErr },
@@ -115,6 +133,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     { data: cleaner_earnings, error: earningsErr },
   ] = await Promise.all([
     cleanerPromise,
+    selectedCleanerPromise,
     userProfilePromise,
     offersPromise,
     issueReportsPromise,
@@ -178,6 +197,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     booking_line_items: booking_line_items ?? [],
     cleaner_earnings: cleaner_earnings ?? [],
     cleaner: cleaner ?? null,
+    selected_cleaner: selected_cleaner ?? null,
     userProfile: userProfile ?? null,
     dispatch_offers: dispatchOffers ?? [],
     cleaner_issue_reports: cleanerIssueReports ?? [],

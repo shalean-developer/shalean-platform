@@ -81,7 +81,7 @@ export function CleanerLoginPageClient() {
     const fallback = "/cleaner/dashboard";
     const safe = redirectRaw ? sanitizeCleanerPostAuthRedirect(redirectRaw) : fallback;
     const path = safe === "/cleaner" ? fallback : safe;
-    /** Full navigation so the next document request includes auth cookies (middleware + RSC see the session). */
+    /** Full navigation so the next document request includes auth cookies (proxy + RSC see the session). */
     window.location.assign(path);
   }
 
