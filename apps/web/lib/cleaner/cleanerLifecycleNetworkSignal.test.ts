@@ -15,6 +15,11 @@ describe("isOfflineSignal", () => {
     expect(isOfflineSignal(null, { navigatorOnline: true, error: new TypeError("Failed to fetch") })).toBe(true);
   });
 
+  it("returns false when navigator is online and there is no response object (pre-fetch / navigator-only check)", () => {
+    expect(isOfflineSignal(null, { navigatorOnline: true })).toBe(false);
+    expect(isOfflineSignal(undefined, { navigatorOnline: true })).toBe(false);
+  });
+
   it("returns false for normal online 200", () => {
     expect(isOfflineSignal(new Response("", { status: 200 }), { navigatorOnline: true })).toBe(false);
   });

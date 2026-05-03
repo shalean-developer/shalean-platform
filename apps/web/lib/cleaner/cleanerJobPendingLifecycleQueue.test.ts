@@ -54,6 +54,12 @@ describe("canEnqueueLifecycleAfterQueued", () => {
     expect(canEnqueueLifecycleAfterQueued("start", "en_route").ok).toBe(false);
   });
 
+  it("allows accept to replace stale forward-queued intent (server still on accept)", () => {
+    expect(canEnqueueLifecycleAfterQueued("en_route", "accept").ok).toBe(true);
+    expect(canEnqueueLifecycleAfterQueued("start", "accept").ok).toBe(true);
+    expect(canEnqueueLifecycleAfterQueued("complete", "accept").ok).toBe(true);
+  });
+
   it("allows same-action replace", () => {
     expect(canEnqueueLifecycleAfterQueued("accept", "accept").ok).toBe(true);
   });

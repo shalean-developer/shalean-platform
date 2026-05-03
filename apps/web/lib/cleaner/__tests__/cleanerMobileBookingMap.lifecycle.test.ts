@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { deriveCleanerJobLifecycleSlot, deriveCleanerJobUiState } from "@/lib/cleaner/cleanerMobileBookingMap";
+import {
+  deriveCleanerJobLifecycleSlot,
+  deriveCleanerJobUiState,
+  isCleanerAssignmentAccepted,
+  mobilePhaseDisplayForDashboard,
+} from "@/lib/cleaner/cleanerMobileBookingMap";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 
 function baseRow(over: Partial<CleanerBookingRow>): CleanerBookingRow {
@@ -30,6 +35,16 @@ const nowBeforeOfferExpiry = Date.parse("2026-04-30T07:15:00.000Z");
 /** Past scheduled start + 30m grace — unaccepted assigned offers expire. */
 const nowAfterOfferExpiry = Date.parse("2026-04-30T08:15:00.000Z");
 
+describe("isCleanerAssignmentAccepted", () => {
+  it("is true when response is accepted or accepted_at is set", () => {
+    expect(isCleanerAssignmentAccepted(baseRow({ cleaner_response_status: "accepted" }))).toBe(true);
+    expect(isCleanerAssignmentAccepted(baseRow({ cleaner_response_status: "pending", accepted_at: "2026-04-30T07:00:00.000Z" }))).toBe(
+      true,
+    );
+    expect(isCleanerAssignmentAccepted(baseRow({ cleaner_response_status: "pending" }))).toBe(false);
+  });
+});
+
 describe("deriveCleanerJobUiState", () => {
   it("matches lifecycle slot semantics for assigned / accept / travel / start", () => {
     expect(deriveCleanerJobUiState(baseRow({ cleaner_response_status: "pending" }), { nowMs: nowBeforeOfferExpiry })).toEqual({
@@ -42,6 +57,15 @@ describe("deriveCleanerJobUiState", () => {
     expect(deriveCleanerJobUiState(baseRow({ cleaner_response_status: "accepted" }), { nowMs: nowAfterOfferExpiry })).toEqual({
       phase: "on_my_way",
     });
+    expect(
+      deriveCleanerJobUiState(
+        baseRow({
+          cleaner_response_status: "pending",
+          accepted_at: "2026-04-30T07:00:00.000Z",
+        }),
+        { nowMs: nowAfterOfferExpiry },
+      ),
+    ).toEqual({ phase: "on_my_way" });
     expect(deriveCleanerJobUiState(baseRow({ cleaner_response_status: "on_my_way" }), { nowMs: nowBeforeOfferExpiry })).toEqual({
       phase: "start",
     });
@@ -67,6 +91,30 @@ describe("deriveCleanerJobUiState", () => {
         else if (ui.phase === "complete") expect(slot).toEqual({ kind: "complete" });
       }
     }
+  });
+});
+
+describe("confirmed status (legacy)", () => {
+  it("uses same lifecycle as assigned for accept / en route", () => {
+    expect(deriveCleanerJobUiState(baseRow({ status: "confirmed", cleaner_response_status: "pending" }), { nowMs: nowBeforeOfferExpiry })).toEqual({
+      phase: "accept",
+      canReject: true,
+    });
+    expect(
+      deriveCleanerJobUiState(
+        baseRow({ status: "confirmed", cleaner_response_status: "on_my_way" }),
+        { nowMs: nowBeforeOfferExpiry },
+      ),
+    ).toEqual({ phase: "start" });
+    expect(mobilePhaseDisplayForDashboard(baseRow({ status: "confirmed", cleaner_response_status: "pending" }), { nowMs: nowBeforeOfferExpiry })).toBe(
+      "Needs accept",
+    );
+    expect(
+      mobilePhaseDisplayForDashboard(
+        baseRow({ status: "confirmed", cleaner_response_status: "on_my_way" }),
+        { nowMs: nowBeforeOfferExpiry },
+      ),
+    ).toBe("En route");
   });
 });
 

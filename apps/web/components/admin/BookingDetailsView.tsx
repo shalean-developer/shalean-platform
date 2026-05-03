@@ -78,6 +78,8 @@ type BookingDetails = {
   payment_mismatch?: boolean | null;
   total_paid_cents?: number | null;
   assigned_at?: string | null;
+  /** Set when cleaner accepts in app (with `cleaner_response_status` accepted). */
+  accepted_at?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
@@ -290,6 +292,27 @@ function formatShortTs(iso: string | null | undefined): string {
   return d.toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** Solo cleaner_id, team roster, or status shows job is operationally assigned (not “searching”). */
+function adminBookingAssignmentStepDone(b: BookingDetails): boolean {
+  if (Boolean(String(b.cleaner_id ?? "").trim())) return true;
+  if (b.is_team_job === true && Boolean(String(b.team_id ?? "").trim())) return true;
+  const st = String(b.status ?? "")
+    .trim()
+    .toLowerCase();
+  if (["assigned", "confirmed", "in_progress", "completed"].includes(st) && Boolean(String(b.assigned_at ?? "").trim())) {
+    return true;
+  }
+  return false;
+}
+
+function adminBookingCleanerAcceptedDone(b: BookingDetails): boolean {
+  const crs = String(b.cleaner_response_status ?? "")
+    .trim()
+    .toLowerCase();
+  if (crs === "accepted" || crs === "on_my_way" || crs === "started" || crs === "completed") return true;
+  return Boolean(String(b.accepted_at ?? "").trim());
+}
+
 function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
   const paidAt = booking.payment_completed_at;
   const offPlatform = adminOffPlatformPaidBadgeLabel(booking);
@@ -297,6 +320,24 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
   const payoutPs = String(booking.payout_status ?? "").trim().toLowerCase();
   const payoutLabel =
     payoutPs === "paid" ? "Paid out to cleaner" : payoutPs === "eligible" ? "Eligible for payout" : payoutPs ? payoutPs : "—";
+
+  const assignedDone = adminBookingAssignmentStepDone(booking);
+  const assignedDetail = (() => {
+    if (Boolean(String(booking.cleaner_id ?? "").trim())) {
+      return formatShortTs(booking.assigned_at ?? null);
+    }
+    if (booking.is_team_job === true && Boolean(String(booking.team_id ?? "").trim())) {
+      return booking.assigned_at ? `Team · ${formatShortTs(booking.assigned_at)}` : "Team roster assigned";
+    }
+    return assignedDone ? formatShortTs(booking.assigned_at ?? null) : "No cleaner yet";
+  })();
+
+  const acceptedDone = adminBookingCleanerAcceptedDone(booking);
+  const acceptedDetail = acceptedDone
+    ? String(booking.accepted_at ?? "").trim()
+      ? formatShortTs(booking.accepted_at)
+      : "Acknowledged"
+    : "Awaiting cleaner in app";
 
   const steps: { key: string; label: string; detail: string; done: boolean }[] = [
     { key: "created", label: "Created", detail: formatShortTs(booking.created_at), done: true },
@@ -309,8 +350,14 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
     {
       key: "assigned",
       label: "Assigned",
-      detail: booking.cleaner_id ? formatShortTs(booking.assigned_at ?? null) : "No cleaner yet",
-      done: Boolean(booking.cleaner_id),
+      detail: assignedDetail,
+      done: assignedDone,
+    },
+    {
+      key: "accepted",
+      label: "Cleaner accepted",
+      detail: acceptedDetail,
+      done: acceptedDone,
     },
     {
       key: "progress",
@@ -351,7 +398,9 @@ function detailFlags(booking: BookingDetails, userProfile: UserProfile | null) {
   if ((userProfile?.tier ?? "").toLowerCase() === "gold" || (userProfile?.tier ?? "").toLowerCase() === "platinum") {
     flags.push("VIP");
   }
-  if (!booking.cleaner_id) flags.push("NO CLEANER");
+  if (!booking.cleaner_id && !(booking.is_team_job === true && String(booking.team_id ?? "").trim())) {
+    flags.push("NO CLEANER");
+  }
   if (!booking.customer_email) flags.push("MISSING CUSTOMER EMAIL");
   const total = money(booking);
   if (total <= 0) flags.push("PAYMENT ISSUE");

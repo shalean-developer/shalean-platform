@@ -4,19 +4,18 @@ import { prioritizeDashboardJobsForDisplay } from "@/lib/cleaner-dashboard/prior
 
 function row(p: Partial<CleanerBookingRow> & { id: string }): CleanerBookingRow {
   return {
-    id: p.id,
     service: "Std",
-    date: p.date ?? null,
-    time: p.time ?? null,
+    date: null,
+    time: null,
     location: null,
-    status: p.status ?? "assigned",
+    status: "assigned",
     total_paid_zar: null,
     customer_name: null,
     customer_phone: null,
     assigned_at: null,
     en_route_at: null,
     started_at: null,
-    completed_at: p.completed_at ?? null,
+    completed_at: null,
     created_at: null,
     ...p,
   };

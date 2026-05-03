@@ -3,6 +3,8 @@ import type { StoredPriceLine } from "@/lib/dashboard/storedPriceBreakdown";
 
 export type NormalizedBookingStatus =
   | "pending"
+  | "pending_assignment"
+  | "offered"
   | "confirmed"
   | "assigned"
   | "in_progress"
@@ -27,6 +29,8 @@ export type BookingRow = {
   amount_paid_cents: number | null;
   currency: string | null;
   status: string | null;
+  dispatch_status?: string | null;
+  cleaner_response_status?: string | null;
   /** Monthly billing sub-state when set (e.g. `pending_monthly`). */
   payment_status?: string | null;
   monthly_invoice_id?: string | null;
@@ -38,6 +42,7 @@ export type BookingRow = {
   paystack_reference: string;
   cleaner_id?: string | null;
   assigned_at?: string | null;
+  accepted_at?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;

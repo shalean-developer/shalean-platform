@@ -40,12 +40,14 @@ function lastRequestLabel(status: string): string {
 type CleanerWorkSettingsCardProps = {
   /** Reserved for layout tweaks when nested in {@link CleanerHeroStack}. */
   embedded?: boolean;
+  /** When incremented (e.g. Supabase Realtime), refetches work settings from the API. */
+  realtimeRefreshKey?: number;
 };
 
 const PANEL_CLASS =
   "w-full space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm ring-1 ring-black/[0.04] dark:bg-card/95 dark:ring-white/[0.06]";
 
-export function CleanerWorkSettingsCard({ embedded: _embedded = false }: CleanerWorkSettingsCardProps) {
+export function CleanerWorkSettingsCard({ embedded: _embedded = false, realtimeRefreshKey }: CleanerWorkSettingsCardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assignedArea, setAssignedArea] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export function CleanerWorkSettingsCard({ embedded: _embedded = false }: Cleaner
       setAssignedArea(typeof j.assigned_area === "string" && j.assigned_area.trim() ? j.assigned_area.trim() : null);
       const wd = Array.isArray(j.working_days) ? j.working_days : [];
       const normalized = CLEANER_WEEKDAY_CODES.filter((d) => wd.includes(d));
-      setWorkingDays(normalized.length > 0 ? (normalized as CleanerWeekdayCode[]) : [...CLEANER_WEEKDAY_CODES]);
+      setWorkingDays(normalized as CleanerWeekdayCode[]);
       setLastRequest(j.last_request ?? null);
     } catch (e) {
       if (!silent) setError(e instanceof Error ? e.message : "Could not load work settings.");
@@ -90,6 +92,11 @@ export function CleanerWorkSettingsCard({ embedded: _embedded = false }: Cleaner
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial work settings fetch on mount
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (realtimeRefreshKey == null || realtimeRefreshKey === 0) return;
+    void load({ silent: true });
+  }, [realtimeRefreshKey, load]);
 
   const refetchDebounceMs = useRef(0);
   useEffect(() => {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { replaceCleanerAvailabilityFromWeekly } from "@/lib/admin/replaceCleanerAvailabilityFromWeekly";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +70,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       weeklySchedule: weekly,
       horizonDays,
     });
+    await syncCleanerSummary(admin, id);
     return NextResponse.json({ ok: true, inserted: r.inserted });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed." }, { status: 500 });

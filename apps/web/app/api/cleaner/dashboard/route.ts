@@ -11,13 +11,12 @@ import { dedupeBookingsById, prioritizeDashboardJobsForDisplay } from "@/lib/cle
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getCleanerDashboardCache, setCleanerDashboardCache } from "@/app/api/cleaner/dashboard/dashboardResponseCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, service, customer_name, completed_at, created_at, cleaner_response_status, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents";
+  "id, date, time, location, status, dispatch_status, service, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id";
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
@@ -27,18 +26,22 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     time: (raw.time as string | null | undefined) ?? null,
     location: (raw.location as string | null | undefined) ?? null,
     status: (raw.status as string | null | undefined) ?? null,
+    dispatch_status: (raw.dispatch_status as string | null | undefined) ?? null,
     cleaner_response_status: (raw.cleaner_response_status as string | null | undefined) ?? null,
     total_paid_zar: null,
     customer_name: (raw.customer_name as string | null | undefined) ?? null,
     customer_phone: null,
-    assigned_at: null,
-    en_route_at: null,
-    started_at: null,
+    assigned_at: (raw.assigned_at as string | null | undefined) ?? null,
+    accepted_at: (raw.accepted_at as string | null | undefined) ?? null,
+    en_route_at: (raw.en_route_at as string | null | undefined) ?? null,
+    started_at: (raw.started_at as string | null | undefined) ?? null,
     completed_at: (raw.completed_at as string | null | undefined) ?? null,
     created_at: (raw.created_at as string | null | undefined) ?? null,
     cleaner_earnings_total_cents: raw.cleaner_earnings_total_cents as number | null | undefined,
     payout_frozen_cents: raw.payout_frozen_cents as number | null | undefined,
     display_earnings_cents: raw.display_earnings_cents as number | null | undefined,
+    is_team_job: raw.is_team_job === true,
+    team_id: (raw.team_id as string | null | undefined) ?? null,
   };
 }
 
@@ -56,11 +59,6 @@ export async function GET(request: Request) {
   const { data: c } = await admin.from("cleaners").select("id").eq("id", cleanerId).maybeSingle();
   if (!c) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
-  }
-
-  const cached = getCleanerDashboardCache(cleanerId);
-  if (cached != null) {
-    return NextResponse.json(cached);
   }
 
   const { orFilter } = await getCleanerVisibleBookingsOrFilter(admin, cleanerId);
@@ -109,6 +107,7 @@ export async function GET(request: Request) {
       earnings_timezone: "Africa/Johannesburg",
     },
   };
-  setCleanerDashboardCache(cleanerId, body);
-  return NextResponse.json(body);
+  return NextResponse.json(body, {
+    headers: { "Cache-Control": "private, no-store, max-age=0" },
+  });
 }

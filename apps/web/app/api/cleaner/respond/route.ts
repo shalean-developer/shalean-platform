@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cleanerHasBookingAccess } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { runCleanerBookingLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -41,12 +42,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Cleaner mismatch." }, { status: 403 });
   }
 
-  const { data: row, error: rowErr } = await admin.from("bookings").select("cleaner_id").eq("id", bookingId).maybeSingle();
+  const { data: row, error: rowErr } = await admin
+    .from("bookings")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job")
+    .eq("id", bookingId)
+    .maybeSingle();
   if (rowErr || !row) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });
   }
-  const cid = String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
-  if (cid !== session.cleanerId) {
+  const rec = row as {
+    id?: string;
+    cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
+    team_id?: string | null;
+    is_team_job?: boolean | null;
+  };
+  const canAccess = await cleanerHasBookingAccess(admin, session.cleanerId, {
+    id: bookingId,
+    cleaner_id: rec.cleaner_id ?? null,
+    payout_owner_cleaner_id: rec.payout_owner_cleaner_id ?? null,
+    team_id: rec.team_id ?? null,
+    is_team_job: rec.is_team_job === true,
+  });
+  if (!canAccess) {
     return NextResponse.json({ error: "Not your job." }, { status: 403 });
   }
 

@@ -1,13 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { loadCustomerBookingRowsForUser } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const DEPRECATION_HEADERS = {
+  Deprecation: "true",
+  Sunset: "2027-06-01",
+  Link: '</api/customer/bookings>; rel="successor-version"',
+};
+
 /**
- * Authenticated user's bookings (`user_id` = JWT subject). Bearer token required.
+ * @deprecated Use `GET /api/customer/bookings` — same payload and auth.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -33,21 +39,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  const { data, error } = await admin
-    .from("bookings")
-    .select(
-      "id, service, date, time, location, total_paid_zar, amount_paid_cents, currency, status, booking_snapshot, created_at, paystack_reference, cleaner_id, assigned_at, en_route_at, started_at, completed_at",
-    )
-    .eq("user_id", userData.user.id)
-    .neq("status", "pending_payment")
-    .neq("status", "payment_expired")
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (error) {
-    await reportOperationalIssue("error", "api/bookings/me", error.message);
-    return NextResponse.json({ error: "Could not load bookings." }, { status: 500 });
+  const out = await loadCustomerBookingRowsForUser(admin, userData.user.id);
+  if (!out.ok) {
+    return NextResponse.json({ error: out.error }, { status: out.status });
   }
-
-  return NextResponse.json({ bookings: data ?? [] });
+  return NextResponse.json({ bookings: out.bookings }, { headers: DEPRECATION_HEADERS });
 }

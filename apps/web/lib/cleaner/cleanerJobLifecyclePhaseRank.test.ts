@@ -78,6 +78,20 @@ describe("pickIncomingJobAvoidPhaseRegression", () => {
       cleaner_response_status: "accepted",
     });
   });
+
+  it("merges `accepted_at` from prev when GET lags (dual-signal accept)", () => {
+    const prev: LifecycleWireLike = {
+      status: "assigned",
+      cleaner_response_status: "pending",
+      accepted_at: "2026-05-04T06:00:00.000Z",
+    };
+    const incoming: LifecycleWireLike = { status: "assigned", cleaner_response_status: "pending" };
+    expect(pickIncomingJobAvoidPhaseRegression(prev, incoming, null)).toEqual({
+      status: "assigned",
+      cleaner_response_status: "pending",
+      accepted_at: "2026-05-04T06:00:00.000Z",
+    });
+  });
 });
 
 describe("lifecyclePhaseRankFromWire", () => {

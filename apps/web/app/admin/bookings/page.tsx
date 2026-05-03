@@ -538,6 +538,7 @@ export default function AdminBookingsPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    /** Requires `bookings`, `dispatch_offers`, and `cleaners` in Supabase → Database → Replication. */
     const sb = getSupabaseBrowser();
     if (!sb) return;
 
@@ -556,6 +557,7 @@ export default function AdminBookingsPage() {
       bookingsChannel = sb
         .channel("admin-bookings-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, scheduleRealtimeReload)
+        .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_offers" }, scheduleRealtimeReload)
         .subscribe();
 
       cleanersChannel = sb

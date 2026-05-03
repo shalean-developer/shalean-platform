@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PasswordInput } from "@/components/ui/password-input";
 import ActionMenu from "@/components/admin/ActionMenu";
 import DataTable from "@/components/admin/DataTable";
@@ -29,6 +29,7 @@ import {
   CLEANER_WEEKDAY_CODES,
   CLEANER_WEEKDAY_LABELS,
   normalizeCleanerAvailabilityWeekdays,
+  parseCleanerAvailabilityWeekdaysStrict,
   type CleanerWeekdayCode,
 } from "@/lib/cleaner/availabilityWeekdays";
 
@@ -199,6 +200,16 @@ export default function AdminCleanersPage() {
   const loadRef = useRef(load);
   loadRef.current = load;
 
+  const refreshSelectedCleanerRow = useCallback(async () => {
+    try {
+      const cleaners = await fetchCleaners(search.trim() || undefined);
+      setRows(cleaners);
+      setSelected((prev) => (prev ? cleaners.find((c) => c.id === prev.id) ?? prev : null));
+    } catch {
+      /* ignore */
+    }
+  }, [search]);
+
   const focusRefetchAt = useRef(0);
   useEffect(() => {
     const run = () => {
@@ -226,6 +237,7 @@ export default function AdminCleanersPage() {
       setChangeRequests((prev) => prev.filter((r) => r.id !== id));
       const cleaners = await fetchCleaners(search.trim() || undefined);
       setRows(cleaners);
+      setSelected((prev) => (prev ? cleaners.find((c) => c.id === prev.id) ?? prev : null));
       setToast("Request approved");
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Approve failed.");
@@ -239,6 +251,9 @@ export default function AdminCleanersPage() {
     try {
       await rejectCleanerChangeRequest(id);
       setChangeRequests((prev) => prev.filter((r) => r.id !== id));
+      const cleaners = await fetchCleaners(search.trim() || undefined);
+      setRows(cleaners);
+      setSelected((prev) => (prev ? cleaners.find((c) => c.id === prev.id) ?? prev : null));
       setToast("Request rejected");
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Reject failed.");
@@ -357,10 +372,8 @@ export default function AdminCleanersPage() {
       await updateCleanerProfile(selected.id, {
         full_name: editForm.fullName.trim(),
         phone: editForm.phone.trim(),
-        location: editForm.location.trim() || null,
         availability_start: editForm.availabilityStart || null,
         availability_end: editForm.availabilityEnd || null,
-        availability_weekdays: editForm.availabilityWeekdays,
         is_available: editForm.isAvailable,
         status: editForm.status,
       });
@@ -668,14 +681,34 @@ export default function AdminCleanersPage() {
               </p>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                 Weekdays:{" "}
-                {normalizeCleanerAvailabilityWeekdays(selected.availability_weekdays)
-                  .map((d) => CLEANER_WEEKDAY_LABELS[d])
-                  .join(", ")}
+                {(() => {
+                  const strict = parseCleanerAvailabilityWeekdaysStrict(selected.availability_weekdays);
+                  if (strict.length === 0) {
+                    return (
+                      <span className="text-zinc-500 dark:text-zinc-400">
+                        None set — use Weekly availability below or approve a change request.
+                      </span>
+                    );
+                  }
+                  return strict.map((d) => CLEANER_WEEKDAY_LABELS[d]).join(", ");
+                })()}
               </p>
               <p className="text-sm text-zinc-600 dark:text-zinc-300">Status: {selected.status ?? "offline"}</p>
             </section>
-            <AdminCleanerAvailabilityPanel cleanerId={selected.id} onToast={(msg) => setToast(msg)} />
-            <AdminCleanerServiceAreasPanel cleanerId={selected.id} onToast={(msg) => setToast(msg)} />
+            <AdminCleanerAvailabilityPanel
+              key={selected.id}
+              cleanerId={selected.id}
+              availabilityWeekdaysSnapshot={selected.availability_weekdays ?? null}
+              availabilityStartSnapshot={selected.availability_start ?? null}
+              availabilityEndSnapshot={selected.availability_end ?? null}
+              onToast={(msg) => setToast(msg)}
+              onSaved={() => void refreshSelectedCleanerRow()}
+            />
+            <AdminCleanerServiceAreasPanel
+              cleanerId={selected.id}
+              onToast={(msg) => setToast(msg)}
+              onCanonicalSaved={() => void refreshSelectedCleanerRow()}
+            />
             <AdminCleanerPreferencesPanel cleanerId={selected.id} onToast={(msg) => setToast(msg)} />
             <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Performance metrics</h3>
@@ -832,40 +865,37 @@ function CleanerFormModal({
               ))}
             </select>
           </label>
-          <Input label="Primary Location" value={form.location} onChange={(v) => onChange({ ...form, location: v })} />
+          <label className="block text-sm text-zinc-700 dark:text-zinc-200">
+            <span className="mb-1 block">Area label (derived)</span>
+            <p className="min-h-10 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100">
+              {form.location.trim() || "—"}
+            </p>
+            <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+              Edited via Working areas + Weekly availability panels below.
+            </span>
+          </label>
           <Input label="Availability Start" type="time" value={form.availabilityStart} onChange={(v) => onChange({ ...form, availabilityStart: v })} />
           <Input label="Availability End" type="time" value={form.availabilityEnd} onChange={(v) => onChange({ ...form, availabilityEnd: v })} />
         </div>
         <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Working weekdays</p>
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Working weekdays (derived)</p>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            Shown read-only in the cleaner app. At least one day required.
+            Synced from the Weekly availability calendar. Shown read-only in the cleaner app.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {CLEANER_WEEKDAY_CODES.map((code) => {
-              const checked = form.availabilityWeekdays.includes(code);
+              const active = form.availabilityWeekdays.includes(code);
               return (
-                <label
+                <span
                   key={code}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  className={`rounded-lg border px-2.5 py-1.5 text-sm ${
+                    active
+                      ? "border-emerald-600 bg-emerald-50 font-medium text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100"
+                      : "border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500"
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      const set = new Set(form.availabilityWeekdays);
-                      if (checked) {
-                        if (set.size <= 1) return;
-                        set.delete(code);
-                      } else {
-                        set.add(code);
-                      }
-                      const next = CLEANER_WEEKDAY_CODES.filter((d) => set.has(d));
-                      onChange({ ...form, availabilityWeekdays: next });
-                    }}
-                  />
                   {CLEANER_WEEKDAY_LABELS[code]}
-                </label>
+                </span>
               );
             })}
           </div>

@@ -137,41 +137,10 @@ function shortArea(location: string | null): string {
   return line.length > 40 ? `${line.slice(0, 37)}…` : line;
 }
 
-export function deriveMobilePhase(row: CleanerBookingRow): CleanerMobilePhase {
-  const st = String(row.status ?? "").toLowerCase();
-  if (st === "completed" || st === "cancelled") return "completed";
-  if (st === "in_progress") return "in_progress";
-  if (st === "pending") return row.en_route_at ? "en_route" : "pending";
-  if (st === "assigned") return row.en_route_at ? "en_route" : "assigned";
-  return "pending";
-}
-
-/** Short label for dashboard job chips (terminal statuses stay explicit). */
-export function mobilePhaseDisplayForDashboard(row: CleanerBookingRow): string {
-  const st = String(row.status ?? "").toLowerCase();
-  if (st === "cancelled") return "Cancelled";
-  if (st === "completed") return "Completed";
-  const ph = deriveMobilePhase(row);
-  switch (ph) {
-    case "pending":
-      return "Pending";
-    case "assigned":
-      return "Assigned";
-    case "en_route":
-      return "En route";
-    case "in_progress":
-      return "In progress";
-    case "completed":
-      return "Completed";
-    default:
-      return "Open";
-  }
-}
-
 /**
  * Single canonical resolver for cleaner primary actions.
- * Combines `bookings.status`, `bookings.cleaner_response_status`, `en_route_at`, and offer-expiry rules.
- * Prefer this for new UI; {@link deriveCleanerJobLifecycleSlot} maps into legacy slot shapes for schedule helpers.
+ * Combines `bookings.status`, `bookings.dispatch_status`, `bookings.cleaner_response_status`, `en_route_at`, and offer-expiry rules.
+ * {@link deriveMobilePhase} and {@link mobilePhaseDisplayForDashboard} delegate here — do not fork lifecycle rules elsewhere.
  */
 export type CleanerJobUiState =
   | { phase: "none" }
@@ -181,29 +150,89 @@ export type CleanerJobUiState =
   | { phase: "start" }
   | { phase: "complete" };
 
+/**
+ * Dual-signal “assignment accepted” for UI: canonical column plus `accepted_at` (server must keep both in sync).
+ */
+export function isCleanerAssignmentAccepted(row: CleanerBookingRow): boolean {
+  const rec = row as Record<string, unknown>;
+  const raw = (row.cleaner_response_status ?? rec.cleaner_response_status) as string | null | undefined;
+  const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
+  const hasAcceptedAt = Boolean(String(row.accepted_at ?? rec.accepted_at ?? "").trim());
+  return r === CLEANER_RESPONSE.ACCEPTED || hasAcceptedAt;
+}
+
+/** Legacy + admin paths still persist `confirmed` for paid/locked jobs — treat like `assigned` for cleaner lifecycle UI. */
+function isAssignedOperationalStatus(status: string): boolean {
+  return status === "assigned" || status === "confirmed";
+}
+
 export function deriveCleanerJobUiState(row: CleanerBookingRow, opts?: { nowMs?: number }): CleanerJobUiState {
   const st = String(row.status ?? "").toLowerCase();
+  const dst = String(row.dispatch_status ?? "").trim().toLowerCase();
+  if (dst === "expired" && (st === "pending" || st === "offered" || st === "pending_assignment")) {
+    return { phase: "expired" };
+  }
   if (st === "completed" || st === "cancelled" || st === "failed") return { phase: "none" };
+  if (st === "offered") return { phase: "none" };
   if (st === "in_progress") return { phase: "complete" };
 
   const rec = row as Record<string, unknown>;
   const raw = (row.cleaner_response_status ?? rec.cleaner_response_status) as string | null | undefined;
   const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
+  const responseAccepted = isCleanerAssignmentAccepted(row);
   const isTeam = row.is_team_job === true;
-  const accepted = r === CLEANER_RESPONSE.ACCEPTED;
   const onMyWay = r === CLEANER_RESPONSE.ON_MY_WAY;
   const hasEnRoute = Boolean(row.en_route_at);
 
-  if (st === "assigned") {
+  if (isAssignedOperationalStatus(st)) {
     const readyToStart = hasEnRoute || onMyWay;
     if (readyToStart) return { phase: "start" };
-    if (!accepted) {
+    if (!responseAccepted) {
       if (assignedOfferPastAcceptanceDeadline(row, opts?.nowMs)) return { phase: "expired" };
       return { phase: "accept", canReject: !isTeam };
     }
     return { phase: "on_my_way" };
   }
   return { phase: "none" };
+}
+
+/** Legacy coarse phase for schedule hints — derived only from {@link deriveCleanerJobUiState} + `bookings.status`. */
+export function deriveMobilePhase(row: CleanerBookingRow, opts?: { nowMs?: number }): CleanerMobilePhase {
+  const st = String(row.status ?? "").toLowerCase();
+  if (st === "completed" || st === "cancelled") return "completed";
+  if (st === "in_progress") return "in_progress";
+  if (st === "offered") return "pending";
+  if (st === "pending") return row.en_route_at ? "en_route" : "pending";
+  if (isAssignedOperationalStatus(st)) {
+    const ui = deriveCleanerJobUiState(row, opts);
+    if (ui.phase === "expired") return "pending";
+    if (row.en_route_at || ui.phase === "start") return "en_route";
+    if (ui.phase === "on_my_way" || ui.phase === "accept") return "assigned";
+    return "assigned";
+  }
+  return "pending";
+}
+
+/** Dashboard chip label — derived only from {@link deriveCleanerJobUiState} + `bookings.status`. */
+export function mobilePhaseDisplayForDashboard(row: CleanerBookingRow, opts?: { nowMs?: number }): string {
+  const st = String(row.status ?? "").toLowerCase();
+  if (st === "cancelled") return "Cancelled";
+  if (st === "completed") return "Completed";
+  if (st === "offered") return "Offer sent";
+  const dst = String(row.dispatch_status ?? "").toLowerCase();
+  if (dst === "expired") return "Dispatch expired";
+  if (st === "in_progress") return "In progress";
+  if (st === "pending") return row.en_route_at ? "En route" : "Pending";
+  if (isAssignedOperationalStatus(st)) {
+    const ui = deriveCleanerJobUiState(row, opts);
+    if (ui.phase === "expired") return "Offer expired";
+    if (ui.phase === "accept") return "Needs accept";
+    if (ui.phase === "on_my_way") return "Accepted";
+    if (ui.phase === "start" || row.en_route_at) return "En route";
+    if (ui.phase === "complete") return "In progress";
+    return st === "confirmed" ? "Confirmed" : "Assigned";
+  }
+  return "Open";
 }
 
 /** At most one primary action group for schedule / job detail (matches server lifecycle rules). */

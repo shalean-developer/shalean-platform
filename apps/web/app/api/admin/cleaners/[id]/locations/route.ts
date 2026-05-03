@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,12 +55,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
   if (ids.length === 0) {
+    try {
+      await syncCleanerSummary(admin, id);
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Sync failed." }, { status: 500 });
+    }
     return NextResponse.json({ ok: true, count: 0 });
   }
 
   const rows = ids.map((location_id) => ({ cleaner_id: id, location_id }));
   const { error: insErr } = await admin.from("cleaner_locations").insert(rows);
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+  try {
+    await syncCleanerSummary(admin, id);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Sync failed." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, count: ids.length });
 }

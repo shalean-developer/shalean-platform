@@ -242,14 +242,14 @@ export function AdminAssignForm({
       setBusy(false);
       return;
     }
-    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign`, {
+    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/offer`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ cleanerId: cleanerId.trim(), force }),
     });
     const j = (await res.json()) as { error?: string };
     if (!res.ok) {
-      const err = j.error ?? "Failed to assign cleaner";
+      const err = j.error ?? "Failed to send job offer";
       if (res.status === 400) recordAssignFailure(bookingId, cleanerId.trim());
       setMsg(err);
       onError(err);
@@ -490,7 +490,7 @@ export function AdminAssignForm({
         disabled={busy}
         className="w-full rounded-md bg-emerald-600 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
       >
-        {busy ? "Saving…" : "Apply assignment"}
+        {busy ? "Saving…" : "Send job offer"}
       </button>
       <button
         type="button"

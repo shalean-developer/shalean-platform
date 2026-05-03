@@ -36,19 +36,40 @@ export async function GET(request: Request) {
     })
     .slice(0, 20);
 
-  const bookingIds = offers.map((o) => String(o.booking_id)).filter(Boolean);
+  const bookingIds = [...new Set(offers.map((o) => String(o.booking_id)).filter(Boolean))];
   let bookingById = new Map<string, Record<string, unknown>>();
+  const rosterBookingIdSet = new Set<string>();
   if (bookingIds.length > 0) {
     const { data: rows } = await admin
       .from("bookings")
       .select(
-        "id, service, date, time, location, customer_name, customer_phone, status, total_paid_zar, amount_paid_cents, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, booking_snapshot, payout_frozen_cents",
+        "id, service, date, time, location, customer_name, customer_phone, status, cleaner_id, total_paid_zar, amount_paid_cents, is_team_job, team_id, team_member_count_snapshot, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, booking_snapshot, payout_frozen_cents",
       )
       .in("id", bookingIds);
     bookingById = new Map((rows ?? []).map((r) => [String((r as { id: string }).id), r as Record<string, unknown>]));
+
+    const { data: rosterHits } = await admin.from("booking_cleaners").select("booking_id").eq("cleaner_id", cleanerId).in("booking_id", bookingIds);
+    for (const rh of rosterHits ?? []) {
+      const bid = String((rh as { booking_id?: string }).booking_id ?? "").trim();
+      if (bid) rosterBookingIdSet.add(bid);
+    }
   }
 
-  const offersOut = offers
+  /** Pending dispatch row is stale once the booking is already on this cleaner (solo or team roster). */
+  const offersActive = offers.filter((o) => {
+    const bid = String((o as { booking_id?: string }).booking_id ?? "").trim();
+    const b = bid ? bookingById.get(bid) : undefined;
+    if (!b) return true;
+    const st = String(b.status ?? "")
+      .trim()
+      .toLowerCase();
+    if (!["assigned", "confirmed", "in_progress"].includes(st)) return true;
+    if (String(b.cleaner_id ?? "").trim() === cleanerId) return false;
+    if (b.is_team_job === true && rosterBookingIdSet.has(bid)) return false;
+    return true;
+  });
+
+  const offersOut = offersActive
     .map((o) => {
       const booking = bookingById.get(String(o.booking_id)) ?? null;
       const displayEarningsCents =

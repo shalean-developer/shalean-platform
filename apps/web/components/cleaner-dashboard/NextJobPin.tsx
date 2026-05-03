@@ -16,6 +16,11 @@ type NextJobPinProps = {
   /** Added to `Date.now()` so countdown tracks server time (see dashboard `server_now_ms`). */
   clockOffsetMs?: number;
   embedded?: boolean;
+  /**
+   * When false, hide directions until the job is past the accept step (matches lifecycle rules).
+   * Default true for callers that do not compute lifecycle.
+   */
+  showMapsNavigation?: boolean;
 };
 
 function formatStartsIn(msUntil: number): string {
@@ -38,7 +43,14 @@ function urgencyClass(msUntil: number | null): string {
 }
 
 /** Single high-signal “do this next” card with actions. */
-export function NextJobPin({ job, startsAtMs, mapsQuery, clockOffsetMs = 0, embedded }: NextJobPinProps) {
+export function NextJobPin({
+  job,
+  startsAtMs,
+  mapsQuery,
+  clockOffsetMs = 0,
+  embedded,
+  showMapsNavigation = true,
+}: NextJobPinProps) {
   const reduceMotion = useReducedMotion();
   const offsetRef = useRef(clockOffsetMs);
   offsetRef.current = clockOffsetMs;
@@ -80,7 +92,8 @@ export function NextJobPin({ job, startsAtMs, mapsQuery, clockOffsetMs = 0, embe
     };
   }, [startsAtMs, clockOffsetMs]);
 
-  const mapsHref = mapsQuery && mapsQuery.trim().length > 0 ? directionsHrefFromQuery(mapsQuery.trim()) : null;
+  const mapsHref =
+    showMapsNavigation && mapsQuery && mapsQuery.trim().length > 0 ? directionsHrefFromQuery(mapsQuery.trim()) : null;
 
   const urgency = urgencyClass(msUntil);
   const pulseUrgent = msUntil != null && msUntil > 0 && msUntil <= 15 * 60_000;

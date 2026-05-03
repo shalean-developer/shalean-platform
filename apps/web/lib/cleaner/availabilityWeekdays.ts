@@ -13,6 +13,25 @@ export const CLEANER_WEEKDAY_LABELS: Record<CleanerWeekdayCode, string> = {
   sun: "Sun",
 };
 
+/**
+ * JS `getUTCDay()` / admin “Weekly availability” integers: 0 = Sunday … 6 = Saturday.
+ * Matches `expandWeeklyScheduleToRows` (weekly template expansion).
+ */
+export const CLEANER_WEEKDAY_CODE_TO_UTC_JS_DAY: Record<CleanerWeekdayCode, number> = {
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
+};
+
+/** Maps canonical `mon`…`sun` codes to integers used by the admin weekly panel. */
+export function utcJsWeekdaySetFromCleanerCodes(codes: CleanerWeekdayCode[]): Set<number> {
+  return new Set(codes.map((c) => CLEANER_WEEKDAY_CODE_TO_UTC_JS_DAY[c]));
+}
+
 const ALLOWED = new Set<string>(CLEANER_WEEKDAY_CODES);
 
 /** Normalises DB / JSON into a sorted Mon→Sun subset; defaults to all days if empty or invalid. */
@@ -25,6 +44,20 @@ export function normalizeCleanerAvailabilityWeekdays(raw: unknown): CleanerWeekd
   }
   const ordered = CLEANER_WEEKDAY_CODES.filter((d) => picked.has(d));
   return ordered.length > 0 ? ordered : [...CLEANER_WEEKDAY_CODES];
+}
+
+/**
+ * Parses `mon`…`sun` keys without defaulting to “all days” when empty.
+ * Use for canonical availability regeneration and strict API responses.
+ */
+export function parseCleanerAvailabilityWeekdaysStrict(raw: unknown): CleanerWeekdayCode[] {
+  if (!Array.isArray(raw)) return [];
+  const picked = new Set<CleanerWeekdayCode>();
+  for (const x of raw) {
+    const k = String(x).trim().toLowerCase();
+    if (ALLOWED.has(k)) picked.add(k as CleanerWeekdayCode);
+  }
+  return CLEANER_WEEKDAY_CODES.filter((d) => picked.has(d));
 }
 
 export function validateCleanerAvailabilityWeekdaysForAdmin(

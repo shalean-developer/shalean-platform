@@ -70,7 +70,8 @@ export function dispatchStateLabel(
 export function cleanerSelectEmptyLabel(r: AdminBookingsListRow): string {
   const st = (r.status ?? "").toLowerCase();
   const ds = (r.dispatch_status ?? "").toLowerCase();
-  if (!r.cleaner_id && st === "pending" && ds === "searching") return "Assigning…";
+  if (!r.cleaner_id && (st === "pending" || st === "offered") && ds === "searching") return "Assigning…";
+  if (!r.cleaner_id && st === "offered" && ds === "offered") return "Offer sent";
   return "Unassigned";
 }
 
@@ -80,7 +81,7 @@ export function adminRowFlags(r: AdminBookingsListRow, today: string) {
   const paymentMissing = cents <= 0 && tzar <= 0;
   const st = (r.status ?? "").toLowerCase();
   const d = r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : null;
-  const active = st === "pending" || st === "assigned" || st === "in_progress";
+  const active = st === "pending" || st === "offered" || st === "pending_assignment" || st === "assigned" || st === "in_progress";
   const statusInconsistent = active && d !== null && d < today;
   const missingEmail = !r.customer_email?.trim();
   return { paymentMissing, statusInconsistent, missingEmail };

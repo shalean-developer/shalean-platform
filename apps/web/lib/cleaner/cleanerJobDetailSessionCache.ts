@@ -39,3 +39,14 @@ export function writeCleanerJobDetailCache(bookingId: string, body: CleanerJobDe
     /* quota / private mode */
   }
 }
+
+export function clearCleanerJobDetailCache(bookingId: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  const id = bookingId.trim();
+  if (!id) return;
+  try {
+    sessionStorage.removeItem(`${KEY_PREFIX}${id}`);
+  } catch {
+    /* ignore */
+  }
+}

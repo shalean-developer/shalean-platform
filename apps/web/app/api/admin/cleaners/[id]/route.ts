@@ -2,7 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { validateCleanerAvailabilityWeekdaysForAdmin } from "@/lib/cleaner/availabilityWeekdays";
+import { regenerateCleanerAvailabilityFromStoredWeekdays } from "@/lib/cleaner/regenerateCleanerAvailabilityFromStoredWeekdays";
+import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
 import { normalizeSouthAfricaPhone, southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
 export const runtime = "nodejs";
@@ -33,6 +34,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   // Email is updated only via POST /api/admin/update-cleaner-email (syncs auth.users + cleaners).
+  // `location` + `availability_weekdays` on `cleaners` are derived from `cleaner_locations` + `cleaner_availability`
+  // (ignored if present in JSON for backward compatibility).
 
   let body: {
     status?: string;
@@ -85,7 +88,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     updates.phone = phoneNorm;
   }
-  if (body.location !== undefined) updates.location = body.location?.trim() || null;
   if (body.availability_start !== undefined) updates.availability_start = body.availability_start || null;
   if (body.availability_end !== undefined) updates.availability_end = body.availability_end || null;
   if (body.is_available !== undefined) {
@@ -94,11 +96,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       updates.status = body.is_available ? "available" : "offline";
     }
   }
-  if (body.availability_weekdays !== undefined) {
-    const w = validateCleanerAvailabilityWeekdaysForAdmin(body.availability_weekdays);
-    if (!w.ok) return NextResponse.json({ error: w.error }, { status: 400 });
-    updates.availability_weekdays = w.value;
-  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
@@ -106,6 +103,16 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { error } = await admin.from("cleaners").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const shouldRegenSlots = body.availability_start !== undefined || body.availability_end !== undefined;
+  try {
+    if (shouldRegenSlots) {
+      await regenerateCleanerAvailabilityFromStoredWeekdays(admin, id, { horizonDays: 60 });
+    }
+    await syncCleanerSummary(admin, id);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Summary sync failed." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -12,9 +12,10 @@ export function isOfflineSignal(
   opts?: { navigatorOnline?: boolean; error?: unknown },
 ): boolean {
   if (opts?.error != null && isNetworkError(opts.error)) return true;
-  const online = opts?.navigatorOnline ?? (typeof navigator === "undefined" ? true : navigator.onLine);
-  if (!online) return true;
-  if (!res) return true;
+  const navOnline = opts?.navigatorOnline ?? (typeof navigator === "undefined" ? true : navigator.onLine);
+  if (!navOnline) return true;
+  /** No `Response` yet — caller is only asking about navigator / opts.error; do not treat as offline. */
+  if (res == null) return false;
   if (res.status === 0) return true;
   if (res.status === 503) return true;
   return false;

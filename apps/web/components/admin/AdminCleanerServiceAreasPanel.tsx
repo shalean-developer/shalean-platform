@@ -6,9 +6,11 @@ import { fetchAdminCleanerPreferences, saveAdminCleanerLocationIds } from "@/lib
 type Props = {
   cleanerId: string;
   onToast?: (msg: string) => void;
+  /** After areas save + sync; parent refetches `cleaners` for the slide-over summary. */
+  onCanonicalSaved?: () => void | Promise<void>;
 };
 
-export function AdminCleanerServiceAreasPanel({ cleanerId, onToast }: Props) {
+export function AdminCleanerServiceAreasPanel({ cleanerId, onToast, onCanonicalSaved }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export function AdminCleanerServiceAreasPanel({ cleanerId, onToast }: Props) {
       await saveAdminCleanerLocationIds(cleanerId, [...selected]);
       onToast?.("Working areas saved.");
       await load();
+      await onCanonicalSaved?.();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Save failed.");
     } finally {

@@ -7,6 +7,8 @@ export const CLEANER_RESPONSE = {
   ON_MY_WAY: "on_my_way",
   /** Job marked started (`bookings.status` becomes `in_progress`). */
   STARTED: "started",
+  /** Job completed (`bookings.status` is `completed`); mirrors system terminal state. */
+  COMPLETED: "completed",
   DECLINED: "declined",
   TIMEOUT: "timeout",
 } as const;

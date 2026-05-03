@@ -22,6 +22,8 @@ export type CleanerBookingRow = {
   time: string | null;
   location: string | null;
   status: string | null;
+  /** Dispatch funnel (`bookings.dispatch_status`) — exposed on cleaner APIs for one contract. */
+  dispatch_status?: string | null;
   total_paid_zar: number | null;
   total_price?: number | string | null;
   price_breakdown?: Record<string, unknown> | null;
@@ -35,6 +37,7 @@ export type CleanerBookingRow = {
   /** Snapshot-derived scope lines (e.g. `GET /api/cleaner/jobs?view=card` when line items are omitted). */
   scope_lines?: string[] | null;
   assigned_at: string | null;
+  accepted_at?: string | null;
   en_route_at: string | null;
   started_at: string | null;
   completed_at: string | null;

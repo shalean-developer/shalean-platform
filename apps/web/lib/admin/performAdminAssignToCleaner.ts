@@ -109,9 +109,10 @@ export async function performAdminAssignToCleaner(
     .from("bookings")
     .update({
       cleaner_id: null,
-      status: "pending",
+      status: "offered",
       dispatch_status: "offered",
       assigned_at: null,
+      accepted_at: null,
       ...BOOKING_PAYOUT_COLUMNS_CLEAR,
       ...(dispatchWasUnassignable ? { became_pending_at: nowIsoForPending } : {}),
     })

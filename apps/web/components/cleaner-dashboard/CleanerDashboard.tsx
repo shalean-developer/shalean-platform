@@ -47,6 +47,7 @@ export function CleanerDashboard() {
     declineOffer,
     actingOfferId,
     removeOfferLocal,
+    workSettingsRealtimeTick,
   } = useCleanerDashboardData();
 
   const nextJobEmptyScheduleLine = useMemo(() => {
@@ -99,7 +100,7 @@ export function CleanerDashboard() {
         </CleanerHeroBlock>
 
         <CleanerHeroBlock className="p-4">
-          <CleanerWorkSettingsCard embedded />
+          <CleanerWorkSettingsCard embedded realtimeRefreshKey={workSettingsRealtimeTick} />
         </CleanerHeroBlock>
 
         <CleanerHeroBlock className="p-4">
@@ -110,6 +111,7 @@ export function CleanerDashboard() {
               startsAtMs={nextJobPinExtras.startsAtMs}
               mapsQuery={nextJobPinExtras.mapsQuery}
               clockOffsetMs={nextJobPinExtras.clockOffsetMs}
+              showMapsNavigation={nextJobPinExtras.showMapsNavigation}
             />
           ) : (
             <NextJobEmptyHint

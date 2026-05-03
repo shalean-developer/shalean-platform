@@ -425,6 +425,14 @@ export function canEnqueueLifecycleAfterQueued(
   const ry = linearRank(next);
   if (rx === null || ry === null) return { ok: true };
   if (ry < rx) {
+    /**
+     * Queued `en_route` / `start` / `complete` while the server (and job UI) is still at accept means the
+     * outbox is stale — e.g. offline tap, failed flush, or optimistic queue never cleared. Replacing with a
+     * fresh `accept` matches the screen and avoids blocking Accept when the booking never advanced server-side.
+     */
+    if (next === "accept" && rx > 0) {
+      return { ok: true };
+    }
     return {
       ok: false,
       reason: "That would go backwards in the job steps — wait for sync or refresh.",

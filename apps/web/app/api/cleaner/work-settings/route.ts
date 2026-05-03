@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchCleanerMeRow } from "@/lib/cleaner/cleanerMeDb";
-import { normalizeCleanerAvailabilityWeekdays } from "@/lib/cleaner/availabilityWeekdays";
+import { parseCleanerAvailabilityWeekdaysStrict } from "@/lib/cleaner/availabilityWeekdays";
 import { resolveCleanerFromRequest } from "@/lib/cleaner/resolveCleanerFromRequest";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   }
 
   const location = String(me.location ?? "").trim();
-  const working_days = normalizeCleanerAvailabilityWeekdays(me.availability_weekdays);
+  const working_days = parseCleanerAvailabilityWeekdaysStrict(me.availability_weekdays);
 
   const { data: lastRows, error: reqErr } = await admin
     .from("cleaner_change_requests")

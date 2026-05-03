@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
 
   const { data: jobs, error } = directAssignments
     ? await admin

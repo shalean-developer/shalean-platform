@@ -5,15 +5,17 @@ import { jobStartMsJohannesburg } from "@/lib/cleaner/jobStartJohannesburgMs";
 /** Solo assigned jobs: allow accept until scheduled start + this grace (ms). */
 export const ASSIGNED_ACCEPT_GRACE_MS = 30 * 60 * 1000;
 
-type OfferExpiryRow = Pick<CleanerBookingRow, "status" | "cleaner_response_status" | "date" | "time">;
+type OfferExpiryRow = Pick<CleanerBookingRow, "status" | "cleaner_response_status" | "date" | "time" | "accepted_at">;
 
 function cleanerPastAcceptForExpiry(row: OfferExpiryRow): boolean {
+  if (Boolean(String(row.accepted_at ?? "").trim())) return true;
   const raw = row.cleaner_response_status;
   const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
   return (
     r === CLEANER_RESPONSE.ACCEPTED ||
     r === CLEANER_RESPONSE.ON_MY_WAY ||
-    r === CLEANER_RESPONSE.STARTED
+    r === CLEANER_RESPONSE.STARTED ||
+    r === CLEANER_RESPONSE.COMPLETED
   );
 }
 
@@ -27,7 +29,7 @@ export function assignedOfferPastAcceptanceDeadline(
   graceMs: number = ASSIGNED_ACCEPT_GRACE_MS,
 ): boolean {
   const st = String(row.status ?? "").toLowerCase();
-  if (st !== "assigned") return false;
+  if (st !== "assigned" && st !== "confirmed") return false;
   if (cleanerPastAcceptForExpiry(row)) return false;
   const startMs = jobStartMsJohannesburg(row.date, row.time);
   if (startMs == null) return false;

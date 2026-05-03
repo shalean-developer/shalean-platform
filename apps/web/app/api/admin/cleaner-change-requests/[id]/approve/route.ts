@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { regenerateCleanerAvailabilityFromStoredWeekdays } from "@/lib/cleaner/regenerateCleanerAvailabilityFromStoredWeekdays";
+import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +37,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const reviewer = user.email.trim();
 
+  const { data: reqMeta, error: metaErr } = await admin
+    .from("cleaner_change_requests")
+    .select("cleaner_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (metaErr) return NextResponse.json({ error: metaErr.message }, { status: 500 });
+  const cleanerId = reqMeta?.cleaner_id != null ? String(reqMeta.cleaner_id) : "";
+
   const { error } = await admin.rpc("approve_cleaner_change_request", {
     p_request_id: id,
     p_reviewer: reviewer,
@@ -61,6 +71,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       );
     }
     return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
+  if (cleanerId) {
+    try {
+      await regenerateCleanerAvailabilityFromStoredWeekdays(admin, cleanerId, { horizonDays: 60 });
+      await syncCleanerSummary(admin, cleanerId);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Approved but calendar/summary sync failed." },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });

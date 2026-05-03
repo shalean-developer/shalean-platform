@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -15,7 +15,7 @@ import {
   cleanerBookingRowToUpcomingJob,
 } from "@/lib/cleaner-dashboard/dashboardUpcomingJobs";
 import { compareCleanerBookingStartJohannesburg } from "@/lib/cleaner/cleanerUpcomingScheduleJohannesburg";
-import { mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { deriveCleanerJobUiState, mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import type { CleanerDashboardTodayBreakdownItem } from "@/lib/cleaner/cleanerDashboardTodayCents";
 import type { CleanerMeRow } from "@/lib/cleaner/cleanerMobileProfileFromMe";
@@ -24,10 +24,8 @@ import { cleanerDisplayFirstName } from "@/lib/cleaner/cleanerDisplayFirstName";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { setCleanerAvailability } from "@/lib/cleaner/setCleanerAvailability";
 import { jobStartMsJohannesburg } from "@/lib/cleaner/jobStartJohannesburgMs";
-import {
-  readCleanerDashboardCache,
-  writeCleanerDashboardCache,
-} from "@/lib/cleaner/cleanerDashboardSessionCache";
+import { CLEANER_DASHBOARD_JOBS_REFRESH_EVENT, writeCleanerDashboardCache } from "@/lib/cleaner/cleanerDashboardSessionCache";
+import { useCleanerRealtime } from "@/lib/realtime/useCleanerRealtime";
 import { hrefForNotificationKind } from "@/lib/notifications/notificationRoutes";
 import { useCleanerNotifications } from "@/lib/notifications/notificationsStore";
 import { wireBrowserNotificationClick } from "@/lib/notifications/wireBrowserNotification";
@@ -74,6 +72,7 @@ function assertOnline(): { ok: true } | { ok: false; error: string } {
 
 export function useCleanerDashboardData() {
   const router = useRouter();
+  const pathname = usePathname() ?? "";
   const { addNotification } = useCleanerNotifications();
   const [cleanerId, setCleanerId] = useState<string | null>(null);
   const [teamIds, setTeamIds] = useState<string[]>([]);
@@ -96,6 +95,8 @@ export function useCleanerDashboardData() {
   /** `server_now_ms` from API minus local `Date.now()` at receive time — stabilizes urgency countdowns. */
   const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
   const [realtimeAuthEpoch, setRealtimeAuthEpoch] = useState(0);
+  /** Bumped by {@link useCleanerRealtime} when work-settings tables change (admin approval, areas, calendar). */
+  const [workSettingsRealtimeTick, setWorkSettingsRealtimeTick] = useState(0);
   const loadSeq = useRef(0);
   const dashboardRequestId = useRef(0);
   const offersRequestId = useRef(0);
@@ -111,6 +112,8 @@ export function useCleanerDashboardData() {
   const offersRtTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const teamRtTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeAuthDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Previous pathname — detect return from job detail so dashboard jobs refetch (accept state). */
+  const prevPathnameRef = useRef<string | null>(null);
 
   useEffect(() => {
     const up = () => setBrowserOnline(true);
@@ -169,7 +172,7 @@ export function useCleanerDashboardData() {
 
   const loadOffers = useCallback(async (headers: Record<string, string>) => {
     const reqId = ++offersRequestId.current;
-    const res = await cleanerAuthenticatedFetch("/api/cleaner/offers", { headers });
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/offers", { headers, cache: "no-store" });
     const j = (await res.json().catch(() => ({}))) as { offers?: CleanerOfferRow[]; error?: string };
     if (reqId !== offersRequestId.current) return;
     if (!res.ok) throw new Error(j.error ?? "Could not load offers.");
@@ -208,7 +211,7 @@ export function useCleanerDashboardData() {
   const loadDashboard = useCallback(
     async (headers: Record<string, string>) => {
       const reqId = ++dashboardRequestId.current;
-      const res = await cleanerAuthenticatedFetch("/api/cleaner/dashboard", { headers });
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/dashboard", { headers, cache: "no-store" });
       const j = (await res.json().catch(() => ({}))) as CleanerDashboardWireJson & { error?: string };
       if (reqId !== dashboardRequestId.current) return;
       if (!res.ok) throw new Error(j.error ?? "Could not load dashboard.");
@@ -267,18 +270,6 @@ export function useCleanerDashboardData() {
     try {
       const cid = await loadMe(headers);
       if (seq !== loadSeq.current) return;
-      if (cid) {
-        const cached = readCleanerDashboardCache(cid);
-        if (cached) {
-          const jobs = cached.jobs;
-          if (Array.isArray(jobs) && jobs.length > 0) {
-            applyDashboardFromResponse({
-              jobs: jobs as CleanerBookingRow[],
-              summary: cached.summary as CleanerDashboardWireJson["summary"],
-            });
-          }
-        }
-      }
       await Promise.all([loadOffers(headers), loadDashboard(headers)]);
       if (seq !== loadSeq.current) return;
       setError(null);
@@ -328,6 +319,18 @@ export function useCleanerDashboardData() {
     };
   }, [cleanerId, refetchDashboardOnly, refetchOffersOnly]);
 
+  const bumpWorkSettingsRealtime = useCallback(() => {
+    setWorkSettingsRealtimeTick((n) => n + 1);
+  }, []);
+
+  useCleanerRealtime({
+    cleanerId,
+    debounceMs: 300,
+    subscribeBookings: false,
+    subscribeWorkSettings: true,
+    onWorkSettingsChange: bumpWorkSettingsRealtime,
+  });
+
   const refetchMeTeamsAndDashboard = useCallback(async () => {
     const headers = await getCleanerAuthHeaders();
     if (!headers) return;
@@ -366,6 +369,26 @@ export function useCleanerDashboardData() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    const id = cleanerId?.trim();
+    if (!id) return;
+    const prev = prevPathnameRef.current;
+    prevPathnameRef.current = pathname;
+    const onDashboard = pathname === "/cleaner/dashboard";
+    const cameFromJobsArea = Boolean(prev && prev !== pathname && prev.startsWith("/cleaner/jobs"));
+    if (onDashboard && cameFromJobsArea) {
+      void refetchDashboardOnly();
+    }
+  }, [pathname, cleanerId, refetchDashboardOnly]);
+
+  useEffect(() => {
+    const onJobsRefresh = () => {
+      void refetchDashboardOnly();
+    };
+    window.addEventListener(CLEANER_DASHBOARD_JOBS_REFRESH_EVENT, onJobsRefresh);
+    return () => window.removeEventListener(CLEANER_DASHBOARD_JOBS_REFRESH_EVENT, onJobsRefresh);
+  }, [refetchDashboardOnly]);
 
   useEffect(() => {
     if (offerRows.length === 0) return;
@@ -891,16 +914,25 @@ export function useCleanerDashboardData() {
         startsAtMs: null as number | null,
         mapsQuery: null as string | null,
         clockOffsetMs: serverClockOffsetMs,
+        showMapsNavigation: false,
       };
     }
     const row = jobRows.find((r) => r.id === nextHighlightedJob.id);
     if (!row) {
-      return { startsAtMs: null, mapsQuery: null, clockOffsetMs: serverClockOffsetMs };
+      return {
+        startsAtMs: null,
+        mapsQuery: null,
+        clockOffsetMs: serverClockOffsetMs,
+        showMapsNavigation: false,
+      };
     }
     const startsAtMs = jobStartMsJohannesburg(row.date, row.time);
     const loc = String(row.location ?? "").trim();
     const mapsQuery = loc ? (loc.split(/\r?\n/)[0]?.trim() ?? loc) : null;
-    return { startsAtMs, mapsQuery, clockOffsetMs: serverClockOffsetMs };
+    const ui = deriveCleanerJobUiState(row, { nowMs: Date.now() + serverClockOffsetMs });
+    const showMapsNavigation =
+      Boolean(mapsQuery) && ui.phase !== "accept" && ui.phase !== "expired" && ui.phase !== "none";
+    return { startsAtMs, mapsQuery, clockOffsetMs: serverClockOffsetMs, showMapsNavigation };
   }, [nextHighlightedJob, jobRows, serverClockOffsetMs]);
 
   return {
@@ -933,5 +965,6 @@ export function useCleanerDashboardData() {
     actingOfferId,
     removeOfferLocal,
     reload: loadAll,
+    workSettingsRealtimeTick,
   };
 }

@@ -8,7 +8,14 @@ export const CLEANER_LIFECYCLE_CODE = {
   START_REQUIRES_ASSIGNED: "lifecycle_start_requires_assigned",
   EN_ROUTE_REQUIRED_BEFORE_START: "lifecycle_en_route_required_before_start",
   COMPLETE_REQUIRES_IN_PROGRESS: "lifecycle_complete_requires_in_progress",
+  /** Row is `in_progress` but `cleaner_response_status` is not `started` (data drift guard). */
+  COMPLETE_REQUIRES_STARTED_RESPONSE: "lifecycle_complete_requires_started_response",
   UNSUPPORTED: "lifecycle_unsupported",
   /** Assigned offer: scheduled start + grace passed without accept. */
   ACCEPT_OFFER_EXPIRED: "lifecycle_accept_offer_expired",
+  /**
+   * Conditional accept update matched zero rows (PostgREST returns no error for 0-row updates).
+   * Usually status left `assigned` between read and write, or booking was cleared elsewhere.
+   */
+  ACCEPT_UPDATE_NO_ROW: "lifecycle_accept_update_no_row",
 } as const;

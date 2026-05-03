@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
+import { syncBookingDispatchExpiredWhenNoPendingOffers } from "@/lib/dispatch/syncBookingDispatchExpiredWhenNoPendingOffers";
 import {
   notifyCleanerDispatchOfferLostRaceSms,
   notifyCleanerOfDispatchOffer,
@@ -338,6 +339,8 @@ export async function waitForDispatchOfferResolution(params: {
     .eq("id", params.offerId)
     .eq("status", "pending");
 
+  await syncBookingDispatchExpiredWhenNoPendingOffers(params.supabase, params.bookingId);
+
   await logSystemEvent({
     level: "info",
     source: "dispatch_offer_expired",
@@ -491,12 +494,13 @@ export async function acceptDispatchOffer(params: {
       status: "assigned",
       dispatch_status: "assigned",
       assigned_at: now,
-      cleaner_response_status: CLEANER_RESPONSE.PENDING,
+      accepted_at: now,
+      cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
       ...assignMeta,
     })
     .eq("id", bookingId)
     .neq("status", "assigned")
-    .in("status", ["pending", "pending_assignment"])
+    .in("status", ["pending", "pending_assignment", "offered"])
     .neq("dispatch_status", "assigned")
     .select("id");
 
@@ -813,6 +817,8 @@ export async function rejectDispatchOffer(params: {
     rejectedCleanerId: params.cleanerId,
     skipBackoffScheduling: true,
   });
+
+  await syncBookingDispatchExpiredWhenNoPendingOffers(params.supabase, bookingId);
 
   return { ok: true };
 }

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeeklyScheduleWindow } from "@/lib/booking/weeklyAvailability";
 import { expandWeeklyScheduleToRows } from "@/lib/booking/weeklyAvailability";
+import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 
 function ymdAddDays(startYmd: string, addDays: number): string {
   const d = new Date(`${startYmd}T12:00:00.000Z`);
@@ -25,7 +26,7 @@ export async function replaceCleanerAvailabilityFromWeekly(
   },
 ): Promise<{ inserted: number }> {
   const horizonDays = Math.min(120, Math.max(7, Math.round(params.horizonDays)));
-  const startYmd = (params.startYmd ?? new Date().toISOString().slice(0, 10)).trim();
+  const startYmd = (params.startYmd ?? johannesburgCalendarYmd(new Date())).trim();
   const endYmd = ymdAddDays(startYmd, horizonDays - 1);
 
   const { error: delErr } = await admin

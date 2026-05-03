@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CleanerJobListCard } from "@/components/cleaner-jobs/CleanerJobListCard";
 import { useCleanerNavBadges } from "@/components/cleaner-dashboard/CleanerNavBadgesContext";
@@ -21,7 +21,10 @@ import {
   readTtlCompleteSyncLockFromSession,
 } from "@/lib/cleaner/cleanerJobPendingLifecycleQueue";
 import { subscribeTtlCompleteLockBroadcast } from "@/lib/cleaner/cleanerLifecycleTtlLockBroadcast";
+import { CLEANER_DASHBOARD_JOBS_REFRESH_EVENT } from "@/lib/cleaner/cleanerDashboardSessionCache";
 import { cn } from "@/lib/utils";
+import { useCleanerRealtime } from "@/lib/realtime/useCleanerRealtime";
+import { useUser } from "@/hooks/useUser";
 
 type FilterTab = "all" | "upcoming" | "completed";
 
@@ -40,12 +43,18 @@ function tabClass(active: boolean): string {
 
 export default function CleanerJobsListPage() {
   const { setOpenJobsCount } = useCleanerNavBadges();
+  const { loading: userLoading } = useUser();
   const [rows, setRows] = useState<CleanerBookingRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [ttlLockEpoch, setTtlLockEpoch] = useState(0);
+  const [jobsRealtimeTick, setJobsRealtimeTick] = useState(0);
+  /** `public.cleaners.id` for Realtime filters — can differ from Supabase auth uid when the row uses `auth_user_id`. */
+  const [rtCleanerId, setRtCleanerId] = useState<string | null>(null);
+  const [rtTeamIds, setRtTeamIds] = useState<string[]>([]);
+  const workspaceFromApiRef = useRef(false);
 
   const now = useMemo(() => new Date(nowTick), [nowTick]);
 
@@ -56,33 +65,78 @@ export default function CleanerJobsListPage() {
     setOpenJobsCount(openCount);
   }, [loading, openCount, setOpenJobsCount]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const headers = await getCleanerAuthHeaders();
-      if (!headers) {
-        if (!cancelled) {
-          setErr("Not signed in.");
-          setLoading(false);
+  const loadJobs = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setErr(null);
+    }
+    const headers = await getCleanerAuthHeaders();
+    if (!headers) {
+      setErr("Not signed in.");
+      setRows([]);
+      workspaceFromApiRef.current = false;
+      setRtCleanerId(null);
+      setRtTeamIds([]);
+      if (!silent) setLoading(false);
+      return;
+    }
+    const fetchProfile = !workspaceFromApiRef.current;
+    const jobsPromise = cleanerAuthenticatedFetch("/api/cleaner/jobs?view=card", { headers });
+    const mePromise = fetchProfile ? cleanerAuthenticatedFetch("/api/cleaner/me", { headers }) : null;
+    const res = await jobsPromise;
+    const meRes = mePromise ? await mePromise : null;
+    if (meRes) {
+      const m = (await meRes.json().catch(() => ({}))) as { cleaner?: { id?: string }; teamIds?: unknown };
+      if (meRes.ok && m.cleaner && typeof m.cleaner.id === "string") {
+        const cid = m.cleaner.id.trim();
+        if (cid) {
+          workspaceFromApiRef.current = true;
+          setRtCleanerId(cid);
+          const tis = Array.isArray(m.teamIds)
+            ? m.teamIds.filter((x): x is string => typeof x === "string" && Boolean(String(x).trim())).map((x) => String(x).trim())
+            : [];
+          setRtTeamIds(tis);
         }
-        return;
       }
-      const res = await cleanerAuthenticatedFetch("/api/cleaner/jobs?view=card", { headers });
-      const j = (await res.json().catch(() => ({}))) as { jobs?: CleanerBookingRow[]; error?: string };
-      if (cancelled) return;
-      if (!res.ok) {
-        setErr(j.error ?? "Could not load jobs.");
-        setRows([]);
-      } else {
-        setErr(null);
-        setRows(Array.isArray(j.jobs) ? j.jobs : []);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    }
+    const j = (await res.json().catch(() => ({}))) as { jobs?: CleanerBookingRow[]; error?: string };
+    if (!res.ok) {
+      setErr(j.error ?? "Could not load jobs.");
+      setRows([]);
+    } else {
+      setErr(null);
+      setRows(Array.isArray(j.jobs) ? j.jobs : []);
+    }
+    if (!silent) setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (userLoading) return;
+    void loadJobs({ silent: jobsRealtimeTick > 0 });
+  }, [userLoading, loadJobs, jobsRealtimeTick]);
+
+  useEffect(() => {
+    const onJobsRefresh = () => {
+      void loadJobs({ silent: true });
+    };
+    window.addEventListener(CLEANER_DASHBOARD_JOBS_REFRESH_EVENT, onJobsRefresh);
+    return () => window.removeEventListener(CLEANER_DASHBOARD_JOBS_REFRESH_EVENT, onJobsRefresh);
+  }, [loadJobs]);
+
+  const bumpJobsFromRealtime = useCallback(() => {
+    setJobsRealtimeTick((n) => n + 1);
+  }, []);
+
+  useCleanerRealtime({
+    cleanerId: userLoading ? undefined : rtCleanerId ?? undefined,
+    debounceMs: 300,
+    subscribeBookings: true,
+    subscribeWorkSettings: false,
+    workspaceBookingsRealtime: true,
+    workspaceTeamIds: rtTeamIds,
+    onBookingChange: bumpJobsFromRealtime,
+  });
 
   useEffect(() => {
     let debounce: number | null = null;

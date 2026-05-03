@@ -13,6 +13,8 @@ export function normalizeStatus(s: string | null | undefined): NormalizedBooking
   const v = (s ?? "pending").toLowerCase();
   if (
     v === "pending" ||
+    v === "pending_assignment" ||
+    v === "offered" ||
     v === "confirmed" ||
     v === "assigned" ||
     v === "in_progress" ||

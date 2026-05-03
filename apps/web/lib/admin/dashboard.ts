@@ -331,7 +331,7 @@ export async function fetchCustomers() {
 
 export async function assignCleaner(bookingId: string, cleanerId: string, force = false) {
   const token = await getAdminToken();
-  const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign`, {
+  const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/offer`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ cleanerId, force }),

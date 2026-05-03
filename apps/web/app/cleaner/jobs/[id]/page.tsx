@@ -28,7 +28,11 @@ import {
   type UseCleanerLifecycleOrchestratorReturn,
 } from "@/lib/cleaner/lifecycle/useCleanerLifecycleOrchestrator";
 import type { CleanerBookingLineItemWire, CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { readCleanerJobDetailCache, writeCleanerJobDetailCache } from "@/lib/cleaner/cleanerJobDetailSessionCache";
+import {
+  clearCleanerJobDetailCache,
+  readCleanerJobDetailCache,
+  writeCleanerJobDetailCache,
+} from "@/lib/cleaner/cleanerJobDetailSessionCache";
 import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRank";
 import { wireLikeFromJobDetailCacheBody } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
 import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
@@ -41,6 +45,10 @@ import {
 import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
+import {
+  clearAllCleanerDashboardSessionCaches,
+  signalCleanerDashboardJobsRefresh,
+} from "@/lib/cleaner/cleanerDashboardSessionCache";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +62,8 @@ type CleanerJobDetailWire = {
   time?: string | null;
   location?: string | null;
   status?: string | null;
+  /** From `bookings.dispatch_status` — used with status for lifecycle chips. */
+  dispatch_status?: string | null;
   rooms?: number | null;
   bathrooms?: number | null;
   extras?: unknown[] | null;
@@ -77,6 +87,8 @@ type CleanerJobDetailWire = {
   teamMemberCount?: number | null;
   team_roster_summary?: string | null;
   assigned_at?: string | null;
+  /** From `bookings.accepted_at` — dual-signal with `cleaner_response_status` for accepted UI (see `isCleanerAssignmentAccepted`). */
+  accepted_at?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
@@ -153,6 +165,7 @@ function wireToBookingRow(j: CleanerJobDetailWire): CleanerBookingRow {
     time: j.time ?? null,
     location: j.location ?? null,
     status: j.status ?? null,
+    dispatch_status: j.dispatch_status ?? null,
     total_paid_zar: j.total_paid_zar ?? null,
     total_price: j.total_price ?? null,
     price_breakdown: j.price_breakdown ?? null,
@@ -163,6 +176,7 @@ function wireToBookingRow(j: CleanerJobDetailWire): CleanerBookingRow {
     extras: j.extras ?? null,
     lineItems: j.lineItems ?? null,
     assigned_at: j.assigned_at ?? null,
+    accepted_at: j.accepted_at ?? null,
     en_route_at: j.en_route_at ?? null,
     started_at: j.started_at ?? null,
     completed_at: j.completed_at ?? null,
@@ -186,7 +200,7 @@ function lifecyclePhaseBeforeLabel(
   if (!job?.id) return "unknown";
   const merged = { ...job, ...patch } as CleanerJobDetailWire;
   try {
-    return String(deriveMobilePhase(wireToBookingRow(merged)));
+    return String(deriveMobilePhase(wireToBookingRow(merged), { nowMs: Date.now() }));
   } catch {
     return String(job.status ?? "unknown");
   }
@@ -206,7 +220,7 @@ function optimisticPatchForAction(action: "accept" | "en_route" | "start" | "com
         cleaner_response_status: CLEANER_RESPONSE.STARTED,
       };
     case "complete":
-      return { status: "completed", completed_at: now };
+      return { status: "completed", completed_at: now, cleaner_response_status: CLEANER_RESPONSE.COMPLETED };
     default:
       return {};
   }
@@ -268,9 +282,9 @@ export default function CleanerJobDetailPage() {
     return { ...job, ...optimisticPatch };
   }, [job, optimisticPatch]);
 
-  useEffect(() => {
-    latestJobRef.current = job;
-  }, [job]);
+  /** Same as `displayJob` — updated during render so `loadJob` / flush always see merged state without extra effect deps. */
+  latestJobRef.current = displayJob;
+
   useEffect(() => {
     optimisticPatchRef.current = optimisticPatch;
   }, [optimisticPatch]);
@@ -498,8 +512,14 @@ export default function CleanerJobDetailPage() {
     () => (bookingRow?.id ? deriveCleanerJobUiState(bookingRow) : ({ phase: "none" } as const)),
     [bookingRow],
   );
-  const phaseBadge = useMemo(() => (bookingRow?.id ? mobilePhaseDisplayForDashboard(bookingRow) : "—"), [bookingRow]);
-  const mobilePhase = useMemo(() => (bookingRow?.id ? deriveMobilePhase(bookingRow) : null), [bookingRow]);
+  const phaseBadge = useMemo(
+    () => (bookingRow?.id ? mobilePhaseDisplayForDashboard(bookingRow, { nowMs: Date.now() + serverClockOffsetMs }) : "—"),
+    [bookingRow, serverClockOffsetMs, tick],
+  );
+  const mobilePhase = useMemo(
+    () => (bookingRow?.id ? deriveMobilePhase(bookingRow, { nowMs: Date.now() + serverClockOffsetMs }) : null),
+    [bookingRow, serverClockOffsetMs, tick],
+  );
 
   useEffect(() => {
     setConfirmPending(null);
@@ -698,6 +718,8 @@ export default function CleanerJobDetailPage() {
 
           lifecycleOrchestratorRef.current?.clearFlushFailureStreakAndConnectionFlag();
           if (result.ok) {
+            clearAllCleanerDashboardSessionCaches();
+            clearCleanerJobDetailCache(id);
             const nowIso = new Date().toISOString();
             if (action === "accept") {
               persistLifecycleSessionPatch({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED });
@@ -736,6 +758,7 @@ export default function CleanerJobDetailPage() {
           setConfirmPending(null);
           await removePendingLifecycleByKey(idempotencyKey);
           setNeedsJobRefresh(false);
+          signalCleanerDashboardJobsRefresh();
           scrollJobControlIntoView();
           return {};
         });

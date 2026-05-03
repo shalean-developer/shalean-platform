@@ -7,6 +7,8 @@ import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 export type LifecycleWireLike = {
   status?: string | null;
+  /** Mirrors accept commit — used with `cleaner_response_status` for dual-signal UI. */
+  accepted_at?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
@@ -30,7 +32,11 @@ export function lifecyclePhaseRankFromWire(w: LifecycleWireLike | null | undefin
   if (w.started_at) return 80;
   if (w.en_route_at) return 60;
   const cr = String(w.cleaner_response_status ?? "").toLowerCase();
-  return Math.max(20, rankFromCleanerResponse(cr));
+  let r = Math.max(20, rankFromCleanerResponse(cr));
+  if (Boolean(String(w.accepted_at ?? "").trim())) {
+    r = Math.max(r, 50);
+  }
+  return r;
 }
 
 export function lifecyclePhaseRankFromPatch(patch: Partial<LifecycleWireLike> | null | undefined): number {
@@ -41,7 +47,11 @@ export function lifecyclePhaseRankFromPatch(patch: Partial<LifecycleWireLike> | 
   if (st === "in_progress" || patch.started_at) return 80;
   if (patch.en_route_at) return 60;
   const cr = patch.cleaner_response_status != null ? String(patch.cleaner_response_status).toLowerCase() : "";
-  return rankFromCleanerResponse(cr);
+  const crR = rankFromCleanerResponse(cr);
+  if (patch.accepted_at != null && String(patch.accepted_at).trim()) {
+    return Math.max(crR, 50);
+  }
+  return crR;
 }
 
 /** Overlay optimistic lifecycle fields onto a (possibly stale) GET payload. Skips undefined patch keys. */
@@ -63,6 +73,7 @@ export function lifecycleFieldsPatchFrom(prev: LifecycleWireLike): Partial<Lifec
   return {
     status: prev.status,
     cleaner_response_status: prev.cleaner_response_status,
+    accepted_at: prev.accepted_at,
     en_route_at: prev.en_route_at,
     started_at: prev.started_at,
     completed_at: prev.completed_at,

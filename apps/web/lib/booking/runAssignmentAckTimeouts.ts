@@ -25,10 +25,11 @@ export async function runAssignmentAckTimeouts(admin: SupabaseClient): Promise<{
 
   const { data: rows, error: selErr } = await admin
     .from("bookings")
-    .select("id, date, time, cleaner_id, status, assigned_at")
+    .select("id, date, time, cleaner_id, status, assigned_at, cleaner_response_status, is_team_job")
     .eq("status", "assigned")
     .not("assigned_at", "is", null)
     .lt("assigned_at", cutoff)
+    .or("cleaner_response_status.is.null,cleaner_response_status.eq.none,cleaner_response_status.eq.pending")
     .limit(MAX_BATCH);
 
   if (selErr || !rows?.length) {
@@ -47,7 +48,8 @@ export async function runAssignmentAckTimeouts(admin: SupabaseClient): Promise<{
   let errors = 0;
 
   for (const raw of rows) {
-    const row = raw as StaleAssignedRow;
+    const row = raw as StaleAssignedRow & { is_team_job?: boolean | null };
+    if (row.is_team_job === true) continue;
     const id = typeof row.id === "string" ? row.id : "";
     if (!id) continue;
 
