@@ -11,6 +11,12 @@ export type CleanerJobOffer = {
   expiresAt: string;
   /** Echoed for accept POST body (`buildCleanerOfferAcceptBody`). */
   uxVariant?: string | null;
+  /** Public offer link; used when SMS may not have delivered. */
+  offerToken?: string;
+  /** ISO — row `created_at` for soft SMS-outage hint. */
+  offerCreatedAtIso?: string;
+  /** When dispatch SMS was recorded; absence + fresh row → subtle “SMS may have failed” hint. */
+  smsSentAt?: string | null;
 };
 
 export type CleanerUpcomingJob = {

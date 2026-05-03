@@ -21,9 +21,19 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     cleanerId: session.cleanerId,
   });
   if (!r.ok) {
+    const status =
+      r.failure === "wrong_cleaner"
+        ? 403
+        : r.failure === "not_found"
+          ? 404
+          : r.failure === "expired"
+            ? 410
+            : r.failure === "assigned_other" || r.failure === "booking_taken"
+              ? 409
+              : 400;
     return NextResponse.json(
-      { error: r.error, reason: r.machineReason },
-      { status: r.error.includes("Not your") ? 403 : 400 },
+      { error: r.error, failure: r.failure, reason: r.machineReason },
+      { status },
     );
   }
 

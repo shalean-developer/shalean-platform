@@ -13,7 +13,12 @@ import { normalizeCleanerPayoutSummaryRow } from "@/lib/cleaner/normalizeCleaner
 import { touchPayoutIntegrityFirstSeen } from "@/lib/cleaner/touchPayoutIntegrityFirstSeen";
 import { metrics } from "@/lib/metrics/counters";
 import { buildLast7DaysEarningsPoints } from "@/lib/cleaner/earningsInsightsSeries";
-import { computeEarningsFinanceShadow } from "@/lib/cleaner/earningsLedgerShadowTotals";
+import { computeCutoffAssignmentProbe } from "@/lib/cleaner/earnings/nextPayoutFriday";
+import {
+  computeEarningsFinanceShadow,
+  filterPayoutCardsForJhbIsoWeek,
+  isEarningsLedgerFlipReady,
+} from "@/lib/cleaner/earningsLedgerShadowTotals";
 import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummaryTypes";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -122,10 +127,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
   }
 
-  const { data: cleaner } = await admin.from("cleaners").select("id").eq("id", session.cleanerId).maybeSingle();
-  if (!cleaner) {
+  const { data: cleanerRow } = await admin
+    .from("cleaners")
+    .select("id, full_name")
+    .eq("id", session.cleanerId)
+    .maybeSingle();
+  if (!cleanerRow) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
+  const cleanerFullName = String((cleanerRow as { full_name?: string | null }).full_name ?? "").trim() || null;
 
   const earningsFetchStartedMs = performance.now();
 
@@ -135,6 +145,12 @@ export async function GET(request: Request) {
   const statusParam = String(url.searchParams.get("status") ?? "all").trim().toLowerCase();
   const statusFilter =
     statusParam === "pending" || statusParam === "approved" || statusParam === "paid" ? statusParam : "all";
+  const useLedgerTotalsParam = String(url.searchParams.get("use_ledger_totals") ?? "")
+    .trim()
+    .toLowerCase();
+  const useLedgerTotalsFromQuery = useLedgerTotalsParam === "true" || useLedgerTotalsParam === "1";
+  const useLedgerTotalsEnv = process.env.USE_LEDGER_TOTALS === "true";
+  const useLedgerTotals = useLedgerTotalsEnv || useLedgerTotalsFromQuery;
 
   const { orFilter: visibilityOr } = await getCleanerVisibleBookingsOrFilter(admin, session.cleanerId);
 
@@ -297,8 +313,6 @@ export async function GET(request: Request) {
       payout_run_id: normalized.payout_run_id,
       in_frozen_batch: inLockedWeeklyBatch,
       booking_status: String(b.status ?? "completed").trim().toLowerCase(),
-      customer_paid_cents: customerPaid,
-      platform_fee_cents: platformFee,
       is_team_job: Boolean(b.is_team_job),
       ...(normalized.__invalid ? { __invalid: true as const } : {}),
     };
@@ -430,6 +444,12 @@ export async function GET(request: Request) {
 
   const shadowCards = out.map((r, i) => {
     const b = rows[i];
+    const primary_completion_at_iso =
+      typeof b?.completed_at === "string" && b.completed_at.trim()
+        ? b.completed_at.trim()
+        : typeof b?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.date.trim())
+          ? `${b.date.trim()}T12:00:00+02:00`
+          : null;
     return {
       booking_id: r.booking_id,
       amount_cents: r.amount_cents,
@@ -437,24 +457,44 @@ export async function GET(request: Request) {
       in_frozen_batch: Boolean(r.in_frozen_batch),
       is_team_job: Boolean(b?.is_team_job),
       cleaner_earnings_total_cents: b?.cleaner_earnings_total_cents ?? null,
+      primary_completion_at_iso,
     };
   });
-  const finance_shadow = computeEarningsFinanceShadow(
-    shadowCards,
-    totalsAll.map((le) => ({
-      booking_id: String(le.booking_id ?? ""),
-      amount_cents: Math.max(0, Math.round(Number(le.amount_cents) || 0)),
-      status: String(le.status ?? ""),
-    })),
-  );
+  const ledgerShadowRows = totalsAll.map((le) => ({
+    booking_id: String(le.booking_id ?? ""),
+    amount_cents: Math.max(0, Math.round(Number(le.amount_cents) || 0)),
+    status: String(le.status ?? ""),
+  }));
+  const asOfMs = Date.parse(as_of);
+  const shadowOpts = { asOfMs: Number.isFinite(asOfMs) ? asOfMs : Date.now() };
+  const finance_shadow_core = computeEarningsFinanceShadow(shadowCards, ledgerShadowRows, shadowOpts);
+  const weekSliceCards = filterPayoutCardsForJhbIsoWeek(shadowCards, new Date(as_of));
+  const finance_shadow_jhb_week = computeEarningsFinanceShadow(weekSliceCards, ledgerShadowRows, shadowOpts);
+  const finance_shadow = {
+    ...finance_shadow_core,
+    jhb_week: finance_shadow_jhb_week,
+  };
+  const cutoff_assignment_probe = computeCutoffAssignmentProbe(new Date(as_of));
 
   if (finance_shadow.shadow_mismatch) {
     metrics.increment("cleaner.earnings_shadow_totals_mismatch", {
       booking_ids_in_slice: finance_shadow.booking_ids_in_slice,
       delta_all_cents: finance_shadow.delta_all_cents,
+      delta_direction: finance_shadow.delta_direction,
       bucket_aligned: finance_shadow.bucket_aligned,
       card_all_cents: finance_shadow.card.all_cents,
       ledger_all_cents: finance_shadow.ledger.all_cents,
+      bucket_mapping_mismatch_count: finance_shadow.bucket_mapping_mismatch_count,
+    });
+  }
+  if (finance_shadow.missing_ledger_expected_count_soft > 0) {
+    metrics.increment("cleaner.earnings_missing_ledger_rows_soft", {
+      count: finance_shadow.missing_ledger_expected_count_soft,
+    });
+  }
+  if (finance_shadow.missing_ledger_expected_count_hard > 0) {
+    metrics.increment("cleaner.earnings_missing_ledger_rows_hard", {
+      count: finance_shadow.missing_ledger_expected_count_hard,
     });
   }
   if (finance_shadow.missing_ledger_expected_count > 0) {
@@ -462,34 +502,62 @@ export async function GET(request: Request) {
       count: finance_shadow.missing_ledger_expected_count,
     });
   }
+  if (finance_shadow.bucket_mapping_mismatch_count > 0) {
+    metrics.increment("cleaner.earnings_bucket_mapping_mismatch", {
+      count: finance_shadow.bucket_mapping_mismatch_count,
+    });
+  }
+  if (cutoff_assignment_probe.mismatch) {
+    metrics.increment("cleaner.earnings_cutoff_assignment_mismatch", {
+      kind: "earnings_api_probe",
+      ui_payout_target_friday_ymd: cutoff_assignment_probe.ui_payout_target_friday_ymd,
+      batch_pay_friday_jhb_ymd: cutoff_assignment_probe.batch_pay_friday_jhb_ymd,
+    });
+  }
+
+  const earnings_ledger_flip_ready = isEarningsLedgerFlipReady(finance_shadow);
+  metrics.increment("cleaner.earnings_ledger_flip_ready", {
+    ready: earnings_ledger_flip_ready ? 1 : 0,
+    use_ledger_totals: useLedgerTotals,
+  });
 
   metrics.increment("cleaner.earnings_fetch", {
     latency_ms: Math.round(performance.now() - earningsFetchStartedMs),
     rows_count: out.length,
     earnings_chart_points_count: chartPoints.length,
+    use_ledger_totals: useLedgerTotals,
   });
+
+  const source_of_truth = useLedgerTotals ? ("ledger" as const) : ("booking" as const);
+  const summaryPayload = {
+    pending_cents: useLedgerTotals ? total_pending : pending_cents,
+    eligible_cents: useLedgerTotals ? total_approved : eligible_cents,
+    paid_cents: useLedgerTotals ? total_paid : paid_cents,
+    invalid_cents,
+    frozen_batch_cents,
+    today_cents,
+    week_cents,
+    month_cents,
+    /** Same 7-day JHB logic as `GET /api/cleaner/dashboard` — single source for goal UI. */
+    suggested_daily_goal_cents,
+  };
 
   return NextResponse.json({
     as_of,
-    /** Money for summary + `rows` is still booking-derived; flip to `"ledger"` when totals migrate. */
-    source_of_truth: "booking" as const,
+    /**
+     * `"booking"`: card buckets + `rows` are booking-derived; ledger is shadowed.
+     * `"ledger"` (with `?use_ledger_totals=true`): summary pending/eligible/paid mirror full-ledger totals; rows unchanged.
+     */
+    source_of_truth,
+    use_ledger_totals: useLedgerTotals,
+    earnings_ledger_flip_ready,
     finance_shadow,
+    cutoff_assignment_probe,
     total_pending,
     total_approved,
     total_paid,
     total_all_time,
-    summary: {
-      pending_cents,
-      eligible_cents,
-      paid_cents,
-      invalid_cents,
-      frozen_batch_cents,
-      today_cents,
-      week_cents,
-      month_cents,
-      /** Same 7-day JHB logic as `GET /api/cleaner/dashboard` — single source for goal UI. */
-      suggested_daily_goal_cents,
-    },
+    summary: summaryPayload,
     line_item_ledger: {
       total_pending_cents: ledger_pending,
       total_approved_cents: ledger_approved,
@@ -515,6 +583,7 @@ export async function GET(request: Request) {
       readyForPayout: Boolean((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),
       missingBankDetails: !((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),
     },
+    cleaner: { full_name: cleanerFullName },
     rows: out,
   });
 }

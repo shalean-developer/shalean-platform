@@ -26,7 +26,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -74,7 +74,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const snapRaw = record.team_member_count_snapshot;
   const snapCount =
     typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
-  const { cleaner_payout_cents: _legacyPayout, display_earnings_cents: _displayRaw, team_member_count_snapshot: _snapOmit, ...safe } = record;
+  const {
+    cleaner_payout_cents: _legacyPayout,
+    display_earnings_cents: _displayRaw,
+    team_member_count_snapshot: _snapOmit,
+    total_paid_zar: _omitPaidZar,
+    total_price: _omitTotalPrice,
+    price_breakdown: _omitPriceBreakdown,
+    amount_paid_cents: _omitAmountPaid,
+    ...safe
+  } = record;
 
   const snap = record.booking_snapshot;
   const snapCust =

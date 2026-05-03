@@ -172,63 +172,49 @@ export function useCleanerMobileWorkspace() {
     if (!sb || !cleanerId) return;
 
     let cancelled = false;
-    let chBookings: ReturnType<typeof sb.channel> | null = null;
-    let chOffers: ReturnType<typeof sb.channel> | null = null;
-    let chTeamMembers: ReturnType<typeof sb.channel> | null = null;
-    let chBookingCleaners: ReturnType<typeof sb.channel> | null = null;
+    let rtChannel: ReturnType<typeof sb.channel> | null = null;
 
     void sb.auth.getSession().then(({ data: { session } }) => {
       if (cancelled || !session?.user) return;
 
-      chBookings = sb.channel(`cleaner-mobile-bookings-${cleanerId}`);
-      chBookings.on(
+      const ch = sb.channel(`cleaner-mobile-rt-${cleanerId}`);
+      ch.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${cleanerId}` },
         scheduleRealtimeReload,
       );
-      chBookings.on(
+      ch.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `payout_owner_cleaner_id=eq.${cleanerId}` },
         scheduleRealtimeReload,
       );
       for (const tid of teamIdsForRealtime) {
         if (!tid.trim()) continue;
-        chBookings.on(
+        ch.on(
           "postgres_changes",
           { event: "*", schema: "public", table: "bookings", filter: `team_id=eq.${tid}` },
           scheduleRealtimeReload,
         );
       }
-      chBookings.subscribe((status) => {
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${cleanerId}` },
+        scheduleRealtimeReload,
+      );
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${cleanerId}` },
+        scheduleRealtimeReload,
+      );
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "booking_cleaners", filter: `cleaner_id=eq.${cleanerId}` },
+        scheduleRealtimeReload,
+      );
+      rtChannel = ch;
+      ch.subscribe((status) => {
         if (!cancelled) setRealtimeOk(status === "SUBSCRIBED");
       });
-
-      chOffers = sb
-        .channel(`cleaner-mobile-offers-${cleanerId}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${cleanerId}` },
-          scheduleRealtimeReload,
-        )
-        .subscribe();
-
-      chTeamMembers = sb
-        .channel(`cleaner-mobile-team-members-${cleanerId}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${cleanerId}` },
-          scheduleRealtimeReload,
-        )
-        .subscribe();
-
-      chBookingCleaners = sb
-        .channel(`cleaner-mobile-booking-cleaners-${cleanerId}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "booking_cleaners", filter: `cleaner_id=eq.${cleanerId}` },
-          scheduleRealtimeReload,
-        )
-        .subscribe();
     });
 
     return () => {
@@ -237,10 +223,7 @@ export function useCleanerMobileWorkspace() {
         clearTimeout(realtimeLoadDebounceRef.current);
         realtimeLoadDebounceRef.current = null;
       }
-      if (chBookings) void sb.removeChannel(chBookings);
-      if (chOffers) void sb.removeChannel(chOffers);
-      if (chTeamMembers) void sb.removeChannel(chTeamMembers);
-      if (chBookingCleaners) void sb.removeChannel(chBookingCleaners);
+      if (rtChannel) void sb.removeChannel(rtChannel);
     };
   }, [load, teamIdsForRealtime, cleaner?.id, realtimeAuthEpoch, scheduleRealtimeReload]);
 

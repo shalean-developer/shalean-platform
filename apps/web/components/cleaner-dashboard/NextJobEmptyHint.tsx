@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CleanerDashboardInfoHint } from "./CleanerDashboardInfoHint";
 import { cn } from "@/lib/utils";
 
 type NextJobEmptyHintProps = {
@@ -10,6 +11,8 @@ type NextJobEmptyHintProps = {
   browserOnline?: boolean;
   onNotificationsGranted?: () => void;
   embedded?: boolean;
+  /** When the list below still has future/today jobs but nothing is “next” (edge). */
+  nextScheduleLine?: string | null;
 };
 
 function notificationHint(): { icon: "on" | "off" | "default"; title: string; body: string; showRequest?: boolean } {
@@ -17,24 +20,28 @@ function notificationHint(): { icon: "on" | "off" | "default"; title: string; bo
     return {
       icon: "default",
       title: "Job alerts",
-      body: "New offers appear at the top of this screen when you're online.",
+      body: "Offers show on this screen when you're online.\n\nThis browser can't prompt for desktop alerts.",
     };
   }
   const p = Notification.permission;
   if (p === "granted") {
-    return { icon: "on", title: "Notifications are on", body: "We'll use browser alerts when we can, and always show offers here." };
+    return {
+      icon: "on",
+      title: "Browser notifications allowed",
+      body: "Desktop alerts can fire when this tab is in the background.\n\nNew offers always appear on this dashboard too.",
+    };
   }
   if (p === "denied") {
     return {
       icon: "off",
-      title: "Browser notifications are off",
-      body: "You can enable them in your browser settings so you never miss a rush offer.",
+      title: "Browser notifications blocked",
+      body: "Turn alerts on in your browser site settings if you want desktop pings.\n\nOffers still show here.",
     };
   }
   return {
     icon: "default",
-    title: "Turn on notifications",
-    body: "Allow alerts so a new offer can ping you even when this tab is in the background.",
+    title: "Enable browser notifications",
+    body: "Optional: allow alerts so a new offer can ping you when this tab is in the background.",
     showRequest: true,
   };
 }
@@ -45,18 +52,23 @@ export function NextJobEmptyHint({
   browserOnline = true,
   onNotificationsGranted,
   embedded,
+  nextScheduleLine,
 }: NextJobEmptyHintProps) {
   const [hint, setHint] = useState(() => notificationHint());
 
   useEffect(() => {
-    setHint(notificationHint());
+    const sync = () => setHint(notificationHint());
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
   }, []);
 
   const requestNotify = () => {
     if (typeof Notification === "undefined" || Notification.permission !== "default") return;
     void Notification.requestPermission().then((p) => {
       setHint(notificationHint());
-      if (p === "granted") onNotificationsGranted?.();
+      if (p === "granted") {
+        onNotificationsGranted?.();
+      }
     });
   };
 
@@ -75,20 +87,30 @@ export function NextJobEmptyHint({
           <Search className="size-5 text-muted-foreground" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-bold tracking-tight">No upcoming jobs</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-lg font-bold tracking-tight">Nothing next in your queue</p>
+            <CleanerDashboardInfoHint
+              text={`Your soonest open visit (today or a future day) shows here.\n\nThis is not limited to “today only” — tomorrow and later bookings count too.`}
+              label="About the next job slot"
+            />
+          </div>
+          {nextScheduleLine ? (
+            <p className="mt-1 text-sm font-medium text-foreground/90">
+              Next: <span className="text-foreground">{nextScheduleLine}</span>
+            </p>
+          ) : null}
           {browserOnline && receivingOffers ? (
             <p className="mt-1 text-sm font-medium text-foreground/90">We&apos;re finding jobs for you nearby</p>
           ) : null}
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            We&apos;ll surface the next visit here as soon as you&apos;re assigned one.
-          </p>
         </div>
       </div>
       <div className="mt-4 flex items-start gap-2 rounded-xl border border-border/60 bg-background/60 px-3 py-2.5">
         <Icon className="mt-0.5 size-4 shrink-0 text-foreground/80" aria-hidden />
         <div className="min-w-0 flex-1 text-sm">
-          <p className="font-semibold text-foreground">{hint.title}</p>
-          <p className="mt-0.5 text-muted-foreground">{hint.body}</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="font-semibold text-foreground">{hint.title}</p>
+            <CleanerDashboardInfoHint text={hint.body} label={hint.title} />
+          </div>
           {hint.showRequest ? (
             <Button type="button" size="sm" variant="secondary" className="mt-2 h-9 active:scale-[0.98]" onClick={requestNotify}>
               Enable notifications

@@ -3,6 +3,7 @@ import { cleanerBookingCardDetailsFromRow, cleanerBookingScopeLines } from "@/li
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { jobTotalZarFromCleanerBookingLike } from "@/lib/cleaner/cleanerUxEstimatedPayZar";
@@ -167,32 +168,73 @@ export function mobilePhaseDisplayForDashboard(row: CleanerBookingRow): string {
   }
 }
 
-/** At most one primary action group for schedule / job detail (matches server lifecycle rules). */
-export type CleanerJobLifecycleSlot =
-  | { kind: "accept_reject"; canReject: boolean }
-  | { kind: "en_route" }
-  | { kind: "start" }
-  | { kind: "complete" }
-  | null;
+/**
+ * Single canonical resolver for cleaner primary actions.
+ * Combines `bookings.status`, `bookings.cleaner_response_status`, `en_route_at`, and offer-expiry rules.
+ * Prefer this for new UI; {@link deriveCleanerJobLifecycleSlot} maps into legacy slot shapes for schedule helpers.
+ */
+export type CleanerJobUiState =
+  | { phase: "none" }
+  | { phase: "expired" }
+  | { phase: "accept"; canReject: boolean }
+  | { phase: "on_my_way" }
+  | { phase: "start" }
+  | { phase: "complete" };
 
-export function deriveCleanerJobLifecycleSlot(row: CleanerBookingRow): CleanerJobLifecycleSlot {
+export function deriveCleanerJobUiState(row: CleanerBookingRow, opts?: { nowMs?: number }): CleanerJobUiState {
   const st = String(row.status ?? "").toLowerCase();
-  if (st === "completed" || st === "cancelled" || st === "failed") return null;
-  if (st === "in_progress") return { kind: "complete" };
+  if (st === "completed" || st === "cancelled" || st === "failed") return { phase: "none" };
+  if (st === "in_progress") return { phase: "complete" };
+
   const rec = row as Record<string, unknown>;
-  const raw = rec.cleaner_response_status as string | null | undefined;
+  const raw = (row.cleaner_response_status ?? rec.cleaner_response_status) as string | null | undefined;
   const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
   const isTeam = row.is_team_job === true;
   const accepted = r === CLEANER_RESPONSE.ACCEPTED;
   const onMyWay = r === CLEANER_RESPONSE.ON_MY_WAY;
   const hasEnRoute = Boolean(row.en_route_at);
+
   if (st === "assigned") {
     const readyToStart = hasEnRoute || onMyWay;
-    if (readyToStart) return { kind: "start" };
-    if (!accepted) return { kind: "accept_reject", canReject: !isTeam };
-    return { kind: "en_route" };
+    if (readyToStart) return { phase: "start" };
+    if (!accepted) {
+      if (assignedOfferPastAcceptanceDeadline(row, opts?.nowMs)) return { phase: "expired" };
+      return { phase: "accept", canReject: !isTeam };
+    }
+    return { phase: "on_my_way" };
   }
-  return null;
+  return { phase: "none" };
+}
+
+/** At most one primary action group for schedule / job detail (matches server lifecycle rules). */
+export type CleanerJobLifecycleSlot =
+  | { kind: "accept_reject"; canReject: boolean }
+  | { kind: "offer_expired" }
+  | { kind: "en_route" }
+  | { kind: "start" }
+  | { kind: "complete" }
+  | null;
+
+/** Maps {@link deriveCleanerJobUiState} into the legacy slot union (schedule / CTA helpers). */
+export function deriveCleanerJobLifecycleSlot(
+  row: CleanerBookingRow,
+  opts?: { nowMs?: number },
+): CleanerJobLifecycleSlot {
+  const u = deriveCleanerJobUiState(row, opts);
+  switch (u.phase) {
+    case "accept":
+      return { kind: "accept_reject", canReject: u.canReject };
+    case "expired":
+      return { kind: "offer_expired" };
+    case "on_my_way":
+      return { kind: "en_route" };
+    case "start":
+      return { kind: "start" };
+    case "complete":
+      return { kind: "complete" };
+    default:
+      return null;
+  }
 }
 
 /** Prefer camelCase from cleaner APIs; fall back to snake_case if present. */

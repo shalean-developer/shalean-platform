@@ -40,7 +40,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cleanerDisplayFirstName } from "@/lib/cleaner/cleanerDisplayFirstName";
 import { cn } from "@/lib/utils";
+import { CleanerDashboardInfoHint } from "./CleanerDashboardInfoHint";
 import { Header } from "./Header";
 import { CleanerEarningsWeeklyBarChart } from "./CleanerEarningsWeeklyBarChart";
 
@@ -51,12 +53,29 @@ type EarningsJson = {
   /** Server snapshot time for this payload (ISO 8601). */
   as_of?: string;
   source_of_truth?: "booking" | "ledger";
+  use_ledger_totals?: boolean;
+  /** Server-computed go/no-go for ledger summary flip (shadow gates). */
+  earnings_ledger_flip_ready?: boolean;
   finance_shadow?: {
     booking_ids_in_slice: number;
     delta_all_cents: number;
+    delta_direction?: "card_minus_ledger";
     bucket_aligned: boolean;
     shadow_mismatch: boolean;
     missing_ledger_expected_count: number;
+    missing_ledger_expected_count_soft?: number;
+    missing_ledger_expected_count_hard?: number;
+    bucket_mapping_mismatch_count?: number;
+    summary?: {
+      ok?: boolean;
+      buckets?: { pending_delta?: number; eligible_delta?: number; paid_delta?: number };
+    };
+    jhb_week?: unknown;
+  };
+  cutoff_assignment_probe?: {
+    mismatch?: boolean;
+    ui_payout_target_friday_ymd?: string;
+    batch_pay_friday_jhb_ymd?: string;
   };
   total_all_time?: number;
   summary?: {
@@ -76,6 +95,7 @@ type EarningsJson = {
     readyForPayout?: boolean;
     missingBankDetails?: boolean;
   };
+  cleaner?: { full_name?: string | null };
 };
 
 function cents(n: unknown): number {
@@ -225,7 +245,6 @@ export function CleanerEarningsScreen() {
   const rows = payload?.rows ?? EMPTY_EARNINGS_ROWS;
   const paymentDetails = payload?.paymentDetails;
   const hasFailedTransfer = Boolean(payload?.has_failed_transfer);
-  const lifetimeLedgerCents = cents(payload?.total_all_time);
 
   const now = nowTick;
   const todayY = useMemo(() => johannesburgCalendarYmd(now), [now]);
@@ -304,21 +323,14 @@ export function CleanerEarningsScreen() {
   const periodAmt = period === "today" ? todayAmt : period === "week" ? weekAmt : monthAmt;
   const periodLabel = period === "today" ? "Today" : period === "week" ? "This week" : "This month";
 
-  const { jobs: jobsToday, cents: todayFromRows } = useMemo(
-    () => countJobsAndCentsForToday(rows, todayY),
-    [rows, todayY],
-  );
+  const { jobs: jobsToday } = useMemo(() => countJobsAndCentsForToday(rows, todayY), [rows, todayY]);
   const jobsWeek = useMemo(() => countJobsInWeek(rows, todayY, weekStart), [rows, todayY, weekStart]);
-  const avgPerJobToday = jobsToday > 0 ? Math.round(todayFromRows / jobsToday) : 0;
 
   const lastInPeriod = useMemo(
     () => lastJobInPeriod(rows, period, todayY, weekStart, monthPrefix),
     [rows, period, todayY, weekStart, monthPrefix],
   );
   const lastJobCents = lastInPeriod ? cents(lastInPeriod.amount_cents) : 0;
-
-  const pctOfGoal = goalAmt > 0 ? Math.round((todayAmt / goalAmt) * 100) : 0;
-  const aboveGoalPct = goalAmt > 0 && todayAmt > goalAmt ? Math.round(((todayAmt - goalAmt) / goalAmt) * 100) : 0;
 
   const projectedWeek =
     isoWeekday >= 1 && weekAmt > 0 ? Math.round((weekAmt / isoWeekday) * 7) : weekAmt;
@@ -350,13 +362,69 @@ export function CleanerEarningsScreen() {
     projectedWeek > 0 &&
     projectedWeek < goalAmt * 7 * 0.85;
 
+  const overviewVisibleLines = useMemo(() => {
+    const out: string[] = [];
+    const msg = momentum.message;
+    if (msg) {
+      if (msg.includes("ahead of last week")) {
+        out.push("You're ahead of last week 👍");
+      } else {
+        out.push(msg);
+      }
+    }
+    if (out.length < 2 && jobsToGoal != null && jobsToGoal > 0 && goalAmt > 0) {
+      out.push(`${jobsToGoal} more ${jobsToGoal === 1 ? "job" : "jobs"} to reach today's goal.`);
+    }
+    return out.slice(0, 2);
+  }, [momentum.message, jobsToGoal, goalAmt]);
+
+  const overviewTooltipDetail = useMemo(() => {
+    const chunks: string[] = [];
+    if (momentum.recoveryHint) chunks.push(momentum.recoveryHint);
+    if (projectionUnderWeekGoal) {
+      chunks.push(
+        "At this week's pace you're under a full-week goal at your dashboard target — one more completed job soon lifts the projection.",
+      );
+    }
+    if (period === "week" && projectedWeek > 0) {
+      chunks.push(`On track for about ${formatZarFromCents(projectedWeek)} this week if your pace holds.`);
+    }
+    if (bestDay && bestDay.cents > 0 && period === "week") {
+      chunks.push(`Best day (7d): ${bestDay.label} · ${formatZarFromCents(bestDay.cents)}`);
+    }
+    for (const m of insightMessages) {
+      if (!chunks.includes(m)) chunks.push(m);
+    }
+    return chunks.slice(0, 8).join("\n\n");
+  }, [
+    momentum.recoveryHint,
+    projectionUnderWeekGoal,
+    period,
+    projectedWeek,
+    bestDay,
+    insightMessages,
+  ]);
+
+  const showOverviewSection = overviewVisibleLines.length > 0 || overviewTooltipDetail.length > 0;
+
   const hasRows = rows.length > 0;
   const showEmpty = !loading && !error && !hasRows;
 
+  const headerFirstName = useMemo(
+    () => cleanerDisplayFirstName(payload?.cleaner?.full_name),
+    [payload?.cleaner?.full_name],
+  );
+
+  const payoutHeadlineShort = useMemo(() => {
+    const h = payoutArrival.headline;
+    const i = h.indexOf("—");
+    return i === -1 ? h : h.slice(0, i).trim();
+  }, [payoutArrival.headline]);
+
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-lg bg-background pb-28">
+    <div className="mx-auto w-full max-w-lg bg-background">
       <div className="space-y-4 p-4">
-        <Header />
+        <Header firstName={headerFirstName} />
         <Link href="/cleaner/dashboard" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
           ← Dashboard
         </Link>
@@ -393,157 +461,141 @@ export function CleanerEarningsScreen() {
           <h1 className="sr-only">Earnings</h1>
           <div className="sticky top-0 z-20 border-b border-border/80 bg-background/95 px-4 pb-3 pt-0 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
             <Card className="overflow-hidden rounded-2xl p-5 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{periodLabel} earnings</p>
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {periodLabel} earnings
+                </p>
+                <CleanerDashboardInfoHint
+                  label={`About ${periodLabel} earnings`}
+                  text={
+                    (period === "today"
+                      ? "Shows earnings from jobs completed today.\n\nUpdates after each completed job."
+                      : period === "week"
+                        ? "Shows earnings from jobs completed this week (SAST).\n\nUpdates when you finish a job."
+                        : "Shows earnings from jobs completed this month (SAST).\n\nUpdates when you finish a job.") +
+                    `\n\nTotals use South African time (SAST). Data refreshes about every minute while this page is open.` +
+                    (updatedAgoLabel ? ` ${updatedAgoLabel}.` : "")
+                  }
+                  className="-translate-y-px"
+                />
+              </div>
               <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-foreground">{formatZarFromCents(periodAmt)}</p>
               {lastJobCents > 0 ? (
                 <p className="mt-1 text-sm font-medium text-emerald-700 dark:text-emerald-400">
                   +{formatZarFromCents(lastJobCents)} from last job
                 </p>
               ) : period === "today" ? (
-                <p className="mt-1 text-sm text-muted-foreground">No earnings logged for today yet.</p>
+                <p className="mt-1 text-sm text-muted-foreground">No earnings yet today</p>
+              ) : period === "week" ? (
+                <p className="mt-1 text-sm text-muted-foreground">No earnings this week yet</p>
               ) : (
-                <p className="mt-1 text-sm text-muted-foreground">No completed-job earnings in this period yet.</p>
+                <p className="mt-1 text-sm text-muted-foreground">No earnings this month yet</p>
               )}
-              <Tabs value={period} onValueChange={(v) => syncRangeToUrl(v as EarningsPeriod)} className="mt-4 w-full">
-                <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
-                  <TabsTrigger value="today" className="text-xs sm:text-sm">
-                    Today
-                  </TabsTrigger>
-                  <TabsTrigger value="week" className="text-xs sm:text-sm">
-                    Week
-                  </TabsTrigger>
-                  <TabsTrigger value="month" className="text-xs sm:text-sm">
-                    Month
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {lifetimeLedgerCents > 0 ? (
-                <p className="mt-3 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Total in earnings ledger:</span>{" "}
-                  {formatZarFromCents(lifetimeLedgerCents)}
-                  <span className="block pt-1 opacity-90">All recorded cleaner earnings line items (pending + paid).</span>
-                </p>
-              ) : null}
-              <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-                Totals use South African time (SAST). Refreshes every minute while this tab is open.
-                {updatedAgoLabel ? (
-                  <>
-                    {" "}
-                    <span className="font-medium text-foreground/90">{updatedAgoLabel}</span>.
-                  </>
-                ) : null}
-              </p>
+              <div className="mt-4 flex w-full items-end gap-2">
+                <Tabs value={period} onValueChange={(v) => syncRangeToUrl(v as EarningsPeriod)} className="min-w-0 flex-1">
+                  <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
+                    <TabsTrigger value="today" className="text-xs sm:text-sm">
+                      Today
+                    </TabsTrigger>
+                    <TabsTrigger value="week" className="text-xs sm:text-sm">
+                      Week
+                    </TabsTrigger>
+                    <TabsTrigger value="month" className="text-xs sm:text-sm">
+                      Month
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <CleanerDashboardInfoHint
+                  label="About period tabs"
+                  text="Switch between your earnings for today, this week, or this month."
+                  className="pb-0.5"
+                />
+              </div>
             </Card>
           </div>
 
           <div className="space-y-4 px-4 pt-4" aria-labelledby="earnings-body-heading">
-            <h2 id="earnings-body-heading" className="text-lg font-semibold text-foreground">
-              Overview
+            <h2 id="earnings-body-heading" className="sr-only">
+              Earnings
             </h2>
-
-            {(insightMessages.length > 0 ||
-              (period === "week" && projectedWeek > 0) ||
-              (bestDay && bestDay.cents > 0 && period === "week") ||
-              (jobsToGoal != null && jobsToGoal > 0 && goalAmt > 0) ||
-              momentum.message ||
-              momentum.recoveryHint ||
-              projectionUnderWeekGoal) ? (
-              <ul className="space-y-1.5 rounded-xl border border-border bg-muted/30 px-3 py-3 text-sm text-foreground">
-                {momentum.message ? <li className="font-medium text-foreground">{momentum.message}</li> : null}
-                {momentum.recoveryHint ? <li className="text-muted-foreground">{momentum.recoveryHint}</li> : null}
-                {projectionUnderWeekGoal ? (
-                  <li className="text-muted-foreground">
-                    At this week&apos;s pace you&apos;re tracking under a full-week goal at your dashboard target —
-                    completing one more job soon moves the projection up.
-                  </li>
+            {showOverviewSection ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-lg font-semibold text-foreground">Overview</h3>
+                  <CleanerDashboardInfoHint
+                    label="About overview"
+                    text={
+                      "Summary of your recent performance, goals, and payout status." +
+                      (overviewTooltipDetail ? `\n\n${overviewTooltipDetail}` : "")
+                    }
+                  />
+                </div>
+                {overviewVisibleLines.length > 0 ? (
+                  <ul className="space-y-1.5 rounded-xl border border-border bg-muted/30 px-3 py-3 text-sm text-foreground">
+                    {overviewVisibleLines.map((line, i) => (
+                      <li key={`${i}-${line}`} className="font-medium text-foreground">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
-                {period === "week" && projectedWeek > 0 ? (
-                  <li className="text-muted-foreground">
-                    On track for about {formatZarFromCents(projectedWeek)} this week if your pace holds.
-                  </li>
-                ) : null}
-                {bestDay && bestDay.cents > 0 && period === "week" ? (
-                  <li className="text-muted-foreground">
-                    Best day (7d): {bestDay.label} · {formatZarFromCents(bestDay.cents)}
-                  </li>
-                ) : null}
-                {jobsToGoal != null && jobsToGoal > 0 && goalAmt > 0 ? (
-                  <li>
-                    Complete about {jobsToGoal} more {jobsToGoal === 1 ? "job" : "jobs"} to reach today&apos;s goal.
-                  </li>
-                ) : null}
-                {insightMessages.map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
+              </>
             ) : null}
 
             {goalAmt > 0 ? (
               <Card className="rounded-2xl p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-1">
                     <p className="text-sm font-medium text-foreground">Daily goal</p>
-                    <p className="text-xs text-muted-foreground">From your recent 7-day pace (dashboard).</p>
+                    <CleanerDashboardInfoHint
+                      label="About daily goal"
+                      text="Estimated target based on your recent 7-day performance."
+                    />
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">{formatZarFromCents(goalAmt)}</span>
+                  <p className="shrink-0 text-xl font-bold tabular-nums tracking-tight text-foreground">
+                    {formatZarFromCents(goalAmt)}
+                  </p>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-emerald-600 transition-[width] duration-300 ease-out dark:bg-emerald-500"
-                    style={{ width: `${Math.min(100, pctOfGoal)}%` }}
-                  />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>
-                    Logged today: <span className="font-semibold text-foreground">{formatZarFromCents(todayAmt)}</span>
-                  </span>
-                  {todayAmt >= goalAmt ? (
-                    <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                      {aboveGoalPct > 0 ? `+${aboveGoalPct}% above goal` : "Goal reached"}
-                      <span aria-hidden> 🎉</span>
-                    </span>
-                  ) : (
-                    <span>{pctOfGoal}% of goal</span>
-                  )}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {jobsToday > 0 ? (
-                    <>
-                      {jobsToday} {jobsToday === 1 ? "job" : "jobs"} completed today
-                      {avgPerJobToday > 0 ? (
-                        <>
-                          {" "}
-                          · Avg/job {formatZarFromCents(avgPerJobToday)}
-                        </>
-                      ) : null}
-                    </>
-                  ) : (
-                    "No completed jobs yet today — your next finish will show up here."
-                  )}
+                <p className="mt-4 text-sm text-muted-foreground">
+                  <span className="font-semibold tabular-nums text-foreground">{formatZarFromCents(todayAmt)}</span>{" "}
+                  earned today
                 </p>
               </Card>
             ) : null}
 
             <Card className="rounded-2xl p-4 shadow-sm">
-              <p className="text-sm font-semibold text-foreground">Payouts</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Weekly batch transfers. &quot;Available&quot; is cleared for the next run; &quot;Processing&quot;
-                includes jobs still finalising or locked in a batch.
-              </p>
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-semibold text-foreground">Payouts</p>
+                <CleanerDashboardInfoHint
+                  label="How payouts work"
+                  text={
+                    "Your earnings are paid weekly.\n\n" +
+                    "Jobs must be completed before Thursday 23:59 SAST to be included in the next payout.\n\n" +
+                    "Available pays on the next weekly batch once your bank details are ready. " +
+                    "Processing includes amounts still finalising or locked in a batch.\n\n" +
+                    payoutArrival.sub
+                  }
+                />
+              </div>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Available for payout</span>
+                  <span className="text-muted-foreground">Available</span>
                   <span className="font-semibold tabular-nums text-foreground">{formatZarFromCents(availableForPayout)}</span>
                 </div>
-                <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">{payoutArrival.headline}</p>
-                <p className="text-[11px] leading-snug text-muted-foreground">{payoutArrival.sub}</p>
+                <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">{payoutHeadlineShort}</p>
                 <div className="flex justify-between gap-3 text-muted-foreground">
-                  <span>Processing / finalising</span>
-                  <span className="tabular-nums">{formatZarFromCents(processingPipeline)}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <span>Processing</span>
+                    <CleanerDashboardInfoHint
+                      label="About processing"
+                      text="These earnings are being reviewed and will be included in your next payout."
+                    />
+                  </span>
+                  <span className="tabular-nums text-foreground">{formatZarFromCents(processingPipeline)}</span>
                 </div>
                 <div className="flex justify-between gap-3 text-muted-foreground">
-                  <span>Paid (this week)</span>
-                  <span className="tabular-nums">{formatZarFromCents(paidWeek)}</span>
+                  <span>Paid</span>
+                  <span className="tabular-nums text-foreground">{formatZarFromCents(paidWeek)}</span>
                 </div>
               </div>
               {hasFailedTransfer ? (
@@ -604,28 +656,37 @@ export function CleanerEarningsScreen() {
             </Card>
 
             <Card className="rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
                 <p className="text-sm font-semibold text-foreground">Last 7 days</p>
-                <span className="text-xs text-muted-foreground">Johannesburg days</span>
+                <CleanerDashboardInfoHint
+                  label="About last 7 days chart"
+                  text="Tap a bar to view earnings for that specific day."
+                />
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">Tap a bar to filter the timeline to that day.</p>
-              <CleanerEarningsWeeklyBarChart
-                points={points}
-                bestYmd={bestDay?.ymd ?? null}
-                onSelectDay={(ymd) => syncChartDayToUrl(ymd)}
-              />
+              <div className="mt-3">
+                <CleanerEarningsWeeklyBarChart
+                  points={points}
+                  bestYmd={bestDay?.ymd ?? null}
+                  onSelectDay={(ymd) => syncChartDayToUrl(ymd)}
+                />
+              </div>
             </Card>
 
             <Card className="rounded-2xl p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground">Earnings timeline</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-semibold text-foreground">Earnings timeline</p>
+                  <CleanerDashboardInfoHint
+                    label="About earnings timeline"
+                    text="List of completed jobs and how much you earned from each."
+                  />
+                </div>
                 <div className="flex items-center gap-2">
                   {highlightDayYmd ? (
                     <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => syncChartDayToUrl(null)}>
                       Clear day filter
                     </Button>
                   ) : null}
-                  <span className="text-xs text-muted-foreground">Per job</span>
                 </div>
               </div>
               {highlightDayYmd ? (
@@ -650,10 +711,7 @@ export function CleanerEarningsScreen() {
                         <ul className="mt-2 space-y-3">
                           {list.map((r) => {
                             const badge = bookingStatusBadgeLabel(r.booking_status);
-                            const cust = r.customer_paid_cents;
-                            const plat = r.platform_fee_cents;
                             const you = cents(r.amount_cents);
-                            const showBreakdown = cust != null && cust > 0;
                             const earningsRowHref = `/cleaner/earnings?range=week&job=${encodeURIComponent(r.booking_id)}`;
                             return (
                               <li
@@ -688,7 +746,10 @@ export function CleanerEarningsScreen() {
                                     </p>
                                     <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{r.location}</p>
                                   </div>
-                                  <span className="shrink-0 text-sm font-semibold tabular-nums">{formatZarFromCents(you)}</span>
+                                  <div className="shrink-0 text-right">
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">You earned</p>
+                                    <p className="text-sm font-semibold tabular-nums text-foreground">{formatZarFromCents(you)}</p>
+                                  </div>
                                 </div>
                                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
                                   <Link
@@ -698,31 +759,8 @@ export function CleanerEarningsScreen() {
                                     View receipt
                                   </Link>
                                 </div>
-                                {showBreakdown ? (
-                                  <details className="mt-2 rounded-lg border border-border/80 bg-muted/20 px-2 py-1.5 text-xs">
-                                    <summary className="cursor-pointer font-medium text-foreground">Breakdown</summary>
-                                    <dl className="mt-2 space-y-1 text-muted-foreground">
-                                      <div className="flex justify-between gap-2">
-                                        <dt>Client paid</dt>
-                                        <dd className="tabular-nums text-foreground">{formatZarFromCents(cust!)}</dd>
-                                      </div>
-                                      <div className="flex justify-between gap-2">
-                                        <dt title="Calculated as customer total minus your earnings; not an itemised fee invoice.">
-                                          Platform &amp; fees (estimated)
-                                        </dt>
-                                        <dd className="tabular-nums text-foreground">
-                                          {plat != null ? formatZarFromCents(plat) : "—"}
-                                        </dd>
-                                      </div>
-                                      <div className="flex justify-between gap-2 font-semibold text-foreground">
-                                        <dt>You earned</dt>
-                                        <dd className="tabular-nums">{formatZarFromCents(you)}</dd>
-                                      </div>
-                                    </dl>
-                                    {r.is_team_job ? (
-                                      <p className="mt-2 text-[10px] text-muted-foreground">Team job — your share of the booking.</p>
-                                    ) : null}
-                                  </details>
+                                {r.is_team_job ? (
+                                  <p className="mt-2 text-[10px] text-muted-foreground">Team job — your share of the booking.</p>
                                 ) : null}
                               </li>
                             );

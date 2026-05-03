@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { CleanerDashboardInfoHint } from "./CleanerDashboardInfoHint";
 import type { CleanerEarningsSnapshot } from "./types";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ export function EarningsCard({ earnings, embedded }: EarningsCardProps) {
         embedded ? "rounded-xl p-4 shadow-inner" : "rounded-2xl p-5 shadow-md transition-shadow duration-200 hover:shadow-lg",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <Link
           href="/cleaner/earnings"
           className="min-w-0 flex-1 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-95 focus-visible:ring-2 focus-visible:ring-white/40 active:opacity-90"
@@ -85,32 +86,35 @@ export function EarningsCard({ earnings, embedded }: EarningsCardProps) {
           {earnings.earningsForwardLine ? (
             <p className="mt-2 max-w-[300px] text-sm font-medium leading-relaxed text-white/80">{earnings.earningsForwardLine}</p>
           ) : null}
-          <p className="mt-3 text-xs leading-relaxed text-white/45">
-            Earnings calculated in South African time (SAST).
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-white/40">Earnings update after job completion.</p>
           <p className="mt-2 text-xs text-white/40 underline-offset-2">Tap for full earnings →</p>
         </Link>
-        {hasBreakdown ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="min-h-11 h-11 shrink-0 gap-1 text-white transition-colors duration-200 hover:bg-white/10 hover:text-white active:scale-95"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-          >
-            {open ? (
-              <>
-                Hide <ChevronUp className="size-4" aria-hidden />
-              </>
-            ) : (
-              <>
-                Details <ChevronDown className="size-4" aria-hidden />
-              </>
-            )}
-          </Button>
-        ) : null}
+        <div className="flex shrink-0 items-start gap-1 pt-0.5">
+          <CleanerDashboardInfoHint
+            variant="onDark"
+            label="How today's earnings work"
+            text={`Totals use South African time (SAST).\n\nThey update after each job is completed.`}
+          />
+          {hasBreakdown ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="min-h-11 h-11 shrink-0 gap-1 text-white transition-colors duration-200 hover:bg-white/10 hover:text-white active:scale-95"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+            >
+              {open ? (
+                <>
+                  Hide <ChevronUp className="size-4" aria-hidden />
+                </>
+              ) : (
+                <>
+                  Details <ChevronDown className="size-4" aria-hidden />
+                </>
+              )}
+            </Button>
+          ) : null}
+        </div>
       </div>
       {open && hasBreakdown ? (
         <ul className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">

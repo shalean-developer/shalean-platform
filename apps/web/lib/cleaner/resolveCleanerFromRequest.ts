@@ -26,7 +26,11 @@ export type ResolveCleanerFromRequestResult =
   | { ok: true; cleaner: ResolvedCleanerRow; authUserId: string; authUser: CleanerAuthUser | null }
   | { ok: false; error: string; status: number };
 
-async function cleanerRowForAuthUserId(
+/**
+ * Same lookup as {@link resolveCleanerFromRequest} (auth_user_id, then legacy id row).
+ * Used for customer/cleaner post-auth routing without a full Request.
+ */
+export async function fetchCleanerRowForSupabaseAuthUser(
   admin: SupabaseClient,
   authUserId: string,
 ): Promise<ResolvedCleanerRow | null> {
@@ -76,7 +80,7 @@ export async function resolveCleanerFromRequest(
       return { ok: false, error: "Invalid or expired session.", status: 401 };
     }
     const authUserId = userData.user.id;
-    const cleaner = await cleanerRowForAuthUserId(admin, authUserId);
+    const cleaner = await fetchCleanerRowForSupabaseAuthUser(admin, authUserId);
     if (!cleaner) {
       return { ok: false, error: "Not a cleaner account.", status: 403 };
     }

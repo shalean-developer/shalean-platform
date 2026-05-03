@@ -14,14 +14,6 @@ export type CleanerEarningsRowWire = {
   __invalid?: boolean;
   /** Booking lifecycle status (earnings list is completed jobs today). */
   booking_status?: string | null;
-  /** Customer total paid for the booking when known (ZAR cents). */
-  customer_paid_cents?: number | null;
-  /** `customer_paid_cents - amount_cents` when customer total known; remainder to platform. */
-  platform_fee_cents?: number | null;
-  /** Future: explicit processor fee from pricing snapshot (not yet on wire). */
-  payment_processor_fee_cents?: number | null;
-  /** Future: tips attributed to cleaner (not yet on wire). */
-  tips_cents?: number | null;
   is_team_job?: boolean;
 };
 

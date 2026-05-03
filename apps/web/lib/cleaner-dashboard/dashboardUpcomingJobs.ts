@@ -9,6 +9,19 @@ const SECTION_ORDER = ["overdue", "today", "upcoming", "completed"] as const;
 const MAX_TOTAL = 36;
 const MAX_COMPLETED = 10;
 
+/** Single row → dashboard “Your jobs” / next-pin card shape. */
+export function cleanerBookingRowToUpcomingJob(r: CleanerBookingRow, now: Date): CleanerUpcomingJob {
+  const head = jobDateHeading(String(r.date ?? ""), now);
+  const t = (r.time ?? "—").trim() || "—";
+  return {
+    id: r.id,
+    timeLine: `${head} • ${t}`,
+    suburb: suburbFromLocationForOffer(r.location),
+    href: `/cleaner/jobs/${encodeURIComponent(r.id)}`,
+    phaseDisplay: mobilePhaseDisplayForDashboard(r),
+  };
+}
+
 /** Open + recent completed jobs (grouped like schedule tab; capped for dashboard). */
 export function buildDashboardUpcomingJobs(
   rows: CleanerBookingRow[],
@@ -27,15 +40,7 @@ export function buildDashboardUpcomingJobs(
     const slice = sec.rows.slice(0, Math.max(0, cap));
     for (const r of slice) {
       if (used >= MAX_TOTAL) break;
-      const head = jobDateHeading(String(r.date ?? ""), now);
-      const t = (r.time ?? "—").trim() || "—";
-      out.push({
-        id: r.id,
-        timeLine: `${head} • ${t}`,
-        suburb: suburbFromLocationForOffer(r.location),
-        href: `/cleaner/jobs/${encodeURIComponent(r.id)}`,
-        phaseDisplay: mobilePhaseDisplayForDashboard(r),
-      });
+      out.push(cleanerBookingRowToUpcomingJob(r, now));
       used++;
     }
   }

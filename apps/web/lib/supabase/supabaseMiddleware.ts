@@ -61,6 +61,18 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   const cleanerPublic = pathname.startsWith("/cleaner/login") || pathname.startsWith("/cleaner/apply");
 
   if (pathname.startsWith("/cleaner") && !cleanerPublic && !user) {
+    const jobMagic = pathname.match(/^\/cleaner\/jobs\/([^/]+)$/);
+    const magicT = request.nextUrl.searchParams.get("t");
+    if (jobMagic?.[1] && magicT) {
+      const bid = jobMagic[1];
+      const bridge = request.nextUrl.clone();
+      bridge.pathname = "/api/cleaner/magic-session";
+      bridge.search = "";
+      bridge.searchParams.set("b", bid);
+      bridge.searchParams.set("t", magicT);
+      return NextResponse.redirect(bridge);
+    }
+
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/cleaner/login";
     const rawNext = `${pathname}${request.nextUrl.search}`;

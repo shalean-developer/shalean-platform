@@ -5,12 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { PasswordInput } from "@/components/ui/password-input";
+import { getResolvedAuthIntent, parseIntentQuery } from "@/lib/auth/authRoleIntent";
+import { resolveCustomerPostAuthDestination } from "@/lib/auth/resolveCustomerPostAuthDestination";
 import { signIn } from "@/lib/auth/authClient";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect")?.trim() || "/dashboard/bookings";
+  const intentParam = searchParams.get("intent");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,21 +21,32 @@ function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    getResolvedAuthIntent(intentParam);
+  }, [intentParam]);
+
+  useEffect(() => {
     const first = document.querySelector<HTMLInputElement>('input[type="email"]');
     first?.focus();
   }, []);
+
+  const intentForSignup = parseIntentQuery(intentParam) ?? "customer";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      const { user, session, error: err } = await signIn(email, password);
+      const { session, error: err } = await signIn(email, password);
       if (err) {
         setError(err.message);
         return;
       }
-      router.replace(redirect.startsWith("/") ? redirect : "/dashboard/bookings");
+      if (!session?.access_token) {
+        setError("No session returned. Try again.");
+        return;
+      }
+      const next = await resolveCustomerPostAuthDestination(session.access_token, redirect, intentParam);
+      router.replace(next);
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -99,7 +113,7 @@ function LoginForm() {
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
           No account?{" "}
           <Link
-            href={`/auth/signup?redirect=${encodeURIComponent(redirect)}`}
+            href={`/auth/signup?redirect=${encodeURIComponent(redirect)}&intent=${encodeURIComponent(intentForSignup)}`}
             className="font-semibold text-primary hover:underline"
           >
             Create account

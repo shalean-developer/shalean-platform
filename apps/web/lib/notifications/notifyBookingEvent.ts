@@ -22,6 +22,8 @@ import {
   type CustomerOutboundDecisionTrace,
   type SmsRole,
 } from "@/lib/templates/customerOutbound";
+import { cleanerJobDeepLinkForSms } from "@/lib/cleaner/cleanerJobMagicLink";
+import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { enqueueFailedJob } from "@/lib/booking/failedJobs";
@@ -661,9 +663,10 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         if (!assignedSmsClaimed) {
           console.log("[ASSIGNED SMS SKIPPED — IDEMPOTENT]", { bookingId: event.bookingId, cleanerId: event.cleanerId });
         } else {
+          const jobLink = cleanerJobDeepLinkForSms(event.bookingId, event.cleanerId);
           const smsBody = formatBookingNotifyPlainLines(msgFields, {
             headline: "Shalean: Job assigned to you",
-            footerLines: ["Open your app for details."],
+            footerLines: ["View details:", jobLink],
           }).slice(0, 1200);
           const smsRes = await sendSmsFallback({
             toE164: e164,

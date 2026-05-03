@@ -19,6 +19,7 @@ import {
   teamRosterPeersSummary,
   type TeamRosterMemberWire,
 } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
+import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, total_paid_zar, total_price, price_breakdown, pricing_version_id, amount_paid_cents, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
 
   const { data: jobs, error } = directAssignments
     ? await admin
@@ -107,7 +108,16 @@ export async function GET(request: Request) {
     const snapRaw = row.team_member_count_snapshot;
     const teamSnap =
       typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
-    const { cleaner_payout_cents: _legacyPayout, display_earnings_cents: _displayRaw, team_member_count_snapshot: _snapCol, ...safe } = row;
+    const {
+      cleaner_payout_cents: _legacyPayout,
+      display_earnings_cents: _displayRaw,
+      team_member_count_snapshot: _snapCol,
+      total_paid_zar: _omitPaidZar,
+      total_price: _omitTotalPrice,
+      price_breakdown: _omitPriceBreakdown,
+      amount_paid_cents: _omitAmountPaid,
+      ...safe
+    } = row;
     return {
       ...safe,
       displayEarningsCents,
@@ -213,10 +223,12 @@ export async function GET(request: Request) {
     }
   }
 
-  const jobsWithIssueFlag = mappedWithLineItems.map((j) => {
-    const id = String((j as { id?: string }).id ?? "").trim();
-    return { ...j, cleaner_has_issue_report: slimWire ? false : id ? reportedIds.has(id) : false };
-  });
+  const jobsWithIssueFlag = mappedWithLineItems
+    .map((j) => {
+      const id = String((j as { id?: string }).id ?? "").trim();
+      return { ...j, cleaner_has_issue_report: slimWire ? false : id ? reportedIds.has(id) : false };
+    })
+    .filter((j) => !assignedOfferPastAcceptanceDeadline(j as CleanerBookingRow));
 
   const jobsOut = jobsWithIssueFlag.map((j) => ({
     ...j,

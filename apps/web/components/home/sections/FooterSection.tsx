@@ -107,8 +107,8 @@ export function FooterSection() {
             <Link href="/booking/details" className="transition hover:text-zinc-300">
               Book now
             </Link>
-            <Link href="/login?role=customer" className="transition hover:text-zinc-300">
-              Customer login
+            <Link href="/auth" className="transition hover:text-zinc-300">
+              Sign in
             </Link>
             <a href="mailto:hello@shaleancleaning.com?subject=Privacy%20policy" className="transition hover:text-zinc-300">
               Privacy Policy

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { acceptDispatchOffer } from "@/lib/dispatch/dispatchOffers";
-import { fetchDispatchOfferRowByToken, isValidOfferTokenFormat } from "@/lib/dispatch/offerByToken";
+import { fetchDispatchOfferRowByToken } from "@/lib/dispatch/offerByToken";
+import { isValidOfferTokenFormat } from "@/lib/dispatch/offerTokenFormat";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { serverUnixMs } from "@/lib/time/serverClock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const expMs = new Date(row.expiresAtIso).getTime();
-  if (Number.isFinite(expMs) && Date.now() >= expMs) {
+  if (Number.isFinite(expMs) && serverUnixMs() >= expMs) {
     return NextResponse.json({ error: "This offer has expired." }, { status: 410 });
   }
 
@@ -52,8 +54,17 @@ export async function POST(request: Request) {
           ? 403
           : r.failure === "expired"
             ? 410
-            : 400;
-    return NextResponse.json({ error: r.error, failure: r.failure }, { status });
+            : r.failure === "assigned_other" || r.failure === "booking_taken"
+              ? 409
+              : 400;
+    return NextResponse.json(
+      {
+        error: r.error,
+        failure: r.failure,
+        ...(r.machineReason ? { machineReason: r.machineReason } : {}),
+      },
+      { status },
+    );
   }
 
   return NextResponse.json({ ok: true, status: "accepted" });

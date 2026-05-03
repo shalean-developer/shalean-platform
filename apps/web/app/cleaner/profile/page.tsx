@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
-import type { BadgeVariant } from "@/components/ui/badge";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -21,22 +20,13 @@ import { Select } from "@/components/ui/select";
 import { signOut } from "@/lib/auth/authClient";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
+import { accountHealthBadge, mapCleanerAccountHealthTier } from "@/lib/cleaner/mapCleanerAccountHealth";
+import { payoutArrivalSummaryJohannesburg } from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { bankDisplayNameFromCode, SOUTH_AFRICAN_PAYSTACK_BANKS } from "@/lib/cleaner/southAfricanPaystackBanks";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
-
-type MeCleaner = {
-  full_name?: string | null;
-  phone?: string | null;
-  phone_number?: string | null;
-  email?: string | null;
-  status?: string | null;
-  is_available?: boolean | null;
-};
-
-type MeJson = {
-  cleaner?: MeCleaner | null;
-  error?: string;
-};
+import { CleanerDashboardInfoHint } from "@/components/cleaner-dashboard/CleanerDashboardInfoHint";
+import type { CleanerProfileSummaryJson } from "@/lib/cleaner/cleanerProfileSummaryTypes";
+import { CUSTOMER_SUPPORT_EMAIL } from "@/lib/site/customerSupport";
 
 type PaymentDetailsJson = {
   details?: {
@@ -48,119 +38,83 @@ type PaymentDetailsJson = {
   error?: string;
 };
 
-type EarningsJson = {
-  total_all_time?: number;
-  has_failed_transfer?: boolean;
-  paymentDetails?: {
-    readyForPayout?: boolean;
-    missingBankDetails?: boolean;
-  };
-  error?: string;
+type MergedPayment = {
+  hasRecipientCode: boolean;
+  bankCode?: string | null;
+  accountNumberMasked?: string | null;
+  accountName?: string | null;
 };
 
-function deriveAccountBadge(status: string | null | undefined): {
-  variant: BadgeVariant;
-  label: string;
-  lineClass: string;
-} {
-  const s = String(status ?? "").trim().toLowerCase();
-  if (/(blocked|suspended|banned|disabled)/.test(s)) {
+function mergePaymentFromSummary(
+  payment: PaymentDetailsJson["details"] | null,
+  summary: CleanerProfileSummaryJson | null,
+): MergedPayment | null {
+  if (payment?.hasRecipientCode) {
     return {
-      variant: "destructive",
-      label: "Action required",
-      lineClass: "text-red-600 dark:text-red-400",
+      hasRecipientCode: true,
+      bankCode: payment.bankCode,
+      accountNumberMasked: payment.accountNumberMasked,
+      accountName: payment.accountName,
     };
   }
-  if (s.includes("pending")) {
+  if (summary?.has_payment_method) {
     return {
-      variant: "warning",
-      label: "Pending verification",
-      lineClass: "text-amber-600 dark:text-amber-500",
+      hasRecipientCode: true,
+      bankCode: summary.bank_code ?? null,
+      accountNumberMasked: summary.account_number_masked ?? null,
+      accountName: summary.account_name ?? null,
     };
   }
-  return {
-    variant: "success",
-    label: "Active cleaner",
-    lineClass: "text-emerald-600 dark:text-emerald-400",
-  };
-}
-
-function availabilityHint(c: MeCleaner | null): string {
-  if (!c) return "";
-  const st = String(c.status ?? "").trim().toLowerCase();
-  if (/(blocked|suspended|banned|disabled)/.test(st)) return "Your account needs attention from Shalean.";
-  if (st === "busy") return "You are marked busy (on a job).";
-  if (c.is_available === true || st === "available") return "Availability is on — you can receive offers.";
-  return "Availability is off — turn it on from the home dashboard when you are ready to work.";
+  return null;
 }
 
 export default function CleanerProfilePage() {
   const router = useRouter();
-  const [me, setMe] = useState<MeCleaner | null>(null);
+  const [summary, setSummary] = useState<CleanerProfileSummaryJson | null>(null);
   const [payment, setPayment] = useState<PaymentDetailsJson["details"]>(null);
-  const [earnings, setEarnings] = useState<{
-    totalAllTimeCents: number;
-    hasFailedTransfer: boolean;
-    missingBank: boolean;
-    /** True when earnings API reports a saved payout recipient (fallback if payment-details GET fails). */
-    payoutReady: boolean;
-  } | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [bankOpen, setBankOpen] = useState(false);
   const [bankSaving, setBankSaving] = useState(false);
   const [bankFormError, setBankFormError] = useState<string | null>(null);
+  const [bankSaveSuccess, setBankSaveSuccess] = useState(false);
   const [bankCode, setBankCode] = useState<string>(SOUTH_AFRICAN_PAYSTACK_BANKS[0]?.code ?? "");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const bankSuccessTimerRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     const headers = await getCleanerAuthHeaders();
     if (!headers) {
       setErr("Not signed in.");
-      setMe(null);
+      setSummary(null);
       setPayment(null);
-      setEarnings(null);
       setLoading(false);
       return;
     }
 
-    const [meRes, payRes, earnRes] = await Promise.all([
-      cleanerAuthenticatedFetch("/api/cleaner/me", { headers }),
+    const [sumRes, payRes] = await Promise.all([
+      cleanerAuthenticatedFetch("/api/cleaner/profile-summary", { headers }),
       cleanerAuthenticatedFetch("/api/cleaner/payment-details", { headers }),
-      cleanerAuthenticatedFetch("/api/cleaner/earnings", { headers }),
     ]);
 
-    const meJson = (await meRes.json().catch(() => ({}))) as MeJson;
+    const sumJson = (await sumRes.json().catch(() => ({}))) as CleanerProfileSummaryJson & { error?: string };
     const payJson = (await payRes.json().catch(() => ({}))) as PaymentDetailsJson;
-    const earnJson = (await earnRes.json().catch(() => ({}))) as EarningsJson;
 
-    if (!meRes.ok || !meJson.cleaner) {
-      setErr(meJson.error ?? "Could not load profile.");
-      setMe(null);
+    if (!sumRes.ok) {
+      setErr(sumJson.error ?? "Could not load profile.");
+      setSummary(null);
     } else {
       setErr(null);
-      setMe(meJson.cleaner);
+      setSummary(sumJson);
     }
 
     if (payRes.ok && !payJson.error) {
       setPayment(payJson.details ?? null);
     } else {
       setPayment(null);
-    }
-
-    if (earnRes.ok && !earnJson.error) {
-      const missingBank = Boolean(earnJson.paymentDetails?.missingBankDetails);
-      setEarnings({
-        totalAllTimeCents: Math.max(0, Math.round(Number(earnJson.total_all_time) || 0)),
-        hasFailedTransfer: Boolean(earnJson.has_failed_transfer),
-        missingBank,
-        payoutReady: !missingBank,
-      });
-    } else {
-      setEarnings(null);
     }
 
     setLoading(false);
@@ -177,11 +131,28 @@ export default function CleanerProfilePage() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (!bankSaveSuccess) return;
+    if (bankSuccessTimerRef.current != null) window.clearTimeout(bankSuccessTimerRef.current);
+    bankSuccessTimerRef.current = window.setTimeout(() => {
+      bankSuccessTimerRef.current = null;
+      setBankSaveSuccess(false);
+    }, 10_000);
+    return () => {
+      if (bankSuccessTimerRef.current != null) {
+        window.clearTimeout(bankSuccessTimerRef.current);
+        bankSuccessTimerRef.current = null;
+      }
+    };
+  }, [bankSaveSuccess]);
+
   const openBankDialog = () => {
+    setBankSaveSuccess(false);
     setBankFormError(null);
-    setBankCode(payment?.bankCode?.trim() || SOUTH_AFRICAN_PAYSTACK_BANKS[0]?.code || "");
+    const merged = mergePaymentFromSummary(payment, summary);
+    setBankCode(merged?.bankCode?.trim() || SOUTH_AFRICAN_PAYSTACK_BANKS[0]?.code || "");
     setAccountNumber("");
-    setAccountName(String(payment?.accountName ?? "").trim());
+    setAccountName(String(merged?.accountName ?? "").trim());
     setBankOpen(true);
   };
 
@@ -212,6 +183,7 @@ export default function CleanerProfilePage() {
       }
       setPayment(j.details ?? null);
       setBankOpen(false);
+      setBankSaveSuccess(true);
       await refresh();
     } finally {
       setBankSaving(false);
@@ -231,22 +203,46 @@ export default function CleanerProfilePage() {
     }
   };
 
-  const phone = String(me?.phone_number ?? me?.phone ?? "").trim();
-  const email = String(me?.email ?? "").trim();
-  const name = String(me?.full_name ?? "").trim() || "—";
-  const badge = deriveAccountBadge(me?.status);
-  const hasRecipient = Boolean(payment?.hasRecipientCode) || Boolean(earnings?.payoutReady);
-  const bankLabel = bankDisplayNameFromCode(payment?.bankCode ?? null);
-  const payoutCardDestructive = !hasRecipient || Boolean(earnings?.hasFailedTransfer);
+  const statusLower = String(summary?.status ?? "").trim().toLowerCase();
+  const tier = mapCleanerAccountHealthTier(summary?.status);
+  const badge = accountHealthBadge(tier);
+  const phone = String(summary?.phone ?? "").trim();
+  const email = String(summary?.email ?? "").trim();
+  const name = String(summary?.name ?? "").trim() || "—";
+  const is_available = summary?.is_available === true;
+  const has_failed_transfer = Boolean(summary?.has_failed_transfer);
+
+  const displayPayment = mergePaymentFromSummary(payment, summary);
+  const hasRecipient = Boolean(displayPayment?.hasRecipientCode);
+  const bankLabel = bankDisplayNameFromCode(displayPayment?.bankCode ?? null);
+  const payoutCardDestructive = !hasRecipient || has_failed_transfer;
+
+  const showMissingBankAlert = !hasRecipient;
+  const showGoOnline =
+    tier === "active" && statusLower !== "busy" && !is_available && statusLower !== "available";
+
+  const supportMailto = `mailto:${CUSTOMER_SUPPORT_EMAIL}?subject=${encodeURIComponent("Shalean cleaner — account help")}`;
+
+  const nextPayoutDateLine = useMemo(() => {
+    if (!summary) return "";
+    const p = payoutArrivalSummaryJohannesburg(new Date());
+    const ymd = p.payoutTargetFridayYmd;
+    const d = new Date(`${ymd}T12:00:00+02:00`);
+    return d.toLocaleDateString("en-ZA", {
+      timeZone: "Africa/Johannesburg",
+      weekday: "long",
+      month: "short",
+      day: "2-digit",
+    });
+  }, [summary]);
 
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-lg space-y-4 bg-background px-4 pb-28 pt-4">
+    <div className="mx-auto w-full max-w-lg space-y-4 bg-background px-4 pt-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
         <Link href="/cleaner/dashboard">← Home</Link>
       </Button>
       <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground">Profile</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Account, payouts, and trust at a glance.</p>
       </div>
 
       {loading ? (
@@ -255,18 +251,29 @@ export default function CleanerProfilePage() {
         <p className="text-sm text-destructive">{err}</p>
       ) : (
         <>
-          {!loading && earnings && (earnings.hasFailedTransfer || earnings.missingBank) ? (
+          {bankSaveSuccess ? (
+            <Card className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+              <div className="flex gap-3">
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50">Bank details saved</p>
+                  <p className="text-sm text-emerald-900/90 dark:text-emerald-100/90">
+                    You&apos;re set for weekly payouts.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
+          {summary ? (
             <div className="space-y-2">
-              {earnings.hasFailedTransfer ? (
+              {has_failed_transfer ? (
                 <Card className="rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-900/60 dark:bg-red-950/30">
                   <div className="flex gap-3">
                     <AlertTriangle className="mt-0.5 size-5 shrink-0 text-red-600 dark:text-red-400" aria-hidden />
                     <div className="min-w-0 space-y-1">
                       <p className="text-sm font-semibold text-red-900 dark:text-red-100">Payout failed</p>
-                      <p className="text-sm text-red-800/90 dark:text-red-200/90">
-                        A transfer to your bank did not go through. Update your details or contact Shalean if the problem
-                        continues.
-                      </p>
+                      <p className="text-sm text-red-800/90 dark:text-red-200/90">Update your bank details.</p>
                       <Button type="button" size="sm" className="mt-2 w-full sm:w-auto" variant="destructive" onClick={openBankDialog}>
                         Fix now
                       </Button>
@@ -274,15 +281,13 @@ export default function CleanerProfilePage() {
                   </div>
                 </Card>
               ) : null}
-              {earnings.missingBank && !earnings.hasFailedTransfer ? (
+              {showMissingBankAlert ? (
                 <Card className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900/50 dark:bg-amber-950/25">
                   <div className="flex gap-3">
                     <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
                     <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">No payout account yet</p>
-                      <p className="text-sm text-amber-900/85 dark:text-amber-200/85">
-                        Add a bank account so weekly payouts can reach you.
-                      </p>
+                      <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">No payout account</p>
+                      <p className="text-sm text-amber-900/85 dark:text-amber-200/85">Add bank details to get paid</p>
                       <Button type="button" size="sm" className="mt-2 w-full sm:w-auto" onClick={openBankDialog}>
                         Add bank details
                       </Button>
@@ -310,66 +315,74 @@ export default function CleanerProfilePage() {
                 <p className={`text-sm font-medium ${badge.lineClass}`}>{badge.label}</p>
               </div>
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">{availabilityHint(me)}</p>
+            {showGoOnline ? (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <p className="text-sm font-medium text-foreground">You&apos;re currently offline</p>
+                <Button asChild size="sm" className="w-full shrink-0 rounded-xl sm:w-auto">
+                  <Link href="/cleaner/dashboard">Go online</Link>
+                </Button>
+              </div>
+            ) : null}
             <div className="mt-4 space-y-2 text-sm text-foreground">
               <p>{phone || "—"}</p>
               <p className="text-muted-foreground">{email || "—"}</p>
             </div>
           </Card>
 
+          {summary ? (
+            <Card className="rounded-2xl border border-border p-4 shadow-sm">
+              <div className="flex items-center gap-1">
+                <h3 className="font-medium text-foreground">Next payout</h3>
+                <CleanerDashboardInfoHint
+                  label="Next payout details"
+                  text={`${summary.payout_schedule_headline}\n\n${summary.payout_schedule_sub}`}
+                />
+              </div>
+              <p className="mt-2 text-sm font-semibold text-foreground">{nextPayoutDateLine}</p>
+            </Card>
+          ) : null}
+
           <Card
             className={`rounded-2xl p-4 shadow-sm ${
-              payoutCardDestructive
-                ? "border border-red-200 dark:border-red-900/50"
-                : "border border-border"
+              payoutCardDestructive ? "border border-red-200 dark:border-red-900/50" : "border border-border"
             }`}
           >
             <h3 className="font-medium text-foreground">Payout details</h3>
-            {hasRecipient ? (
-              payment ? (
-                <div className="mt-3 space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Bank</span>
-                    <span className="text-right font-medium text-foreground">{bankLabel}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Account</span>
-                    <span className="text-right font-medium text-foreground">
-                      {payment?.accountNumberMasked ?? "—"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Account name</span>
-                    <span className="max-w-[55%] truncate text-right font-medium text-foreground">
-                      {String(payment?.accountName ?? "").trim() || "—"}
-                    </span>
-                  </div>
-                  {earnings?.hasFailedTransfer ? (
-                    <p className="pt-1 text-sm text-red-600 dark:text-red-400">Last payout failed — confirm these details.</p>
-                  ) : (
-                    <p className="pt-1 text-sm text-emerald-600 dark:text-emerald-400">Ready for payouts.</p>
-                  )}
+            {hasRecipient && displayPayment ? (
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Bank</span>
+                  <span className="text-right font-medium text-foreground">{bankLabel}</span>
                 </div>
-              ) : (
-                <div className="mt-3 space-y-2 text-sm">
-                  <p className="text-muted-foreground">
-                    A payout account is on file. Full bank details could not be loaded — you can still replace your account
-                    below if needed.
-                  </p>
-                  {earnings?.hasFailedTransfer ? (
-                    <p className="text-red-600 dark:text-red-400">Last payout failed — confirm your account below.</p>
-                  ) : (
-                    <p className="text-emerald-600 dark:text-emerald-400">Ready for payouts.</p>
-                  )}
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Account</span>
+                  <span className="text-right font-medium text-foreground">
+                    {displayPayment.accountNumberMasked ?? "—"}
+                  </span>
                 </div>
-              )
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Account name</span>
+                  <span className="max-w-[55%] truncate text-right font-medium text-foreground">
+                    {String(displayPayment.accountName ?? "").trim() || "—"}
+                  </span>
+                </div>
+                {has_failed_transfer ? (
+                  <p className="pt-1 text-sm text-red-600 dark:text-red-400">Last payout failed — confirm these details.</p>
+                ) : (
+                  <p className="pt-1 text-sm text-emerald-600 dark:text-emerald-400">Ready for payouts.</p>
+                )}
+              </div>
+            ) : !hasRecipient ? (
+              <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">Bank account not added</p>
             ) : (
-              <>
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">Bank account: not added</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Add your South African bank account so Paystack can pay you.
-                </p>
-              </>
+              <div className="mt-3 space-y-2 text-sm">
+                <p className="text-muted-foreground">We couldn&apos;t show full bank details — use update to change your account.</p>
+                {has_failed_transfer ? (
+                  <p className="text-red-600 dark:text-red-400">Last payout failed — confirm your account below.</p>
+                ) : (
+                  <p className="text-emerald-600 dark:text-emerald-400">Ready for payouts.</p>
+                )}
+              </div>
             )}
             <Button type="button" className="mt-4 w-full rounded-xl" variant={hasRecipient ? "outline" : "default"} onClick={openBankDialog}>
               {hasRecipient ? "Update bank details" : "Add bank details"}
@@ -378,26 +391,27 @@ export default function CleanerProfilePage() {
 
           <Card className="rounded-2xl p-4 shadow-sm">
             <h3 className="font-medium text-foreground">Verification</h3>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Document checks are run by the Shalean team. Below reflects what the app knows today.
-            </p>
-            <div className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Payout profile (Paystack)</span>
-                <span className={hasRecipient ? "font-medium text-emerald-600 dark:text-emerald-400" : "font-medium text-amber-600 dark:text-amber-500"}>
-                  {hasRecipient ? "Verified" : "Pending"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Profile on file</span>
+            <div className="mt-3 space-y-2 text-sm text-foreground">
+              <p>
+                Payout profile —{" "}
                 <span
                   className={
-                    phone && email ? "font-medium text-emerald-600 dark:text-emerald-400" : "font-medium text-amber-600 dark:text-amber-500"
+                    hasRecipient ? "font-semibold text-emerald-600 dark:text-emerald-400" : "font-semibold text-amber-600 dark:text-amber-500"
+                  }
+                >
+                  {hasRecipient ? "Verified" : "Pending"}
+                </span>
+              </p>
+              <p>
+                Profile —{" "}
+                <span
+                  className={
+                    phone && email ? "font-semibold text-emerald-600 dark:text-emerald-400" : "font-semibold text-amber-600 dark:text-amber-500"
                   }
                 >
                   {phone && email ? "Complete" : "Incomplete"}
                 </span>
-              </div>
+              </p>
             </div>
             {!hasRecipient || !phone || !email ? (
               <Button type="button" className="mt-4 w-full rounded-xl" variant="secondary" onClick={openBankDialog}>
@@ -409,9 +423,9 @@ export default function CleanerProfilePage() {
           <Card className="rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-muted-foreground">Total earned (all time)</p>
+                <p className="text-sm text-muted-foreground">Total earned</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {earnings != null ? formatZarFromCents(earnings.totalAllTimeCents) : "—"}
+                  {summary != null ? formatZarFromCents(summary.total_all_time_cents) : "—"}
                 </p>
               </div>
               <Button asChild variant="ghost" className="shrink-0 rounded-xl">
@@ -421,16 +435,10 @@ export default function CleanerProfilePage() {
           </Card>
 
           <Card className="rounded-2xl p-4 shadow-sm">
-            <h3 className="font-medium text-foreground">Settings</h3>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li>
-                <Link href="/cleaner/dashboard" className="font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400">
-                  Home dashboard
-                </Link>{" "}
-                — change availability and see jobs.
-              </li>
-              <li>Phone, email, password, and notifications are managed with Shalean support for now.</li>
-            </ul>
+            <h3 className="font-medium text-foreground">Need help?</h3>
+            <Button asChild variant="outline" className="mt-3 w-full rounded-xl">
+              <a href={supportMailto}>Contact support</a>
+            </Button>
           </Card>
 
           <Button
@@ -455,12 +463,7 @@ export default function CleanerProfilePage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Select
-                id="bank-code"
-                label="Bank"
-                value={bankCode}
-                onChange={(e) => setBankCode(e.target.value)}
-              >
+              <Select id="bank-code" label="Bank" value={bankCode} onChange={(e) => setBankCode(e.target.value)}>
                 {SOUTH_AFRICAN_PAYSTACK_BANKS.map((b) => (
                   <option key={b.code} value={b.code}>
                     {b.name}

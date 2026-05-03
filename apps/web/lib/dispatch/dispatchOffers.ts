@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
-import { notifyCleanerOfDispatchOffer, notifyCleanerOfferDeclined } from "@/lib/dispatch/offerNotifications";
+import {
+  notifyCleanerDispatchOfferLostRaceSms,
+  notifyCleanerOfDispatchOffer,
+  notifyCleanerOfferDeclined,
+} from "@/lib/dispatch/offerNotifications";
 import { tryEmitDispatchOfferTimeoutMetric } from "@/lib/dispatch/offerTimeoutMetric";
 import {
   compactDispatchMetricTags,
@@ -450,6 +454,12 @@ export async function acceptDispatchOffer(params: {
       .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
       .eq("id", params.offerId)
       .eq("status", "pending");
+    void notifyCleanerDispatchOfferLostRaceSms({
+      supabase: params.supabase,
+      bookingId,
+      cleanerId: params.cleanerId,
+      offerId: params.offerId,
+    });
     return {
       ok: false,
       error: "Another cleaner was assigned.",
@@ -499,6 +509,12 @@ export async function acceptDispatchOffer(params: {
       .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
       .eq("id", params.offerId)
       .eq("status", "pending");
+    void notifyCleanerDispatchOfferLostRaceSms({
+      supabase: params.supabase,
+      bookingId,
+      cleanerId: params.cleanerId,
+      offerId: params.offerId,
+    });
     return {
       ok: false,
       error: "Booking was already assigned.",

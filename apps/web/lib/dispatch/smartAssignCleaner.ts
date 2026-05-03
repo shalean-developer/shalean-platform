@@ -25,15 +25,12 @@ import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import type { CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
-import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { predictAcceptanceProbability } from "@/lib/marketplace-intelligence/acceptanceProbability";
 import { scoreCleanerForBooking } from "@/lib/marketplace-intelligence/cleanerScoring";
 import type { AssignmentWeights } from "@/lib/ai-autonomy/modelWeights";
 import { predictCleanerAcceptanceSync } from "@/lib/ai-autonomy/predictions";
 import { computeAiDispatchDelta } from "@/lib/ai-autonomy/assignmentBlend";
 import { getAiAutonomyFlags } from "@/lib/ai-autonomy/flags";
-import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
-import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { getWhatsAppQueueStatusCounts } from "@/lib/whatsapp/queue";
 import {
@@ -71,7 +68,8 @@ export type DemandLevel = "low" | "normal" | "peak";
 export type SmartAssignOptions = {
   randomFn?: () => number;
   travelProvider?: TravelTimeProvider;
-  assignmentMode?: "instant" | "soft";
+  /** Only `"soft"` is supported — parallel/tiered dispatch offers; `"instant"` is coerced to soft at runtime. */
+  assignmentMode?: "soft";
   offerTimeoutMs?: number;
   maxSoftOffers?: number;
   maxCandidates?: number;
@@ -133,7 +131,7 @@ export { MAX_PARALLEL_OFFERS, MAX_PARALLEL_OFFERS_PEAK };
 
 const FORCED_PRIORITY_CLEANER_ID = "abe30dda-a927-4f75-b204-c7165f6eadd0";
 
-function defaultAssignmentMode(): "instant" | "soft" {
+function defaultAssignmentMode(): "soft" {
   return "soft";
 }
 
@@ -391,7 +389,7 @@ function emptyFindSmartDispatchCandidates(): FindSmartDispatchCandidatesResult {
   return { candidates: [], rankingV1MetricRows: [] };
 }
 
-/** Writes one row per candidate; set `assignedCleanerId` when dispatch committed (instant top or soft race winner). */
+/** Writes one row per candidate; set `assignedCleanerId` when dispatch committed (soft race winner). */
 function flushDispatchRankingV1MetricRows(rows: DispatchRankingV1MetricRow[], assignedCleanerId: string | null): void {
   if (!rows.length || process.env.DISPATCH_RANKING_V1_METRICS !== "true") return;
   for (const row of rows) {
@@ -1129,7 +1127,10 @@ export async function smartAssignCleaner(
   options?: SmartAssignOptions,
 ): Promise<SmartAssignResult> {
   const travelProvider = options?.travelProvider ?? getDefaultTravelTimeProvider();
-  const mode = options?.assignmentMode ?? defaultAssignmentMode();
+  const mode: "soft" =
+    (options as { assignmentMode?: string } | undefined)?.assignmentMode === "instant"
+      ? "soft"
+      : (options?.assignmentMode ?? defaultAssignmentMode());
   const offerTimeoutMs = options?.offerTimeoutMs ?? DEFAULT_OFFER_TIMEOUT_MS;
   const maxSoftOffers = options?.maxSoftOffers ?? DEFAULT_MAX_SOFT_OFFERS;
   const maxCandidates = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
@@ -1374,78 +1375,6 @@ export async function smartAssignCleaner(
 
   const ttlSeconds = resolveDispatchOfferAcceptTtlSeconds();
   const raceTimeoutMs = Math.max(offerTimeoutMs, ttlSeconds * 1000 + 12_000);
-
-  if (mode === "instant") {
-    const top = candidates[0];
-    if (!top) {
-      await logSystemEvent({
-        level: "warn",
-        source: "dispatch_failed",
-        message: "No cleaner matched dispatch v4 rules",
-        context: {
-          bookingId: params.bookingId,
-          reason: "no_candidate_v4",
-          locationId: params.locationId,
-          date: dateYmd,
-          time: normalizeHm(timeHm),
-        },
-      });
-      await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4");
-      await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
-      flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
-      return { ok: false, error: "no_candidate" };
-    }
-
-    const now = new Date().toISOString();
-    const assignMeta = await marketplaceBookingPatchOnAssign(supabase, {
-      date: dateYmd,
-      time: normalizeHm(timeHm),
-      location_id: locationId,
-      city_id: cityId || null,
-    });
-    const { error: u1 } = await supabase
-      .from("bookings")
-      .update({
-        cleaner_id: top.id,
-        payout_owner_cleaner_id: top.id,
-        status: "assigned",
-        dispatch_status: "assigned",
-        assigned_at: now,
-        cleaner_response_status: CLEANER_RESPONSE.PENDING,
-        ...assignMeta,
-      })
-      .eq("id", params.bookingId)
-      .eq("status", "pending");
-
-    if (u1) {
-      await reportOperationalIssue("error", "smartAssignCleaner", u1.message, { bookingId: params.bookingId });
-      flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
-      return { ok: false, error: "db_error", message: u1.message };
-    }
-
-    flushDispatchRankingV1MetricRows(rankingV1MetricRows, top.id);
-
-    const waveMetrics = await fetchDispatchWaveMetrics(supabase, params.bookingId);
-    await logSystemEvent({
-      level: "info",
-      source: "dispatch_success",
-      message: "Cleaner auto-assigned (dispatch v4 instant)",
-      context: {
-        bookingId: params.bookingId,
-        cleanerId: top.id,
-        score: top.score,
-        distance_km: top.distance_km,
-        parallel_count: 1,
-        supply_ratio: Math.round(supplyRatio * 1000) / 1000,
-        offers_for_booking: waveMetrics.offers_for_booking,
-        time_to_assign_ms: waveMetrics.time_to_assign_ms,
-      },
-    });
-
-    void notifyCleanerAssignedBooking(supabase, params.bookingId, top.id);
-
-    return { ok: true, cleanerId: top.id, score: top.score };
-  }
 
   const pool = candidates.slice(0, maxSoftOffers);
   if (pool.length === 0) {

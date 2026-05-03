@@ -7,6 +7,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALLOWED = new Set(["queued", "synced", "flush_failed"]);
+const ALLOWED_FLUSH_TRIGGER = new Set([
+  "enqueue",
+  "bc",
+  "visibility",
+  "interval",
+  "initial",
+  "online",
+  "unknown",
+]);
 
 export async function POST(request: Request) {
   let body: {
@@ -32,6 +41,7 @@ export async function POST(request: Request) {
     flush_items_succeeded?: number;
     flush_items_failed?: number;
     flush_items_deferred?: number;
+    flush_trigger?: string;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -118,6 +128,8 @@ export async function POST(request: Request) {
     typeof body.flush_items_deferred === "number" && Number.isFinite(body.flush_items_deferred)
       ? Math.max(0, Math.floor(body.flush_items_deferred))
       : null;
+  const flushTriggerRaw = typeof body.flush_trigger === "string" ? body.flush_trigger.trim() : "";
+  const flushTrigger = ALLOWED_FLUSH_TRIGGER.has(flushTriggerRaw) ? flushTriggerRaw : null;
 
   const message =
     status === "queued"
@@ -154,6 +166,7 @@ export async function POST(request: Request) {
       ...(flushItemsSucceeded != null ? { flush_items_succeeded: flushItemsSucceeded } : {}),
       ...(flushItemsFailed != null ? { flush_items_failed: flushItemsFailed } : {}),
       ...(flushItemsDeferred != null ? { flush_items_deferred: flushItemsDeferred } : {}),
+      ...(flushTrigger ? { flush_trigger: flushTrigger } : {}),
     },
   });
 

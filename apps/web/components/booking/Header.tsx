@@ -62,7 +62,7 @@ export function BookingHeader({ hideMobileBackLink = false }: BookingHeaderProps
     return `${pathname}${q ? `?${q}` : ""}`;
   }, [pathname, searchParams]);
 
-  const loginHref = `/auth/login?redirect=${encodeURIComponent(redirectTarget)}`;
+  const loginHref = `/auth?redirect=${encodeURIComponent(redirectTarget)}`;
   const signupHref = `/auth/signup?redirect=${encodeURIComponent(redirectTarget)}`;
 
   const linkBookings = useCallback(() => {

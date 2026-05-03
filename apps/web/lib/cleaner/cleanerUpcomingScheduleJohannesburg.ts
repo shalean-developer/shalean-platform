@@ -163,7 +163,7 @@ export function resolveUpcomingPrimaryCta(
   _minutesUntilStart: number | null,
 ): UpcomingPrimaryCta {
   if (!lifecycle) return { kind: "none" };
-  if (lifecycle.kind === "accept_reject") return { kind: "none" };
+  if (lifecycle.kind === "accept_reject" || lifecycle.kind === "offer_expired") return { kind: "none" };
   if (lifecycle.kind === "complete") return { kind: "lifecycle", action: "complete", label: "Complete Job" };
   if (lifecycle.kind === "start") return { kind: "lifecycle", action: "start", label: "Start Job" };
   if (lifecycle.kind === "en_route") return { kind: "lifecycle", action: "en_route", label: "On my way" };

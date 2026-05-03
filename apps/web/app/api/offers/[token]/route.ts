@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchDispatchOfferPublicByToken, isValidOfferTokenFormat } from "@/lib/dispatch/offerByToken";
+import { fetchDispatchOfferPublicByToken } from "@/lib/dispatch/offerByToken";
+import { isValidOfferTokenFormat } from "@/lib/dispatch/offerTokenFormat";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";

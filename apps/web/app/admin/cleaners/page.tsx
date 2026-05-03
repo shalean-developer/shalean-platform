@@ -12,11 +12,15 @@ import { AdminCleanerAvailabilityPanel } from "@/components/admin/AdminCleanerAv
 import { AdminCleanerPreferencesPanel } from "@/components/admin/AdminCleanerPreferencesPanel";
 import { AdminCleanerServiceAreasPanel } from "@/components/admin/AdminCleanerServiceAreasPanel";
 import {
+  approveCleanerChangeRequest,
   createAdminCleaner,
   fetchCleaners,
+  fetchPendingCleanerChangeRequests,
+  rejectCleanerChangeRequest,
   requestCleanerRecoveryLink,
   resetCleanerPassword,
   runCleanerAuthBackfill,
+  type AdminCleanerChangeRequest,
   type AdminCleanerRow,
   updateCleanerEmail,
   updateCleanerProfile,
@@ -69,6 +73,10 @@ function responseTimeMinutes(row: AdminCleanerRow): number {
   return Math.max(2, 16 - Math.min(12, Math.floor(jobs / 15)));
 }
 
+function formatWeekdayList(days: string[]): string {
+  return days.map((d) => CLEANER_WEEKDAY_LABELS[d as CleanerWeekdayCode] ?? d).join(" ");
+}
+
 function AuthLinkBadge({ linked }: { linked: boolean }) {
   if (linked) {
     return (
@@ -114,10 +122,14 @@ export default function AdminCleanersPage() {
   const [resetRecoveryBusy, setResetRecoveryBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
 
+  const [changeRequests, setChangeRequests] = useState<AdminCleanerChangeRequest[]>([]);
+  const [changeRequestBusy, setChangeRequestBusy] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+
   const searchBoot = useRef(false);
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only full load; focus refetch uses `loadRef` for latest `load`
   }, []);
 
   useEffect(() => {
@@ -160,24 +172,78 @@ export default function AdminCleanersPage() {
     }
   }
 
-  async function load() {
+  async function load(opts?: { silent?: boolean }) {
+    const silent = opts?.silent === true;
     try {
-      setLoading(true);
-      const [cleaners, cityRes] = await Promise.all([
+      if (!silent) setLoading(true);
+      const [cleaners, cityRes, pendingCr] = await Promise.all([
         fetchCleaners(search.trim() || undefined),
         fetch("/api/cities").then(async (r) => {
           const j = (await r.json()) as { cities?: City[]; error?: string };
           if (!r.ok) throw new Error(j.error ?? "Failed to load cities.");
           return j.cities ?? [];
         }),
+        fetchPendingCleanerChangeRequests().catch(() => [] as AdminCleanerChangeRequest[]),
       ]);
       setRows(cleaners);
       setCities(cityRes);
-      setError(null);
+      setChangeRequests(pendingCr);
+      if (!silent) setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load cleaners.");
+      if (!silent) setError(e instanceof Error ? e.message : "Failed to load cleaners.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+    }
+  }
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  const focusRefetchAt = useRef(0);
+  useEffect(() => {
+    const run = () => {
+      const now = Date.now();
+      if (now - focusRefetchAt.current < 400) return;
+      focusRefetchAt.current = now;
+      void loadRef.current({ silent: true });
+    };
+    const onFocus = () => run();
+    const onVis = () => {
+      if (document.visibilityState === "visible") run();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
+  async function approveChangeRequest(id: string) {
+    setChangeRequestBusy({ id, action: "approve" });
+    try {
+      await approveCleanerChangeRequest(id);
+      setChangeRequests((prev) => prev.filter((r) => r.id !== id));
+      const cleaners = await fetchCleaners(search.trim() || undefined);
+      setRows(cleaners);
+      setToast("Request approved");
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Approve failed.");
+    } finally {
+      setChangeRequestBusy(null);
+    }
+  }
+
+  async function rejectChangeRequest(id: string) {
+    setChangeRequestBusy({ id, action: "reject" });
+    try {
+      await rejectCleanerChangeRequest(id);
+      setChangeRequests((prev) => prev.filter((r) => r.id !== id));
+      setToast("Request rejected");
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Reject failed.");
+    } finally {
+      setChangeRequestBusy(null);
     }
   }
 
@@ -400,6 +466,52 @@ export default function AdminCleanersPage() {
       </div>
 
       <main className="mx-auto grid max-w-7xl gap-6">
+        {changeRequests.length > 0 ? (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/25">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Pending work-setting requests</h3>
+            <ul className="mt-3 space-y-3">
+              {changeRequests.map((req) => (
+                <li
+                  key={req.id}
+                  className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                >
+                  <p className="font-medium text-zinc-900 dark:text-zinc-50">Cleaner: {req.cleaner_name}</p>
+                  <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+                    Current: {req.current_location} · {formatWeekdayList(req.current_days)}
+                  </p>
+                  <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+                    Requested: {req.requested_locations.length ? req.requested_locations.join(" · ") : "—"} ·{" "}
+                    {formatWeekdayList(req.requested_days)}
+                  </p>
+                  {req.note ? (
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+                      Note: <span className="font-medium">{req.note}</span>
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={changeRequestBusy != null}
+                      onClick={() => void approveChangeRequest(req.id)}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                    >
+                      {changeRequestBusy?.id === req.id && changeRequestBusy.action === "approve" ? "Approving…" : "Approve"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={changeRequestBusy != null}
+                      onClick={() => void rejectChangeRequest(req.id)}
+                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                    >
+                      {changeRequestBusy?.id === req.id && changeRequestBusy.action === "reject" ? "Rejecting…" : "Reject"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <MetricsGrid items={metrics} />
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

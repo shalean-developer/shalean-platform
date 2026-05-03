@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useCleanerDashboardData } from "@/hooks/useCleanerDashboardData";
 import { Button } from "@/components/ui/button";
 import { CleanerActivityStrip } from "./CleanerActivityStrip";
@@ -8,6 +8,7 @@ import { CleanerHeroBlock } from "./CleanerHeroMotion";
 import { CleanerHeroStack } from "./CleanerHeroStack";
 import { useCleanerNavBadges } from "./CleanerNavBadgesContext";
 import { CleanerStateBanner } from "./CleanerStateBanner";
+import { CleanerWorkSettingsCard } from "./CleanerWorkSettingsCard";
 import { EarningsCard } from "./EarningsCard";
 import { Header } from "./Header";
 import { JobOffersSection } from "./JobOffersSection";
@@ -41,11 +42,19 @@ export function CleanerDashboard() {
     openJobCount,
     trackedJobCount,
     earningsSnapshot,
+    performanceMetrics,
     acceptOffer,
     declineOffer,
     actingOfferId,
     removeOfferLocal,
   } = useCleanerDashboardData();
+
+  const nextJobEmptyScheduleLine = useMemo(() => {
+    if (nextHighlightedJob) return null;
+    return (
+      upcomingJobs.find((j) => j.phaseDisplay !== "Completed" && j.phaseDisplay !== "Cancelled")?.timeLine ?? null
+    );
+  }, [nextHighlightedJob, upcomingJobs]);
 
   useEffect(() => {
     setOpenJobsCount(openJobCount);
@@ -53,7 +62,7 @@ export function CleanerDashboard() {
 
   if (loading) {
     return (
-      <div className="mx-auto min-h-[100dvh] w-full max-w-lg space-y-5 bg-background p-4 pb-28">
+      <div className="mx-auto w-full max-w-lg space-y-5 bg-background p-4">
         <div className="h-10 w-48 animate-pulse rounded-lg bg-muted" />
         <div className="h-28 animate-pulse rounded-2xl bg-muted" />
         <div className="h-32 animate-pulse rounded-2xl bg-muted" />
@@ -64,7 +73,7 @@ export function CleanerDashboard() {
 
   if (error) {
     return (
-      <div className="mx-auto min-h-[100dvh] w-full max-w-lg space-y-4 bg-background p-4 pb-28">
+      <div className="mx-auto w-full max-w-lg space-y-4 bg-background p-4">
         <Header firstName={firstName} notificationPermission={notificationPermission} />
         <p className="text-sm text-destructive">{error}</p>
       </div>
@@ -72,7 +81,7 @@ export function CleanerDashboard() {
   }
 
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-lg space-y-5 bg-background px-4 pb-28 pt-4">
+    <div className="mx-auto w-full max-w-lg space-y-5 bg-background px-4 pt-4">
       <Header firstName={firstName} notificationPermission={notificationPermission} />
 
       <CleanerHeroStack>
@@ -85,7 +94,12 @@ export function CleanerDashboard() {
             onGoAvailable={() => void goAvailable()}
             onGoOffline={() => void goOffline()}
             availabilityBusy={availabilityBusy}
+            performanceMetrics={performanceMetrics}
           />
+        </CleanerHeroBlock>
+
+        <CleanerHeroBlock className="p-4">
+          <CleanerWorkSettingsCard embedded />
         </CleanerHeroBlock>
 
         <CleanerHeroBlock className="p-4">
@@ -103,6 +117,7 @@ export function CleanerDashboard() {
               receivingOffers={receivingOffers}
               browserOnline={browserOnline}
               onNotificationsGranted={onNotificationsGranted}
+              nextScheduleLine={nextJobEmptyScheduleLine}
             />
           )}
         </CleanerHeroBlock>

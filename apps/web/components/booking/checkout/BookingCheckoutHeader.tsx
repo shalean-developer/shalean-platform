@@ -233,7 +233,7 @@ export function BookingCheckoutHeader({ currentStep }: BookingCheckoutHeaderProp
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[10rem] dark:border-zinc-700 dark:bg-zinc-900">
               <DropdownMenuItem asChild>
-                <Link href={`/auth/login?redirect=${authRedirect}`} className="cursor-pointer">
+                <Link href={`/auth?redirect=${authRedirect}`} className="cursor-pointer">
                   Login
                 </Link>
               </DropdownMenuItem>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CleanerOfferRow } from "@/lib/cleaner/cleanerOfferRow";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -9,7 +10,12 @@ import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import { mapOfferToDashboardCard } from "@/lib/cleaner-dashboard/mapOfferToDashboardCard";
-import { buildDashboardUpcomingJobs } from "@/lib/cleaner-dashboard/dashboardUpcomingJobs";
+import {
+  buildDashboardUpcomingJobs,
+  cleanerBookingRowToUpcomingJob,
+} from "@/lib/cleaner-dashboard/dashboardUpcomingJobs";
+import { compareCleanerBookingStartJohannesburg } from "@/lib/cleaner/cleanerUpcomingScheduleJohannesburg";
+import { mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import type { CleanerDashboardTodayBreakdownItem } from "@/lib/cleaner/cleanerDashboardTodayCents";
 import type { CleanerMeRow } from "@/lib/cleaner/cleanerMobileProfileFromMe";
@@ -22,10 +28,14 @@ import {
   readCleanerDashboardCache,
   writeCleanerDashboardCache,
 } from "@/lib/cleaner/cleanerDashboardSessionCache";
+import { hrefForNotificationKind } from "@/lib/notifications/notificationRoutes";
+import { useCleanerNotifications } from "@/lib/notifications/notificationsStore";
+import { wireBrowserNotificationClick } from "@/lib/notifications/wireBrowserNotification";
 
 type MeJson = {
   cleaner?: CleanerMeRow | null;
   teamIds?: string[];
+  completion_pct?: number | null;
   error?: string;
 };
 
@@ -63,6 +73,8 @@ function assertOnline(): { ok: true } | { ok: false; error: string } {
 }
 
 export function useCleanerDashboardData() {
+  const router = useRouter();
+  const { addNotification } = useCleanerNotifications();
   const [cleanerId, setCleanerId] = useState<string | null>(null);
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [offerRows, setOfferRows] = useState<CleanerOfferRow[]>([]);
@@ -71,6 +83,7 @@ export function useCleanerDashboardData() {
   const [dailyGoalCents, setDailyGoalCents] = useState(40_000);
   const [todayBreakdown, setTodayBreakdown] = useState<CleanerDashboardTodayBreakdownItem[]>([]);
   const [cleanerMe, setCleanerMe] = useState<CleanerMeRow | null>(null);
+  const [completionPct, setCompletionPct] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingOfferId, setActingOfferId] = useState<string | null>(null);
@@ -219,12 +232,15 @@ export function useCleanerDashboardData() {
       setTeamIds([]);
       setCleanerMe(null);
       cleanerMeRef.current = null;
+      setCompletionPct(null);
       throw new Error(j.error ?? "Could not load profile.");
     }
     const cleaner = j.cleaner;
     const cid = cleaner.id.trim();
     setCleanerMe(cleaner);
     cleanerMeRef.current = cleaner;
+    const cp = j.completion_pct;
+    setCompletionPct(typeof cp === "number" && Number.isFinite(cp) ? Math.min(100, Math.max(0, Math.round(cp))) : null);
     setCleanerId(cid);
     setTeamIds(
       Array.isArray(j.teamIds)
@@ -243,6 +259,7 @@ export function useCleanerDashboardData() {
       setCleanerId(null);
       setCleanerMe(null);
       cleanerMeRef.current = null;
+      setCompletionPct(null);
       setLoading(false);
       return;
     }
@@ -382,10 +399,8 @@ export function useCleanerDashboardData() {
     if (!sb) return;
 
     let cancelled = false;
-    let chBookings: ReturnType<typeof sb.channel> | null = null;
-    let chOffers: ReturnType<typeof sb.channel> | null = null;
-    let chTeamMembers: ReturnType<typeof sb.channel> | null = null;
-    let chBookingCleaners: ReturnType<typeof sb.channel> | null = null;
+    /** One multiplexed channel — fewer subscribe/teardown cycles than four channels (less noisy with HMR). */
+    let rtChannel: ReturnType<typeof sb.channel> | null = null;
 
     void sb.auth.getSession().then(({ data: { session } }) => {
       if (cancelled || !session?.user) return;
@@ -394,13 +409,13 @@ export function useCleanerDashboardData() {
       const reloadOffers = () => bumpOffersRealtime();
       const reloadTeamsScope = () => bumpTeamRealtime();
 
-      chBookings = sb.channel(`cleaner-dashboard-bookings-${id}`);
-      chBookings.on(
+      const ch = sb.channel(`cleaner-dashboard-rt-${id}`);
+      ch.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `cleaner_id=eq.${id}` },
         reloadJobsAndEarnings,
       );
-      chBookings.on(
+      ch.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `payout_owner_cleaner_id=eq.${id}` },
         reloadJobsAndEarnings,
@@ -408,40 +423,29 @@ export function useCleanerDashboardData() {
       for (const tid of teamIds) {
         const t = tid.trim();
         if (!t) continue;
-        chBookings.on(
+        ch.on(
           "postgres_changes",
           { event: "*", schema: "public", table: "bookings", filter: `team_id=eq.${t}` },
           reloadJobsAndEarnings,
         );
       }
-      chBookings.subscribe();
-
-      chOffers = sb
-        .channel(`cleaner-dashboard-offers-${id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${id}` },
-          reloadOffers,
-        )
-        .subscribe();
-
-      chTeamMembers = sb
-        .channel(`cleaner-dashboard-team-${id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${id}` },
-          reloadTeamsScope,
-        )
-        .subscribe();
-
-      chBookingCleaners = sb
-        .channel(`cleaner-dashboard-booking-cleaners-${id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "booking_cleaners", filter: `cleaner_id=eq.${id}` },
-          reloadJobsAndEarnings,
-        )
-        .subscribe();
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dispatch_offers", filter: `cleaner_id=eq.${id}` },
+        reloadOffers,
+      );
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "team_members", filter: `cleaner_id=eq.${id}` },
+        reloadTeamsScope,
+      );
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "booking_cleaners", filter: `cleaner_id=eq.${id}` },
+        reloadJobsAndEarnings,
+      );
+      rtChannel = ch;
+      ch.subscribe();
     });
 
     return () => {
@@ -458,10 +462,7 @@ export function useCleanerDashboardData() {
         clearTimeout(teamRtTimerRef.current);
         teamRtTimerRef.current = null;
       }
-      if (chBookings) void sb.removeChannel(chBookings);
-      if (chOffers) void sb.removeChannel(chOffers);
-      if (chTeamMembers) void sb.removeChannel(chTeamMembers);
-      if (chBookingCleaners) void sb.removeChannel(chBookingCleaners);
+      if (rtChannel) void sb.removeChannel(rtChannel);
     };
   }, [
     bumpDashboardRealtime,
@@ -495,6 +496,14 @@ export function useCleanerDashboardData() {
 
   const firstName = useMemo(() => cleanerDisplayFirstName(cleanerMe?.full_name), [cleanerMe?.full_name]);
 
+  const performanceMetrics = useMemo(() => {
+    const jc = cleanerMe?.jobs_completed;
+    const jobsCompleted = typeof jc === "number" && Number.isFinite(jc) ? Math.max(0, Math.round(jc)) : null;
+    const rt = cleanerMe?.rating;
+    const rating = typeof rt === "number" && Number.isFinite(rt) ? rt : null;
+    return { jobsCompleted, rating, completionPct };
+  }, [cleanerMe?.jobs_completed, cleanerMe?.rating, completionPct]);
+
   const serverReceivingOffers = useMemo(() => {
     if (!cleanerMe) return false;
     return cleanerMe.is_available === true || String(cleanerMe.status ?? "").toLowerCase() === "available";
@@ -516,25 +525,77 @@ export function useCleanerDashboardData() {
   }, [browserOnline, receivingOffers, pushActivityFeed]);
 
   const prevOfferLen = useRef(0);
+  const prevOfferIdsRef = useRef<Set<string>>(new Set());
   const offersFeedHydrated = useRef(false);
   useEffect(() => {
     if (loading) return;
     if (!offersFeedHydrated.current) {
       offersFeedHydrated.current = true;
       prevOfferLen.current = offerRows.length;
+      prevOfferIdsRef.current = new Set(offerRows.map((o) => o.id));
       return;
     }
+    const currentIds = new Set(offerRows.map((o) => o.id));
+    const newOffers = offerRows.filter((o) => !prevOfferIdsRef.current.has(o.id));
+    prevOfferIdsRef.current = currentIds;
+
     const n = offerRows.length;
-    if (browserOnline && receivingOffers && n > prevOfferLen.current) {
-      const d = n - prevOfferLen.current;
+    /** Skip only a large first hydration burst (e.g. replay); still notify for the first single offer `[] → [a]`. */
+    const isInitialBulkSnapshot =
+      prevOfferIdsRef.current.size === 0 &&
+      newOffers.length === offerRows.length &&
+      offerRows.length > 2;
+    if (isInitialBulkSnapshot) {
+      prevOfferLen.current = n;
+      return;
+    }
+
+    if (browserOnline && receivingOffers && newOffers.length > 0) {
+      const d = newOffers.length;
       pushActivityFeed(
         "offers",
         d === 1 ? "New job offer received — review below." : `${d} new offers — review below.`,
         "offer",
       );
+      for (const o of newOffers) {
+        const token = String(o.offer_token ?? "").trim();
+        addNotification({
+          title: "New job offer",
+          body: token ? "Tap to review and accept this job." : "Review and accept from the offers section on your dashboard.",
+          kind: "job_offer",
+          booking_id: o.booking_id,
+          offer_token: token || undefined,
+          dedupe_key: `job_offer_row:${o.id}`,
+        });
+      }
+      if (notificationPermission === "granted" && typeof Notification !== "undefined") {
+        try {
+          const bn = new Notification(d === 1 ? "New job offer" : `${d} new offers`, {
+            body: "Tap to open your offer.",
+            tag: "shalean-cleaner-offer",
+          });
+          const firstTok = String(newOffers[0]?.offer_token ?? "").trim();
+          wireBrowserNotificationClick(
+            bn,
+            hrefForNotificationKind("job_offer", newOffers[0]?.booking_id ?? null, firstTok || null),
+            (h) => router.push(h),
+          );
+        } catch {
+          /* ignore */
+        }
+      }
     }
     prevOfferLen.current = n;
-  }, [loading, offerRows.length, browserOnline, receivingOffers, pushActivityFeed]);
+  }, [
+    loading,
+    offerRows,
+    browserOnline,
+    receivingOffers,
+    pushActivityFeed,
+    addNotification,
+    notificationPermission,
+    router,
+  ]);
 
   const rosterIncludesToday = useMemo(
     () => cleanerWorksOnScheduledWeekday(cleanerMe?.availability_weekdays, jhbClock.todayYmd),
@@ -625,7 +686,17 @@ export function useCleanerDashboardData() {
   const onNotificationsGranted = useCallback(() => {
     setNotificationToast("Notifications enabled — we'll alert you instantly when new jobs arrive.");
     setNotificationPermission("granted");
-  }, []);
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        const bn = new Notification("Notifications enabled", {
+          body: "We’ll alert you when new job offers arrive.",
+        });
+        wireBrowserNotificationClick(bn, hrefForNotificationKind("system"), (h) => router.push(h));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [router]);
 
   const setReceivingOffers = useCallback(
     async (next: boolean) => {
@@ -707,6 +778,26 @@ export function useCleanerDashboardData() {
           }
           return;
         }
+        const bookingIdAfterAccept = snapshot?.booking_id?.trim() || undefined;
+        addNotification({
+          title: "Job assigned",
+          body: "You accepted an offer — it appears in your upcoming jobs.",
+          kind: "job_assigned",
+          booking_id: bookingIdAfterAccept,
+        });
+        if (notificationPermission === "granted" && typeof Notification !== "undefined") {
+          try {
+            const bn = new Notification("Job assigned", {
+              body: "View your upcoming job on Shalean.",
+              tag: bookingIdAfterAccept ? `shalean-job-${bookingIdAfterAccept}` : "shalean-job-assigned",
+            });
+            wireBrowserNotificationClick(bn, hrefForNotificationKind("job_assigned", bookingIdAfterAccept), (h) =>
+              router.push(h),
+            );
+          } catch {
+            /* ignore */
+          }
+        }
         await Promise.all([loadOffers(headers), loadDashboard(headers)]);
       } catch {
         if (snapshot) {
@@ -718,7 +809,7 @@ export function useCleanerDashboardData() {
         setActingOfferId(null);
       }
     },
-    [loadDashboard, loadOffers],
+    [loadDashboard, loadOffers, addNotification, notificationPermission, router],
   );
 
   const declineOffer = useCallback(
@@ -778,9 +869,21 @@ export function useCleanerDashboardData() {
     }).length;
   }, [jobRows]);
 
+  /** Soonest open booking by schedule (JHB), not “first section” in the grouped list — matches cleaner expectation of “next”. */
   const nextHighlightedJob = useMemo(() => {
-    return upcomingJobs.find((j) => j.phaseDisplay !== "Completed" && j.phaseDisplay !== "Cancelled") ?? null;
-  }, [upcomingJobs]);
+    const open = jobRows.filter((r) => {
+      const s = String(r.status ?? "").toLowerCase();
+      return s !== "completed" && s !== "cancelled";
+    });
+    if (open.length === 0) return null;
+    const sorted = [...open].sort(compareCleanerBookingStartJohannesburg);
+    for (const r of sorted) {
+      const pd = mobilePhaseDisplayForDashboard(r);
+      if (pd === "Completed" || pd === "Cancelled") continue;
+      return cleanerBookingRowToUpcomingJob(r, jhbClock.now);
+    }
+    return null;
+  }, [jobRows, jhbClock.now]);
 
   const nextJobPinExtras = useMemo(() => {
     if (!nextHighlightedJob) {
@@ -824,6 +927,7 @@ export function useCleanerDashboardData() {
     openJobCount,
     trackedJobCount: jobRows.length,
     earningsSnapshot,
+    performanceMetrics,
     acceptOffer,
     declineOffer,
     actingOfferId,

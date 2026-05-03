@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { countJobsAndCentsForToday } from "@/lib/cleaner/earnings/counts";
 import { priorIsoWeekEarnedCents, weekOverWeekMomentum } from "@/lib/cleaner/earnings/momentum";
 import {
+  computeCutoffAssignmentProbe,
   daysUntilNextFridayJohannesburg,
   nextFridayYmdJohannesburg,
   payoutArrivalSummaryJohannesburg,
@@ -31,6 +32,15 @@ describe("nextPayoutFriday", () => {
     expect(s.cutoffPassedForBatch).toBe(true);
     expect(s.payoutTargetFridayYmd).toBe("2026-05-15");
     expect(s.headline.toLowerCase()).toContain("today");
+  });
+
+  it("computeCutoffAssignmentProbe returns UI + batch window fields", () => {
+    const wed = new Date("2026-05-06T12:00:00+02:00");
+    const p = computeCutoffAssignmentProbe(wed);
+    expect(p.ui_payout_target_friday_ymd).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(p.batch_utc_completion_period_ymd.start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(p.batch_pay_friday_jhb_ymd).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(typeof p.mismatch).toBe("boolean");
   });
 });
 

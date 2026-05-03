@@ -1,4 +1,5 @@
 import type { Session, User } from "@supabase/supabase-js";
+import { clearAuthIntent } from "@/lib/auth/authRoleIntent";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 
@@ -93,6 +94,7 @@ export async function signUp(email: string, password: string, fullName: string) 
 export async function signOut(): Promise<{ error: Error | null }> {
   const sb = getSupabaseBrowser();
   if (!sb) return { error: new Error("Supabase is not configured.") };
+  clearAuthIntent();
   const { error } = await sb.auth.signOut();
   return { error: error ? new Error(error.message) : null };
 }

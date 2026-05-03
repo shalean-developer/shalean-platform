@@ -1,5 +1,6 @@
 import type { CleanerBookingLineItemWire } from "@/lib/cleaner/cleanerBookingRow";
 import type { CleanerBookingScopeSource } from "@/lib/cleaner/cleanerBookingScopeSummary";
+import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
 import { cleanerBookingCardDetailsFromRow } from "@/lib/cleaner/cleanerBookingScopeSummary";
 
 export type UnifiedJobScope = {
@@ -51,7 +52,7 @@ export function buildUnifiedJobScope(source: CleanerBookingScopeSource & { scope
   const extrasOrdered: string[] = [];
   const seen = new Set<string>();
   const push = (label: string) => {
-    const k = label.trim();
+    const k = stripExtraTimeSuffixFromDisplayLabel(label);
     if (!k || seen.has(k.toLowerCase())) return;
     seen.add(k.toLowerCase());
     extrasOrdered.push(k);
@@ -92,15 +93,18 @@ export function buildEarningsIncludesLines(serviceTitle: string, lineItems: read
   }
 
   const extraNamesFromItems = new Set(
-    items.filter((i) => String(i.item_type ?? "").toLowerCase() === "extra").map((i) => i.name.trim().toLowerCase()),
+    items
+      .filter((i) => String(i.item_type ?? "").toLowerCase() === "extra")
+      .map((i) => stripExtraTimeSuffixFromDisplayLabel(i.name).toLowerCase()),
   );
   for (const it of items) {
     if (String(it.item_type ?? "").toLowerCase() !== "extra") continue;
-    lines.push(`${it.name} (+extra — included in your pay)`);
+    lines.push(`${stripExtraTimeSuffixFromDisplayLabel(it.name)} (included in your pay)`);
   }
   for (const name of extras) {
-    if (extraNamesFromItems.has(name.trim().toLowerCase())) continue;
-    lines.push(`${name} (+extra — included in your pay)`);
+    const cleaned = stripExtraTimeSuffixFromDisplayLabel(name);
+    if (extraNamesFromItems.has(cleaned.toLowerCase())) continue;
+    lines.push(`${cleaned} (included in your pay)`);
   }
 
   return lines;

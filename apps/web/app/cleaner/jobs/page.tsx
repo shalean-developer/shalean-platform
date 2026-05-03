@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CleanerJobListCard } from "@/components/cleaner-jobs/CleanerJobListCard";
-import { CleanerNextJobHero } from "@/components/cleaner-jobs/CleanerNextJobHero";
 import { useCleanerNavBadges } from "@/components/cleaner-dashboard/CleanerNavBadgesContext";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -16,12 +15,7 @@ import {
   isOpenCleanerJobRow,
   jobsListAdaptivePollMs,
   sortUpcomingJobsAsc,
-  splitJobLocationPrimarySecondary,
-  summarizeCleanerJobsThisIsoWeek,
-  trailingWeekGoalGapZar,
 } from "@/lib/cleaner/cleanerJobsListDerived";
-import { formatZarWhole } from "@/lib/cleaner/cleanerZarFormat";
-import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import {
   CLEANER_TTL_COMPLETE_LOCK_STORAGE_KEY,
   readTtlCompleteSyncLockFromSession,
@@ -119,9 +113,6 @@ export default function CleanerJobsListPage() {
     return readTtlCompleteSyncLockFromSession();
   }, [ttlLockEpoch, nowTick]);
 
-  const week = useMemo(() => summarizeCleanerJobsThisIsoWeek(rows, now), [rows, now]);
-  const goalGap = useMemo(() => trailingWeekGoalGapZar(rows, now), [rows, now]);
-
   const upcomingRaw = useMemo(() => rows.filter((r) => isOpenCleanerJobRow(r)), [rows]);
   const upcomingSorted = useMemo(() => sortUpcomingJobsAsc(upcomingRaw), [upcomingRaw]);
 
@@ -143,43 +134,18 @@ export default function CleanerJobsListPage() {
 
   const pastGrouped = useMemo(() => groupRowsByBookingDateDesc(pastForFilter), [pastForFilter]);
 
-  const todayYmd = useMemo(() => johannesburgCalendarYmd(now), [now]);
-  const todayOpenJobs = useMemo(() => {
-    return sortUpcomingJobsAsc(upcomingRaw.filter((r) => String(r.date ?? "").slice(0, 10) === todayYmd));
-  }, [upcomingRaw, todayYmd]);
-  const openTodayCount = todayOpenJobs.length;
-
-  const nextJob = upcomingSorted[0] ?? null;
-  const commandGlobalLine = useMemo(() => {
-    if (!nextJob) return null;
-    const d = String(nextJob.date ?? "").trim().slice(0, 10);
-    const t = String(nextJob.time ?? "").trim() || "—";
-    const { primary } = splitJobLocationPrimarySecondary(nextJob.location);
-    if (d === todayYmd) return `Next: ${t} in ${primary}`;
-    const head = /^\d{4}-\d{2}-\d{2}$/.test(d) ? jobDateHeading(d, now) : "Scheduled";
-    return `Next: ${head} · ${t} in ${primary}`;
-  }, [nextJob, todayYmd, now]);
-
   const showUpcoming = filter === "all" || filter === "upcoming";
   const showPast = filter === "all" || filter === "completed";
-  const showNextHero = Boolean(showUpcoming && nextJob);
-
-  const listUpcoming = useMemo(() => {
-    if (!showNextHero || !nextJob) return upcomingSorted;
-    return upcomingSorted.filter((r) => r.id !== nextJob.id);
-  }, [showNextHero, nextJob, upcomingSorted]);
-
-  const earnedZar = Math.max(0, Math.round(week.earnedCents / 100));
 
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-lg space-y-4 bg-background px-4 pb-28 pt-4">
+    <div className="mx-auto w-full max-w-lg space-y-4 bg-background px-4 pt-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
         <Link href="/cleaner/dashboard">← Home</Link>
       </Button>
 
       <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground">Your jobs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Work timeline — upcoming first, then history.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Upcoming and past bookings.</p>
       </div>
 
       {ttlCompleteLock ? (
@@ -192,45 +158,6 @@ export default function CleanerJobsListPage() {
             A completion may not have reached the server before it expired from this device. Open that job and use{" "}
             <strong>Refresh details</strong> before completing again.
           </p>
-        </div>
-      ) : null}
-
-      {!loading && !err && rows.length > 0 && (openTodayCount > 0 || commandGlobalLine) ? (
-        <div className="space-y-1 rounded-xl border border-emerald-600/20 bg-emerald-500/5 p-3 text-sm">
-          {openTodayCount > 0 ? (
-            <p className="font-semibold text-foreground">
-              {openTodayCount} job{openTodayCount === 1 ? "" : "s"} today
-            </p>
-          ) : null}
-          {todayOpenJobs[0] ? (
-            <p className="text-muted-foreground">
-              Next: {String(todayOpenJobs[0].time ?? "").trim() || "—"} in{" "}
-              {splitJobLocationPrimarySecondary(todayOpenJobs[0].location).primary}
-            </p>
-          ) : null}
-          {todayOpenJobs.slice(1).map((job) => (
-            <p key={job.id} className="text-muted-foreground">
-              Then: {String(job.time ?? "").trim() || "—"} in {splitJobLocationPrimarySecondary(job.location).primary}
-            </p>
-          ))}
-          {todayOpenJobs.length === 0 && commandGlobalLine ? (
-            <p className="text-muted-foreground">{commandGlobalLine}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {!loading && !err && rows.length > 0 ? (
-        <div className="rounded-xl border border-border bg-card/80 p-3 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">This week</p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {week.completedCountInWeek} job{week.completedCountInWeek === 1 ? "" : "s"} completed · {formatZarWhole(earnedZar)}{" "}
-            earned
-          </p>
-          {goalGap.remainderZar > 0 ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {formatZarWhole(goalGap.remainderZar)} to reach your goal
-            </p>
-          ) : null}
         </div>
       ) : null}
 
@@ -271,12 +198,14 @@ export default function CleanerJobsListPage() {
       ) : err ? (
         <p className="text-sm text-destructive">{err}</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No jobs to show yet.</p>
+        <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">No jobs available right now</p>
+          <p className="mt-2">Stay online — we&apos;ll send jobs when available.</p>
+        </div>
       ) : (
         <div className="space-y-8">
           {showUpcoming ? (
             <section className="space-y-3">
-              {showNextHero && nextJob ? <CleanerNextJobHero row={nextJob} now={now} /> : null}
               <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
                 Upcoming
               </h2>
@@ -285,11 +214,9 @@ export default function CleanerJobsListPage() {
                   <p className="font-medium text-foreground">You&apos;re all caught up</p>
                   <p className="mt-1">Stay online — new jobs will appear here.</p>
                 </div>
-              ) : listUpcoming.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No other upcoming jobs.</p>
               ) : (
                 <ul className="space-y-2">
-                  {listUpcoming.map((r) => (
+                  {upcomingSorted.map((r) => (
                     <li key={r.id}>
                       <CleanerJobListCard row={r} variant="upcoming" now={now} />
                     </li>

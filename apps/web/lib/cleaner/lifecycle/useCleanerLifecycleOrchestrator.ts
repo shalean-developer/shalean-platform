@@ -24,7 +24,10 @@ import {
   getLifecycleBroadcastClientId,
   subscribeCleanerLifecycleQueueChanged,
 } from "@/lib/cleaner/cleanerLifecycleQueueBroadcast";
-import { logCleanerLifecycleClientEvent } from "@/lib/cleaner/cleanerLifecycleTelemetryClient";
+import {
+  logCleanerLifecycleClientEvent,
+  type LifecycleFlushTrigger,
+} from "@/lib/cleaner/cleanerLifecycleTelemetryClient";
 import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRank";
 import { shouldDropStaleQueuedLifecycleAction } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
 
@@ -61,10 +64,28 @@ export type CleanerLifecycleOrchestratorState = {
   connectionUnstable: boolean;
 };
 
+/** Result of the inner function passed to {@link UseCleanerLifecycleOrchestratorReturn.enqueueViaPost}. */
+export type LifecycleEnqueueViaPostResult = {
+  /** When false, skip shared peek / queue / flush tail (e.g. not signed in). Default true. */
+  applyPostEnqueueTail?: boolean;
+  /** After offline or 5xx enqueue path. */
+  armBackoffAfterPostEnqueue?: boolean;
+  /** When false, do not trigger a flush after tail. Default true. */
+  scheduleFlush?: boolean;
+  skipInvalidatePeek?: boolean;
+  /** Defaults to `activeBookingId` when omitted. */
+  peekBookingId?: string;
+};
+
 export type UseCleanerLifecycleOrchestratorReturn = CleanerLifecycleOrchestratorState & {
   flushPendingLifecycleQueue: () => Promise<void>;
   /** Single entry for scheduling a flush (alias of flush). */
   scheduleFlush: () => Promise<void>;
+  /**
+   * Runs page-owned lifecycle POST / enqueue logic, then applies one shared tail:
+   * peek invalidation, queue refresh, optional post-enqueue backoff, optional flush.
+   */
+  enqueueViaPost: (body: () => Promise<LifecycleEnqueueViaPostResult | void>) => Promise<void>;
   refreshQueueFromDisk: () => void;
   bumpQueueUi: () => void;
   clearFlushBackoff: () => void;
@@ -76,7 +97,7 @@ export type UseCleanerLifecycleOrchestratorReturn = CleanerLifecycleOrchestrator
   armFlushBackoffAfterJobFetchDegraded: () => void;
   /** Clears backoff, failure streak, and connection-unstable flag (successful server fetch, etc.). */
   markNetworkStable: () => void;
-  /** After successful direct POST (not full fetch) — reset streak + UI flag without clearing backoff. */
+  /** Resets failure streak, connection flag, and flush backoff (symmetric with markNetworkStable). */
   clearFlushFailureStreakAndConnectionFlag: () => void;
 };
 
@@ -117,6 +138,18 @@ export function useCleanerLifecycleOrchestrator(
   const bcEventsReceivedSessionRef = useRef(0);
   const lifecyclePeekSessionCacheRef = useRef(new Map<string, { wire: LifecycleWireLike; atMs: number }>());
   const flushQueueCursorRef = useRef(0);
+  /** Throttles non-chained flush entry (BC, visibility, enqueue bursts). */
+  const lastNonChainedFlushStartMsRef = useRef(0);
+  const bcRefreshCoalesceTimerRef = useRef<number | null>(null);
+  const bcRefreshScheduledRef = useRef(false);
+  /** Monotonic “last failure” for connection-unstable auto-clear (90s since last failure). */
+  const connectionUnstableSinceMsRef = useRef<number | null>(null);
+  /** Non-chained flush source; consumed when a non-chained run is admitted (survives throttle skips). */
+  const pendingNonChainedFlushTriggerRef = useRef<LifecycleFlushTrigger>("unknown");
+  /** Wall clock for chained flush burst cap (2s across chained starts). */
+  const chainBurstStartMsRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const lastFocusPeekClearMsRef = useRef(0);
 
   const bumpQueueUi = useCallback(() => setQueueUiNonce((n) => n + 1), []);
 
@@ -142,14 +175,22 @@ export function useCleanerLifecycleOrchestrator(
     flushBackoffUntilMsRef.current = 0;
   }, []);
 
+  const clearFlushBackoffRef = useRef(clearFlushBackoff);
+  useEffect(() => {
+    clearFlushBackoffRef.current = clearFlushBackoff;
+  }, [clearFlushBackoff]);
+
   const markNetworkStable = useCallback(() => {
     flushBackoffUntilMsRef.current = 0;
     flushFailureStreakRef.current = 0;
+    connectionUnstableSinceMsRef.current = null;
     setConnectionUnstable(false);
   }, []);
 
   const clearFlushFailureStreakAndConnectionFlag = useCallback(() => {
     flushFailureStreakRef.current = 0;
+    flushBackoffUntilMsRef.current = 0;
+    connectionUnstableSinceMsRef.current = null;
     setConnectionUnstable(false);
   }, []);
 
@@ -196,7 +237,17 @@ export function useCleanerLifecycleOrchestrator(
       if (!plan.shouldRefresh) return;
       lastAppliedBcMessageVersionRef.current = plan.nextLastMessageVersion;
       lastBcDiskVersionRef.current = plan.nextLastDiskVersion;
-      refreshQueueFromDiskRef.current();
+      if (bcRefreshScheduledRef.current) return;
+      bcRefreshScheduledRef.current = true;
+      if (bcRefreshCoalesceTimerRef.current != null) window.clearTimeout(bcRefreshCoalesceTimerRef.current);
+      bcRefreshCoalesceTimerRef.current = window.setTimeout(() => {
+        bcRefreshCoalesceTimerRef.current = null;
+        bcRefreshScheduledRef.current = false;
+        if (!isMountedRef.current) return;
+        refreshQueueFromDiskRef.current();
+        pendingNonChainedFlushTriggerRef.current = "bc";
+        void flushFnRef.current();
+      }, 50);
     });
   }, []);
 
@@ -206,6 +257,11 @@ export function useCleanerLifecycleOrchestrator(
         window.clearTimeout(scheduledChainFlushRef.current);
         scheduledChainFlushRef.current = null;
       }
+      if (bcRefreshCoalesceTimerRef.current != null) {
+        window.clearTimeout(bcRefreshCoalesceTimerRef.current);
+        bcRefreshCoalesceTimerRef.current = null;
+      }
+      bcRefreshScheduledRef.current = false;
     };
   }, []);
 
@@ -218,6 +274,13 @@ export function useCleanerLifecycleOrchestrator(
     }, Math.floor(Math.random() * 500));
   }, []);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const flushPendingLifecycleQueue = useCallback(async () => {
     if (flushInFlightRef.current) return;
     if (Date.now() < flushBackoffUntilMsRef.current) return;
@@ -225,10 +288,28 @@ export function useCleanerLifecycleOrchestrator(
 
     const fromChained = flushFromChainedTimerRef.current;
     flushFromChainedTimerRef.current = false;
+    if (!fromChained) {
+      const t = Date.now();
+      if (t - lastNonChainedFlushStartMsRef.current < 50) return;
+      lastNonChainedFlushStartMsRef.current = t;
+    }
+    const flushTriggerForCycle: LifecycleFlushTrigger = fromChained
+      ? "interval"
+      : pendingNonChainedFlushTriggerRef.current;
+    if (!fromChained) {
+      pendingNonChainedFlushTriggerRef.current = "unknown";
+    }
     let flushCycleStep = 0;
     if (fromChained) {
       chainedFlushDepthRef.current += 1;
+      if (chainedFlushDepthRef.current === 1) {
+        chainBurstStartMsRef.current = Date.now();
+      } else if (Date.now() - chainBurstStartMsRef.current > 2000) {
+        chainedFlushDepthRef.current = 0;
+        return;
+      }
       if (chainedFlushDepthRef.current > 5) {
+        chainedFlushDepthRef.current = 0;
         return;
       }
       flushCycleStep = chainedFlushDepthRef.current;
@@ -307,6 +388,7 @@ export function useCleanerLifecycleOrchestrator(
           if (shouldDropStaleQueuedLifecycleAction(item.action as PendingLifecycleAction, wire)) {
             flushSkippedStaleCount += 1;
             flushFailureStreakRef.current = 0;
+            connectionUnstableSinceMsRef.current = null;
             setConnectionUnstable(false);
             await removePendingLifecycleByKey(item.idempotencyKey);
             lifecyclePeekSessionCacheRef.current.delete(item.bookingId.trim());
@@ -337,6 +419,7 @@ export function useCleanerLifecycleOrchestrator(
           });
           if (result.ok) {
             flushFailureStreakRef.current = 0;
+            connectionUnstableSinceMsRef.current = null;
             setConnectionUnstable(false);
             await removePendingLifecycleByKey(item.idempotencyKey);
             lifecyclePeekSessionCacheRef.current.delete(item.bookingId.trim());
@@ -369,6 +452,7 @@ export function useCleanerLifecycleOrchestrator(
           if (!result.ok && result.status === 409) {
             clearFlushBackoff();
             flushFailureStreakRef.current = 0;
+            connectionUnstableSinceMsRef.current = null;
             setConnectionUnstable(false);
             await removePendingLifecycleByKey(item.idempotencyKey);
             lifecyclePeekSessionCacheRef.current.delete(item.bookingId.trim());
@@ -422,6 +506,7 @@ export function useCleanerLifecycleOrchestrator(
             flushFailureStreakRef.current >= 2 &&
             (result.status === 0 || isOfflineSignal(null, { navigatorOnline: readNavigatorOnline() }))
           ) {
+            connectionUnstableSinceMsRef.current = Date.now();
             setConnectionUnstable(true);
           }
           refreshQueueFromDisk();
@@ -446,6 +531,7 @@ export function useCleanerLifecycleOrchestrator(
         flushItemsSucceeded,
         flushItemsFailed,
         flushItemsDeferred,
+        flush_trigger: flushTriggerForCycle,
       });
       flushInFlightRef.current = false;
       setIsFlushing(false);
@@ -465,11 +551,14 @@ export function useCleanerLifecycleOrchestrator(
     const onOnline = () => {
       flushBackoffUntilMsRef.current = 0;
       flushFailureStreakRef.current = 0;
+      connectionUnstableSinceMsRef.current = null;
       setConnectionUnstable(false);
       chainedFlushDepthRef.current = 0;
+      pendingNonChainedFlushTriggerRef.current = "online";
       void flushPendingLifecycleQueue();
     };
     window.addEventListener("online", onOnline);
+    pendingNonChainedFlushTriggerRef.current = "initial";
     void flushPendingLifecycleQueue();
     return () => window.removeEventListener("online", onOnline);
   }, [flushPendingLifecycleQueue]);
@@ -477,9 +566,15 @@ export function useCleanerLifecycleOrchestrator(
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastFocusPeekClearMsRef.current >= 1000) {
+        lastFocusPeekClearMsRef.current = now;
+        lifecyclePeekSessionCacheRef.current.clear();
+      }
       flushBackoffUntilMsRef.current = 0;
       chainedFlushDepthRef.current = 0;
       void (async () => {
+        pendingNonChainedFlushTriggerRef.current = "visibility";
         await flushPendingLifecycleQueue();
         if (!needsJobRefresh) return;
         const ok = await loadJob();
@@ -506,14 +601,91 @@ export function useCleanerLifecycleOrchestrator(
   }, [refreshQueueFromDisk]);
 
   useEffect(() => {
-    if (!connectionUnstable) return;
-    const t = window.setTimeout(() => setConnectionUnstable(false), 90_000);
-    return () => window.clearTimeout(t);
+    if (!connectionUnstable) {
+      connectionUnstableSinceMsRef.current = null;
+      return;
+    }
+    if (connectionUnstableSinceMsRef.current == null) {
+      connectionUnstableSinceMsRef.current = Date.now();
+    }
+    const id = window.setInterval(() => {
+      const since = connectionUnstableSinceMsRef.current;
+      if (since == null) return;
+      if (Date.now() - since >= 90_000) {
+        connectionUnstableSinceMsRef.current = null;
+        setConnectionUnstable(false);
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
   }, [connectionUnstable]);
 
   const scheduleFlush = useCallback(async () => {
+    pendingNonChainedFlushTriggerRef.current = "unknown";
     await flushPendingLifecycleQueue();
   }, [flushPendingLifecycleQueue]);
+
+  const enqueueViaPost = useCallback(
+    async (body: () => Promise<LifecycleEnqueueViaPostResult | void>) => {
+      let r: LifecycleEnqueueViaPostResult | void;
+      try {
+        r = await body();
+      } catch (e) {
+        armFlushBackoffAfterPostEnqueue();
+        throw e;
+      }
+      r = r ?? {};
+      if (r.applyPostEnqueueTail === false) return;
+      const peekId = (r.peekBookingId ?? activeId).trim();
+      if (!r.skipInvalidatePeek) {
+        if (peekId) invalidatePeekCache(peekId);
+        else invalidatePeekCache();
+      }
+      refreshQueueFromDisk();
+      if (r.armBackoffAfterPostEnqueue) armFlushBackoffAfterPostEnqueue();
+      if (r.scheduleFlush !== false) {
+        pendingNonChainedFlushTriggerRef.current = "enqueue";
+        void flushPendingLifecycleQueue();
+      }
+    },
+    [activeId, armFlushBackoffAfterPostEnqueue, flushPendingLifecycleQueue, invalidatePeekCache, refreshQueueFromDisk],
+  );
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    type LifecycleDebug = {
+      getQueue: typeof listPendingLifecycle;
+      getState: () => {
+        backoffUntil: number;
+        failureStreak: number;
+        flushInFlight: boolean;
+        chainedDepth: number;
+        connectionUnstableSinceMs: number | null;
+      };
+      forceFlush: () => void;
+      clearBackoff: () => void;
+    };
+    const w = window as unknown as { __lifecycleDebug?: LifecycleDebug };
+    w.__lifecycleDebug = {
+      getQueue: () => listPendingLifecycle(),
+      getState: () => ({
+        backoffUntil: flushBackoffUntilMsRef.current,
+        failureStreak: flushFailureStreakRef.current,
+        flushInFlight: flushInFlightRef.current,
+        chainedDepth: chainedFlushDepthRef.current,
+        connectionUnstableSinceMs: connectionUnstableSinceMsRef.current,
+      }),
+      forceFlush: () => {
+        pendingNonChainedFlushTriggerRef.current = "unknown";
+        void flushFnRef.current();
+      },
+      clearBackoff: () => {
+        clearFlushBackoffRef.current();
+      },
+    };
+    return () => {
+      delete w.__lifecycleDebug;
+    };
+  }, []);
 
   return {
     isFlushing,
@@ -523,6 +695,7 @@ export function useCleanerLifecycleOrchestrator(
     connectionUnstable,
     flushPendingLifecycleQueue,
     scheduleFlush,
+    enqueueViaPost,
     refreshQueueFromDisk,
     bumpQueueUi,
     clearFlushBackoff,

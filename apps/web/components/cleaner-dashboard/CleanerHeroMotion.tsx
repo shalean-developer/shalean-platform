@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { cleanerConsole } from "@/lib/cleaner-dashboard/cleanerConsoleTokens";
 
 const ease = cleanerConsole.motion.ease;
@@ -28,11 +28,12 @@ export function CleanerHeroMotion({ children, className }: { children: ReactNode
 }
 
 export function CleanerHeroBlock({ children, className }: { children: ReactNode; className?: string }) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
       className={className}
       variants={{
-        hidden: { opacity: 0, y: 10 },
+        hidden: { opacity: reduceMotion ? 1 : 0, y: reduceMotion ? 0 : 10 },
         show: { opacity: 1, y: 0, transition: { duration: blockS, ease } },
       }}
     >

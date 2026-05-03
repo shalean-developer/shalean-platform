@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { instantNearJhbThursdayPayoutCutoff } from "@/lib/cleaner/earnings/nextPayoutFriday";
+import {
+  computeCutoffAssignmentProbe,
+  instantNearJhbThursdayPayoutCutoff,
+  payoutArrivalSummaryJohannesburg,
+} from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -117,7 +121,9 @@ async function ensureNoMissingCompletedPayouts(
  * for the **previous UTC Mon–Sun** week (by completion day). Does not recalculate cents.
  */
 export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<GenerateWeeklyPayoutsResult> {
-  const { periodStart, periodEnd } = getPreviousWeekDateBoundsUtc();
+  const asOf = new Date();
+  const { periodStart, periodEnd } = getPreviousWeekDateBoundsUtc(asOf);
+  const batchPayFridayJhb = computeCutoffAssignmentProbe(asOf).batch_pay_friday_jhb_ymd;
   let payoutsCreated = 0;
   let bookingsLinked = 0;
   let payoutsBackfilled = 0;
@@ -127,6 +133,8 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
   payoutsBackfilled += preflight.backfilled;
 
   let jhbCutoffEdgeCaseBookings = 0;
+  /** Per booking: UI JHB payout-target Friday at completion vs batch pay Friday for this UTC-week run. */
+  let batchCutoffUiVsBatchFridayMismatches = 0;
 
   const { data: cleaners, error: cErr } = await admin.from("cleaners").select("id");
   if (cErr || !cleaners?.length) {
@@ -160,8 +168,18 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
     }) as BookingPayoutRow[];
 
     for (const b of candidateBookings) {
-      const ms = Date.parse(String((b as BookingPayoutRow).completed_at ?? ""));
-      if (Number.isFinite(ms) && instantNearJhbThursdayPayoutCutoff(ms)) jhbCutoffEdgeCaseBookings += 1;
+      const br = b as BookingPayoutRow;
+      const completedMs = Date.parse(String(br.completed_at ?? ""));
+      if (Number.isFinite(completedMs) && instantNearJhbThursdayPayoutCutoff(completedMs)) {
+        jhbCutoffEdgeCaseBookings += 1;
+      }
+      const ymd = completionDayYmd(br);
+      const uiFriday = Number.isFinite(completedMs)
+        ? payoutArrivalSummaryJohannesburg(new Date(completedMs)).payoutTargetFridayYmd
+        : ymd
+          ? payoutArrivalSummaryJohannesburg(new Date(`${ymd}T12:00:00+02:00`)).payoutTargetFridayYmd
+          : null;
+      if (uiFriday != null && uiFriday !== batchPayFridayJhb) batchCutoffUiVsBatchFridayMismatches += 1;
     }
 
     const bookings: BookingPayoutRow[] = [];
@@ -295,6 +313,17 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
       count: jhbCutoffEdgeCaseBookings,
       period_start: periodStart,
       period_end: periodEnd,
+      source: "generateWeeklyPayouts",
+    });
+  }
+
+  if (batchCutoffUiVsBatchFridayMismatches > 0) {
+    metrics.increment("cleaner.earnings_cutoff_assignment_mismatch", {
+      kind: "weekly_batch_per_booking",
+      count: batchCutoffUiVsBatchFridayMismatches,
+      period_start: periodStart,
+      period_end: periodEnd,
+      batch_pay_friday_jhb_ymd: batchPayFridayJhb,
       source: "generateWeeklyPayouts",
     });
   }

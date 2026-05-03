@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchCleanerTeamIds } from "@/lib/cleaner/cleanerBookingAccess";
+import { fetchCleanerCompletionRatePercent } from "@/lib/cleaner/fetchCleanerCompletionRate";
 import { fetchCleanerMeRow, updateCleanerMeAvailabilityAndFetch } from "@/lib/cleaner/cleanerMeDb";
 import { resolveCleanerFromRequest } from "@/lib/cleaner/resolveCleanerFromRequest";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -39,12 +40,14 @@ export async function GET(request: Request) {
   }
 
   const teamIds = await fetchCleanerTeamIds(admin, session.cleaner.id);
+  const completion_pct = await fetchCleanerCompletionRatePercent(admin, session.cleaner.id);
   return NextResponse.json(
     {
       cleaner,
       user: session.authUser,
       isCleaner: true,
       teamIds,
+      completion_pct,
     },
     { headers: { "Cache-Control": ME_CACHE_CONTROL } },
   );

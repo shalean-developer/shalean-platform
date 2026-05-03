@@ -3,6 +3,10 @@ export type CleanerOfferRow = {
   id: string;
   booking_id: string;
   cleaner_id: string;
+  /** Public token for `/offer/{offer_token}` (matches `dispatch_offers.offer_token`). */
+  offer_token?: string;
+  /** Set when offer SMS was persisted successfully; null if not sent yet or send failed. */
+  sms_sent_at?: string | null;
   status: string;
   expires_at: string;
   created_at: string;

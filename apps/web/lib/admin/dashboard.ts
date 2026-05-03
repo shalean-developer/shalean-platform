@@ -83,6 +83,49 @@ export async function fetchCleaners(search?: string) {
   return json.cleaners ?? [];
 }
 
+export type AdminCleanerChangeRequest = {
+  id: string;
+  cleaner_id: string;
+  cleaner_name: string;
+  current_location: string;
+  current_days: string[];
+  requested_locations: string[];
+  requested_days: string[];
+  note: string | null;
+  created_at: string;
+  status: string;
+};
+
+export async function fetchPendingCleanerChangeRequests(): Promise<AdminCleanerChangeRequest[]> {
+  const token = await getAdminToken();
+  const res = await fetch("/api/admin/cleaner-change-requests", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as { requests?: AdminCleanerChangeRequest[]; error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch change requests.");
+  return json.requests ?? [];
+}
+
+export async function approveCleanerChangeRequest(requestId: string): Promise<void> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaner-change-requests/${encodeURIComponent(requestId)}/approve`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as { error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Approve failed.");
+}
+
+export async function rejectCleanerChangeRequest(requestId: string): Promise<void> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaner-change-requests/${encodeURIComponent(requestId)}/reject`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as { error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Reject failed.");
+}
+
 /** Cleaners for “add to team” picker: optional search, excludes current roster, capped server-side. */
 export async function fetchAdminCleanersForTeamAdd(opts: {
   excludeTeamId: string;

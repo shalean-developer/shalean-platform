@@ -1,13 +1,10 @@
 import { format, isValid, parseISO } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isValidOfferTokenFormat } from "./offerTokenFormat";
+import { serverUnixMs } from "@/lib/time/serverClock";
 import { formatCleanerPayZarLabel } from "@/lib/whatsapp/cleanerWhatsappTemplates";
 
-const OFFER_TOKEN_UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function isValidOfferTokenFormat(token: string): boolean {
-  return OFFER_TOKEN_UUID.test(String(token ?? "").trim());
-}
+export { isValidOfferTokenFormat };
 
 const DATE_MAX = 30;
 const TIME_MAX = 30;
@@ -42,10 +39,28 @@ function formatLocationPrimary(raw: string): string {
   return primary.slice(0, LOC_MAX);
 }
 
+export type PublicDispatchOfferClosedReason =
+  | "expired"
+  | "taken"
+  | "declined"
+  | "cancelled"
+  | "payment_expired"
+  | "unknown";
+
 export type PublicDispatchOfferView = {
   offerId: string;
   status: string;
   expiresAtIso: string;
+  /** `closed` = no accept/decline; still show summary + CTA (old SMS links). */
+  surface: "active" | "closed";
+  closedReason?: PublicDispatchOfferClosedReason;
+  /** `dispatch_offers.created_at` — staleness / analytics only. */
+  offerCreatedAtIso?: string;
+  /**
+   * When the row is still `pending` but `expires_at` is already past (evaluated on the server at fetch time),
+   * the client should treat the offer as closed immediately (no “still open” flicker).
+   */
+  offeredClosed?: boolean;
   booking: {
     id: string;
     location: string;
@@ -97,20 +112,46 @@ export async function fetchDispatchOfferPublicByToken(
 
   const { data: offer, error } = await supabase
     .from("dispatch_offers")
-    .select("id, status, expires_at, booking_id")
+    .select("id, status, expires_at, booking_id, created_at")
     .eq("offer_token", t)
     .maybeSingle();
 
   if (error || !offer) return null;
 
-  const row = offer as { id: string; status: string; expires_at: string; booking_id: string };
+  const row = offer as {
+    id: string;
+    status: string;
+    expires_at: string;
+    booking_id: string;
+    created_at?: string;
+  };
+  const offerCreatedAtIso = typeof row.created_at === "string" ? row.created_at : undefined;
+
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, location, date, time, total_paid_zar, amount_paid_cents")
+    .select("id, location, date, time, total_paid_zar, amount_paid_cents, status")
     .eq("id", row.booking_id)
     .maybeSingle();
 
-  if (bErr || !booking) return null;
+  const emptyBooking = {
+    id: String(row.booking_id),
+    location: "—",
+    dateLabel: "—",
+    timeLabel: "—",
+    payLabel: "—",
+  };
+
+  if (bErr || !booking) {
+    return {
+      offerId: row.id,
+      status: row.status,
+      expiresAtIso: row.expires_at,
+      surface: "closed",
+      closedReason: "unknown",
+      offerCreatedAtIso,
+      booking: emptyBooking,
+    };
+  }
 
   const b = booking as {
     id: string;
@@ -119,14 +160,49 @@ export async function fetchDispatchOfferPublicByToken(
     time?: string | null;
     total_paid_zar?: unknown;
     amount_paid_cents?: unknown;
+    status?: string | null;
   };
   const timeRaw = String(b.time ?? "").trim();
   const timeHm = timeRaw.length >= 5 ? timeRaw.slice(0, 5) : timeRaw;
+
+  const expMs = new Date(row.expires_at).getTime();
+  const st = String(row.status ?? "").toLowerCase();
+  const nowMs = serverUnixMs();
+  const nowPastExpiry = Number.isFinite(expMs) && nowMs >= expMs;
+  const offeredClosed = st === "pending" && nowPastExpiry;
+
+  const bookingSt = String(b.status ?? "").toLowerCase();
+
+  let closedReason: PublicDispatchOfferClosedReason | undefined;
+  let surface: "active" | "closed" = "active";
+  if (bookingSt === "payment_expired") {
+    surface = "closed";
+    closedReason = "payment_expired";
+  } else if (bookingSt === "cancelled" || bookingSt === "failed") {
+    surface = "closed";
+    closedReason = "cancelled";
+  } else if (st === "accepted") {
+    surface = "closed";
+    closedReason = "taken";
+  } else if (st === "rejected") {
+    surface = "closed";
+    closedReason = "declined";
+  } else if (st === "expired" || offeredClosed) {
+    surface = "closed";
+    closedReason = "expired";
+  } else if (st !== "pending") {
+    surface = "closed";
+    closedReason = "unknown";
+  }
 
   return {
     offerId: row.id,
     status: row.status,
     expiresAtIso: row.expires_at,
+    surface,
+    ...(closedReason ? { closedReason } : {}),
+    ...(offerCreatedAtIso ? { offerCreatedAtIso } : {}),
+    ...(offeredClosed ? { offeredClosed: true as const } : {}),
     booking: {
       id: b.id,
       location: formatLocationPrimary(String(b.location ?? "")),

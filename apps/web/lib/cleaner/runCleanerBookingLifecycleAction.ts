@@ -16,6 +16,7 @@ import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarnin
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { CLEANER_LIFECYCLE_CODE } from "@/lib/cleaner/cleanerLifecycleErrors";
+import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 
 export type CleanerLifecycleAction = "accept" | "reject" | "en_route" | "start" | "complete";
 
@@ -36,7 +37,7 @@ export async function runCleanerBookingLifecycleAction(params: {
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, assignment_attempts, cleaner_response_status, en_route_at",
+      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, en_route_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -52,6 +53,8 @@ export async function runCleanerBookingLifecycleAction(params: {
     team_id?: string | null;
     is_team_job?: boolean | null;
     status?: string | null;
+    date?: string | null;
+    time?: string | null;
     assignment_attempts?: number | null;
     cleaner_response_status?: string | null;
     en_route_at?: string | null;
@@ -95,6 +98,22 @@ export async function runCleanerBookingLifecycleAction(params: {
     if (resp === CLEANER_RESPONSE.ACCEPTED) {
       await syncCleanerBusyFromBookings(admin, cleanerId);
       return { status: 200, json: { ok: true, status: "assigned", cleaner_response_status: CLEANER_RESPONSE.ACCEPTED } };
+    }
+    if (
+      assignedOfferPastAcceptanceDeadline({
+        status: bRow.status ?? null,
+        cleaner_response_status: bRow.cleaner_response_status ?? null,
+        date: bRow.date ?? null,
+        time: bRow.time ?? null,
+      })
+    ) {
+      return {
+        status: 400,
+        json: {
+          error: "This job is no longer available — the scheduled time has passed.",
+          code: CLEANER_LIFECYCLE_CODE.ACCEPT_OFFER_EXPIRED,
+        },
+      };
     }
     if (resp === CLEANER_RESPONSE.ON_MY_WAY || resp === CLEANER_RESPONSE.STARTED) {
       await syncCleanerBusyFromBookings(admin, cleanerId);

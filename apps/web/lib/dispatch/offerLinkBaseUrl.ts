@@ -11,3 +11,10 @@ export function getOfferSmsLinkBaseUrl(): string {
   /** Same as `getPublicAppUrlBase()` production default when env is unset. */
   return DEFAULT_PUBLIC_APP_ORIGIN;
 }
+
+/** Tracked redirect (`GET /r/offer/:token` → metrics → `/offer/:token`) for SMS click analytics. */
+export function getOfferSmsTrackedUrl(offerToken: string): string {
+  const t = String(offerToken ?? "").trim();
+  const base = getOfferSmsLinkBaseUrl();
+  return `${base}/r/offer/${encodeURIComponent(t)}`;
+}

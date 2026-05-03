@@ -63,6 +63,10 @@
  * - `dispatch.offer_cap_exceeded` — offer rows exceeded per-booking cap (`totalOffers`, `offerCap`).
  * - `dispatch.admin_terminal_reset` — admin reset terminal dispatch (`from` = prior `dispatch_status`).
  * - Accept latency: `dispatch.offer.accepted` already emits `latency_ms` (WhatsApp/SMS anchor vs accept).
+ * - `dispatch.offer.sms_send_ok` / `dispatch.offer.sms_send_failed` — Twilio offer SMS outcome (`bookingId`, `offerId`, optional `phase`).
+ * - `dispatch.offer.sms_tracked_link_click` — GET `/r/offer/:token` redirect before `/offer/:token` (SMS click funnel).
+ *   Emitted at most once per token per 5-minute bucket (`notification_idempotency_claims` + `dispatch_offer_tracked_link_open`).
+ * - `dispatch_offer_click_raw` — system_logs only: every tracked-link GET (UA + IP hash); not counted toward CTR.
  *
  * --- Suggested external alerts (wire in your log/metrics sink) ---
  * - `dispatch.lease.stolen` — spike rate vs 7d baseline (cron overlap / contention).
@@ -100,7 +104,17 @@ export const metrics = {
    * - `cleaner.earnings_shadow_totals_mismatch` — GET `/api/cleaner/earnings` card slice vs ledger slice bucket/delta
    *   drift; fields: `booking_ids_in_slice`, `delta_all_cents`, `bucket_aligned`, `card_all_cents`, `ledger_all_cents`.
    * - `cleaner.earnings_missing_ledger_rows` — solo slice rows with finalized `cleaner_earnings_total_cents` but no
-   *   `cleaner_earnings` row; fields: `count`.
+   *   `cleaner_earnings` row; fields: `count` (soft + hard).
+   * - `cleaner.earnings_missing_ledger_rows_soft` — missing expected row, completion within async window (~12m);
+   *   trend-only — **wire pages/alerts on `hard` only** (soft is normal async lag).
+   * - `cleaner.earnings_missing_ledger_rows_hard` — missing expected row beyond soft window (**alert**).
+   * - `cleaner.earnings_bucket_mapping_mismatch` — same `booking_id` in card + ledger but mapped status mismatch
+   *   (e.g. card `eligible` vs ledger `pending`); fields: `count`.
+   * - `cleaner.earnings_cutoff_assignment_mismatch` — (a) `kind: earnings_api_probe` — GET earnings cutoff probe
+   *   global mismatch; (b) `kind: weekly_batch_per_booking` — weekly job:
+   *   per candidate booking, UI payout Friday at completion vs batch pay Friday for that run (`count`, `period_*`).
+   * - `cleaner.earnings_ledger_flip_ready` — GET earnings: `ready` 1/0 when shadow is safe to flip ledger totals
+   *   (`shadow_mismatch`, hard missing, bucket map, `delta_all_cents` all clear); fields: `use_ledger_totals`.
    * - `cleaner.earnings_cutoff_edge_case` — weekly payout batch scan: completions within ±5m of Thu 23:59:59.999 SAST
    *   cutoff; fields: `count`, `period_start`, `period_end`, `source` (= `generateWeeklyPayouts`).
    * - `cleaner.earnings_payout_request_clicked` — client opened “Request payout” info (fields optional).

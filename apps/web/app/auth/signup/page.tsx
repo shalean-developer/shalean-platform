@@ -5,12 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { PasswordInput } from "@/components/ui/password-input";
+import { getResolvedAuthIntent, parseIntentQuery } from "@/lib/auth/authRoleIntent";
+import { resolveCustomerPostAuthDestination } from "@/lib/auth/resolveCustomerPostAuthDestination";
 import { signUp } from "@/lib/auth/authClient";
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect")?.trim() || "/dashboard/bookings";
+  const intentParam = searchParams.get("intent");
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,9 +23,15 @@ function SignupForm() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    getResolvedAuthIntent(intentParam);
+  }, [intentParam]);
+
+  useEffect(() => {
     const first = document.querySelector<HTMLInputElement>("#fullName");
     first?.focus();
   }, []);
+
+  const intentForLogin = parseIntentQuery(intentParam) ?? "customer";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,7 +49,8 @@ function SignupForm() {
         return;
       }
       if (session?.access_token && user) {
-        router.replace(redirect.startsWith("/") ? redirect : "/dashboard/bookings");
+        const next = await resolveCustomerPostAuthDestination(session.access_token, redirect, intentParam);
+        router.replace(next);
         router.refresh();
         return;
       }
@@ -129,7 +139,7 @@ function SignupForm() {
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Already have an account?{" "}
           <Link
-            href={`/auth/login?redirect=${encodeURIComponent(redirect)}`}
+            href={`/auth?redirect=${encodeURIComponent(redirect)}&intent=${encodeURIComponent(intentForLogin)}`}
             className="font-semibold text-primary hover:underline"
           >
             Log in

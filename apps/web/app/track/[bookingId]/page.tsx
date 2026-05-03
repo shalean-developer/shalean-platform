@@ -154,7 +154,7 @@ export default function CustomerTrackBookingPage() {
         <h1 className="text-lg font-semibold text-zinc-900">Track your cleaner</h1>
         <p className="text-sm text-zinc-600">Sign in to see live location for this booking.</p>
         <Link
-          href={`/auth/login?redirect=${encodeURIComponent(`/track/${encodeURIComponent(bookingId)}`)}`}
+          href={`/auth?redirect=${encodeURIComponent(`/track/${encodeURIComponent(bookingId)}`)}`}
           className="inline-flex rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
         >
           Sign in

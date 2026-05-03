@@ -2,6 +2,16 @@ import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 
 export type LifecycleClientTelemetryStatus = "queued" | "synced" | "flush_failed";
 
+/** Why a flush run started (for `flush_cycle_metrics` dashboards). */
+export type LifecycleFlushTrigger =
+  | "enqueue"
+  | "bc"
+  | "visibility"
+  | "interval"
+  | "initial"
+  | "online"
+  | "unknown";
+
 export async function logCleanerLifecycleClientEvent(params: {
   bookingId: string;
   action: string;
@@ -41,6 +51,8 @@ export async function logCleanerLifecycleClientEvent(params: {
   flushItemsFailed?: number;
   /** Flush cycle: rows not reached (timeout, auth break) or remaining rotation tail. */
   flushItemsDeferred?: number;
+  /** What caused this flush invocation (best-effort). */
+  flush_trigger?: LifecycleFlushTrigger;
 }): Promise<void> {
   try {
     const headers = await getCleanerAuthHeaders();
@@ -71,6 +83,7 @@ export async function logCleanerLifecycleClientEvent(params: {
         flush_items_succeeded: params.flushItemsSucceeded,
         flush_items_failed: params.flushItemsFailed,
         flush_items_deferred: params.flushItemsDeferred,
+        flush_trigger: params.flush_trigger,
       }),
       keepalive: true,
     });

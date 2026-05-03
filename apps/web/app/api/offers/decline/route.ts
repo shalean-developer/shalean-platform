@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
-import { fetchDispatchOfferRowByToken, isValidOfferTokenFormat } from "@/lib/dispatch/offerByToken";
+import { fetchDispatchOfferRowByToken } from "@/lib/dispatch/offerByToken";
+import { isValidOfferTokenFormat } from "@/lib/dispatch/offerTokenFormat";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { serverUnixMs } from "@/lib/time/serverClock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
   }
 
   const expMs = new Date(row.expiresAtIso).getTime();
-  if (Number.isFinite(expMs) && Date.now() >= expMs) {
+  if (Number.isFinite(expMs) && serverUnixMs() >= expMs) {
     return NextResponse.json({ error: "This offer has expired." }, { status: 410 });
   }
 

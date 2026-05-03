@@ -6,6 +6,7 @@ import {
   todayCentsAndBreakdownFromBookings,
   type CleanerDashboardEarningsWireRow,
 } from "@/lib/cleaner/cleanerDashboardTodayCents";
+import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 import { dedupeBookingsById, prioritizeDashboardJobsForDisplay } from "@/lib/cleaner-dashboard/prioritizeDashboardJobs";
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -16,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, service, customer_name, completed_at, created_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents";
+  "id, date, time, location, status, service, customer_name, completed_at, created_at, cleaner_response_status, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents";
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
@@ -26,6 +27,7 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     time: (raw.time as string | null | undefined) ?? null,
     location: (raw.location as string | null | undefined) ?? null,
     status: (raw.status as string | null | undefined) ?? null,
+    cleaner_response_status: (raw.cleaner_response_status as string | null | undefined) ?? null,
     total_paid_zar: null,
     customer_name: (raw.customer_name as string | null | undefined) ?? null,
     customer_phone: null,
@@ -81,7 +83,9 @@ export async function GET(request: Request) {
   const rawList = (rows ?? []) as Record<string, unknown>[];
   const now = new Date();
   const { todayYmd } = getJhbTodayRange(now);
-  const wired = rawList.map(wireDashboardJob);
+  const wired = rawList
+    .map(wireDashboardJob)
+    .filter((row) => !assignedOfferPastAcceptanceDeadline(row));
   const jobs = prioritizeDashboardJobsForDisplay(dedupeBookingsById(wired), now, 12, todayYmd);
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(

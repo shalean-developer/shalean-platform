@@ -69,10 +69,14 @@ export function latenessVsSchedule(params: {
   const deltaMin = (params.nowMs - params.startMs) / 60_000;
   if (deltaMin >= 1) {
     const minutes = Math.round(deltaMin);
+    /** Clock skew or bad anchors can produce absurd values — hide from UI. */
+    if (minutes > 60 * 24 * 14) return { kind: "none" };
     return { kind: "late", minutes: Math.max(1, minutes), severe: minutes > 15 };
   }
   if (deltaMin <= -5) {
     const minutes = Math.round(-deltaMin);
+    /** "Early" only makes sense shortly before start (job far in future / skew → nonsense). */
+    if (minutes > 180) return { kind: "none" };
     return { kind: "early", minutes: Math.max(5, minutes) };
   }
   return { kind: "none" };

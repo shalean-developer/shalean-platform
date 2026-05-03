@@ -44,9 +44,38 @@ export function lifecyclePhaseRankFromPatch(patch: Partial<LifecycleWireLike> | 
   return rankFromCleanerResponse(cr);
 }
 
+/** Overlay optimistic lifecycle fields onto a (possibly stale) GET payload. Skips undefined patch keys. */
+export function mergeLifecyclePatchOntoIncoming<T extends LifecycleWireLike>(
+  incoming: T,
+  patch: Partial<LifecycleWireLike> | null,
+): T {
+  if (!patch) return incoming;
+  const base = { ...incoming } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(patch) as [keyof LifecycleWireLike, unknown][]) {
+    if (v === undefined) continue;
+    base[k as string] = v;
+  }
+  return base as T;
+}
+
+/** Lifecycle columns only — safe to overlay from cache / `prev` onto a fresh GET row. */
+export function lifecycleFieldsPatchFrom(prev: LifecycleWireLike): Partial<LifecycleWireLike> {
+  return {
+    status: prev.status,
+    cleaner_response_status: prev.cleaner_response_status,
+    en_route_at: prev.en_route_at,
+    started_at: prev.started_at,
+    completed_at: prev.completed_at,
+  };
+}
+
 /**
  * If the server payload looks behind optimistic / current UI progression, keep the prior row
  * (avoids flicker from lagging reads). Caller passes current client job + incoming GET job.
+ *
+ * When the server is behind the **optimistic patch** only (e.g. accept wrote `cleaner_response_status`
+ * but the next GET is stale), merge patch onto `incoming` instead of returning `prev`, so callers
+ * can safely clear optimistic state without losing acknowledged lifecycle fields.
  */
 export function pickIncomingJobAvoidPhaseRegression<T extends LifecycleWireLike>(
   prev: T | null,
@@ -67,10 +96,18 @@ export function pickIncomingJobAvoidPhaseRegression<T extends LifecycleWireLike>
   const rInc = lifecyclePhaseRankFromWire(incoming);
   const display = Math.max(rPrev, rPatch);
   if (rPatch > rPrev && rInc < rPatch) {
-    return prev;
+    return mergeLifecyclePatchOntoIncoming(incoming, optimisticPatch);
   }
   if (rInc < display && display >= 80) {
     return prev;
+  }
+  /**
+   * No optimistic patch (e.g. user left job detail after accept): `prev` may be session cache or
+   * last React state with `cleaner_response_status: accepted` while the GET is still `pending`.
+   * Fold higher-ranked lifecycle fields from `prev` onto `incoming` — same idea as optimistic merge.
+   */
+  if (optimisticPatch == null && rPatch === 0 && rPrev > rInc) {
+    return mergeLifecyclePatchOntoIncoming(incoming, lifecycleFieldsPatchFrom(prev));
   }
   return incoming;
 }

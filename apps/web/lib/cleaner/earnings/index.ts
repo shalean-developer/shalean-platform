@@ -11,6 +11,7 @@ export {
 } from "@/lib/cleaner/earnings/timeline";
 export { countJobsAndCentsForToday, countJobsInWeek } from "@/lib/cleaner/earnings/counts";
 export {
+  computeCutoffAssignmentProbe,
   daysUntilNextFridayJohannesburg,
   nextFridayYmdJohannesburg,
   payoutArrivalSummaryJohannesburg,

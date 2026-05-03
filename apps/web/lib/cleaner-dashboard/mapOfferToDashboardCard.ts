@@ -43,6 +43,9 @@ export function mapOfferToDashboardCard(offer: CleanerOfferRow, now: Date): Clea
       payZarLabel,
       scheduleLine: "—",
       expiresAt: offer.expires_at,
+      offerToken: offer.offer_token?.trim() || undefined,
+      offerCreatedAtIso: offer.created_at,
+      smsSentAt: offer.sms_sent_at ?? null,
     };
   }
 
@@ -62,5 +65,8 @@ export function mapOfferToDashboardCard(offer: CleanerOfferRow, now: Date): Clea
     scheduleLine,
     expiresAt: offer.expires_at,
     uxVariant: offer.ux_variant ?? null,
+    offerToken: offer.offer_token?.trim() || undefined,
+    offerCreatedAtIso: offer.created_at,
+    smsSentAt: offer.sms_sent_at ?? null,
   };
 }

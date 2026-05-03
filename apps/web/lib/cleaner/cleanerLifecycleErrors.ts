@@ -9,4 +9,6 @@ export const CLEANER_LIFECYCLE_CODE = {
   EN_ROUTE_REQUIRED_BEFORE_START: "lifecycle_en_route_required_before_start",
   COMPLETE_REQUIRES_IN_PROGRESS: "lifecycle_complete_requires_in_progress",
   UNSUPPORTED: "lifecycle_unsupported",
+  /** Assigned offer: scheduled start + grace passed without accept. */
+  ACCEPT_OFFER_EXPIRED: "lifecycle_accept_offer_expired",
 } as const;

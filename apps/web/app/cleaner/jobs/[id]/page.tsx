@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Copy, Loader2, MapPin, MessageCircle, Navigation, Phone, Radio, X } from "lucide-react";
+import { AlertTriangle, Calendar, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
@@ -12,10 +12,8 @@ import {
   clearTtlCompleteSyncLockFromSession,
   consumeQueueTtlPruneNotice,
   enqueuePendingLifecycle,
-  listPendingLifecycleForBooking,
   readTtlCompleteSyncLockFromSession,
   removePendingLifecycleByKey,
-  retryFailedQueueItem,
   type PendingLifecycleAction,
 } from "@/lib/cleaner/cleanerJobPendingLifecycleQueue";
 import { isOfflineSignal } from "@/lib/cleaner/cleanerLifecycleNetworkSignal";
@@ -34,15 +32,15 @@ import { readCleanerJobDetailCache, writeCleanerJobDetailCache } from "@/lib/cle
 import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRank";
 import { wireLikeFromJobDetailCacheBody } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
 import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
-import { buildEarningsIncludesLines, buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
+import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
 import {
-  deriveCleanerJobLifecycleSlot,
+  deriveCleanerJobUiState,
   deriveMobilePhase,
   mobilePhaseDisplayForDashboard,
 } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
-import { directionsHrefFromQuery } from "@/lib/cleaner/directionsHref";
-import { checkoutPriceLinesFromPersisted } from "@/lib/dashboard/bookingUtils";
+import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { cn } from "@/lib/utils";
 
@@ -110,14 +108,6 @@ const NOTES_PREVIEW_LEN = 240;
 
 function readNavigatorOnline(): boolean {
   return typeof navigator === "undefined" ? true : navigator.onLine;
-}
-
-function formatQueueAgeShort(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ago`;
 }
 
 function sectionHeadingId(title: string): string {
@@ -224,28 +214,11 @@ function optimisticPatchForAction(action: "accept" | "en_route" | "start" | "com
 
 const NOTE_ALERT_RE = /\b(dog|dogs|alarm|key|keys|gate|codes?|code|pet|pets|lock)\b/i;
 
-function formatQueuedLifecycleAction(a: PendingLifecycleAction): string {
-  switch (a) {
-    case "accept":
-      return "Accept job";
-    case "reject":
-      return "Decline job";
-    case "en_route":
-      return "On the way";
-    case "start":
-      return "Start job";
-    case "complete":
-      return "Complete job";
-    default:
-      return a;
-  }
-}
-
 function beforeYouStartLines(phase: ReturnType<typeof deriveMobilePhase>): string[] {
   switch (phase) {
     case "in_progress":
       return [
-        "Follow the booked scope and extras — customer pricing is for reference only.",
+        "Follow the booked scope and extras — focus on the work you were assigned.",
         "Report damage, access issues, or scope mismatches as soon as you can.",
         "Finish strong: quick handover note in app if your flow supports it.",
       ];
@@ -272,24 +245,17 @@ export default function CleanerJobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
-  const [copyDone, setCopyDone] = useState(false);
-  const [browserOnline, setBrowserOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [tick, setTick] = useState(0);
   const [confirmPending, setConfirmPending] = useState<null | "complete" | "reject">(null);
   const [completionSuccess, setCompletionSuccess] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
-  const [sessionJobAgeMs, setSessionJobAgeMs] = useState<number | null>(null);
   const [lifecycleWorking, setLifecycleWorking] = useState(false);
   const [needsJobRefresh, setNeedsJobRefresh] = useState(false);
   const [queueTtlBanner, setQueueTtlBanner] = useState<{ count: number; hadComplete: boolean } | null>(null);
-  const [retryBusyKey, setRetryBusyKey] = useState<string | null>(null);
   const [ttlCompleteLock, setTtlCompleteLock] = useState(false);
+  const [contactSheetOpen, setContactSheetOpen] = useState(false);
   const jobControlRef = useRef<HTMLElement | null>(null);
-  const queueDetailsWrapRef = useRef<HTMLDetailsElement | null>(null);
-  const prevPendingFailedCountRef = useRef(0);
   const lifecycleGuardRef = useRef(false);
-  const firstFailedQueueLiRef = useRef<HTMLLIElement | null>(null);
-  const [queueAriaMessage, setQueueAriaMessage] = useState("");
   const latestJobRef = useRef<CleanerJobDetailWire | null>(null);
   const optimisticPatchRef = useRef<Partial<CleanerJobDetailWire> | null>(null);
   const flushWireResolverRef = useRef<(bookingId: string) => LifecycleWireLike | null>(() => null);
@@ -327,20 +293,21 @@ export default function CleanerJobDetailPage() {
       setLoading(false);
       return false;
     }
-    const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, { headers });
+    const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(id)}`, {
+      headers,
+      cache: "no-store",
+    });
     const j = (await res.json().catch(() => ({}))) as { job?: CleanerJobDetailWire; error?: string };
     if (res.status === 404) {
       const cached = readCleanerJobDetailCache(id);
       if (cached) {
         setJob(cached.body as CleanerJobDetailWire);
-        setSessionJobAgeMs(cached.ageMs);
         setStaleBanner("This job is no longer on your roster — showing your last saved copy.");
         setErr(null);
       } else {
         setErr("This job is no longer assigned to you, or it was removed.");
         setJob(null);
         setStaleBanner(null);
-        setSessionJobAgeMs(null);
       }
       setLoading(false);
       return false;
@@ -352,34 +319,44 @@ export default function CleanerJobDetailPage() {
       const cached = readCleanerJobDetailCache(id);
       if (cached) {
         setJob(cached.body as CleanerJobDetailWire);
-        setSessionJobAgeMs(cached.ageMs);
         setStaleBanner(j.error ?? "Could not refresh — showing saved job details.");
         setErr(null);
       } else {
         setErr(j.error ?? "Could not load job.");
         setJob(null);
         setStaleBanner(null);
-        setSessionJobAgeMs(null);
       }
       setLoading(false);
       return false;
     }
     setErr(null);
     setStaleBanner(null);
-    setSessionJobAgeMs(null);
     const next = j.job ?? null;
     const picked = pickIncomingJobAvoidPhaseRegression(latestJobRef.current, next, optimisticPatchRef.current);
     setJob(picked);
-    if (picked === next && next && typeof next.server_now_ms === "number" && Number.isFinite(next.server_now_ms)) {
+    if (next && typeof next.server_now_ms === "number" && Number.isFinite(next.server_now_ms)) {
       setServerClockOffsetMs(next.server_now_ms - Date.now());
     }
-    if (picked === next && next) writeCleanerJobDetailCache(id, next as Record<string, unknown>);
+    if (picked) writeCleanerJobDetailCache(id, picked as Record<string, unknown>);
     setLoading(false);
     lifecycleOrchestratorRef.current?.markNetworkStable();
     setTtlCompleteLock(false);
     clearTtlCompleteSyncLockFromSession();
     signalLifecycleFlushBackoffClear("job-detail-get");
     return true;
+  }, [id]);
+
+  /** Merge lifecycle fields into session cache before `loadJob` (survives fast navigation). */
+  const persistLifecycleSessionPatch = useCallback((patch: Record<string, unknown>) => {
+    const bid = id.trim();
+    if (!bid) return;
+    const cached = readCleanerJobDetailCache(bid);
+    const raw = latestJobRef.current ?? (cached?.body as CleanerJobDetailWire | null | undefined);
+    if (!raw?.id || String(raw.id).trim() !== bid) return;
+    writeCleanerJobDetailCache(bid, {
+      ...(raw as unknown as Record<string, unknown>),
+      ...patch,
+    });
   }, [id]);
 
   const lifecycleOrch = useCleanerLifecycleOrchestrator({
@@ -449,17 +426,6 @@ export default function CleanerJobDetailPage() {
   }, [lifecycleOrch.queueUiNonce]);
 
   useEffect(() => {
-    const up = () => setBrowserOnline(true);
-    const down = () => setBrowserOnline(false);
-    window.addEventListener("online", up);
-    window.addEventListener("offline", down);
-    return () => {
-      window.removeEventListener("online", up);
-      window.removeEventListener("offline", down);
-    };
-  }, []);
-
-  useEffect(() => {
     const idTimer = window.setInterval(() => setTick((n) => n + 1), 30_000);
     return () => window.clearInterval(idTimer);
   }, []);
@@ -476,12 +442,10 @@ export default function CleanerJobDetailPage() {
     setConfirmPending(null);
     setCompletionSuccess(false);
     setNotesExpanded(false);
-    setSessionJobAgeMs(null);
     setJob(null);
     const cached = readCleanerJobDetailCache(id);
     if (cached) {
       setJob(cached.body as CleanerJobDetailWire);
-      setSessionJobAgeMs(cached.ageMs);
       setLoading(false);
     } else {
       setLoading(true);
@@ -495,76 +459,6 @@ export default function CleanerJobDetailPage() {
       cancelled = true;
     };
   }, [id, loadJob]);
-
-  // queueUiNonce intentionally forces re-read of localStorage-backed queue (not a data dep of the memo body).
-  const pendingForJob = useMemo(
-    () => listPendingLifecycleForBooking(id).sort((a, b) => a.queuedAt - b.queuedAt),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce is a manual invalidation tick
-    [id, lifecycleOrch.queueUiNonce],
-  );
-  const pendingSyncCount = pendingForJob.filter((x) => !x.failed).length;
-  const pendingFailed = pendingForJob.filter((x) => x.failed);
-  const firstFailedKey = pendingFailed[0]?.idempotencyKey;
-
-  useEffect(() => {
-    if (!firstFailedKey) return;
-    window.requestAnimationFrame(() => {
-      firstFailedQueueLiRef.current?.focus();
-    });
-  }, [firstFailedKey, pendingFailed.length]);
-
-  const oldestPendingAgeMs = useMemo(() => {
-    const pend = pendingForJob.filter((x) => !x.failed);
-    if (pend.length === 0) return null;
-    const oldestAt = Math.min(...pend.map((p) => p.queuedAt));
-    // eslint-disable-next-line react-hooks/purity -- wall clock for “queued Xm ago”
-    return Date.now() - oldestAt;
-  }, [pendingForJob, lifecycleOrch.queueUiNonce, tick]);
-
-  const pendingLastAttemptAgeLabelByKey = useMemo(() => {
-    // eslint-disable-next-line react-hooks/purity -- wall clock for queue row ages
-    const now = Date.now();
-    const m = new Map<string, string>();
-    for (const row of pendingForJob) {
-      if (row.lastAttemptAt == null) continue;
-      m.set(row.idempotencyKey, formatQueueAgeShort(now - row.lastAttemptAt));
-    }
-    return m;
-  }, [pendingForJob, lifecycleOrch.queueUiNonce, tick]);
-
-  const [queueDetailsOpen, setQueueDetailsOpen] = useState(false);
-  useEffect(() => {
-    if (pendingForJob.length === 0) {
-      setQueueDetailsOpen(false);
-      return;
-    }
-    if (pendingFailed.length > 0) {
-      setQueueDetailsOpen(true);
-      return;
-    }
-    if (oldestPendingAgeMs != null && oldestPendingAgeMs > 12 * 60 * 1000) {
-      setQueueDetailsOpen(true);
-    }
-  }, [pendingForJob.length, pendingFailed.length, oldestPendingAgeMs, tick]);
-
-  useEffect(() => {
-    const n = pendingFailed.length;
-    const prev = prevPendingFailedCountRef.current;
-    prevPendingFailedCountRef.current = n;
-    if (n === 0) {
-      setQueueAriaMessage("");
-      return;
-    }
-    if (prev === 0 && n > 0) {
-      setQueueAriaMessage(
-        `${n} lifecycle action${n === 1 ? "" : "s"} could not sync. Open the queue below to retry.`,
-      );
-      window.requestAnimationFrame(() => {
-        setQueueDetailsOpen(true);
-        queueDetailsWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
-    }
-  }, [pendingFailed.length]);
 
   useEffect(() => {
     if (!completionSuccess) return;
@@ -600,33 +494,31 @@ export default function CleanerJobDetailPage() {
   );
 
   const bookingRow = useMemo(() => (displayJob ? wireToBookingRow(displayJob) : null), [displayJob]);
-  const lifecycleSlot = useMemo(() => (bookingRow?.id ? deriveCleanerJobLifecycleSlot(bookingRow) : null), [bookingRow]);
+  const jobUi = useMemo(
+    () => (bookingRow?.id ? deriveCleanerJobUiState(bookingRow) : ({ phase: "none" } as const)),
+    [bookingRow],
+  );
   const phaseBadge = useMemo(() => (bookingRow?.id ? mobilePhaseDisplayForDashboard(bookingRow) : "—"), [bookingRow]);
   const mobilePhase = useMemo(() => (bookingRow?.id ? deriveMobilePhase(bookingRow) : null), [bookingRow]);
 
   useEffect(() => {
     setConfirmPending(null);
-  }, [lifecycleSlot?.kind]);
+  }, [jobUi.phase]);
 
-  const checkoutLines = useMemo(() => {
-    if (!displayJob) return null;
-    return checkoutPriceLinesFromPersisted({
-      price_breakdown: displayJob.price_breakdown ?? null,
-      total_price: displayJob.total_price ?? null,
-      total_paid_zar: displayJob.total_paid_zar ?? null,
-      amount_paid_cents: displayJob.amount_paid_cents ?? null,
-      pricing_version_id: displayJob.pricing_version_id ?? null,
-    });
-  }, [displayJob]);
+  useEffect(() => {
+    setContactSheetOpen(false);
+  }, [id]);
 
-  const mapsHref = useMemo(() => {
-    const loc = displayJob?.location ? String(displayJob.location).trim() : "";
-    if (!loc) return null;
-    const q = loc.split(/\r?\n/)[0]?.trim() ?? loc;
-    return q ? directionsHrefFromQuery(q) : null;
-  }, [displayJob?.location]);
+  useEffect(() => {
+    if (!contactSheetOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContactSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [contactSheetOpen]);
 
-  const googleMapsWebHref = useMemo(() => {
+  const addressMapsHref = useMemo(() => {
     const loc = displayJob?.location ? String(displayJob.location).trim() : "";
     if (!loc) return null;
     const q = loc.split(/\r?\n/)[0]?.trim() ?? loc;
@@ -643,11 +535,6 @@ export default function CleanerJobDetailPage() {
   const earningsCents = displayJob?.displayEarningsCents ?? displayJob?.earnings_cents ?? null;
   const earningsEstimated = displayJob?.displayEarningsIsEstimate === true || displayJob?.earnings_estimated === true;
 
-  const includesLines = useMemo(
-    () => buildEarningsIncludesLines(title, displayJob?.lineItems ?? null, unified.extras),
-    [title, displayJob?.lineItems, unified.extras],
-  );
-
   const scheduleModel = useMemo(
     () =>
       displayJob
@@ -659,6 +546,11 @@ export default function CleanerJobDetailPage() {
         : null,
     [displayJob],
   );
+
+  const scheduleHeadline = useMemo(() => {
+    const parts = [displayJob?.date, displayJob?.time].map((x) => String(x ?? "").trim()).filter(Boolean);
+    return parts.length ? parts.join(" · ") : null;
+  }, [displayJob?.date, displayJob?.time]);
 
   const nowAnchored = useMemo(() => Date.now() + serverClockOffsetMs, [serverClockOffsetMs, tick]);
 
@@ -704,55 +596,24 @@ export default function CleanerJobDetailPage() {
       try {
         setActionErr(null);
 
-        const headersEarly = await getCleanerAuthHeaders();
-        if (!headersEarly) {
-          setActionErr("Not signed in.");
+        const orch = lifecycleOrchestratorRef.current;
+        if (!orch) {
+          setActionErr("Not ready. Try again.");
           setConfirmPending(null);
           return;
         }
 
-        const phaseBefore = lifecyclePhaseBeforeLabel(latestJobRef.current, optimisticPatchRef.current);
-
-        if (!online) {
-          const enq = await enqueuePendingLifecycle({
-            bookingId: id,
-            action: action as PendingLifecycleAction,
-            idempotencyKey,
-            queuedAt: Date.now(),
-          });
-          if (!enq.ok) {
-            setActionErr(enq.reason);
+        await orch.enqueueViaPost(async () => {
+          const headersEarly = await getCleanerAuthHeaders();
+          if (!headersEarly) {
+            setActionErr("Not signed in.");
             setConfirmPending(null);
-            return;
+            return { applyPostEnqueueTail: false };
           }
-          lifecycleOrchestratorRef.current?.invalidatePeekCache(id);
-          void logCleanerLifecycleClientEvent({
-            bookingId: id,
-            action,
-            status: "queued",
-            finalStatus: "queued",
-            networkOnline: readNavigatorOnline(),
-            phaseBefore,
-          });
-          applyOptimistic();
-          lifecycleOrchestratorRef.current?.refreshQueueFromDisk();
-          setConfirmPending(null);
-          return;
-        }
 
-        setActionBusy(action);
-        applyOptimistic();
+          const phaseBefore = lifecyclePhaseBeforeLabel(latestJobRef.current, optimisticPatchRef.current);
 
-        const result = await postCleanerLifecycleWithRetry({
-          bookingId: id,
-          action,
-          idempotencyKey,
-          getHeaders: getCleanerAuthHeaders,
-          onPostSuccess: () => lifecycleOrchestratorRef.current?.clearFlushBackoff(),
-        });
-
-        if (!result.ok) {
-          if (result.status === 0 || result.status >= 500) {
+          if (!online) {
             const enq = await enqueuePendingLifecycle({
               bookingId: id,
               action: action as PendingLifecycleAction,
@@ -760,12 +621,10 @@ export default function CleanerJobDetailPage() {
               queuedAt: Date.now(),
             });
             if (!enq.ok) {
-              setOptimisticPatch(null);
               setActionErr(enq.reason);
               setConfirmPending(null);
-              return;
+              return { applyPostEnqueueTail: false };
             }
-            lifecycleOrchestratorRef.current?.invalidatePeekCache(id);
             void logCleanerLifecycleClientEvent({
               bookingId: id,
               action,
@@ -774,74 +633,137 @@ export default function CleanerJobDetailPage() {
               networkOnline: readNavigatorOnline(),
               phaseBefore,
             });
-            lifecycleOrchestratorRef.current?.armFlushBackoffAfterPostEnqueue();
-            lifecycleOrchestratorRef.current?.refreshQueueFromDisk();
-            setActionErr(null);
+            applyOptimistic();
+            const nowQueued = new Date().toISOString();
+            if (action === "accept") {
+              persistLifecycleSessionPatch({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED });
+            } else if (action === "en_route") {
+              persistLifecycleSessionPatch({
+                cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY,
+                en_route_at: nowQueued,
+              });
+            } else if (action === "start") {
+              persistLifecycleSessionPatch({
+                status: "in_progress",
+                started_at: nowQueued,
+                cleaner_response_status: CLEANER_RESPONSE.STARTED,
+              });
+            }
             setConfirmPending(null);
-            return;
+            return {};
+          }
+
+          setActionBusy(action);
+          applyOptimistic();
+
+          const result = await postCleanerLifecycleWithRetry({
+            bookingId: id,
+            action,
+            idempotencyKey,
+            getHeaders: getCleanerAuthHeaders,
+            onPostSuccess: () => lifecycleOrchestratorRef.current?.clearFlushBackoff(),
+          });
+
+          if (!result.ok) {
+            if (result.status === 0 || result.status >= 500) {
+              const enq = await enqueuePendingLifecycle({
+                bookingId: id,
+                action: action as PendingLifecycleAction,
+                idempotencyKey,
+                queuedAt: Date.now(),
+              });
+              if (!enq.ok) {
+                setOptimisticPatch(null);
+                setActionErr(enq.reason);
+                setConfirmPending(null);
+                return { applyPostEnqueueTail: false };
+              }
+              void logCleanerLifecycleClientEvent({
+                bookingId: id,
+                action,
+                status: "queued",
+                finalStatus: "queued",
+                networkOnline: readNavigatorOnline(),
+                phaseBefore,
+              });
+              setActionErr(null);
+              setConfirmPending(null);
+              return { armBackoffAfterPostEnqueue: true };
+            }
+            setOptimisticPatch(null);
+            setActionErr(result.error ?? "Action failed.");
+            setConfirmPending(null);
+            return { applyPostEnqueueTail: false };
+          }
+
+          lifecycleOrchestratorRef.current?.clearFlushFailureStreakAndConnectionFlag();
+          if (result.ok) {
+            const nowIso = new Date().toISOString();
+            if (action === "accept") {
+              persistLifecycleSessionPatch({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED });
+            } else if (action === "en_route") {
+              persistLifecycleSessionPatch({
+                cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY,
+                en_route_at: nowIso,
+              });
+            } else if (action === "start") {
+              persistLifecycleSessionPatch({
+                status: "in_progress",
+                started_at: nowIso,
+                cleaner_response_status: CLEANER_RESPONSE.STARTED,
+              });
+            } else if (action === "complete") {
+              persistLifecycleSessionPatch({
+                status: "completed",
+                completed_at: nowIso,
+              });
+            }
+          }
+          if (action === "complete") {
+            setCompletionSuccess(true);
+          }
+          try {
+            await loadJob();
+          } catch {
+            setOptimisticPatch(null);
+            setNeedsJobRefresh(true);
+            setActionErr(null);
+            await removePendingLifecycleByKey(idempotencyKey);
+            setConfirmPending(null);
+            return { scheduleFlush: false };
           }
           setOptimisticPatch(null);
-          setActionErr(result.error ?? "Action failed.");
           setConfirmPending(null);
-          return;
-        }
-
-        lifecycleOrchestratorRef.current?.clearFlushFailureStreakAndConnectionFlag();
-        if (action === "complete") {
-          setCompletionSuccess(true);
-        }
-        try {
-          await loadJob();
-        } catch {
-          setOptimisticPatch(null);
-          setNeedsJobRefresh(true);
-          setActionErr(null);
           await removePendingLifecycleByKey(idempotencyKey);
-          lifecycleOrchestratorRef.current?.invalidatePeekCache(id);
-          lifecycleOrchestratorRef.current?.refreshQueueFromDisk();
-          setConfirmPending(null);
-          return;
-        }
-        setOptimisticPatch(null);
-        setConfirmPending(null);
-        await removePendingLifecycleByKey(idempotencyKey);
-        lifecycleOrchestratorRef.current?.invalidatePeekCache(id);
-        lifecycleOrchestratorRef.current?.refreshQueueFromDisk();
-        setSessionJobAgeMs(null);
-        setNeedsJobRefresh(false);
-        void lifecycleOrchestratorRef.current?.flushPendingLifecycleQueue();
-        scrollJobControlIntoView();
+          setNeedsJobRefresh(false);
+          scrollJobControlIntoView();
+          return {};
+        });
       } finally {
         setActionBusy(null);
         lifecycleGuardRef.current = false;
         setLifecycleWorking(false);
       }
     },
-    [id, loadJob, scrollJobControlIntoView],
+    [id, loadJob, persistLifecycleSessionPatch, scrollJobControlIntoView],
   );
 
-  const copyAddress = useCallback(async () => {
-    const t = displayJob?.location ? String(displayJob.location).trim() : "";
-    if (!t || typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
-    try {
-      await navigator.clipboard.writeText(t);
-      setCopyDone(true);
-      window.setTimeout(() => setCopyDone(false), 2000);
-    } catch {
-      /* ignore */
-    }
+  const openNavigationForCurrentJob = useCallback(() => {
+    const url = mapsNavigationUrlFromJobLocation(displayJob?.location);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
   }, [displayJob?.location]);
 
-  const hasScopeContent =
-    Boolean(unified.propertyLine) || unified.extras.length > 0 || (displayJob?.lineItems?.length ?? 0) > 0;
+  /** Maps opens in the same user activation (avoids popup blockers); lifecycle POST runs immediately after. */
+  const handleOnMyWay = useCallback(() => {
+    openNavigationForCurrentJob();
+    void runLifecyclePost("en_route", { optimistic: true });
+  }, [openNavigationForCurrentJob, runLifecyclePost]);
+
   const st = String(displayJob?.status ?? "").toLowerCase();
   const completed = st === "completed";
   const cancelled = st === "cancelled";
   const failed = st === "failed";
-  const lifecycleDisabled =
-    Boolean(staleBanner) || lifecycleWorking || ttlCompleteLock || retryBusyKey != null;
-  const sessionDetailStale =
-    typeof sessionJobAgeMs === "number" && sessionJobAgeMs >= 60 * 60 * 1000;
+  const lifecycleDisabled = Boolean(staleBanner) || lifecycleWorking || ttlCompleteLock;
 
   const notesFull = displayJob?.job_notes?.trim() ?? "";
   const notesNeedsExpand = notesFull.length > NOTES_PREVIEW_LEN;
@@ -849,15 +771,28 @@ export default function CleanerJobDetailPage() {
 
   const checklist = mobilePhase ? beforeYouStartLines(mobilePhase) : beforeYouStartLines("pending");
 
+  const jobDetailsHeadingId = sectionHeadingId("Job details");
+
+  const jobStatusBadgeClass = useMemo(() => {
+    if (cancelled) return "border-destructive/30 bg-destructive/10 text-destructive";
+    if (failed) return "border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-50";
+    if (completed) return "border-border bg-muted text-muted-foreground";
+    const ph = mobilePhase ?? "pending";
+    switch (ph) {
+      case "assigned":
+        return "border-emerald-600/35 bg-emerald-600/12 text-emerald-900 dark:text-emerald-100";
+      case "en_route":
+        return "border-sky-600/35 bg-sky-600/12 text-sky-900 dark:text-sky-100";
+      case "in_progress":
+        return "border-primary/35 bg-primary/10 text-primary";
+      case "pending":
+      default:
+        return "border-border bg-muted text-foreground";
+    }
+  }, [mobilePhase, cancelled, failed, completed]);
+
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-lg space-y-4 bg-background p-4 pb-28">
-      <div
-        className="sr-only"
-        aria-live={pendingFailed.length > 0 ? "assertive" : "polite"}
-        aria-atomic="true"
-      >
-        {queueAriaMessage}
-      </div>
+    <div className="mx-auto w-full max-w-lg space-y-4 bg-background p-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
         <Link href="/cleaner/dashboard">← Dashboard</Link>
       </Button>
@@ -867,71 +802,39 @@ export default function CleanerJobDetailPage() {
         <p className="text-sm text-destructive">{err}</p>
       ) : displayJob ? (
         <div className="space-y-4">
-          {pendingSyncCount > 0 || pendingFailed.length > 0 ? (
-            <button
-              type="button"
-              className={cn(
-                "flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-left text-xs font-medium text-sky-950 dark:text-sky-50",
-                oldestPendingAgeMs != null && oldestPendingAgeMs > 10 * 60 * 1000 ? "animate-pulse" : null,
-              )}
-              role="status"
-              onClick={() => setQueueDetailsOpen(true)}
-            >
-              <span className="tabular-nums">
-                {pendingSyncCount > 0 ? (
-                  <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                    {oldestPendingAgeMs != null && oldestPendingAgeMs > 10 * 60 * 1000 ? (
-                      <Radio className="size-3.5 shrink-0 opacity-90" aria-hidden />
-                    ) : null}
-                    <span>
-                      {`${pendingSyncCount} action${pendingSyncCount === 1 ? "" : "s"} pending`}
-                      {oldestPendingAgeMs != null ? ` · queued ${formatQueueAgeShort(oldestPendingAgeMs)}` : null}
-                    </span>
-                  </span>
-                ) : null}
-                {pendingSyncCount > 0 && pendingFailed.length > 0 ? " · " : null}
-                {pendingFailed.length > 0 ? (
-                  <span className="text-destructive">{`${pendingFailed.length} could not sync`}</span>
-                ) : null}
-              </span>
-            </button>
-          ) : null}
           {staleBanner ? (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-50">{staleBanner}</div>
           ) : null}
-          {!browserOnline ? (
-            <div className="rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-950 dark:text-rose-50">
-              You&apos;re offline — reconnect to sync with the server. Navigation and saved details still work.
+          {lifecycleOrch.hasFailuresForJob ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-3 text-sm text-destructive"
+            >
+              <p className="font-medium text-destructive">Couldn&apos;t save your last update to the server.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Check your connection, then try again.</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 h-9 rounded-lg"
+                disabled={lifecycleOrch.isFlushing}
+                onClick={() => void lifecycleOrch.flushPendingLifecycleQueue()}
+              >
+                {lifecycleOrch.isFlushing ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                    Retrying…
+                  </>
+                ) : (
+                  "Try again"
+                )}
+              </Button>
             </div>
           ) : null}
-          {lifecycleOrch.connectionUnstable ? (
-            <div className="rounded-xl border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-50">
-              Connection unstable — actions will sync later.
-            </div>
-          ) : null}
-          {lifecycleOrch.offlineQueuedForJob ? (
-            <div className="rounded-xl border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-sm text-sky-950 dark:text-sky-50">
-              Saved — will sync when you&apos;re back online.
-            </div>
-          ) : null}
-          {sessionDetailStale ? (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-50">
-              This job info may be outdated — reconnect to refresh from the server.
-            </div>
-          ) : null}
-          {needsJobRefresh ? (
-            <div className="rounded-xl border border-emerald-600/35 bg-emerald-600/10 px-3 py-2 text-sm text-emerald-950 dark:text-emerald-50">
-              Action saved. Updating details… Switch back to this tab and we&apos;ll refresh automatically.
-            </div>
-          ) : null}
-          {queueTtlBanner != null && queueTtlBanner.count > 0 ? (
+          {queueTtlBanner != null && queueTtlBanner.count > 0 && queueTtlBanner.hadComplete ? (
             <div className="relative rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 pr-10 text-sm text-amber-950 dark:text-amber-50">
-              <p>Some unsynced actions expired and were removed.</p>
-              {queueTtlBanner.hadComplete ? (
-                <p className="mt-2 font-medium text-amber-950 dark:text-amber-100">
-                  Job completion was not synced. Please confirm status.
-                </p>
-              ) : null}
+              <p className="font-medium text-amber-950 dark:text-amber-100">Job completion was not synced.</p>
+              <p className="mt-1 text-xs opacity-90">Please confirm status with the server when you can.</p>
               <Button
                 type="button"
                 variant="ghost"
@@ -939,9 +842,8 @@ export default function CleanerJobDetailPage() {
                 className="absolute right-1 top-1 size-8 shrink-0 p-0 text-amber-950 hover:bg-amber-500/20 dark:text-amber-50"
                 aria-label="Dismiss notice"
                 onClick={() => {
-                  const had = queueTtlBanner?.hadComplete;
                   setQueueTtlBanner(null);
-                  if (!had) setTtlCompleteLock(false);
+                  setTtlCompleteLock(false);
                 }}
               >
                 <X className="size-4" aria-hidden />
@@ -966,86 +868,6 @@ export default function CleanerJobDetailPage() {
               </Button>
             </div>
           ) : null}
-          {pendingForJob.length > 0 ? (
-            <details
-              ref={queueDetailsWrapRef}
-              className="rounded-xl border border-border bg-card px-3 py-2 text-sm shadow-sm"
-              open={queueDetailsOpen}
-              onToggle={(e) => setQueueDetailsOpen((e.target as HTMLDetailsElement).open)}
-            >
-              <summary className="cursor-pointer font-medium text-foreground">
-                {[
-                  pendingSyncCount > 0 ? `${pendingSyncCount} action${pendingSyncCount === 1 ? "" : "s"} queued` : null,
-                  pendingSyncCount > 0 && oldestPendingAgeMs != null ? `queued ${formatQueueAgeShort(oldestPendingAgeMs)}` : null,
-                  pendingFailed.length > 0 ? `${pendingFailed.length} could not sync` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </summary>
-              <ul className="mt-2 space-y-3 text-muted-foreground">
-                {pendingForJob.map((row) => (
-                  <li
-                    key={row.idempotencyKey}
-                    ref={row.failed && row.idempotencyKey === firstFailedKey ? firstFailedQueueLiRef : undefined}
-                    tabIndex={row.failed ? 0 : undefined}
-                    className={cn(
-                      "border-b border-border pb-2 last:border-0 last:pb-0",
-                      row.failed
-                        ? "rounded-md outline outline-2 outline-offset-2 outline-primary focus-visible:ring-2 focus-visible:ring-ring"
-                        : null,
-                    )}
-                  >
-                    <p className="font-medium text-foreground">{formatQueuedLifecycleAction(row.action)}</p>
-                    <p className="text-xs">
-                      Queued{" "}
-                      {new Date(row.queuedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
-                    </p>
-                    {row.lastAttemptAt != null ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Last attempt: {pendingLastAttemptAgeLabelByKey.get(row.idempotencyKey) ?? "—"}
-                      </p>
-                    ) : null}
-                    {row.failed ? (
-                      <div className="mt-2 flex flex-col gap-2">
-                        <p className="text-xs font-medium text-destructive">
-                          Couldn&apos;t sync after multiple attempts. Check your connection or contact support.
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          <Link href="/cleaner/dashboard" className="font-semibold text-primary underline-offset-4 hover:underline">
-                            Open jobs list
-                          </Link>{" "}
-                          if you need to report an issue.
-                        </p>
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="sm"
-                          className="h-10 w-fit gap-2"
-                          disabled={retryBusyKey === row.idempotencyKey}
-                          onClick={async () => {
-                            setRetryBusyKey(row.idempotencyKey);
-                            try {
-                              await retryFailedQueueItem(row.idempotencyKey);
-                              lifecycleOrchestratorRef.current?.refreshQueueFromDisk();
-                              await lifecycleOrchestratorRef.current?.flushPendingLifecycleQueue();
-                              scrollJobControlIntoView();
-                            } finally {
-                              setRetryBusyKey(null);
-                            }
-                          }}
-                        >
-                          {retryBusyKey === row.idempotencyKey ? (
-                            <Loader2 className="size-4 animate-spin" aria-hidden />
-                          ) : null}
-                          {retryBusyKey === row.idempotencyKey ? "Retrying…" : "Retry sync"}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
 
           {cancelled ? (
             <div className="rounded-xl border border-muted-foreground/30 bg-muted/30 px-3 py-3 text-sm text-foreground">
@@ -1060,227 +882,78 @@ export default function CleanerJobDetailPage() {
             </div>
           ) : null}
 
-          <header className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <h1 className="text-xl font-semibold leading-snug text-foreground">{title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {[displayJob.date, displayJob.time].filter((x) => String(x ?? "").trim()).join(" · ") || "Schedule TBD"}
+          <section
+            ref={jobControlRef}
+            className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+            aria-labelledby={jobDetailsHeadingId}
+          >
+            <p id={jobDetailsHeadingId} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Job details
             </p>
-            <p className="mt-2 inline-block rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">{phaseBadge}</p>
-          </header>
+            <div className="mt-2 space-y-5">
+              <h1 className="text-xl font-semibold leading-snug text-foreground">{title}</h1>
 
-          {lifecycleSlot || completed ? (
-            <section
-              ref={jobControlRef}
-              className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-4 shadow-sm"
-              aria-label="Job actions"
-            >
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-primary">Job control</h2>
-              {staleBanner ? (
-                <p className="mt-2 text-xs text-muted-foreground">Refresh details from the server when you can to continue updating this job.</p>
-              ) : null}
-              {actionErr ? <p className="mt-2 text-sm text-destructive">{actionErr}</p> : null}
-              <div className="mt-3 flex flex-col gap-2">
-                {lifecycleSlot?.kind === "accept_reject" ? (
-                  <>
-                    <Button
-                      type="button"
-                      className="min-h-12 w-full"
-                      disabled={actionBusy != null || lifecycleDisabled || cancelled || failed}
-                      onClick={() => void runLifecyclePost("accept", { optimistic: true })}
-                    >
-                      {actionBusy === "accept" ? <Loader2 className="size-4 animate-spin" aria-label="Loading" /> : null}
-                      Accept job
-                    </Button>
-                    {lifecycleSlot.canReject ? (
-                      confirmPending === "reject" ? (
-                        <div className="rounded-lg border border-destructive/30 bg-background p-3">
-                          <p className="text-sm font-medium text-foreground">Decline this job?</p>
-                          <p className="mt-1 text-xs text-muted-foreground">It will go back for reassignment.</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              className="min-h-12 flex-1"
-                              disabled={actionBusy != null || lifecycleDisabled}
-                              onClick={() => void runLifecyclePost("reject")}
-                            >
-                              {actionBusy === "reject" ? <Loader2 className="size-4 animate-spin" /> : null}
-                              Yes, decline
-                            </Button>
-                            <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setConfirmPending(null)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="min-h-12 w-full border-destructive/40 text-destructive hover:bg-destructive/5"
-                          disabled={actionBusy != null || lifecycleDisabled}
-                          onClick={() => setConfirmPending("reject")}
-                        >
-                          Decline job
-                        </Button>
-                      )
-                    ) : null}
-                  </>
-                ) : null}
-                {lifecycleSlot?.kind === "en_route" ? (
-                  <Button
-                    type="button"
-                    className="min-h-12 w-full bg-primary text-primary-foreground"
-                    disabled={actionBusy != null || lifecycleDisabled}
-                    onClick={() => void runLifecyclePost("en_route", { optimistic: true })}
-                  >
-                    {actionBusy === "en_route" ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
-                    On the way
-                  </Button>
-                ) : null}
-                {lifecycleSlot?.kind === "start" ? (
-                  <Button
-                    type="button"
-                    className="min-h-12 w-full bg-emerald-600 text-white hover:bg-emerald-600/90"
-                    disabled={actionBusy != null || lifecycleDisabled}
-                    onClick={() => void runLifecyclePost("start", { optimistic: true })}
-                  >
-                    {actionBusy === "start" ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
-                    I&apos;ve arrived — start job
-                  </Button>
-                ) : null}
-                {lifecycleSlot?.kind === "complete" ? (
-                  confirmPending === "complete" ? (
-                    <div className="rounded-lg border border-emerald-600/35 bg-background p-3">
-                      <p className="text-sm font-medium text-foreground">Complete this job?</p>
-                      <p className="mt-1 text-xs text-muted-foreground">This records completion and runs payout checks.</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          className="min-h-12 flex-1 bg-emerald-700 text-white hover:bg-emerald-700/90"
-                          disabled={actionBusy != null || lifecycleDisabled}
-                          onClick={() => void runLifecyclePost("complete", { optimistic: true })}
-                        >
-                          {actionBusy === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                          Yes, complete
-                        </Button>
-                        <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setConfirmPending(null)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      className="min-h-12 w-full bg-emerald-700 text-white hover:bg-emerald-700/90"
-                      disabled={actionBusy != null || lifecycleDisabled}
-                      onClick={() => setConfirmPending("complete")}
-                    >
-                      Complete job
-                    </Button>
-                  )
-                ) : null}
-                {completed ? (
-                  <p className="text-sm text-muted-foreground">
-                    This job is completed.{" "}
-                    <Link href="/cleaner/earnings" className="font-semibold text-primary underline-offset-4 hover:underline">
-                      View earnings summary
-                    </Link>
-                    .
-                  </p>
-                ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm">
+                <div className="flex min-w-0 flex-1 items-start gap-2">
+                  <Calendar className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <p className="min-w-0 text-muted-foreground">{scheduleHeadline ?? scheduleModel?.startLabel ?? "Schedule TBD"}</p>
+                </div>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 rounded-full border px-3 py-1 text-xs font-semibold",
+                    jobStatusBadgeClass,
+                  )}
+                >
+                  {phaseBadge}
+                </span>
               </div>
-            </section>
-          ) : null}
 
-          <section className="rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Navigation and contact">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Getting there</h2>
-            {mapsHref ? (
-              <Button type="button" asChild className="mt-3 min-h-12 w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-600/90">
-                <a href={mapsHref} target="_blank" rel="noopener noreferrer">
-                  <Navigation className="size-4 shrink-0" aria-hidden />
-                  Start navigation
-                </a>
-              </Button>
-            ) : null}
-            <div className={cn("flex flex-wrap gap-2", mapsHref ? "mt-2" : "mt-3")}>
-              {googleMapsWebHref ? (
-                <Button type="button" variant="outline" size="sm" className="min-h-11 flex-1 gap-2 sm:max-w-[50%]" asChild>
-                  <a href={googleMapsWebHref} target="_blank" rel="noopener noreferrer">
-                    <MapPin className="size-4 shrink-0" aria-hidden />
-                    Google Maps
-                  </a>
-                </Button>
-              ) : null}
-              {displayJob.location?.trim() ? (
-                <Button type="button" variant="outline" size="sm" className="min-h-11 flex-1 gap-2 sm:max-w-[50%]" onClick={() => void copyAddress()}>
-                  <Copy className="size-4 shrink-0" aria-hidden />
-                  {copyDone ? "Copied" : "Copy address"}
-                </Button>
-              ) : null}
-            </div>
-          </section>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">{displayJob.customer_name?.trim() || "—"}</p>
+                {displayJob.location?.trim() ? (
+                  <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      {addressMapsHref ? (
+                        <a
+                          href={addressMapsHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Open address in Google Maps"
+                          className="whitespace-pre-wrap text-foreground underline decoration-muted-foreground/60 underline-offset-2 hover:text-primary hover:decoration-primary"
+                        >
+                          {String(displayJob.location).trim()}
+                        </a>
+                      ) : (
+                        <p className="whitespace-pre-wrap text-foreground">{String(displayJob.location).trim()}</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Address on file will appear here.</p>
+                )}
+              </div>
 
-          {hasScopeContent ? (
-            <Section title="Scope of work">
-              {unified.propertyLine ? <p className="text-base font-medium text-foreground">{unified.propertyLine}</p> : null}
-              {unified.extras.length > 0 ? (
-                <div className={cn(unified.propertyLine ? "mt-3" : "")}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extras</p>
-                  <ul className="mt-1.5 list-inside list-disc space-y-1 text-sm text-foreground">
-                    {unified.extras.map((name) => (
-                      <li key={name}>
-                        {name} <span className="text-muted-foreground">(+extra time)</span>
-                      </li>
-                    ))}
-                  </ul>
+              {scheduleModel?.durText || scheduleModel?.endRange ? (
+                <div className="space-y-1 text-sm">
+                  {scheduleModel.durText ? (
+                    <p className="text-foreground">
+                      <span className="text-muted-foreground">Estimated duration: </span>
+                      {scheduleModel.durText}
+                    </p>
+                  ) : null}
+                  {scheduleModel.endRange ? (
+                    <p className="text-foreground">
+                      <span className="text-muted-foreground">Expected finish: </span>
+                      {scheduleModel.endRange}
+                    </p>
+                  ) : null}
                 </div>
-              ) : null}
-              {displayJob.lineItems && displayJob.lineItems.length > 0 ? (
-                <div className={cn(unified.propertyLine || unified.extras.length ? "mt-4 border-t border-border pt-3" : "")}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booked line items</p>
-                  <ul className="mt-1.5 space-y-1.5 text-sm text-foreground">
-                    {displayJob.lineItems.map((it, idx) => (
-                      <li key={`${it.slug ?? it.name}-${idx}`} className="flex justify-between gap-2">
-                        <span className="min-w-0">
-                          {it.name}
-                          {String(it.item_type ?? "").toLowerCase() === "extra" ? (
-                            <span className="text-muted-foreground"> (+extra time)</span>
-                          ) : null}
-                          {it.quantity > 1 ? <span className="text-muted-foreground"> ×{it.quantity}</span> : null}
-                        </span>
-                        <span className="shrink-0 text-[10px] font-medium uppercase text-muted-foreground">{it.item_type}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </Section>
-          ) : null}
-
-          {scheduleModel && (scheduleModel.startLabel || scheduleModel.durText || scheduleModel.endRange) ? (
-            <Section title="Schedule">
-              {scheduleModel.startLabel ? (
-                <p className="text-sm text-foreground">
-                  <span className="text-muted-foreground">Start time: </span>
-                  {scheduleModel.startLabel}
-                </p>
-              ) : null}
-              {scheduleModel.durText ? (
-                <p className={cn("text-sm text-foreground", scheduleModel.startLabel ? "mt-1" : "")}>
-                  <span className="text-muted-foreground">Estimated duration: </span>
-                  {scheduleModel.durText}
-                </p>
-              ) : null}
-              {scheduleModel.endRange ? (
-                <p className="mt-1 text-sm text-foreground">
-                  <span className="text-muted-foreground">Expected finish: </span>
-                  {scheduleModel.endRange}
-                </p>
               ) : null}
               {lateness.kind === "late" ? (
                 <p
                   className={cn(
-                    "mt-2 text-sm font-semibold",
+                    "text-sm font-semibold",
                     lateness.severe ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-200",
                   )}
                 >
@@ -1288,35 +961,17 @@ export default function CleanerJobDetailPage() {
                 </p>
               ) : null}
               {lateness.kind === "early" ? (
-                <p className="mt-2 text-sm font-medium text-sky-800 dark:text-sky-200">Arriving ~{lateness.minutes} min early</p>
+                <p className="text-sm font-medium text-sky-800 dark:text-sky-200">Arriving ~{lateness.minutes} min early</p>
               ) : null}
               {displayJob.is_team_job && displayJob.teamMemberCount != null && displayJob.teamMemberCount > 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Team roster: {displayJob.teamMemberCount} cleaner{displayJob.teamMemberCount === 1 ? "" : "s"}
                   {displayJob.team_roster_summary ? ` — ${displayJob.team_roster_summary}` : ""}
                 </p>
               ) : null}
-            </Section>
-          ) : null}
 
-          <Section title="Before you start" className="border-dashed">
-            <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-              {checklist.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </Section>
-
-          <div className="space-y-3">
-            <section
-              className="rounded-2xl border-2 border-emerald-500/35 bg-emerald-500/5 p-4 shadow-sm"
-              aria-labelledby="job-earnings-cleaner"
-            >
-              <h2 id="job-earnings-cleaner" className="text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">
-                Your earnings (this job)
-              </h2>
               {completionSuccess ? (
-                <div className="relative mt-3 flex gap-2 rounded-lg border border-emerald-600/30 bg-emerald-600/10 py-2 pl-3 pr-10 text-sm text-emerald-950 dark:text-emerald-50">
+                <div className="relative flex gap-2 rounded-lg border border-emerald-600/30 bg-emerald-600/10 py-2 pl-3 pr-10 text-sm text-emerald-950 dark:text-emerald-50">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">Job completed</p>
@@ -1334,57 +989,275 @@ export default function CleanerJobDetailPage() {
                   </Button>
                 </div>
               ) : null}
-              {earningsCents != null && earningsCents > 0 ? (
-                <>
-                  <p className="mt-2 text-3xl font-bold tabular-nums text-emerald-800 dark:text-emerald-200">{formatZarFromCents(earningsCents)}</p>
+
+              {unified.propertyLine ? <p className="text-base font-medium text-foreground">{unified.propertyLine}</p> : null}
+
+              {typeof earningsCents === "number" && earningsCents > 0 ? (
+                <div className={cn(unified.propertyLine ? "mt-1" : "")}>
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                    You earn: {formatZarFromCents(earningsCents)}
+                  </p>
                   {earningsEstimated ? (
                     <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">Estimate — final amount follows roster and payout rules.</p>
-                  ) : (
-                    <p className="mt-1 text-xs text-emerald-900/80 dark:text-emerald-100/80">Total for your work on this booking.</p>
-                  )}
-                  <div className="mt-4 border-t border-emerald-500/20 pt-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-900/90 dark:text-emerald-100/90">What this pay covers</p>
-                    <ul className="mt-2 space-y-1.5 text-sm text-foreground">
-                      {includesLines.map((line) => (
-                        <li key={line} className="flex gap-2">
-                          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                          <span>{line}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
+                  ) : null}
+                </div>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p
+                  className={cn(
+                    "text-sm text-muted-foreground",
+                    unified.propertyLine || completionSuccess ? "mt-1" : "",
+                  )}
+                >
                   {completionSuccess
                     ? "Processing your earnings… refresh in a moment if the amount still shows as empty."
                     : "Your pay for this job will show here once earnings are calculated and attached to the booking."}
                 </p>
               )}
-            </section>
 
-            {checkoutLines && checkoutLines.length > 0 ? (
-              <section
-                className="rounded-2xl border border-muted-foreground/25 bg-muted/10 p-4 shadow-sm"
-                aria-labelledby="job-customer-price"
-              >
-                <h2 id="job-customer-price" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Customer checkout (reference only)
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">Not your payout split — for context on what the customer paid.</p>
-                <ul className="mt-3 space-y-1.5 text-sm">
-                  {checkoutLines.map((line) => (
-                    <li key={line.kind + line.label} className="flex justify-between gap-2">
-                      <span className="text-foreground">{line.label}</span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {line.amountZar < 0 ? "−" : ""}R{Math.abs(line.amountZar).toLocaleString("en-ZA")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-          </div>
+              {unified.extras.length > 0 ? (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extras</p>
+                  <ul className="mt-1.5 list-inside list-disc space-y-1 text-sm text-foreground">
+                    {unified.extras.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {displayJob.lineItems && displayJob.lineItems.length > 0 ? (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booked line items</p>
+                  <ul className="mt-1.5 space-y-1.5 text-sm text-foreground">
+                    {displayJob.lineItems.map((it, idx) => (
+                      <li key={`${it.slug ?? it.name}-${idx}`} className="flex justify-between gap-2">
+                        <span className="min-w-0">
+                          {stripExtraTimeSuffixFromDisplayLabel(String(it.name ?? ""))}
+                          {it.quantity > 1 ? <span className="text-muted-foreground"> ×{it.quantity}</span> : null}
+                        </span>
+                        <span className="shrink-0 text-[10px] font-medium uppercase text-muted-foreground">{it.item_type}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="mt-4 space-y-3 border-t border-border pt-4" aria-label="Job actions">
+                {actionErr ? <p className="text-sm text-destructive">{actionErr}</p> : null}
+                {jobUi.phase === "expired" ? (
+                  <div className="rounded-lg border border-muted-foreground/30 bg-muted/30 px-3 py-3 text-sm text-foreground">
+                    <p className="font-semibold">This job is no longer available</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The scheduled start has passed without acceptance. Refresh your jobs list — this booking may have
+                      been removed.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {jobUi.phase !== "none" || completed ? (
+                  <div className="flex flex-col gap-2">
+                    {jobUi.phase === "accept" ? (
+                      <>
+                        <Button
+                          type="button"
+                          className="min-h-12 w-full"
+                          disabled={actionBusy != null || lifecycleDisabled || cancelled || failed}
+                          onClick={() => void runLifecyclePost("accept", { optimistic: true })}
+                        >
+                          {actionBusy === "accept" ? <Loader2 className="size-4 animate-spin" aria-label="Loading" /> : null}
+                          Accept job
+                        </Button>
+                        {jobUi.canReject ? (
+                          confirmPending === "reject" ? (
+                            <div className="rounded-lg border border-destructive/30 bg-background p-3">
+                              <p className="text-sm font-medium text-foreground">Decline this job?</p>
+                              <p className="mt-1 text-xs text-muted-foreground">It will go back for reassignment.</p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  className="min-h-12 flex-1"
+                                  disabled={actionBusy != null || lifecycleDisabled}
+                                  onClick={() => void runLifecyclePost("reject")}
+                                >
+                                  {actionBusy === "reject" ? <Loader2 className="size-4 animate-spin" /> : null}
+                                  Yes, decline
+                                </Button>
+                                <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setConfirmPending(null)}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="min-h-12 w-full border-destructive/40 text-destructive hover:bg-destructive/5"
+                              disabled={actionBusy != null || lifecycleDisabled}
+                              onClick={() => setConfirmPending("reject")}
+                            >
+                              Decline job
+                            </Button>
+                          )
+                        ) : null}
+                      </>
+                    ) : null}
+                    {jobUi.phase === "on_my_way" ? (
+                      <Button
+                        type="button"
+                        className="min-h-12 w-full bg-emerald-600 text-white hover:bg-emerald-600/90"
+                        disabled={actionBusy != null || lifecycleDisabled}
+                        onClick={() => void handleOnMyWay()}
+                      >
+                        {actionBusy === "en_route" ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+                        {actionBusy === "en_route" ? "Navigating…" : "On my way"}
+                      </Button>
+                    ) : null}
+                    {jobUi.phase === "start" ? (
+                      <Button
+                        type="button"
+                        className="min-h-12 w-full bg-emerald-600 text-white hover:bg-emerald-600/90"
+                        disabled={actionBusy != null || lifecycleDisabled}
+                        onClick={() => void runLifecyclePost("start", { optimistic: true })}
+                      >
+                        {actionBusy === "start" ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+                        I&apos;ve arrived — start job
+                      </Button>
+                    ) : null}
+                    {jobUi.phase === "complete" ? (
+                      confirmPending === "complete" ? (
+                        <div className="rounded-lg border border-emerald-600/35 bg-background p-3">
+                          <p className="text-sm font-medium text-foreground">Complete this job?</p>
+                          <p className="mt-1 text-xs text-muted-foreground">This records completion and runs payout checks.</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              className="min-h-12 flex-1 bg-emerald-700 text-white hover:bg-emerald-700/90"
+                              disabled={actionBusy != null || lifecycleDisabled}
+                              onClick={() => void runLifecyclePost("complete", { optimistic: true })}
+                            >
+                              {actionBusy === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                              Yes, complete
+                            </Button>
+                            <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setConfirmPending(null)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          className="min-h-12 w-full bg-emerald-700 text-white hover:bg-emerald-700/90"
+                          disabled={actionBusy != null || lifecycleDisabled}
+                          onClick={() => setConfirmPending("complete")}
+                        >
+                          Complete job
+                        </Button>
+                      )
+                    ) : null}
+                    {completed ? (
+                      <p className="text-sm text-muted-foreground">
+                        This job is completed.{" "}
+                        <Link href="/cleaner/earnings" className="font-semibold text-primary underline-offset-4 hover:underline">
+                          View earnings summary
+                        </Link>
+                        .
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {jobUi.phase !== "accept" ? (
+                  displayJob.customer_phone?.trim() ? (
+                    <>
+                      <div className={cn(jobUi.phase !== "none" || completed ? "border-t border-border pt-3" : "")}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-12 w-full"
+                          onClick={() => setContactSheetOpen(true)}
+                        >
+                          Contact
+                        </Button>
+                      </div>
+                      {contactSheetOpen ? (
+                        <div
+                          className="fixed inset-0 z-50 flex flex-col justify-end"
+                          role="dialog"
+                          aria-modal="true"
+                          aria-labelledby="contact-sheet-title"
+                        >
+                          <button
+                            type="button"
+                            className="absolute inset-0 bg-zinc-950/50"
+                            aria-label="Close contact options"
+                            onClick={() => setContactSheetOpen(false)}
+                          />
+                          <div className="relative mt-auto w-full max-w-lg self-center rounded-t-2xl border border-border bg-card p-4 shadow-lg">
+                            <p id="contact-sheet-title" className="mb-3 text-center text-sm font-semibold text-foreground">
+                              Contact customer
+                            </p>
+                            <div className="flex flex-col gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                              <Button type="button" variant="outline" className="min-h-12 w-full gap-2" asChild>
+                                <a href={`tel:${digitsOnly(displayJob.customer_phone)}`} onClick={() => setContactSheetOpen(false)}>
+                                  <Phone className="size-4 shrink-0" aria-hidden />
+                                  Call
+                                </a>
+                              </Button>
+                              {digitsOnly(displayJob.customer_phone).length >= 9 ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="min-h-12 w-full gap-2 border-emerald-600/40 text-emerald-800 hover:bg-emerald-600/10 dark:text-emerald-200"
+                                  asChild
+                                >
+                                  <a
+                                    href={`https://wa.me/${digitsOnly(displayJob.customer_phone)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setContactSheetOpen(false)}
+                                  >
+                                    <MessageCircle className="size-4 shrink-0" aria-hidden />
+                                    WhatsApp
+                                  </a>
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="min-h-11 w-full text-muted-foreground"
+                                onClick={() => setContactSheetOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p
+                      className={cn(
+                        "text-sm text-muted-foreground",
+                        jobUi.phase !== "none" || completed ? "border-t border-border pt-3" : "",
+                      )}
+                    >
+                      No phone on file.
+                    </p>
+                  )
+                ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <Section title="Before you start" className="border-dashed">
+            <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+              {checklist.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </Section>
 
           {notesFull ? (
             <Section title="Notes">
@@ -1406,37 +1279,6 @@ export default function CleanerJobDetailPage() {
             </Section>
           ) : null}
 
-          <Section title="Location">
-            {displayJob.location ? (
-              <p className="whitespace-pre-wrap text-sm text-foreground">{String(displayJob.location).trim()}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">Address on file will appear here.</p>
-            )}
-          </Section>
-
-          <Section title="Customer">
-            <p className="font-medium text-foreground">{displayJob.customer_name?.trim() || "—"}</p>
-            {displayJob.customer_phone?.trim() ? (
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <Button type="button" className="min-h-12 w-full gap-2" asChild>
-                  <a href={`tel:${digitsOnly(displayJob.customer_phone)}`}>
-                    <Phone className="size-4 shrink-0" aria-hidden />
-                    Call
-                  </a>
-                </Button>
-                {digitsOnly(displayJob.customer_phone).length >= 9 ? (
-                  <Button type="button" variant="secondary" className="min-h-12 w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-600/90" asChild>
-                    <a href={`https://wa.me/${digitsOnly(displayJob.customer_phone)}`} target="_blank" rel="noopener noreferrer">
-                      <MessageCircle className="size-4 shrink-0" aria-hidden />
-                      WhatsApp
-                    </a>
-                  </Button>
-                ) : null}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">No phone on file.</p>
-            )}
-          </Section>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">Nothing to show.</p>

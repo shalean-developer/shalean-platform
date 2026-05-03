@@ -182,7 +182,14 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
   it("offers response includes positive displayEarningsCents", async () => {
     mockState.admin = new MockSupabaseClient({
       dispatch_offers: [
-        { id: "o1", booking_id: "b2", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
+        {
+          id: "o1",
+          booking_id: "b2",
+          cleaner_id: "cleaner-1",
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00Z",
+          offer_token: "aaaa0001-0000-4000-8000-000000000001",
+        },
       ],
       bookings: [
         {
@@ -203,12 +210,20 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(offer.displayEarningsCents).toBeDefined();
     expect(Number(offer.displayEarningsCents)).toBeGreaterThan(0);
     expect(offer.earnings_cents).toBe(offer.displayEarningsCents);
+    expect(offer.offer_token).toBe("aaaa0001-0000-4000-8000-000000000001");
   });
 
   it("offers include row with null when earnings cannot be resolved", async () => {
     mockState.admin = new MockSupabaseClient({
       dispatch_offers: [
-        { id: "o-none", booking_id: "b-none", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
+        {
+          id: "o-none",
+          booking_id: "b-none",
+          cleaner_id: "cleaner-1",
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00Z",
+          offer_token: "aaaa0002-0000-4000-8000-000000000002",
+        },
       ],
       bookings: [
         {
@@ -237,7 +252,14 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
   it("offers return null display when booking has no stored cleaner earnings", async () => {
     mockState.admin = new MockSupabaseClient({
       dispatch_offers: [
-        { id: "o-est", booking_id: "b-est", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
+        {
+          id: "o-est",
+          booking_id: "b-est",
+          cleaner_id: "cleaner-1",
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00Z",
+          offer_token: "aaaa0003-0000-4000-8000-000000000003",
+        },
       ],
       bookings: [
         {
@@ -269,7 +291,14 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
   it("team job offer has null display when booking has no stored cleaner earnings", async () => {
     mockState.admin = new MockSupabaseClient({
       dispatch_offers: [
-        { id: "o2", booking_id: "b3", cleaner_id: "cleaner-1", status: "pending", expires_at: "2099-01-01T00:00:00Z" },
+        {
+          id: "o2",
+          booking_id: "b3",
+          cleaner_id: "cleaner-1",
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00Z",
+          offer_token: "aaaa0004-0000-4000-8000-000000000004",
+        },
       ],
       bookings: [
         {

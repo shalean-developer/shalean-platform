@@ -1,3 +1,6 @@
+"use client";
+
+import { CleanerDashboardInfoHint } from "./CleanerDashboardInfoHint";
 import type { CleanerUpcomingJob } from "./types";
 import { UpcomingJobCard } from "./UpcomingJobCard";
 
@@ -42,10 +45,13 @@ export function UpcomingJobsSection({
             </>
           ) : (
             <>
-              <p className="text-base font-semibold text-foreground">No jobs in this list right now</p>
-              <p className="text-sm leading-relaxed">
-                Assigned visits will appear here. We&apos;ll notify you as soon as a job is available.
-              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-base font-semibold text-foreground">No jobs in this list right now</p>
+                <CleanerDashboardInfoHint
+                  text={`Assigned visits list here when you have one.\n\nWe'll notify you when that happens.`}
+                  label="About this job list"
+                />
+              </div>
             </>
           )}
         </div>

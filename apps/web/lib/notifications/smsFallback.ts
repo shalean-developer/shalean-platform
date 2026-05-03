@@ -20,6 +20,10 @@ export type SmsFallbackDeliveryLog = {
   role: "cleaner" | "customer";
 };
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function bookingIdForSmsLog(
   deliveryLog: SmsFallbackDeliveryLog | undefined,
   context: Record<string, unknown>,
@@ -132,68 +136,92 @@ export async function sendSmsFallback(params: {
   }
 
   const auth = Buffer.from(`${sid}:${token}`).toString("base64");
-  const form = new URLSearchParams();
-  form.set("To", to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`);
-  form.set("From", from);
-  form.set("Body", params.body.slice(0, 1400));
+  const recipientE164 = to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`;
+  const maxAttempts = 3;
+  let lastError = "sms_fallback_failed";
 
-  try {
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form.toString(),
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      const err = `twilio_${res.status}: ${t.slice(0, 400)}`;
-      await reportOperationalIssue("warn", "sms_fallback", err, context);
-      const result = { sent: false, error: err, messageSid: null };
-      await writeSmsDeliveryLog({
-        deliveryLog: params.deliveryLog,
-        context,
-        body: params.body,
-        recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
-        result,
-      });
-      return result;
-    }
-    await logSystemEvent({
-      level: "info",
-      source: "sms_fallback_sent",
-      message: "SMS sent",
-      context,
-    });
-    let messageSid: string | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const form = new URLSearchParams();
+    form.set("To", recipientE164);
+    form.set("From", from);
+    form.set("Body", params.body.slice(0, 1400));
+
     try {
-      const bodyJson = (await res.json()) as { sid?: string };
-      if (typeof bodyJson.sid === "string" && bodyJson.sid.trim()) messageSid = bodyJson.sid.trim();
-    } catch {
-      /* ignore parse errors */
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: form.toString(),
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (res.ok) {
+        await logSystemEvent({
+          level: "info",
+          source: "sms_fallback_sent",
+          message: "SMS sent",
+          context: { ...context, sms_attempt: attempt + 1 },
+        });
+        let messageSid: string | null = null;
+        try {
+          const bodyJson = (await res.json()) as { sid?: string };
+          if (typeof bodyJson.sid === "string" && bodyJson.sid.trim()) messageSid = bodyJson.sid.trim();
+        } catch {
+          /* ignore parse errors */
+        }
+        const ok = { sent: true, error: null, messageSid } as const;
+        await writeSmsDeliveryLog({
+          deliveryLog: params.deliveryLog,
+          context,
+          body: params.body,
+          recipient: recipientE164,
+          result: ok,
+        });
+        return ok;
+      }
+
+      const t = await res.text();
+      lastError = `twilio_${res.status}: ${t.slice(0, 400)}`;
+      await reportOperationalIssue("warn", "sms_fallback", lastError, { ...context, sms_attempt: attempt + 1 });
+      const retryable = res.status === 429 || res.status >= 500;
+      if (!retryable || attempt === maxAttempts - 1) {
+        const result = { sent: false, error: lastError, messageSid: null } as const;
+        await writeSmsDeliveryLog({
+          deliveryLog: params.deliveryLog,
+          context,
+          body: params.body,
+          recipient: recipientE164,
+          result,
+        });
+        return result;
+      }
+      await sleep(Math.round(400 * (attempt + 1) * (1 + Math.random() * 0.2)));
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue("warn", "sms_fallback", lastError, { ...context, sms_attempt: attempt + 1 });
+      if (attempt === maxAttempts - 1) {
+        const result = { sent: false, error: lastError, messageSid: null };
+        await writeSmsDeliveryLog({
+          deliveryLog: params.deliveryLog,
+          context,
+          body: params.body,
+          recipient: recipientE164,
+          result,
+        });
+        return result;
+      }
+      await sleep(Math.round(400 * (attempt + 1) * (1 + Math.random() * 0.2)));
     }
-    const ok = { sent: true, error: null, messageSid } as const;
-    await writeSmsDeliveryLog({
-      deliveryLog: params.deliveryLog,
-      context,
-      body: params.body,
-      recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
-      result: ok,
-    });
-    return ok;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await reportOperationalIssue("warn", "sms_fallback", msg, context);
-    const result = { sent: false, error: msg, messageSid: null };
-    await writeSmsDeliveryLog({
-      deliveryLog: params.deliveryLog,
-      context,
-      body: params.body,
-      recipient: to.startsWith("+") ? to : `+${to.replace(/^\+/, "")}`,
-      result,
-    });
-    return result;
   }
+
+  const result = { sent: false, error: lastError, messageSid: null };
+  await writeSmsDeliveryLog({
+    deliveryLog: params.deliveryLog,
+    context,
+    body: params.body,
+    recipient: recipientE164,
+    result,
+  });
+  return result;
 }
