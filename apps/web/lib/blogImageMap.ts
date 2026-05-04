@@ -114,6 +114,9 @@ export const BLOG_IMAGE_MAP_NEW_ADDITIONS: Record<string, string> = {
   "how-much-does-cleaning-cost-cape-town-2026": "/images/blog/cape-town-living-room-floor-mop-clean.jpg",
   /** Same photography as mop hero, distinct URL so `validateBlogImages` stays strict; swap asset when you have a dedicated frame. */
   "is-it-worth-hiring-cleaner-cape-town": "/images/blog/cape-town-cleaning-worth-professional.jpg",
+  "best-airbnb-cleaning-tips-cape-town": "/images/blog/pool/cape-town-living-seaview-sofas.webp",
+  "how-often-to-clean-airbnb-cape-town": "/images/blog/pool/cape-town-open-plan-floor-polish.webp",
+  "airbnb-cleaning-mistakes-hosts-make": "/images/blog/pool/cape-town-bathroom-shower-beige-tile.webp",
 };
 
 /** Union of legacy WebP overrides + JPG pins; each value must appear at most once (see `validateBlogImages`). */

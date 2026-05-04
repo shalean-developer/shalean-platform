@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import type { HubBlogCard } from "@/lib/blog/get-all-posts";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { LocationHubAirbnbCleaningSection } from "@/components/seo/LocationHubAirbnbCleaningSection";
 import { LocationHubBlogSection } from "@/components/seo/LocationHubBlogSection";
 import { LocationHubEngagementClient } from "@/components/seo/LocationHubEngagementClient";
 import { LocationHubMidBanner } from "@/components/seo/LocationHubMidBanner";
@@ -450,6 +451,8 @@ export function ProgrammaticLocationCleaningPage({
           </div>
         </div>
       </section>
+
+      <LocationHubAirbnbCleaningSection locationName={location.name} hubSlug={slug} />
 
       <LocationHubQueryExpansion location={location} slug={slug} tier={hubTier} />
 

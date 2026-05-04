@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { AirbnbHostGuidePost } from "@/lib/blog/airbnbHostGuidePosts";
+import { AIRBNB_SERVICE_HREF, getAirbnbGuideCrossLinkBundle } from "@/lib/blog/airbnbHostGuideCrossLinks";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const proseArticle =
@@ -58,6 +59,37 @@ function ServiceAnchorParagraph() {
       <Link href={AIRBNB_SERVICE}>airbnb cleaning services in cape town</Link> so bedrooms, bathrooms, and turnover extras
       match what your listing promises.
     </p>
+  );
+}
+
+function AirbnbGuideCrossLinkFooter({ slug }: { slug: string }) {
+  const bundle = getAirbnbGuideCrossLinkBundle(slug);
+  if (!bundle) return null;
+  return (
+    <section className="not-prose my-12 rounded-2xl border border-zinc-200 bg-zinc-50/90 p-6">
+      <h2 className="text-lg font-bold text-zinc-900">Keep exploring this cluster</h2>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+        Anchor turnover decisions on our central{" "}
+        <Link href={AIRBNB_SERVICE_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+          Airbnb cleaning Cape Town
+        </Link>{" "}
+        service hub—then pair suburb context from your location guide below with two related articles.
+      </p>
+      <ul className="mt-4 space-y-2 text-sm">
+        {bundle.peerGuides.map((g) => (
+          <li key={g.href}>
+            <Link href={g.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              {g.label}
+            </Link>
+          </li>
+        ))}
+        <li>
+          <Link href={bundle.locationHub.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            {bundle.locationHub.label}
+          </Link>
+        </li>
+      </ul>
+    </section>
   );
 }
 
@@ -241,6 +273,131 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
         </>
       ) : null}
+
+      {post.slug === "best-airbnb-cleaning-tips-cape-town" ? (
+        <>
+          <p className="lead text-lg leading-relaxed text-zinc-700">
+            Cape Town hosts win or lose on fast optics: bathrooms that photograph bright, kitchens that smell neutral on
+            check-in, and floors that survive wide-angle shots. These tips prioritise review-heavy zones first—without
+            pretending a turnover can absorb deferred deep work forever.
+          </p>
+          <ServiceAnchorParagraph />
+          <p>
+            Start wet-to-dry in kitchens: hob and sink before counters, then bins, then floors—otherwise grease migrates
+            backwards onto finished surfaces. In Atlantic Seaboard apartments, add door tracks and balcony thresholds early;
+            sand returns overnight after Promenade walks even when guests swear they wiped feet.
+          </p>
+          <h2>Tip stack: bathrooms before lounge fluff</h2>
+          <p>
+            Mirrors, glass, and chrome carry disproportionate weight in smartphone photos—dry chrome properly so spots do
+            not bloom an hour later when humidity spikes. Hair in drains still tops complaint lists; vacuum edges before
+            mopping so grit does not streak into grout lines.
+          </p>
+          <p>
+            Cross-check cadence with{" "}
+            <Link href="/blog/how-often-to-clean-airbnb-cape-town">how often to clean an Airbnb in Cape Town</Link> before
+            you assume bi-weekly “touch-ups” replace full turnovers between paying guests.
+          </p>
+          <NeedHelpCta />
+          <h2>Brief access like a logistics partner—not a mystery guest</h2>
+          <p>
+            Intercom sequences, lift fobs, and visitor parking behave differently across CBD-adjacent blocks and Southern
+            Suburb estates. Minutes spent decoding access come out of bathroom dwell time unless notes are precise—see how
+            preparation discipline compounds in{" "}
+            <Link href="/blog/prepare-airbnb-for-cleaning">how to prepare your Airbnb for cleaning between guests</Link>.
+          </p>
+          <p>
+            Ground neighbourhood friction using the{" "}
+            <Link href="/locations/gardens-cleaning-services">Gardens cleaning services hub</Link> when your listing sits near
+            the City Bowl—parking and loading rules shift block by block.
+          </p>
+        </>
+      ) : null}
+
+      {post.slug === "how-often-to-clean-airbnb-cape-town" ? (
+        <>
+          <p className="lead text-lg leading-relaxed text-zinc-700">
+            Most Cape Town short-stay calendars book a full turnover after each checkout—guests pay for a reset that matches
+            photos, not a compressed tidy that hopes nobody opens the oven. Cadence questions really mean: when do you layer
+            deeper resets without punishing the next guest window?
+          </p>
+          <ServiceAnchorParagraph />
+          <p>
+            Seasonality matters: December-January and long weekends tighten slots—if you compress drying time on coastal
+            humidity days, floors telegraph streaks in reviews even when crews executed scope faithfully.
+          </p>
+          <h2>Per-checkout baseline vs quarterly “truth resets”</h2>
+          <p>
+            Treat kitchens and bathrooms as every-checkout priorities; treat ovens, grout-adjacent buildup, and balcony glass
+            as rotating deep targets when listings start drifting from gallery shots. Pair planning with{" "}
+            <Link href="/blog/airbnb-cleaning-cost-cape-town">Airbnb cleaning cost guidance</Link> so budget matches honest
+            dwell time.
+          </p>
+          <NeedHelpCta />
+          <h2>Signals you are overdue for deeper scope</h2>
+          <p>
+            Lingering odours, recurring dust films after turnovers, or repeatable hair/drain complaints mean your baseline
+            tier no longer matches guest intensity—either extend turnover time or schedule an intentional deep visit before
+            ratings slip.
+          </p>
+          <p>
+            Avoid the mistakes we outline in{" "}
+            <Link href="/blog/airbnb-cleaning-mistakes-hosts-make">Airbnb cleaning mistakes hosts make</Link>—especially
+            optimistic calendars that steal minutes from high-impact zones.
+          </p>
+          <p>
+            Claremont-style family homes often show wear differently than compact Sea Point flats—compare notes with the{" "}
+            <Link href="/locations/claremont-cleaning-services">Claremont cleaning hub</Link> when routing predicts stairs,
+            gates, and mudrooms.
+          </p>
+        </>
+      ) : null}
+
+      {post.slug === "airbnb-cleaning-mistakes-hosts-make" ? (
+        <>
+          <p className="lead text-lg leading-relaxed text-zinc-700">
+            Most “cleaning failures” on Airbnb are expectation failures—calendars promise hotel-ready resets while notes hide
+            parking friction, kitchens hide grease cameras amplify, and balconies advertised in photos collect grit hosts
+            never scoped.
+          </p>
+          <ServiceAnchorParagraph />
+          <p>
+            Cape Town adds predictable wrinkles: southeaster dust, humid bathrooms that fog mirrors an hour after wipes,
+            and estate security that consumes the first ten minutes on site. Fixing mistakes starts with honest scope—not
+            louder reminders to crews already squeezed by time.
+          </p>
+          <h2>Mistake #1: optimistic changeover buffers</h2>
+          <p>
+            If check-out and check-in overlap lifts, drying floors, or linen swaps, someone inherits impossible promises.
+            Buffer humidity drying on tiled Atlantic Seaboard stacks; budget stair carries in Southern Suburbs homes before you
+            advertise same-day flips.
+          </p>
+          <h2>Mistake #2: hiding supplies behind “minimalist” staging</h2>
+          <p>
+            Guests notice missing dishwasher tabs faster than a slightly imperfect cushion angle—stage consumables where
+            crews can replenish without unlocking private cupboards mid-slot. Reinforce habits via{" "}
+            <Link href="/blog/best-airbnb-cleaning-tips-cape-town">best Airbnb cleaning tips for Cape Town hosts</Link>.
+          </p>
+          <NeedHelpCta />
+          <h2>Mistake #3: skipping documentation before cleaners arrive</h2>
+          <p>
+            Timestamp simple photos when inventory or finishes change—so turnover crews stay focused on cleaning, not
+            debates that belong between host and guest.
+          </p>
+          <p>
+            Compare your rhythm against{" "}
+            <Link href="/blog/how-often-to-clean-airbnb-cape-town">how often to clean an Airbnb here</Link>, then sanity-check
+            surfaces against the{" "}
+            <Link href="/blog/airbnb-cleaning-checklist-cape-town">room-by-room checklist article</Link> before peak weeks.
+          </p>
+          <p>
+            Hosting near schools and family routes in the Southern Suburbs? Ground parking and gate habits using the{" "}
+            <Link href="/locations/claremont-cleaning-services">Claremont cleaning hub</Link> alongside your turnover brief.
+          </p>
+        </>
+      ) : null}
+
+      <AirbnbGuideCrossLinkFooter slug={post.slug} />
     </div>
   );
 }

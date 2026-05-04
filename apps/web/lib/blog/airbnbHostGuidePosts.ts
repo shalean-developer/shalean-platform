@@ -116,6 +116,103 @@ export const AIRBNB_HOST_GUIDE_POSTS: AirbnbHostGuidePost[] = [
       },
     ],
   },
+  {
+    slug: "best-airbnb-cleaning-tips-cape-town",
+    title: "Best Airbnb Cleaning Tips for Cape Town Hosts",
+    description:
+      "High-impact Airbnb turnover tips for Cape Town: prioritise bathrooms and kitchens first, beat coastal dust, brief lifts and parking honestly, and protect reviews with repeatable guest-ready resets.",
+    h1: "Best Airbnb Cleaning Tips for Cape Town Hosts",
+    primaryKeyword: "Airbnb cleaning tips Cape Town",
+    publishedAt: PUBLISHED,
+    dateModified: MODIFIED,
+    readingTimeMinutes: 8,
+    faqs: [
+      {
+        q: "What should Cape Town hosts clean first on a turnover?",
+        a:
+          "Kitchens and bathrooms carry review weight—degrease hobs and sinks before counters pick up residue; sanitise glass and drains before floors so you do not re-soil finished zones.",
+      },
+      {
+        q: "How do I handle Atlantic Seaboard sand and dust?",
+        a:
+          "Vacuum edges and door tracks before mopping; balconies advertised in photos need a quick sweep when windy stretch grit resets overnight.",
+      },
+      {
+        q: "Should I mention parking in booking notes?",
+        a:
+          "Yes—minutes lost to ambiguous loading rules shrink effective cleaning time; bay labels and intercom steps matter in Sea Point and Green Point blocks.",
+      },
+      {
+        q: "Where do I book professional turnovers?",
+        a: PAY,
+      },
+    ],
+  },
+  {
+    slug: "how-often-to-clean-airbnb-cape-town",
+    title: "How Often Should You Clean an Airbnb in Cape Town?",
+    description:
+      "Cadence guide for Cape Town Airbnb hosts: per checkout turnovers vs deeper resets, seasonal peaks, and when to step up scope before reviews slip.",
+    h1: "How Often Should You Clean an Airbnb in Cape Town?",
+    primaryKeyword: "how often clean Airbnb Cape Town",
+    publishedAt: PUBLISHED,
+    dateModified: MODIFIED,
+    readingTimeMinutes: 7,
+    faqs: [
+      {
+        q: "Do I clean after every guest?",
+        a:
+          "Most short-stay calendars book a turnover after each checkout—scope follows bedrooms, bathrooms, and add-ons you select online before payment.",
+      },
+      {
+        q: "When should hosts schedule a deeper reset?",
+        a:
+          "After busy holiday weeks, festival weekends, or when kitchens and grout lag standard upkeep—deep visits budget honest dwell time instead of compressing mess into minimum turnovers.",
+      },
+      {
+        q: "Does peak season change cadence?",
+        a:
+          "Peak tightens slots; it rarely removes the need for a full turnover—buffer realistic gaps so floors dry and lifts clear during arrivals.",
+      },
+      {
+        q: "Can I see pricing before committing?",
+        a: PAY,
+      },
+    ],
+  },
+  {
+    slug: "airbnb-cleaning-mistakes-hosts-make",
+    title: "Airbnb Cleaning Mistakes Cape Town Hosts Make (And How to Avoid Them)",
+    description:
+      "Common Airbnb turnover mistakes in Cape Town: vague access notes, under-scoped kitchens, ignoring balcony grit, and compressing changeovers—plus fixes that protect ratings.",
+    h1: "Airbnb Cleaning Mistakes Cape Town Hosts Make",
+    primaryKeyword: "Airbnb cleaning mistakes hosts",
+    publishedAt: PUBLISHED,
+    dateModified: MODIFIED,
+    readingTimeMinutes: 8,
+    faqs: [
+      {
+        q: "What is the biggest turnover mistake hosts make?",
+        a:
+          "Optimistic calendars—assuming a minimum clean fits every checkout—when kitchens, pet hair seasons, or windy balcony dust actually need more dwell time.",
+      },
+      {
+        q: "Why do vague access notes hurt outcomes?",
+        a:
+          "Crews lose minutes before cleaning starts; that time often came from bathroom polishing or kitchen finishes guests photograph first.",
+      },
+      {
+        q: "Should hosts hide supplies from cleaners?",
+        a:
+          "If guests expect stocked detergents or toiletries, stage them visibly—cleaners should not hunt through private cupboards mid-slot.",
+      },
+      {
+        q: "How do I align crews with listing photos?",
+        a:
+          "Brief cushion placement, towel folds, and consumable visibility against your gallery shots—repeatability trains guest expectations.",
+      },
+    ],
+  },
 ];
 
 export function getAirbnbHostGuidePost(slug: string): AirbnbHostGuidePost | null {

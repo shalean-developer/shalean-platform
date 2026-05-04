@@ -6,6 +6,11 @@ const SERVICES_HUB = "/services";
 const DEEP = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
 const BOOKING = "/booking";
 
+const AIRBNB_SEA_POINT = "/services/airbnb-cleaning-sea-point";
+const AIRBNB_GREEN_POINT = "/services/airbnb-cleaning-green-point";
+const AIRBNB_CLAREMONT = "/services/airbnb-cleaning-claremont";
+const HUB_GARDENS = "/locations/gardens-cleaning-services";
+
 const sectionClass = "mx-auto max-w-4xl px-4";
 const ctaRowClass = "not-prose mt-8 flex flex-wrap gap-3";
 
@@ -14,10 +19,32 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
 
   return (
     <>
+      <section className="border-b border-blue-100 bg-blue-50/25 py-16" aria-labelledby="airbnb-str-cape-town">
+        <div className={sectionClass}>
+          <h2 id="airbnb-str-cape-town" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Airbnb Cleaning for Short-Term Rentals in Cape Town
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Short-term rental cleaning is the rhythm behind calendars—holiday homes off school breaks, vacation rentals
+            between flights, and guest turnover cleaning when check-out and check-in sit too close for comfort. We treat each
+            visit as a reset guests photograph on arrival, not a stretched residential tidy.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-700">
+            Whether you list one apartment or several units, Airbnb cleaning services Cape Town hosts book through Shalean tie
+            together kitchens, bathrooms, floors, and staging—so every stay opens with guest-ready cleaning that matches your
+            gallery and protects rental property cleaning budgets from surprise add-ons mid-turnover.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Booking locks bedrooms, bathrooms, and turnover extras before payment—notes carry estate rules and linen locations
+            so holiday lettings and peak-season vacation rentals stay predictable.
+          </p>
+        </div>
+      </section>
+
       <section className="border-b border-blue-100 py-16" aria-labelledby="airbnb-turnover-process">
         <div className={sectionClass}>
           <h2 id="airbnb-turnover-process" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Airbnb Turnover Cleaning Process in Cape Town
+            Airbnb Turnover Cleaning in Cape Town
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Turnovers live or die on sequencing. In Cape Town, parking, estate rules, and coastal dust all steal minutes—so
@@ -64,6 +91,30 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
               Check availability
             </GrowthCtaLink>
           </div>
+        </div>
+      </section>
+
+      <section className="border-b border-blue-100 py-16" aria-labelledby="airbnb-short-term-services">
+        <div className={sectionClass}>
+          <h2 id="airbnb-short-term-services" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Short-Term Rental Cleaning Services
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Scope scales with how guests actually use the space: coastal flats pick up sand and balcony grit; City Bowl
+            walk-ups need stair-smart crews; Southern Suburb houses spread mess across mudrooms and multiple baths. The same
+            short-term rental cleaning playbook still prioritises wet areas, high-touch points, and kitchens that read fresh
+            on wide-angle listing shots.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Holiday home cleaning often includes deeper fridge checks or linen bundles you supply; vacation rental cleaning
+            may layer balcony sweeps or oven fronts when summer bookings stack. Tell us what your listing promises—we align time
+            so <strong className="font-semibold text-zinc-900">rental property cleaning</strong> stays honest for your nightly
+            rate, not a rushed wipe-down.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Pair recurring turnovers with an occasional deep clean when grout, ovens, or neglected corners start sneaking into
+            reviews—steady cadence beats panic resets for any rental property cleaning schedule.
+          </p>
         </div>
       </section>
 
@@ -175,6 +226,45 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
         </div>
       </section>
 
+      <section className="border-b border-blue-100 py-16" aria-labelledby="airbnb-recent-cleans">
+        <div className={sectionClass}>
+          <h2 id="airbnb-recent-cleans" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Recent Airbnb cleans in Cape Town
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Illustrative turnover scenarios—your scope still locks online from bedrooms, bathrooms, and the extras you
+            select. These are the shapes of work crews budget when calendars compress.
+          </p>
+          <ul className="mt-6 space-y-4 text-base leading-relaxed text-zinc-700">
+            <li>
+              <strong className="text-zinc-900">Atlantic Seaboard two-bed, same-day flip.</strong> Sand in entry tracks,
+              balcony rail dust after a southeaster week, and a kitchen photographed for check-in—teams sequence wet-to-dry so
+              glass and chrome stay review-ready when humidity rebounds.
+            </li>
+            <li>
+              <strong className="text-zinc-900">CBD-adjacent studio before a conference check-in.</strong> Compact footprint,
+              heavy bathroom optics, and tight lift etiquette—notes carry visitor parking and intercom steps so the gap goes
+              to scrubbing, not logistics.
+            </li>
+            <li>
+              <strong className="text-zinc-900">Southern Suburbs family let after school holidays.</strong> Mudroom grit,
+              multiple baths, and oven fingerprints from busy weeks—hosts pair honest dwell time with linen staging when
+              bundles are supplied on site.
+            </li>
+          </ul>
+          <h3 className="mt-10 text-lg font-semibold text-zinc-900">Trusted by hosts across Sea Point, Green Point, Claremont &amp; Gardens</h3>
+          <p className="mt-3 text-base leading-relaxed text-zinc-600">
+            Hosts repeat bookings where access notes match reality and turnovers mirror listing shots—whether you list near the
+            Promenade, the stadium corridor, school-run suburbs, or the City Bowl edge in{" "}
+            <Link href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Gardens
+            </Link>
+            . Use suburb guides when you want guest-facing language; use location hubs when you need broader parking and area
+            FAQs.
+          </p>
+        </div>
+      </section>
+
       <section className="border-b border-blue-100 bg-blue-50/30 py-16" aria-labelledby="airbnb-areas-featured">
         <div className={sectionClass}>
           <h2 id="airbnb-areas-featured" className="text-2xl font-bold tracking-tight text-zinc-900">
@@ -184,11 +274,34 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             Short-stay demand clusters on the Atlantic Seaboard and Southern Suburbs corridors—each pocket has different
             parking, security, and dust profiles.
           </p>
+          <div className="mt-8 rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-zinc-900">Also serving nearby areas</h3>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+              Turnover crews route across the Seaboard and City Bowl edges every week—start from suburb-specific guides when
+              your listing sits in{" "}
+              <Link href={AIRBNB_SEA_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                Sea Point
+              </Link>
+              ,{" "}
+              <Link href={AIRBNB_GREEN_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                Green Point
+              </Link>
+              , or the{" "}
+              <Link href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                Gardens
+              </Link>{" "}
+              corridor (broader hub page for City Bowl-adjacent hosting).
+            </p>
+          </div>
           <ul className="mt-8 flex flex-wrap gap-3">
             {[
-              { href: "/locations/sea-point-cleaning-services", label: "Sea Point turnover cleans" },
-              { href: "/locations/green-point-cleaning-services", label: "Green Point turnover cleans" },
-              { href: "/locations/claremont-cleaning-services", label: "Claremont turnover cleans" },
+              { href: AIRBNB_SEA_POINT, label: "Sea Point Airbnb cleaning" },
+              { href: AIRBNB_GREEN_POINT, label: "Green Point Airbnb cleaning" },
+              { href: AIRBNB_CLAREMONT, label: "Claremont Airbnb cleaning" },
+              { href: HUB_GARDENS, label: "Gardens hosting hub" },
+              { href: "/locations/sea-point-cleaning-services", label: "Sea Point area hub" },
+              { href: "/locations/green-point-cleaning-services", label: "Green Point area hub" },
+              { href: "/locations/claremont-cleaning-services", label: "Claremont area hub" },
             ].map((item) => (
               <li key={item.href}>
                 <Link
@@ -206,6 +319,25 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
               Cape Town locations directory
             </Link>
             —each hub links back to this service guide so hosts keep scope consistent.
+          </p>
+        </div>
+      </section>
+
+      <section className="border-b border-blue-100 py-16" aria-labelledby="professional-airbnb-cleaners-cpt">
+        <div className={sectionClass}>
+          <h2 id="professional-airbnb-cleaners-cpt" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Professional Airbnb Cleaners Cape Town
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Professional cleaners on our turnover roster work from structured scope—not improvised chats—so Seaboard humidity,
+            estate gates, and school-week traffic do not steal the minutes bathrooms need. Crews understand guest-facing
+            optics: chrome that dries clear, cushions that match your hero photo, and bins that read ready before anyone
+            unpacks.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            You still control access, linen, and consumables; we align dwell time to what you selected online and flag friction
+            early when calendars lie about realistic gaps. That consistency is what keeps short-stay ratings steady across busy
+            Cape Town months.
           </p>
         </div>
       </section>

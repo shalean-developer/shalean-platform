@@ -442,11 +442,11 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "airbnb-cleaning-cape-town": {
     slug: "airbnb-cleaning-cape-town",
     path: "/services/airbnb-cleaning-cape-town",
-    title: "Airbnb Cleaning Cape Town | Guest Turnovers | Shalean",
+    title: "Airbnb Cleaning Cape Town | Turnover, Short-Term Rental & Guest Cleaning",
     description:
-      "Airbnb turnover cleaning in Cape Town for fast guest changeovers. Photo-ready resets, vetted cleaners, and clear scope—book online with Shalean today.",
+      "Professional Airbnb cleaning for short-term rentals in Cape Town—guest turnover between stays, rental-ready resets, and cleaners who know what hosts need.",
     ogImage: "/images/marketing/airbnb-cleaning-cape-town-living-room.webp",
-    h1: "Airbnb cleaning services in Cape Town for guest-ready homes",
+    h1: "Airbnb Cleaning & Turnover Services in Cape Town",
     bookingLabel: "Airbnb turnover cleaning",
     bookingPath: "/booking",
     introSectionHeading: "Built for Airbnb hosts in Cape Town",
@@ -454,7 +454,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Turnover pressure is street-specific—tight lifts on the Atlantic Seaboard versus Southern Suburb gates and school traffic. The hubs below capture local access cues; combine them with this Cape Town Airbnb cleaning checklist for consistent guest-ready results.",
     explanation: [
       "Between back-to-back guests, calendar gaps, and same-day check-outs, Airbnb hosts need a turnover partner that respects inventory photos, linen resets, and tight handover windows—not just a generic tidy.",
-      "Shalean focuses on short-stay realities across Cape Town: sand tracked in from the beach, coffee rings on dining tables, and bathrooms that must read “hotel fresh” before your next review arrives.",
+      "Shalean focuses on short-stay and vacation rental realities across Cape Town: sand tracked in from the beach, coffee rings on dining tables, and bathrooms that must read “hotel fresh” before your next review arrives.",
       "Hosts still compare house cleaning Cape Town providers on speed and trust; professional cleaning services built for turnovers layer staging, odour control, and high-touch wipes on top of standard home cleaning services Cape Town guests expect between stays.",
       "Most negative turnover feedback is not “mystery dirt”—it is missed high-touch points, weak bathroom presentation, or kitchen surfaces that look fine in person but read tired in wide-angle photos. We structure time so those zones do not get squeezed when parking or lift access runs long.",
       "Property managers running multiple units benefit from the same online scope controls as individual hosts: bedrooms, bathrooms, and add-ons set the price before payment, and notes carry estate rules, remote access, and linen locations so every handover feels repeatable.",

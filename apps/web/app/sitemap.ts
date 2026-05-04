@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
 import { listActiveCategorySlugs, listTagSlugs } from "@/lib/blog/get-taxonomy-posts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import { AIRBNB_AREA_LANDING_PATHS } from "@/lib/seo/airbnbAreaLandingPages";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 
 const BASE = "https://www.shalean.co.za";
@@ -58,6 +59,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     ...Object.values(CAPE_TOWN_SERVICE_SEO).map((p) => ({
       url: `${BASE}${p.path}`,
+      lastModified,
+    })),
+    ...AIRBNB_AREA_LANDING_PATHS.map((path) => ({
+      url: `${BASE}${path}`,
       lastModified,
     })),
     ...Object.values(LOCATION_SEO_PAGES).map((p) => ({
