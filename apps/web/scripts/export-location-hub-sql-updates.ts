@@ -39,6 +39,9 @@ const lines: string[] = [
   "-- Does not INSERT. Only UPDATE rows whose slug matches exactly.",
   "-- Source: apps/web/lib/blog/seed/locationHubStructuredContent.ts",
   "-- Regenerate: npx tsx apps/web/scripts/export-location-hub-sql-updates.ts",
+  "--",
+  "-- Run THIS file in the SQL editor (UPDATE ... statements).",
+  "-- Do NOT paste supabase/seed/blog_location_hubs_structured_content.json — JSON begins with \"{\" and Postgres will error: syntax error at or near \"{\".",
   "",
   "BEGIN;",
   "",
@@ -56,7 +59,9 @@ for (const page of LOCATION_HUB_STRUCTURED_PAGES) {
 
 lines.push("COMMIT;");
 lines.push("");
-lines.push("-- Expected: each UPDATE returns UPDATE 1 in psql (7 updates ⇒ 7 rows touched total).");
+lines.push(
+  `-- Expected: each UPDATE returns UPDATE 1 in psql (${LOCATION_HUB_STRUCTURED_PAGES.length} updates ⇒ ${LOCATION_HUB_STRUCTURED_PAGES.length} rows touched total).`,
+);
 lines.push("-- Hub rows present in DB:");
 lines.push("SELECT slug, updated_at");
 lines.push("FROM public.blog_posts");
@@ -78,7 +83,9 @@ lines.push("WHERE NOT EXISTS (");
 lines.push("  SELECT 1 FROM public.blog_posts b WHERE b.slug = e.slug");
 lines.push(");");
 lines.push("");
-lines.push("-- How many of the 7 hub slugs exist (expect 7 after seeds/migrations):");
+lines.push(
+  `-- How many hub slugs exist (expect ${LOCATION_HUB_STRUCTURED_PAGES.length} after seeds/migrations):`,
+);
 lines.push("SELECT COUNT(*)::int AS hub_posts_found_in_db");
 lines.push("FROM public.blog_posts");
 lines.push("WHERE slug IN (");

@@ -77,7 +77,11 @@ export function MarketingHomeServicesSection() {
             </div>
             <p className="max-w-xl text-base leading-relaxed text-slate-600 lg:max-w-none lg:pt-1">
               From everyday home cleaning to specialized care for carpets, sofas, and workspaces, our team makes every
-              corner shine. Choose the service that fits your space and let us do the rest.
+              corner shine. Choose the service that fits your space and let us do the rest.{" "}
+              <Link href="/cleaning-prices-cape-town" className={linkInParagraphClassName}>
+                Cleaning prices in Cape Town
+              </Link>{" "}
+              —compare bands by service and home size before you book.
             </p>
           </div>
 

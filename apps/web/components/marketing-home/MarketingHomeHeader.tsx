@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 const MARKETING_NAV = {
   services: "/services",
   locations: "/locations",
+  cleaningPricesHub: "/cleaning-prices-cape-town",
   pricing: "/booking/details",
   about: "/about",
   faq: "/faq",
@@ -41,8 +42,15 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
           <Link href={MARKETING_NAV.locations} className={navClass}>
             Locations
           </Link>
+          <Link
+            href={MARKETING_NAV.cleaningPricesHub}
+            className={navClass}
+            title="Cleaning prices in Cape Town"
+          >
+            Cleaning prices
+          </Link>
           <Link href={MARKETING_NAV.pricing} className={navClass}>
-            Pricing
+            Instant quote
           </Link>
           <Link href={MARKETING_NAV.about} className={navClass}>
             About Us
@@ -86,7 +94,8 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
               [
                 ["Services", MARKETING_NAV.services],
                 ["Locations", MARKETING_NAV.locations],
-                ["Pricing", MARKETING_NAV.pricing],
+                ["Cleaning prices in Cape Town", MARKETING_NAV.cleaningPricesHub],
+                ["Instant quote", MARKETING_NAV.pricing],
                 ["About Us", MARKETING_NAV.about],
                 ["FAQs", MARKETING_NAV.faq],
               ] as const

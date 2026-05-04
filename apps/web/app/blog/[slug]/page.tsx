@@ -42,6 +42,7 @@ import {
 } from "@/lib/blog/get-blog-sidebar-data";
 import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const SITE = "https://www.shalean.co.za";
 
@@ -89,7 +90,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       alternates: { canonical: canonicalAbsolute },
       ...(keywords && keywords.length > 0 ? { keywords } : {}),
-      robots: dbPost.noindex ? { index: false, follow: true } : undefined,
+      robots: dbPost.noindex ? { index: false, follow: true } : SEO_INDEX_FOLLOW,
       openGraph: {
         title: `${titleBase} | Shalean Blog`,
         description,
@@ -117,6 +118,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: `${hc.title} | Shalean Blog`,
       description: hc.description,
+      robots: SEO_INDEX_FOLLOW,
       alternates: { canonical: url },
       openGraph: {
         title: `${hc.title} | Shalean Blog`,
@@ -146,6 +148,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: `${hostGuide.title} | Shalean Blog`,
       description: hostGuide.description,
+      robots: SEO_INDEX_FOLLOW,
       alternates: { canonical: url },
       keywords: [hostGuide.primaryKeyword, "Airbnb Cape Town", "Shalean", "turnover cleaning"],
       openGraph: {
@@ -167,7 +170,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const prog = getProgrammaticPost(slug);
-  if (!prog) return { title: "Blog | Shalean" };
+  if (!prog) notFound();
 
   const path = `/blog/${prog.slug}`;
   const url = `${SITE}${path}`;
@@ -177,6 +180,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${prog.title} | Shalean Blog`,
     description: prog.description,
+    robots: SEO_INDEX_FOLLOW,
     alternates: { canonical: url },
     keywords: [
       prog.primaryKeyword,
@@ -214,7 +218,7 @@ function buildProgrammaticBlogPostingJsonLd(post: ProgrammaticPost) {
   const keywords = [post.primaryKeyword, locationKw, serviceKw, "Shalean", "Cape Town"].filter(Boolean).join(", ");
 
   return {
-    "@type": "BlogPosting",
+    "@type": ["BlogPosting", "Article"],
     headline: post.h1,
     description: post.description,
     datePublished: post.publishedAt,
@@ -299,7 +303,7 @@ function buildHighConversionBlogPostingJsonLd(post: HighConversionBlogArticle) {
   const heroAbsolute = `${SITE}${resolveBlogFeaturedSrc(post.slug)}`;
   const dateModified = post.dateModified ?? post.publishedAt;
   return {
-    "@type": "BlogPosting",
+    "@type": ["BlogPosting", "Article"],
     headline: post.h1,
     description: post.description,
     datePublished: post.publishedAt,

@@ -11,6 +11,7 @@ import { BlogLayout } from "@/components/blog/engine/BlogLayout";
 import { BlogRelatedPostsGrid } from "@/components/blog/engine/BlogRelatedPostsGrid";
 import { BlogShareBar } from "@/components/blog/engine/BlogShareBar";
 import { BlogSidebar } from "@/components/blog/engine/BlogSidebar";
+import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { StickyBookingCta } from "@/components/blog/StickyBookingCta";
 import type { BlogIndexPost } from "@/lib/blog/get-all-posts";
 import type { BlogSidebarCategory, RelatedGridPost } from "@/lib/blog/get-blog-sidebar-data";
@@ -187,6 +188,13 @@ export function BlogPostLayout({
               {relatedLinksSlot ? <div className="not-prose mt-12">{relatedLinksSlot}</div> : null}
 
               <BlogRelatedPostsGrid posts={relatedGridPosts} className="mt-4" />
+
+              <div className="not-prose mt-12">
+                <SeoInternalLinksBlock
+                  title="Book with Shalean"
+                  className="rounded-2xl border border-zinc-200 bg-zinc-50/90 p-6"
+                />
+              </div>
 
               <BlogPreFooterTrust />
 

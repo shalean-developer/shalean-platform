@@ -11,6 +11,7 @@ import { flattenAllFaqItems } from "@/lib/faq/faq-page-data";
 import { buildFaqPageJsonLd } from "@/lib/faq/faq-jsonld";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/faq";
 const CANONICAL = absoluteCanonicalUrl(PATH);
@@ -19,6 +20,7 @@ export const metadata: Metadata = {
   title: "Cleaning Service FAQs | Pricing, Booking & Trust | Shalean Cape Town",
   description:
     "FAQ for Shalean home cleaning in Cape Town—pricing bands, what’s included, same-day booking, supplies, vetting, insurance, and cancellations. Get instant quotes online.",
+  robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
   openGraph: {
     type: "website",

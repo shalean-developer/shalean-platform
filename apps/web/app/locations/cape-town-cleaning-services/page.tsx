@@ -12,6 +12,7 @@ import { TrustBar } from "@/components/locations/cape-town-cleaning-services/Tru
 import { WhyChooseUs } from "@/components/locations/cape-town-cleaning-services/WhyChooseUs";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/locations/cape-town-cleaning-services";
 const CANONICAL_ABSOLUTE = absoluteCanonicalUrl(PATH);
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
   title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
   description:
     "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
+  robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL_ABSOLUTE },
   openGraph: {
     type: "website",

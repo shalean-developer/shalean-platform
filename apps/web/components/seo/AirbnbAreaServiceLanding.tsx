@@ -47,7 +47,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
       },
       {
         "@type": "BreadcrumbList",
-        "@id": `${pageUrl}#breadcrumb`,
+        "@id": `${pageUrl}#breadcrumbs`,
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
           { "@type": "ListItem", position: 2, name: "Services", item: absoluteCanonicalUrl("/services") },

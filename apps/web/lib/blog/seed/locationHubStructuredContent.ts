@@ -14,156 +14,159 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   hub("cleaning-services-claremont-cape-town", [
     {
       type: "paragraph",
-      content: `Book trusted cleaning services in Claremont with upfront pricing and same-week availability—see your price online before you commit, then lock a slot without WhatsApp ping-pong. Whether you’re off Main Road near school-run traffic, in a Cavendish-close sectional title, or tucked into Harfield Village, [instant quote](/booking) takes minutes. Same-day spots open when calendars allow; most confirmed Claremont visits land inside 24–72 hours.`,
+      content: `Looking for reliable cleaning services in Claremont, Cape Town? Whether you live near Cavendish Square, manage a rental property, or need help maintaining your home, choosing the right cleaning service can make a big difference in consistency and quality.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover what to expect, typical pricing, and how to choose a professional cleaning service in Claremont.`,
+    },
+    {
+      type: "paragraph",
+      content: `Jump to what you need:`,
+    },
+    {
+      type: "internal_links",
+      title: "On this page",
+      links: [
+        { label: "Cleaning services in Claremont", url: "#services" },
+        { label: "Cleaning prices in Claremont", url: "#pricing" },
+        { label: "Book a cleaner", url: "#booking" },
+        { label: "Same-day cleaning in Claremont", url: "#same-day" },
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `If you're searching for cleaning services near you in Claremont, our local cleaners offer same-day and scheduled bookings across the area.`,
     },
     {
       type: "heading",
       level: 2,
-      content: `Cleaning prices in Claremont: bedrooms, bathrooms & what shifts the quote`,
+      content: `Professional cleaning services in Claremont`,
     },
     {
       type: "paragraph",
-      content: `Real cleaning prices in Claremont track layout more than postcode. A one-bedroom, one-bathroom walk-up near Cavendish commonly lands roughly R350–R520 for a typical standard visit before add-ons. A two-bedroom, two-bathroom flat off Vineyard or Kildare usually prints around R550–R780 once both baths are sanitised properly—not just wiped. A three-bedroom family house with two or three bathrooms regularly sits R680–R950+ on standard-to-deep scopes because kitchens, passages, and multiple wet rooms chew predictable minutes.`,
-    },
-    {
-      type: "paragraph",
-      content: `Within those bands, quotes climb when you tick move-out inventory rigour, neglected ovens or grout that belongs in deep tier instead of maintenance standard, or extras such as interior fridge fronts and [carpet cleaning](/services/carpet-cleaning-cape-town). Student flats with shared baths can trend lighter when clutter is minimal; renovated executive kitchens still need the same bath maths—don’t under-count showers. Still weighing tiers? Compare [standard cleaning](/services/standard-cleaning-cape-town) with [deep cleaning](/services/deep-cleaning-cape-town), then lock numbers in [booking](/booking).`,
+      content: `If you're looking for reliable cleaning services in Claremont, Shalean provides professional home, apartment, and rental cleaning tailored to the needs of the area.`,
     },
     {
       type: "heading",
       level: 2,
-      content: `What affects cleaning time and cost in Claremont`,
+      id: "services",
+      content: `Cleaning services in Claremont`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [Claremont cleaning services](/locations/claremont-cleaning-services) are designed to support both residential homes and rental properties. From regular weekly cleaning to detailed move-out cleans, services are tailored to match the needs of students, families, and property managers in the area.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why Claremont homes need specialised cleaning`,
     },
     {
       type: "bullet_list",
       items: [
-        `Property size & wet zones—every bedroom and bathroom you confirm adjusts mop, vacuum, and sanitising loops; counting a study as a spare bedroom keeps labour honest.`,
-        `Condition & occupancy—pet hair, skipped weeks of wiping, grease films behind stoves, or muddy passages after winter rain extend scrub time versus a lightly used apartment.`,
-        `Extras you select—oven interior, fridge interior, detailed grout or shelf packs stack consecutive tasks; skip anything you’ll redo yourself tomorrow.`,
-        `Access logistics—boom gates, basement bays, Main Road school-hour arrivals, or narrow shared drives determine whether hour one is cleaning or circling; brief once in booking notes.`,
+        `Student housing and shared apartments increase cleaning frequency`,
+        `Family homes require consistent maintenance`,
+        `Rental properties need inspection-ready cleaning`,
+        `Move-out cleaning is common due to tenant turnover`,
       ],
     },
     {
       type: "heading",
       level: 2,
-      content: `What your booking covers (service by service)`,
+      content: `Popular cleaning services in Claremont`,
     },
     {
       type: "bullet_list",
       items: [
-        `Standard cleaning — Surface-focused upkeep: kitchens wiped down, bathrooms sanitised, floors vacuumed/mopped, dusting in living zones. Book when you need dependable rhythm between bigger resets—think fortnightly family upkeep or post-travel tidy.`,
-        `Deep cleaning — Built-up grime targets: degreased cooktops, descaled taps, detailed skirtings, appliance fronts, and neglected corners standard passes skip. Choose it before hosting inspections, after renovations, or when bathrooms haven’t seen elbow grease in months.`,
-        `Move-out cleaning — Inventory-aware finishes aimed at ovens, grout lines, cupboards, and wet rooms agents photograph. Tenants align it with handover dates; sellers pair it with show-house timelines.`,
-        `Airbnb cleaning — Guest-ready bathrooms/kitchens, linen-ready surfaces, rubbish cleared, quick resets between checkout and check-in. Hosts near campus corridors add keypad/parking notes so crews don’t burn daylight hunting access.`,
-        `Carpet cleaning — Focused extraction or shampoo passes on rugs and bedrooms where dogs, kids, or winter boots shorten fibre life—often bolted onto deeper visits rather than guessed separately.`,
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Move out cleaning](/services/move-out-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
       ],
     },
     {
-      type: "heading",
-      level: 2,
-      content: `When Claremont homes usually need professional cleaning`,
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [cleaning services in Green Point](/blog/cleaning-services-green-point-cape-town) or [cleaning services in Rondebosch](/blog/cleaning-services-rondebosch-cape-town).`,
     },
     {
       type: "paragraph",
-      content: `Tenants book when Rondebosch-adjacent agents send inventory PDFs and grout suddenly matters more than pride. Airbnb hosts book between tight guest gaps—especially when basement remotes and Cavendish-week traffic threaten late check-ins. Families book after sport-season Saturdays when mudrooms, ovens, and three bathrooms surrender at once. Landlords book ahead of show days or between leases when cottages must smell neutral under winter viewing lights. Hybrid workers book mid-quarter when kitchens never cool between Zoom blocks. Peak demand hits month-end and school holidays—mid-week drops often carry calmer calendars.`,
+      content: `We also cover nearby areas like [Newlands](/locations/newlands-cleaning-services).`,
     },
     {
       type: "heading",
       level: 2,
-      content: `Why Cape Town homeowners and hosts choose Shalean`,
-    },
-    {
-      type: "bullet_list",
-      items: [
-        `Dual-income households who book after cleaners ghost them Friday night—crews arrive briefed on boom codes and basement bays, not blind pins.`,
-        `Airbnb hosts cycling guests near campus pockets—turnovers timed between checkout photos and the next keypad message.`,
-        `Tenants racing Rondebosch-adjacent inventories—checklists align with what agents photograph first.`,
-        `Landlords refreshing cottages before open homes—kitchens and wet rooms that pass sniff tests under winter light.`,
-        `Transparent pricing: what you select online is what teams execute—no “extras at the door” surprises.`,
-      ],
-    },
-    {
-      type: "heading",
-      level: 2,
-      content: `Areas we serve around Claremont`,
+      id: "pricing",
+      content: `How much does cleaning cost in Claremont?`,
     },
     {
       type: "paragraph",
-      content: `Dispatched routes cover Harfield Village, Newlands, Rondebosch, Kenilworth, Wynberg, Plumstead, and Bishopscourt daily—less windshield time means tighter arrival windows than city-wide call centres. Mention gatehouses or visitor discs once; teams carry Southern Suburbs familiarity from visit to visit.`,
-    },
-    {
-      type: "heading",
-      level: 2,
-      content: `Looking for cleaners near you in Claremont?`,
+      content: `Cleaning services in Claremont typically start from around R400 to R500 depending on the size of the property and the type of cleaning required. Move-out and deep cleaning services may cost more depending on the condition of the property.`,
     },
     {
       type: "paragraph",
-      content: `Cleaners near you in Claremont should mean Southern Suburbs locals—not vans touring in from the far north. Shalean matches “near me” searches with pros already running Harfield, Newlands, and Rondebosch-adjacent streets, so availability rebounds faster after busy weekends and school breaks. Confirm online in one flow; pricing and arrival expectations are spelled out before anyone parks.`,
-    },
-    {
-      type: "heading",
-      level: 2,
-      content: `How to book a Claremont clean (step-by-step)`,
+      content: `[Get an exact quote for your home](/booking/details)`,
     },
     {
       type: "paragraph",
-      content: `Booking takes just a few minutes online—start with the [instant booking tool](/booking), then follow the steps below to confirm your cleaning service.`,
-    },
-    {
-      type: "numbered_list",
-      items: [
-        `Enter your address and confirm Claremont or nearby suburb coverage.`,
-        `Select bedrooms, bathrooms, and any extras like oven or fridge cleaning.`,
-        `Choose your service type—standard, deep, move-out, or Airbnb cleaning.`,
-        `Pick your preferred date and arrival time.`,
-        `Review your total price and confirm securely online.`,
-      ],
+      content: `For more detailed services, see our [deep cleaning services](/services/deep-cleaning-cape-town) or [move out cleaning](/services/move-out-cleaning-cape-town) options available in Claremont.`,
     },
     {
       type: "heading",
       level: 2,
-      content: `Frequently asked questions`,
+      id: "booking",
+      content: `Book a cleaner in Claremont`,
+    },
+    {
+      type: "paragraph",
+      content: `If you're looking for a reliable cleaner in Claremont, you can book online in minutes and get matched with a vetted professional.`,
+    },
+    {
+      type: "paragraph",
+      content: `[View cleaning services in Claremont](/locations/claremont-cleaning-services)`,
     },
     {
       type: "faq",
       omit_section_heading: true,
       items: [
         {
+          question: `How much does cleaning cost in Claremont?`,
+          answer: `Cleaning services in Claremont typically start from around R400 to R500 depending on the size of the property and the type of cleaning required. Move-out and deep cleaning services may cost more depending on the condition of the property. Use the online booking flow for an itemised quote before you pay.`,
+        },
+        {
+          question: `How do I book a cleaner in Claremont?`,
+          answer: `Choose your service on our guides (standard, deep, move-out, or window cleaning), enter your Claremont address and room counts in [booking](/booking/details), review your total, then confirm online. You can also start from the [Claremont location hub](/locations/claremont-cleaning-services) for suburb-specific context.`,
+        },
+        {
           question: `How quickly can I book a cleaner in Claremont?`,
-          answer: `After you complete the online flow, many households secure visits inside 24–72 hours because Southern Suburbs crews already route Harfield, Newlands, and Rondebosch-adjacent streets. Same-day pockets appear when cleaners finish early or cancellations open gaps—worth checking, but never promise guests or agents until you’ve confirmed in-app. Month-end, school holidays, and post-rain mud weeks tighten calendars fastest; booking Sunday night for the coming week usually beats waiting until Tuesday morning.`,
+          answer: `You can book a cleaner in Claremont within minutes using our online booking system. Same-day and next-day availability is often available depending on demand.`,
         },
         {
-          question: `How much does a 2-bedroom cleaning cost in Claremont?`,
-          answer: `Most two-bedroom homes land roughly R550–R780 once two bathrooms are sanitised properly—studios posing as “two-bed” shares with one bath trend lower, while dual bathrooms + balcony grit after windy weeks trend higher. Add-ons such as interior ovens, fridge fronts, or carpet extraction move the total independently of bedroom count. Generate an itemised preview in the online booking flow; totals update instantly when you tick extras or switch from standard to deep scope.`,
-        },
-        {
-          question: `Do cleaners bring their own supplies?`,
-          answer: `Yes—professional-grade consumables and equipment travel with vetted teams unless your sectional title or allergy brief requests owner-supplied products. If you need fragrance-free, eco-only, or vacuum-noise restrictions, flag it during booking so coordinators stock accordingly before dispatch rather than improvising on your doorstep.`,
-        },
-        {
-          question: `Can I book same-day cleaning in Claremont?`,
-          answer: `Sometimes—especially mid-week when suburban routes still carry whitespace—but don’t anchor guest check-ins or inventory handovers on “maybe.” Next-day or clearly scheduled slots survive lift delays, boom-gate confusion, and parking hunts far better. If same-day is critical, complete the quote immediately and watch live availability rather than messaging ad hoc.`,
-        },
-        {
-          question: `Do you handle move-out or end-of-lease cleaning?`,
-          answer: `Yes. Move-out scope emphasises evidence zones inspectors zoom in on: ovens, fridges (when selected), grout, skirtings, cupboards, and bathrooms that photograph harshly under LED flashes. It’s built for tenants aligning keys with agencies and landlords prepping deposits—not for light tidy-ups mistaken for inventory-grade finishes. Pair booking notes with your agent checklist highlights so crews prioritise what loses deposits fastest.`,
-        },
-        {
-          question: `How do I book a cleaner?`,
-          answer: `Start in the online booking flow, confirm Claremont coverage, enter accurate bedrooms and bathrooms, choose standard/deep/move-out/Airbnb as appropriate, select extras honestly, then pick a slot and pay securely once the itemised total matches your expectations. That sequence preserves audit trails, locks pricing to scope, and feeds dispatch the boom codes or basement directions they need before arrival.`,
+          question: `Do you offer same-day cleaning in Claremont?`,
+          answer: `Yes, same-day and next-day cleaning in Claremont is often available depending on demand. You can check availability and book online in minutes.`,
         },
       ],
     },
     {
+      type: "heading",
+      level: 2,
+      id: "same-day",
+      content: `Same-day cleaning in Claremont`,
+    },
+    {
       type: "paragraph",
-      content: `Ready when you are: the flow takes minutes, you’ll see your exact price before paying, and there’s no haggling or surprise line items after checkout—just clear scope, clear availability, and a team briefed on what you bought.`,
+      content: `Need a cleaner today? We often have same-day and next-day availability in Claremont depending on demand. You can check availability instantly and secure a booking in minutes.`,
+    },
+    {
+      type: "paragraph",
+      content: `[Check availability now](/booking/details)`,
     },
     {
       type: "cta",
       title: `Book a cleaner in Claremont`,
       description: `Get instant pricing and confirm your booking online in minutes.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/booking/details`,
       variant: `primary`,
     },
   ]),
@@ -949,6 +952,1184 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       description: `Host-ready quotes with Seaboard savvy.`,
       button_text: `Get instant quote`,
       link: `/booking`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("airbnb-cleaning-green-point-cape-town", [
+    {
+      type: "paragraph",
+      content: `Green Point is one of Cape Town’s busiest short-term rental areas, with high guest turnover and constant demand for clean, guest-ready spaces. If you’re an Airbnb host, reliable cleaning is essential to maintaining ratings and maximizing bookings.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover how Airbnb cleaning works in Green Point, pricing expectations, and how to choose the right cleaning service.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Professional Airbnb cleaning services in Green Point`,
+    },
+    {
+      type: "paragraph",
+      content: `If you’re looking for reliable Airbnb cleaning in Green Point, our team provides fast turnovers, detailed cleaning, and guest-ready presentation for short-term rentals.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Airbnb cleaning in Green Point`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Green Point](/locations/green-point-cleaning-services) are designed for fast turnovers, consistent quality, and guest-ready presentation.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why Airbnb cleaning is essential in Green Point`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `High booking frequency requires fast turnaround`,
+        `Guest expectations demand hotel-level cleanliness`,
+        `Reviews depend heavily on cleanliness`,
+        `Same-day turnovers are common`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Cleaning services available in Green Point`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Airbnb cleaning services](/services/airbnb-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+        `[Move out cleaning](/services/move-out-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `We also cover nearby areas like [Sea Point](/locations/sea-point-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `How much does Airbnb cleaning cost in Green Point?`,
+    },
+    {
+      type: "paragraph",
+      content: `Airbnb cleaning in Green Point typically starts from around R450 depending on property size, linen changes, and turnaround time. High-frequency bookings may require flexible pricing based on schedule and workload.`,
+    },
+    {
+      type: "paragraph",
+      content: `[Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For larger properties or deeper cleans, see our [deep cleaning services](/services/deep-cleaning-cape-town) or [move out cleaning](/services/move-out-cleaning-cape-town) options available in Green Point.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day Airbnb cleaning in Green Point`,
+    },
+    {
+      type: "paragraph",
+      content: `Same-day cleaning is often required between guest check-outs and check-ins. Our team provides fast turnaround cleaning to ensure your property is ready for the next guest.`,
+    },
+    {
+      type: "paragraph",
+      content: `[Check availability now](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [cleaning services in Sea Point](/blog/cleaning-services-sea-point-cape-town) or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Book Airbnb cleaning in Green Point`,
+    },
+    {
+      type: "paragraph",
+      content: `Book a reliable Airbnb cleaner in Green Point and keep your property guest-ready at all times.`,
+    },
+    {
+      type: "paragraph",
+      content: `[View cleaning services in Green Point](/locations/green-point-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does Airbnb cleaning cost in Green Point?`,
+          answer: `Airbnb cleaning in Green Point typically starts from around R450 depending on property size and turnaround requirements.`,
+        },
+        {
+          question: `Do you offer same-day Airbnb cleaning in Green Point?`,
+          answer: `Yes, same-day Airbnb cleaning is available depending on scheduling. You can check availability and book online.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book Airbnb cleaning in Green Point`,
+      description: `Get instant pricing and confirm your booking online.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("move-out-cleaning-rondebosch-cape-town", [
+    {
+      type: "paragraph",
+      content: `Rondebosch has a high number of student rentals and shared homes, which means frequent move-outs and strict inspection standards. A proper move-out clean helps you leave the property spotless and improves your chances of getting your full deposit back.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover what's included in move-out cleaning in Rondebosch, typical costs, and how to book quickly.`,
+    },
+    {
+      type: "paragraph",
+      content: `If you're searching for move-out cleaning near you in Rondebosch, our local cleaners can prepare your property for inspection quickly and reliably.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Move-out cleaning in Rondebosch`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Rondebosch](/locations/rondebosch-cleaning-services) are designed to meet landlord and agency inspection standards, especially for student housing and shared rentals.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why move-out cleaning is common in Rondebosch`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Student leases end on fixed dates → high turnover`,
+        `Shared homes require full resets between tenants`,
+        `Landlords expect inspection-ready cleaning`,
+        `Deposits often depend on cleanliness`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Cleaning services available in Rondebosch`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Move-out cleaning](/services/move-out-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does move-out cleaning cost in Rondebosch?`,
+    },
+    {
+      type: "paragraph",
+      content: `Move-out cleaning in Rondebosch typically starts from around R900–R1200 depending on the size of the property and its condition. Shared homes and student properties may require more detailed cleaning before inspection.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For deeper resets, see our [deep cleaning services](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day move-out cleaning in Rondebosch`,
+    },
+    {
+      type: "paragraph",
+      content: `Need a last-minute clean before inspection? Same-day and next-day bookings are often available in Rondebosch depending on demand.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Move-out cleaning checklist`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Kitchen (oven, cupboards, surfaces)`,
+        `Bathrooms (tiles, grout, fixtures)`,
+        `Floors vacuumed and mopped`,
+        `Inside cupboards and wardrobes`,
+        `Windows (interior)`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `For deeper resets, consider our [deep cleaning services](/services/deep-cleaning-cape-town) and for final polish, [window cleaning](/services/window-cleaning-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town) or [Airbnb cleaning in Green Point](/blog/airbnb-cleaning-green-point-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Newlands](/locations/newlands-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book move-out cleaning in Rondebosch`,
+    },
+    {
+      type: "paragraph",
+      content: `Book a reliable cleaner and get your property inspection-ready in Rondebosch.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Rondebosch](/locations/rondebosch-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does move-out cleaning cost in Rondebosch?`,
+          answer: `Move-out cleaning in Rondebosch typically starts from around R900–R1200 depending on property size and condition.`,
+        },
+        {
+          question: `Do you offer same-day move-out cleaning in Rondebosch?`,
+          answer: `Yes, same-day cleaning is often available depending on scheduling. You can check availability and book online.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book move-out cleaning in Rondebosch`,
+      description: `Get inspection-ready results with upfront pricing online.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("deep-cleaning-gardens-cape-town", [
+    {
+      type: "paragraph",
+      content: `Gardens is a mix of family homes, apartments, and older properties that often need detailed, once-off cleaning. Deep cleaning helps reset your home, remove built-up dirt, and tackle areas not covered in regular cleaning.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover what deep cleaning in Gardens includes, typical pricing, and how to book quickly.`,
+    },
+    {
+      type: "paragraph",
+      content: `If you're searching for deep cleaning near you in Gardens, our local cleaners offer same-day and scheduled bookings for homes and apartments across the area.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Deep cleaning in Gardens`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Gardens](/locations/gardens-cleaning-services) are designed for detailed, top-to-bottom cleaning across homes, apartments, and rental properties.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why deep cleaning is important in Gardens`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Older homes require more detailed cleaning`,
+        `Busy households need periodic full resets`,
+        `Dust buildup in high-traffic areas`,
+        `Seasonal cleaning for healthier living spaces`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `Deep cleaning is especially useful for family homes in Gardens, helping reset kitchens, bathrooms, and living spaces after busy periods or seasonal changes.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "services",
+      content: `Cleaning services available in Gardens`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+        `[Move-out cleaning](/services/move-out-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does deep cleaning cost in Gardens?`,
+    },
+    {
+      type: "paragraph",
+      content: `Deep cleaning in Gardens typically starts from around R800–R1500 depending on the size of the property and level of detail required. Larger homes and older properties may require more time and effort.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For regular upkeep after a deep clean, see our [home cleaning services](/services/standard-cleaning-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day deep cleaning in Gardens`,
+    },
+    {
+      type: "paragraph",
+      content: `Need a full home reset quickly? Same-day and next-day deep cleaning in Gardens is often available depending on scheduling.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Deep cleaning checklist`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Kitchen (appliances, cupboards, surfaces)`,
+        `Bathrooms (tiles, grout, fixtures)`,
+        `Floors, skirting boards, and corners`,
+        `Dust removal from high and hidden areas`,
+        `Window interiors`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `For finishing touches, consider [window cleaning](/services/window-cleaning-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), [Airbnb cleaning in Green Point](/blog/airbnb-cleaning-green-point-cape-town), or [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Vredehoek](/locations/vredehoek-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book deep cleaning in Gardens`,
+    },
+    {
+      type: "paragraph",
+      content: `Book a reliable cleaner and give your home a full reset in Gardens.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Gardens](/locations/gardens-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does deep cleaning cost in Gardens?`,
+          answer: `Deep cleaning in Gardens typically starts from around R800–R1500 depending on the size and condition of the property.`,
+        },
+        {
+          question: `Do you offer same-day deep cleaning in Gardens?`,
+          answer: `Yes, same-day deep cleaning may be available depending on scheduling. You can check availability and book online.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book deep cleaning in Gardens`,
+      description: `Once-off resets and family-home deep cleans with upfront pricing online.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("luxury-home-cleaning-camps-bay-cape-town", [
+    {
+      type: "paragraph",
+      content: `Camps Bay is known for luxury homes, sea-facing apartments, and high-end finishes that require careful, detailed cleaning. Professional cleaning services help maintain these spaces to a consistently high standard.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover what luxury home cleaning in Camps Bay includes, typical pricing, and how to book a trusted cleaner.`,
+    },
+    {
+      type: "paragraph",
+      content: `If you're searching for cleaning services near you in Camps Bay, our local team provides discreet, high-quality cleaning for premium homes and apartments, with same-day and scheduled availability.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Luxury cleaning in Camps Bay`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Camps Bay](/locations/camps-bay-cleaning-services) are tailored for premium homes, large spaces, and detailed finishes.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why luxury homes in Camps Bay need specialised cleaning`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `High-end finishes require careful handling`,
+        `Large homes need structured, detailed cleaning`,
+        `Glass, balconies, and sea exposure increase cleaning needs`,
+        `Consistency is key for maintaining property value`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `Our cleaners are trained to work with delicate surfaces such as marble, glass, stainless steel, and high-end finishes commonly found in Camps Bay homes.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "services",
+      content: `Cleaning services available in Camps Bay`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+        `[Airbnb cleaning](/services/airbnb-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does luxury cleaning cost in Camps Bay?`,
+    },
+    {
+      type: "paragraph",
+      content: `Cleaning services in Camps Bay typically start from around R500–R1200 depending on property size, finishes, and service level. Luxury homes may require more time and specialised attention.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For more detailed cleaning, see our [deep cleaning services](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day cleaning in Camps Bay`,
+    },
+    {
+      type: "paragraph",
+      content: `Need cleaning on short notice? Same-day and next-day cleaning in Camps Bay may be available depending on scheduling.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Luxury home cleaning checklist`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Detailed surface cleaning and polishing`,
+        `Kitchen and appliance cleaning`,
+        `Bathrooms and fixtures sanitised`,
+        `Balconies and glass cleaned`,
+        `Dust removal from high-end finishes`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `For final detailing, consider [window cleaning](/services/window-cleaning-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town), [Airbnb cleaning in Green Point](/blog/airbnb-cleaning-green-point-cape-town), or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Bantry Bay](/locations/bantry-bay-cleaning-services) and [Fresnaye](/locations/fresnaye-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book luxury cleaning in Camps Bay`,
+    },
+    {
+      type: "paragraph",
+      content: `Book a professional cleaner to maintain your home to the highest standard in Camps Bay.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Camps Bay](/locations/camps-bay-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does cleaning cost in Camps Bay?`,
+          answer: `Cleaning services in Camps Bay typically start from around R500–R1200 depending on property size and service level.`,
+        },
+        {
+          question: `Do you offer same-day cleaning in Camps Bay?`,
+          answer: `Yes, same-day cleaning may be available depending on scheduling. You can check availability and book online.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book luxury cleaning in Camps Bay`,
+      description: `Premium-home quotes with clear scope and reliable crews.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("regular-home-cleaning-wynberg-cape-town", [
+    {
+      type: "paragraph",
+      content: `Wynberg is home to families, long-term residents, and busy households that benefit from consistent, reliable cleaning. Regular home cleaning helps maintain a clean, comfortable space without the need for frequent deep cleans.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover how regular cleaning in Wynberg works, typical pricing, and how to set up a weekly or bi-weekly plan.`,
+    },
+    {
+      type: "paragraph",
+      content: `If you're searching for regular cleaning near you in Wynberg, our local cleaners offer weekly and bi-weekly schedules with consistent, reliable results.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Regular home cleaning in Wynberg`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Wynberg](/locations/wynberg-cleaning-services) are designed for ongoing maintenance, helping keep your home clean week after week.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why regular cleaning is ideal in Wynberg`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Busy households need consistent upkeep`,
+        `Families benefit from predictable cleaning schedules`,
+        `Reduces the need for frequent deep cleaning`,
+        `Keeps living spaces healthy and organised`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `Weekly and bi-weekly cleaning plans in Wynberg help maintain a consistently clean home while reducing the need for frequent deep cleaning.`,
+    },
+    {
+      type: "paragraph",
+      content: `For a Cape Town-wide guide to recurring domestic help and schedules, see [maid services in Cape Town](/maid-services-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `Regular cleaning is especially useful for family homes in Wynberg, helping maintain kitchens, bathrooms, and shared spaces on an ongoing basis.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "services",
+      content: `Cleaning services available in Wynberg`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Move-out cleaning](/services/move-out-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does regular cleaning cost in Wynberg?`,
+    },
+    {
+      type: "paragraph",
+      content: `Regular home cleaning in Wynberg typically starts from around R250–R450 depending on home size and frequency. Weekly and bi-weekly plans often provide better value over time.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For occasional resets, see our [deep cleaning services](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day cleaning in Wynberg`,
+    },
+    {
+      type: "paragraph",
+      content: `Need help on short notice? Same-day and next-day cleaning in Wynberg may be available depending on scheduling.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `What's included in regular cleaning`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Kitchen surfaces and appliances wiped`,
+        `Bathrooms cleaned and sanitised`,
+        `Floors vacuumed and mopped`,
+        `Dusting of furniture and surfaces`,
+        `General tidying of living areas`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `For more detailed cleaning, consider [deep cleaning](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town), [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), or [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Plumstead](/locations/plumstead-cleaning-services) and [Kenilworth](/locations/kenilworth-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book regular cleaning in Wynberg`,
+    },
+    {
+      type: "paragraph",
+      content: `Set up a reliable weekly or bi-weekly cleaning plan for your home in Wynberg.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Wynberg](/locations/wynberg-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does regular cleaning cost in Wynberg?`,
+          answer: `Regular cleaning in Wynberg typically starts from around R250–R450 depending on home size and cleaning frequency.`,
+        },
+        {
+          question: `Do you offer weekly or bi-weekly cleaning in Wynberg?`,
+          answer: `Yes, you can choose weekly or bi-weekly cleaning in Wynberg based on your needs. Regular plans help maintain a consistently clean home.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book regular cleaning in Wynberg`,
+      description: `Weekly and bi-weekly plans with upfront pricing—built for busy households.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("affordable-cleaning-observatory-cape-town", [
+    {
+      type: "paragraph",
+      content: `Observatory is known for student housing, shared homes, and a vibrant community where affordable and flexible cleaning services are essential. Regular cleaning helps keep shared spaces organised and comfortable.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover how affordable cleaning in Observatory works, pricing expectations, and how to book quickly.`,
+    },
+    {
+      type: "paragraph",
+      content: `If you're searching for affordable cleaning near you in Observatory, our local cleaners offer flexible scheduling for shared homes and student accommodation.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Cleaning services in Observatory`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Observatory](/locations/observatory-cleaning-services) are designed for shared homes, student accommodation, and budget-friendly cleaning needs.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why cleaning is important in Observatory`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Shared homes need regular upkeep`,
+        `Student housing requires flexible cleaning schedules`,
+        `High-traffic areas get dirty quickly`,
+        `Affordable options are important for tenants`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `In shared homes, cleaning costs can be split between tenants, making regular cleaning more affordable for everyone.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "services",
+      content: `Cleaning services available in Observatory`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Standard cleaning](/services/standard-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Move-out cleaning](/services/move-out-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does cleaning cost in Observatory?`,
+    },
+    {
+      type: "paragraph",
+      content: `Cleaning services in Observatory typically start from around R200–R400 depending on the size of the property and service frequency. Shared homes often benefit from splitting costs between tenants.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day cleaning in Observatory`,
+    },
+    {
+      type: "paragraph",
+      content: `Need quick help? Same-day and next-day cleaning in Observatory may be available depending on scheduling.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `What's included in shared-home cleaning`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Kitchen cleaning and surface wipe-down`,
+        `Bathroom cleaning and sanitising`,
+        `Floor vacuuming and mopping`,
+        `Dusting shared spaces`,
+        `General tidying`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town) or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Rosebank](/locations/rosebank-cleaning-services) and [Woodstock](/locations/woodstock-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book affordable cleaning in Observatory`,
+    },
+    {
+      type: "paragraph",
+      content: `Book a reliable and affordable cleaner for your home or shared space in Observatory.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Observatory](/locations/observatory-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does cleaning cost in Observatory?`,
+          answer: `Cleaning services in Observatory typically start from around R200–R400 depending on the size of the property and service frequency.`,
+        },
+        {
+          question: `Can I share cleaning costs in a shared home?`,
+          answer: `Yes, many shared homes split cleaning costs between tenants, making it an affordable option for maintaining common areas.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book affordable cleaning in Observatory`,
+      description: `Flexible scheduling for shares and student flats—clear scope before checkout.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("home-cleaning-plumstead-cape-town", [
+    {
+      type: "paragraph",
+      content: `Plumstead is a quiet, family-oriented suburb where regular home cleaning helps maintain clean, comfortable living spaces. Consistent cleaning reduces the need for frequent deep cleans and keeps your home running smoothly.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover how home cleaning in Plumstead works, typical pricing, and how to set up a regular cleaning schedule.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Home cleaning in Plumstead`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Plumstead](/locations/plumstead-cleaning-services) are designed for ongoing home maintenance, helping families keep their homes clean week after week.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why regular cleaning works well in Plumstead`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Family homes benefit from consistent upkeep`,
+        `Quiet suburbs suit scheduled cleaning routines`,
+        `Reduces buildup of dust and dirt over time`,
+        `Helps maintain a comfortable living environment`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `Regular cleaning is ideal for Plumstead households, keeping kitchens, bathrooms, and shared spaces clean without needing constant deep cleaning.`,
+    },
+    {
+      type: "paragraph",
+      content: `Planning weekly or bi-weekly help across the city? Read [maid services in Cape Town](/maid-services-cape-town) for schedules, scope, and pricing context.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "services",
+      content: `Cleaning services available in Plumstead`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+        `[Move-out cleaning](/services/move-out-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does home cleaning cost in Plumstead?`,
+    },
+    {
+      type: "paragraph",
+      content: `Home cleaning in Plumstead typically starts from around R250–R450 depending on property size and frequency. Regular cleaning plans often provide better value over time.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For occasional resets, see our [deep cleaning services](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day cleaning in Plumstead`,
+    },
+    {
+      type: "paragraph",
+      content: `Need cleaning on short notice? Same-day and next-day cleaning in Plumstead may be available depending on scheduling.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `What's included in regular home cleaning`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Kitchen surfaces and appliances wiped`,
+        `Bathrooms cleaned and sanitised`,
+        `Floors vacuumed and mopped`,
+        `Dusting of furniture and surfaces`,
+        `General tidying of living areas`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `For deeper cleaning, consider [deep cleaning](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [regular cleaning in Wynberg](/blog/regular-home-cleaning-wynberg-cape-town), [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), or [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Kenilworth](/locations/kenilworth-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book home cleaning in Plumstead`,
+    },
+    {
+      type: "paragraph",
+      content: `Set up a reliable cleaning schedule and keep your home consistently clean in Plumstead.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Plumstead](/locations/plumstead-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does home cleaning cost in Plumstead?`,
+          answer: `Home cleaning in Plumstead typically starts from around R250–R450 depending on property size and frequency.`,
+        },
+        {
+          question: `Can I book regular weekly cleaning in Plumstead?`,
+          answer: `Yes, weekly and bi-weekly cleaning options are available for homes in Plumstead.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book home cleaning in Plumstead`,
+      description: `Maintenance-focused visits for quiet suburban homes—scope locked before checkout.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
+      variant: `primary`,
+    },
+  ]),
+
+  hub("home-cleaning-constantia-cape-town", [
+    {
+      type: "paragraph",
+      content: `Constantia is known for large homes, estates, and leafy surroundings that require detailed, consistent cleaning. Professional cleaning services help maintain these properties to a high standard.`,
+    },
+    {
+      type: "paragraph",
+      content: `In this guide, we cover how home cleaning in Constantia works, pricing expectations, and how to book a reliable cleaner.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Home cleaning in Constantia`,
+    },
+    {
+      type: "paragraph",
+      content: `Professional [cleaning services in Constantia](/locations/constantia-cleaning-services) are tailored for large homes, estates, and properties that require detailed attention.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Why cleaning is important for Constantia homes`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Large homes require structured, detailed cleaning`,
+        `Outdoor areas bring in dust and debris`,
+        `Multiple rooms need consistent upkeep`,
+        `High standards are expected in premium properties`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `Regular cleaning helps maintain kitchens, bathrooms, and living areas across large Constantia homes.`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "services",
+      content: `Cleaning services available in Constantia`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `[Standard home cleaning](/services/standard-cleaning-cape-town)`,
+        `[Deep cleaning](/services/deep-cleaning-cape-town)`,
+        `[Window cleaning](/services/window-cleaning-cape-town)`,
+        `[Airbnb cleaning](/services/airbnb-cleaning-cape-town)`,
+      ],
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "pricing",
+      content: `How much does cleaning cost in Constantia?`,
+    },
+    {
+      type: "paragraph",
+      content: `Cleaning services in Constantia typically start from around R500–R1200 depending on property size and service level. Larger homes may require more time and detailed cleaning.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Get an exact quote](/booking/details)`,
+    },
+    {
+      type: "paragraph",
+      content: `For more intensive cleaning, see our [deep cleaning services](/services/deep-cleaning-cape-town).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `Same-day cleaning in Constantia`,
+    },
+    {
+      type: "paragraph",
+      content: `Need cleaning quickly? Same-day and next-day cleaning in Constantia may be available depending on scheduling.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [Check availability now](/booking/details)`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      content: `What's included in home cleaning`,
+    },
+    {
+      type: "bullet_list",
+      items: [
+        `Kitchen cleaning and appliance wipe-down`,
+        `Bathroom cleaning and sanitising`,
+        `Floors vacuumed and mopped`,
+        `Dusting across multiple rooms`,
+        `General tidying and organisation`,
+      ],
+    },
+    {
+      type: "paragraph",
+      content: `For finishing touches, consider [window cleaning](/services/window-cleaning-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `You may also be interested in nearby areas like [home cleaning in Plumstead](/blog/home-cleaning-plumstead-cape-town), [regular cleaning in Wynberg](/blog/regular-home-cleaning-wynberg-cape-town), or [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town).`,
+    },
+    {
+      type: "paragraph",
+      content: `We also serve nearby areas like [Bergvliet](/locations/bergvliet-cleaning-services).`,
+    },
+    {
+      type: "heading",
+      level: 2,
+      id: "booking",
+      content: `Book home cleaning in Constantia`,
+    },
+    {
+      type: "paragraph",
+      content: `Book a reliable cleaner to maintain your home to a high standard in Constantia.`,
+    },
+    {
+      type: "paragraph",
+      content: `👉 [View cleaning services in Constantia](/locations/constantia-cleaning-services)`,
+    },
+    {
+      type: "faq",
+      omit_section_heading: true,
+      items: [
+        {
+          question: `How much does cleaning cost in Constantia?`,
+          answer: `Cleaning services in Constantia typically start from around R500–R1200 depending on property size and service level.`,
+        },
+        {
+          question: `Do you clean large homes in Constantia?`,
+          answer: `Yes, cleaning services are available for large homes and estates in Constantia with tailored cleaning plans.`,
+        },
+      ],
+    },
+    {
+      type: "cta",
+      title: `Book home cleaning in Constantia`,
+      description: `Large-home and estate visits with clear scope—priced before checkout.`,
+      button_text: `Get instant quote`,
+      link: `/booking/details`,
       variant: `primary`,
     },
   ]),

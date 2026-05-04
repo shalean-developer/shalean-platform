@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { LocationsIndexView } from "@/components/locations/LocationsIndexView";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/locations";
 const CANONICAL_ABSOLUTE = absoluteCanonicalUrl(PATH);
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
   title: "Cleaning Services Across Cape Town | Suburb Hubs | Shalean",
   description:
     "Find trusted cleaners in your Cape Town suburb—transparent pricing, instant booking, and local hub guides for Sea Point, Claremont, Rondebosch, and more.",
+  robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL_ABSOLUTE },
   openGraph: {
     type: "website",

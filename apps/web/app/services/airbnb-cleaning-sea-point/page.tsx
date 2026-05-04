@@ -3,6 +3,7 @@ import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { AirbnbAreaServiceLanding } from "@/components/seo/AirbnbAreaServiceLanding";
 import { AIRBNB_AREA_LANDINGS } from "@/lib/seo/airbnbAreaLandingPages";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const block = AIRBNB_AREA_LANDINGS["sea-point"];
 const canonical = absoluteCanonicalUrl(block.path);
@@ -10,6 +11,7 @@ const canonical = absoluteCanonicalUrl(block.path);
 export const metadata: Metadata = {
   title: block.title,
   description: block.description,
+  robots: SEO_INDEX_FOLLOW,
   alternates: { canonical },
   openGraph: {
     type: "website",

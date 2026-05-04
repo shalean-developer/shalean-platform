@@ -4,6 +4,7 @@
 
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
+import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 
@@ -60,10 +61,12 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         description: metaDescription,
         url: pageUrl,
         isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: siteOrigin },
+        mainEntityOfPage: { "@id": `${pageUrl}#service` },
+        mainEntity: { "@id": `${pageUrl}#service` },
       },
       {
         "@type": "BreadcrumbList",
-        "@id": `${pageUrl}#breadcrumb`,
+        "@id": `${pageUrl}#breadcrumbs`,
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Home", item: siteOrigin },
           { "@type": "ListItem", position: 2, name: "Locations", item: locationsIndexUrl },
@@ -87,6 +90,7 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         serviceType: "Cleaning services",
         url: pageUrl,
         areaServed: { "@type": "Place", name: primaryPlaceLabel, containedInPlace: cityPlace },
+        serviceArea: capeTownAdministrativeServiceArea(),
         provider: { "@id": localBusinessId },
       },
       {

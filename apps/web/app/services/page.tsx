@@ -4,6 +4,7 @@ import Link from "next/link";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
+import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { ServiceCard } from "@/components/services/ServiceCard";
 import { ServicesAreasSection } from "@/components/services/ServicesAreasSection";
 import { ServicesHubAccordions } from "@/components/services/ServicesHubAccordions";
@@ -17,6 +18,7 @@ import {
   type CapeTownSeoServiceSlug,
 } from "@/lib/seo/capeTownSeoPages";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import {
   AppWindow,
   Building2,
@@ -64,11 +66,11 @@ const hubPageJsonLd = {
       name: "Professional Cleaning Services in Cape Town",
       description,
       isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: SITE },
-      breadcrumb: { "@id": `${PAGE_URL}#breadcrumb` },
+      breadcrumb: { "@id": `${PAGE_URL}#breadcrumbs` },
     },
     {
       "@type": "BreadcrumbList",
-      "@id": `${PAGE_URL}#breadcrumb`,
+      "@id": `${PAGE_URL}#breadcrumbs`,
       itemListElement: [
         { "@type": "ListItem", position: 1, name: "Home", item: SITE },
         { "@type": "ListItem", position: 2, name: "Cleaning services", item: PAGE_URL },
@@ -105,6 +107,7 @@ const hubPageJsonLd = {
 export const metadata: Metadata = {
   title,
   description,
+  robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: PAGE_URL },
   openGraph: {
     type: "website",
@@ -185,6 +188,13 @@ export default function ServicesHubPage() {
                 </Link>{" "}
                 scope before you sync calendars.
               </p>
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-600 sm:text-base">
+                Need recurring home help? Browse{" "}
+                <Link href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  maid services in Cape Town
+                </Link>{" "}
+                for weekly, bi-weekly, or daily domestic cleaning—same instant quote flow as below.
+              </p>
               <ul className="mt-6 space-y-3">
                 {[
                   "From R300 — exact total before you pay",
@@ -240,7 +250,11 @@ export default function ServicesHubPage() {
               Our cleaning services
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-600 md:text-base">
-              Seven Cape Town guides — same booking flow, scoped to how your space is used.
+              Seven Cape Town guides — same booking flow, scoped to how your space is used.{" "}
+              <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                See our cleaning prices in Cape Town
+              </Link>{" "}
+              before you book.
             </p>
             <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <ServiceCard
@@ -472,6 +486,12 @@ export default function ServicesHubPage() {
         </section>
 
         <Section spacing="tight" className="pb-16 pt-10">
+          <div className="mb-10">
+            <SeoInternalLinksBlock
+              title="Hub navigation"
+              className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+            />
+          </div>
           <RelatedLinks placement="services_hub" />
         </Section>
       </main>

@@ -96,6 +96,45 @@ export function MarketingAreasSection({ locations }: Props) {
               </Link>
               .
             </p>
+            <p>
+              We also cover specific areas like{" "}
+              <Link href="/blog/cleaning-services-claremont-cape-town" className={linkInParagraphClassName}>
+                cleaning services in Claremont
+              </Link>
+              ,{" "}
+              <Link href="/blog/deep-cleaning-gardens-cape-town" className={linkInParagraphClassName}>
+                Gardens cleaning services
+              </Link>
+              ,{" "}
+              <Link href="/blog/move-out-cleaning-rondebosch-cape-town" className={linkInParagraphClassName}>
+                Rondebosch cleaning services
+              </Link>
+              ,{" "}
+              <Link href="/blog/regular-home-cleaning-wynberg-cape-town" className={linkInParagraphClassName}>
+                Wynberg cleaning services
+              </Link>
+              ,{" "}
+              <Link href="/blog/affordable-cleaning-observatory-cape-town" className={linkInParagraphClassName}>
+                Observatory cleaning services
+              </Link>
+              ,{" "}
+              <Link href="/blog/home-cleaning-plumstead-cape-town" className={linkInParagraphClassName}>
+                Plumstead cleaning services
+              </Link>
+              ,{" "}
+              <Link href="/blog/home-cleaning-constantia-cape-town" className={linkInParagraphClassName}>
+                Constantia cleaning services
+              </Link>
+              ,{" "}
+              <Link href="/blog/luxury-home-cleaning-camps-bay-cape-town" className={linkInParagraphClassName}>
+                Camps Bay cleaning services
+              </Link>
+              , and{" "}
+              <Link href="/blog/airbnb-cleaning-green-point-cape-town" className={linkInParagraphClassName}>
+                Green Point cleaning services
+              </Link>
+              .
+            </p>
           </div>
         </div>
 

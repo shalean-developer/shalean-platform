@@ -13,14 +13,17 @@ import {
   WindowCleaningServiceTypesSection,
 } from "@/components/seo/WindowCapeTownServiceExtendedContent";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
+import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import {
   CAPE_TOWN_SERVICE_SEO,
+  LOCATION_SEO_PAGES,
   capeTownSeoLocationLinks,
   resolveCapeTownServiceSchemaFields,
   serviceHubLocationLinks,
 } from "@/lib/seo/capeTownSeoPages";
 import { googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
+import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
@@ -82,7 +85,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
 
   const breadcrumbEntity = {
     "@type": "BreadcrumbList",
-    "@id": `${pageUrl}#breadcrumb`,
+    "@id": `${pageUrl}#breadcrumbs`,
     itemListElement: [
       { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
       { "@type": "ListItem", position: 2, name: "Services", item: absoluteCanonicalUrl("/services") },
@@ -116,6 +119,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
         serviceType: schemaServiceType,
         url: pageUrl,
         areaServed: { "@type": "Place", name: "Cape Town, South Africa" },
+        serviceArea: capeTownAdministrativeServiceArea(),
         provider: { "@id": localBusinessId },
       },
       breadcrumbEntity,
@@ -178,6 +182,15 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             {data.explanation.map((p, i) => (
               <p key={i}>{p}</p>
             ))}
+            <p>
+              <Link
+                href="/cleaning-prices-cape-town"
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                See our cleaning prices in Cape Town
+              </Link>{" "}
+              before you book.
+            </p>
             {slug === "deep-cleaning-cape-town" ? (
               <p>
                 Hosting short-stay guests? Our{" "}
@@ -187,6 +200,19 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 scope is tuned for tight changeovers—deep cleans still matter when ovens and grout lag behind turnover cycles.
               </p>
             ) : null}
+            {slug === "deep-cleaning-cape-town" ? (
+              <p>
+                Cleaning along the Atlantic Seaboard? Compare{" "}
+                <Link
+                  href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  cleaning services in Sea Point
+                </Link>{" "}
+                for salt-air buildup, compact apartments, and rental-heavy streets—then lock bedrooms, bathrooms, and add-ons
+                for your deep clean online.
+              </p>
+            ) : null}
             {slug === "standard-cleaning-cape-town" ? (
               <p>
                 If you list on Airbnb, compare dedicated{" "}
@@ -194,6 +220,15 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                   airbnb cleaning Cape Town
                 </Link>{" "}
                 turnovers alongside recurring standard visits—guest expectations are closer to hospitality than weekly home upkeep.
+              </p>
+            ) : null}
+            {slug === "standard-cleaning-cape-town" ? (
+              <p>
+                For ongoing weekly cleaning, see our{" "}
+                <Link href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  maid services in Cape Town
+                </Link>
+                .
               </p>
             ) : null}
             {slug === "airbnb-cleaning-cape-town" ? (
@@ -206,6 +241,30 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                   window cleaning in Cape Town
                 </Link>{" "}
                 for apartments and balconies.
+              </p>
+            ) : null}
+            {slug === "airbnb-cleaning-cape-town" ? (
+              <p>
+                Hosting near the Promenade or Main Road corridor? Read our{" "}
+                <Link
+                  href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  cleaning services in Sea Point
+                </Link>{" "}
+                hub for turnover pacing, parking, and guest-ready presentation alongside this Cape Town-wide Airbnb scope.
+              </p>
+            ) : null}
+            {slug === "airbnb-cleaning-cape-town" ? (
+              <p>
+                Running a listing in Green Point? Read{" "}
+                <Link
+                  href="/blog/airbnb-cleaning-green-point-cape-town"
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  Airbnb cleaning in Green Point
+                </Link>
+                —pricing, same-day turnovers, and guest-ready standards for STR hosts.
               </p>
             ) : null}
             {slug === "move-out-cleaning-cape-town" ? (
@@ -234,6 +293,27 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 when glass needs a polish for inspection photos.
               </p>
             ) : null}
+            {data.neighbourhoodBlogGuide ? (
+              <p>
+                Looking for cleaning services in {data.neighbourhoodBlogGuide.areaName}? See our full area guide:{" "}
+                <Link
+                  href={data.neighbourhoodBlogGuide.blogPath}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  {data.neighbourhoodBlogGuide.linkAnchorText}
+                </Link>
+                .
+              </p>
+            ) : null}
+            {data.extraNeighbourhoodBlogGuides?.map((g) => (
+              <p key={g.blogPath}>
+                For {g.areaName}-specific cleaning guidance, read{" "}
+                <Link href={g.blogPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  {g.linkAnchorText}
+                </Link>
+                .
+              </p>
+            ))}
           </div>
         </div>
       </section>
@@ -419,7 +499,11 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
       ) : null}
 
       <section className="border-b border-zinc-100 py-16">
-        <div className="mx-auto max-w-4xl px-4">
+        <div className="mx-auto max-w-4xl space-y-10 px-4">
+          <SeoInternalLinksBlock
+            title="Hub navigation"
+            className="rounded-2xl border border-zinc-200 bg-zinc-50/90 p-6"
+          />
           <RelatedLinks placement="service" currentServiceSlug={slug} />
         </div>
       </section>

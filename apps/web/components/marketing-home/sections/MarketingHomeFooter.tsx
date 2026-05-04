@@ -81,6 +81,11 @@ export function MarketingHomeFooter() {
                 </Link>
               </li>
               <li>
+                <Link href="/cleaning-prices-cape-town" className="transition hover:text-white">
+                  Cleaning prices in Cape Town
+                </Link>
+              </li>
+              <li>
                 <Link href="/blog" className="transition hover:text-white">
                   Blog
                 </Link>

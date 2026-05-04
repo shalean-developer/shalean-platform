@@ -268,17 +268,6 @@ export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = [
     dateModified: PROGRAMMATIC_DATE_MODIFIED,
   },
   {
-    slug: "move-out-cleaning-rondebosch-cape-town",
-    title: "Move-Out Cleaning in Rondebosch, Cape Town",
-    description: "End of lease cleaning in Rondebosch to help secure your deposit.",
-    h1: "Move-Out Cleaning in Rondebosch, Cape Town",
-    primaryKeyword: "move out cleaning Rondebosch Cape Town",
-    location: "Rondebosch",
-    service: "move-out",
-    publishedAt: PROGRAMMATIC_PUBLISHED_AT,
-    dateModified: PROGRAMMATIC_DATE_MODIFIED,
-  },
-  {
     slug: "home-cleaning-frequency-rondebosch-cape-town",
     title: "How Often Should You Book Home Cleaning in Rondebosch?",
     description:
@@ -332,17 +321,6 @@ export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = [
   },
 
   // GARDENS
-  {
-    slug: "deep-cleaning-gardens-cape-town",
-    title: "Deep Cleaning Services in Gardens, Cape Town",
-    description: "Professional deep cleaning in Gardens for apartments and homes.",
-    h1: "Deep Cleaning in Gardens, Cape Town",
-    primaryKeyword: "deep cleaning Gardens Cape Town",
-    location: "Gardens",
-    service: "deep",
-    publishedAt: PROGRAMMATIC_PUBLISHED_AT,
-    dateModified: PROGRAMMATIC_DATE_MODIFIED,
-  },
   {
     slug: "airbnb-cleaning-gardens-cape-town",
     title: "Airbnb Cleaning Services in Gardens, Cape Town",
@@ -1207,6 +1185,22 @@ const AREA_HUB_LINK_LABEL_PHRASE: Record<ProgrammaticServiceForAreaHub, string> 
   carpet: "Carpet cleaning",
 };
 
+/** Editorial `blog_posts` rows that supersede thin PROGRAMMATIC_POSTS URLs for a given service × area. */
+const EDITORIAL_SERVICE_AREA_BLOG_SLUG: Partial<
+  Record<ProgrammaticServiceForAreaHub, Partial<Record<(typeof AREA_BLOG_HUB_LOCATIONS)[number], string>>>
+> = {
+  deep: {
+    Gardens: "deep-cleaning-gardens-cape-town",
+  },
+  standard: {
+    Wynberg: "regular-home-cleaning-wynberg-cape-town",
+    Constantia: "home-cleaning-constantia-cape-town",
+  },
+  "move-out": {
+    Rondebosch: "move-out-cleaning-rondebosch-cape-town",
+  },
+};
+
 /** Internal links from Cape Town service SEO pages to matching programmatic /blog/* area posts. */
 export function getAreaProgrammaticBlogLinksForCapeTownService(
   slug: CapeTownSeoServiceSlug,
@@ -1215,6 +1209,10 @@ export function getAreaProgrammaticBlogLinksForCapeTownService(
   if (!svc) return null;
   const phrase = AREA_HUB_LINK_LABEL_PHRASE[svc];
   return AREA_BLOG_HUB_LOCATIONS.map((loc) => {
+    const editorialSlug = EDITORIAL_SERVICE_AREA_BLOG_SLUG[svc]?.[loc];
+    if (editorialSlug) {
+      return { href: `/blog/${editorialSlug}`, label: `${phrase} in ${loc}` };
+    }
     const post = PROGRAMMATIC_POSTS.find((p) => p.service === svc && p.location === loc);
     if (!post) {
       throw new Error(`Missing programmatic post for service "${svc}" in ${loc}`);

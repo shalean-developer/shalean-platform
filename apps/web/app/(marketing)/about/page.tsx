@@ -5,6 +5,7 @@ import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHe
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/about";
 const CANONICAL = absoluteCanonicalUrl(PATH);
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   title: "About Shalean | Trusted Home Cleaning Cape Town",
   description:
     "Vetted cleaners, transparent pricing, and reliable home cleaning across Cape Town. Learn how Shalean works and book online with upfront quotes.",
+  robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
   openGraph: {
     type: "website",

@@ -19,57 +19,77 @@ function pathnameNotExcluded(url: string): boolean {
   }
 }
 
+function normalizeSitemapUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+    return u.href;
+  } catch {
+    return url;
+  }
+}
+
 /**
- * Public index URLs: `/`, `/services`, `/services/*`, `/locations/*`, `/blog/*`, Supabase blog posts, taxonomy.
+ * Public index URLs with priorities. De-duplicates by normalized URL (e.g. trailing slashes).
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
+  const seen = new Set<string>();
+  const entries: MetadataRoute.Sitemap = [];
+
+  const push = (url: string, priority: number) => {
+    if (!pathnameNotExcluded(url)) return;
+    const normalized = normalizeSitemapUrl(url);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    entries.push({ url: normalized, lastModified, priority });
+  };
+
+  push(BASE, 1);
+
+  push(`${BASE}/services`, 0.9);
+  for (const p of Object.values(CAPE_TOWN_SERVICE_SEO)) {
+    push(`${BASE}${p.path}`, 0.9);
+  }
+
+  push(`${BASE}/locations`, 0.8);
+  push(`${BASE}/locations/cape-town-cleaning-services`, 0.8);
+  for (const p of Object.values(LOCATION_SEO_PAGES)) {
+    push(`${BASE}${p.path}`, 0.8);
+  }
+
+  for (const path of AIRBNB_AREA_LANDING_PATHS) {
+    push(`${BASE}${path}`, 0.8);
+  }
+
+  push(`${BASE}/cleaning-prices-cape-town`, 0.8);
+  push(`${BASE}/maid-services-cape-town`, 0.8);
+
+  push(`${BASE}/about`, 0.65);
+  push(`${BASE}/faq`, 0.65);
+  push(`${BASE}/reviews`, 0.65);
+
+  push(`${BASE}/blog`, 0.7);
 
   const dbSlugs = await getPublishedBlogSlugs();
   const categorySlugs = await listActiveCategorySlugs();
   const tagSlugs = await listTagSlugs();
-
-  const blogPostUrls: MetadataRoute.Sitemap = [];
 
   const blogSlugSet = new Set<string>();
   for (const s of dbSlugs) blogSlugSet.add(s);
   for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(post.slug);
 
   for (const slug of blogSlugSet) {
-    blogPostUrls.push({ url: `${BASE}/blog/${slug}`, lastModified });
+    push(`${BASE}/blog/${slug}`, 0.7);
   }
 
-  const entries: MetadataRoute.Sitemap = [
-    { url: BASE, lastModified },
-    { url: `${BASE}/services`, lastModified },
-    { url: `${BASE}/locations`, lastModified },
-    { url: `${BASE}/about`, lastModified },
-    { url: `${BASE}/faq`, lastModified },
-    { url: `${BASE}/reviews`, lastModified },
-    { url: `${BASE}/locations/cape-town-cleaning-services`, lastModified },
-    { url: `${BASE}/blog`, lastModified },
-    ...blogPostUrls,
-    ...categorySlugs.map((slug) => ({
-      url: `${BASE}/blog/category/${slug}`,
-      lastModified,
-    })),
-    ...tagSlugs.map((slug) => ({
-      url: `${BASE}/blog/tag/${slug}`,
-      lastModified,
-    })),
-    ...Object.values(CAPE_TOWN_SERVICE_SEO).map((p) => ({
-      url: `${BASE}${p.path}`,
-      lastModified,
-    })),
-    ...AIRBNB_AREA_LANDING_PATHS.map((path) => ({
-      url: `${BASE}${path}`,
-      lastModified,
-    })),
-    ...Object.values(LOCATION_SEO_PAGES).map((p) => ({
-      url: `${BASE}${p.path}`,
-      lastModified,
-    })),
-  ];
+  for (const slug of categorySlugs) {
+    push(`${BASE}/blog/category/${slug}`, 0.65);
+  }
 
-  return entries.filter((e) => pathnameNotExcluded(e.url));
+  for (const slug of tagSlugs) {
+    push(`${BASE}/blog/tag/${slug}`, 0.65);
+  }
+
+  return entries;
 }

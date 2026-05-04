@@ -13,6 +13,7 @@ import { getLocationHubBlogCards } from "@/lib/seo/location-hub-blog-cards";
 import { resolveLocationHubUiPatch } from "@/lib/seo/resolve-location-hub-ui-patch";
 import { resolveLocationTitleVariant } from "@/lib/seo/resolve-location-title-variant";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -44,6 +45,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
+    robots: SEO_INDEX_FOLLOW,
     alternates: { canonical: absoluteCanonicalUrl(path) },
     openGraph: {
       type: "website",

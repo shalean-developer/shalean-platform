@@ -38,7 +38,7 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
                 in Cape Town
               </h1>
 
-              <p className="mt-3 max-w-md text-base leading-relaxed text-slate-600">
+              <p className="marketing-hero-lead mt-3 max-w-md text-base leading-relaxed text-slate-600">
                 Book trusted home and office cleaners with fast online scheduling, vetted teams, and clear pricing. Serving
                 Cape Town with reliable, professional results.
               </p>

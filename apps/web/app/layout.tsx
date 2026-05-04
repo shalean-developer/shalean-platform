@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { ReferralCapture } from "@/components/referrals/ReferralCapture";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.shalean.co.za"),
+  robots: SEO_INDEX_FOLLOW,
   title: {
     default: "Shalean Cleaning Services",
     template: "%s",

@@ -17,10 +17,12 @@ import {
   type BlogTopicFilterId,
 } from "@/lib/blog/blog-index-hub";
 import { getAllPublishedPosts } from "@/lib/blog/get-all-posts";
+import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const SITE = "https://www.shalean.co.za";
-const CANONICAL = "/blog";
-const PAGE_URL = `${SITE}${CANONICAL}`;
+const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
+const PAGE_URL = CANONICAL_ABS;
 
 const H1 = "Cleaning Guides & Prices in Cape Town";
 const DEFAULT_DESCRIPTION =
@@ -46,7 +48,8 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
   return {
     title,
     description,
-    alternates: { canonical: CANONICAL },
+    robots: SEO_INDEX_FOLLOW,
+    alternates: { canonical: CANONICAL_ABS },
     openGraph: {
       type: "website",
       url: PAGE_URL,
@@ -109,7 +112,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
       url: SITE,
     },
     blogPost: enriched.slice(0, 20).map((post) => ({
-      "@type": "BlogPosting",
+      "@type": ["BlogPosting", "Article"],
       headline: post.title,
       description: post.displayExcerpt,
       url: `${SITE}/blog/${post.slug}`,

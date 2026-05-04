@@ -72,6 +72,12 @@ export function LocationsIndexView() {
             <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-600">
               Find trusted cleaners in your area with transparent pricing and instant booking.
             </p>
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-600">
+              <Link href="/cleaning-prices-cape-town" className={linkEmphasisClassName}>
+                Check cleaning prices in Cape Town
+              </Link>{" "}
+              for your area, then open your suburb hub below.
+            </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <GrowthCtaLink
                 href="/booking/details"

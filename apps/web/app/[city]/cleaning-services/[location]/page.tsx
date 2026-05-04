@@ -7,6 +7,7 @@ import { cityNameFromSlug, locationNameForCity, SERVICE_LOCATIONS } from "@/lib/
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const SITE_ORIGIN = "https://www.shalean.co.za";
 
@@ -60,7 +61,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!cityName || !locationName) return { title: defaultTitle };
 
-  return shared;
+  return { ...shared, robots: SEO_INDEX_FOLLOW };
 }
 
 function areaHref(citySlug: string, areaSlug: string): string {

@@ -12,11 +12,13 @@ import { LocationHubAuthoritySection } from "@/components/seo/LocationHubAuthori
 import { LocationHubComparisonSection } from "@/components/seo/LocationHubComparisonSection";
 import { LocationHubEntityStack } from "@/components/seo/LocationHubEntityStack";
 import { LocationHubRankingSections } from "@/components/seo/LocationHubRankingSections";
+import { buildRankingHeroParagraphs, LocationHubRankingAsset } from "@/components/seo/LocationHubRankingAsset";
 import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDepth";
 import { LocationHubShareBar } from "@/components/seo/LocationHubShareBar";
 import { LocationReviewHighlights } from "@/components/seo/LocationReviewHighlights";
 import { LocationTrustSignals } from "@/components/seo/LocationTrustSignals";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
+import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import { LocationHubServiceTiles } from "@/components/seo/LocationHubServiceTiles";
 import { SeoHubGrowthCtaLink } from "@/components/seo/SeoHubGrowthCtaLink";
@@ -42,7 +44,9 @@ import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { buildDynamicLocationFaqs, nearbyProgrammaticLocations } from "@/lib/seo/locations";
 import { buildPeopleAlsoAskFaqs, mergeLocationFaqs } from "@/lib/seo/location-paa-faqs";
 import { buildLocationLocalProofBullets } from "@/lib/seo/location-hub-local-proof";
+import { buildCostFaqAnswer } from "@/lib/seo/location-ranking-asset-copy";
 import { getLocationPricingHeroLine } from "@/lib/seo/location-pricing";
+import { resolveLocationRankingSections } from "@/lib/seo/resolve-location-ranking-sections";
 import { buildLocationHubJsonLd } from "@/lib/seo/structured-data";
 import { LOCATION_PAGE_CONTENT_GROUP } from "@/lib/seo/search-console-readiness";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
@@ -120,9 +124,23 @@ export function ProgrammaticLocationCleaningPage({
   const geoHints = getLocationGeoHints(slug);
   const nearbyNamesForCopy = nearby.map((l) => l.name);
   const nearbyListSentence = formatNearbyNames(nearbyNamesForCopy);
+  const rankingResolved = seo ? resolveLocationRankingSections(seo) : null;
+  const rankingHeroParagraphs =
+    rankingResolved?.useRankingHero && seo ? buildRankingHeroParagraphs(location, seo) : null;
   const baseFaqs = seo?.faqs?.length ? seo.faqs : buildDynamicLocationFaqs(location);
+  const peopleAlsoAskBase = buildPeopleAlsoAskFaqs(location);
+  const peopleAlsoAsk =
+    rankingResolved?.prependCostFaq
+      ? [
+          {
+            q: `How much does cleaning cost in ${location.name}?`,
+            a: seo?.rankingCostFaqAnswer ?? buildCostFaqAnswer(location),
+          },
+          ...peopleAlsoAskBase,
+        ]
+      : peopleAlsoAskBase;
   const mergedFaqs = mergeLocationFaqs(
-    buildPeopleAlsoAskFaqs(location),
+    peopleAlsoAsk,
     baseFaqs.map((f) => ({ q: f.q, a: f.a })),
   );
   const eyebrow = `${location.city} · ${location.region}`;
@@ -167,6 +185,7 @@ export function ProgrammaticLocationCleaningPage({
           primary_kw: h1,
           seo_priority: seoPriority,
           hub_tier: hubTier,
+          location_ranking_tier: rankingResolved?.tier ?? "none",
         }}
       />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
@@ -198,10 +217,21 @@ export function ProgrammaticLocationCleaningPage({
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</p>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{h1}</h1>
           <div className="mt-6 space-y-4 text-lg leading-relaxed text-zinc-600">
-            {intro.map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
+            {rankingHeroParagraphs
+              ? rankingHeroParagraphs.map((p, i) => <p key={i}>{p}</p>)
+              : intro.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
           </div>
+          {seo?.relatedBlogGuide ? (
+            <p className="mt-5 text-base leading-relaxed text-zinc-600 md:text-lg">
+              Need a full breakdown of cleaning options, pricing, and services? Read our guide:{" "}
+              <Link href={seo.relatedBlogGuide.href} className={`font-semibold ${linkEmphasisClassName}`}>
+                {seo.relatedBlogGuide.linkAnchorText}
+              </Link>
+              .
+            </p>
+          ) : null}
           {nearby.length > 0 ? (
             <p className="mt-5 text-base leading-relaxed text-zinc-600">
               Compare nearby hubs:{" "}
@@ -223,11 +253,19 @@ export function ProgrammaticLocationCleaningPage({
             <span className="font-semibold text-zinc-800">Typical pricing in {location.name}: </span>
             {getLocationPricingHeroLine(location)}
           </p>
-          <p className="mt-5 text-base leading-relaxed text-zinc-700">
-            We help families, professionals, and Airbnb hosts in {location.name}, {location.city}, with vetted cleaners
-            and transparent online quoting—tell us your address and room count so your total is clear before you
-            confirm.
+          <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+            <Link href="/cleaning-prices-cape-town" className={linkEmphasisClassName}>
+              Check cleaning prices in Cape Town
+            </Link>{" "}
+            for your area.
           </p>
+          {!rankingResolved?.useRankingHero ? (
+            <p className="mt-5 text-base leading-relaxed text-zinc-700">
+              We help families, professionals, and Airbnb hosts in {location.name}, {location.city}, with vetted cleaners
+              and transparent online quoting—tell us your address and room count so your total is clear before you
+              confirm.
+            </p>
+          ) : null}
           <p className="mt-4 text-sm font-medium text-zinc-700">
             {publicTrustRatingBadgeLine(trustStats)} · Thousands of Cape Town cleans completed through Shalean
           </p>
@@ -288,7 +326,11 @@ export function ProgrammaticLocationCleaningPage({
         </div>
       </section>
 
-      {seo?.localAngle?.length ? (
+      {rankingResolved?.active && seo ? (
+        <LocationHubRankingAsset location={location} seo={seo} ranking={rankingResolved} ctx={seoCtx} />
+      ) : null}
+
+      {seo?.localAngle?.length && !rankingResolved?.skipLocalAngle ? (
         <section className="border-b border-zinc-100 py-16">
           <div className="mx-auto max-w-4xl px-4">
             <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Local context</h2>
@@ -390,69 +432,75 @@ export function ProgrammaticLocationCleaningPage({
 
       <LocationReviewHighlights location={location} />
 
-      <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Why choose Shalean in {location.name}?</h2>
-          <ul className="mt-8 space-y-4">
-            {whyChooseItems.map((item, wi) => (
-              <li
-                key={`why-${wi}-${item.slice(0, 24)}`}
-                className="flex gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-700 shadow-sm"
-              >
-                <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+      {!rankingResolved?.skipDefaultWhyChoose ? (
+        <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Why choose Shalean in {location.name}?</h2>
+            <ul className="mt-8 space-y-4">
+              {whyChooseItems.map((item, wi) => (
+                <li
+                  key={`why-${wi}-${item.slice(0, 24)}`}
+                  className="flex gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-700 shadow-sm"
+                >
+                  <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
 
       <LocationHubComparisonSection location={location} />
 
       <LocationHubMidBanner location={location} slug={slug} tier={hubTier} analyticsCtx={seoCtx} />
 
-      <section className="border-b border-zinc-100 py-16">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Services available in {location.name}</h2>
-          <p className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3 text-base font-medium leading-relaxed text-zinc-800">
-            {directAnswerWhatCleaningServicesAreAvailable(location)}
-          </p>
-          <p className="mt-4 text-base text-zinc-600">
-            Open a Cape Town-wide guide, enter your {location.name} address at checkout, and lock scope before we
-            dispatch.
-          </p>
-          <LocationHubServiceTiles
-            ctx={seoCtx}
-            tiles={[
-              { href: STANDARD_SERVICE, label: "Standard cleaning" },
-              { href: DEEP_SERVICE, label: "Deep cleaning" },
-              { href: MOVE_OUT_SERVICE, label: "Move-out cleaning" },
-            ]}
-          />
-          <p className="mt-6 text-sm text-zinc-600">
-            More guides:{" "}
-            <Link href="/services" className={linkEmphasisClassName}>
-              all Cape Town cleaning services
-            </Link>
-            .
-          </p>
-          <div className="mt-8">
-            <SeoHubGrowthCtaLink
-              href="/booking/details"
-              source={`seo_loc_${slug}_services_book_now`}
+      {!rankingResolved?.skipDefaultServicesStrip ? (
+        <section className="border-b border-zinc-100 py-16">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Services available in {location.name}</h2>
+            <p className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3 text-base font-medium leading-relaxed text-zinc-800">
+              {directAnswerWhatCleaningServicesAreAvailable(location)}
+            </p>
+            <p className="mt-4 text-base text-zinc-600">
+              Open a Cape Town-wide guide, enter your {location.name} address at checkout, and lock scope before we
+              dispatch.
+            </p>
+            <LocationHubServiceTiles
               ctx={seoCtx}
-              ctaLocation="services_section"
-              ctaLabel="Book now"
-              ctaKind="book_now"
-              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-            >
-              Book now
-            </SeoHubGrowthCtaLink>
+              tiles={[
+                { href: STANDARD_SERVICE, label: "Standard cleaning" },
+                { href: DEEP_SERVICE, label: "Deep cleaning" },
+                { href: MOVE_OUT_SERVICE, label: "Move-out cleaning" },
+              ]}
+            />
+            <p className="mt-6 text-sm text-zinc-600">
+              More guides:{" "}
+              <Link href="/services" className={linkEmphasisClassName}>
+                all Cape Town cleaning services
+              </Link>
+              .
+            </p>
+            <div className="mt-8">
+              <SeoHubGrowthCtaLink
+                href="/booking/details"
+                source={`seo_loc_${slug}_services_book_now`}
+                ctx={seoCtx}
+                ctaLocation="services_section"
+                ctaLabel="Book now"
+                ctaKind="book_now"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+              >
+                Book now
+              </SeoHubGrowthCtaLink>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      <LocationHubAirbnbCleaningSection locationName={location.name} hubSlug={slug} />
+      {!rankingResolved?.skipDefaultAirbnbStrip ? (
+        <LocationHubAirbnbCleaningSection locationName={location.name} hubSlug={slug} />
+      ) : null}
 
       <LocationHubQueryExpansion location={location} slug={slug} tier={hubTier} />
 
@@ -518,7 +566,11 @@ export function ProgrammaticLocationCleaningPage({
       <LocationHubSessionDepth location={location} slug={slug} />
 
       <section className="border-b border-zinc-100 py-16">
-        <div className="mx-auto max-w-4xl px-4">
+        <div className="mx-auto max-w-4xl space-y-10 px-4">
+          <SeoInternalLinksBlock
+            title="Hub navigation"
+            className="rounded-2xl border border-zinc-200 bg-zinc-50/90 p-6"
+          />
           <RelatedLinks placement="location" currentLocationSlug={slug} />
         </div>
       </section>

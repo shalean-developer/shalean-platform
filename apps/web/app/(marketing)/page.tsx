@@ -17,17 +17,21 @@ import { getHomePageData } from "@/lib/home/data";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { getHomepageInternalSeoLinks } from "@/lib/seo/capeTownSeoPages";
+import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const OG_IMAGE = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
+const HOME_CANONICAL = absoluteCanonicalUrl("/");
 
 export const metadata: Metadata = {
   title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
   description:
     "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
-  alternates: { canonical: "https://www.shalean.co.za" },
+  robots: SEO_INDEX_FOLLOW,
+  alternates: { canonical: HOME_CANONICAL },
   openGraph: {
     type: "website",
-    url: "https://www.shalean.co.za",
+    url: HOME_CANONICAL,
     title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
     description:
       "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",

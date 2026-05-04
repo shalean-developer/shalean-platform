@@ -249,7 +249,7 @@ export function buildAirbnbHostGuideGraphJsonLd(post: AirbnbHostGuidePost, siteO
   const keywords = [post.primaryKeyword, "Airbnb Cape Town", "Shalean", "turnover cleaning"].join(", ");
 
   const blogPosting = {
-    "@type": "BlogPosting",
+    "@type": ["BlogPosting", "Article"],
     headline: post.h1,
     description: post.description,
     datePublished: post.publishedAt,

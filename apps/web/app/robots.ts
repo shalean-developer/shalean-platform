@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
           "/cleaner",
           "/payment",
           "/pay",
+          "/offer",
           "/dashboard",
           "/account",
           "/auth",

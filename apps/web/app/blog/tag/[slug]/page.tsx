@@ -5,21 +5,31 @@ import { getBlogPostsByTagSlug } from "@/lib/blog/get-taxonomy-posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const title = `${slug.replace(/-/g, " ")} | Blog tags | Shalean`;
+  const label = slug.replace(/-/g, " ");
+  const title = `${label} | Blog tags | Shalean`;
   const canonicalAbs = absoluteCanonicalUrl(`/blog/tag/${slug}`);
+  const description = `Posts tagged “${label}”—practical Cape Town cleaning tips, scopes, and instant-quote booking from Shalean.`;
   return {
     title,
+    description,
     alternates: { canonical: canonicalAbs },
-    robots: { index: true, follow: true },
+    robots: SEO_INDEX_FOLLOW,
     openGraph: {
       title,
+      description,
       url: canonicalAbs,
       type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
     },
   };
 }

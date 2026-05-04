@@ -35,7 +35,7 @@ export function buildDbBlogPostingJsonLd(params: {
   articleSection?: string | null;
 }) {
   const node: Record<string, unknown> = {
-    "@type": "BlogPosting",
+    "@type": ["BlogPosting", "Article"],
     headline: params.headline,
     description: params.description,
     datePublished: params.publishedAt,
