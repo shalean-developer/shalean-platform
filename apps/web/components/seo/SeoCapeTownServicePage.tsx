@@ -7,10 +7,18 @@ import { getAreaProgrammaticBlogLinksForCapeTownService } from "@/lib/blog/progr
 import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
+import { AirbnbCapeTownServiceExtendedContent } from "@/components/seo/AirbnbCapeTownServiceExtendedContent";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
-import { CAPE_TOWN_SERVICE_SEO, capeTownSeoLocationLinks, serviceHubLocationLinks } from "@/lib/seo/capeTownSeoPages";
-import { googleBusinessAggregateRatingSchema, googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
+import {
+  CAPE_TOWN_SERVICE_SEO,
+  capeTownSeoLocationLinks,
+  resolveCapeTownServiceSchemaFields,
+  serviceHubLocationLinks,
+} from "@/lib/seo/capeTownSeoPages";
+import { googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
+import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
+import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = { slug: CapeTownSeoServiceSlug; trustStats: PublicReviewBannerStats | null };
 
@@ -36,7 +44,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           source={`seo_ct_${slug}_hero`}
           className="inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
-          Book {data.bookingLabel}
+          {slug === "airbnb-cleaning-cape-town" ? "Book Airbnb cleaner" : `Book ${data.bookingLabel}`}
         </GrowthCtaLink>
         <Link
           href={`${data.path}#included`}
@@ -48,9 +56,38 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
     </>
   );
 
-  const pageUrl = `https://www.shalean.co.za${data.path}`;
+  const pageUrl = absoluteCanonicalUrl(data.path);
+  const localBusinessId = `${SITE_ORIGIN}/#localbusiness`;
+  const serviceNodeId = `${pageUrl}#service`;
+  const { schemaName, schemaServiceType } = resolveCapeTownServiceSchemaFields(slug, data);
+  const sameAs = getBrandSameAsForJsonLd();
+
+  const localBusinessNode: Record<string, unknown> = {
+    "@type": "LocalBusiness",
+    "@id": localBusinessId,
+    name: "Shalean Cleaning Services",
+    url: SITE_ORIGIN,
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "Cape Town",
+      addressCountry: "ZA",
+    },
+  };
+  if (sameAs.length > 0) localBusinessNode.sameAs = sameAs;
+
+  const breadcrumbEntity = {
+    "@type": "BreadcrumbList",
+    "@id": `${pageUrl}#breadcrumb`,
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
+      { "@type": "ListItem", position: 2, name: "Services", item: absoluteCanonicalUrl("/services") },
+      { "@type": "ListItem", position: 3, name: data.h1, item: pageUrl },
+    ],
+  };
+
   const faqPageEntity = {
     "@type": "FAQPage",
+    "@id": `${pageUrl}#faq`,
     url: pageUrl,
     mainEntity: data.faqs.map((faq) => ({
       "@type": "Question",
@@ -62,29 +99,35 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
     })),
   };
 
+  /** No aggregateRating / Review — trust copy is visible; avoids invalid Review snippets. */
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
+      localBusinessNode,
       {
-        "@type": "Service",
-        name: data.h1,
-        description: data.description,
-        areaServed: { "@type": "City", name: "Cape Town" },
-        provider: { "@id": "https://www.shalean.co.za/#localbusiness" },
+        "@type": "CleaningService",
+        "@id": serviceNodeId,
+        name: schemaName,
+        serviceType: schemaServiceType,
         url: pageUrl,
-        aggregateRating: googleBusinessAggregateRatingSchema(),
+        areaServed: { "@type": "Place", name: "Cape Town, South Africa" },
+        provider: { "@id": localBusinessId },
       },
+      breadcrumbEntity,
       faqPageEntity,
     ],
   };
 
+  const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+
   return (
     <main className="bg-white text-zinc-900">
       <GrowthTracking event="page_view" payload={{ page_type: "seo_cape_town_service", slug }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
 
       <div className="mx-auto max-w-7xl px-4 pt-8">
         <SeoBreadcrumbs
+          includeJsonLd={false}
           items={[
             { name: "Home", href: "/" },
             { name: "Services", href: "/services" },
@@ -130,6 +173,24 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             {data.explanation.map((p, i) => (
               <p key={i}>{p}</p>
             ))}
+            {slug === "deep-cleaning-cape-town" ? (
+              <p>
+                Hosting short-stay guests? Our{" "}
+                <Link href={CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  Airbnb turnover cleaning
+                </Link>{" "}
+                scope is tuned for tight changeovers—deep cleans still matter when ovens and grout lag behind turnover cycles.
+              </p>
+            ) : null}
+            {slug === "standard-cleaning-cape-town" ? (
+              <p>
+                If you list on Airbnb, compare dedicated{" "}
+                <Link href={CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  airbnb cleaning Cape Town
+                </Link>{" "}
+                turnovers alongside recurring standard visits—guest expectations are closer to hospitality than weekly home upkeep.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>
@@ -175,6 +236,10 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             </div>
           </div>
         </section>
+      ) : null}
+
+      {slug === "airbnb-cleaning-cape-town" ? (
+        <AirbnbCapeTownServiceExtendedContent bookingPath={bookingPath} />
       ) : null}
 
       <section className="border-b border-blue-100 bg-blue-50/30 py-16">
@@ -263,13 +328,33 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
       <section className="bg-blue-600 py-16 text-center text-white">
         <h2 className="text-3xl font-bold tracking-tight">Ready to book {data.bookingLabel}?</h2>
         <p className="mx-auto mt-3 max-w-xl text-blue-100">Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works.</p>
-        <GrowthCtaLink
-          href={bookingPath}
-          source={`seo_ct_${slug}_footer`}
-          className="mt-6 inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-blue-700 transition hover:bg-blue-50"
-        >
-          Start booking
-        </GrowthCtaLink>
+        <div className="mx-auto mt-6 flex flex-wrap justify-center gap-3">
+          <GrowthCtaLink
+            href={bookingPath}
+            source={`seo_ct_${slug}_footer`}
+            className="inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-blue-700 transition hover:bg-blue-50"
+          >
+            {slug === "airbnb-cleaning-cape-town" ? "Book Airbnb cleaner" : "Start booking"}
+          </GrowthCtaLink>
+          {slug === "airbnb-cleaning-cape-town" ? (
+            <>
+              <GrowthCtaLink
+                href={bookingPath}
+                source={`seo_ct_${slug}_footer_price`}
+                className="inline-flex min-h-12 items-center rounded-xl border border-white/40 bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-500"
+              >
+                Get instant price
+              </GrowthCtaLink>
+              <GrowthCtaLink
+                href={bookingPath}
+                source={`seo_ct_${slug}_footer_avail`}
+                className="inline-flex min-h-12 items-center rounded-xl border border-white/40 bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-500"
+              >
+                Check availability
+              </GrowthCtaLink>
+            </>
+          ) : null}
+        </div>
       </section>
     </main>
   );

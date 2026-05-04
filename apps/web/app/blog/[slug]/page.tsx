@@ -11,7 +11,13 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImages";
 import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
+import { AirbnbHostGuideBlogTemplate } from "@/components/blog/AirbnbHostGuideBlogTemplate";
 import { BlogPostLayout } from "@/components/blog/BlogPostLayout";
+import {
+  AIRBNB_HOST_GUIDE_POSTS,
+  buildAirbnbHostGuideGraphJsonLd,
+  getAirbnbHostGuidePost,
+} from "@/lib/blog/airbnbHostGuidePosts";
 import {
   absoluteUrlFromCanonicalPath,
   buildDbBlogGraphJsonLd,
@@ -35,6 +41,7 @@ import {
   pickTrendingSidebarPosts,
 } from "@/lib/blog/get-blog-sidebar-data";
 import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
+import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 
 const SITE = "https://www.shalean.co.za";
 
@@ -47,8 +54,6 @@ function toAbsoluteAssetUrl(url: string): string {
 /** Publisher logo in JSON-LD (distinct from per-post hero art). */
 const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
 
-const PROGRAMMATIC_HERO_SRC = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
-
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateStaticParams() {
@@ -57,6 +62,7 @@ export async function generateStaticParams() {
   for (const slug of dbSlugs) map.set(slug, { slug });
   for (const post of ROUTED_HIGH_CONVERSION_POSTS) map.set(post.slug, { slug: post.slug });
   for (const post of ROUTED_PROGRAMMATIC_POSTS) map.set(post.slug, { slug: post.slug });
+  for (const post of AIRBNB_HOST_GUIDE_POSTS) map.set(post.slug, { slug: post.slug });
   return [...map.values()];
 }
 
@@ -68,10 +74,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
     const titleBase = dbPost.metaTitle?.trim() || dbPost.title;
     const description = dbPost.metaDescription?.trim() || dbPost.excerpt || dbPost.title;
-    const heroSrc = dbPost.featuredImageUrl
-      ? toAbsoluteAssetUrl(dbPost.featuredImageUrl)
-      : `${SITE}${PROGRAMMATIC_HERO_SRC}`;
-    const heroAlt = dbPost.featuredImageAlt?.trim() || dbPost.h1;
+    const heroSrc = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
+    const heroAlt = dbPost.featuredImageAlt.trim() || dbPost.h1;
     const kwPhrase = buildKeywordsPhrase(dbPost);
     const keywords =
       kwPhrase != null
@@ -107,7 +111,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const hc = getHighConversionBlogPost(slug);
   if (hc) {
     const url = `${SITE}/blog/${hc.slug}`;
-    const heroAbs = `${SITE}${hc.heroImage.src}`;
+    const heroPath = resolveBlogFeaturedSrc(hc.slug);
+    const heroAbs = `${SITE}${heroPath}`;
+    const heroAlt = resolveBlogFeaturedAlt(hc.slug);
     return {
       title: `${hc.title} | Shalean Blog`,
       description: hc.description,
@@ -119,7 +125,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         type: "article",
         publishedTime: hc.publishedAt,
         modifiedTime: hc.dateModified ?? hc.publishedAt,
-        images: [{ url: heroAbs, alt: hc.heroImage.alt }],
+        images: [{ url: heroAbs, alt: heroAlt }],
       },
       twitter: {
         card: "summary_large_image",
@@ -130,12 +136,44 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
+  const hostGuide = getAirbnbHostGuidePost(slug);
+  if (hostGuide) {
+    const path = `/blog/${hostGuide.slug}`;
+    const url = `${SITE}${path}`;
+    const heroPath = resolveBlogFeaturedSrc(hostGuide.slug);
+    const heroOg = `${SITE}${heroPath}`;
+    const heroOgAlt = resolveBlogFeaturedAlt(hostGuide.slug);
+    return {
+      title: `${hostGuide.title} | Shalean Blog`,
+      description: hostGuide.description,
+      alternates: { canonical: url },
+      keywords: [hostGuide.primaryKeyword, "Airbnb Cape Town", "Shalean", "turnover cleaning"],
+      openGraph: {
+        title: hostGuide.title,
+        description: hostGuide.description,
+        url,
+        type: "article",
+        publishedTime: hostGuide.publishedAt,
+        modifiedTime: hostGuide.dateModified,
+        images: [{ url: heroOg, alt: heroOgAlt }],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: hostGuide.title,
+        description: hostGuide.description,
+        images: [heroOg],
+      },
+    };
+  }
+
   const prog = getProgrammaticPost(slug);
   if (!prog) return { title: "Blog | Shalean" };
 
   const path = `/blog/${prog.slug}`;
   const url = `${SITE}${path}`;
-  const heroOg = `${SITE}${PROGRAMMATIC_HERO_SRC}`;
+  const heroPath = resolveBlogFeaturedSrc(prog.slug);
+  const heroOg = `${SITE}${heroPath}`;
+  const heroOgAlt = resolveBlogFeaturedAlt(prog.slug);
   return {
     title: `${prog.title} | Shalean Blog`,
     description: prog.description,
@@ -153,7 +191,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: "article",
       publishedTime: prog.publishedAt,
       modifiedTime: prog.dateModified ?? prog.publishedAt,
-      images: [{ url: heroOg, alt: `${prog.h1} — Shalean Cape Town` }],
+      images: [{ url: heroOg, alt: heroOgAlt }],
     },
     twitter: {
       card: "summary_large_image",
@@ -166,7 +204,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 function buildProgrammaticBlogPostingJsonLd(post: ProgrammaticPost) {
   const pageUrl = `${SITE}/blog/${post.slug}`;
-  const heroAbsolute = `${SITE}${PROGRAMMATIC_HERO_SRC}`;
+  const heroAbsolute = `${SITE}${resolveBlogFeaturedSrc(post.slug)}`;
   const dateModified = post.dateModified ?? post.publishedAt;
   const locationKw = post.location ? `${post.location} cleaning Cape Town` : "Cape Town cleaning";
   const serviceKw =
@@ -258,7 +296,7 @@ function buildProgrammaticGraphJsonLd(post: ProgrammaticPost) {
 
 function buildHighConversionBlogPostingJsonLd(post: HighConversionBlogArticle) {
   const pageUrl = `${SITE}/blog/${post.slug}`;
-  const heroAbsolute = `${SITE}${post.heroImage.src}`;
+  const heroAbsolute = `${SITE}${resolveBlogFeaturedSrc(post.slug)}`;
   const dateModified = post.dateModified ?? post.publishedAt;
   return {
     "@type": "BlogPosting",
@@ -335,9 +373,7 @@ export default async function BlogPostPage({ params }: Props) {
   const dbPost = await getPostBySlug(slug);
   if (dbPost) {
     const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
-    const heroSrcAbs = dbPost.featuredImageUrl
-      ? toAbsoluteAssetUrl(dbPost.featuredImageUrl)
-      : `${SITE}${PROGRAMMATIC_HERO_SRC}`;
+    const heroSrcAbs = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
     const faqItems = collectFaqItemsFromContent(dbPost.content);
     const kwPhrase = buildKeywordsPhrase(dbPost);
     const jsonLd = buildDbBlogGraphJsonLd({
@@ -353,16 +389,10 @@ export default async function BlogPostPage({ params }: Props) {
     });
     const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
 
-    const hero =
-      dbPost.featuredImageUrl != null && dbPost.featuredImageUrl !== ""
-        ? {
-            src: dbPost.featuredImageUrl,
-            alt: dbPost.featuredImageAlt?.trim() || dbPost.h1,
-          }
-        : {
-            src: PROGRAMMATIC_HERO_SRC,
-            alt: `${dbPost.h1} — Shalean professional cleaning in Cape Town`,
-          };
+    const hero = {
+      src: dbPost.featuredImageUrl,
+      alt: dbPost.featuredImageAlt.trim() || dbPost.h1,
+    };
 
     const contentForRender = stripFirstDuplicateFeaturedImage(
       {
@@ -437,7 +467,7 @@ export default async function BlogPostPage({ params }: Props) {
             publishedAtIso={hc.publishedAt}
             updatedAtIso={hc.dateModified}
             readingTimeMinutes={hc.readingTimeMinutes ?? 6}
-            hero={{ src: hc.heroImage.src, alt: hc.heroImage.alt }}
+            hero={{ src: resolveBlogFeaturedSrc(hc.slug), alt: resolveBlogFeaturedAlt(hc.slug) }}
             trackingSlug={hc.slug}
             sidebarCategories={sidebarCategories}
             sidebarTrending={sidebarTrending}
@@ -451,6 +481,47 @@ export default async function BlogPostPage({ params }: Props) {
             }
           >
             <HighConversionBlogTemplate article={hc} />
+          </BlogPostLayout>
+        </main>
+      </MarketingLayout>
+    );
+  }
+
+  const hostGuide = getAirbnbHostGuidePost(slug);
+  if (hostGuide) {
+    const jsonLdStr = JSON.stringify(buildAirbnbHostGuideGraphJsonLd(hostGuide, SITE)).replace(/</g, "\\u003c");
+    const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, hostGuide.slug, 6));
+
+    return (
+      <MarketingLayout>
+        <main className="bg-white text-zinc-900">
+          <GrowthTracking event="page_view" payload={{ page_type: "blog_airbnb_host_guide", slug: hostGuide.slug }} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
+
+          <BlogPostLayout
+            breadcrumbCurrentLabel={hostGuide.title}
+            h1={hostGuide.h1}
+            lede={hostGuide.description}
+            publishedAtIso={hostGuide.publishedAt}
+            updatedAtIso={hostGuide.dateModified}
+            readingTimeMinutes={hostGuide.readingTimeMinutes}
+            hero={{
+              src: resolveBlogFeaturedSrc(hostGuide.slug),
+              alt: resolveBlogFeaturedAlt(hostGuide.slug),
+            }}
+            trackingSlug={hostGuide.slug}
+            sidebarCategories={sidebarCategories}
+            sidebarTrending={sidebarTrending}
+            relatedGridPosts={relatedGrid}
+            relatedLinksSlot={<RelatedLinks placement="blog" />}
+            belowArticleSlot={
+              <>
+                <BlogContextualServiceLinks />
+                <BlogServiceLinks service={getBlogServiceType(hostGuide.slug)} />
+              </>
+            }
+          >
+            <AirbnbHostGuideBlogTemplate post={hostGuide} />
           </BlogPostLayout>
         </main>
       </MarketingLayout>
@@ -478,8 +549,8 @@ export default async function BlogPostPage({ params }: Props) {
           updatedAtIso={prog.dateModified}
           readingTimeMinutes={5}
           hero={{
-            src: PROGRAMMATIC_HERO_SRC,
-            alt: `${prog.h1} — Shalean professional cleaning in Cape Town`,
+            src: resolveBlogFeaturedSrc(prog.slug),
+            alt: resolveBlogFeaturedAlt(prog.slug),
           }}
           trackingSlug={prog.slug}
           sidebarCategories={sidebarCategories}

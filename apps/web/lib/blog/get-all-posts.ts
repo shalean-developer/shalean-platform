@@ -1,3 +1,4 @@
+import { DEFAULT_BLOG_FEATURED_IMAGE, resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { emptyBlogContentJson, type BlogContentJson } from "./content-json";
 import { safeParseBlogContentJson } from "./content-json-schema";
@@ -22,8 +23,6 @@ export type BlogIndexPost = {
   categoryName?: string | null;
 };
 
-const DEFAULT_LIST_HERO = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
-
 function normalizeContentJson(raw: unknown): BlogContentJson {
   const parsed = safeParseBlogContentJson(raw);
   if (!parsed.success) return emptyBlogContentJson();
@@ -42,14 +41,12 @@ function normalizeDbRow(row: Record<string, unknown>): BlogIndexPost | null {
   const rawExcerpt = row.excerpt == null || row.excerpt === "" ? null : String(row.excerpt).trim();
   const excerpt = rawExcerpt || excerptFromFirstIntroBlock(content, 160) || titleBase;
 
-  const imgUrl =
-    row.featured_image_url == null || row.featured_image_url === ""
-      ? DEFAULT_LIST_HERO
-      : String(row.featured_image_url);
-  const imgAlt =
-    row.featured_image_alt == null || row.featured_image_alt === ""
-      ? `${displayTitle} — Shalean Cape Town`
-      : String(row.featured_image_alt);
+  const rawImg =
+    row.featured_image_url == null || row.featured_image_url === "" ? null : String(row.featured_image_url);
+  const rawAlt =
+    row.featured_image_alt == null || row.featured_image_alt === "" ? null : String(row.featured_image_alt);
+  const imgUrl = resolveBlogFeaturedSrc(slug, rawImg);
+  const imgAlt = resolveBlogFeaturedAlt(slug, rawAlt);
 
   const rt =
     typeof row.reading_time_minutes === "number" && row.reading_time_minutes >= 0
@@ -115,7 +112,8 @@ export async function getAllPublishedPosts(): Promise<BlogIndexPost[]> {
   return out;
 }
 
-export { DEFAULT_LIST_HERO };
+/** @deprecated Use DEFAULT_BLOG_FEATURED_IMAGE from `@/lib/blogImageMap` — kept for index “variety” checks. */
+export const DEFAULT_LIST_HERO = DEFAULT_BLOG_FEATURED_IMAGE;
 
 /** Cape Town hub “guides” strip — pricing + service guides linked from location hubs. */
 export const CAPE_TOWN_HUB_BLOG_SLUGS = [

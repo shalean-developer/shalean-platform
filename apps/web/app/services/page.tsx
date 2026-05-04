@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
@@ -170,6 +171,17 @@ export default function ServicesHubPage() {
               <p className="mt-4 max-w-xl text-base leading-relaxed text-zinc-600 sm:text-lg">
                 Book trusted cleaners for your home, apartment, or office — transparent pricing, flexible scheduling, and
                 instant booking.
+              </p>
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-600 sm:text-base">
+                Short-stay hosts: explore{" "}
+                <Link href={p["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  Airbnb cleaning Cape Town
+                </Link>{" "}
+                turnovers or jump straight to{" "}
+                <Link href={p["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  Airbnb turnover cleaning
+                </Link>{" "}
+                scope before you sync calendars.
               </p>
               <ul className="mt-6 space-y-3">
                 {[

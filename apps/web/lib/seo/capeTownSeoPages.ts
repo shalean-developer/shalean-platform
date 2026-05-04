@@ -100,7 +100,38 @@ export type CapeTownServiceSeoBlock = {
   heroImage: { src: string; alt: string };
   /** 3–5 natural Q&As for on-page FAQ + FAQPage JSON-LD */
   faqs: { q: string; a: string }[];
+  /** Intent-focused JSON-LD `name` (shorter than `<title>`); defaults from slug */
+  schemaName?: string;
+  /** JSON-LD `serviceType` for CleaningService */
+  schemaServiceType?: string;
 };
+
+/** Default `serviceType` strings for `/services/*-cape-town` JSON-LD */
+export const CAPE_TOWN_SERVICE_SCHEMA_SERVICE_TYPE: Record<CapeTownSeoServiceSlug, string> = {
+  "deep-cleaning-cape-town": "Deep Cleaning Service",
+  "standard-cleaning-cape-town": "Standard Home Cleaning Service",
+  "move-out-cleaning-cape-town": "Move-Out Cleaning Service",
+  "office-cleaning-cape-town": "Office Cleaning Service",
+  "airbnb-cleaning-cape-town": "Airbnb Cleaning Service",
+  "carpet-cleaning-cape-town": "Carpet Cleaning Service",
+};
+
+/** e.g. `airbnb-cleaning-cape-town` → `Airbnb Cleaning Cape Town | Shalean` */
+export function defaultCapeTownServiceSchemaName(slug: CapeTownSeoServiceSlug): string {
+  const core = slug.replace(/-cape-town$/, "");
+  const words = core.split("-").map((w) => (w === "airbnb" ? "Airbnb" : w.charAt(0).toUpperCase() + w.slice(1)));
+  return `${words.join(" ")} Cape Town | Shalean`;
+}
+
+export function resolveCapeTownServiceSchemaFields(
+  slug: CapeTownSeoServiceSlug,
+  block: CapeTownServiceSeoBlock,
+): { schemaName: string; schemaServiceType: string } {
+  return {
+    schemaName: block.schemaName ?? defaultCapeTownServiceSchemaName(slug),
+    schemaServiceType: block.schemaServiceType ?? CAPE_TOWN_SERVICE_SCHEMA_SERVICE_TYPE[slug],
+  };
+}
 
 export type LocationSeoBlock = {
   slug: LocationSeoSlug;
@@ -425,6 +456,8 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Between back-to-back guests, calendar gaps, and same-day check-outs, Airbnb hosts need a turnover partner that respects inventory photos, linen resets, and tight handover windows—not just a generic tidy.",
       "Shalean focuses on short-stay realities across Cape Town: sand tracked in from the beach, coffee rings on dining tables, and bathrooms that must read “hotel fresh” before your next review arrives.",
       "Hosts still compare house cleaning Cape Town providers on speed and trust; professional cleaning services built for turnovers layer staging, odour control, and high-touch wipes on top of standard home cleaning services Cape Town guests expect between stays.",
+      "Most negative turnover feedback is not “mystery dirt”—it is missed high-touch points, weak bathroom presentation, or kitchen surfaces that look fine in person but read tired in wide-angle photos. We structure time so those zones do not get squeezed when parking or lift access runs long.",
+      "Property managers running multiple units benefit from the same online scope controls as individual hosts: bedrooms, bathrooms, and add-ons set the price before payment, and notes carry estate rules, remote access, and linen locations so every handover feels repeatable.",
     ],
     included: [
       "Kitchen reset: counters, hob, sink, exterior of appliances, and bin refresh",

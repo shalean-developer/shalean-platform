@@ -102,6 +102,17 @@ export function ServicesSection() {
                 <Link href={s.servicePage} className="mt-3 text-sm font-semibold text-blue-700 transition hover:text-blue-900">
                   Learn more about {s.title}
                 </Link>
+                {s.service === "airbnb" ? (
+                  <p className="mt-2 text-xs leading-relaxed text-gray-500">
+                    <Link href={s.servicePage} className="font-semibold text-blue-600 transition hover:text-blue-800">
+                      Airbnb cleaning Cape Town
+                    </Link>
+                    <span className="text-gray-400"> · </span>
+                    <Link href={s.servicePage} className="font-semibold text-blue-600 transition hover:text-blue-800">
+                      Airbnb turnover cleaning
+                    </Link>
+                  </p>
+                ) : null}
                 <BookCleaningLink
                   source={s.source}
                   className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"

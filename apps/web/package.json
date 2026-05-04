@@ -16,7 +16,9 @@
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
     "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",
     "process-favicons": "node scripts/process-favicons-transparent.mjs",
-    "generate-favicons": "node scripts/generate-favicons-from-logo.mjs"
+    "generate-favicons": "node scripts/generate-favicons-from-logo.mjs",
+    "validate:blog-images": "tsx scripts/validate-blog-images.ts",
+    "import:cursor-blog-pool": "tsx scripts/import-cursor-blog-png-pool.ts"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",

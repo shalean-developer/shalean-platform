@@ -29,8 +29,7 @@ export function BlogHero({ src, alt, overlay = true, className }: Props) {
         fill
         className="object-cover"
         sizes="(max-width: 1024px) 100vw, min(896px, 70vw)"
-        priority
-        fetchPriority="high"
+        loading="lazy"
         unoptimized={remote}
       />
       {overlay ? (

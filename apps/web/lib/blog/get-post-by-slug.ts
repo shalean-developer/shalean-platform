@@ -1,3 +1,4 @@
+import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
 import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-related-posts";
 import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
@@ -21,8 +22,8 @@ export type NormalizedDbBlogPost = {
   metaTitle: string | null;
   metaDescription: string | null;
   content: BlogContentJson;
-  featuredImageUrl: string | null;
-  featuredImageAlt: string | null;
+  featuredImageUrl: string;
+  featuredImageAlt: string;
   readingTimeMinutes: number | null;
   publishedAt: string;
   updatedAt: string;
@@ -182,14 +183,14 @@ export async function getPostBySlug(slug: string): Promise<NormalizedDbBlogPost 
     metaTitle,
     metaDescription,
     content,
-    featuredImageUrl:
-      row.featured_image_url == null || row.featured_image_url === ""
-        ? null
-        : String(row.featured_image_url),
-    featuredImageAlt:
-      row.featured_image_alt == null || row.featured_image_alt === ""
-        ? null
-        : String(row.featured_image_alt),
+    featuredImageUrl: resolveBlogFeaturedSrc(
+      trimmed,
+      row.featured_image_url == null || row.featured_image_url === "" ? null : String(row.featured_image_url),
+    ),
+    featuredImageAlt: resolveBlogFeaturedAlt(
+      trimmed,
+      row.featured_image_alt == null || row.featured_image_alt === "" ? null : String(row.featured_image_alt),
+    ),
     readingTimeMinutes:
       typeof row.reading_time_minutes === "number" ? row.reading_time_minutes : null,
     publishedAt: String(row.published_at),

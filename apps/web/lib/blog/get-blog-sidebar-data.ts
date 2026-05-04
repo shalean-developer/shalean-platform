@@ -1,11 +1,35 @@
 import { cache } from "react";
+import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getAllPublishedPosts, type BlogIndexPost } from "@/lib/blog/get-all-posts";
+import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 
 export type BlogSidebarCategory = { slug: string; name: string };
 
+function airbnbHostGuideToIndexPost(slug: string): BlogIndexPost | null {
+  const p = AIRBNB_HOST_GUIDE_POSTS.find((x) => x.slug === slug);
+  if (!p) return null;
+  return {
+    slug: p.slug,
+    title: p.h1,
+    excerpt: p.description,
+    image: { src: resolveBlogFeaturedSrc(p.slug), alt: resolveBlogFeaturedAlt(p.slug) },
+    readingTime: p.readingTimeMinutes,
+    publishedAt: p.publishedAt,
+    source: "programmatic",
+  };
+}
+
 export const getBlogIndexPostsCached = cache(async (): Promise<BlogIndexPost[]> => {
-  return getAllPublishedPosts();
+  const db = await getAllPublishedPosts();
+  const dbSlugs = new Set(db.map((row) => row.slug));
+  const extras: BlogIndexPost[] = [];
+  for (const post of AIRBNB_HOST_GUIDE_POSTS) {
+    if (dbSlugs.has(post.slug)) continue;
+    const row = airbnbHostGuideToIndexPost(post.slug);
+    if (row) extras.push(row);
+  }
+  return [...db, ...extras].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1));
 });
 
 export async function getBlogSidebarCategories(): Promise<BlogSidebarCategory[]> {
