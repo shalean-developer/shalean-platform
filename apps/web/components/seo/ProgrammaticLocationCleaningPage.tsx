@@ -3,11 +3,18 @@ import { Sparkles } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
+import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import type { LocationSeoBlock } from "@/lib/seo/capeTownSeoPages";
+import {
+  buildLocationPageMetaDescription,
+  CAPE_TOWN_SERVICE_SEO,
+  type LocationSeoBlock,
+} from "@/lib/seo/capeTownSeoPages";
+import { GOOGLE_BUSINESS_REVIEWS, googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
 import { defaultLocationFaqs, nearbyProgrammaticLocations } from "@/lib/seo/locations";
+import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 
 type Props = {
@@ -16,14 +23,37 @@ type Props = {
   trustStats: PublicReviewBannerStats | null;
 };
 
-const STANDARD_SERVICE = "/services/standard-cleaning-cape-town";
-const DEEP_SERVICE = "/services/deep-cleaning-cape-town";
+const SITE_ORIGIN = "https://www.shalean.co.za";
+
+const STANDARD_SERVICE = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
+const DEEP_SERVICE = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
+const MOVE_OUT_SERVICE = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
 
 function formatNearbyNames(names: readonly string[]): string {
   if (names.length === 0) return "";
   if (names.length === 1) return names[0]!;
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+/** Editorial themes aligned with Google feedback — not attributed verbatim quotes. */
+function locationCustomerVoiceBullets(loc: CapeTownLocationRow): string[] {
+  const { name } = loc;
+  return [
+    `Straightforward quotes and punctual arrivals — patterns ${name} customers often mention alongside our ${GOOGLE_BUSINESS_REVIEWS.rating}★ Google rating.`,
+    `Reviewers frequently note thorough kitchens and bathrooms—the areas ${name} homes depend on between visits.`,
+    `Same-week booking slots open often; pick a time online after you lock your ${name} address and scope.`,
+  ];
+}
+
+function defaultWhyChooseBullets(loc: CapeTownLocationRow): string[] {
+  const { name, city } = loc;
+  return [
+    `Vetted, insured cleaners who understand typical ${name} homes—from apartments to freestanding houses.`,
+    `Clear scope and pricing online before we dispatch; no surprise surcharges for what you selected.`,
+    `Easy booking with human support if access codes, parking, or pets need a quick update in ${city}.`,
+    `Trusted by households across ${city}; ratings reflect real visits booked through Shalean.`,
+  ];
 }
 
 function locationIntroParagraphs(loc: CapeTownLocationRow): string[] {
@@ -61,18 +91,46 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
   const eyebrow = `${location.city} · ${location.region}`;
   const bookCtaLabel = `Book a cleaner in ${location.name}`;
 
+  const pageUrl = `${SITE_ORIGIN}/locations/${slug}`;
+  const locationsIndexUrl = `${SITE_ORIGIN}/locations`;
+  const webDescription = seo?.description ?? buildLocationPageMetaDescription(location.name);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "WebPage",
+        "@id": `${pageUrl}#webpage`,
         name: h1,
-        description: seo?.description ?? `Trusted cleaning in ${location.name}, ${location.city}.`,
-        url: `https://www.shalean.co.za/locations/${slug}`,
-        isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: "https://www.shalean.co.za" },
+        description: webDescription,
+        url: pageUrl,
+        isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: SITE_ORIGIN },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${pageUrl}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
+          { "@type": "ListItem", position: 2, name: "Locations", item: locationsIndexUrl },
+          { "@type": "ListItem", position: 3, name: location.name, item: pageUrl },
+        ],
+      },
+      {
+        "@type": "Service",
+        "@id": `${pageUrl}#service`,
+        name: `House Cleaning in ${location.name}`,
+        areaServed: { "@type": "Place", name: `${location.name}, ${location.city}` },
+        provider: {
+          "@type": "LocalBusiness",
+          name: "Shalean Cleaning Services",
+          url: SITE_ORIGIN,
+          telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
+          aggregateRating: googleBusinessAggregateRatingSchema(),
+        },
       },
       {
         "@type": "FAQPage",
+        "@id": `${pageUrl}#faq`,
         mainEntity: faqs.map((f) => ({
           "@type": "Question",
           name: f.q,
@@ -82,10 +140,23 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
     ],
   };
 
+  const whyChooseItems = seo?.whyChoose?.length ? seo.whyChoose : defaultWhyChooseBullets(location);
+
   return (
     <main className="bg-white text-zinc-900">
       <GrowthTracking event="page_view" payload={{ page_type: "seo_location", slug }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+
+      <div className="mx-auto max-w-4xl px-4 pt-8">
+        <SeoBreadcrumbs
+          includeJsonLd={false}
+          items={[
+            { name: "Home", href: "/" },
+            { name: "Locations", href: "/locations" },
+            { name: location.name, href: `/locations/${slug}`, current: true },
+          ]}
+        />
+      </div>
 
       <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/60 via-white to-white py-14">
         <div className="mx-auto max-w-4xl px-4">
@@ -107,13 +178,22 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
           <p className="mt-4 text-sm font-medium text-zinc-700">
             {publicTrustRatingBadgeLine(trustStats)} · Thousands of Cape Town cleans completed through Shalean
           </p>
-          <GrowthCtaLink
-            href="/booking/details"
-            source={`seo_loc_${slug}_hero`}
-            className="mt-8 inline-flex min-h-12 items-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-          >
-            {bookCtaLabel}
-          </GrowthCtaLink>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <GrowthCtaLink
+              href="/booking/details"
+              source={`seo_loc_${slug}_hero`}
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              {bookCtaLabel}
+            </GrowthCtaLink>
+            <GrowthCtaLink
+              href="/booking"
+              source={`seo_loc_${slug}_book_now`}
+              className="inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-6 text-base font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50"
+            >
+              Book now
+            </GrowthCtaLink>
+          </div>
         </div>
       </section>
 
@@ -130,38 +210,37 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
         </section>
       ) : null}
 
-      {seo?.whyChoose?.length ? (
-        <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
-          <div className="mx-auto max-w-4xl px-4">
-            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Why Cape Town customers choose Shalean</h2>
-            <ul className="mt-8 space-y-4">
-              {seo.whyChoose.map((item) => (
-                <li
-                  key={item}
-                  className="flex gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-700 shadow-sm"
-                >
-                  <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ) : null}
+      <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Why choose Shalean in {location.name}?</h2>
+          <ul className="mt-8 space-y-4">
+            {whyChooseItems.map((item, wi) => (
+              <li
+                key={`why-${wi}-${item.slice(0, 24)}`}
+                className="flex gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-700 shadow-sm"
+              >
+                <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Popular services for {location.name}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Services available in {location.name}</h2>
           <p className="mt-3 text-base text-zinc-600">
-            Start with a Cape Town-wide guide, then enter your {location.name} details at checkout for an accurate quote.
+            Open a Cape Town-wide guide, enter your {location.name} address at checkout, and lock scope before we
+            dispatch.
           </p>
-          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
+          <ul className="mt-8 grid gap-3 sm:grid-cols-3">
             <li>
               <Link
                 href={STANDARD_SERVICE}
                 className="block rounded-2xl border border-emerald-100 bg-white p-5 text-base font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
               >
-                Home cleaning in {location.name}
+                Standard cleaning
               </Link>
             </li>
             <li>
@@ -169,7 +248,15 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
                 href={DEEP_SERVICE}
                 className="block rounded-2xl border border-emerald-100 bg-white p-5 text-base font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
               >
-                Deep cleaning services in {location.name}
+                Deep cleaning
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={MOVE_OUT_SERVICE}
+                className="block rounded-2xl border border-emerald-100 bg-white p-5 text-base font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
+              >
+                Move-out cleaning
               </Link>
             </li>
           </ul>
@@ -183,9 +270,27 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
         </div>
       </section>
 
+      <section className="border-b border-zinc-100 py-16">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">What customers say in {location.name}</h2>
+          <p className="mt-3 text-base leading-relaxed text-zinc-600">
+            Customers in {location.name} book Shalean for recurring and deep cleans. On Google we hold a{" "}
+            {GOOGLE_BUSINESS_REVIEWS.rating}★ rating from {GOOGLE_BUSINESS_REVIEWS.count} reviews — here are themes people
+            highlight again and again (summaries, not verbatim quotes):
+          </p>
+          <ul className="mt-6 space-y-3 text-sm leading-relaxed text-zinc-700">
+            {locationCustomerVoiceBullets(location).map((line, i) => (
+              <li key={i} className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
       <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
         <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Cleaning services near {location.name}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Nearby areas we serve</h2>
           {nearbyListSentence ? (
             <p className="mt-3 text-base leading-relaxed text-zinc-600">
               We also provide cleaning services in nearby areas such as {nearbyListSentence}. Each hub explains local
@@ -204,7 +309,7 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
                   href={`/locations/${loc.slug}`}
                   className="inline-flex max-w-full rounded-full border border-zinc-200 bg-white px-4 py-2 text-left text-sm font-medium leading-snug text-zinc-700 shadow-sm transition hover:border-emerald-200 hover:text-emerald-900"
                 >
-                  Cleaning services in {loc.name}
+                  Cleaning {loc.name}
                 </Link>
               </li>
             ))}
@@ -214,7 +319,8 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">FAQs — {location.name}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Frequently Asked Questions</h2>
+          <p className="mt-2 text-sm text-zinc-600">Common questions about booking cleaning in {location.name}.</p>
           <dl className="mt-8 space-y-6">
             {faqs.map((item) => (
               <div key={item.q} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -237,13 +343,22 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
         <p className="mx-auto mt-3 max-w-lg text-zinc-300">
           {location.city}-wide coverage with suburb-aware quoting—confirm your total before you pay.
         </p>
-        <GrowthCtaLink
-          href="/booking/details"
-          source={`seo_loc_${slug}_footer`}
-          className="mt-6 inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-zinc-900 transition hover:bg-zinc-100"
-        >
-          {bookCtaLabel}
-        </GrowthCtaLink>
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <GrowthCtaLink
+            href="/booking/details"
+            source={`seo_loc_${slug}_footer`}
+            className="inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-zinc-900 transition hover:bg-zinc-100"
+          >
+            {bookCtaLabel}
+          </GrowthCtaLink>
+          <GrowthCtaLink
+            href="/booking"
+            source={`seo_loc_${slug}_footer_book_now`}
+            className="inline-flex min-h-12 items-center rounded-xl border border-zinc-500 px-6 text-base font-semibold text-white transition hover:bg-zinc-800"
+          >
+            Book now
+          </GrowthCtaLink>
+        </div>
       </section>
     </main>
   );

@@ -1835,6 +1835,11 @@ export const DEEP_CLEANING_VS_REGULAR_CLEANING_CAPE_TOWN_ARTICLE = {
   ],
 } as const satisfies HighConversionBlogArticle;
 
+/** Set `NEXT_PUBLIC_LEGACY_HIGH_CONVERSION_ROUTES=false` after migrating HC articles to `blog_posts`. */
+export const LEGACY_HIGH_CONVERSION_ROUTES_ENABLED =
+  typeof process.env.NEXT_PUBLIC_LEGACY_HIGH_CONVERSION_ROUTES === "undefined" ||
+  process.env.NEXT_PUBLIC_LEGACY_HIGH_CONVERSION_ROUTES !== "false";
+
 export const HIGH_CONVERSION_POSTS: readonly HighConversionBlogArticle[] = [
   EXAMPLE_HIGH_CONVERSION_ARTICLE,
   HOW_OFTEN_DEEP_CLEAN_HOME_CAPE_TOWN_ARTICLE,
@@ -1862,10 +1867,14 @@ for (const p of PROGRAMMATIC_POSTS) {
   }
 }
 
+/** Routing pool — disable legacy env flag once content lives in Supabase. */
+export const ROUTED_HIGH_CONVERSION_POSTS: readonly HighConversionBlogArticle[] =
+  LEGACY_HIGH_CONVERSION_ROUTES_ENABLED ? HIGH_CONVERSION_POSTS : [];
+
 export function getHighConversionBlogPost(slug: string): HighConversionBlogArticle | null {
-  return HIGH_CONVERSION_POSTS.find((p) => p.slug === slug) ?? null;
+  return ROUTED_HIGH_CONVERSION_POSTS.find((p) => p.slug === slug) ?? null;
 }
 
 export function getAllHighConversionBlogPosts(): readonly HighConversionBlogArticle[] {
-  return HIGH_CONVERSION_POSTS;
+  return ROUTED_HIGH_CONVERSION_POSTS;
 }

@@ -1,6 +1,7 @@
 /**
  * Canonical shape for `blog_posts.content_json` (JSONB).
- * Render with a single `switch (block.type)` map — no `dangerouslySetInnerHTML` for body.
+ * Render with a single `switch (block.type)` map.
+ * `rich_text` uses sanitized HTML at render time (`sanitizeBlogRichHtml`).
  */
 
 export const BLOG_CONTENT_JSON_SCHEMA_VERSION = 1 as const;
@@ -59,11 +60,40 @@ export type BlogFaqItem = { question: string; answer: string };
 export type BlogFaqBlock = BaseBlock & {
   type: "faq";
   items: BlogFaqItem[];
+  /** When true, skip the FAQ section’s built-in H2 so a preceding `heading` block owns the title. */
+  omit_section_heading?: boolean;
 };
 
 export type BlogParagraphBlock = BaseBlock & {
   type: "paragraph";
   content: string;
+};
+
+/** Rich prose block (TipTap HTML). Prefer over `paragraph` for new content. */
+export type BlogRichTextBlock = BaseBlock & {
+  type: "rich_text";
+  html: string;
+};
+
+/** Standalone heading — prefer level 2–3 in body copy (page layout usually owns the main H1). */
+export type BlogHeadingBlock = BaseBlock & {
+  type: "heading";
+  /** Semantic heading level rendered as `<h1>`–`<h3>`. */
+  level: 1 | 2 | 3;
+  content: string;
+};
+
+/** Semantic unordered list (distinct legacy type name `bullets`). */
+export type BlogBulletListBlock = BaseBlock & {
+  type: "bullet_list";
+  items: string[];
+  title?: string;
+};
+
+export type BlogNumberedListBlock = BaseBlock & {
+  type: "numbered_list";
+  items: string[];
+  title?: string;
 };
 
 /** Key moment / snippet — emit strong visible heading + short copy for SERP-friendly layout */
@@ -77,6 +107,11 @@ export type BlogImageBlock = BaseBlock & {
   url: string;
   alt: string;
   caption?: string;
+  /** Intrinsic dimensions for layout-stable rendering (recommended). */
+  width?: number;
+  height?: number;
+  /** LCP / above-fold only — avoids lazy loading. */
+  priority?: boolean;
 };
 
 export type BlogQuoteBlock = BaseBlock & {
@@ -108,8 +143,12 @@ export type BlogContentBlock =
   | BlogSectionBlock
   | BlogComparisonBlock
   | BlogBulletsBlock
+  | BlogBulletListBlock
+  | BlogNumberedListBlock
+  | BlogHeadingBlock
   | BlogCtaBlock
   | BlogFaqBlock
+  | BlogRichTextBlock
   | BlogParagraphBlock
   | BlogKeyTakeawaysBlock
   | BlogImageBlock

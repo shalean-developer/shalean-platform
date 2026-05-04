@@ -38,7 +38,7 @@ export function HeroSection() {
               </Link>
             </div>
             <div className="mt-5 rounded-2xl border border-blue-100 bg-white p-4 text-sm font-semibold text-zinc-700 shadow-sm">
-              <span className="text-blue-600">4.9 rating</span> • 500+ cleans completed • Trusted across Cape Town
+              <span className="text-blue-600">4.8 Google rating</span> • 129 reviews • Trusted across Cape Town
             </div>
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
               <li className="flex items-center gap-2">

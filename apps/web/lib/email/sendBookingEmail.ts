@@ -7,6 +7,7 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getVariableAllowlistFromRow, renderTemplate } from "@/lib/templates/render";
+import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
 import { getTemplate } from "@/lib/templates/store";
 
 export type BookingEmailPayload = {
@@ -917,6 +918,13 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
   const appUrl = getPublicAppUrlBase();
   const bid = payload.bookingId?.trim() || payload.paymentReference;
   const reviewUrl = `${appUrl}/review?booking=${encodeURIComponent(bid)}`;
+  const googleReviewUrl = getGoogleReviewWriteUrl();
+  const googleBlock =
+    googleReviewUrl != null
+      ? `<p style="margin-top:16px;">Hi! Thanks for booking with Shalean 🙌</p>
+  <p>If you have a moment, please leave us a quick Google review — it helps other households choose trusted cleaning:</p>
+  <p><a href="${escapeAttr(googleReviewUrl)}" style="display:inline-block;margin-top:8px;padding:12px 18px;background:#0f766e;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">Leave a Google review</a></p>`
+      : "";
   const html = `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
@@ -926,7 +934,8 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
     ${payload.bookingId?.trim() ? `Booking ID: <span style="font-family:monospace;">${escapeHtml(payload.bookingId.trim())}</span><br/>` : ""}
     Payment ref: <span style="font-family:monospace;">${escapeHtml(payload.paymentReference)}</span>
   </p>
-  <p><a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;font-weight:600;">Leave a review</a></p>
+  ${googleBlock}
+  <p style="margin-top:16px;"><a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;font-weight:600;">Rate this visit in Shalean</a> <span style="color:#6b7280;font-weight:400;">(optional feedback)</span></p>
 </div>`;
   try {
     const { error } = await resend.emails.send({

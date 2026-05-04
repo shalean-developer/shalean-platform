@@ -19,7 +19,7 @@ export const bookingCopy = {
     addressLabel: "Your address",
     propertyLabel: "Home type",
     propertyHint: "Pick the option that best matches your home.",
-    socialProof: "Trusted by 500+ homeowners in Cape Town",
+    socialProof: "4.8★ from 129 Google reviews",
     /** Shown when service-locations loaded OK but every area has zero active cleaners (all busy / none rostered). */
     emptyServiceAreaCoverage:
       "No cleaners available in your area right now. Try a nearby suburb or check back later.",
@@ -47,7 +47,7 @@ export const bookingCopy = {
     cta: "Continue",
     earlyTrust: "⭐ Trusted by homeowners across Cape Town",
     /** Mid-flow social proof after service selection. */
-    midFlowSocialProof: "Trusted by 500+ homeowners in Cape Town",
+    midFlowSocialProof: "4.8★ from 129 Google reviews",
     notesHeading: "Anything else we should know?",
     notesPlaceholder: "Access codes, pets, focus areas… (optional)",
   },
@@ -133,7 +133,7 @@ export const bookingCopy = {
       "This booking is locked for checkout. Complete payment below to confirm your visit.",
     title: "Confirm your booking",
     trust: [
-      "⭐ Rated 4.9 by homeowners in Cape Town",
+      "⭐ 4.8★ average on Google (129 reviews)",
       "🛡️ Not happy? We’ll come back and re-clean for free",
       "👩‍🔧 Experienced, background-checked cleaners",
       "🔒 Secure payment powered by Paystack",

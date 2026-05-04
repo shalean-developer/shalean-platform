@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "path";
 import { fileURLToPath } from "url";
+import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
 
 /** Absolute app root — required when a parent folder (e.g. `apps/web/package.json` shim) has its own lockfile and Turbopack would otherwise infer the wrong root. */
 const turbopackRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -52,14 +53,16 @@ const nextConfig: NextConfig = {
       },
       /**
        * Legacy flat location URLs (short suburb slug, e.g. `sea-point`).
-       * Middleware 308 runs first and uses `locationSeoPathFromLegacyAreaSlug` so slugs that
-       * already include `-cleaning-services` map correctly; this rule covers short-slug bookmarks.
+       * `proxy.ts` runs first and resolves via `locationSeoPathFromLegacyAreaSlug`; this rule
+       * covers remaining `/cleaning-services/:slug` hits as `/locations/:slug-cleaning-services`.
+       * Cape Town duplicate URLs `/cape-town/cleaning-services/:slug` redirect in `proxy.ts` to the mapped hub.
        */
       {
         source: "/cleaning-services/:slug",
         destination: "/locations/:slug-cleaning-services",
         permanent: true,
       },
+      ...programmaticBlogCleanupRedirects,
     ];
   },
   images: {

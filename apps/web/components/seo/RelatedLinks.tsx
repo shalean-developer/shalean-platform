@@ -16,6 +16,8 @@ type Props = {
   currentServiceSlug?: CapeTownSeoServiceSlug;
   /** On a location SEO page, omit so other suburb hubs surface (2+ links). */
   currentLocationSlug?: string;
+  /** Blog articles: stronger local “near me” framing and booking hint. */
+  emphasizeLocalBooking?: boolean;
 };
 
 const SERVICE_ROWS: { slug: CapeTownSeoServiceSlug; label: string }[] = [
@@ -67,12 +69,19 @@ function capeTownHubFirst(
  * Structured internal links: 3 service hubs, 3 location hubs, booking CTA.
  * Use on blog, location, service, and services hub pages so crawl paths stay dense.
  */
-export function RelatedLinks({ placement, currentServiceSlug, currentLocationSlug }: Props) {
+export function RelatedLinks({
+  placement,
+  currentServiceSlug,
+  currentLocationSlug,
+  emphasizeLocalBooking,
+}: Props) {
   const services = pickServiceLinks(currentServiceSlug);
   const hubRows = capeTownHubFirst(placement, currentLocationSlug);
   const nearbyCount = placement === "location" && currentLocationSlug ? 3 : placement === "blog" ? 2 : 3;
   const locations = [...hubRows, ...pickLocationLinks(currentLocationSlug, nearbyCount)];
   const bookingSource = `related_links_${placement}`;
+
+  const localBlog = placement === "blog" && emphasizeLocalBooking;
 
   return (
     <section
@@ -80,10 +89,12 @@ export function RelatedLinks({ placement, currentServiceSlug, currentLocationSlu
       aria-labelledby="related-links-heading"
     >
       <h2 id="related-links-heading" className="text-lg font-bold tracking-tight text-zinc-900">
-        Related links
+        {localBlog ? "Cleaners near you in Cape Town" : "Related links"}
       </h2>
       <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-        Discover more Shalean guides across Cape Town—each page is built for search and booking clarity.
+        {localBlog
+          ? "Jump to a suburb hub or service guide—then continue to booking with the same upfront pricing flow."
+          : "Discover more Shalean guides across Cape Town—each page is built for search and booking clarity."}
       </p>
 
       <div className="mt-6 grid gap-8 sm:grid-cols-2">
@@ -114,13 +125,15 @@ export function RelatedLinks({ placement, currentServiceSlug, currentLocationSlu
       </div>
 
       <div className="mt-8 border-t border-zinc-200 pt-6 text-center">
-        <p className="text-sm font-medium text-zinc-800">Ready to book?</p>
+        <p className="text-sm font-medium text-zinc-800">
+          {localBlog ? "See live slots for your address" : "Ready to book?"}
+        </p>
         <GrowthCtaLink
-          href="/booking/details"
+          href="/booking"
           source={bookingSource}
           className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
-          Book a cleaning in Cape Town
+          {localBlog ? "Get instant quote" : "Book a cleaning in Cape Town"}
         </GrowthCtaLink>
       </div>
     </section>

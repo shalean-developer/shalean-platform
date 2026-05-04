@@ -1,8 +1,8 @@
 import { ShieldCheck, Sparkles, Star, Users } from "lucide-react";
 
 const items = [
-  { icon: Star, title: "4.9 rating", subtitle: "From verified reviews" },
-  { icon: Users, title: "Trusted by 500+ homes", subtitle: "Across Cape Town" },
+  { icon: Star, title: "4.8 Google rating", subtitle: "129 reviews" },
+  { icon: Users, title: "Trusted Cape Town homes", subtitle: "Southern Suburbs to CBD" },
   { icon: ShieldCheck, title: "Vetted cleaners", subtitle: "ID & reference checked" },
   { icon: Sparkles, title: "Satisfaction guarantee", subtitle: "Support if something is missed" },
 ] as const;

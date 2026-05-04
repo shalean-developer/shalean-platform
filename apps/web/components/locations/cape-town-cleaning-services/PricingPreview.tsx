@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import { bookingFlowHref, bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
 
 const rows = [
   { service: "Standard clean (2 bed)", from: "From R450" },
@@ -11,7 +11,7 @@ const rows = [
 ] as const;
 
 export function PricingPreview() {
-  const quoteHref = bookingFlowHref("quote", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "cape_town_main_pricing" });
+  const quoteHref = bookingFlowHref("quote", { ...(bookingMarketingPromoExtra("SAVE10") ?? {}), source: "cape_town_main_pricing" });
 
   return (
     <section aria-labelledby="pricing-heading" className="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 md:p-8">

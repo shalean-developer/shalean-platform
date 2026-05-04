@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { MarketingHomeNewsletterForm } from "@/components/marketing-home/MarketingHomeNewsletterForm";
+import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 import {
   CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_WHATSAPP_URL,
 } from "@/lib/site/customerSupport";
+import {
+  getGoogleReviewWhatsAppUrl,
+  getGoogleReviewWriteUrl,
+  GOOGLE_BUSINESS_REVIEWS,
+} from "@/lib/seo/googleReviews";
 
 function hash(h: string) {
   return `/${h}`;
@@ -12,6 +18,8 @@ function hash(h: string) {
 /** Footer: server-rendered links + small client newsletter form. */
 export function MarketingHomeFooter() {
   const year = new Date().getFullYear();
+  const googleWriteUrl = getGoogleReviewWriteUrl();
+  const googleWaUrl = getGoogleReviewWhatsAppUrl();
 
   return (
     <footer id="contact" className="scroll-mt-24 bg-black py-14 text-white sm:py-16">
@@ -30,6 +38,34 @@ export function MarketingHomeFooter() {
             <p className="mt-4 max-w-xs text-sm font-normal leading-relaxed text-white/85">
               Making your world shine, one home at a time.
             </p>
+            <p className="mt-4 text-xs leading-relaxed text-white/70">
+              {GOOGLE_BUSINESS_REVIEWS.rating}⭐ Google rating · {GOOGLE_BUSINESS_REVIEWS.count}+ reviews · Trusted cleaners
+              in Cape Town
+            </p>
+            {googleWriteUrl ? (
+              <p className="mt-3">
+                <a
+                  href={googleWriteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  Leave a Google review
+                </a>
+              </p>
+            ) : null}
+            {googleWaUrl ? (
+              <p className="mt-2">
+                <a
+                  href={googleWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-emerald-300 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  Review link via WhatsApp
+                </a>
+              </p>
+            ) : null}
             <p className="mt-8 text-xs leading-relaxed text-neutral-500">
               © {year} Shalean Cleaning Services. All rights reserved.
             </p>
@@ -159,33 +195,26 @@ export function MarketingHomeFooter() {
           aria-labelledby="footer-areas-heading"
         >
           <h4 id="footer-areas-heading" className="text-sm font-bold text-white">
-            Areas we serve
+            Popular Areas
           </h4>
-          <nav
-            className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-white/90"
-            aria-label="Cape Town suburbs we serve"
-          >
-            <Link href="/locations/claremont-cleaning-services" className="transition hover:text-white">
-              Cleaning services in Claremont
-            </Link>
-            <span className="text-white/30" aria-hidden>
-              ·
-            </span>
-            <Link href="/locations/sea-point-cleaning-services" className="transition hover:text-white">
-              Cleaning services in Sea Point
-            </Link>
-            <span className="text-white/30" aria-hidden>
-              ·
-            </span>
-            <Link href="/locations/observatory-cleaning-services" className="transition hover:text-white">
-              Cleaning services in Observatory
-            </Link>
-            <span className="text-white/30" aria-hidden>
-              ·
-            </span>
-            <Link href="/services#hub-areas-heading" className="transition hover:text-white">
-              All Cape Town areas
-            </Link>
+          <nav aria-label="Popular Cape Town cleaning locations">
+            <ul className="mt-4 max-w-md space-y-2.5 text-sm text-white/90">
+              {FOOTER_POPULAR_LOCATION_HUBS.map((hub) => (
+                <li key={hub.slug}>
+                  <Link href={`/locations/${hub.slug}`} className="transition hover:text-white">
+                    {hub.name}
+                  </Link>
+                </li>
+              ))}
+              <li className="pt-1">
+                <Link
+                  href="/locations"
+                  className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  View all locations
+                </Link>
+              </li>
+            </ul>
           </nav>
         </div>
       </div>

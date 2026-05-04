@@ -19,5 +19,11 @@ export async function GET(request: Request, ctx: Ctx) {
   const { data, error } = await admin.from("blog_posts").select("*").eq("id", id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  return NextResponse.json({ post: data });
+
+  const { data: tagRows, error: tagErr } = await admin.from("blog_post_tags").select("tag_id").eq("post_id", id);
+  if (tagErr) return NextResponse.json({ error: tagErr.message }, { status: 500 });
+
+  const tag_ids = (tagRows ?? []).map((r) => String((r as { tag_id: string }).tag_id));
+
+  return NextResponse.json({ post: { ...data, tag_ids } });
 }

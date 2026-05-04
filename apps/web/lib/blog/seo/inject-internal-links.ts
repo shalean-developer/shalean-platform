@@ -168,6 +168,15 @@ export function injectInternalLinks(
     push(anchorPick(blogAnchors, `${p.slug}-blog-${ri}`, ri), `/blog/${p.slug}`);
   }
 
+  /** Booking funnel — required for conversion-focused internal linking. */
+  const bookingPath = normPath("/booking");
+  if (!seen.has(bookingPath)) {
+    push(
+      anchorPick(["Book a cleaner online", "Get an instant quote", "Start your booking"], "booking-funnel", 0),
+      "/booking",
+    );
+  }
+
   if (toAdd.length === 0) return content_json;
 
   const blocks = content_json.blocks.map((b) => ({ ...b })) as BlogContentBlock[];

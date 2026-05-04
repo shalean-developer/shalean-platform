@@ -26,8 +26,8 @@ export function MarketingHomeTrustSection({ reviewBanner }: Props) {
               },
               {
                 Icon: Users,
-                title: "Trusted by 500+ homes",
-                subtitle: "Across Cape Town",
+                title: "Serving Cape Town",
+                subtitle: "Fast booking, clear pricing",
               },
               {
                 Icon: ShieldCheck,

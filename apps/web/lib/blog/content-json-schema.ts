@@ -58,6 +58,7 @@ const faqItem = z
 const faqBlock = baseBlock.extend({
   type: z.literal("faq"),
   items: z.array(faqItem).min(1),
+  omit_section_heading: z.boolean().optional(),
 }).strict();
 
 const ctaBlock = z
@@ -81,6 +82,29 @@ const paragraphBlock = baseBlock.extend({
   content: z.string(),
 }).strict();
 
+const richTextBlock = baseBlock.extend({
+  type: z.literal("rich_text"),
+  html: z.string(),
+}).strict();
+
+const headingBlock = baseBlock.extend({
+  type: z.literal("heading"),
+  level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  content: z.string(),
+}).strict();
+
+const bulletListBlock = baseBlock.extend({
+  type: z.literal("bullet_list"),
+  items: z.array(z.string()).min(1),
+  title: z.string().optional(),
+}).strict();
+
+const numberedListBlock = baseBlock.extend({
+  type: z.literal("numbered_list"),
+  items: z.array(z.string()).min(1),
+  title: z.string().optional(),
+}).strict();
+
 const keyTakeawaysBlock = baseBlock.extend({
   type: z.literal("key_takeaways"),
   items: z.array(z.string()).min(1),
@@ -91,6 +115,9 @@ const imageBlock = baseBlock.extend({
   url: z.string(),
   alt: z.string(),
   caption: z.string().optional(),
+  width: z.number().positive().optional(),
+  height: z.number().positive().optional(),
+  priority: z.boolean().optional(),
 }).strict();
 
 const quoteBlock = baseBlock.extend({
@@ -146,9 +173,13 @@ export const contentBlockSchema = z.union([
   sectionBlock,
   comparisonBlock,
   bulletsBlock,
+  bulletListBlock,
+  numberedListBlock,
+  headingBlock,
   ctaBlock,
   faqBlock,
   paragraphBlock,
+  richTextBlock,
   keyTakeawaysBlock,
   imageBlock,
   quoteBlock,

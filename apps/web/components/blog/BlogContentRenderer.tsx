@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
+import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,13 +39,83 @@ function isRemoteSrc(src: string) {
   return src.startsWith("http://") || src.startsWith("https://");
 }
 
+/** Renders `paragraph.content` with optional `[label](/path)` → internal links (trusted CMS content only). */
+function ParagraphWithOptionalInlineLinks({
+  id,
+  className,
+  text,
+}: {
+  id?: string;
+  className?: string;
+  text: string;
+}) {
+  const linkClass =
+    "font-medium text-blue-600 underline-offset-4 hover:text-blue-700 hover:underline";
+  const parts: React.ReactNode[] = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(text.slice(last, m.index));
+    }
+    parts.push(
+      <Link key={`${k++}-${m.index}`} href={m[2]} className={linkClass}>
+        {m[1]}
+      </Link>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    parts.push(text.slice(last));
+  }
+  return (
+    <p id={id} className={className}>
+      {parts.length ? parts : text}
+    </p>
+  );
+}
+
+function ArticleHeading({
+  id,
+  level,
+  children,
+}: {
+  id?: string;
+  level: 1 | 2 | 3;
+  children: React.ReactNode;
+}) {
+  const base =
+    "scroll-mt-24 font-bold tracking-tight text-zinc-900 max-w-none";
+  if (level === 1) {
+    return (
+      <h1 id={id} className={cn(base, "text-3xl sm:text-4xl")}>
+        {children}
+      </h1>
+    );
+  }
+  if (level === 2) {
+    return (
+      <h2 id={id} className={cn(base, "text-2xl sm:text-3xl")}>
+        {children}
+      </h2>
+    );
+  }
+  return (
+    <h3 id={id} className={cn(base, "text-xl sm:text-2xl")}>
+      {children}
+    </h3>
+  );
+}
+
 function Block({ block, index }: { block: BlogContentBlock; index: number }) {
   switch (block.type) {
     case "intro":
       return (
         <p
           id={block.id}
-          className="text-lg leading-relaxed text-zinc-700 sm:text-xl sm:leading-relaxed"
+          className="max-w-prose text-base leading-relaxed text-zinc-700 sm:text-[1.0625rem] sm:leading-[1.65]"
         >
           {block.content}
         </p>
@@ -57,7 +128,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           className="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-4 text-zinc-800 shadow-sm sm:px-6 sm:py-5"
           aria-label="Quick answer"
         >
-          <p className="text-base leading-relaxed font-medium text-zinc-900">{block.content}</p>
+          <p className="whitespace-pre-line text-base leading-relaxed font-medium text-zinc-900">{block.content}</p>
         </aside>
       );
 
@@ -65,14 +136,16 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
       const raw = block.heading_level ?? 2;
       const level: 2 | 3 | 4 = raw === 3 || raw === 4 ? raw : 2;
       return (
-        <section id={block.id} className="space-y-3 scroll-mt-24">
+        <section id={block.id} className="scroll-mt-24 space-y-4">
           <SectionHeading
             level={level}
             className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl"
           >
             {block.title}
           </SectionHeading>
-          <p className="text-base leading-relaxed text-zinc-600 whitespace-pre-line">{block.content}</p>
+          <p className="max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed whitespace-pre-line">
+            {block.content}
+          </p>
         </section>
       );
     }
@@ -81,18 +154,14 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
       return (
         <div
           id={block.id}
-          className="grid gap-4 sm:grid-cols-2"
+          className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/60"
           role="list"
           aria-label="Comparison"
         >
           {block.items.map((item) => (
-            <div
-              key={item.label}
-              role="listitem"
-              className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 shadow-sm"
-            >
+            <div key={item.label} role="listitem" className="px-4 py-3.5 sm:px-5 sm:py-4">
               <p className="text-sm font-semibold text-zinc-900">{item.label}</p>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-600">{item.value}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600">{item.value}</p>
             </div>
           ))}
         </div>
@@ -139,7 +208,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           {block.title ? (
             <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
           ) : null}
-          <ul className="list-disc space-y-2 pl-5 text-base leading-relaxed text-zinc-600 marker:text-blue-600">
+          <ul className="list-disc space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-600 marker:text-blue-600 sm:text-base">
             {block.items.map((item, i) => (
               <li key={i}>{item}</li>
             ))}
@@ -173,6 +242,29 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
 
     case "faq": {
       const headingId = `blog-faq-heading-${index}`;
+      const accordion = (
+        <Accordion type="single" collapsible className="mt-4 w-full">
+          {block.items.map((item, i) => (
+            <AccordionItem value={`faq-${index}-${i}`} key={i}>
+              <AccordionTrigger className="text-left text-base">{item.question}</AccordionTrigger>
+              <AccordionContent className="text-base leading-relaxed text-zinc-600">
+                {item.answer}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      );
+      if (block.omit_section_heading) {
+        return (
+          <section
+            id={block.id ?? `blog-faq-${index}`}
+            className="scroll-mt-24"
+            aria-label="Frequently asked questions"
+          >
+            {accordion}
+          </section>
+        );
+      }
       return (
         <section
           id={block.id ?? `blog-faq-${index}`}
@@ -182,25 +274,73 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           <h2 id={headingId} className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
             Frequently asked questions
           </h2>
-          <Accordion type="single" collapsible className="mt-4 w-full">
-            {block.items.map((item, i) => (
-              <AccordionItem value={`faq-${index}-${i}`} key={i}>
-                <AccordionTrigger className="text-left text-base">{item.question}</AccordionTrigger>
-                <AccordionContent className="text-base leading-relaxed text-zinc-600">
-                  {item.answer}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          {accordion}
         </section>
+      );
+    }
+
+    case "rich_text": {
+      const safe = sanitizeBlogRichHtml(block.html);
+      return (
+        <div
+          id={block.id}
+          className={cn(
+            "blog-rich-text prose prose-zinc max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed",
+            "prose-headings:scroll-mt-24 prose-headings:font-bold prose-headings:text-zinc-900",
+            "prose-h2:text-2xl prose-h2:sm:text-3xl prose-h3:text-xl prose-h3:sm:text-2xl",
+            "prose-a:font-medium prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-4 prose-a:hover:text-blue-700",
+            "prose-ul:marker:text-blue-600 prose-ol:marker:text-blue-600",
+          )}
+          data-block-type="rich_text"
+          dangerouslySetInnerHTML={{ __html: safe }}
+        />
       );
     }
 
     case "paragraph":
       return (
-        <p id={block.id} className="text-base leading-relaxed text-zinc-600 whitespace-pre-line">
+        <ParagraphWithOptionalInlineLinks
+          id={block.id}
+          className="max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed whitespace-pre-line"
+          text={block.content}
+        />
+      );
+
+    case "heading":
+      return (
+        <ArticleHeading id={block.id} level={block.level}>
           {block.content}
-        </p>
+        </ArticleHeading>
+      );
+
+    case "bullet_list":
+      return (
+        <section id={block.id} className="space-y-3" aria-label={block.title ?? "Bullet list"}>
+          {block.title ? (
+            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
+          ) : null}
+          <ul className="list-disc space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-600 marker:text-blue-600 sm:text-base">
+            {block.items.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      );
+
+    case "numbered_list":
+      return (
+        <section id={block.id} className="space-y-3" aria-label={block.title ?? "Numbered list"}>
+          {block.title ? (
+            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
+          ) : null}
+          <ol className="list-decimal space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-600 marker:text-blue-600 sm:text-base">
+            {block.items.map((item, i) => (
+              <li key={i} className="pl-1">
+                {item}
+              </li>
+            ))}
+          </ol>
+        </section>
       );
 
     case "key_takeaways":
@@ -211,7 +351,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           aria-label="Key takeaways"
         >
           <p className="text-sm font-semibold uppercase tracking-wide text-amber-900/90">Key takeaways</p>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-base leading-relaxed text-zinc-800 marker:text-amber-700">
+          <ul className="mt-3 list-disc space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-800 marker:text-amber-700 sm:text-base">
             {block.items.map((item, i) => (
               <li key={i}>{item}</li>
             ))}
@@ -220,16 +360,21 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
       );
 
     case "image": {
+      if (!block.url?.trim()) {
+        return null;
+      }
       const remote = isRemoteSrc(block.url);
       return (
-        <figure id={block.id} className="space-y-2">
-          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-zinc-100 ring-1 ring-zinc-200/60">
+        <figure id={block.id} className="my-2 w-full space-y-2">
+          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 ring-1 ring-zinc-200/60 shadow-sm">
             <Image
               src={block.url}
               alt={block.alt}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, 768px"
+              sizes="(max-width: 768px) 100vw, min(896px, 100vw)"
+              loading={block.priority ? undefined : "lazy"}
+              priority={block.priority}
               unoptimized={remote}
             />
           </div>
@@ -276,13 +421,22 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
 
     case "service_area":
       return (
-        <section id={block.id} className="space-y-3" aria-label="Service areas">
-          <h3 className="text-lg font-semibold text-zinc-900">Areas we cover</h3>
+        <section
+          id={block.id}
+          className="space-y-4 rounded-2xl border border-blue-100 bg-blue-50/35 px-5 py-5 sm:px-6"
+          aria-label="Local service areas"
+        >
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-900">Local coverage near you</h3>
+            <p className="mt-1 text-sm leading-relaxed text-zinc-600">
+              Browse these suburbs for cleaners near me—each hub explains typical scopes before you continue to booking.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             {block.locations.map((loc) => (
               <span
                 key={loc}
-                className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm text-zinc-700"
+                className="inline-flex items-center rounded-full border border-white bg-white/90 px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-sm"
               >
                 {loc}
               </span>
@@ -291,6 +445,10 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
         </section>
       );
 
+    default: {
+      const _exhaustive: never = block;
+      return _exhaustive;
+    }
   }
 }
 
@@ -299,7 +457,7 @@ export function BlogContentRenderer({ content }: Props) {
 
   return (
     <div
-      className="prose prose-zinc max-w-none space-y-10 prose-p:my-0 prose-headings:scroll-mt-24"
+      className="prose prose-zinc max-w-none space-y-10 prose-p:my-0 prose-headings:scroll-mt-24 lg:space-y-12"
       data-blog-content-root
       data-has-faq={hasFaq ? "true" : "false"}
     >

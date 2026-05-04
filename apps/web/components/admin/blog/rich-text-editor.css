@@ -1,0 +1,45 @@
+/* TipTap / ProseMirror shell — scoped under .rich-text-editor-root */
+
+.rich-text-editor-root .ProseMirror {
+  outline: none;
+  min-height: 140px;
+}
+
+.rich-text-editor-root .ProseMirror p {
+  margin: 0.35em 0;
+}
+
+.rich-text-editor-root .ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.75em 0 0.35em;
+  color: rgb(24 24 27);
+}
+
+.rich-text-editor-root .ProseMirror h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0.65em 0 0.3em;
+  color: rgb(24 24 27);
+}
+
+.rich-text-editor-root .ProseMirror ul,
+.rich-text-editor-root .ProseMirror ol {
+  padding-left: 1.25rem;
+  margin: 0.35em 0;
+}
+
+.rich-text-editor-root .ProseMirror li {
+  margin: 0.15em 0;
+}
+
+.rich-text-editor-root .ProseMirror a {
+  font-weight: 500;
+  color: rgb(37 99 235);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.rich-text-editor-root .ProseMirror a:hover {
+  color: rgb(29 78 216);
+}

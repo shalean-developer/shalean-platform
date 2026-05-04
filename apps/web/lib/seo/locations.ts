@@ -9,6 +9,7 @@ import {
   type CapeTownLocationRow,
   type CapeTownLocationSlug,
 } from "@/lib/seo/capeTownLocations";
+import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 
 export type { CapeTownLocationRow, CapeTownLocationSlug } from "@/lib/seo/capeTownLocations";
 export { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
@@ -23,6 +24,17 @@ export type ProgrammaticLocation = {
 export const PROGRAMMATIC_LOCATIONS: readonly ProgrammaticLocation[] = CAPE_TOWN_LOCATIONS.map(
   ({ slug, name, city }) => ({ slug, name, city }),
 );
+
+/** Priority hubs for footer, blog index chips, and conversion-focused internal links. */
+export const FOOTER_POPULAR_LOCATION_HUBS: readonly { readonly name: string; readonly slug: string }[] = [
+  { name: "Claremont", slug: "claremont-cleaning-services" },
+  { name: "Rondebosch", slug: "rondebosch-cleaning-services" },
+  { name: "Gardens", slug: "gardens-cleaning-services" },
+  { name: "Sea Point", slug: "sea-point-cleaning-services" },
+  { name: "Green Point", slug: "green-point-cleaning-services" },
+  { name: "Wynberg", slug: "wynberg-cleaning-services" },
+  { name: "Durbanville", slug: "durbanville-cleaning-services" },
+];
 
 export type ProgrammaticLocationSlug = CapeTownLocationSlug;
 
@@ -90,16 +102,32 @@ export function nearbyProgrammaticLocations(slug: string, count = 4): Programmat
 export function defaultLocationFaqs(name: string, city: string): { q: string; a: string }[] {
   return [
     {
+      q: `What is Shalean's Google rating for cleaning in ${name}?`,
+      a: `Shalean maintains a ${GOOGLE_BUSINESS_REVIEWS.rating}★ rating on Google from ${GOOGLE_BUSINESS_REVIEWS.count} reviews — feedback from customers who booked through our platform. Ratings reflect real visits across ${city}.`,
+    },
+    {
+      q: `How much is house cleaning in ${name}?`,
+      a: `Pricing depends on home size, bathrooms, and add-ons. Many ${name} bookings start from around R300 for smaller scopes; you’ll see an instant total online before you pay—adjust rooms and extras until it matches your budget.`,
+    },
+    {
+      q: `Do you bring cleaning supplies to ${name} jobs?`,
+      a: `Yes. Teams arrive with professional-grade products and equipment suited to typical ${city} homes. Mention allergies or preferred products in your booking notes—we’ll brief the cleaner before arrival.`,
+    },
+    {
+      q: `How quickly can I book a cleaner in ${name}?`,
+      a: `Often same-week, depending on slot demand in ${name}. Pick your service and address online to see the soonest available times—your quote stays locked to what you selected.`,
+    },
+    {
+      q: `Do you serve nearby areas outside ${name}?`,
+      a: `Yes. Shalean covers suburbs across ${city}, including neighbourhoods next to ${name}. Browse nearby area pages or enter your street at checkout—coverage and pricing update automatically.`,
+    },
+    {
       q: `Do you offer cleaning in ${name}?`,
       a: `Yes. Shalean dispatches vetted teams across ${name}, ${city}. Enter your street address at checkout so we can confirm coverage and show an accurate quote before you pay.`,
     },
     {
       q: `Which cleaning services can I book for ${name}?`,
-      a: `You can book standard home cleaning, deep cleaning, move-out cleaning, Airbnb turnovers, office cleaning, and carpet or sofa care. Each service has a Cape Town-wide guide; your ${name} address finalises scope and pricing.`,
-    },
-    {
-      q: "How do I book a cleaner online?",
-      a: "Choose your service and home size on Shalean, add any extras, then pick a time slot. You will see a clear total before you confirm—no surprise surcharges for the items you selected.",
+      a: `Standard home cleaning, deep cleaning, move-out cleaning, Airbnb turnovers, office cleaning, and carpet care. Each service has a Cape Town-wide guide; your ${name} details finalise scope and pricing.`,
     },
   ];
 }

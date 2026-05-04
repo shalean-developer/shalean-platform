@@ -13,7 +13,10 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { bookingId } = await params;
-  return { title: `Pay for booking · ${bookingId.slice(0, 8)}…` };
+  return {
+    title: `Pay for booking · ${bookingId.slice(0, 8)}…`,
+    robots: { index: false, follow: false },
+  };
 }
 
 export default async function PaymentBookingPage({ params }: PageProps) {

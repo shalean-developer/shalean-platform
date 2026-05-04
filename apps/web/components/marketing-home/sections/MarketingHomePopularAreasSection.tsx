@@ -34,7 +34,7 @@ export function MarketingHomePopularAreasSection() {
               Cleaning services in {loc.name}
             </Link>
           ))}
-          <Link href="/services#hub-areas-heading" className={cn(linkInNavClassName, "text-sm font-semibold")}>
+          <Link href="/locations/cape-town-cleaning-services" className={cn(linkInNavClassName, "text-sm font-semibold")}>
             All areas
           </Link>
         </nav>

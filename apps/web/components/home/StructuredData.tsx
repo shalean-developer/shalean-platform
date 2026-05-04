@@ -1,15 +1,14 @@
 import type { HomeFaq, HomeLocation, HomeService } from "@/lib/home/data";
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import {
   CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_TELEPHONE_E164,
 } from "@/lib/site/customerSupport";
+import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
 
 type StructuredDataProps = {
   services: HomeService[];
   locations: HomeLocation[];
   faqs: HomeFaq[];
-  reviewBanner?: PublicReviewBannerStats | null;
 };
 
 const SITE_URL = "https://www.shalean.co.za";
@@ -18,7 +17,7 @@ const LOCAL_BUSINESS_ID = `${SITE_URL}/#localbusiness`;
 /** Primary service labels for Google rich results (aligned with CleaningService). */
 const CORE_SERVICE_TYPES = ["house cleaning", "deep cleaning", "move-out cleaning"] as const;
 
-export function StructuredData({ services, locations, faqs, reviewBanner = null }: StructuredDataProps) {
+export function StructuredData({ services, locations, faqs }: StructuredDataProps) {
   const areaServed = [
     { "@type": "Country" as const, name: "South Africa" },
     ...locations.map((location) => ({
@@ -42,6 +41,7 @@ export function StructuredData({ services, locations, faqs, reviewBanner = null 
     },
     areaServed,
     serviceType: [...CORE_SERVICE_TYPES],
+    aggregateRating: googleBusinessAggregateRatingSchema(),
     makesOffer: services.map((service) => ({
       "@type": "Offer",
       itemOffered: {
@@ -53,14 +53,6 @@ export function StructuredData({ services, locations, faqs, reviewBanner = null 
       ...(service.price != null ? { price: service.price } : {}),
     })),
   };
-
-  if (reviewBanner != null && reviewBanner.reviewCount >= 1 && Number.isFinite(reviewBanner.avgRating)) {
-    localBusiness.aggregateRating = {
-      "@type": "AggregateRating",
-      ratingValue: reviewBanner.avgRating.toFixed(1),
-      reviewCount: String(reviewBanner.reviewCount),
-    };
-  }
 
   const cleaningService = {
     "@type": "CleaningService",

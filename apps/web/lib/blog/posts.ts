@@ -1,11 +1,15 @@
-export const BLOG_POST_SLUGS = [
+/** Slugs that historically shipped as in-repo TSX articles; metadata kept for hub cards until DB rows publish. */
+export const LEGACY_EDITORIAL_SLUGS = [
   "airbnb-cleaning-checklist",
   "cleaning-cost-cape-town",
   "move-out-cleaning-guide",
   "deep-vs-standard-cleaning-cape-town",
 ] as const;
 
-export type BlogPostSlug = (typeof BLOG_POST_SLUGS)[number];
+export type BlogPostSlug = (typeof LEGACY_EDITORIAL_SLUGS)[number];
+
+/** Empty: no extra static blog params beyond Supabase + optional legacy HC/programmatic pools. */
+export const BLOG_POST_SLUGS = [] as const;
 
 export type BlogPostMeta = {
   slug: BlogPostSlug;
@@ -146,7 +150,7 @@ export function getBlogPost(slug: string): BlogPostMeta | null {
 
 /** Newest first — stable for listing + sitemap consumers. */
 export function getAllBlogPosts(): BlogPostMeta[] {
-  return BLOG_POST_SLUGS.map((s) => BLOG_POSTS[s]).sort(
+  return LEGACY_EDITORIAL_SLUGS.map((s) => BLOG_POSTS[s]).sort(
     (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
   );
 }

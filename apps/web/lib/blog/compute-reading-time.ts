@@ -1,4 +1,5 @@
 import type { BlogContentBlock, BlogContentJson } from "./content-json";
+import { plainTextFromHtml } from "./html-plain-text";
 
 function wc(s: string): number {
   const t = s.trim();
@@ -12,11 +13,19 @@ function blockWords(b: BlogContentBlock): number {
     case "quick_answer":
     case "paragraph":
       return wc(b.content);
+    case "rich_text":
+      return wc(plainTextFromHtml(b.html));
+    case "heading":
+      return wc(b.content);
     case "section":
       return wc(b.title) + wc(b.content);
     case "comparison":
       return b.items.reduce((n, i) => n + wc(i.label) + wc(i.value), 0);
     case "bullets":
+      return (b.title ? wc(b.title) : 0) + b.items.reduce((n, i) => n + wc(i), 0);
+    case "bullet_list":
+    case "numbered_list":
+      return (b.title ? wc(b.title) : 0) + b.items.reduce((n, i) => n + wc(i), 0);
     case "key_takeaways":
       return b.items.reduce((n, i) => n + wc(i), 0);
     case "cta":

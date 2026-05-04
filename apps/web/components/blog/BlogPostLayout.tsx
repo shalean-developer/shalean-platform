@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BlogArticleEndCta } from "@/components/blog/BlogArticleConversionBlocks";
+import { BlogPostHeroConversion } from "@/components/blog/BlogPostHeroConversion";
+import { BlogPreFooterTrust } from "@/components/blog/BlogPreFooterTrust";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +25,8 @@ export type BlogPostLayoutProps = {
   /** Rendered only when non-empty and you want links outside structured blocks */
   supplementalInternalLinks?: { label: string; href: string }[];
   relatedLinksSlot?: ReactNode;
+  /** Service links, mid-page CTA, figures — rendered after main article body. */
+  belowArticleSlot?: ReactNode;
 };
 
 export function BlogPostLayout({
@@ -37,6 +41,7 @@ export function BlogPostLayout({
   trackingSlug,
   supplementalInternalLinks,
   relatedLinksSlot,
+  belowArticleSlot,
 }: BlogPostLayoutProps) {
   const readLabel =
     readingTimeMinutes != null && readingTimeMinutes > 0
@@ -89,7 +94,11 @@ export function BlogPostLayout({
         <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.35rem] lg:leading-tight">
           {h1}
         </h1>
-        {lede ? <p className="mt-4 text-lg leading-relaxed text-zinc-600">{lede}</p> : null}
+        {lede ? (
+          <p className="mt-4 max-w-prose text-base leading-relaxed text-zinc-600 sm:text-[1.0625rem] sm:leading-relaxed">
+            {lede}
+          </p>
+        ) : null}
         <p className="mt-4 text-sm text-zinc-500">
           Published {publishedLabel}
           {readLabel ? (
@@ -107,6 +116,8 @@ export function BlogPostLayout({
         </p>
       </header>
 
+      <BlogPostHeroConversion trackingSlug={trackingSlug} />
+
       {hero ? (
         <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
           <Image
@@ -122,7 +133,9 @@ export function BlogPostLayout({
         </div>
       ) : null}
 
-      <div className="py-10">{children}</div>
+      <div className="py-10 lg:py-14">{children}</div>
+
+      {belowArticleSlot ? <div className="not-prose space-y-12">{belowArticleSlot}</div> : null}
 
       {supplementalInternalLinks && supplementalInternalLinks.length > 0 ? (
         <nav className="not-prose border-t border-zinc-200 pt-10" aria-label="Related guides">
@@ -142,7 +155,9 @@ export function BlogPostLayout({
         </nav>
       ) : null}
 
-      {relatedLinksSlot ? <div className="not-prose mt-12">{relatedLinksSlot}</div> : null}
+      {relatedLinksSlot ? <div className="not-prose mt-14">{relatedLinksSlot}</div> : null}
+
+      <BlogPreFooterTrust />
 
       <BlogArticleEndCta trackingSlug={trackingSlug} />
 

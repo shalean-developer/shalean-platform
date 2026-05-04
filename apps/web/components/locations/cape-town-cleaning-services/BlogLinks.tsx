@@ -1,17 +1,13 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { BLOG_POSTS, type BlogPostSlug } from "@/lib/blog/posts";
+import { getPublishedHubBlogCards } from "@/lib/blog/get-all-posts";
 
-/** Editorial guides that strengthen hub ↔ blog internal flow (incl. cost intent). */
-const HUB_BLOG_SLUGS: BlogPostSlug[] = [
-  "cleaning-cost-cape-town",
-  "deep-vs-standard-cleaning-cape-town",
-  "move-out-cleaning-guide",
-  "airbnb-cleaning-checklist",
-];
+export async function BlogLinks() {
+  const featured = await getPublishedHubBlogCards();
 
-export function BlogLinks() {
-  const featured = HUB_BLOG_SLUGS.map((slug) => BLOG_POSTS[slug]);
+  if (featured.length === 0) {
+    return null;
+  }
 
   return (
     <section aria-labelledby="blog-heading">
@@ -39,7 +35,7 @@ export function BlogLinks() {
                 <h3 className="text-base font-semibold text-zinc-900 group-hover:text-blue-700 dark:text-zinc-50 dark:group-hover:text-blue-300">
                   {post.title}
                 </h3>
-                <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" aria-hidden />
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-400 group-hover:text-blue-600 dark:text-zinc-400" aria-hidden />
               </div>
               <p className="mt-2 line-clamp-2 flex-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{post.excerpt}</p>
               <span className="mt-4 text-sm font-medium text-blue-600 dark:text-blue-400">Read guide</span>

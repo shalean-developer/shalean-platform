@@ -6,7 +6,7 @@ import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyRes
 /** Path-only canonical joins root `metadataBase` (`app/layout.tsx`) — query strings never become canonical. */
 export const metadata: Metadata = {
   title: "Payment successful | Shalean",
-  robots: "noindex, nofollow, noimageindex",
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
   alternates: { canonical: "/payment/success" },
 };
 

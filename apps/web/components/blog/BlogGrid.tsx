@@ -1,8 +1,8 @@
-import type { BlogIndexPost } from "@/lib/blog/get-all-posts";
+import type { BlogIndexCardPost } from "@/lib/blog/blog-index-hub";
 import { BlogCard } from "@/components/blog/BlogCard";
 
 type Props = {
-  posts: BlogIndexPost[];
+  posts: BlogIndexCardPost[];
   /** First N cards use eager image loading */
   eagerImageCount?: number;
 };

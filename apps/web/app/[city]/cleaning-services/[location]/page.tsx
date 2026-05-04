@@ -20,13 +20,47 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { city, location } = await params;
   const cityName = cityNameFromSlug(city);
   const locationName = locationNameForCity(city, location);
-  if (!cityName || !locationName) return { title: "Cleaning Services | Shalean" };
-  const primaryPath = city === "cape-town" ? locationSeoPathFromLegacyAreaSlug(location) : null;
-  return {
-    title: `House Cleaning in ${locationName}, ${cityName} | Shalean`,
-    description: `Book trusted house cleaning in ${locationName}, ${cityName}. Fast quotes, vetted cleaners, secure checkout.`,
-    ...(primaryPath ? { alternates: { canonical: `${SITE_ORIGIN}${primaryPath}` } } : {}),
+
+  const dupPath = `/${city}/cleaning-services/${location}`;
+  const dupAbsolute = `${SITE_ORIGIN}${dupPath}`;
+  const capeTownCanonical =
+    city === "cape-town" ? locationSeoPathFromLegacyAreaSlug(location) : null;
+  const canonicalUrl = capeTownCanonical ? `${SITE_ORIGIN}${capeTownCanonical}` : dupAbsolute;
+
+  const defaultTitle = "Cleaning Services | Shalean";
+  const title =
+    cityName && locationName
+      ? `House Cleaning in ${locationName}, ${cityName} | Shalean`
+      : defaultTitle;
+  const description =
+    cityName && locationName
+      ? `Book trusted house cleaning in ${locationName}, ${cityName}. Fast quotes, vetted cleaners, secure checkout.`
+      : undefined;
+
+  const shared: Metadata = {
+    title,
+    description,
+    alternates: { canonical: canonicalUrl },
+    openGraph: {
+      type: "website",
+      url: canonicalUrl,
+      title,
+      description,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
   };
+
+  if (city !== "cape-town") {
+    return { ...shared, robots: { index: false, follow: true } };
+  }
+
+  if (!cityName || !locationName) return { title: defaultTitle };
+
+  return shared;
 }
 
 function areaHref(citySlug: string, areaSlug: string): string {

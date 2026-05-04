@@ -156,12 +156,6 @@ export function HighConversionBlogTemplate({ article }: Props) {
 
       <RelatedServicesSection />
 
-      <BlogHighConversionCtaBlock
-        source={`blog_hc_${article.slug}_end`}
-        heading={article.cta?.heading}
-        subtext={article.cta?.subtext}
-      />
-
       <section className="not-prose mt-12" aria-labelledby="hc-faq-heading">
         <h2 id="hc-faq-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
           Frequently asked questions

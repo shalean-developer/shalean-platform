@@ -396,8 +396,18 @@ for (const s of BLOG_POST_SLUGS) {
   }
 }
 
+/** Set `NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES=false` after migrating programmatic URLs to `blog_posts`. */
+export const LEGACY_PROGRAMMATIC_ROUTES_ENABLED =
+  typeof process.env.NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES === "undefined" ||
+  process.env.NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES !== "false";
+
+/** Posts still rendered from in-repo definitions (routing + static params). */
+export const ROUTED_PROGRAMMATIC_POSTS: ProgrammaticPost[] = LEGACY_PROGRAMMATIC_ROUTES_ENABLED
+  ? PROGRAMMATIC_POSTS
+  : [];
+
 export function getProgrammaticPost(slug: string): ProgrammaticPost | null {
-  return PROGRAMMATIC_POSTS.find((p) => p.slug === slug) ?? null;
+  return ROUTED_PROGRAMMATIC_POSTS.find((p) => p.slug === slug) ?? null;
 }
 
 const AREA_BLOG_HUB_LOCATIONS = ["Claremont", "Sea Point", "Rondebosch", "Gardens", "Wynberg"] as const;

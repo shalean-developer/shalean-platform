@@ -9,6 +9,7 @@ import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
+import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
 
 export type ReviewPromptKind = "initial" | "reminder";
 
@@ -30,10 +31,15 @@ export function buildReviewPromptSmsBody(params: {
   kind: ReviewPromptKind;
 }): string {
   const link = `${getPublicAppUrlBase()}/review?booking=${encodeURIComponent(params.bookingId)}`;
+  const google = getGoogleReviewWriteUrl();
+  const googleLine =
+    google != null
+      ? `\nGoogle review (helps others find us):\n${google}`
+      : "";
   if (params.kind === "reminder") {
-    return `Hi ${params.firstName}, quick reminder — we'd love your feedback on your Shalean clean:\n${link}`;
+    return `Hi ${params.firstName}, quick reminder — we'd love your feedback on your Shalean clean:\n${link}${googleLine}`;
   }
-  return `Hi ${params.firstName}, thanks for choosing Shalean 🙌\nPlease rate your cleaning experience:\n${link}`;
+  return `Hi ${params.firstName}, thanks for choosing Shalean 🙌\nPlease rate your cleaning experience:\n${link}${googleLine}`;
 }
 
 async function deliverReviewPromptSms(params: {

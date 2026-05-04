@@ -12,11 +12,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { validateBlogPublish } from "@/lib/blog/seo/publish-validation";
+import {
+  buildBlogTemplateContent,
+  BLOG_TEMPLATE_OPTIONS,
+  type BlogTemplateId,
+} from "@/lib/blog/templates";
+import { legacyParagraphToRichHtml } from "@/lib/blog/legacy-paragraph-to-rich-html";
+import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
+import { RichTextBlockEditor } from "./RichTextBlockEditor";
 
 type AddableType =
   | "intro"
+  | "quick_answer"
   | "section"
+  | "rich_text"
+  | "image"
+  | "heading"
   | "bullets"
+  | "bullet_list"
+  | "numbered_list"
+  | "key_takeaways"
   | "faq"
   | "cta"
   | "internal_links"
@@ -35,14 +51,40 @@ function withBlockId<B extends BlogContentBlock>(block: B): B {
   return { ...block, id: newBlockId() };
 }
 
+/** Loads legacy `paragraph` blocks into the TipTap-powered `rich_text` shape. */
+function normalizeBlockForEditor(b: BlogContentBlock): BlogContentBlock {
+  if (b.type === "paragraph") {
+    return {
+      id: b.id,
+      type: "rich_text",
+      html: legacyParagraphToRichHtml(b.content),
+    };
+  }
+  return b;
+}
+
 function newBlock(type: AddableType): BlogContentBlock {
   switch (type) {
     case "intro":
       return withBlockId({ type: "intro", content: "" });
+    case "quick_answer":
+      return withBlockId({ type: "quick_answer", content: "" });
     case "section":
       return withBlockId({ type: "section", title: "", content: "", heading_level: 2 });
+    case "rich_text":
+      return withBlockId({ type: "rich_text", html: "<p></p>" });
+    case "image":
+      return withBlockId({ type: "image", url: "", alt: "" });
+    case "heading":
+      return withBlockId({ type: "heading", level: 2, content: "" });
     case "bullets":
       return withBlockId({ type: "bullets", items: [""] });
+    case "bullet_list":
+      return withBlockId({ type: "bullet_list", items: [""] });
+    case "numbered_list":
+      return withBlockId({ type: "numbered_list", items: [""] });
+    case "key_takeaways":
+      return withBlockId({ type: "key_takeaways", items: [""] });
     case "faq":
       return withBlockId({ type: "faq", items: [{ question: "", answer: "" }] });
     case "cta":
@@ -107,14 +149,53 @@ export function PostEditorForm({ mode, postId }: Props) {
   const [featuredAlt, setFeaturedAlt] = useState("");
   const [noindex, setNoindex] = useState(false);
   const [blocks, setBlocks] = useState<BlogContentBlock[]>([]);
-  const [addType, setAddType] = useState<AddableType>("intro");
+  const [addType, setAddType] = useState<AddableType>("rich_text");
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const [primaryKeyword, setPrimaryKeyword] = useState("");
+  const [secondaryKwText, setSecondaryKwText] = useState("");
+  const [searchIntent, setSearchIntent] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<{ id: string; slug: string; name: string }[]>([]);
+  const [tags, setTags] = useState<{ id: string; slug: string; name: string }[]>([]);
+  const [seoGenSlug, setSeoGenSlug] = useState(false);
+  const [seoApplySuggestions, setSeoApplySuggestions] = useState(false);
+  const [templateChoice, setTemplateChoice] = useState<BlogTemplateId | "">("");
+  const [tplArea, setTplArea] = useState("Claremont");
+  const [tplCity, setTplCity] = useState("Cape Town");
+  const [tplService, setTplService] = useState("Home cleaning");
+  const [tplA, setTplA] = useState("Standard cleaning");
+  const [tplB, setTplB] = useState("Deep cleaning");
+  const [tplTopic, setTplTopic] = useState("home cleaning");
 
   const contentJson: BlogContentJson = useMemo(
     () => ({ schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks }),
     [blocks],
   );
+
+  const publishPreview = useMemo(() => validateBlogPublish(contentJson), [contentJson]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch("/api/admin/blog/taxonomy", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        categories?: { id: string; slug: string; name: string }[];
+        tags?: { id: string; slug: string; name: string }[];
+      };
+      if (cancelled || !res.ok) return;
+      setCategories(json.categories ?? []);
+      setTags(json.tags ?? []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== "edit" || !postId) return;
@@ -158,9 +239,18 @@ export function PostEditorForm({ mode, postId }: Props) {
       setFeaturedUrl(p.featured_image_url == null ? "" : String(p.featured_image_url));
       setFeaturedAlt(p.featured_image_alt == null ? "" : String(p.featured_image_alt));
       setNoindex(Boolean(p.noindex));
+      setPrimaryKeyword(p.primary_keyword == null ? "" : String(p.primary_keyword));
+      const sec = p.secondary_keywords;
+      setSecondaryKwText(Array.isArray(sec) ? (sec as string[]).join("\n") : "");
+      setSearchIntent(p.search_intent == null ? "" : String(p.search_intent));
+      setCategoryId(p.category_id == null ? "" : String(p.category_id));
+      const tids = (p as { tag_ids?: string[] }).tag_ids;
+      setTagIds(Array.isArray(tids) ? tids : []);
       const raw = p.content_json;
       const parsed = safeParseBlogContentJson(raw);
-      setBlocks(parsed.success ? parsed.data.blocks.map((b) => withBlockId(b)) : []);
+      setBlocks(
+        parsed.success ? parsed.data.blocks.map((b) => normalizeBlockForEditor(withBlockId(b))) : [],
+      );
       setLoading(false);
     })();
     return () => {
@@ -255,6 +345,16 @@ export function PostEditorForm({ mode, postId }: Props) {
       featured_image_alt: featuredAlt.trim() || null,
       noindex,
       content_json: contentJson,
+      primary_keyword: primaryKeyword.trim() || null,
+      secondary_keywords: secondaryKwText
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+      search_intent: searchIntent.trim() || null,
+      category_id: categoryId.trim() || null,
+      tag_ids: tagIds,
+      seo_generate_slug_from_keyword: seoGenSlug,
+      seo_apply_suggestions: seoApplySuggestions,
     };
 
     const res = await fetch("/api/admin/blog/posts", {
@@ -276,6 +376,28 @@ export function PostEditorForm({ mode, postId }: Props) {
     router.refresh();
   };
 
+  const applyTemplate = () => {
+    if (!templateChoice) return;
+    let json: BlogContentJson;
+    if (templateChoice === "location") {
+      json = buildBlogTemplateContent({
+        template: "location",
+        vars: { areaName: tplArea, cityName: tplCity, serviceName: tplService },
+      });
+    } else if (templateChoice === "comparison") {
+      json = buildBlogTemplateContent({
+        template: "comparison",
+        vars: { topicA: tplA, topicB: tplB, cityName: tplCity },
+      });
+    } else {
+      json = buildBlogTemplateContent({
+        template: "guide",
+        vars: { topic: tplTopic, cityName: tplCity },
+      });
+    }
+    setBlocks(json.blocks.map((b) => withBlockId(b)));
+  };
+
   if (loading) {
     return <p className="text-sm text-zinc-600">Loading…</p>;
   }
@@ -291,7 +413,7 @@ export function PostEditorForm({ mode, postId }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16 px-4">
       {(formError || fieldErrors.length > 0) && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {formError ? <p>{formError}</p> : null}
@@ -407,54 +529,229 @@ export function PostEditorForm({ mode, postId }: Props) {
         </div>
       </div>
 
+      {mode === "create" ? (
+        <section className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Start from template</h2>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Inserts starter blocks — expand copy before publishing (minimum 800 words).
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Template</Label>
+              <select
+                className="flex h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                value={templateChoice}
+                onChange={(e) => setTemplateChoice(e.target.value as BlogTemplateId | "")}
+              >
+                <option value="">— None —</option>
+                {BLOG_TEMPLATE_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {templateChoice === "location" ? (
+              <>
+                <Input placeholder="Area (e.g. Claremont)" value={tplArea} onChange={(e) => setTplArea(e.target.value)} />
+                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+                <Input placeholder="Service" value={tplService} onChange={(e) => setTplService(e.target.value)} />
+              </>
+            ) : null}
+            {templateChoice === "comparison" ? (
+              <>
+                <Input placeholder="Option A" value={tplA} onChange={(e) => setTplA(e.target.value)} />
+                <Input placeholder="Option B" value={tplB} onChange={(e) => setTplB(e.target.value)} />
+                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+              </>
+            ) : null}
+            {templateChoice === "guide" ? (
+              <>
+                <Input placeholder="Topic" value={tplTopic} onChange={(e) => setTplTopic(e.target.value)} />
+                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+              </>
+            ) : null}
+            <Button type="button" variant="secondary" size="sm" onClick={applyTemplate} disabled={!templateChoice}>
+              Apply template
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">SEO & taxonomy</h2>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="pk">Primary keyword</Label>
+            <Input
+              id="pk"
+              value={primaryKeyword}
+              onChange={(e) => setPrimaryKeyword(e.target.value)}
+              placeholder="e.g. cleaning claremont"
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="sk">Secondary keywords (one per line)</Label>
+            <Textarea
+              id="sk"
+              value={secondaryKwText}
+              onChange={(e) => setSecondaryKwText(e.target.value)}
+              rows={3}
+              placeholder={"house cleaning claremont\ncleaners near me"}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="intent">Search intent</Label>
+            <select
+              id="intent"
+              className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              value={searchIntent}
+              onChange={(e) => setSearchIntent(e.target.value)}
+            >
+              <option value="">—</option>
+              <option value="informational">informational</option>
+              <option value="transactional">transactional</option>
+              <option value="commercial">commercial</option>
+              <option value="navigational">navigational</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cat">Category</Label>
+            <select
+              id="cat"
+              className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2 space-y-2">
+            <Label>Tags</Label>
+            <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+              {tags.map((t) => {
+                const on = tagIds.includes(t.id);
+                return (
+                  <label key={t.id} className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() =>
+                        setTagIds((prev) => (on ? prev.filter((id) => id !== t.id) : [...prev, t.id]))
+                      }
+                    />
+                    {t.name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2">
+            <input type="checkbox" checked={seoGenSlug} onChange={(e) => setSeoGenSlug(e.target.checked)} />
+            Generate slug from primary keyword on save (server)
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2">
+            <input type="checkbox" checked={seoApplySuggestions} onChange={(e) => setSeoApplySuggestions(e.target.checked)} />
+            Apply meta/H1 suggestions where empty (server)
+          </label>
+          <div className="sm:col-span-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-900">
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">SEO score: {publishPreview.seoScore}/100</span>
+            <span className="ml-2 text-zinc-600 dark:text-zinc-400">
+              {publishPreview.wordCount} words · publishing requires passing all checks (≥800 words, FAQ, CTA, internal links).
+            </span>
+          </div>
+        </div>
+      </section>
+
       <section className="space-y-4">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <Label>Add block</Label>
             <select
-              className="flex h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="flex h-10 min-w-[220px] rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
               value={addType}
               onChange={(e) => setAddType(e.target.value as AddableType)}
             >
-              <option value="intro">intro</option>
-              <option value="section">section</option>
-              <option value="bullets">bullets</option>
-              <option value="faq">faq</option>
-              <option value="cta">cta</option>
-              <option value="internal_links">internal_links</option>
-              <option value="comparison_table">comparison_table</option>
+              <optgroup label="Rich & structured">
+                <option value="rich_text">rich_text (WordPress-style)</option>
+                <option value="image">image</option>
+                <option value="faq">faq</option>
+                <option value="cta">cta</option>
+                <option value="internal_links">internal_links</option>
+              </optgroup>
+              <optgroup label="Layouts">
+                <option value="intro">intro</option>
+                <option value="quick_answer">quick_answer</option>
+                <option value="section">section</option>
+                <option value="heading">heading</option>
+                <option value="bullets">bullets</option>
+                <option value="bullet_list">bullet_list</option>
+                <option value="numbered_list">numbered_list</option>
+                <option value="key_takeaways">key_takeaways</option>
+                <option value="comparison_table">comparison_table</option>
+              </optgroup>
             </select>
           </div>
           <Button type="button" variant="secondary" onClick={() => setBlocks((b) => [...b, newBlock(addType)])}>
             Add block
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setBlocks((b) => [...b, newBlock("image")])}
+          >
+            Insert image
+          </Button>
         </div>
 
-        <div className="space-y-4">
-          {blocks.map((block, i) => (
-            <div
-              key={block.id ?? `idx-${i}`}
-              className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
-            >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  {block.type} · #{i + 1}
-                </span>
-                <div className="flex gap-1">
-                  <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, -1)}>
-                    Up
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, 1)}>
-                    Down
-                  </Button>
-                  <Button type="button" size="sm" variant="destructive" onClick={() => removeBlock(i)}>
-                    Remove
-                  </Button>
+        <details className="rounded-lg border border-zinc-200 bg-zinc-50/80 lg:hidden dark:border-zinc-800">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+            Live preview
+          </summary>
+          <div className="max-h-[55vh] overflow-y-auto border-t border-zinc-200 px-3 py-4 dark:border-zinc-800">
+            <BlogContentRenderer content={contentJson} />
+          </div>
+        </details>
+
+        <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-8">
+          <div className="min-w-0 space-y-4">
+            {blocks.map((block, i) => (
+              <div
+                key={block.id ?? `idx-${i}`}
+                className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
+              >
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    {block.type} · #{i + 1}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, -1)}>
+                      Up
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, 1)}>
+                      Down
+                    </Button>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => removeBlock(i)}>
+                      Remove
+                    </Button>
+                  </div>
                 </div>
+                <BlockFields block={block} onChange={(next) => updateBlock(i, next)} />
               </div>
-              <BlockFields block={block} onChange={(next) => updateBlock(i, next)} />
-            </div>
-          ))}
+            ))}
+          </div>
+
+          <div className="sticky top-6 mt-6 hidden max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-sm lg:mt-0 lg:block dark:border-zinc-800 dark:bg-zinc-950">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Live preview
+            </p>
+            <BlogContentRenderer content={contentJson} />
+          </div>
         </div>
       </section>
 
@@ -515,6 +812,27 @@ function BlockFields({
           </div>
         </div>
       );
+    case "heading":
+      return (
+        <div className="space-y-2">
+          <div>
+            <label className={lab}>Level</label>
+            <select
+              className={inp}
+              value={String(block.level)}
+              onChange={(e) => onChange({ ...block, level: Number(e.target.value) as 1 | 2 | 3 })}
+            >
+              <option value="1">h1</option>
+              <option value="2">h2</option>
+              <option value="3">h3</option>
+            </select>
+          </div>
+          <div>
+            <label className={lab}>Text</label>
+            <Input className={inp} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
+          </div>
+        </div>
+      );
     case "bullets":
       return (
         <div className="space-y-2">
@@ -548,9 +866,88 @@ function BlockFields({
           </Button>
         </div>
       );
+    case "bullet_list":
+      return (
+        <div className="space-y-2">
+          <div>
+            <label className={lab}>Section title (optional)</label>
+            <Input className={inp} value={block.title ?? ""} onChange={(e) => onChange({ ...block, title: e.target.value || undefined })} />
+          </div>
+          {block.items.map((item, j) => (
+            <div key={j} className="flex gap-2">
+              <Input
+                className={inp}
+                value={item}
+                onChange={(e) => {
+                  const items = [...block.items];
+                  items[j] = e.target.value;
+                  onChange({ ...block, items });
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange({ ...block, items: block.items.filter((_, k) => k !== j) })}
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="secondary" onClick={() => onChange({ ...block, items: [...block.items, ""] })}>
+            Add item
+          </Button>
+        </div>
+      );
+    case "numbered_list":
+      return (
+        <div className="space-y-2">
+          <div>
+            <label className={lab}>Section title (optional)</label>
+            <Input className={inp} value={block.title ?? ""} onChange={(e) => onChange({ ...block, title: e.target.value || undefined })} />
+          </div>
+          {block.items.map((item, j) => (
+            <div key={j} className="flex gap-2">
+              <Input
+                className={inp}
+                value={item}
+                onChange={(e) => {
+                  const items = [...block.items];
+                  items[j] = e.target.value;
+                  onChange({ ...block, items });
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange({ ...block, items: block.items.filter((_, k) => k !== j) })}
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="secondary" onClick={() => onChange({ ...block, items: [...block.items, ""] })}>
+            Add step
+          </Button>
+        </div>
+      );
     case "faq":
       return (
         <div className="space-y-3">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={Boolean(block.omit_section_heading)}
+              onChange={(e) =>
+                onChange({
+                  ...block,
+                  omit_section_heading: e.target.checked ? true : undefined,
+                })
+              }
+            />
+            Omit built-in FAQ title (use a preceding heading block)
+          </label>
           {block.items.map((item, j) => (
             <div key={j} className="rounded border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
               <label className={lab}>Question</label>
@@ -672,9 +1069,19 @@ function BlockFields({
           <Textarea className={cn(inp, "min-h-[88px]")} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
         </div>
       );
+    case "rich_text":
+      return (
+        <div className="space-y-2">
+          <label className={lab}>Rich content</label>
+          <RichTextBlockEditor html={block.html} onChange={(html) => onChange({ ...block, html })} />
+        </div>
+      );
     case "paragraph":
       return (
-        <div>
+        <div className="space-y-2">
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            Legacy paragraph block — edit below or save to migrate copy into rich_text elsewhere.
+          </p>
           <label className={lab}>Content</label>
           <Textarea className={cn(inp, "min-h-[88px]")} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
         </div>
@@ -872,5 +1279,9 @@ function BlockFields({
           </Button>
         </div>
       );
+    default: {
+      const _exhaustive: never = block;
+      return _exhaustive;
+    }
   }
 }

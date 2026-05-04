@@ -19,7 +19,7 @@ import {
 import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
 import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { extrasLineItemsForService } from "@/lib/pricing/extrasConfig";
-import { bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import { bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
 import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
 
 export function StepQuote() {
@@ -116,7 +116,7 @@ export function StepQuote() {
       canContinue={canContinue}
       onContinue={() => {
         trackBookingFunnelEvent("quote", "next", { route_step: "quote" });
-        const welcomePromo = promoParam == null ? bookingFlowPromoExtra("SAVE10") : undefined;
+        const welcomePromo = promoParam == null ? bookingMarketingPromoExtra("SAVE10") : undefined;
         router.push(bookingHref("details", welcomePromo));
       }}
       continueLabel={copy.cta}

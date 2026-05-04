@@ -2,7 +2,7 @@ import { CreditCard, ShieldCheck, Star, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { icon: Star, label: "4.9 ★★★★★", sub: "Trusted by Cape Town households" },
+  { icon: Star, label: "4.8 ★ Google reviews", sub: "129 reviews" },
   { icon: ShieldCheck, label: "Vetted Cleaners", sub: "Background-checked teams" },
   { icon: CreditCard, label: "Secure Payments", sub: "Pay safely online" },
   { icon: Zap, label: "Same-Day Available", sub: "When slots open up" },

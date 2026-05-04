@@ -1,43 +1,35 @@
 import type { Metadata } from "next";
-import type { ComponentType } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogContextualServiceLinks } from "@/components/blog/BlogContextualServiceLinks";
+import { BlogMidArticleCta } from "@/components/blog/BlogMidArticleCta";
 import { BlogServiceLinks } from "@/components/blog/BlogServiceLinks";
-import { BlogPostGlobalSections } from "@/components/blog/BlogPostGlobalSections";
 import { BlogArticleEndCta } from "@/components/blog/BlogArticleConversionBlocks";
+import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
-import { BlogRelatedGuidesSection } from "@/components/blog/BlogRelatedGuidesSection";
 import { HighConversionBlogTemplate } from "@/components/blog/HighConversionBlogTemplate";
 import { ProgrammaticBlogTemplate } from "@/components/blog/ProgrammaticBlogTemplate";
-import { AirbnbCleaningChecklistPost } from "@/components/blog/posts/AirbnbCleaningChecklistPost";
-import { CleaningCostCapeTownPost } from "@/components/blog/posts/CleaningCostCapeTownPost";
-import { MoveOutCleaningGuidePost } from "@/components/blog/posts/MoveOutCleaningGuidePost";
-import { DeepVsStandardCleaningCapeTownPost } from "@/components/blog/posts/DeepVsStandardCleaningCapeTownPost";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
-import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
+import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImages";
+import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
 import { BlogPostLayout } from "@/components/blog/BlogPostLayout";
 import {
   absoluteUrlFromCanonicalPath,
   buildDbBlogGraphJsonLd,
   collectFaqItemsFromContent,
 } from "@/lib/blog/db-blog-jsonld";
-import { getPostBySlug, getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
+import { buildKeywordsPhrase, getPostBySlug, getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
 import type { HighConversionBlogArticle } from "@/lib/blog/highConversionBlogArticle";
-import {
-  getHighConversionBlogPost,
-  HIGH_CONVERSION_POSTS,
-} from "@/lib/blog/highConversionPosts";
+import { getHighConversionBlogPost, ROUTED_HIGH_CONVERSION_POSTS } from "@/lib/blog/highConversionPosts";
 import {
   getProgrammaticFaqEntities,
   getProgrammaticPost,
-  PROGRAMMATIC_POSTS,
+  ROUTED_PROGRAMMATIC_POSTS,
   type ProgrammaticPost,
 } from "@/lib/blog/programmaticPosts";
 import { getBlogServiceType } from "@/lib/blog/getBlogServiceType";
-import { BLOG_POST_SLUGS, type BlogPostSlug, getBlogPost } from "@/lib/blog/posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
@@ -48,13 +40,6 @@ function toAbsoluteAssetUrl(url: string): string {
   const path = url.startsWith("/") ? url : `/${url}`;
   return `${SITE}${path}`;
 }
-
-const POST_BODIES: Record<BlogPostSlug, ComponentType> = {
-  "airbnb-cleaning-checklist": AirbnbCleaningChecklistPost,
-  "cleaning-cost-cape-town": CleaningCostCapeTownPost,
-  "move-out-cleaning-guide": MoveOutCleaningGuidePost,
-  "deep-vs-standard-cleaning-cape-town": DeepVsStandardCleaningCapeTownPost,
-};
 
 /** Publisher logo in JSON-LD (distinct from per-post hero art). */
 const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
@@ -67,9 +52,8 @@ export async function generateStaticParams() {
   const dbSlugs = await getPublishedBlogSlugs();
   const map = new Map<string, { slug: string }>();
   for (const slug of dbSlugs) map.set(slug, { slug });
-  for (const slug of BLOG_POST_SLUGS) map.set(slug, { slug });
-  for (const post of HIGH_CONVERSION_POSTS) map.set(post.slug, { slug: post.slug });
-  for (const post of PROGRAMMATIC_POSTS) map.set(post.slug, { slug: post.slug });
+  for (const post of ROUTED_HIGH_CONVERSION_POSTS) map.set(post.slug, { slug: post.slug });
+  for (const post of ROUTED_PROGRAMMATIC_POSTS) map.set(post.slug, { slug: post.slug });
   return [...map.values()];
 }
 
@@ -104,31 +88,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         title: `${titleBase} | Shalean Blog`,
         description,
         images: [heroSrc],
-      },
-    };
-  }
-
-  const editorial = getBlogPost(slug);
-  if (editorial) {
-    const path = `/blog/${editorial.slug}`;
-    const url = `${SITE}${path}`;
-    return {
-      title: `${editorial.title} | Shalean Blog`,
-      description: editorial.description,
-      alternates: { canonical: path },
-      openGraph: {
-        title: editorial.title,
-        description: editorial.description,
-        url,
-        type: "article",
-        publishedTime: editorial.publishedAt,
-        images: [{ url: editorial.heroImage.src, alt: editorial.heroImage.alt }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: editorial.title,
-        description: editorial.description,
-        images: [editorial.heroImage.src],
       },
     };
   }
@@ -184,72 +143,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: prog.description,
       images: [PROGRAMMATIC_HERO_SRC],
     },
-  };
-}
-
-function buildBlogArticleJsonLd(post: NonNullable<ReturnType<typeof getBlogPost>>) {
-  const pageUrl = `${SITE}/blog/${post.slug}`;
-  const heroAbsolute = `${SITE}${post.heroImage.src}`;
-  const dateModified = post.dateModified ?? post.publishedAt;
-
-  return {
-    "@type": "BlogPosting",
-    headline: post.title,
-    description: post.description,
-    datePublished: post.publishedAt,
-    dateModified,
-    image: [heroAbsolute],
-    author: {
-      "@type": "Organization",
-      name: "Shalean Cleaning Services",
-    },
-    publisher: {
-      "@type": "Organization",
-      name: "Shalean Cleaning Services",
-      url: SITE,
-      logo: {
-        "@type": "ImageObject",
-        url: ORGANIZATION_LOGO_ABSOLUTE,
-      },
-    },
-    mainEntityOfPage: {
-      "@type": "WebPage",
-      "@id": pageUrl,
-    },
-  };
-}
-
-function buildBreadcrumbJsonLdArticle(post: NonNullable<ReturnType<typeof getBlogPost>>) {
-  const pageUrl = `${SITE}/blog/${post.slug}`;
-  return {
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: SITE,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "Blog",
-        item: `${SITE}/blog`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: post.title,
-        item: pageUrl,
-      },
-    ],
-  };
-}
-
-function buildBlogPostGraphJsonLd(post: NonNullable<ReturnType<typeof getBlogPost>>) {
-  return {
-    "@context": "https://schema.org",
-    "@graph": [buildBlogArticleJsonLd(post), buildBreadcrumbJsonLdArticle(post)],
   };
 }
 
@@ -419,6 +312,7 @@ export default async function BlogPostPage({ params }: Props) {
       ? toAbsoluteAssetUrl(dbPost.featuredImageUrl)
       : `${SITE}${PROGRAMMATIC_HERO_SRC}`;
     const faqItems = collectFaqItemsFromContent(dbPost.content);
+    const kwPhrase = buildKeywordsPhrase(dbPost);
     const jsonLd = buildDbBlogGraphJsonLd({
       headline: dbPost.h1,
       description: dbPost.metaDescription?.trim() || dbPost.excerpt || dbPost.title,
@@ -427,6 +321,8 @@ export default async function BlogPostPage({ params }: Props) {
       pageUrl,
       imageUrls: [heroSrcAbs],
       faqItems,
+      keywords: kwPhrase,
+      articleSection: dbPost.categoryName,
     });
     const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
 
@@ -440,6 +336,14 @@ export default async function BlogPostPage({ params }: Props) {
             src: PROGRAMMATIC_HERO_SRC,
             alt: `${dbPost.h1} — Shalean professional cleaning in Cape Town`,
           };
+
+    const contentForRender = stripFirstDuplicateFeaturedImage(
+      {
+        ...dbPost.content,
+        blocks: injectLocationHubSeoImages(dbPost.slug, dbPost.content.blocks),
+      },
+      hero.src,
+    );
 
     return (
       <MarketingLayout>
@@ -456,95 +360,22 @@ export default async function BlogPostPage({ params }: Props) {
             readingTimeMinutes={dbPost.readingTimeMinutes}
             hero={hero}
             trackingSlug={dbPost.slug}
-            relatedLinksSlot={<RelatedLinks placement="blog" />}
           >
-            <BlogContextualServiceLinks />
-            <BlogContentRenderer content={dbPost.content} />
-            <BlogServiceLinks service={getBlogServiceType(dbPost.slug)} />
+            <BlogDbArticleBody
+              content={contentForRender}
+              midArticleSlot={
+                <section
+                  className="not-prose space-y-10 border-t border-zinc-200 pt-10"
+                  aria-label="Services, areas, and booking"
+                >
+                  <BlogContextualServiceLinks embedded />
+                  <BlogServiceLinks service={getBlogServiceType(dbPost.slug)} dense />
+                  <RelatedLinks placement="blog" emphasizeLocalBooking />
+                  <BlogMidArticleCta trackingSlug={dbPost.slug} />
+                </section>
+              }
+            />
           </BlogPostLayout>
-        </main>
-      </MarketingLayout>
-    );
-  }
-
-  const editorial = getBlogPost(slug);
-  if (editorial) {
-    const Body = POST_BODIES[editorial.slug as BlogPostSlug];
-    if (!Body) notFound();
-
-    const jsonLdStr = JSON.stringify(buildBlogPostGraphJsonLd(editorial)).replace(/</g, "\\u003c");
-
-    return (
-      <MarketingLayout>
-        <main className="bg-white text-zinc-900">
-          <GrowthTracking event="page_view" payload={{ page_type: "blog_post", slug: editorial.slug }} />
-          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
-
-          <article className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:max-w-4xl lg:px-8 lg:py-16">
-            <nav className="text-sm text-zinc-500" aria-label="Breadcrumb">
-              <Link href="/" className={cn(linkInNavClassName, "text-sm")}>
-                Home
-              </Link>
-              <span className="mx-2 text-zinc-400" aria-hidden>
-                /
-              </span>
-              <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
-                Blog
-              </Link>
-              <span className="mx-2 text-zinc-400" aria-hidden>
-                /
-              </span>
-              <span className="text-zinc-700">{editorial.title}</span>
-            </nav>
-
-            <header className="mt-6 border-b border-zinc-200 pb-10">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Shalean · Cape Town</p>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.35rem] lg:leading-tight">
-                {editorial.title}
-              </h1>
-              <p className="mt-4 text-lg leading-relaxed text-zinc-600">{editorial.description}</p>
-              <p className="mt-4 text-sm text-zinc-500">
-                Published{" "}
-                {new Intl.DateTimeFormat("en-ZA", {
-                  dateStyle: "long",
-                  timeZone: "Africa/Johannesburg",
-                }).format(new Date(editorial.publishedAt))}{" "}
-                · {editorial.readingTimeMinutes} min read
-              </p>
-            </header>
-
-            <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
-              <Image
-                src={editorial.heroImage.src}
-                alt={editorial.heroImage.alt}
-                fill
-                className="object-cover"
-                sizes="(max-width: 896px) 100vw, 896px"
-                priority
-                fetchPriority="high"
-              />
-            </div>
-
-            <div className="py-10">
-              <BlogPostGlobalSections post={editorial} />
-              <Body />
-              <BlogContextualServiceLinks />
-              <BlogServiceLinks service={getBlogServiceType(editorial.slug)} />
-              <BlogRelatedGuidesSection post={editorial} />
-              <div className="mt-12">
-                <RelatedLinks placement="blog" />
-              </div>
-              <BlogArticleEndCta trackingSlug={editorial.slug} />
-            </div>
-
-            <footer className="not-prose mt-8 border-t border-zinc-200 pt-8 text-center">
-              <p className="text-sm text-zinc-500">
-                <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
-                  ← Back to all articles
-                </Link>
-              </p>
-            </footer>
-          </article>
         </main>
       </MarketingLayout>
     );
@@ -591,7 +422,7 @@ export default async function BlogPostPage({ params }: Props) {
               </p>
             </header>
 
-            <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
+            <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
               <Image
                 src={hc.heroImage.src}
                 alt={hc.heroImage.alt}
@@ -667,7 +498,7 @@ export default async function BlogPostPage({ params }: Props) {
             </p>
           </header>
 
-          <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
+          <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
             <Image
               src={PROGRAMMATIC_HERO_SRC}
               alt={`${prog.h1} — Shalean professional cleaning in Cape Town`}

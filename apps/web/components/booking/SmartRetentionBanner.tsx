@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import {
+  bookingFlowHref,
+  bookingMarketingPromoExtra,
+  isBookingMarketingPromoInUrlsEnabled,
+} from "@/lib/booking/bookingFlow";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { useAuth } from "@/lib/auth/useAuth";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -85,17 +89,26 @@ export function SmartRetentionBanner() {
   if (loading || !hint) return null;
 
   if (hint.kind === "welcome") {
-    const save10Href = bookingFlowHref("entry", bookingFlowPromoExtra("SAVE10"));
+    const promoInUrl = isBookingMarketingPromoInUrlsEnabled();
+    const save10Href = bookingFlowHref("entry", bookingMarketingPromoExtra("SAVE10"));
     return (
       <div className="mb-4 rounded-xl border border-emerald-200/90 bg-emerald-50/95 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-50">
         <strong>Welcome!</strong> Get 10% off your first clean — use code <span className="font-mono font-semibold">SAVE10</span> at
         payment.
         <p className="mt-2 text-xs leading-snug text-emerald-900/90 dark:text-emerald-100/90">
-          This offer is in your link:{" "}
-          <Link href={save10Href} className="font-medium underline underline-offset-2 hover:text-emerald-950 dark:hover:text-emerald-50">
-            Start booking with SAVE10 in the URL
-          </Link>
-          .
+          {promoInUrl ? (
+            <>
+              This offer is in your link:{" "}
+              <Link href={save10Href} className="font-medium underline underline-offset-2 hover:text-emerald-950 dark:hover:text-emerald-50">
+                Start booking with SAVE10 in the URL
+              </Link>
+              .
+            </>
+          ) : (
+            <Link href={save10Href} className="font-medium underline underline-offset-2 hover:text-emerald-950 dark:hover:text-emerald-50">
+              Start booking
+            </Link>
+          )}
         </p>
       </div>
     );
@@ -109,20 +122,32 @@ export function SmartRetentionBanner() {
     );
   }
 
-  const welcome50Href = bookingFlowHref("entry", bookingFlowPromoExtra("WELCOME50"));
+  const promoInUrl = isBookingMarketingPromoInUrlsEnabled();
+  const welcome50Href = bookingFlowHref("entry", bookingMarketingPromoExtra("WELCOME50"));
   return (
     <div className="mb-4 rounded-xl border border-violet-200/90 bg-violet-50/95 px-4 py-3 text-sm text-violet-950 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-50">
       We miss you ({hint.daysSince}+ days since your last clean) — here&apos;s <strong>R50 off</strong> with code{" "}
       <span className="font-mono font-semibold">WELCOME50</span> on your next clean.
       <p className="mt-2 text-xs leading-snug text-violet-900/90 dark:text-violet-100/90">
-        Prefilled in your link:{" "}
-        <Link
-          href={welcome50Href}
-          className="font-medium underline underline-offset-2 hover:text-violet-950 dark:hover:text-violet-50"
-        >
-          Start booking with WELCOME50 in the URL
-        </Link>
-        .
+        {promoInUrl ? (
+          <>
+            Prefilled in your link:{" "}
+            <Link
+              href={welcome50Href}
+              className="font-medium underline underline-offset-2 hover:text-violet-950 dark:hover:text-violet-50"
+            >
+              Start booking with WELCOME50 in the URL
+            </Link>
+            .
+          </>
+        ) : (
+          <Link
+            href={welcome50Href}
+            className="font-medium underline underline-offset-2 hover:text-violet-950 dark:hover:text-violet-50"
+          >
+            Start booking
+          </Link>
+        )}
       </p>
     </div>
   );

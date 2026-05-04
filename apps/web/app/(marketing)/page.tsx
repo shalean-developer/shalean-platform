@@ -6,6 +6,7 @@ import { MarketingHomeAboutSection } from "@/components/marketing-home/sections/
 import { MarketingHomeCtaSection } from "@/components/marketing-home/sections/MarketingHomeCtaSection";
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
+import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
 import { MarketingHomeLocationsSection } from "@/components/marketing-home/sections/MarketingHomeLocationsSection";
@@ -57,7 +58,7 @@ export default async function MarketingHomePage() {
 
   return (
     <>
-      <StructuredData services={services} locations={locations} faqs={faqs} reviewBanner={reviewBanner} />
+      <StructuredData services={services} locations={locations} faqs={faqs} />
       <nav className="sr-only" aria-label="Cape Town service and suburb pages">
         <ul>
           {getHomepageInternalSeoLinks().map((item) => (
@@ -71,6 +72,7 @@ export default async function MarketingHomePage() {
         <MarketingHomeHeader bookingHref={bookingHref} />
         <main>
           <MarketingHomeHeroSection reviewBanner={reviewBanner} />
+          <MarketingGoogleReviewsBand />
           <MarketingHomeTrustSection reviewBanner={reviewBanner} />
           <MarketingHomeServicesSection />
           <MarketingHomeAboutSection />

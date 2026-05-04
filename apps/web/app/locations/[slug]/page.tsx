@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { ProgrammaticLocationCleaningPage } from "@/components/seo/ProgrammaticLocationCleaningPage";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
-import { buildLocationSeoMetadata, getLocationSeo } from "@/lib/seo/capeTownSeoPages";
+import {
+  buildLocationPageMetaDescription,
+  buildLocationPageMetaTitle,
+  buildLocationSeoMetadata,
+  getLocationSeo,
+} from "@/lib/seo/capeTownSeoPages";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
 
 const SITE_ORIGIN = "https://www.shalean.co.za";
@@ -24,25 +29,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const seo = getLocationSeo(slug) ?? null;
-  const title = seo?.h1 ?? `Cleaning Services in ${location.name} | Shalean`;
-  const description =
-    seo?.description ??
-    `Book trusted cleaning services in ${location.name}, ${location.city}. Reliable home and office cleaning.`;
 
   if (seo) {
-    const base = buildLocationSeoMetadata(seo);
-    return {
-      ...base,
-      title,
-      description,
-      openGraph: base.openGraph
-        ? { ...base.openGraph, title, description }
-        : { type: "website", url: `${SITE_ORIGIN}${seo.path}`, title, description },
-      twitter: base.twitter ? { ...base.twitter, title, description } : { card: "summary_large_image", title, description },
-    };
+    return buildLocationSeoMetadata(seo);
   }
 
   const path = `/locations/${slug}`;
+  const title = buildLocationPageMetaTitle(location.name);
+  const description = buildLocationPageMetaDescription(location.name);
   return {
     title,
     description,

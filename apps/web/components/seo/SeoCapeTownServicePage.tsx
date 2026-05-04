@@ -8,7 +8,9 @@ import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
+import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import { CAPE_TOWN_SERVICE_SEO, serviceHubLocationLinks } from "@/lib/seo/capeTownSeoPages";
+import { googleBusinessAggregateRatingSchema, googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
 
 type Props = { slug: CapeTownSeoServiceSlug; trustStats: PublicReviewBannerStats | null };
 
@@ -70,6 +72,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
         areaServed: { "@type": "City", name: "Cape Town" },
         provider: { "@id": "https://www.shalean.co.za/#localbusiness" },
         url: pageUrl,
+        aggregateRating: googleBusinessAggregateRatingSchema(),
       },
       faqPageEntity,
     ],
@@ -79,6 +82,17 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
     <main className="bg-white text-zinc-900">
       <GrowthTracking event="page_view" payload={{ page_type: "seo_cape_town_service", slug }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+
+      <div className="mx-auto max-w-7xl px-4 pt-8">
+        <SeoBreadcrumbs
+          items={[
+            { name: "Home", href: "/" },
+            { name: "Services", href: "/services" },
+            { name: data.h1, href: data.path, current: true },
+          ]}
+        />
+        <p className="mt-4 max-w-3xl text-sm font-medium leading-relaxed text-blue-900/90">{googleReviewsServiceTrustLine()}</p>
+      </div>
 
       <section className="border-b border-blue-100 bg-gradient-to-b from-blue-50/80 via-white to-white py-14">
         <div className="mx-auto max-w-7xl px-4">

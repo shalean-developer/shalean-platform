@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import { locationPageServiceLinks } from "@/lib/seo/capeTownSeoPages";
-import { PROGRAMMATIC_LOCATIONS } from "@/lib/seo/locations";
+import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 
 const waHref = "https://wa.me/27215550123?text=Hi%20Shalean%20Cleaning%20Services";
 
@@ -41,21 +41,29 @@ export function FooterSection() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">Locations</p>
-            <ul className="mt-3 space-y-2 text-sm">
-              {PROGRAMMATIC_LOCATIONS.map((l) => (
-                <li key={l.slug}>
-                  <Link href={`/locations/${l.slug}`} className="text-zinc-300 transition hover:text-white">
-                    Cleaning services in {l.name}
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">Popular Areas</p>
+            <nav aria-label="Popular Cape Town cleaning locations">
+              <ul className="mt-3 space-y-2 text-sm">
+                {FOOTER_POPULAR_LOCATION_HUBS.map((hub) => (
+                  <li key={hub.slug}>
+                    <Link
+                      href={`/locations/${hub.slug}`}
+                      className="text-zinc-300 transition hover:text-white"
+                    >
+                      {hub.name}
+                    </Link>
+                  </li>
+                ))}
+                <li className="pt-1">
+                  <Link
+                    href="/locations"
+                    className="font-medium text-blue-400 transition hover:text-white"
+                  >
+                    View all locations
                   </Link>
                 </li>
-              ))}
-              <li>
-                <Link href="/services#hub-areas-heading" className="text-zinc-300 transition hover:text-white">
-                  All Cape Town areas
-                </Link>
-              </li>
-            </ul>
+              </ul>
+            </nav>
           </div>
 
           <div>

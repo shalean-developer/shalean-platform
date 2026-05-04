@@ -11,22 +11,25 @@ type EndCtaProps = {
 export function BlogArticleEndCta({ trackingSlug }: EndCtaProps) {
   return (
     <section
-      className={`${sectionShell} mt-10 rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50/90 to-white px-6 py-10 text-center shadow-sm`}
+      className={`${sectionShell} mt-10 rounded-3xl border border-blue-200/80 bg-gradient-to-br from-blue-600 via-blue-600 to-blue-700 px-6 py-12 text-center shadow-lg shadow-blue-600/25 sm:px-10`}
       aria-labelledby="blog-end-cta-heading"
     >
-      <h2 id="blog-end-cta-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
-        Need help? Book a professional cleaning service
+      <h2 id="blog-end-cta-heading" className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+        Get your cleaning quote in Cape Town
       </h2>
-      <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-zinc-600">
-        Tell us your Cape Town address and home details—pricing updates before you confirm, with vetted Shalean teams.
+      <p className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-blue-100 sm:text-base">
+        See exact pricing and book online in minutes—your total stays tied to the rooms and tier you select.
       </p>
       <GrowthCtaLink
-        href="/booking/details"
+        href="/booking"
         source={`blog_${trackingSlug}_end_cta_book`}
-        className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
+        className="mt-8 inline-flex min-h-[52px] min-w-[220px] items-center justify-center rounded-full bg-white px-10 text-base font-semibold text-blue-700 shadow-md transition hover:bg-blue-50"
       >
-        Book cleaning online
+        Get instant quote
       </GrowthCtaLink>
+      <p className="mx-auto mt-4 max-w-md text-xs leading-relaxed text-blue-200/90">
+        Same-day slots when capacity allows · Deep, standard, move-out &amp; Airbnb
+      </p>
     </section>
   );
 }

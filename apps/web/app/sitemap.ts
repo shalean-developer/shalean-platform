@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
-import { PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
-import { BLOG_POST_SLUGS } from "@/lib/blog/posts";
+import { getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
+import { listActiveCategorySlugs, listTagSlugs } from "@/lib/blog/get-taxonomy-posts";
+import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 
 const BASE = "https://www.shalean.co.za";
@@ -17,20 +18,39 @@ function pathnameNotExcluded(url: string): boolean {
   }
 }
 
-/** Public index URLs only: `/`, `/services`, `/services/*`, `/locations/*`, `/blog/*`. Legacy `/cape-town/cleaning-services/*` and `/cleaning-services/*` redirect (308) to `/locations/{suburb}-cleaning-services`. */
-export default function sitemap(): MetadataRoute.Sitemap {
+/**
+ * Public index URLs: `/`, `/services`, `/services/*`, `/locations/*`, `/blog/*`, Supabase blog posts, taxonomy.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
+
+  const dbSlugs = await getPublishedBlogSlugs();
+  const categorySlugs = await listActiveCategorySlugs();
+  const tagSlugs = await listTagSlugs();
+
+  const blogPostUrls: MetadataRoute.Sitemap = [];
+
+  const blogSlugSet = new Set<string>();
+  for (const s of dbSlugs) blogSlugSet.add(s);
+  for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(post.slug);
+
+  for (const slug of blogSlugSet) {
+    blogPostUrls.push({ url: `${BASE}/blog/${slug}`, lastModified });
+  }
 
   const entries: MetadataRoute.Sitemap = [
     { url: BASE, lastModified },
     { url: `${BASE}/services`, lastModified },
+    { url: `${BASE}/locations`, lastModified },
+    { url: `${BASE}/locations/cape-town-cleaning-services`, lastModified },
     { url: `${BASE}/blog`, lastModified },
-    ...BLOG_POST_SLUGS.map((slug) => ({
-      url: `${BASE}/blog/${slug}`,
+    ...blogPostUrls,
+    ...categorySlugs.map((slug) => ({
+      url: `${BASE}/blog/category/${slug}`,
       lastModified,
     })),
-    ...PROGRAMMATIC_POSTS.map((post) => ({
-      url: `${BASE}/blog/${post.slug}`,
+    ...tagSlugs.map((slug) => ({
+      url: `${BASE}/blog/tag/${slug}`,
       lastModified,
     })),
     ...Object.values(CAPE_TOWN_SERVICE_SEO).map((p) => ({

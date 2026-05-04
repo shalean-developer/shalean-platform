@@ -29,8 +29,12 @@ export function buildDbBlogPostingJsonLd(params: {
   dateModified: string;
   pageUrl: string;
   imageUrls: string[];
+  /** Comma-separated keywords for BlogPosting */
+  keywords?: string | null;
+  /** e.g. category name */
+  articleSection?: string | null;
 }) {
-  return {
+  const node: Record<string, unknown> = {
     "@type": "BlogPosting",
     headline: params.headline,
     description: params.description,
@@ -55,6 +59,11 @@ export function buildDbBlogPostingJsonLd(params: {
       "@id": params.pageUrl,
     },
   };
+  const kw = params.keywords?.trim();
+  if (kw) node.keywords = kw;
+  const sec = params.articleSection?.trim();
+  if (sec) node.articleSection = sec;
+  return node;
 }
 
 export function buildDbBreadcrumbJsonLd(params: { pageUrl: string; title: string }) {
@@ -91,6 +100,8 @@ export function buildDbBlogGraphJsonLd(params: {
   pageUrl: string;
   imageUrls: string[];
   faqItems: BlogFaqItem[];
+  keywords?: string | null;
+  articleSection?: string | null;
 }) {
   const graph: Record<string, unknown>[] = [
     buildDbBlogPostingJsonLd({
@@ -100,6 +111,8 @@ export function buildDbBlogGraphJsonLd(params: {
       dateModified: params.dateModified,
       pageUrl: params.pageUrl,
       imageUrls: params.imageUrls,
+      keywords: params.keywords,
+      articleSection: params.articleSection,
     }),
     buildDbBreadcrumbJsonLd({ pageUrl: params.pageUrl, title: params.headline }),
   ];

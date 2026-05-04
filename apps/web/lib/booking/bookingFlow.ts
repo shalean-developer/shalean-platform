@@ -10,6 +10,17 @@ export const BOOKING_NODRAFT_QUERY = "noDraft";
 /** Promo / coupon code carried through the funnel (e.g. `?promo=SAVE10`). */
 export const BOOKING_PROMO_QUERY = "promo";
 
+/**
+ * When `NEXT_PUBLIC_BOOKING_MARKETING_PROMO_IN_URLS` is `false` or `0`, hero/hub CTAs and
+ * retention banners must not append `?promo=` (cleaner URLs). Inbound links with `?promo=` still work
+ * via {@link bookingFlowPromoExtra} on the booking page.
+ */
+export function isBookingMarketingPromoInUrlsEnabled(): boolean {
+  const v = process.env.NEXT_PUBLIC_BOOKING_MARKETING_PROMO_IN_URLS;
+  if (v === "0" || v === "false") return false;
+  return true;
+}
+
 /** Safe subset for URL promo codes (matches client promo entry). */
 export function sanitizeBookingPromoParam(raw: string | null | undefined): string | null {
   if (raw == null) return null;
@@ -19,10 +30,17 @@ export function sanitizeBookingPromoParam(raw: string | null | undefined): strin
   return t.toUpperCase();
 }
 
+/** Serialize a sanitized promo for query strings (inbound URL, session restore, etc.). */
 export function bookingFlowPromoExtra(promo: string | null | undefined): Record<string, string> | undefined {
   const s = sanitizeBookingPromoParam(promo ?? null);
   if (!s) return undefined;
   return { [BOOKING_PROMO_QUERY]: s };
+}
+
+/** Same as {@link bookingFlowPromoExtra} but respects {@link isBookingMarketingPromoInUrlsEnabled} for CTAs. */
+export function bookingMarketingPromoExtra(promo: string | null | undefined): Record<string, string> | undefined {
+  if (!isBookingMarketingPromoInUrlsEnabled()) return undefined;
+  return bookingFlowPromoExtra(promo);
 }
 
 /** Five-step conversion flow (URL `?step=`). */

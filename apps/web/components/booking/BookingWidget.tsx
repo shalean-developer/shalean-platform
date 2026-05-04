@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { HomeService } from "@/lib/home/data";
 import { BOOKING_DATA_STORAGE_KEY } from "@/lib/booking/bookingWidgetDraft";
-import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import { bookingFlowHref, bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
 import { defaultBookingTimeForDate, todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import { calculateHomeWidgetQuoteZar, type HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
@@ -96,7 +96,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
     } catch {
       /* Storage can be unavailable in private browsing. */
     }
-    router.push(bookingFlowHref("entry", { ...(bookingFlowPromoExtra("SAVE10") ?? {}), source: "home_hero_widget" }));
+    router.push(bookingFlowHref("entry", { ...(bookingMarketingPromoExtra("SAVE10") ?? {}), source: "home_hero_widget" }));
   }
 
   return (
