@@ -90,6 +90,8 @@ export type CapeTownServiceSeoBlock = {
   bookingPath?: string;
   /** Defaults to "How this service works in Cape Town" */
   introSectionHeading?: string;
+  /** Overrides default "What's included" section `<h2>` when set */
+  includedSectionHeading?: string;
   explanation: string[];
   included: string[];
   benefits: { title: string; body: string }[];
@@ -318,25 +320,31 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "move-out-cleaning-cape-town": {
     slug: "move-out-cleaning-cape-town",
     path: "/services/move-out-cleaning-cape-town",
-    title: "Move-Out Cleaning Cape Town | Lease Handover Ready | Shalean",
+    title: "Move Out Cleaning Cape Town | End of Tenancy Cleaning | Shalean",
     description:
-      "Move-out cleaning in Cape Town for tenants and landlords: kitchens, bathrooms, floors, and handover detail. Book a deposit-ready clean with Shalean online.",
+      "Move-out and end-of-tenancy cleaning in Cape Town—kitchens, bathrooms, cupboards, and inspection-ready detail for tenants and landlords. Book online with Shalean.",
+    keywords: ["move out cleaning cape town", "end of tenancy cleaning cape town"],
     ogImage: "/images/marketing/move-out-cleaning-cape-town-handover.webp",
-    h1: "Move-out cleaning services in Cape Town for stress-free handovers",
+    h1: "Move Out & End of Tenancy Cleaning Services in Cape Town",
     bookingLabel: "move-out cleaning",
+    introSectionHeading: "Professional move out cleaning for Cape Town rentals",
+    includedSectionHeading: "Move Out Cleaning Checklist",
+    areasSectionHeading: "Move Out Cleaning Across Cape Town",
     areasSectionIntro:
-      "Lease-end friction shifts by suburb—narrow drives, estate gates, and inspection habits differ. The location hubs below capture those cues; pair them with this move-out checklist so Cape Town kitchens, bathrooms, and floors read handover-ready.",
+      "We serve Sea Point, Green Point, Claremont, Rondebosch, Observatory, Wynberg, City Bowl and surrounding areas. Explore suburb hubs below for parking, building access, and typical layouts—each links back to this move-out guide.",
     explanation: [
-      "End-of-lease pressure is familiar across Cape Town rentals: inventory checks, deposit timelines, and keys due the same morning. A move-out clean concentrates on the evidence areas inspectors notice first—grease, limescale, floor edges, and built-up dust behind furniture marks.",
-      "Shalean focuses on a structured handover scope so you can align cleaning timing with your removalists and key exchange, whether you are leaving a Sea Point apartment or a family house further inland.",
-      "When house cleaning Cape Town timelines collide with moving day, professional cleaning services keep the job scoped: home cleaning services Cape Town tenants book for handover should still prioritise kitchens, bathrooms, and floors agents photograph first.",
+      "Moving out? Our professional move out cleaning in Cape Town ensures your home is spotless and ready for inspection. Whether you're a tenant, landlord, or property manager, we provide detailed end of tenancy cleaning that meets rental standards and helps secure your deposit.",
+      "We clean everything from kitchens and bathrooms to inside cupboards, appliances, and hard-to-reach areas — so you leave your property in perfect condition.",
+      "End-of-lease timelines stack fast: inventory checks, deposit deadlines, and keys due the same morning. A structured move-out scope concentrates on what inspectors notice first—grease, limescale, floor edges, and built-up dust—while you coordinate movers and access.",
     ],
     included: [
-      "Kitchen deep wipe including cupboards exteriors where in scope",
-      "Bathroom descale and sanitisation for handover presentation",
-      "Inside windowsills and tracks where included in your tier",
-      "Floor vacuum and mop through living spaces and bedrooms",
-      "Skirting, doors, and high-touch surfaces addressed on checklist",
+      "Deep kitchen cleaning (oven, stove, cupboards)",
+      "Bathroom sanitisation (tiles, grout, toilet, shower)",
+      "Inside cupboards and wardrobes",
+      "Skirting boards and wall spot cleaning",
+      "Floors vacuumed and mopped",
+      "Window cleaning (interior)",
+      "Dust removal (including high areas)",
     ],
     benefits: [
       {
@@ -358,24 +366,24 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     },
     faqs: [
       {
+        q: "How much is move out cleaning in Cape Town?",
+        a: "Prices start from R980 depending on property size. Your live total reflects bedrooms, bathrooms, condition, and any add-ons—check instant pricing online before you confirm.",
+      },
+      {
+        q: "Do you guarantee deposit return cleaning?",
+        a: "We follow agency-approved cleaning checklists to meet inspection standards. Deposit outcomes still depend on your lease, inventory, and any repairs or issues outside cleaning.",
+      },
+      {
+        q: "How long does move out cleaning take?",
+        a: "Typically 3–6 hours depending on the size of the property and the tier you book. Larger homes or heavy build-up may need more time—your quote aligns hours with the scope you select.",
+      },
+      {
         q: "When should I schedule move-out cleaning around handover day?",
         a: "Book after furniture is out and rubbish is cleared, but while you still have access for a final walkthrough. Many tenants aim for the day before keys are due so there is buffer if the agency requests touch-ups. Add your handover time in booking notes so we can suggest a realistic slot.",
       },
       {
-        q: "Does move-out cleaning include inside ovens, fridges, or cupboards?",
-        a: "Cupboard exteriors and standard handover surfaces are usually in scope. Interiors like ovens, fridges, or inside cupboards are often booked as extras when your inventory or lease requires them—select those add-ons during quoting so the team brings enough time.",
-      },
-      {
-        q: "Is this service suitable for Western Cape rental inspections?",
-        a: "Move-out cleaning is built around the areas inspectors notice first: kitchens, bathrooms, floors, skirting, and built-up dust at edges. It does not replace repairs or painting, but it helps present a neutral, handover-ready finish for typical Cape Town rental checklists.",
-      },
-      {
         q: "Can a landlord book move-out cleaning for an outgoing tenant?",
         a: "Yes. Landlords and agents often book ahead of new tenants or viewings. Use the booking flow to specify access, parking, and any estate security steps so cleaners can complete the scope without delays.",
-      },
-      {
-        q: "What if the agent requests touch-ups after the move-out clean?",
-        a: "Share photos and the agency checklist quickly through support so we can advise whether a short revisit or targeted add-on makes sense. Clear before-and-after expectations in your original booking notes reduce surprises on narrow Cape Town handover days.",
       },
     ],
   },

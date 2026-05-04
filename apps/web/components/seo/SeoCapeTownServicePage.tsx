@@ -30,7 +30,8 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
   const bookingPath = data.bookingPath ?? "/booking/details";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
-  const areasHeading = "Areas we serve";
+  const includedHeading = data.includedSectionHeading ?? "What's included";
+  const areasHeading = data.areasSectionHeading ?? "Areas we serve";
   const areasIntro =
     data.areasSectionIntro ??
     "Explore suburb-focused cleaning pages across the Southern Suburbs—each hub explains local access and typical homes, then links back to this Cape Town service guide so you can compare scope before booking.";
@@ -207,6 +208,32 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 for apartments and balconies.
               </p>
             ) : null}
+            {slug === "move-out-cleaning-cape-town" ? (
+              <p>
+                Need a heavier reset before handover? Compare our{" "}
+                <Link
+                  href={CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  deep cleaning services
+                </Link>
+                ,{" "}
+                <Link
+                  href={CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  airbnb cleaning
+                </Link>{" "}
+                for turnovers, and dedicated{" "}
+                <Link
+                  href={CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  window cleaning services
+                </Link>{" "}
+                when glass needs a polish for inspection photos.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>
@@ -215,7 +242,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
 
       <section id="included" className="scroll-mt-24 border-b border-blue-100 bg-blue-50/40 py-16">
         <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">What&apos;s included</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">{includedHeading}</h2>
           <p className="mt-3 text-zinc-600">Exact scope follows your online quote—below is the typical checklist for this service type.</p>
           <ul className="mt-8 grid gap-3 sm:grid-cols-2">
             {data.included.map((item) => (
@@ -227,6 +254,32 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           </ul>
         </div>
       </section>
+
+      {slug === "move-out-cleaning-cape-town" ? (
+        <section className="border-b border-blue-100 py-16">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Move Out Cleaning Prices in Cape Town</h2>
+            <p className="mt-3 font-medium text-zinc-900">Pricing depends on:</p>
+            <ul className="mt-4 list-disc space-y-2 pl-5 text-base leading-relaxed text-zinc-600">
+              <li>Property size</li>
+              <li>Level of dirt</li>
+              <li>Additional services (carpet, upholstery, windows)</li>
+            </ul>
+            <p className="mt-6 text-base leading-relaxed text-zinc-600">
+              Get an instant quote online or book a cleaner in minutes.
+            </p>
+            <div className="mt-6">
+              <GrowthCtaLink
+                href={bookingPath}
+                source={`seo_ct_${slug}_pricing_instant_price`}
+                className="inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                Get instant price
+              </GrowthCtaLink>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="border-b border-blue-100 py-16">
         <div className="mx-auto max-w-5xl px-4">
@@ -372,8 +425,14 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
       </section>
 
       <section className="bg-blue-600 py-16 text-center text-white">
-        <h2 className="text-3xl font-bold tracking-tight">Ready to book {data.bookingLabel}?</h2>
-        <p className="mx-auto mt-3 max-w-xl text-blue-100">Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works.</p>
+        <h2 className="text-3xl font-bold tracking-tight">
+          {slug === "move-out-cleaning-cape-town" ? "Ready to move out stress-free?" : `Ready to book ${data.bookingLabel}?`}
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-blue-100">
+          {slug === "move-out-cleaning-cape-town"
+            ? "Book your move out cleaning today and leave your property spotless."
+            : "Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works."}
+        </p>
         <div className="mx-auto mt-6 flex flex-wrap justify-center gap-3">
           <GrowthCtaLink
             href={bookingPath}
@@ -384,7 +443,9 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
               ? "Book Airbnb cleaner"
               : slug === "window-cleaning-cape-town"
                 ? "Book window cleaning"
-                : "Start booking"}
+                : slug === "move-out-cleaning-cape-town"
+                  ? "Book cleaning"
+                  : "Start booking"}
           </GrowthCtaLink>
           {slug === "airbnb-cleaning-cape-town" || slug === "window-cleaning-cape-town" ? (
             <>
@@ -403,6 +464,15 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 Check availability
               </GrowthCtaLink>
             </>
+          ) : null}
+          {slug === "move-out-cleaning-cape-town" ? (
+            <GrowthCtaLink
+              href={bookingPath}
+              source={`seo_ct_${slug}_footer_price`}
+              className="inline-flex min-h-12 items-center rounded-xl border border-white/40 bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-500"
+            >
+              Get instant price
+            </GrowthCtaLink>
           ) : null}
         </div>
       </section>
