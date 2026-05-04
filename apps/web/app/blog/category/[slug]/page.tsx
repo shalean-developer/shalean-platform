@@ -4,22 +4,21 @@ import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { getBlogPostsByCategorySlug } from "@/lib/blog/get-taxonomy-posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
-
-const SITE = "https://www.shalean.co.za";
+import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const title = `${slug.replace(/-/g, " ")} | Blog categories | Shalean`;
-  const canonical = `/blog/category/${slug}`;
+  const canonicalAbs = absoluteCanonicalUrl(`/blog/category/${slug}`);
   return {
     title,
-    alternates: { canonical },
+    alternates: { canonical: canonicalAbs },
     robots: { index: true, follow: true },
     openGraph: {
       title,
-      url: `${SITE}${canonical}`,
+      url: canonicalAbs,
       type: "website",
     },
   };

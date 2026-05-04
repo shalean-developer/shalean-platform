@@ -117,8 +117,8 @@ export async function getAllPublishedPosts(): Promise<BlogIndexPost[]> {
 
 export { DEFAULT_LIST_HERO };
 
-/** Cape Town hub “guides” strip — same slugs as the former static `BlogLinks` set. */
-const CAPE_TOWN_HUB_BLOG_SLUGS = [
+/** Cape Town hub “guides” strip — pricing + service guides linked from location hubs. */
+export const CAPE_TOWN_HUB_BLOG_SLUGS = [
   "cleaning-cost-cape-town",
   "deep-vs-standard-cleaning-cape-town",
   "move-out-cleaning-guide",

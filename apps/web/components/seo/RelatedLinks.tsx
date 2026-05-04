@@ -38,13 +38,13 @@ function pickLocationLinks(excludeSlug?: string, max = 3) {
     return nearbyProgrammaticLocations(excludeSlug, max).map((loc) => ({
       slug: loc.slug,
       href: `/locations/${loc.slug}`,
-      label: `${loc.name} cleaning services`,
+      label: `Cleaning services in ${loc.name}`,
     }));
   }
   const rows = PROGRAMMATIC_LOCATIONS.map((loc) => ({
     slug: loc.slug,
     href: `/locations/${loc.slug}`,
-    label: `${loc.name} cleaning services`,
+    label: `Cleaning services in ${loc.name}`,
   }));
   return rows.slice(0, max);
 }

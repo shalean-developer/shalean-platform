@@ -20,6 +20,7 @@ export function BlogMidArticleCta({ trackingSlug }: Props) {
       <GrowthCtaLink
         href="/booking"
         source={`blog_${trackingSlug}_mid_cta`}
+        blogAnalyticsPlacement={`${trackingSlug}_mid_cta`}
         className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-100"
       >
         Check pricing &amp; availability

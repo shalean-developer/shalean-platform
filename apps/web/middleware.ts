@@ -7,15 +7,22 @@ import { updateSession } from "@/lib/supabase/supabaseMiddleware";
 /** Aligns HTML `meta name="robots"` on transactional pages; `noimageindex` avoids Google Images surfacing page assets. */
 const X_ROBOTS_BLOCK = "noindex, nofollow, noimageindex";
 
-/** Non-prod and Vercel Preview/Development: block indexing for the whole deployment. */
 function shouldNoIndexEntireDeployment(): boolean {
   if (process.env.NODE_ENV !== "production") return true;
   const v = process.env.VERCEL_ENV;
   return v === "preview" || v === "development";
 }
 
-export async function proxy(request: NextRequest) {
+/**
+ * Legacy SEO URLs → canonical `/locations/*` hubs (308).
+ * Runs before `next.config` redirects so mapped suburbs keep exact hub paths.
+ *
+ * Kept as `middleware.ts` (not `proxy.ts`) because **`next build --webpack` in Next.js 16.2 still opens this path**
+ * and fails with ENOENT if only `proxy.ts` exists (upstream webpack integration gap).
+ */
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);
   if (legacy) {
     const destPath = locationSeoPathFromLegacyAreaSlug(legacy[1] ?? "");
@@ -27,7 +34,6 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  /** Legacy flat URLs `/cleaning-services/{area}` → canonical `/locations/{area}-cleaning-services`. */
   const flatCleaning = pathname.match(/^\/cleaning-services\/([^/]+)\/?$/);
   if (flatCleaning) {
     const segment = flatCleaning[1] ?? "";
@@ -60,7 +66,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

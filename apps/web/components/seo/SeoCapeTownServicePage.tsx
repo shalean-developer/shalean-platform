@@ -9,7 +9,7 @@ import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
-import { CAPE_TOWN_SERVICE_SEO, serviceHubLocationLinks } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_SERVICE_SEO, capeTownSeoLocationLinks, serviceHubLocationLinks } from "@/lib/seo/capeTownSeoPages";
 import { googleBusinessAggregateRatingSchema, googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
 
 type Props = { slug: CapeTownSeoServiceSlug; trustStats: PublicReviewBannerStats | null };
@@ -39,7 +39,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           Book {data.bookingLabel}
         </GrowthCtaLink>
         <Link
-          href="#included"
+          href={`${data.path}#included`}
           className="inline-flex min-h-12 items-center rounded-xl border border-blue-200 px-6 text-base font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
         >
           What&apos;s included
@@ -196,6 +196,24 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
               </li>
             ))}
           </ul>
+          <p className="mt-6 text-sm leading-relaxed text-zinc-600">
+            Explore more suburb hubs for parking, building access, and typical layouts—start with{" "}
+            {capeTownSeoLocationLinks()
+              .slice(0, 6)
+              .map((l, i, arr) => (
+                <span key={l.href}>
+                  {i > 0 ? (i === arr.length - 1 ? ", or " : ", ") : null}
+                  <Link href={l.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                    {l.label}
+                  </Link>
+                </span>
+              ))}
+            , or browse{" "}
+            <Link href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              all Cape Town cleaning locations
+            </Link>
+            .
+          </p>
         </div>
       </section>
 

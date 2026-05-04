@@ -11,19 +11,20 @@ import { ServicesGrid } from "@/components/locations/cape-town-cleaning-services
 import { TrustBar } from "@/components/locations/cape-town-cleaning-services/TrustBar";
 import { WhyChooseUs } from "@/components/locations/cape-town-cleaning-services/WhyChooseUs";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
+import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 
-const SITE = "https://www.shalean.co.za";
 const PATH = "/locations/cape-town-cleaning-services";
+const CANONICAL_ABSOLUTE = absoluteCanonicalUrl(PATH);
 const OG = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
 
 export const metadata: Metadata = {
   title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
   description:
     "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
-  alternates: { canonical: `${SITE}${PATH}` },
+  alternates: { canonical: CANONICAL_ABSOLUTE },
   openGraph: {
     type: "website",
-    url: `${SITE}${PATH}`,
+    url: CANONICAL_ABSOLUTE,
     title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
     description:
       "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",

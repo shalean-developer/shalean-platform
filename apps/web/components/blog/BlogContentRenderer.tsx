@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { blogFaqHeadingDomId, defaultBlogBlockAnchorId } from "@/lib/blog/blog-block-anchors";
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
 import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
 import { cn } from "@/lib/utils";
@@ -86,13 +87,13 @@ function ArticleHeading({
   level: 1 | 2 | 3;
   children: React.ReactNode;
 }) {
-  const base =
-    "scroll-mt-24 font-bold tracking-tight text-zinc-900 max-w-none";
+  const base = "scroll-mt-28 font-bold tracking-tight text-zinc-900 max-w-none";
+  /** Page layout owns the sole document `<h1>`; CMS level-1 headings render as `<h2>` visually. */
   if (level === 1) {
     return (
-      <h1 id={id} className={cn(base, "text-3xl sm:text-4xl")}>
+      <h2 id={id} className={cn(base, "text-3xl sm:text-4xl")}>
         {children}
-      </h1>
+      </h2>
     );
   }
   if (level === 2) {
@@ -136,7 +137,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
       const raw = block.heading_level ?? 2;
       const level: 2 | 3 | 4 = raw === 3 || raw === 4 ? raw : 2;
       return (
-        <section id={block.id} className="scroll-mt-24 space-y-4">
+        <section id={block.id ?? defaultBlogBlockAnchorId(block, index)} className="scroll-mt-28 space-y-4">
           <SectionHeading
             level={level}
             className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl"
@@ -241,7 +242,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
       );
 
     case "faq": {
-      const headingId = `blog-faq-heading-${index}`;
+      const headingId = blogFaqHeadingDomId(block, index);
       const accordion = (
         <Accordion type="single" collapsible className="mt-4 w-full">
           {block.items.map((item, i) => (
@@ -285,8 +286,8 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
         <div
           id={block.id}
           className={cn(
-            "blog-rich-text prose prose-zinc max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed",
-            "prose-headings:scroll-mt-24 prose-headings:font-bold prose-headings:text-zinc-900",
+            "blog-rich-text prose prose-lg prose-zinc max-w-none text-zinc-700",
+            "prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900",
             "prose-h2:text-2xl prose-h2:sm:text-3xl prose-h3:text-xl prose-h3:sm:text-2xl",
             "prose-a:font-medium prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-4 prose-a:hover:text-blue-700",
             "prose-ul:marker:text-blue-600 prose-ol:marker:text-blue-600",
@@ -308,7 +309,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
 
     case "heading":
       return (
-        <ArticleHeading id={block.id} level={block.level}>
+        <ArticleHeading id={block.id ?? defaultBlogBlockAnchorId(block, index)} level={block.level}>
           {block.content}
         </ArticleHeading>
       );
@@ -372,7 +373,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
               alt={block.alt}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, min(896px, 100vw)"
+              sizes="(max-width: 1024px) 100vw, 672px"
               loading={block.priority ? undefined : "lazy"}
               priority={block.priority}
               unoptimized={remote}
@@ -457,7 +458,7 @@ export function BlogContentRenderer({ content }: Props) {
 
   return (
     <div
-      className="prose prose-zinc max-w-none space-y-10 prose-p:my-0 prose-headings:scroll-mt-24 lg:space-y-12"
+      className="blog-body mx-auto w-full max-w-[65ch] space-y-8 text-[1.0625rem] leading-relaxed text-zinc-700 sm:space-y-10 sm:text-[1.0625rem] lg:space-y-12"
       data-blog-content-root
       data-has-faq={hasFaq ? "true" : "false"}
     >

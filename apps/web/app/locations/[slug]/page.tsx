@@ -4,14 +4,15 @@ import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { ProgrammaticLocationCleaningPage } from "@/components/seo/ProgrammaticLocationCleaningPage";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import {
-  buildLocationPageMetaDescription,
-  buildLocationPageMetaTitle,
-  buildLocationSeoMetadata,
+  buildLocationSeoMetadataAsync,
   getLocationSeo,
+  resolveLocationSeoMetaFieldsAsync,
 } from "@/lib/seo/capeTownSeoPages";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
-
-const SITE_ORIGIN = "https://www.shalean.co.za";
+import { getLocationHubBlogCards } from "@/lib/seo/location-hub-blog-cards";
+import { resolveLocationHubUiPatch } from "@/lib/seo/resolve-location-hub-ui-patch";
+import { resolveLocationTitleVariant } from "@/lib/seo/resolve-location-title-variant";
+import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -30,17 +31,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const seo = getLocationSeo(slug) ?? null;
 
+  const path = `/locations/${slug}`;
+
   if (seo) {
-    return buildLocationSeoMetadata(seo);
+    return buildLocationSeoMetadataAsync(seo, location);
   }
 
-  const path = `/locations/${slug}`;
-  const title = buildLocationPageMetaTitle(location.name);
-  const description = buildLocationPageMetaDescription(location.name);
+  const { title, description } = await resolveLocationSeoMetaFieldsAsync(null, location);
   return {
     title,
     description,
-    alternates: { canonical: path },
+    alternates: { canonical: absoluteCanonicalUrl(path) },
     openGraph: {
       type: "website",
       url: `${SITE_ORIGIN}${path}`,
@@ -66,9 +67,23 @@ export default async function LocationSeoPage({ params }: Props) {
     console.log("SEO:", seo ? { slug: seo.slug, path: seo.path } : null);
   }
   const trustStats = await getPublicReviewBannerStats();
+  const [metaFields, blogCards, titleVariant, hubUiPatch] = await Promise.all([
+    resolveLocationSeoMetaFieldsAsync(seo, location),
+    getLocationHubBlogCards(location.name),
+    resolveLocationTitleVariant(slug),
+    resolveLocationHubUiPatch(slug),
+  ]);
   return (
     <MarketingLayout>
-      <ProgrammaticLocationCleaningPage location={location} seo={seo} trustStats={trustStats} />
+      <ProgrammaticLocationCleaningPage
+        location={location}
+        seo={seo}
+        trustStats={trustStats}
+        metaDescription={metaFields.description}
+        blogCards={blogCards}
+        titleVariant={titleVariant}
+        swapHeroBookCtas={hubUiPatch.swapHeroBookCtas}
+      />
     </MarketingLayout>
   );
 }

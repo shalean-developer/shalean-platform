@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "locations": [
+    {
+      "slug": "bantry-bay-cleaning-services",
+      "name": "Bantry Bay",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": ["fresnaye", "sea-point", "camps-bay"],
+      "uniqueContextLine": "Bantry Bay is cliff-side Atlantic living—wind, salt spray, and compact luxury layouts that need careful scope on every visit.",
+      "locationType": "coastal",
+      "propertyTypes": ["luxury_home", "apartment", "short_stay"],
+      "pricingBand": "atlantic_premium"
+    },
+    {
+      "slug": "bergvliet-cleaning-services",
+      "name": "Bergvliet",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["plumstead", "wynberg", "constantia"],
+      "uniqueContextLine": "Bergvliet sits between green belts and school runs—garden dust, pets, and weekend sport sand shape what “clean” means here.",
+      "locationType": "suburban",
+      "propertyTypes": ["family_home", "townhouse"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "camps-bay-cleaning-services",
+      "name": "Camps Bay",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": ["sea-point", "bantry-bay", "gardens"],
+      "uniqueContextLine": "Camps Bay pairs beach-day traffic with guest-ready homes—sand in passages and salt on balconies add up fast between turnovers.",
+      "locationType": "coastal",
+      "propertyTypes": ["luxury_home", "apartment", "short_stay"],
+      "pricingBand": "atlantic_premium"
+    },
+    {
+      "slug": "claremont-cleaning-services",
+      "name": "Claremont",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["newlands", "rondebosch", "kenilworth"],
+      "uniqueContextLine": "Claremont blends family homes and leafy streets with school-week intensity—kitchens, passages, and entrances work hard between visits.",
+      "locationType": "suburban",
+      "propertyTypes": ["family_home", "townhouse", "apartment"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "fresnaye-cleaning-services",
+      "name": "Fresnaye",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": ["sea-point", "bantry-bay", "green-point"],
+      "uniqueContextLine": "Fresnaye is hillside Seaboard living—split levels, sea views, and driveways where access notes save real minutes on the day.",
+      "locationType": "coastal",
+      "propertyTypes": ["luxury_home", "apartment"],
+      "pricingBand": "atlantic_premium"
+    },
+    {
+      "slug": "gardens-cleaning-services",
+      "name": "Gardens",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": ["tamboerskloof", "vredehoek", "zonnebloem"],
+      "uniqueContextLine": "Gardens stacks heritage walk-ups, Kloof-adjacent flats, and festival-week footfall—stairs and tight turnovers are the norm.",
+      "locationType": "urban",
+      "propertyTypes": ["apartment", "townhouse"],
+      "pricingBand": "city_bowl"
+    },
+    {
+      "slug": "green-point-cleaning-services",
+      "name": "Green Point",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": ["sea-point", "fresnaye", "gardens"],
+      "uniqueContextLine": "Green Point mixes Seaboard apartments with promenade energy—lifts, parking bays, and salty balconies define the typical job.",
+      "locationType": "coastal",
+      "propertyTypes": ["apartment", "short_stay"],
+      "pricingBand": "atlantic_premium"
+    },
+    {
+      "slug": "kenilworth-cleaning-services",
+      "name": "Kenilworth",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["claremont", "wynberg", "plumstead"],
+      "uniqueContextLine": "Kenilworth is cottages, older passages, and gardens that shed leaves—pet traffic and school-term kitchens keep resets honest.",
+      "locationType": "suburban",
+      "propertyTypes": ["family_home", "townhouse"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "newlands-cleaning-services",
+      "name": "Newlands",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["rondebosch", "claremont", "wynberg"],
+      "uniqueContextLine": "Newlands lines village-adjacent streets with tree canopies—outdoor dust and busy family calendars shape every booking.",
+      "locationType": "suburban",
+      "propertyTypes": ["family_home", "townhouse"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "observatory-cleaning-services",
+      "name": "Observatory",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["woodstock", "zonnebloem", "rosebank"],
+      "uniqueContextLine": "Observatory is shares, student flats, and walkable Main Road living—compact kitchens and high-turnover bathrooms lead the scope.",
+      "locationType": "suburban",
+      "propertyTypes": ["student_share", "apartment"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "plumstead-cleaning-services",
+      "name": "Plumstead",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["wynberg", "kenilworth", "bergvliet"],
+      "uniqueContextLine": "Plumstead pairs garden homes with school-week traffic—side drives, pets, and leaf litter quietly eat vacuum time.",
+      "locationType": "suburban",
+      "propertyTypes": ["family_home", "townhouse"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "rondebosch-cleaning-services",
+      "name": "Rondebosch",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["claremont", "observatory", "newlands"],
+      "uniqueContextLine": "Rondebosch swings between UCT-adjacent rentals and long-standing family streets—split levels and narrow drives are everyday realities.",
+      "locationType": "suburban",
+      "propertyTypes": ["apartment", "family_home", "student_share"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "rosebank-cleaning-services",
+      "name": "Rosebank",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["rondebosch", "observatory", "wynberg"],
+      "uniqueContextLine": "Rosebank stitches duplex corridors to quieter pockets—student kitchens and shared entrances mean access notes matter.",
+      "locationType": "suburban",
+      "propertyTypes": ["student_share", "apartment", "townhouse"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "sea-point-cleaning-services",
+      "name": "Sea Point",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": ["green-point", "fresnaye", "bantry-bay"],
+      "uniqueContextLine": "Sea Point is apartments and coastal properties along Main Road—salt air, lifts, and tight turnovers set the pace.",
+      "locationType": "coastal",
+      "propertyTypes": ["apartment", "short_stay", "luxury_home"],
+      "pricingBand": "atlantic_premium"
+    },
+    {
+      "slug": "tamboerskloof-cleaning-services",
+      "name": "Tamboerskloof",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": ["gardens", "vredehoek", "woodstock"],
+      "uniqueContextLine": "Tamboerskloof packs Victorian terraces against Kloof’s edge—stairs, street parking, and compact flats dominate the brief.",
+      "locationType": "urban",
+      "propertyTypes": ["apartment", "townhouse"],
+      "pricingBand": "city_bowl"
+    },
+    {
+      "slug": "vredehoek-cleaning-services",
+      "name": "Vredehoek",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": ["gardens", "tamboerskloof", "zonnebloem"],
+      "uniqueContextLine": "Vredehoek climbs the bowl with wind-facing balconies and hillside flats—dust tracks in fast after Cape Doctor weeks.",
+      "locationType": "urban",
+      "propertyTypes": ["apartment"],
+      "pricingBand": "city_bowl"
+    },
+    {
+      "slug": "woodstock-cleaning-services",
+      "name": "Woodstock",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": ["zonnebloem", "observatory", "gardens"],
+      "uniqueContextLine": "Woodstock is lofts and mixed-use spaces between studios and cafés—construction dust and creative schedules shape the reset cadence.",
+      "locationType": "urban",
+      "propertyTypes": ["apartment", "townhouse"],
+      "pricingBand": "city_bowl"
+    },
+    {
+      "slug": "wynberg-cleaning-services",
+      "name": "Wynberg",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["plumstead", "kenilworth", "constantia"],
+      "uniqueContextLine": "Wynberg layers character homes, parks, and Upper Wynberg pockets—older floors and pet-friendly gardens need scoped time.",
+      "locationType": "suburban",
+      "propertyTypes": ["family_home", "townhouse"],
+      "pricingBand": "southern_standard"
+    },
+    {
+      "slug": "zonnebloem-cleaning-services",
+      "name": "Zonnebloem",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": ["gardens", "woodstock", "observatory"],
+      "uniqueContextLine": "Zonnebloem blends apartment towers with commuter-heavy blocks—lifts, basement bays, and weekday dust define most visits.",
+      "locationType": "urban",
+      "propertyTypes": ["apartment"],
+      "pricingBand": "city_bowl"
+    },
+    {
+      "slug": "constantia-cleaning-services",
+      "name": "Constantia",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": ["claremont", "wynberg", "bergvliet", "newlands"],
+      "uniqueContextLine": "Constantia pairs larger plots and tree canopy with busy kitchens—pollen, pet traffic, and entertainment areas need scoped time on every visit.",
+      "locationType": "estate",
+      "propertyTypes": ["family_home", "luxury_home"],
+      "pricingBand": "estate_premium"
+    },
+    {
+      "slug": "table-view-cleaning-services",
+      "name": "Table View",
+      "city": "Cape Town",
+      "region": "Blouberg",
+      "nearby": ["sea-point", "bellville", "durbanville", "camps-bay"],
+      "uniqueContextLine": "Table View mixes coastal sand with family homes—balcony grit, beach-day floors, and open-plan living shape realistic vacuum and mop dwell.",
+      "locationType": "blouberg",
+      "propertyTypes": ["family_home", "apartment", "short_stay"],
+      "pricingBand": "blouberg_coastal"
+    },
+    {
+      "slug": "durbanville-cleaning-services",
+      "name": "Durbanville",
+      "city": "Cape Town",
+      "region": "Northern Suburbs",
+      "nearby": ["bellville", "table-view", "claremont", "cape-town"],
+      "uniqueContextLine": "Durbanville skews toward larger family houses and townhouses—school-week kitchens, garden dust, and multi-bath layouts drive honest scope.",
+      "locationType": "northern",
+      "propertyTypes": ["family_home", "townhouse"],
+      "pricingBand": "northern_standard"
+    },
+    {
+      "slug": "bellville-cleaning-services",
+      "name": "Bellville",
+      "city": "Cape Town",
+      "region": "Northern Suburbs",
+      "nearby": ["durbanville", "table-view", "kenilworth", "claremont"],
+      "uniqueContextLine": "Bellville balances rentals and family homes—move-out windows, pets, and practical weekday access notes keep visits on schedule.",
+      "locationType": "northern",
+      "propertyTypes": ["family_home", "apartment", "townhouse"],
+      "pricingBand": "northern_standard"
+    }
+  ]
+}

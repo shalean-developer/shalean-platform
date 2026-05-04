@@ -24,8 +24,26 @@ const publish = process.argv.includes("--publish");
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
-function serviceSlugFromProgrammatic(service: ProgrammaticPost["service"]): string {
-  switch (service) {
+function serviceSlugFromProgrammatic(p: ProgrammaticPost): string {
+  if (p.service === "local-guide") {
+    switch (p.guideVariant) {
+      case "pricing":
+        return "cleaning-prices";
+      case "best_services":
+        return "best-cleaning-services";
+      case "apartment_tips":
+        return "apartment-cleaning-tips";
+      case "cleaning_frequency":
+        return "home-cleaning-frequency";
+      case "deep_checklist":
+        return "deep-cleaning-checklist";
+      case "move_out_cost":
+        return "move-out-cleaning-cost";
+      default:
+        return "cleaning-guide";
+    }
+  }
+  switch (p.service) {
     case "deep":
       return "deep-cleaning";
     case "standard":
@@ -42,6 +60,32 @@ function serviceSlugFromProgrammatic(service: ProgrammaticPost["service"]): stri
 function buildInput(p: ProgrammaticPost) {
   const location = p.location ?? "Cape Town";
   const city = "Cape Town";
+
+  if (p.service === "local-guide") {
+    const label =
+      p.guideVariant === "pricing"
+        ? "Cleaning prices"
+        : p.guideVariant === "best_services"
+          ? "Best cleaning services"
+          : p.guideVariant === "apartment_tips"
+            ? "Apartment cleaning tips"
+            : p.guideVariant === "cleaning_frequency"
+              ? "Home cleaning frequency"
+              : p.guideVariant === "deep_checklist"
+                ? "Deep cleaning checklist"
+                : p.guideVariant === "move_out_cost"
+                  ? "Move-out cleaning cost"
+                  : "Cleaning guide";
+    return {
+      location,
+      city,
+      service: label,
+      locationSlug: slugifyTitle(location),
+      citySlug: "cape-town",
+      serviceSlug: serviceSlugFromProgrammatic(p),
+    };
+  }
+
   const serviceLabel =
     p.service === "deep"
       ? "Deep cleaning"
@@ -59,7 +103,7 @@ function buildInput(p: ProgrammaticPost) {
     service: serviceLabel,
     locationSlug: slugifyTitle(location),
     citySlug: "cape-town",
-    serviceSlug: serviceSlugFromProgrammatic(p.service),
+    serviceSlug: serviceSlugFromProgrammatic(p),
   };
 }
 
@@ -93,7 +137,7 @@ async function main() {
       noindex: false,
       primary_keyword: p.primaryKeyword,
       secondary_keywords: [
-        `${programmaticServiceLabel(p.service)} ${p.location ?? "Cape Town"}`,
+        `${programmaticServiceLabel(p)} ${p.location ?? "Cape Town"}`,
         "Shalean Cape Town",
       ],
       search_intent: "transactional",

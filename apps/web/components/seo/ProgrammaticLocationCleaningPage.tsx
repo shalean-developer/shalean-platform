@@ -1,29 +1,65 @@
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
-import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import type { HubBlogCard } from "@/lib/blog/get-all-posts";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { LocationHubBlogSection } from "@/components/seo/LocationHubBlogSection";
+import { LocationHubEngagementClient } from "@/components/seo/LocationHubEngagementClient";
+import { LocationHubMidBanner } from "@/components/seo/LocationHubMidBanner";
+import { LocationHubQueryExpansion } from "@/components/seo/LocationHubQueryExpansion";
+import { LocationFAQSection } from "@/components/seo/LocationFAQSection";
+import { LocationHubAuthoritySection } from "@/components/seo/LocationHubAuthoritySection";
+import { LocationHubComparisonSection } from "@/components/seo/LocationHubComparisonSection";
+import { LocationHubEntityStack } from "@/components/seo/LocationHubEntityStack";
+import { LocationHubRankingSections } from "@/components/seo/LocationHubRankingSections";
+import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDepth";
+import { LocationHubShareBar } from "@/components/seo/LocationHubShareBar";
+import { LocationReviewHighlights } from "@/components/seo/LocationReviewHighlights";
+import { LocationTrustSignals } from "@/components/seo/LocationTrustSignals";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
+import { LocationHubServiceTiles } from "@/components/seo/LocationHubServiceTiles";
+import { SeoHubGrowthCtaLink } from "@/components/seo/SeoHubGrowthCtaLink";
 import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
-import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import {
-  buildLocationPageMetaDescription,
-  CAPE_TOWN_SERVICE_SEO,
-  type LocationSeoBlock,
-} from "@/lib/seo/capeTownSeoPages";
-import { GOOGLE_BUSINESS_REVIEWS, googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
-import { defaultLocationFaqs, nearbyProgrammaticLocations } from "@/lib/seo/locations";
-import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
+  locationFooterCtaMicrocopy,
+  locationHeroCtaMicrocopy,
+  locationStickyCtaLine,
+} from "@/lib/seo/location-commercial-copy";
+import { buildStructuredLocationIntro, mergeIntroWithPrimaryKeyword } from "@/lib/seo/location-content-variation";
+import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
+import { buildLifestyleDepthParagraphs } from "@/lib/seo/location-lifestyle-depth";
+import {
+  directAnswerHowMuchDoesCleaningCost,
+  directAnswerWhatCleaningServicesAreAvailable,
+} from "@/lib/seo/location-featured-snippet-copy";
+import { getLocationGeoHints } from "@/lib/seo/location-geo-enrichment";
+import { primaryLocationKeywordPhrase } from "@/lib/seo/location-keyword";
+import { getLocationSeoPriority, hubContentTierFromPriority } from "@/lib/seo/location-priority";
+import { CAPE_TOWN_SERVICE_SEO, type LocationSeoBlock } from "@/lib/seo/capeTownSeoPages";
+import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { buildDynamicLocationFaqs, nearbyProgrammaticLocations } from "@/lib/seo/locations";
+import { buildPeopleAlsoAskFaqs, mergeLocationFaqs } from "@/lib/seo/location-paa-faqs";
+import { buildLocationLocalProofBullets } from "@/lib/seo/location-hub-local-proof";
+import { getLocationPricingHeroLine } from "@/lib/seo/location-pricing";
+import { buildLocationHubJsonLd } from "@/lib/seo/structured-data";
+import { LOCATION_PAGE_CONTENT_GROUP } from "@/lib/seo/search-console-readiness";
+import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
+import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
 
 type Props = {
   location: CapeTownLocationRow;
   seo: LocationSeoBlock | null;
   trustStats: PublicReviewBannerStats | null;
+  /** Matches `<meta name="description">` and Open Graph (via `resolveLocationSeoMetaFields`). */
+  metaDescription: string;
+  blogCards: HubBlogCard[];
+  /** Active `<title>` template id for CTR experiments (`LOCATION_SEO_FEEDBACK_JSON`). */
+  titleVariant: LocationTitleVariantId;
+  /** When true, hero booking CTAs swap order and the “see total first” path takes primary visual weight. */
+  swapHeroBookCtas?: boolean;
 };
-
-const SITE_ORIGIN = "https://www.shalean.co.za";
 
 const STANDARD_SERVICE = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
 const DEEP_SERVICE = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
@@ -56,95 +92,82 @@ function defaultWhyChooseBullets(loc: CapeTownLocationRow): string[] {
   ];
 }
 
-function locationIntroParagraphs(loc: CapeTownLocationRow): string[] {
-  const { name, city, region } = loc;
-  const trust =
-    "Shalean connects you with vetted, insured cleaners and shows a clear total before you confirm—no surprise surcharges for the scope you select.";
-  const isAtlantic = region.toLowerCase().includes("atlantic");
-  const isCityBowl = region.toLowerCase().includes("city bowl");
-  if (isAtlantic) {
-    return [
-      `${name} sits on Cape Town’s ${region}: apartments, sea air, and tight schedules. ${trust}`,
-      `Book for your ${name} address in ${city}—we factor building access, lifts, and the service tier you choose so teams arrive prepared.`,
-    ];
-  }
-  if (isCityBowl) {
-    return [
-      `${name} is part of ${city}’s ${region}: compact flats, walkable streets, and busy weeks where kitchens and bathrooms need dependable resets. ${trust}`,
-      `Tell us your ${name} building access and room count at checkout—quotes stay accurate for ${city} denser layouts and mixed-use blocks.`,
-    ];
-  }
-  return [
-    `${name} is a ${region} neighbourhood in ${city}: family homes, rentals, and busy weeknights that add up between professional visits. ${trust}`,
-    `Whether you need upkeep or a deeper reset, enter your ${name} street and room count at checkout so ${city} pricing stays accurate for your home.`,
-  ];
-}
+const HERO_SOLID_CLASS =
+  "inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700";
+const HERO_OUTLINE_CLASS =
+  "inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-6 text-base font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50";
 
-export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: Props) {
+export function ProgrammaticLocationCleaningPage({
+  location,
+  seo,
+  trustStats,
+  metaDescription,
+  blogCards,
+  titleVariant,
+  swapHeroBookCtas = false,
+}: Props) {
   const slug = location.slug;
-  const h1 = seo?.h1 ?? `Cleaning Services in ${location.name}`;
-  const intro = seo?.intro?.length ? seo.intro : locationIntroParagraphs(location);
+  const seoPriority = getLocationSeoPriority(location);
+  const hubTier = hubContentTierFromPriority(seoPriority);
+  const lifestyleDepth = buildLifestyleDepthParagraphs(location, hubTier);
+  const stickyBookingLine = locationStickyCtaLine(location);
+  const h1 = primaryLocationKeywordPhrase(location);
+  const intro = seo?.intro?.length
+    ? mergeIntroWithPrimaryKeyword(seo.intro, location)
+    : buildStructuredLocationIntro(location);
   const nearby = nearbyProgrammaticLocations(slug, 6);
+  const geoHints = getLocationGeoHints(slug);
   const nearbyNamesForCopy = nearby.map((l) => l.name);
   const nearbyListSentence = formatNearbyNames(nearbyNamesForCopy);
-  const faqs = seo?.faqs?.length ? seo.faqs : defaultLocationFaqs(location.name, location.city);
+  const baseFaqs = seo?.faqs?.length ? seo.faqs : buildDynamicLocationFaqs(location);
+  const mergedFaqs = mergeLocationFaqs(
+    buildPeopleAlsoAskFaqs(location),
+    baseFaqs.map((f) => ({ q: f.q, a: f.a })),
+  );
   const eyebrow = `${location.city} · ${location.region}`;
   const bookCtaLabel = `Book a cleaner in ${location.name}`;
 
+  const seoCtx = {
+    page_slug: slug,
+    suburb: location.name,
+    region: location.region,
+    title_variant: titleVariant,
+    page_type: "seo_location" as const,
+  };
+
   const pageUrl = `${SITE_ORIGIN}/locations/${slug}`;
   const locationsIndexUrl = `${SITE_ORIGIN}/locations`;
-  const webDescription = seo?.description ?? buildLocationPageMetaDescription(location.name);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "WebPage",
-        "@id": `${pageUrl}#webpage`,
-        name: h1,
-        description: webDescription,
-        url: pageUrl,
-        isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: SITE_ORIGIN },
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": `${pageUrl}#breadcrumb`,
-        itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
-          { "@type": "ListItem", position: 2, name: "Locations", item: locationsIndexUrl },
-          { "@type": "ListItem", position: 3, name: location.name, item: pageUrl },
-        ],
-      },
-      {
-        "@type": "Service",
-        "@id": `${pageUrl}#service`,
-        name: `House Cleaning in ${location.name}`,
-        areaServed: { "@type": "Place", name: `${location.name}, ${location.city}` },
-        provider: {
-          "@type": "LocalBusiness",
-          name: "Shalean Cleaning Services",
-          url: SITE_ORIGIN,
-          telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
-          aggregateRating: googleBusinessAggregateRatingSchema(),
-        },
-      },
-      {
-        "@type": "FAQPage",
-        "@id": `${pageUrl}#faq`,
-        mainEntity: faqs.map((f) => ({
-          "@type": "Question",
-          name: f.q,
-          acceptedAnswer: { "@type": "Answer", text: f.a },
-        })),
-      },
-    ],
-  };
+  const jsonLd = buildLocationHubJsonLd({
+    pageUrl,
+    locationsIndexUrl,
+    siteOrigin: SITE_ORIGIN,
+    h1,
+    metaDescription,
+    location,
+    faqs: mergedFaqs,
+    nearbyPlaceNames: nearby,
+  });
 
   const whyChooseItems = seo?.whyChoose?.length ? seo.whyChoose : defaultWhyChooseBullets(location);
 
   return (
-    <main className="bg-white text-zinc-900">
-      <GrowthTracking event="page_view" payload={{ page_type: "seo_location", slug }} />
+    <main className="bg-white pb-32 text-zinc-900" data-location-hub-root>
+      <GrowthTracking
+        event="page_view"
+        payload={{
+          page_type: "seo_location",
+          slug,
+          page_slug: slug,
+          suburb: location.name,
+          region: location.region,
+          title_variant: titleVariant,
+          content_group: LOCATION_PAGE_CONTENT_GROUP,
+          primary_kw: h1,
+          seo_priority: seoPriority,
+          hub_tier: hubTier,
+        }}
+      />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="mx-auto max-w-4xl px-4 pt-8">
@@ -156,6 +179,17 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
             { name: location.name, href: `/locations/${slug}`, current: true },
           ]}
         />
+        <p className="mt-3 text-sm text-zinc-600">
+          <Link href="/locations/cape-town-cleaning-services" className={`font-medium ${linkEmphasisClassName}`}>
+            Cape Town cleaning overview
+          </Link>
+          <span className="mx-2 text-zinc-300" aria-hidden>
+            ·
+          </span>
+          <Link href="/locations" className={`font-medium ${linkEmphasisClassName}`}>
+            All suburb hubs
+          </Link>
+        </p>
       </div>
 
       <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/60 via-white to-white py-14">
@@ -167,8 +201,26 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
               <p key={i}>{p}</p>
             ))}
           </div>
+          {nearby.length > 0 ? (
+            <p className="mt-5 text-base leading-relaxed text-zinc-600">
+              Compare nearby hubs:{" "}
+              {nearby.slice(0, 3).map((loc, i, arr) => (
+                <span key={loc.slug}>
+                  {i > 0 ? (i === arr.length - 1 ? " or " : ", ") : null}
+                  <Link href={`/locations/${loc.slug}`} className={`${linkEmphasisClassName} font-medium`}>
+                    cleaning services in {loc.name}
+                  </Link>
+                </span>
+              ))}
+              —each uses the same locked-quote booking flow.
+            </p>
+          ) : null}
           <p className="mt-5 border-l-4 border-emerald-200 pl-4 text-base font-medium leading-relaxed text-zinc-800">
             {location.uniqueContextLine}
+          </p>
+          <p className="mt-4 text-sm leading-relaxed text-zinc-600">
+            <span className="font-semibold text-zinc-800">Typical pricing in {location.name}: </span>
+            {getLocationPricingHeroLine(location)}
           </p>
           <p className="mt-5 text-base leading-relaxed text-zinc-700">
             We help families, professionals, and Airbnb hosts in {location.name}, {location.city}, with vetted cleaners
@@ -179,21 +231,59 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
             {publicTrustRatingBadgeLine(trustStats)} · Thousands of Cape Town cleans completed through Shalean
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <GrowthCtaLink
-              href="/booking/details"
-              source={`seo_loc_${slug}_hero`}
-              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-            >
-              {bookCtaLabel}
-            </GrowthCtaLink>
-            <GrowthCtaLink
-              href="/booking"
-              source={`seo_loc_${slug}_book_now`}
-              className="inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-6 text-base font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50"
-            >
-              Book now
-            </GrowthCtaLink>
+            {(swapHeroBookCtas
+              ? [
+                  {
+                    key: "total_first" as const,
+                    href: "/booking",
+                    label: "Book now — see total first",
+                    source: `seo_loc_${slug}_book_now`,
+                    ctaLabel: "Book now — see total first",
+                  },
+                  {
+                    key: "details" as const,
+                    href: "/booking/details",
+                    label: bookCtaLabel,
+                    source: `seo_loc_${slug}_hero`,
+                    ctaLabel: bookCtaLabel,
+                  },
+                ]
+              : [
+                  {
+                    key: "details" as const,
+                    href: "/booking/details",
+                    label: bookCtaLabel,
+                    source: `seo_loc_${slug}_hero`,
+                    ctaLabel: bookCtaLabel,
+                  },
+                  {
+                    key: "total_first" as const,
+                    href: "/booking",
+                    label: "Book now — see total first",
+                    source: `seo_loc_${slug}_book_now`,
+                    ctaLabel: "Book now — see total first",
+                  },
+                ]
+            ).map((slot) => {
+              const solid =
+                (!swapHeroBookCtas && slot.key === "details") || (swapHeroBookCtas && slot.key === "total_first");
+              return (
+                <SeoHubGrowthCtaLink
+                  key={slot.key}
+                  href={slot.href}
+                  source={slot.source}
+                  ctx={seoCtx}
+                  ctaLocation="hero"
+                  ctaLabel={slot.ctaLabel}
+                  ctaKind="book_now"
+                  className={solid ? HERO_SOLID_CLASS : HERO_OUTLINE_CLASS}
+                >
+                  {slot.label}
+                </SeoHubGrowthCtaLink>
+              );
+            })}
           </div>
+          <p className="mt-4 text-sm font-medium text-emerald-900">{locationHeroCtaMicrocopy(location)}</p>
         </div>
       </section>
 
@@ -209,6 +299,95 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
           </div>
         </section>
       ) : null}
+
+      {geoHints ? (
+        <section className="border-b border-zinc-100 py-16">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Landmarks & local geography</h2>
+            <p className="mt-3 text-base leading-relaxed text-zinc-600">
+              Crews regularly brief around{" "}
+              <span className="font-medium text-zinc-800">{geoHints.landmarks.join(", ")}</span>
+              {geoHints.roads && geoHints.roads.length > 0 ? (
+                <>
+                  {" "}
+                  along corridors such as{" "}
+                  <span className="font-medium text-zinc-800">{geoHints.roads.join(", ")}</span>
+                </>
+              ) : null}
+              {geoHints.microAreas.length > 0 ? (
+                <>
+                  {" "}
+                  plus micro-areas such as{" "}
+                  <span className="font-medium text-zinc-800">{geoHints.microAreas.join(", ")}</span>
+                </>
+              ) : null}{" "}
+              —mention building access, parking, and outdoor zones in your booking notes so scope matches what teams see
+              on the ground in {location.name}.
+            </p>
+            {geoHints.propertyTypeDensity || geoHints.parkingNotes || geoHints.accessNotes ? (
+              <ul className="mt-6 list-disc space-y-3 pl-5 text-base leading-relaxed text-zinc-700">
+                {geoHints.propertyTypeDensity ? (
+                  <li>
+                    <span className="font-medium text-zinc-900">Property mix: </span>
+                    {geoHints.propertyTypeDensity}
+                  </li>
+                ) : null}
+                {geoHints.parkingNotes ? (
+                  <li>
+                    <span className="font-medium text-zinc-900">Parking: </span>
+                    {geoHints.parkingNotes}
+                  </li>
+                ) : null}
+                {geoHints.accessNotes ? (
+                  <li>
+                    <span className="font-medium text-zinc-900">Access: </span>
+                    {geoHints.accessNotes}
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      <LocationHubEntityStack location={location} slug={slug} />
+
+      <section className="border-b border-zinc-100 py-16">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Homes & lifestyle in {location.name}</h2>
+          <div className="mt-6 space-y-4 text-base leading-relaxed text-zinc-600">
+            {lifestyleDepth.map((p, i) => (
+              <p key={`life-${i}-${p.slice(0, 24)}`}>{p}</p>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <LocationTrustSignals location={location} trustStats={trustStats} />
+
+      <LocationHubAuthoritySection location={location} />
+
+      <section className="border-b border-zinc-100 bg-white py-14" aria-labelledby="hub-local-proof-heading">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 id="hub-local-proof-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Why residents in {location.name} choose Shalean
+          </h2>
+          <ul className="mt-6 space-y-4">
+            {buildLocationLocalProofBullets(location).map((line, i) => (
+              <li
+                key={`proof-${i}-${line.slice(0, 12)}`}
+                className="rounded-2xl border border-zinc-200 bg-zinc-50/90 px-5 py-4 text-sm leading-relaxed text-zinc-700 shadow-sm"
+              >
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <LocationHubRankingSections location={location} slug={slug} analyticsCtx={seoCtx} />
+
+      <LocationReviewHighlights location={location} />
 
       <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
         <div className="mx-auto max-w-4xl px-4">
@@ -227,39 +406,28 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
         </div>
       </section>
 
+      <LocationHubComparisonSection location={location} />
+
+      <LocationHubMidBanner location={location} slug={slug} tier={hubTier} analyticsCtx={seoCtx} />
+
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
           <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Services available in {location.name}</h2>
-          <p className="mt-3 text-base text-zinc-600">
+          <p className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3 text-base font-medium leading-relaxed text-zinc-800">
+            {directAnswerWhatCleaningServicesAreAvailable(location)}
+          </p>
+          <p className="mt-4 text-base text-zinc-600">
             Open a Cape Town-wide guide, enter your {location.name} address at checkout, and lock scope before we
             dispatch.
           </p>
-          <ul className="mt-8 grid gap-3 sm:grid-cols-3">
-            <li>
-              <Link
-                href={STANDARD_SERVICE}
-                className="block rounded-2xl border border-emerald-100 bg-white p-5 text-base font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
-              >
-                Standard cleaning
-              </Link>
-            </li>
-            <li>
-              <Link
-                href={DEEP_SERVICE}
-                className="block rounded-2xl border border-emerald-100 bg-white p-5 text-base font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
-              >
-                Deep cleaning
-              </Link>
-            </li>
-            <li>
-              <Link
-                href={MOVE_OUT_SERVICE}
-                className="block rounded-2xl border border-emerald-100 bg-white p-5 text-base font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
-              >
-                Move-out cleaning
-              </Link>
-            </li>
-          </ul>
+          <LocationHubServiceTiles
+            ctx={seoCtx}
+            tiles={[
+              { href: STANDARD_SERVICE, label: "Standard cleaning" },
+              { href: DEEP_SERVICE, label: "Deep cleaning" },
+              { href: MOVE_OUT_SERVICE, label: "Move-out cleaning" },
+            ]}
+          />
           <p className="mt-6 text-sm text-zinc-600">
             More guides:{" "}
             <Link href="/services" className={linkEmphasisClassName}>
@@ -267,8 +435,23 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
             </Link>
             .
           </p>
+          <div className="mt-8">
+            <SeoHubGrowthCtaLink
+              href="/booking/details"
+              source={`seo_loc_${slug}_services_book_now`}
+              ctx={seoCtx}
+              ctaLocation="services_section"
+              ctaLabel="Book now"
+              ctaKind="book_now"
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              Book now
+            </SeoHubGrowthCtaLink>
+          </div>
         </div>
       </section>
+
+      <LocationHubQueryExpansion location={location} slug={slug} tier={hubTier} />
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
@@ -309,7 +492,7 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
                   href={`/locations/${loc.slug}`}
                   className="inline-flex max-w-full rounded-full border border-zinc-200 bg-white px-4 py-2 text-left text-sm font-medium leading-snug text-zinc-700 shadow-sm transition hover:border-emerald-200 hover:text-emerald-900"
                 >
-                  Cleaning {loc.name}
+                  Cleaning services in {loc.name}
                 </Link>
               </li>
             ))}
@@ -317,20 +500,19 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
         </div>
       </section>
 
-      <section className="border-b border-zinc-100 py-16">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Frequently Asked Questions</h2>
-          <p className="mt-2 text-sm text-zinc-600">Common questions about booking cleaning in {location.name}.</p>
-          <dl className="mt-8 space-y-6">
-            {faqs.map((item) => (
-              <div key={item.q} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <dt className="text-base font-semibold text-zinc-900">{item.q}</dt>
-                <dd className="mt-2 text-sm leading-relaxed text-zinc-600">{item.a}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
+      <LocationHubBlogSection locationName={location.name} locationSlug={slug} cards={blogCards} />
+
+      <LocationFAQSection
+        locationName={location.name}
+        items={mergedFaqs}
+        analytics={{ page_slug: slug, suburb: location.name }}
+      />
+
+      <div className="mx-auto max-w-4xl px-4 pb-4">
+        <LocationHubShareBar url={pageUrl} title={h1} />
+      </div>
+
+      <LocationHubSessionDepth location={location} slug={slug} />
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
@@ -343,23 +525,38 @@ export function ProgrammaticLocationCleaningPage({ location, seo, trustStats }: 
         <p className="mx-auto mt-3 max-w-lg text-zinc-300">
           {location.city}-wide coverage with suburb-aware quoting—confirm your total before you pay.
         </p>
+        <p className="mx-auto mt-4 max-w-lg text-sm text-zinc-400">{locationFooterCtaMicrocopy(location)}</p>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <GrowthCtaLink
+          <SeoHubGrowthCtaLink
             href="/booking/details"
             source={`seo_loc_${slug}_footer`}
+            ctx={seoCtx}
+            ctaLocation="footer"
+            ctaLabel={bookCtaLabel}
+            ctaKind="book_now"
             className="inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-zinc-900 transition hover:bg-zinc-100"
           >
             {bookCtaLabel}
-          </GrowthCtaLink>
-          <GrowthCtaLink
+          </SeoHubGrowthCtaLink>
+          <SeoHubGrowthCtaLink
             href="/booking"
             source={`seo_loc_${slug}_footer_book_now`}
+            ctx={seoCtx}
+            ctaLocation="footer"
+            ctaLabel="Book now — slots update live"
+            ctaKind="book_now"
             className="inline-flex min-h-12 items-center rounded-xl border border-zinc-500 px-6 text-base font-semibold text-white transition hover:bg-zinc-800"
           >
-            Book now
-          </GrowthCtaLink>
+            Book now — slots update live
+          </SeoHubGrowthCtaLink>
         </div>
       </section>
+
+      <LocationHubEngagementClient
+        trackingSlug={slug}
+        stickyLine={stickyBookingLine}
+        analyticsCtx={{ ...seoCtx, hub_tier: hubTier, seo_priority: seoPriority }}
+      />
     </main>
   );
 }

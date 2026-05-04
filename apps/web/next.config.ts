@@ -53,9 +53,8 @@ const nextConfig: NextConfig = {
       },
       /**
        * Legacy flat location URLs (short suburb slug, e.g. `sea-point`).
-       * `proxy.ts` runs first and resolves via `locationSeoPathFromLegacyAreaSlug`; this rule
-       * covers remaining `/cleaning-services/:slug` hits as `/locations/:slug-cleaning-services`.
-       * Cape Town duplicate URLs `/cape-town/cleaning-services/:slug` redirect in `proxy.ts` to the mapped hub.
+       * `middleware.ts` resolves mapped suburbs via `locationSeoPathFromLegacyAreaSlug` (308);
+       * this rule covers any remaining `/cleaning-services/:slug` hits as `/locations/:slug-cleaning-services`.
        */
       {
         source: "/cleaning-services/:slug",

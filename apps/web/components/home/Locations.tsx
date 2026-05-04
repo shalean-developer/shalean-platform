@@ -23,7 +23,7 @@ export function Locations({ locations }: LocationsProps) {
                 ? "/services"
                 : (locationSeoPathFromLegacyAreaSlug(location.slug) ??
                   `/locations/${location.slug.replace(/\/$/, "")}-cleaning-services`)
-              : "#hero-booking";
+              : "/locations";
             return (
               <Link
                 key={location.id}

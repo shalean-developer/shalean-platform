@@ -1,15 +1,7 @@
-import { ShieldCheck, Sparkles, Star, Users } from "lucide-react";
-import { publicTrustRatingCardTitle } from "@/lib/home/publicTrustRating";
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
+import { BadgeCheck, ShieldCheck, Sparkles, Users } from "lucide-react";
 
-type Props = {
-  reviewBanner: PublicReviewBannerStats | null;
-};
-
-/** Trust strip below hero (ratings, scale, vetting, guarantee) — fully server-rendered. */
-export function MarketingHomeTrustSection({ reviewBanner }: Props) {
-  const ratingTrustTitle = publicTrustRatingCardTitle(reviewBanner);
-
+/** Trust strip directly under hero — credibility points only (no aggregate rating; hero + Google band carry scores). */
+export function MarketingHomeTrustSection() {
   return (
     <section id="pricing" className="bg-[#1e4fd4] py-10 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -20,24 +12,24 @@ export function MarketingHomeTrustSection({ reviewBanner }: Props) {
           {(
             [
               {
-                Icon: Star,
-                title: ratingTrustTitle,
-                subtitle: "From verified reviews",
+                Icon: BadgeCheck,
+                title: "Book with confidence",
+                subtitle: "Itemised scope and upfront totals before we dispatch a team",
               },
               {
                 Icon: Users,
-                title: "Serving Cape Town",
-                subtitle: "Fast booking, clear pricing",
+                title: "Serving homes across Cape Town suburbs",
+                subtitle: "Routing from the Atlantic Seaboard to the Southern Suburbs and Northern corridors",
               },
               {
                 Icon: ShieldCheck,
-                title: "Vetted cleaners",
-                subtitle: "ID & reference checked",
+                title: "Background-checked cleaners",
+                subtitle: "Verified profiles with ID and reference checks on every visit",
               },
               {
                 Icon: Sparkles,
-                title: "Satisfaction guarantee",
-                subtitle: "Support if something is missed",
+                title: "Human support if something’s off",
+                subtitle: "Reach real people when a visit does not match the checklist you confirmed",
               },
             ] as const
           ).map(({ Icon, title, subtitle }, i) => (

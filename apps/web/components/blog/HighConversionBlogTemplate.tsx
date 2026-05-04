@@ -5,7 +5,7 @@ import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { linkInParagraphClassName } from "@/lib/ui/linkClassNames";
 
 const proseArticle =
-  "prose prose-zinc max-w-3xl prose-headings:scroll-mt-24 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline";
+  "prose prose-lg prose-zinc mx-auto w-full max-w-[65ch] prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-li:marker:text-blue-600";
 
 const standardPath = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
 const deepPath = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
@@ -14,10 +14,12 @@ const officePath = CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path;
 
 function BlogHighConversionCtaBlock({
   source,
+  blogPlacement,
   heading = "Need help with cleaning?",
   subtext = "Book a professional cleaner in Cape Town today.",
 }: {
   source: string;
+  blogPlacement: string;
   heading?: string;
   subtext?: string;
 }) {
@@ -28,6 +30,7 @@ function BlogHighConversionCtaBlock({
       <GrowthCtaLink
         href="/booking/details"
         source={source}
+        blogAnalyticsPlacement={blogPlacement}
         className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
       >
         Book a cleaner
@@ -104,7 +107,7 @@ function RelatedServicesSection() {
 
 function renderSection(section: HighConversionBlogArticle["sections"][number]) {
   return (
-    <div key={section.id} className={proseArticle}>
+    <div key={section.id} id={`hc-section-${section.id}`} className={proseArticle}>
       {section.level === "h2" ? <h2>{section.heading}</h2> : <h3>{section.heading}</h3>}
       {section.paragraphs.map((p, i) => (
         <p key={`${section.id}-p-${i}`}>{p}</p>
@@ -129,12 +132,6 @@ export function HighConversionBlogTemplate({ article }: Props) {
 
   return (
     <>
-      <div className="not-prose mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.35rem] lg:leading-tight">
-          {article.h1}
-        </h1>
-      </div>
-
       <div className={proseArticle}>
         <p className="lead text-lg text-zinc-700">{article.introParagraphs[0]}</p>
         {article.introParagraphs.slice(1).map((p, i) => (
@@ -148,6 +145,7 @@ export function HighConversionBlogTemplate({ article }: Props) {
 
       <BlogHighConversionCtaBlock
         source={`blog_hc_${article.slug}_mid`}
+        blogPlacement={`${article.slug}_hc_mid_cta`}
         heading={article.cta?.heading}
         subtext={article.cta?.subtext}
       />

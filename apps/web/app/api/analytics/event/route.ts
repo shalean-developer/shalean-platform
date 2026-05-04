@@ -26,6 +26,14 @@ const ALLOWED = new Set([
   "review_prompt_clicked",
   "payment_initiated",
   "payment_completed",
+  "blog_scroll",
+  "blog_cta_click",
+  "blog_time_on_page",
+  "seo_location_scroll",
+  "seo_cta_click",
+  "seo_service_card_click",
+  "seo_faq_expand",
+  "seo_pricing_interaction",
 ]);
 
 export async function POST(request: Request) {

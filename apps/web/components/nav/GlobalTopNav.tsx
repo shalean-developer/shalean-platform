@@ -21,12 +21,9 @@ import {
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
+import { CUSTOMER_SUPPORT_EMAIL } from "@/lib/site/customerSupport";
 
 const bookingHref = "/booking/details";
-
-function hashLink(hash: string, pathname: string) {
-  return pathname === "/" ? hash : `/${hash}`;
-}
 
 function userDisplayName(user: User | null): string {
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
@@ -83,6 +80,9 @@ export function GlobalTopNav() {
   /** Booking flow uses its own header (`BookingHeader`); admin uses `app/admin/layout.tsx`. Cleaner app uses `app/cleaner/layout.tsx` (session shell + dashboard). */
   const hideMarketingNav =
     pathname === "/" ||
+    pathname === "/about" ||
+    pathname === "/faq" ||
+    pathname === "/reviews" ||
     pathname.startsWith("/admin") ||
     pathname === "/booking" ||
     pathname.startsWith("/booking/") ||
@@ -164,16 +164,16 @@ export function GlobalTopNav() {
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
-          <Link href={hashLink("#services", pathname)} className={navLinkClass}>
+          <Link href="/services" className={navLinkClass}>
             Services
           </Link>
-          <Link href={hashLink("#pricing", pathname)} className={navLinkClass}>
+          <Link href={bookingHref} className={navLinkClass}>
             Pricing
           </Link>
-          <Link href={hashLink("#contact", pathname)} className={navLinkClass}>
+          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className={navLinkClass}>
             Contact
-          </Link>
-          <Link href={hashLink("#faq", pathname)} className={navLinkClass}>
+          </a>
+          <Link href="/faq" className={navLinkClass}>
             FAQ
           </Link>
         </nav>
@@ -218,16 +218,16 @@ export function GlobalTopNav() {
       {open ? (
         <div id="mobile-nav" className="border-t border-blue-100 bg-white px-4 py-4 lg:hidden">
           <div className="flex flex-col gap-1">
-            <Link href={hashLink("#services", pathname)} className={cn(navLinkClass, "w-full")}>
+            <Link href="/services" className={cn(navLinkClass, "w-full")}>
               Services
             </Link>
-            <Link href={hashLink("#pricing", pathname)} className={cn(navLinkClass, "w-full")}>
+            <Link href={bookingHref} className={cn(navLinkClass, "w-full")}>
               Pricing
             </Link>
-            <Link href={hashLink("#contact", pathname)} className={cn(navLinkClass, "w-full")}>
+            <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className={cn(navLinkClass, "w-full")}>
               Contact
-            </Link>
-            <Link href={hashLink("#faq", pathname)} className={cn(navLinkClass, "w-full")}>
+            </a>
+            <Link href="/faq" className={cn(navLinkClass, "w-full")}>
               FAQ
             </Link>
             {!loading && !loggedIn ? (

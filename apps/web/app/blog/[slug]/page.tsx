@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogContextualServiceLinks } from "@/components/blog/BlogContextualServiceLinks";
-import { BlogMidArticleCta } from "@/components/blog/BlogMidArticleCta";
 import { BlogServiceLinks } from "@/components/blog/BlogServiceLinks";
-import { BlogArticleEndCta } from "@/components/blog/BlogArticleConversionBlocks";
+import { BlogConversionMidBanner } from "@/components/blog/engine/BlogConversionMidBanner";
 import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { HighConversionBlogTemplate } from "@/components/blog/HighConversionBlogTemplate";
@@ -30,8 +27,14 @@ import {
   type ProgrammaticPost,
 } from "@/lib/blog/programmaticPosts";
 import { getBlogServiceType } from "@/lib/blog/getBlogServiceType";
-import { linkInNavClassName } from "@/lib/ui/linkClassNames";
-import { cn } from "@/lib/utils";
+import {
+  enrichRelatedPostsForGrid,
+  getBlogIndexPostsCached,
+  getBlogSidebarCategories,
+  indexPostsToRelatedGrid,
+  pickTrendingSidebarPosts,
+} from "@/lib/blog/get-blog-sidebar-data";
+import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 
 const SITE = "https://www.shalean.co.za";
 
@@ -69,10 +72,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       ? toAbsoluteAssetUrl(dbPost.featuredImageUrl)
       : `${SITE}${PROGRAMMATIC_HERO_SRC}`;
     const heroAlt = dbPost.featuredImageAlt?.trim() || dbPost.h1;
+    const kwPhrase = buildKeywordsPhrase(dbPost);
+    const keywords =
+      kwPhrase != null
+        ? kwPhrase
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
     return {
       title: `${titleBase} | Shalean Blog`,
       description,
       alternates: { canonical: canonicalAbsolute },
+      ...(keywords && keywords.length > 0 ? { keywords } : {}),
       robots: dbPost.noindex ? { index: false, follow: true } : undefined,
       openGraph: {
         title: `${titleBase} | Shalean Blog`,
@@ -94,13 +106,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const hc = getHighConversionBlogPost(slug);
   if (hc) {
-    const path = `/blog/${hc.slug}`;
-    const url = `${SITE}${path}`;
+    const url = `${SITE}/blog/${hc.slug}`;
     const heroAbs = `${SITE}${hc.heroImage.src}`;
     return {
       title: `${hc.title} | Shalean Blog`,
       description: hc.description,
-      alternates: { canonical: path },
+      alternates: { canonical: url },
       openGraph: {
         title: `${hc.title} | Shalean Blog`,
         description: hc.description,
@@ -108,13 +119,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         type: "article",
         publishedTime: hc.publishedAt,
         modifiedTime: hc.dateModified ?? hc.publishedAt,
-        images: [{ url: hc.heroImage.src, alt: hc.heroImage.alt }],
+        images: [{ url: heroAbs, alt: hc.heroImage.alt }],
       },
       twitter: {
         card: "summary_large_image",
         title: `${hc.title} | Shalean Blog`,
         description: hc.description,
-        images: [hc.heroImage.src],
+        images: [heroAbs],
       },
     };
   }
@@ -124,10 +135,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const path = `/blog/${prog.slug}`;
   const url = `${SITE}${path}`;
+  const heroOg = `${SITE}${PROGRAMMATIC_HERO_SRC}`;
   return {
     title: `${prog.title} | Shalean Blog`,
     description: prog.description,
-    alternates: { canonical: path },
+    alternates: { canonical: url },
+    keywords: [
+      prog.primaryKeyword,
+      prog.location ? `${prog.location} cleaning` : null,
+      "Cape Town cleaning",
+      "Shalean",
+    ].filter((x): x is string => Boolean(x)),
     openGraph: {
       title: prog.title,
       description: prog.description,
@@ -135,13 +153,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: "article",
       publishedTime: prog.publishedAt,
       modifiedTime: prog.dateModified ?? prog.publishedAt,
-      images: [{ url: PROGRAMMATIC_HERO_SRC, alt: `${prog.h1} — Shalean Cape Town` }],
+      images: [{ url: heroOg, alt: `${prog.h1} — Shalean Cape Town` }],
     },
     twitter: {
       card: "summary_large_image",
       title: prog.title,
       description: prog.description,
-      images: [PROGRAMMATIC_HERO_SRC],
+      images: [heroOg],
     },
   };
 }
@@ -151,7 +169,10 @@ function buildProgrammaticBlogPostingJsonLd(post: ProgrammaticPost) {
   const heroAbsolute = `${SITE}${PROGRAMMATIC_HERO_SRC}`;
   const dateModified = post.dateModified ?? post.publishedAt;
   const locationKw = post.location ? `${post.location} cleaning Cape Town` : "Cape Town cleaning";
-  const serviceKw = `${post.service} cleaning Cape Town`;
+  const serviceKw =
+    post.service === "local-guide"
+      ? `${post.primaryKeyword}, Cape Town cleaning guide`
+      : `${post.service} cleaning Cape Town`;
   const keywords = [post.primaryKeyword, locationKw, serviceKw, "Shalean", "Cape Town"].filter(Boolean).join(", ");
 
   return {
@@ -305,6 +326,12 @@ function buildHighConversionGraphJsonLd(post: HighConversionBlogArticle) {
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
 
+  const [indexPosts, sidebarCategories] = await Promise.all([
+    getBlogIndexPostsCached(),
+    getBlogSidebarCategories(),
+  ]);
+  const sidebarTrending = pickTrendingSidebarPosts(indexPosts, slug, 5);
+
   const dbPost = await getPostBySlug(slug);
   if (dbPost) {
     const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
@@ -345,6 +372,11 @@ export default async function BlogPostPage({ params }: Props) {
       hero.src,
     );
 
+    const relatedGrid =
+      dbPost.relatedPosts.length >= 2
+        ? enrichRelatedPostsForGrid(dbPost.relatedPosts, indexPosts).slice(0, 6)
+        : indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
+
     return (
       <MarketingLayout>
         <main className="bg-white text-zinc-900">
@@ -360,6 +392,12 @@ export default async function BlogPostPage({ params }: Props) {
             readingTimeMinutes={dbPost.readingTimeMinutes}
             hero={hero}
             trackingSlug={dbPost.slug}
+            categorySlug={dbPost.categorySlug}
+            categoryName={dbPost.categoryName}
+            sidebarCategories={sidebarCategories}
+            sidebarTrending={sidebarTrending}
+            relatedGridPosts={relatedGrid}
+            showLayoutMidBanner={false}
           >
             <BlogDbArticleBody
               content={contentForRender}
@@ -368,10 +406,10 @@ export default async function BlogPostPage({ params }: Props) {
                   className="not-prose space-y-10 border-t border-zinc-200 pt-10"
                   aria-label="Services, areas, and booking"
                 >
+                  <BlogConversionMidBanner trackingSlug={dbPost.slug} />
                   <BlogContextualServiceLinks embedded />
                   <BlogServiceLinks service={getBlogServiceType(dbPost.slug)} dense />
                   <RelatedLinks placement="blog" emphasizeLocalBooking />
-                  <BlogMidArticleCta trackingSlug={dbPost.slug} />
                 </section>
               }
             />
@@ -384,7 +422,7 @@ export default async function BlogPostPage({ params }: Props) {
   const hc = getHighConversionBlogPost(slug);
   if (hc) {
     const jsonLdStr = JSON.stringify(buildHighConversionGraphJsonLd(hc)).replace(/</g, "\\u003c");
-    const readMin = hc.readingTimeMinutes ?? 6;
+    const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, hc.slug, 6));
 
     return (
       <MarketingLayout>
@@ -392,66 +430,28 @@ export default async function BlogPostPage({ params }: Props) {
           <GrowthTracking event="page_view" payload={{ page_type: "blog_high_conversion", slug: hc.slug }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
-          <article className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:max-w-4xl lg:px-8 lg:py-16">
-            <nav className="text-sm text-zinc-500" aria-label="Breadcrumb">
-              <Link href="/" className={cn(linkInNavClassName, "text-sm")}>
-                Home
-              </Link>
-              <span className="mx-2 text-zinc-400" aria-hidden>
-                /
-              </span>
-              <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
-                Blog
-              </Link>
-              <span className="mx-2 text-zinc-400" aria-hidden>
-                /
-              </span>
-              <span className="text-zinc-700">{hc.title}</span>
-            </nav>
-
-            <header className="mt-6 border-b border-zinc-200 pb-10">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Shalean · Cape Town</p>
-              <p className="mt-4 text-lg leading-relaxed text-zinc-600">{hc.description}</p>
-              <p className="mt-4 text-sm text-zinc-500">
-                Published{" "}
-                {new Intl.DateTimeFormat("en-ZA", {
-                  dateStyle: "long",
-                  timeZone: "Africa/Johannesburg",
-                }).format(new Date(hc.publishedAt))}{" "}
-                · {readMin} min read
-              </p>
-            </header>
-
-            <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
-              <Image
-                src={hc.heroImage.src}
-                alt={hc.heroImage.alt}
-                fill
-                className="object-cover"
-                sizes="(max-width: 896px) 100vw, 896px"
-                priority
-                fetchPriority="high"
-              />
-            </div>
-
-            <div className="py-10">
-              <HighConversionBlogTemplate article={hc} />
-              <BlogContextualServiceLinks />
-              <BlogServiceLinks service={getBlogServiceType(hc.slug)} />
-              <div className="mt-12">
-                <RelatedLinks placement="blog" />
-              </div>
-              <BlogArticleEndCta trackingSlug={hc.slug} />
-            </div>
-
-            <footer className="not-prose mt-8 border-t border-zinc-200 pt-8 text-center">
-              <p className="text-sm text-zinc-500">
-                <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
-                  ← Back to all articles
-                </Link>
-              </p>
-            </footer>
-          </article>
+          <BlogPostLayout
+            breadcrumbCurrentLabel={hc.title}
+            h1={hc.h1}
+            lede={hc.description}
+            publishedAtIso={hc.publishedAt}
+            updatedAtIso={hc.dateModified}
+            readingTimeMinutes={hc.readingTimeMinutes ?? 6}
+            hero={{ src: hc.heroImage.src, alt: hc.heroImage.alt }}
+            trackingSlug={hc.slug}
+            sidebarCategories={sidebarCategories}
+            sidebarTrending={sidebarTrending}
+            relatedGridPosts={relatedGrid}
+            relatedLinksSlot={<RelatedLinks placement="blog" />}
+            belowArticleSlot={
+              <>
+                <BlogContextualServiceLinks />
+                <BlogServiceLinks service={getBlogServiceType(hc.slug)} />
+              </>
+            }
+          >
+            <HighConversionBlogTemplate article={hc} />
+          </BlogPostLayout>
         </main>
       </MarketingLayout>
     );
@@ -461,6 +461,8 @@ export default async function BlogPostPage({ params }: Props) {
   if (!prog) notFound();
 
   const jsonLdStr = JSON.stringify(buildProgrammaticGraphJsonLd(prog)).replace(/</g, "\\u003c");
+  const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, prog.slug, 6));
+  const programmaticHubHref = locationHubHrefFromPlaceName(prog.location);
 
   return (
     <MarketingLayout>
@@ -468,66 +470,36 @@ export default async function BlogPostPage({ params }: Props) {
         <GrowthTracking event="page_view" payload={{ page_type: "blog_programmatic", slug: prog.slug }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
-        <article className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:max-w-4xl lg:px-8 lg:py-16">
-          <nav className="text-sm text-zinc-500" aria-label="Breadcrumb">
-            <Link href="/" className={cn(linkInNavClassName, "text-sm")}>
-              Home
-            </Link>
-            <span className="mx-2 text-zinc-400" aria-hidden>
-              /
-            </span>
-            <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
-              Blog
-            </Link>
-            <span className="mx-2 text-zinc-400" aria-hidden>
-              /
-            </span>
-            <span className="text-zinc-700">{prog.h1}</span>
-          </nav>
-
-          <header className="mt-6 border-b border-zinc-200 pb-10">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Shalean · Cape Town</p>
-            <p className="mt-4 text-lg leading-relaxed text-zinc-600">{prog.description}</p>
-            <p className="mt-4 text-sm text-zinc-500">
-              Published{" "}
-              {new Intl.DateTimeFormat("en-ZA", {
-                dateStyle: "long",
-                timeZone: "Africa/Johannesburg",
-              }).format(new Date(prog.publishedAt))}{" "}
-              · 5 min read
-            </p>
-          </header>
-
-          <div className="relative mt-8 aspect-[16/9] w-full overflow-hidden rounded-xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/60">
-            <Image
-              src={PROGRAMMATIC_HERO_SRC}
-              alt={`${prog.h1} — Shalean professional cleaning in Cape Town`}
-              fill
-              className="object-cover"
-              sizes="(max-width: 896px) 100vw, 896px"
-              priority
-              fetchPriority="high"
-            />
-          </div>
-
-          <div className="py-10">
-            <ProgrammaticBlogTemplate post={prog} />
-            <BlogContextualServiceLinks />
-            <BlogServiceLinks service={getBlogServiceType(prog.slug)} />
-            <div className="mt-12">
-              <RelatedLinks placement="blog" />
-            </div>
-            <BlogArticleEndCta trackingSlug={prog.slug} />
-          </div>
-
-          <footer className="not-prose mt-8 border-t border-zinc-200 pt-8 text-center">
-            <p className="text-sm text-zinc-500">
-              <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
-                ← Back to all articles
-              </Link>
-            </p>
-          </footer>
-        </article>
+        <BlogPostLayout
+          breadcrumbCurrentLabel={prog.title}
+          h1={prog.h1}
+          lede={prog.description}
+          publishedAtIso={prog.publishedAt}
+          updatedAtIso={prog.dateModified}
+          readingTimeMinutes={5}
+          hero={{
+            src: PROGRAMMATIC_HERO_SRC,
+            alt: `${prog.h1} — Shalean professional cleaning in Cape Town`,
+          }}
+          trackingSlug={prog.slug}
+          sidebarCategories={sidebarCategories}
+          sidebarTrending={sidebarTrending}
+          relatedGridPosts={relatedGrid}
+          supplementalInternalLinks={
+            programmaticHubHref && prog.location
+              ? [{ label: `Cleaning services in ${prog.location} (suburb hub)`, href: programmaticHubHref }]
+              : undefined
+          }
+          relatedLinksSlot={<RelatedLinks placement="blog" />}
+          belowArticleSlot={
+            <>
+              <BlogContextualServiceLinks />
+              <BlogServiceLinks service={getBlogServiceType(prog.slug)} />
+            </>
+          }
+        >
+          <ProgrammaticBlogTemplate post={prog} />
+        </BlogPostLayout>
       </main>
     </MarketingLayout>
   );

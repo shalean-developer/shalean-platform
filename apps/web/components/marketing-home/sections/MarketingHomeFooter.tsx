@@ -5,15 +5,7 @@ import {
   CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_WHATSAPP_URL,
 } from "@/lib/site/customerSupport";
-import {
-  getGoogleReviewWhatsAppUrl,
-  getGoogleReviewWriteUrl,
-  GOOGLE_BUSINESS_REVIEWS,
-} from "@/lib/seo/googleReviews";
-
-function hash(h: string) {
-  return `/${h}`;
-}
+import { getGoogleReviewWhatsAppUrl, getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
 
 /** Footer: server-rendered links + small client newsletter form. */
 export function MarketingHomeFooter() {
@@ -39,8 +31,7 @@ export function MarketingHomeFooter() {
               Making your world shine, one home at a time.
             </p>
             <p className="mt-4 text-xs leading-relaxed text-white/70">
-              {GOOGLE_BUSINESS_REVIEWS.rating}⭐ Google rating · {GOOGLE_BUSINESS_REVIEWS.count}+ reviews · Trusted cleaners
-              in Cape Town
+              Cape Town-wide cleaning · Vetted teams · Book online in minutes
             </p>
             {googleWriteUrl ? (
               <p className="mt-3">
@@ -80,7 +71,7 @@ export function MarketingHomeFooter() {
                 </Link>
               </li>
               <li>
-                <Link href={hash("#about")} className="transition hover:text-white">
+                <Link href="/about" className="transition hover:text-white">
                   About Us
                 </Link>
               </li>
@@ -191,14 +182,14 @@ export function MarketingHomeFooter() {
         </div>
 
         <div
-          className="mt-12 border-t border-white/15 pt-10"
+          className="mt-12 border-t border-white/15 pt-10 lg:mt-10 lg:pt-7"
           aria-labelledby="footer-areas-heading"
         >
           <h4 id="footer-areas-heading" className="text-sm font-bold text-white">
             Popular Areas
           </h4>
-          <nav aria-label="Popular Cape Town cleaning locations">
-            <ul className="mt-4 max-w-md space-y-2.5 text-sm text-white/90">
+          <nav className="mt-4 text-sm text-white/90" aria-label="Popular Cape Town cleaning locations">
+            <ul className="max-w-md space-y-2.5 lg:hidden">
               {FOOTER_POPULAR_LOCATION_HUBS.map((hub) => (
                 <li key={hub.slug}>
                   <Link href={`/locations/${hub.slug}`} className="transition hover:text-white">
@@ -215,6 +206,26 @@ export function MarketingHomeFooter() {
                 </Link>
               </li>
             </ul>
+            <div className="hidden leading-relaxed lg:block">
+              {FOOTER_POPULAR_LOCATION_HUBS.map((hub, index) => (
+                <span key={hub.slug}>
+                  {index > 0 ? ", " : null}
+                  <Link href={`/locations/${hub.slug}`} className="transition hover:text-white">
+                    {hub.name}
+                  </Link>
+                </span>
+              ))}
+              <span className="text-white/35" aria-hidden>
+                {" "}
+                ·{" "}
+              </span>
+              <Link
+                href="/locations"
+                className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
+              >
+                View all locations
+              </Link>
+            </div>
           </nav>
         </div>
       </div>

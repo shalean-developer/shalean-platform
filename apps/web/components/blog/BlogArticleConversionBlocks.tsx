@@ -23,6 +23,7 @@ export function BlogArticleEndCta({ trackingSlug }: EndCtaProps) {
       <GrowthCtaLink
         href="/booking"
         source={`blog_${trackingSlug}_end_cta_book`}
+        blogAnalyticsPlacement={`${trackingSlug}_end_cta`}
         className="mt-8 inline-flex min-h-[52px] min-w-[220px] items-center justify-center rounded-full bg-white px-10 text-base font-semibold text-blue-700 shadow-md transition hover:bg-blue-50"
       >
         Get instant quote

@@ -1,70 +1,61 @@
 import Link from "next/link";
 import { Star } from "lucide-react";
-import {
-  getGoogleReviewWriteUrl,
-  GOOGLE_BUSINESS_REVIEWS,
-  googleReviewsMarketingHeadline,
-} from "@/lib/seo/googleReviews";
-import { linkInParagraphClassName } from "@/lib/ui/linkClassNames";
+import { getGoogleReviewWriteUrl, GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 
 const SNIPPET =
   "Homeowners across Cape Town mention punctual teams, clear quotes, and thorough kitchens — see why we earn strong feedback on Google.";
 
-/** Homepage band: live Google aggregate + optional link to leave a review. */
+const trustCardClass =
+  "rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm";
+const ctaCardClass =
+  "flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-center text-sm font-bold text-slate-900 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500";
+
+/** Homepage strip below blue trust banner: compact Google trust badge + rate CTA (matches marketing reference layout). */
 export function MarketingGoogleReviewsBand() {
   const googleWrite = getGoogleReviewWriteUrl();
+  const { rating, count } = GOOGLE_BUSINESS_REVIEWS;
 
   return (
     <section
-      className="border-y border-slate-200 bg-gradient-to-r from-slate-50 to-white py-12 md:py-14"
+      className="border-b border-slate-200 bg-white py-10 md:py-12"
       aria-labelledby="google-reviews-heading"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-12">
+          <div className="max-w-2xl text-center lg:min-w-0 lg:flex-1 lg:text-left">
             <p id="google-reviews-heading" className="text-xs font-semibold uppercase tracking-wide text-sky-700">
               Google reviews
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <span
-                className="flex items-center gap-0.5 text-amber-400"
-                aria-label={`${GOOGLE_BUSINESS_REVIEWS.rating} out of 5 stars on Google`}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Star
-                    key={n}
-                    className={`size-6 ${n <= 4 ? "fill-amber-400 text-amber-400" : "fill-amber-400/85 text-amber-400"}`}
-                    strokeWidth={n <= 4 ? 0 : 1}
-                  />
-                ))}
-              </span>
-              <span className="text-2xl font-bold tabular-nums text-slate-900">{GOOGLE_BUSINESS_REVIEWS.rating}</span>
-              <span className="text-sm font-medium text-slate-600">{googleReviewsMarketingHeadline()}</span>
-            </div>
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 md:text-base">{SNIPPET}</p>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600 md:text-base">{SNIPPET}</p>
           </div>
-          <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-stretch">
-            <div className="rounded-2xl border border-sky-100 bg-white px-5 py-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Trust</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {GOOGLE_BUSINESS_REVIEWS.rating}⭐ · {GOOGLE_BUSINESS_REVIEWS.count}+ reviews
-              </p>
-              <p className="mt-1 text-xs text-slate-600">Verified on Google Business Profile</p>
-            </div>
-            {googleWrite ? (
-              <a
-                href={googleWrite}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-600 px-5 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
+
+          <div
+            className="flex w-full max-w-[300px] flex-col gap-2.5 lg:mx-0 lg:w-[300px] lg:shrink-0"
+            aria-label="Google Business Profile rating summary"
+          >
+            <div className={trustCardClass}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-800">Trust</p>
+              <p
+                className="mt-2 text-base font-bold leading-snug text-slate-900"
+                aria-label={`Rated ${rating} out of 5 average for cleaning services in Cape Town`}
               >
-                Leave a Google review
+                Rated <span className="tabular-nums">{rating} / 5</span> average for cleaning services in Cape Town
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-snug text-slate-800">
+                <span className="tabular-nums">{count}+</span> verified Google reviews · From homeowners across Cape Town
+              </p>
+              <p className="mt-2 flex items-start gap-2 text-xs leading-snug text-slate-500">
+                <Star className="mt-0.5 size-3.5 shrink-0 fill-amber-400 text-amber-400" strokeWidth={0} aria-hidden />
+                <span>Verified on Google Business Profile</span>
+              </p>
+            </div>
+
+            {googleWrite ? (
+              <a href={googleWrite} target="_blank" rel="noopener noreferrer" className={ctaCardClass}>
+                Rate your visit
               </a>
             ) : (
-              <Link
-                href="/review"
-                className={`inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-center text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 ${linkInParagraphClassName}`}
-              >
+              <Link href="/review" className={ctaCardClass}>
                 Rate your visit
               </Link>
             )}

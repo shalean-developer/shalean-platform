@@ -1,29 +1,60 @@
 import type { Metadata } from "next";
+import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
+import { ensureMetaDescriptionKeyword } from "@/lib/seo/location-keyword";
+import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import {
   getProgrammaticLocation,
   PROGRAMMATIC_LOCATIONS,
   type ProgrammaticLocationSlug,
 } from "@/lib/seo/locations";
+import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import {
+  getLocationTitleVariant,
+  mergeLocationMetaDescription,
+  mergeLocationMetaTitle,
+} from "@/lib/seo/location-seo-feedback";
+import { resolveLocationTitleVariant } from "@/lib/seo/resolve-location-title-variant";
+import { buildLocationPageMetaTitleForVariant } from "@/lib/seo/location-title-variants";
 
-const SITE = "https://www.shalean.co.za";
+/** Fallback when hub row is unavailable (should be rare). */
+const DEFAULT_LOCATION_META_PRICE_HINT = "~R380–R950+";
 
-/** Shown in location meta titles — aligns with marketing entry pricing. */
-export const LOCATION_SEO_PRICE_HINT = "R300";
-
-/** CTR-focused title (~≤60 chars); shorter templates for long suburb names. */
-export function buildLocationPageMetaTitle(suburb: string): string {
+/** CTR-focused title (~≤60 chars): primary keyword, illustrative pricing, availability cue. */
+export function buildLocationPageMetaTitle(
+  suburb: string,
+  city: string,
+  priceHint: string = DEFAULT_LOCATION_META_PRICE_HINT,
+): string {
   const s = suburb.trim();
-  const full = `House Cleaning in ${s} (From ${LOCATION_SEO_PRICE_HINT}) | Book Trusted | Shalean`;
-  if (full.length <= 60) return full;
-  const compact = `${s} House Cleaning · From ${LOCATION_SEO_PRICE_HINT} | Book | Shalean`;
-  if (compact.length <= 60) return compact;
-  const tight = `House Cleaning ${s} | From ${LOCATION_SEO_PRICE_HINT} | Shalean`;
-  return tight.length <= 60 ? tight : tight.slice(0, 57).trimEnd() + "…";
+  const c = city.trim();
+  const hint = priceHint.trim() || DEFAULT_LOCATION_META_PRICE_HINT;
+  const kwLong = `Cleaning services in ${s}, ${c}`;
+  const kwMid = `Cleaning services in ${s}`;
+  const avail = "Same-week slots";
+  const availShort = "Slots open";
+  const candidates = [
+    `${kwLong} · ${hint} · ${avail} | Shalean`,
+    `${kwLong} · ${hint} · ${availShort} | Shalean`,
+    `${kwMid}, ${c} · ${hint} · ${availShort} | Shalean`,
+    `${kwLong} · ${hint} | Shalean`,
+    `${kwMid} · ${hint} · ${availShort} | Shalean`,
+    `${kwLong} | Shalean`,
+    `${kwMid} | Shalean`,
+  ];
+  for (const t of candidates) {
+    if (t.length <= 60) return t;
+  }
+  return `${kwMid} | Shalean`.slice(0, 57).trimEnd() + "…";
 }
 
-/** Strong meta description for suburb landing pages (≤158 chars). */
-export function buildLocationPageMetaDescription(suburb: string): string {
-  const t = `Book trusted house cleaning in ${suburb}. Instant pricing, vetted cleaners, secure checkout. Same-week availability across Cape Town.`;
+/** Strong meta description for suburb landing pages (≤158 chars); leads with primary keyword. */
+export function buildLocationPageMetaDescription(
+  suburb: string,
+  city: string,
+  priceHint: string = DEFAULT_LOCATION_META_PRICE_HINT,
+): string {
+  const hint = priceHint.trim() || DEFAULT_LOCATION_META_PRICE_HINT;
+  const t = `Cleaning services in ${suburb}, ${city}: vetted cleaners, totals locked online before payment. Typical scopes ${hint}. Same-week slots when routing allows.`;
   return t.length <= 158 ? t : `${t.slice(0, 155)}…`;
 }
 
@@ -85,6 +116,40 @@ export type LocationSeoBlock = {
   /** Optional extra FAQs; page falls back to programmatic defaults when omitted. */
   faqs?: { q: string; a: string }[];
 };
+
+/** Single source for `<title>`, meta description, OG/Twitter, and JSON-LD descriptions. */
+export function resolveLocationSeoMetaFields(
+  seo: LocationSeoBlock | null,
+  row: CapeTownLocationRow,
+): { title: string; description: string } {
+  const priceHint = getLocationMetaPriceHint(row);
+  /** `<title>`: A/B/C templates via `LOCATION_SEO_FEEDBACK_JSON.titleVariant`, or manual `titles` override from GSC. */
+  const baseTitle = buildLocationPageMetaTitleForVariant(row, getLocationTitleVariant(row.slug));
+  const baseDescription = seo?.description?.trim()
+    ? ensureMetaDescriptionKeyword(seo.description.trim(), row)
+    : buildLocationPageMetaDescription(row.name, row.city, priceHint);
+  return {
+    title: mergeLocationMetaTitle(row.slug, baseTitle),
+    description: mergeLocationMetaDescription(row.slug, baseDescription),
+  };
+}
+
+/** Async variant: includes DB title winner (`seo_auto_title_variant`) when env does not pin `titleVariant`. */
+export async function resolveLocationSeoMetaFieldsAsync(
+  seo: LocationSeoBlock | null,
+  row: CapeTownLocationRow,
+): Promise<{ title: string; description: string }> {
+  const priceHint = getLocationMetaPriceHint(row);
+  const variant = await resolveLocationTitleVariant(row.slug);
+  const baseTitle = buildLocationPageMetaTitleForVariant(row, variant);
+  const baseDescription = seo?.description?.trim()
+    ? ensureMetaDescriptionKeyword(seo.description.trim(), row)
+    : buildLocationPageMetaDescription(row.name, row.city, priceHint);
+  return {
+    title: mergeLocationMetaTitle(row.slug, baseTitle),
+    description: mergeLocationMetaDescription(row.slug, baseDescription),
+  };
+}
 
 export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServiceSeoBlock> = {
   "deep-cleaning-cape-town": {
@@ -656,18 +721,20 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     path: "/locations/sea-point-cleaning-services",
     title: "Sea Point Cleaning Cape Town | Atlantic Seaboard | Shalean",
     description:
-      "Sea Point cleaning in Cape Town for apartments, sea-facing homes, and busy Atlantic Seaboard schedules. Standard, deep, and Airbnb-ready cleaning—book Shalean online.",
+      "Cleaning services in Sea Point, Cape Town: totals locked online before payment. Typical scopes ~R450–R1,200+. Same-week slots when routing allows. Standard, deep & Airbnb-ready—book Shalean.",
     ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
     h1: "Sea Point cleaning services in Cape Town for Atlantic Seaboard apartments and busy households",
     bookingLabel: "cleaning in Sea Point",
     intro: [
-      "Sea Point combines compact Atlantic Seaboard apartments, older blocks with sea air exposure, and walkable Main Road living—salt breeze, wind-blown dust, and high-use kitchens add up fast between professional visits.",
+      "Cleaning services in Sea Point, Cape Town are built for compact Atlantic Seaboard apartments, older blocks with sea-air exposure, and walkable Main Road living—salt breeze, wind-blown dust, and high-use kitchens add up fast between professional visits.",
       "Shalean schedules vetted cleaners across Sea Point with the same transparent quoting used citywide: bedrooms, bathrooms, extras, and service tier are confirmed online before checkout.",
+      "Atlantic Seaboard pricing reflects lifts, coastal wear, and turnover pacing—many compact scopes trend around R450–R650 before add-ons, while larger homes or deeper resets scale upward; your checkout total locks before you pay.",
       "Whether you need house cleaning Cape Town hosts rely on between guests or professional cleaning services before a handover, scoped visits keep kitchens and bathrooms aligned with what your quote shows.",
     ],
     localAngle: [
       "Building access, lifts, and basement parking vary—pin your entrance and mention remotes or security desks so Cape Town teams arrive without delays.",
       "Sea-facing balconies collect salt and grit—note outdoor areas in your booking when you want them included in scope.",
+      "Main Road and Regent Road corridors stay busy—precise parking pins (and visitor bays) prevent lost minutes before cleaners reach lifts.",
     ],
     whyChoose: [
       "Turnover-friendly Airbnb cleans and dependable standard cycles for busy Sea Point households.",
@@ -1105,12 +1172,12 @@ export function locationSeoPathFromLegacyAreaSlug(areaSlug: string): string | nu
 }
 
 export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Metadata {
-  const url = `${SITE}${data.path}`;
+  const url = absoluteCanonicalUrl(data.path);
   const metaDescription = buildServicePageMetaDescription(data);
   return {
     title: data.title,
     description: metaDescription,
-    alternates: { canonical: data.path },
+    alternates: { canonical: url },
     openGraph: {
       type: "website",
       url,
@@ -1137,16 +1204,36 @@ function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string 
   return trimmed.length <= 158 ? trimmed : trimmed.slice(0, 158);
 }
 
-export function buildLocationSeoMetadata(data: LocationSeoBlock): Metadata {
-  const url = `${SITE}${data.path}`;
-  const loc = getProgrammaticLocation(data.slug);
-  const suburb = loc?.name ?? data.h1.split(" ")[0] ?? "Cape Town";
-  const metaTitle = buildLocationPageMetaTitle(suburb);
-  const metaDescription = buildLocationPageMetaDescription(suburb);
+export function buildLocationSeoMetadata(data: LocationSeoBlock, row: CapeTownLocationRow): Metadata {
+  const url = absoluteCanonicalUrl(data.path);
+  const { title: metaTitle, description: metaDescription } = resolveLocationSeoMetaFields(data, row);
   return {
     title: metaTitle,
     description: metaDescription,
-    alternates: { canonical: data.path },
+    alternates: { canonical: url },
+    openGraph: {
+      type: "website",
+      url,
+      title: metaTitle,
+      description: metaDescription,
+      images: [{ url: data.ogImage, alt: data.h1 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: metaTitle,
+      description: metaDescription,
+      images: [data.ogImage],
+    },
+  };
+}
+
+export async function buildLocationSeoMetadataAsync(data: LocationSeoBlock, row: CapeTownLocationRow): Promise<Metadata> {
+  const url = absoluteCanonicalUrl(data.path);
+  const { title: metaTitle, description: metaDescription } = await resolveLocationSeoMetaFieldsAsync(data, row);
+  return {
+    title: metaTitle,
+    description: metaDescription,
+    alternates: { canonical: url },
     openGraph: {
       type: "website",
       url,

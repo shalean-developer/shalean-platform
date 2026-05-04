@@ -6,11 +6,11 @@ import { MarketingHomeAboutSection } from "@/components/marketing-home/sections/
 import { MarketingHomeCtaSection } from "@/components/marketing-home/sections/MarketingHomeCtaSection";
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
+import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
-import { MarketingHomeLocationsSection } from "@/components/marketing-home/sections/MarketingHomeLocationsSection";
-import { MarketingHomePopularAreasSection } from "@/components/marketing-home/sections/MarketingHomePopularAreasSection";
+import { MarketingAreasSection } from "@/components/marketing-home/sections/MarketingAreasSection";
 import { MarketingHomeServicesSection } from "@/components/marketing-home/sections/MarketingHomeServicesSection";
 import { MarketingHomeTrustSection } from "@/components/marketing-home/sections/MarketingHomeTrustSection";
 import { getHomePageData } from "@/lib/home/data";
@@ -72,17 +72,17 @@ export default async function MarketingHomePage() {
         <MarketingHomeHeader bookingHref={bookingHref} />
         <main>
           <MarketingHomeHeroSection reviewBanner={reviewBanner} />
+          <MarketingHomeTrustSection />
           <MarketingGoogleReviewsBand />
-          <MarketingHomeTrustSection reviewBanner={reviewBanner} />
           <MarketingHomeServicesSection />
           <MarketingHomeAboutSection />
           <MarketingHomeCtaSection />
           <MarketingHomeHowItWorksSection />
           <MarketingHomeFaqSection faqs={faqs} />
-          <MarketingHomeLocationsSection locations={locations} />
-          <MarketingHomePopularAreasSection />
+          <MarketingAreasSection locations={locations} />
         </main>
         <MarketingHomeFooter />
+        <MarketingStickyTrustBadge />
       </div>
     </>
   );

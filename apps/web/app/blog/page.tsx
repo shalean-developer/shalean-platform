@@ -84,7 +84,17 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
     gridSource = enriched.filter((p) => p.slug !== featuredSlug);
   }
 
-  const visible = filterPostsByTopic(gridSource, activeTopic);
+  let visible = filterPostsByTopic(gridSource, activeTopic);
+  const rawQ = sp.q;
+  const searchQuery = typeof rawQ === "string" ? rawQ.trim().toLowerCase() : "";
+  if (searchQuery) {
+    visible = visible.filter(
+      (p) =>
+        p.title.toLowerCase().includes(searchQuery) ||
+        p.displayExcerpt.toLowerCase().includes(searchQuery) ||
+        p.slug.toLowerCase().includes(searchQuery),
+    );
+  }
 
   const blogIndexJsonLd = {
     "@context": "https://schema.org",
@@ -200,10 +210,20 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
                   Airbnb, pricing, and online booking.
                 </p>
               </div>
-              {activeTopic !== "all" ? (
+              {activeTopic !== "all" || searchQuery ? (
                 <p className="text-sm font-medium text-blue-800 lg:text-right" role="status">
-                  {blogTopicMetaLabel(activeTopic)}
-                  <br />
+                  {activeTopic !== "all" ? (
+                    <>
+                      {blogTopicMetaLabel(activeTopic)}
+                      <br />
+                    </>
+                  ) : null}
+                  {searchQuery ? (
+                    <>
+                      Search: “{searchQuery}”
+                      <br />
+                    </>
+                  ) : null}
                   <Link href="/blog" className="font-normal text-blue-700 underline-offset-2 hover:underline">
                     Clear filter
                   </Link>

@@ -9,17 +9,29 @@ export function GrowthCtaLink({
   className,
   children,
   source,
+  blogAnalyticsPlacement,
+  beforeNavigate,
 }: {
   href: string;
   className?: string;
   children: ReactNode;
   source: string;
+  /** When set, marks the link for `BlogEngagementAnalytics` (placement label). */
+  blogAnalyticsPlacement?: string;
+  /** Fires immediately before `start_booking` (e.g. SEO `seo_cta_click`). */
+  beforeNavigate?: () => void;
 }) {
   return (
     <Link
       href={href}
       className={className}
-      onClick={() => trackGrowthEvent("start_booking", { source })}
+      {...(blogAnalyticsPlacement
+        ? { "data-blog-track-cta": "1", "data-blog-cta-placement": blogAnalyticsPlacement }
+        : {})}
+      onClick={() => {
+        beforeNavigate?.();
+        trackGrowthEvent("start_booking", { source });
+      }}
     >
       {children}
     </Link>

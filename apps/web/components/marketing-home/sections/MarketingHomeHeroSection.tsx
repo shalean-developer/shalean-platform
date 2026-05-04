@@ -44,6 +44,21 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
               </p>
             </div>
 
+            <figure className="max-w-md rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-left shadow-sm">
+              <blockquote className="text-sm leading-relaxed text-slate-700">
+                <span className="text-slate-400" aria-hidden>
+                  &ldquo;
+                </span>
+                Booked in minutes, cleaner arrived on time and did a great job.
+                <span className="text-slate-400" aria-hidden>
+                  &rdquo;
+                </span>
+              </blockquote>
+              <figcaption className="mt-2 text-xs font-medium text-slate-500">
+                — Sarah M., Sea Point
+              </figcaption>
+            </figure>
+
             <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
               <GrowthCtaLink href={bookHref} source="marketing_hero_book_cleaner" className={marketingPrimaryCtaClassName}>
                 Book a cleaner
@@ -70,12 +85,19 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
                   fetchPriority="high"
                 />
               </div>
-              <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Star size={18} className="shrink-0 fill-amber-400 text-amber-400" aria-hidden />
-                  <span className="text-lg font-extrabold tracking-tight text-gray-900 md:text-xl">{avg}/5.0</span>
+                  <span className="text-lg font-extrabold tracking-tight text-gray-900 md:text-xl">
+                    {avg}/5 average on Google
+                  </span>
                 </div>
-                <p className="text-xs font-medium leading-snug text-gray-500 md:text-[0.8125rem]">Trusted by happy homes</p>
+                <p className="text-xs font-medium leading-snug text-gray-700 md:text-[0.8125rem]">
+                  Based on real customer feedback · Trusted by homes across Cape Town
+                </p>
+                <p className="text-[11px] leading-snug text-gray-500 md:text-xs">
+                  Full scores &amp; verified reviews in the section below
+                </p>
               </div>
             </div>
 

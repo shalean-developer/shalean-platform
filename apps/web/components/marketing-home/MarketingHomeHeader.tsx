@@ -8,9 +8,14 @@ import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { marketingPrimaryCtaClassName } from "@/lib/marketing/marketingHomeCtaClasses";
 import { cn } from "@/lib/utils";
 
-function hash(h: string) {
-  return `/${h}`;
-}
+/** Marketing header targets real routes (no hash URLs). */
+const MARKETING_NAV = {
+  services: "/services",
+  locations: "/locations",
+  pricing: "/booking/details",
+  about: "/about",
+  faq: "/faq",
+} as const;
 
 const navClass =
   "rounded-lg px-3 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white";
@@ -30,19 +35,19 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
-          <Link href={hash("#services")} className={navClass}>
+          <Link href={MARKETING_NAV.services} className={navClass}>
             Services
           </Link>
-          <Link href={hash("#locations")} className={navClass}>
+          <Link href={MARKETING_NAV.locations} className={navClass}>
             Locations
           </Link>
-          <Link href={hash("#pricing")} className={navClass}>
+          <Link href={MARKETING_NAV.pricing} className={navClass}>
             Pricing
           </Link>
-          <Link href={hash("#about")} className={navClass}>
+          <Link href={MARKETING_NAV.about} className={navClass}>
             About Us
           </Link>
-          <Link href={hash("#faq")} className={navClass}>
+          <Link href={MARKETING_NAV.faq} className={navClass}>
             FAQs
           </Link>
         </nav>
@@ -79,11 +84,11 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
           <div className="flex flex-col gap-1">
             {(
               [
-                ["Services", hash("#services")],
-                ["Locations", hash("#locations")],
-                ["Pricing", hash("#pricing")],
-                ["About Us", hash("#about")],
-                ["FAQs", hash("#faq")],
+                ["Services", MARKETING_NAV.services],
+                ["Locations", MARKETING_NAV.locations],
+                ["Pricing", MARKETING_NAV.pricing],
+                ["About Us", MARKETING_NAV.about],
+                ["FAQs", MARKETING_NAV.faq],
               ] as const
             ).map(([label, href]) => (
               <Link

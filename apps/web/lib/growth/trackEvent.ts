@@ -1,5 +1,11 @@
 "use client";
 
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void;
+  }
+}
+
 export type GrowthEventType =
   | "page_view"
   | "start_booking"
@@ -32,7 +38,23 @@ export type GrowthEventType =
   /** Customer opened Paystack / redirect checkout; payload: step, service */
   | "payment_initiated"
   /** Payment succeeded (client beacon on success page); payload: reference?, booking_id? */
-  | "payment_completed";
+  | "payment_completed"
+  /** Blog — payload: slug, depth (25|50|75|100) */
+  | "blog_scroll"
+  /** Blog booking/marketing CTA; payload: slug, placement, href? */
+  | "blog_cta_click"
+  /** Blog dwell time signal; payload: slug, seconds */
+  | "blog_time_on_page"
+  /** Location hub scroll milestone; payload: depth (25|50|75|100), page_slug, suburb, … */
+  | "seo_location_scroll"
+  /** Hub booking / pricing CTA; payload: cta_location, cta_label, cta_kind, page_slug, suburb, … */
+  | "seo_cta_click"
+  /** Services hub card or location hub service tile; payload: click_type (learn_more|book|tile), service_name, … */
+  | "seo_service_card_click"
+  /** FAQ accordion / details opened; payload: question, surface, page_slug, … */
+  | "seo_faq_expand"
+  /** Pricing band interaction (e.g. Get exact price); payload: interaction, surface, … */
+  | "seo_pricing_interaction";
 
 const SESSION_KEY = "shalean_growth_session_id";
 const RETARGETING_KEY = "shalean_retargeting_pending";
@@ -86,21 +108,62 @@ export function markRetargetingCandidate(enabled: boolean): void {
   else window.localStorage.removeItem(RETARGETING_KEY);
 }
 
+function forwardToGa4(eventType: GrowthEventType, payload: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+  const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
+  if (!measurementId || typeof window.gtag !== "function") return;
+  const name =
+    eventType === "seo_location_scroll"
+      ? "seo_scroll_depth"
+      : eventType === "seo_cta_click"
+        ? "seo_cta_click"
+        : eventType === "seo_service_card_click"
+          ? "seo_service_click"
+          : eventType === "seo_faq_expand"
+            ? "seo_faq_expand"
+            : eventType === "seo_pricing_interaction"
+              ? "seo_pricing_click"
+              : eventType;
+  try {
+    window.gtag("event", name, {
+      measurement_id: measurementId,
+      event_category: "seo_growth",
+      event_type: eventType,
+      ...payload,
+    });
+  } catch {
+    // ignore
+  }
+}
+
 export function trackGrowthEvent(
   eventType: GrowthEventType,
   payload: Record<string, unknown> = {},
 ): void {
   if (typeof window === "undefined") return;
+  const enriched = {
+    ...payload,
+    session_id: getSessionId(),
+    device: getAnalyticsDevice(),
+    pathname: window.location.pathname,
+    referrer: document.referrer || null,
+    retargeting_pending: window.localStorage.getItem(RETARGETING_KEY) === "1",
+  };
+
   const body = JSON.stringify({
     event_type: eventType,
-    payload: {
-      ...payload,
-      session_id: getSessionId(),
-      pathname: window.location.pathname,
-      referrer: document.referrer || null,
-      retargeting_pending: window.localStorage.getItem(RETARGETING_KEY) === "1",
-    },
+    payload: enriched,
   });
+
+  if (
+    eventType === "seo_location_scroll" ||
+    eventType === "seo_cta_click" ||
+    eventType === "seo_service_card_click" ||
+    eventType === "seo_faq_expand" ||
+    eventType === "seo_pricing_interaction"
+  ) {
+    forwardToGa4(eventType, enriched);
+  }
 
   try {
     if (navigator.sendBeacon) {

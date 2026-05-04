@@ -1,3 +1,4 @@
+import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
 import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-related-posts";
 import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
 import { buildInjectInternalLinksContext } from "@/lib/blog/seo/build-internal-link-context";
@@ -32,6 +33,7 @@ export type NormalizedDbBlogPost = {
   categorySlug: string | null;
   categoryName: string | null;
   tagSlugs: string[];
+  relatedPosts: { slug: string; title: string }[];
 };
 
 function normalizeContentJson(raw: unknown): BlogContentJson {
@@ -168,6 +170,7 @@ export async function getPostBySlug(slug: string): Promise<NormalizedDbBlogPost 
   });
 
   content = injectInternalLinks(content, ctx);
+  content = assignStableBlogBlockIds(content);
 
   return {
     id: postId,
@@ -198,6 +201,7 @@ export async function getPostBySlug(slug: string): Promise<NormalizedDbBlogPost 
     categorySlug,
     categoryName,
     tagSlugs,
+    relatedPosts: related,
   };
 }
 
