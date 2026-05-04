@@ -16,6 +16,9 @@ import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = { params: Promise<{ slug: string }> };
 
+/** Only pre-rendered hub slugs from `location-hubs.json`; unknown `[slug]` → 404 at build/runtime. */
+export const dynamicParams = false;
+
 export async function generateStaticParams() {
   return CAPE_TOWN_LOCATIONS.map((loc) => ({
     slug: loc.slug,

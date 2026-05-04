@@ -58,6 +58,7 @@ export const BOOKING_LOCATION_CATALOG: BookingLocationRecord[] = CAPE_TOWN_LOCAT
   };
 });
 
-export function locationCleaningServicesHref(record: Pick<BookingLocationRecord, "slug">): string {
-  return `/locations/${record.slug}-cleaning-services`;
+/** Uses catalogue `seoSlug` only — never appends `-cleaning-services` to an arbitrary segment. */
+export function locationCleaningServicesHref(record: Pick<BookingLocationRecord, "seoSlug">): string {
+  return `/locations/${record.seoSlug}`;
 }

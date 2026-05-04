@@ -52,15 +52,9 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       /**
-       * Legacy flat location URLs (short suburb slug, e.g. `sea-point`).
-       * `middleware.ts` resolves mapped suburbs via `locationSeoPathFromLegacyAreaSlug` (308);
-       * this rule covers any remaining `/cleaning-services/:slug` hits as `/locations/:slug-cleaning-services`.
+       * Legacy `/cleaning-services/:slug` URLs are handled only in `middleware.ts` so slugs already ending in
+       * `-cleaning-services` are never double-suffixed. Unknown slugs redirect to `/locations`.
        */
-      {
-        source: "/cleaning-services/:slug",
-        destination: "/locations/:slug-cleaning-services",
-        permanent: true,
-      },
       ...programmaticBlogCleanupRedirects,
     ];
   },

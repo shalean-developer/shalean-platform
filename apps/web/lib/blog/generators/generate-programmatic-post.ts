@@ -4,8 +4,8 @@ import { enhanceFaq } from "@/lib/blog/seo/enhance-faq";
 import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
 import { optimizeMeta } from "@/lib/blog/seo/optimize-meta";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
-import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
 import { getLocation } from "@/lib/locations";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 
 export type GenerateProgrammaticPostInput = {
   location: string;
@@ -31,10 +31,7 @@ function bid(): string {
 }
 
 function locationHref(locationAreaSlug: string): string {
-  const path = locationSeoPathFromLegacyAreaSlug(locationAreaSlug);
-  if (path) return path;
-  const s = slugifyTitle(locationAreaSlug);
-  return `/locations/${s}-cleaning-services`;
+  return locationHubPathFromAreaInput(locationAreaSlug);
 }
 
 function serviceHref(serviceSlug: string, citySlug: string): string {

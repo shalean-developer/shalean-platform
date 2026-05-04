@@ -3,13 +3,27 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const SERVICES_HUB = "/services";
+const HOME = "/";
 const DEEP = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
+const STANDARD = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
+const MOVE_OUT = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
 const BOOKING = "/booking";
+
+/** Google Business Profile review URL — aligns on-page trust copy with GBP entity signals. */
+const GOOGLE_BUSINESS_REVIEW_URL = "https://g.page/r/Ceg4n_v9Pr59EBM/review";
+
+const CAPE_TOWN_OVERVIEW_LOCATIONS = "/locations/cape-town-cleaning-services";
 
 const AIRBNB_SEA_POINT = "/services/airbnb-cleaning-sea-point";
 const AIRBNB_GREEN_POINT = "/services/airbnb-cleaning-green-point";
 const AIRBNB_CLAREMONT = "/services/airbnb-cleaning-claremont";
 const HUB_GARDENS = "/locations/gardens-cleaning-services";
+const HUB_SEA_POINT_LOC = "/locations/sea-point-cleaning-services";
+const HUB_GREEN_POINT_LOC = "/locations/green-point-cleaning-services";
+const HUB_CLAREMONT_LOC = "/locations/claremont-cleaning-services";
+const HUB_RONDEBOSCH_LOC = "/locations/rondebosch-cleaning-services";
+const HUB_WYNBERG_LOC = "/locations/wynberg-cleaning-services";
+const HUB_DURBANVILLE_LOC = "/locations/durbanville-cleaning-services";
 
 const sectionClass = "mx-auto max-w-4xl px-4";
 const ctaRowClass = "not-prose mt-8 flex flex-wrap gap-3";
@@ -38,18 +52,48 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             Booking locks bedrooms, bathrooms, and turnover extras before payment—notes carry estate rules and linen locations
             so holiday lettings and peak-season vacation rentals stay predictable.
           </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Compare every{" "}
+            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Cape Town cleaning service
+            </Link>{" "}
+            tier from one hub—then keep turnovers on this page so guest-ready scope does not drift into residential assumptions.
+          </p>
+        </div>
+      </section>
+
+      <section className="border-b border-blue-100 bg-white py-10" aria-labelledby="airbnb-trust-strip">
+        <div className={sectionClass}>
+          <div className="grid gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 px-6 py-5 sm:grid-cols-3 sm:items-start">
+            <p id="airbnb-trust-strip" className="text-base font-semibold text-emerald-950">
+              Trusted by Airbnb hosts in Cape Town
+            </p>
+            <p className="text-base font-semibold text-emerald-950">Top-rated cleaning service</p>
+            <p className="text-sm font-medium leading-relaxed text-emerald-900/90 sm:border-l sm:border-emerald-200 sm:pl-4">
+              Reliable guest turnover cleaning for short-term rentals—same checklist discipline whether you manage one flat or
+              a portfolio across Cape Town.
+            </p>
+          </div>
         </div>
       </section>
 
       <section className="border-b border-blue-100 py-16" aria-labelledby="airbnb-turnover-process">
         <div className={sectionClass}>
           <h2 id="airbnb-turnover-process" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Airbnb Turnover Cleaning in Cape Town
+            Airbnb Turnover Cleaning Cape Town
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Turnovers live or die on sequencing. In Cape Town, parking, estate rules, and coastal dust all steal minutes—so
             we stage work the same way experienced hosts do: clear handover, predictable arrival, then a reset that matches
-            your listing photos.
+            your listing photos. Dense Seaboard corridors—see{" "}
+            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Sea Point cleaning services
+            </Link>{" "}
+            and{" "}
+            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Green Point cleaning services
+            </Link>
+            —often need lift and parking notes baked into the brief before mops touch tile.
           </p>
           <ol className="mt-8 list-decimal space-y-5 pl-6 text-base leading-relaxed text-zinc-700 marker:font-semibold marker:text-blue-700">
             <li>
@@ -78,9 +122,10 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           <p className="mt-6 text-base leading-relaxed text-zinc-600">
             Need a deeper baseline before peak season? Pair turnovers with{" "}
             <Link href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              deep cleaning services
+              deep cleaning in Cape Town
             </Link>{" "}
-            so grout, ovens, and neglected corners do not surface in reviews after busy months.
+            —ideal when ovens, grout, or balconies need honest dwell time beyond a standard changeover—so reviews stay strong
+            after busy months.
           </p>
           <div className={ctaRowClass}>
             <GrowthCtaLink
@@ -106,14 +151,43 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             on wide-angle listing shots.
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Holiday home cleaning often includes deeper fridge checks or linen bundles you supply; vacation rental cleaning
-            may layer balcony sweeps or oven fronts when summer bookings stack. Tell us what your listing promises—we align time
-            so <strong className="font-semibold text-zinc-900">rental property cleaning</strong> stays honest for your nightly
-            rate, not a rushed wipe-down.
+            Holiday home resets and portfolio-wide standards sit alongside turnovers on our{" "}
+            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              professional cleaning services hub
+            </Link>
+            —book the tier that matches guest promises, not guesswork.
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Pair recurring turnovers with an occasional deep clean when grout, ovens, or neglected corners start sneaking into
-            reviews—steady cadence beats panic resets for any rental property cleaning schedule.
+            Pair recurring turnovers with an occasional{" "}
+            <Link href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              deep cleaning service for Cape Town homes
+            </Link>{" "}
+            when grout, ovens, or neglected corners start sneaking into reviews—steady cadence beats panic resets.
+          </p>
+        </div>
+      </section>
+
+      <section className="border-b border-blue-100 bg-blue-50/25 py-16" aria-labelledby="airbnb-vacation-rental-cpt">
+        <div className={sectionClass}>
+          <h2 id="airbnb-vacation-rental-cpt" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Vacation Rental Cleaning Cape Town
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Vacation rental cleaning spans beach-week sand, festival-season dust, and families tracking grit through passages—so
+            scope has to flex without surprises on your payout. We align kitchens, bathrooms, and floors to what guests see in
+            photos, then surface add-ons when balconies, fridges, or linen swaps need explicit time.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Coastal pockets such as{" "}
+            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Sea Point
+            </Link>{" "}
+            and{" "}
+            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Green Point
+            </Link>{" "}
+            often stack humid bathrooms with salty balconies; Southern Suburb lets lean on mudrooms and multi-bath resets.
+            Property managers can brief once per building template—individual hosts can dial bedrooms and baths per stay.
           </p>
         </div>
       </section>
@@ -252,15 +326,28 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
               bundles are supplied on site.
             </li>
           </ul>
-          <h3 className="mt-10 text-lg font-semibold text-zinc-900">Trusted by hosts across Sea Point, Green Point, Claremont &amp; Gardens</h3>
+          <h3 className="mt-10 text-lg font-semibold text-zinc-900">
+            Trusted by Airbnb hosts in Cape Town—plus reliable guest turnover cleaning inland and on the Seaboard
+          </h3>
           <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            Hosts repeat bookings where access notes match reality and turnovers mirror listing shots—whether you list near the
-            Promenade, the stadium corridor, school-run suburbs, or the City Bowl edge in{" "}
+            Hosts and property managers repeat bookings where access notes match reality and turnovers mirror listing shots—near
+            the Promenade (
+            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Sea Point hub
+            </Link>
+            ), the stadium corridor (
+            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Green Point hub
+            </Link>
+            ), school-run suburbs, or the City Bowl edge in{" "}
             <Link href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Gardens
             </Link>
-            . Use suburb guides when you want guest-facing language; use location hubs when you need broader parking and area
-            FAQs.
+            . Pair local hubs with our{" "}
+            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              full Cape Town services directory
+            </Link>{" "}
+            when you layer deep or standard visits beside turnovers.
           </p>
         </div>
       </section>
@@ -268,11 +355,12 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
       <section className="border-b border-blue-100 bg-blue-50/30 py-16" aria-labelledby="airbnb-areas-featured">
         <div className={sectionClass}>
           <h2 id="airbnb-areas-featured" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Airbnb Cleaning in Cape Town Areas
+            Areas We Serve in Cape Town
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Short-stay demand clusters on the Atlantic Seaboard and Southern Suburbs corridors—each pocket has different
-            parking, security, and dust profiles.
+            Short-stay demand clusters on the Atlantic Seaboard, City Bowl, Southern Suburbs, and Northern corridors—each pocket
+            carries different parking, security, and dust profiles. Follow suburb hubs for local SEO context; use dedicated Airbnb
+            suburb guides when you want turnover-first copy.
           </p>
           <div className="mt-8 rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
             <h3 className="text-base font-semibold text-zinc-900">Also serving nearby areas</h3>
@@ -298,10 +386,13 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
               { href: AIRBNB_SEA_POINT, label: "Sea Point Airbnb cleaning" },
               { href: AIRBNB_GREEN_POINT, label: "Green Point Airbnb cleaning" },
               { href: AIRBNB_CLAREMONT, label: "Claremont Airbnb cleaning" },
-              { href: HUB_GARDENS, label: "Gardens hosting hub" },
-              { href: "/locations/sea-point-cleaning-services", label: "Sea Point area hub" },
-              { href: "/locations/green-point-cleaning-services", label: "Green Point area hub" },
-              { href: "/locations/claremont-cleaning-services", label: "Claremont area hub" },
+              { href: HUB_GARDENS, label: "Gardens cleaning hub" },
+              { href: HUB_SEA_POINT_LOC, label: "Sea Point cleaning services" },
+              { href: HUB_GREEN_POINT_LOC, label: "Green Point cleaning services" },
+              { href: HUB_CLAREMONT_LOC, label: "Claremont cleaning services" },
+              { href: HUB_RONDEBOSCH_LOC, label: "Rondebosch cleaning services" },
+              { href: HUB_WYNBERG_LOC, label: "Wynberg cleaning services" },
+              { href: HUB_DURBANVILLE_LOC, label: "Durbanville cleaning services" },
             ].map((item) => (
               <li key={item.href}>
                 <Link
@@ -326,18 +417,19 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
       <section className="border-b border-blue-100 py-16" aria-labelledby="professional-airbnb-cleaners-cpt">
         <div className={sectionClass}>
           <h2 id="professional-airbnb-cleaners-cpt" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Professional Airbnb Cleaners Cape Town
+            Professional Airbnb Cleaners
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Professional cleaners on our turnover roster work from structured scope—not improvised chats—so Seaboard humidity,
-            estate gates, and school-week traffic do not steal the minutes bathrooms need. Crews understand guest-facing
-            optics: chrome that dries clear, cushions that match your hero photo, and bins that read ready before anyone
-            unpacks.
+            Professional Airbnb cleaners on our Cape Town turnover roster work from structured scope—not improvised chats—so
+            Seaboard humidity, estate gates, and school-week traffic do not steal the minutes bathrooms need. Crews understand
+            guest-facing optics: chrome that dries clear, cushions that match your hero photo, and bins that read ready before
+            anyone unpacks.
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             You still control access, linen, and consumables; we align dwell time to what you selected online and flag friction
-            early when calendars lie about realistic gaps. That consistency is what keeps short-stay ratings steady across busy
-            Cape Town months.
+            early when calendars lie about realistic gaps. That consistency supports{" "}
+            <strong className="font-semibold text-zinc-800">reliable guest turnover cleaning</strong> for hosts and property
+            managers running parallel listings.
           </p>
         </div>
       </section>
@@ -347,6 +439,10 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           <h2 id="why-shalean-airbnb" className="text-2xl font-bold tracking-tight text-zinc-900">
             Why Airbnb Hosts Choose Shalean
           </h2>
+          <p className="mt-3 text-base leading-relaxed text-zinc-600">
+            Trusted by Airbnb hosts in Cape Town who need predictable handovers—plus property managers standardising cleans across
+            suburbs without losing the guest-ready bar.
+          </p>
           <div className="mt-8 grid gap-6 sm:grid-cols-2">
             {[
               {
@@ -382,30 +478,99 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
         </div>
       </section>
 
+      <section className="border-b border-blue-100 bg-blue-50/30 py-16" aria-labelledby="airbnb-leave-review-gbp">
+        <div className={sectionClass}>
+          <h2 id="airbnb-leave-review-gbp" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Leave a Review
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Shalean&apos;s Google Business Profile carries verified Cape Town reviews from households and Airbnb hosts who book
+            turnovers and residential cleans across the metro. If a short-term rental clean in Cape Town matched your listing,
+            leaving feedback on Google helps other hosts compare trust signals alongside this Airbnb cleaning guide.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            We treat Cape Town as one service footprint—whether your guests arrive in Sea Point, Claremont, or the City Bowl—so
+            reviews reinforce the same entity guests see when they search for cleaning near their stay.
+          </p>
+          <div className="not-prose mt-6 flex flex-wrap gap-3">
+            <a
+              href={GOOGLE_BUSINESS_REVIEW_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              Leave a Google review
+            </a>
+            <Link
+              href={HOME}
+              className="inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-5 text-sm font-semibold text-blue-800 transition hover:bg-blue-50"
+            >
+              Shalean homepage
+            </Link>
+          </div>
+          <p className="mt-6 text-sm leading-relaxed text-zinc-600">
+            Explore{" "}
+            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              all Cape Town cleaning services
+            </Link>
+            , compare{" "}
+            <Link href={STANDARD} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              standard home cleaning in Cape Town
+            </Link>{" "}
+            or{" "}
+            <Link href={MOVE_OUT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              move-out cleaning
+            </Link>
+            , and browse suburb hubs via{" "}
+            <Link href={CAPE_TOWN_OVERVIEW_LOCATIONS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Cape Town locations overview
+            </Link>{" "}
+            and the{" "}
+            <Link href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              full locations directory
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
       <section className="border-b border-blue-100 bg-zinc-50/80 py-16" aria-labelledby="airbnb-internal-links">
         <div className={sectionClass}>
           <h2 id="airbnb-internal-links" className="text-2xl font-bold tracking-tight text-zinc-900">
             Related cleaning guides in Cape Town
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Turnovers share DNA with residential cleans—but calendars and guest optics differ. Compare tiers on our{" "}
+            Turnovers share DNA with residential cleans—but calendars and guest optics differ. Start from our{" "}
             <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              professional cleaning services in Cape Town
-            </Link>{" "}
-            hub, then layer{" "}
+              Cape Town cleaning services overview
+            </Link>
+            , then layer{" "}
             <Link href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              deep cleaning services
+              deep cleaning for Cape Town properties
             </Link>{" "}
-            when kitchens, grout, or ovens need honest dwell time beyond a standard turnover.
+            when kitchens, grout, or ovens need honest dwell time beyond a standard turnover. Hosting on the Atlantic Seaboard?
+            Cross-check{" "}
+            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Sea Point cleaning services
+            </Link>{" "}
+            and{" "}
+            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Green Point cleaning services
+            </Link>{" "}
+            for parking and building norms before you sync calendars.
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Ready to route inventory damage or linen swaps without losing the slot? Keep booking notes updated on{" "}
             <Link href={airbnbPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               this Airbnb service page
+            </Link>
+            , revisit the{" "}
+            <Link href={HOME} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Shalean home page
             </Link>{" "}
-            and jump straight to{" "}
+            for brand context, and jump to{" "}
             <Link href={BOOKING} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              instant pricing
+              instant pricing in Cape Town
             </Link>{" "}
             when you are happy with scope.
           </p>

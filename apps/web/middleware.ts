@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getLocation } from "@/lib/locations";
-import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
 
 /** Aligns HTML `meta name="robots"` on transactional pages; `noimageindex` avoids Google Images surfacing page assets. */
@@ -14,8 +14,8 @@ function shouldNoIndexEntireDeployment(): boolean {
 }
 
 /**
- * Legacy SEO URLs → canonical `/locations/*` hubs (308).
- * Runs before `next.config` redirects so mapped suburbs keep exact hub paths.
+ * Legacy SEO URLs → canonical `/locations/*` hubs via `locationHubPathFromAreaInput` (308).
+ * `/cleaning-services/*` is not redirected in `next.config.ts` (avoids double `-cleaning-services` suffix).
  *
  * Kept as `middleware.ts` (not `proxy.ts`) because **`next build --webpack` in Next.js 16.2 still opens this path**
  * and fails with ENOENT if only `proxy.ts` exists (upstream webpack integration gap).
@@ -25,25 +25,7 @@ export async function middleware(request: NextRequest) {
 
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);
   if (legacy) {
-    const destPath = locationSeoPathFromLegacyAreaSlug(legacy[1] ?? "");
-    if (destPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = destPath;
-      url.search = "";
-      return NextResponse.redirect(url, 308);
-    }
-  }
-
-  const flatCleaning = pathname.match(/^\/cleaning-services\/([^/]+)\/?$/);
-  if (flatCleaning) {
-    const segment = flatCleaning[1] ?? "";
-    const destPath = locationSeoPathFromLegacyAreaSlug(segment);
-    if (destPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = destPath;
-      url.search = "";
-      return NextResponse.redirect(url, 308);
-    }
+    const segment = legacy[1] ?? "";
     const svc = getLocation(segment);
     if (svc?.citySlug === "cape-town" && segment === "cape-town") {
       const url = request.nextUrl.clone();
@@ -51,6 +33,26 @@ export async function middleware(request: NextRequest) {
       url.search = "";
       return NextResponse.redirect(url, 308);
     }
+    const url = request.nextUrl.clone();
+    url.pathname = locationHubPathFromAreaInput(segment);
+    url.search = "";
+    return NextResponse.redirect(url, 308);
+  }
+
+  const flatCleaning = pathname.match(/^\/cleaning-services\/([^/]+)\/?$/);
+  if (flatCleaning) {
+    const segment = flatCleaning[1] ?? "";
+    const svc = getLocation(segment);
+    if (svc?.citySlug === "cape-town" && segment === "cape-town") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/services/standard-cleaning-cape-town";
+      url.search = "";
+      return NextResponse.redirect(url, 308);
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = locationHubPathFromAreaInput(segment);
+    url.search = "";
+    return NextResponse.redirect(url, 308);
   }
 
   const res = await updateSession(request);

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
+import { locationHubPathFromAreaInput, type CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { ensureMetaDescriptionKeyword } from "@/lib/seo/location-keyword";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import {
@@ -444,12 +444,12 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     path: "/services/airbnb-cleaning-cape-town",
     title: "Airbnb Cleaning Cape Town | Turnover, Short-Term Rental & Guest Cleaning",
     description:
-      "Professional Airbnb cleaning for short-term rentals in Cape Town—guest turnover between stays, rental-ready resets, and cleaners who know what hosts need.",
+      "Professional Airbnb cleaning for short-term and vacation rentals in Cape Town—guest turnover for hosts and property managers, rental-ready resets, and vetted cleaners who align with listing photos.",
     ogImage: "/images/marketing/airbnb-cleaning-cape-town-living-room.webp",
     h1: "Airbnb Cleaning & Turnover Services in Cape Town",
     bookingLabel: "Airbnb turnover cleaning",
     bookingPath: "/booking",
-    introSectionHeading: "Built for Airbnb hosts in Cape Town",
+    introSectionHeading: "Built for Airbnb hosts, property managers & short-term rental owners",
     areasSectionIntro:
       "Turnover pressure is street-specific—tight lifts on the Atlantic Seaboard versus Southern Suburb gates and school traffic. The hubs below capture local access cues; combine them with this Cape Town Airbnb cleaning checklist for consistent guest-ready results.",
     explanation: [
@@ -485,6 +485,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       paragraphs: [
         "Independent Airbnb hosts managing one or two Cape Town listings who need dependable turnovers without micromanaging every visit.",
         "Property managers coordinating multiple short-stay units, lockboxes, and remote access—especially across the Southern Suburbs and Atlantic Seaboard corridors.",
+        "Short-term rental owners—whether you list on Airbnb, Booking.com, or direct—who want reliable guest turnover cleaning that keeps reviews aligned with your photos.",
       ],
     },
     heroImage: {
@@ -1185,23 +1186,14 @@ export function getLocationSeo(slug: string): LocationSeoBlock | null {
   return LOCATION_SEO_PAGES[slug as LocationSeoSlug] ?? null;
 }
 
-const LOCATION_SEO_SLUG_SET = new Set<string>(LOCATION_SEO_SLUGS);
-
 /**
  * Map legacy `/cape-town/cleaning-services/{area}` short slugs (e.g. `claremont`, `sea-point`)
- * to canonical `/locations/{suburb}-cleaning-services` when that hub exists.
+ * to canonical `/locations/*` paths from `location-hubs.json` only (never synthesise slugs).
+ * Unknown areas → `null` (callers fall back to legacy duplicate URLs or skip links).
  */
 export function locationSeoPathFromLegacyAreaSlug(areaSlug: string): string | null {
-  const key = areaSlug.trim().toLowerCase().replace(/^\/+|\/+$/g, "");
-  if (!key) return null;
-  if (LOCATION_SEO_SLUG_SET.has(key)) {
-    return LOCATION_SEO_PAGES[key as LocationSeoSlug].path;
-  }
-  const suffixed = key.endsWith("-cleaning-services") ? key : `${key}-cleaning-services`;
-  if (LOCATION_SEO_SLUG_SET.has(suffixed)) {
-    return LOCATION_SEO_PAGES[suffixed as LocationSeoSlug].path;
-  }
-  return null;
+  const path = locationHubPathFromAreaInput(areaSlug);
+  return path === "/locations" ? null : path;
 }
 
 export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Metadata {

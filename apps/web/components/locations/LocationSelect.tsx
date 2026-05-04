@@ -53,7 +53,7 @@ function useIsMobile(breakpointPx = 768): boolean {
 
 export type LocationSelectProps = {
   className?: string;
-  /** Navigate to `/locations/{slug}-cleaning-services` after pick. Default true. */
+  /** Navigate to `/locations/{seoSlug}` from the hub catalogue after pick. Default true. */
   navigateOnSelect?: boolean;
   onLocationPick?: (loc: BookingLocationRecord) => void;
   inputId?: string;

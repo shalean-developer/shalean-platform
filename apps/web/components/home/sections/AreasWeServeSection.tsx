@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LocationSelect } from "@/components/locations/LocationSelect";
 import { getLocationsByCity } from "@/lib/locations";
-import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 
 const locations = getLocationsByCity("cape-town");
 
@@ -29,12 +29,7 @@ export function AreasWeServeSection() {
             {locations.map((loc) => (
               <li key={loc.slug}>
                 <Link
-                  href={
-                    loc.slug === "cape-town"
-                      ? "/services"
-                      : locationSeoPathFromLegacyAreaSlug(loc.slug) ??
-                        `/locations/${loc.slug.replace(/\/$/, "")}-cleaning-services`
-                  }
+                  href={loc.slug === "cape-town" ? "/services" : locationHubPathFromAreaInput(loc.slug)}
                   className="block rounded-2xl border border-blue-100 bg-blue-50/40 px-4 py-4 text-center text-sm font-semibold text-zinc-900 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
                   Cleaning services in {loc.name}

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { BlogContentBlock, BlogContentJson, BlogInternalLinksBlock } from "@/lib/blog/content-json";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { getLocation, LOCATIONS } from "@/lib/locations";
-import { CAPE_TOWN_SEO_SERVICE_SLUGS, locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_SEO_SERVICE_SLUGS } from "@/lib/seo/capeTownSeoPages";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 
 export type InjectInternalLinksContext = {
   location: string;
@@ -28,10 +29,7 @@ function normPath(u: string): string {
 }
 
 function locationHref(locationAreaSlug: string): string {
-  const path = locationSeoPathFromLegacyAreaSlug(locationAreaSlug);
-  if (path) return path;
-  const s = slugifyTitle(locationAreaSlug);
-  return `/locations/${s}-cleaning-services`;
+  return locationHubPathFromAreaInput(locationAreaSlug);
 }
 
 function primaryServicePath(serviceSlug: string, citySlug: string): string | null {

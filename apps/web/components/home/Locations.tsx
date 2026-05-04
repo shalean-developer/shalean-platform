@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { HomeLocation } from "@/lib/home/data";
-import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 
 type LocationsProps = {
   locations: HomeLocation[];
@@ -21,8 +21,7 @@ export function Locations({ locations }: LocationsProps) {
             const href = location.slug
               ? location.slug === "cape-town"
                 ? "/services"
-                : (locationSeoPathFromLegacyAreaSlug(location.slug) ??
-                  `/locations/${location.slug.replace(/\/$/, "")}-cleaning-services`)
+                : locationHubPathFromAreaInput(location.slug)
               : "/locations";
             return (
               <Link

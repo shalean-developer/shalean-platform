@@ -6,6 +6,7 @@
 import {
   CAPE_TOWN_LOCATIONS,
   HUB_SUFFIX,
+  resolveCapeTownHubRowFromAreaInput,
   type CapeTownLocationRow,
   type CapeTownLocationSlug,
 } from "@/lib/seo/capeTownLocations";
@@ -47,12 +48,8 @@ function toHubSlug(key: string): string {
   return `${t}${HUB_SUFFIX}`;
 }
 
-function rowBySlug(slug: string): (typeof CAPE_TOWN_LOCATIONS)[number] | undefined {
-  return CAPE_TOWN_LOCATIONS.find((l) => l.slug === slug);
-}
-
 export function getCapeTownLocationRow(slug: string): CapeTownLocationRow | undefined {
-  return rowBySlug(slug);
+  return resolveCapeTownHubRowFromAreaInput(slug);
 }
 
 export function getAllProgrammaticLocationSlugs(): ProgrammaticLocationSlug[] {
@@ -68,7 +65,7 @@ export function getProgrammaticLocation(slug: string): ProgrammaticLocation | un
  * Unknown `nearby` keys (no matching hub yet) are skipped.
  */
 export function nearbyProgrammaticLocations(slug: string, count = 4): ProgrammaticLocation[] {
-  const row = rowBySlug(slug);
+  const row = resolveCapeTownHubRowFromAreaInput(slug);
   const out: ProgrammaticLocation[] = [];
   const seen = new Set<string>([slug]);
 
