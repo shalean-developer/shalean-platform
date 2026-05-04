@@ -65,6 +65,7 @@ export const CAPE_TOWN_SEO_SERVICE_SLUGS = [
   "office-cleaning-cape-town",
   "airbnb-cleaning-cape-town",
   "carpet-cleaning-cape-town",
+  "window-cleaning-cape-town",
 ] as const;
 
 export type CapeTownSeoServiceSlug = (typeof CAPE_TOWN_SEO_SERVICE_SLUGS)[number];
@@ -79,6 +80,8 @@ export type CapeTownServiceSeoBlock = {
   path: string;
   title: string;
   description: string;
+  /** Optional `<meta name="keywords">` — use sparingly; primary targeting still lives in title, H1, and body copy. */
+  keywords?: string[];
   ogImage: string;
   h1: string;
   /** Short booking label for CTAs */
@@ -114,6 +117,7 @@ export const CAPE_TOWN_SERVICE_SCHEMA_SERVICE_TYPE: Record<CapeTownSeoServiceSlu
   "office-cleaning-cape-town": "Office Cleaning Service",
   "airbnb-cleaning-cape-town": "Airbnb Cleaning Service",
   "carpet-cleaning-cape-town": "Carpet Cleaning Service",
+  "window-cleaning-cape-town": "Window Cleaning Service",
 };
 
 /** e.g. `airbnb-cleaning-cape-town` → `Airbnb Cleaning Cape Town | Shalean` */
@@ -576,6 +580,70 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       {
         q: "Should I vacuum before the carpet team arrives?",
         a: "A quick vacuum of loose debris helps, especially after pets or renovations, but it is not mandatory. Note heavy shedding, recent plaster dust, or damp spots in your booking so the team plans dwell time and ventilation for Cape Town humidity.",
+      },
+    ],
+  },
+  "window-cleaning-cape-town": {
+    slug: "window-cleaning-cape-town",
+    path: "/services/window-cleaning-cape-town",
+    title: "Window Cleaning Cape Town | Streak-Free Shine | Shalean",
+    description:
+      "Professional window cleaning for homes and offices in Cape Town. Interior and exterior cleaning with streak-free results.",
+    keywords: [
+      "window cleaning cape town",
+      "professional window cleaning cape town",
+      "residential window cleaning",
+      "commercial window cleaning",
+      "window cleaners cape town",
+    ],
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Window Cleaning Services in Cape Town",
+    bookingLabel: "window cleaning",
+    introSectionHeading: "Trusted window cleaning for Cape Town homes and workspaces",
+    areasSectionIntro:
+      "Atlantic Seaboard apartments and Southern Suburb homes wear salt spray and urban dust differently—browse hubs like Sea Point, Green Point, and Claremont for access cues, then align your window scope with the checklist on this Cape Town page.",
+    explanation: [
+      "Window cleaning in Cape Town is one of the fastest ways to brighten a space after windy weeks, coastal salt mist, and pollen-heavy seasons. Shalean matches you with vetted window cleaners in Cape Town who work methodically on glass, frames, and tracks so views read clear—not smeared—in afternoon light.",
+      "Most bookings focus on realistic reach: balconies and patios you can access, ladder-safe interiors, and estate rules that shape arrival—not improvised ladder stacks at home.",
+      "Across Sea Point, Green Point, Claremont, Rondebosch, Wynberg, and the City Bowl, lifts, narrow streets, and Atlantic damp mean preparation notes matter as much as technique—tell us about parking, pets on balconies, and coated glass before checkout.",
+    ],
+    included: [
+      "Interior glass cleaned for streak-free clarity on agreed openings",
+      "Exterior glass where safely reachable from balconies, patios, or ground access",
+      "Frames and sills wiped down on included openings",
+      "Sliding door and window tracks cleared of loose grit where in scope",
+      "High windows addressed only within safe reach—confirm heights and access in booking notes",
+    ],
+    benefits: [
+      {
+        title: "Residential-ready presentation",
+        body: "Living rooms, bedrooms, and patio doors pick up coastal dust fast—scoped window cleaning keeps rentals and family homes photo-ready without DIY ladder risk.",
+      },
+      {
+        title: "Commercial glass clients notice",
+        body: "Reception, meeting rooms, and street-facing panes shape first impressions; structured scope keeps small Cape Town offices consistently presentable.",
+      },
+      {
+        title: "Transparent totals before checkout",
+        body: "Opening counts, interior versus exterior mix, and bundled home cleans all feed your quote online—fewer surprises on narrow Cape Town access days.",
+      },
+    ],
+    heroImage: {
+      src: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+      alt: "Professional window and glass cleaning at a Cape Town apartment with balcony access",
+    },
+    faqs: [
+      {
+        q: "How often should windows be cleaned?",
+        a: "Most Cape Town homes benefit from a full window reset every 8–12 weeks if you face the ocean or busy roads; sheltered interiors can stretch longer. Offices with street-facing glass often prefer monthly or bi-weekly cadence—pick frequency in booking notes and we will align time on site.",
+      },
+      {
+        q: "Do you clean high-rise windows?",
+        a: "We focus on residential and small commercial openings that teams can reach safely with standard equipment—typically ground-to-mid levels via balconies, patios, or ladder-safe interiors. True high-rise facade work requiring ropes, cradles, or specialised access sits outside our scope; describe your building height in notes so we confirm fit before checkout.",
+      },
+      {
+        q: "Do you bring equipment?",
+        a: "Yes. Cleaners arrive with professional squeegees, scrubbers, microfibre, and safe glass solutions suited to typical Cape Town finishes. If your estate mandates specific products or you have coated glass, mention it in booking notes so we can adapt where possible.",
       },
     ],
   },
@@ -1150,6 +1218,7 @@ const SERVICE_HUB_PHRASE: Record<CapeTownSeoServiceSlug, string> = {
   "office-cleaning-cape-town": "Office cleaning",
   "airbnb-cleaning-cape-town": "Airbnb cleaning",
   "carpet-cleaning-cape-town": "Carpet cleaning",
+  "window-cleaning-cape-town": "Window cleaning",
 };
 
 /** Service SEO page → suburb hubs: “{Service} in Claremont” etc. */
@@ -1175,6 +1244,7 @@ export function locationHubServiceLinksCapeTownAnchors(): { href: string; label:
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning in Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning in Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning in Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path, label: "Window cleaning in Cape Town" },
   ];
 }
 
@@ -1202,6 +1272,7 @@ export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Met
   return {
     title: data.title,
     description: metaDescription,
+    ...(data.keywords?.length ? { keywords: data.keywords } : {}),
     alternates: { canonical: url },
     openGraph: {
       type: "website",
@@ -1283,6 +1354,7 @@ export function locationPageServiceLinks(): { href: string; label: string }[] {
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path, label: "Window cleaning Cape Town" },
   ];
 }
 
@@ -1307,6 +1379,7 @@ export function getHomepageInternalSeoLinks(): { href: string; label: string }[]
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path, label: "Window cleaning Cape Town" },
     ...capeTownSeoLocationLinks(),
   ];
   return homepageInternalSeoLinksCache;

@@ -1196,6 +1196,7 @@ const CAPE_TOWN_SERVICE_SLUG_TO_PROGRAMMATIC_SERVICE: Record<
   "office-cleaning-cape-town": null,
   "airbnb-cleaning-cape-town": "airbnb",
   "carpet-cleaning-cape-town": "carpet",
+  "window-cleaning-cape-town": null,
 };
 
 const AREA_HUB_LINK_LABEL_PHRASE: Record<ProgrammaticServiceForAreaHub, string> = {

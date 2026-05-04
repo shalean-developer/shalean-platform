@@ -121,6 +121,9 @@ export function MarketingHomeServicesSection() {
               <Link href={p["carpet-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
                 Sofa &amp; Carpet Care
               </Link>
+              <Link href={p["window-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
+                Window Cleaning
+              </Link>
               <Link href="/services" className={FRESHNESS_SERVICE_VIEW_ALL_CLASS}>
                 View All Services
               </Link>

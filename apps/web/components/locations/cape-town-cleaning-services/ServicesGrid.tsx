@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, Briefcase, BrushCleaning, Home, Sparkles, Truck } from "lucide-react";
+import { AppWindow, Building2, Briefcase, BrushCleaning, Home, Sparkles, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +45,13 @@ const services = [
     description:
       "Carpet cleaning in Cape Town for rugs and high-traffic areas—paired with your home visit when you want soft floors refreshed too.",
     icon: BrushCleaning,
+  },
+  {
+    href: "/services/window-cleaning-cape-town",
+    title: "Window Cleaning",
+    description:
+      "Window cleaning in Cape Town for interior and exterior glass, frames, and tracks—clear views after coastal salt spray and windy weeks.",
+    icon: AppWindow,
   },
 ] as const;
 

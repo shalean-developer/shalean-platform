@@ -22,6 +22,10 @@ export const BLOG_CONTEXT_SERVICE_LINKS = [
     href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path,
     anchor: "carpet cleaning in Cape Town",
   },
+  {
+    href: CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path,
+    anchor: "window cleaning in Cape Town",
+  },
 ] as const;
 
 /** Three service links shown under Related Cleaning Guides (rotates by post slug for variety). */

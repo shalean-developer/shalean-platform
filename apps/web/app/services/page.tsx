@@ -18,6 +18,7 @@ import {
 } from "@/lib/seo/capeTownSeoPages";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import {
+  AppWindow,
   Building2,
   CalendarCheck,
   Check,
@@ -46,6 +47,7 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "airbnb-cleaning-cape-town",
   "office-cleaning-cape-town",
   "carpet-cleaning-cape-town",
+  "window-cleaning-cape-town",
 ];
 
 const title = "Professional Cleaning Services Cape Town | Book Online | Shalean";
@@ -238,7 +240,7 @@ export default function ServicesHubPage() {
               Our cleaning services
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-600 md:text-base">
-              Six Cape Town guides — same booking flow, scoped to how your space is used.
+              Seven Cape Town guides — same booking flow, scoped to how your space is used.
             </p>
             <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <ServiceCard
@@ -290,6 +292,14 @@ export default function ServicesHubPage() {
                 bookSource="services_hub_card_carpet"
                 seoHubTrack
               />
+              <ServiceCard
+                icon={<AppWindow className="size-5" strokeWidth={1.75} aria-hidden />}
+                title="Window Cleaning"
+                description="Interior and exterior glass, frames, and tracks — streak-free finishes for homes and small offices."
+                learnMoreHref={p["window-cleaning-cape-town"].path}
+                bookSource="services_hub_card_window"
+                seoHubTrack
+              />
             </div>
           </Section>
         </section>
@@ -312,7 +322,7 @@ export default function ServicesHubPage() {
                 {
                   step: "2",
                   title: "Choose your service",
-                  body: "Standard, deep, move-out, Airbnb, office, or carpet — compare scope on each guide if you need detail.",
+                  body: "Standard, deep, move-out, Airbnb, office, carpet, or window cleaning — compare scope on each guide if you need detail.",
                   Icon: ListChecks,
                 },
                 {

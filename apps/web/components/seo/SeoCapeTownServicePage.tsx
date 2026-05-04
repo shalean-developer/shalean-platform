@@ -8,6 +8,10 @@ import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { AirbnbCapeTownServiceExtendedContent } from "@/components/seo/AirbnbCapeTownServiceExtendedContent";
+import {
+  WindowCleaningPricingTrustSection,
+  WindowCleaningServiceTypesSection,
+} from "@/components/seo/WindowCapeTownServiceExtendedContent";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import {
@@ -191,9 +195,23 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 turnovers alongside recurring standard visits—guest expectations are closer to hospitality than weekly home upkeep.
               </p>
             ) : null}
+            {slug === "airbnb-cleaning-cape-town" ? (
+              <p>
+                We also offer{" "}
+                <Link
+                  href={CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  window cleaning in Cape Town
+                </Link>{" "}
+                for apartments and balconies.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>
+
+      {slug === "window-cleaning-cape-town" ? <WindowCleaningServiceTypesSection /> : null}
 
       <section id="included" className="scroll-mt-24 border-b border-blue-100 bg-blue-50/40 py-16">
         <div className="mx-auto max-w-4xl px-4">
@@ -238,6 +256,8 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
         </section>
       ) : null}
 
+      {slug === "window-cleaning-cape-town" ? <WindowCleaningPricingTrustSection bookingPath={bookingPath} /> : null}
+
       {slug === "airbnb-cleaning-cape-town" ? (
         <AirbnbCapeTownServiceExtendedContent bookingPath={bookingPath} />
       ) : null}
@@ -249,6 +269,32 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             {areasHeading}
           </h2>
           <p className="mt-3 text-zinc-600">{areasIntro}</p>
+          {slug === "window-cleaning-cape-town" ? (
+            <p className="mt-4 text-sm leading-relaxed text-zinc-600">
+              Popular hubs for glass work:{" "}
+              <Link
+                href="/locations/sea-point-cleaning-services"
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                window cleaning in Sea Point
+              </Link>
+              ,{" "}
+              <Link
+                href="/locations/green-point-cleaning-services"
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                window cleaning in Green Point
+              </Link>
+              , and{" "}
+              <Link
+                href="/locations/claremont-cleaning-services"
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                window cleaning in Claremont
+              </Link>
+              —each location page adds parking and access context before you book.
+            </p>
+          ) : null}
           <ul className="mt-8 flex flex-wrap gap-3">
             {hubLocationLinks.map((loc) => (
               <li key={loc.href}>
@@ -334,9 +380,13 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             source={`seo_ct_${slug}_footer`}
             className="inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-blue-700 transition hover:bg-blue-50"
           >
-            {slug === "airbnb-cleaning-cape-town" ? "Book Airbnb cleaner" : "Start booking"}
+            {slug === "airbnb-cleaning-cape-town"
+              ? "Book Airbnb cleaner"
+              : slug === "window-cleaning-cape-town"
+                ? "Book window cleaning"
+                : "Start booking"}
           </GrowthCtaLink>
-          {slug === "airbnb-cleaning-cape-town" ? (
+          {slug === "airbnb-cleaning-cape-town" || slug === "window-cleaning-cape-town" ? (
             <>
               <GrowthCtaLink
                 href={bookingPath}

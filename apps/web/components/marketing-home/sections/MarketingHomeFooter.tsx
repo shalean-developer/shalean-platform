@@ -126,6 +126,11 @@ export function MarketingHomeFooter() {
                   Standard Home Cleaning
                 </Link>
               </li>
+              <li>
+                <Link href="/services/window-cleaning-cape-town" className="transition hover:text-white">
+                  Window Cleaning
+                </Link>
+              </li>
             </ul>
           </div>
 
