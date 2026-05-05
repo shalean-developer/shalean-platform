@@ -33,14 +33,16 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
           <div className="flex flex-col justify-center gap-4">
             <div>
               <h1 className="font-sans text-3xl font-bold tracking-tight text-slate-900 leading-[1.05] sm:text-4xl lg:text-[2.6rem] xl:text-[2.9rem]">
-                Professional Cleaning Services{" "}
-                <br className="hidden lg:block" />
-                in Cape Town
+                Cleaning Services Cape Town
               </h1>
 
+              <p className="mt-2 text-lg font-semibold tracking-tight text-slate-800">
+                From R250 · Same-day availability · Trusted local cleaners
+              </p>
+
               <p className="marketing-hero-lead mt-3 max-w-md text-base leading-relaxed text-slate-600">
-                Book trusted home and office cleaners with fast online scheduling, vetted teams, and clear pricing. Serving
-                Cape Town with reliable, professional results.
+                Book vetted home cleaners online with clear totals before you pay—recurring or once-off visits across Cape
+                Town.
               </p>
             </div>
 

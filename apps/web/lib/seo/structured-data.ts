@@ -25,6 +25,8 @@ export type BuildLocationHubJsonLdParams = {
   nearbyPlaceNames: readonly { name: string }[];
   /** ISO date — surfaced on WebPage for freshness signals */
   dateModified?: string;
+  /** Service entity `name` — defaults to `h1` when omitted */
+  serviceSchemaName?: string;
 };
 
 /** Schema.org graph for `/locations/[slug]` — WebPage, BreadcrumbList, LocalBusiness, Service, FAQPage. */
@@ -39,7 +41,10 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
     faqs,
     nearbyPlaceNames,
     dateModified = LOCATION_HUB_SCHEMA_DATE_MODIFIED,
+    serviceSchemaName,
   } = params;
+
+  const serviceName = (serviceSchemaName ?? h1).trim() || h1;
 
   const localBusinessId = `${pageUrl}#localbusiness`;
   const primaryPlaceLabel = `${location.name}, Western Cape, South Africa`;
@@ -93,7 +98,7 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
       {
         "@type": "Service",
         "@id": `${pageUrl}#service`,
-        name: h1,
+        name: serviceName,
         serviceType: "Cleaning services",
         url: pageUrl,
         areaServed: { "@type": "Place", name: primaryPlaceLabel, containedInPlace: cityPlace },

@@ -351,11 +351,11 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "standard-cleaning-cape-town": {
     slug: "standard-cleaning-cape-town",
     path: "/services/standard-cleaning-cape-town",
-    title: "Standard Cleaning Cape Town | Weekly or Once-Off | Shalean",
+    title: "House Cleaning Cape Town | From R250 | Weekly or Once-Off | Shalean",
     description:
-      "Standard home cleaning in Cape Town for weekly or once-off visits. Fresh kitchens, bathrooms, and floors—transparent quotes and vetted Shalean cleaners.",
+      "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes and vetted Shalean cleaners.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
-    h1: "Standard cleaning services in Cape Town for consistent, livable homes",
+    h1: "House cleaning services in Cape Town for consistent, livable homes",
     bookingLabel: "standard cleaning",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",

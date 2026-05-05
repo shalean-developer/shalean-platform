@@ -7,6 +7,7 @@ import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/Ma
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
+import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
 import { MarketingAreasSection } from "@/components/marketing-home/sections/MarketingAreasSection";
@@ -22,18 +23,18 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 const OG_IMAGE = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
 const HOME_CANONICAL = absoluteCanonicalUrl("/");
 const HOME_META_DESCRIPTION = clampMetaDescription(
-  "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
+  "Book trusted cleaning services in Cape Town. Affordable prices, same-day availability when routing allows, and vetted cleaners. Get a quote in under a minute.",
 );
 
 export const metadata: Metadata = {
-  title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
+  title: "Cleaning Services Cape Town from R250 | Same-Day Booking | Shalean",
   description: HOME_META_DESCRIPTION,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: HOME_CANONICAL },
   openGraph: {
     type: "website",
     url: HOME_CANONICAL,
-    title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
+    title: "Cleaning Services Cape Town from R250 | Same-Day Booking | Shalean",
     description: HOME_META_DESCRIPTION,
     images: [
       {
@@ -46,7 +47,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
+    title: "Cleaning Services Cape Town from R250 | Same-Day Booking | Shalean",
     description: HOME_META_DESCRIPTION,
     images: [OG_IMAGE],
   },
@@ -67,6 +68,7 @@ export default async function MarketingHomePage() {
         <MarketingHomeHeader bookingHref={bookingHref} />
         <main>
           <MarketingHomeHeroSection reviewBanner={reviewBanner} />
+          <MarketingHomeCoreServicesSection />
           <MarketingHomeTrustSection />
           <MarketingGoogleReviewsBand />
           <MarketingHomeServicesSection />

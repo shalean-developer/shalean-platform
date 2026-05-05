@@ -44,6 +44,7 @@ import { CAPE_TOWN_SERVICE_SEO, type LocationSeoBlock } from "@/lib/seo/capeTown
 import { getLocationHubAboveFoldServiceLink, getLocationHubRelatedServiceLinks } from "@/lib/seo/internalLinks";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { pickNearbyHubAnchor } from "@/lib/seo/anchorVariants";
+import { getLocationEditorialOverride } from "@/lib/seo/location-editorial-overrides";
 import { buildDynamicLocationFaqs, nearbyProgrammaticLocationsPreferRegion } from "@/lib/seo/locations";
 import { buildPeopleAlsoAskFaqs, mergeLocationFaqs } from "@/lib/seo/location-paa-faqs";
 import { buildLocationLocalProofBullets } from "@/lib/seo/location-hub-local-proof";
@@ -115,6 +116,7 @@ export function ProgrammaticLocationCleaningPage({
   swapHeroBookCtas = false,
 }: Props) {
   const slug = location.slug;
+  const editorialOverride = getLocationEditorialOverride(slug);
   const seoPriority = getLocationSeoPriority(location);
   const hubTier = hubContentTierFromPriority(seoPriority);
   const lifestyleDepth = buildLifestyleDepthParagraphs(location, hubTier);
@@ -132,6 +134,10 @@ export function ProgrammaticLocationCleaningPage({
     rankingResolved?.useRankingHero && seo ? buildRankingHeroParagraphs(location, seo) : null;
   const baseFaqs = seo?.faqs?.length ? seo.faqs : buildDynamicLocationFaqs(location);
   const peopleAlsoAskBase = buildPeopleAlsoAskFaqs(location);
+  const peopleAlsoAskSeed =
+    editorialOverride?.extraFaqs?.length && editorialOverride.extraFaqs.length > 0
+      ? [...editorialOverride.extraFaqs, ...peopleAlsoAskBase]
+      : peopleAlsoAskBase;
   const peopleAlsoAsk =
     rankingResolved?.prependCostFaq
       ? [
@@ -139,9 +145,9 @@ export function ProgrammaticLocationCleaningPage({
             q: `How much does cleaning cost in ${location.name}?`,
             a: seo?.rankingCostFaqAnswer ?? buildCostFaqAnswer(location),
           },
-          ...peopleAlsoAskBase,
+          ...peopleAlsoAskSeed,
         ]
-      : peopleAlsoAskBase;
+      : peopleAlsoAskSeed;
   const mergedFaqs = mergeLocationFaqs(
     peopleAlsoAsk,
     baseFaqs.map((f) => ({ q: f.q, a: f.a })),
@@ -170,6 +176,7 @@ export function ProgrammaticLocationCleaningPage({
     location,
     faqs: mergedFaqs,
     nearbyPlaceNames: nearby,
+    serviceSchemaName: `Cleaning services in ${location.name}`,
   });
 
   const whyChooseItems = seo?.whyChoose?.length ? seo.whyChoose : defaultWhyChooseBullets(location);
@@ -210,6 +217,12 @@ export function ProgrammaticLocationCleaningPage({
           <span className="mx-2 text-zinc-300" aria-hidden>
             ·
           </span>
+          <Link href={STANDARD_SERVICE} className={`font-medium ${linkEmphasisClassName}`}>
+            Citywide house cleaning hub
+          </Link>
+          <span className="mx-2 text-zinc-300" aria-hidden>
+            ·
+          </span>
           <Link href="/locations" className={`font-medium ${linkEmphasisClassName}`}>
             All suburb hubs
           </Link>
@@ -223,6 +236,15 @@ export function ProgrammaticLocationCleaningPage({
         <div className="mx-auto max-w-4xl px-4">
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</p>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{h1}</h1>
+          {editorialOverride ? (
+            <div className="mt-5 space-y-2 rounded-xl border border-emerald-100 bg-white/80 px-4 py-4 text-base leading-relaxed text-zinc-700 shadow-sm md:text-lg">
+              <p>{editorialOverride.localLead}</p>
+              <p className="text-sm text-zinc-500">
+                <span className="font-semibold text-zinc-600">Local anchors:</span>{" "}
+                {editorialOverride.landmarks.join(" · ")}
+              </p>
+            </div>
+          ) : null}
           <div className="mt-6 space-y-4 text-lg leading-relaxed text-zinc-600">
             <p>
               Need recurring visits or a once-off reset? Start with{" "}

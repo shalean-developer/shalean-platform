@@ -127,11 +127,6 @@ export async function generateStaticParams() {
 }
 
 async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
-  /** With page smoke on, skip DB + slug branches so `curl -I` tests route/runtime without data/metadata crashes. */
-  if (process.env.BLOG_SLUG_PAGE_SMOKE === "1") {
-    return { title: "OK", description: "Blog smoke test", robots: SEO_INDEX_FOLLOW };
-  }
-
   let slug: string;
   let sp: Record<string, string | string[] | undefined>;
   try {
@@ -503,19 +498,6 @@ function buildHighConversionGraphJsonLd(post: HighConversionBlogArticle) {
 }
 
 async function BlogPostPageImpl(props: Props) {
-  /**
-   * Prod bisect: `BLOG_SLUG_PAGE_SMOKE=1` on Vercel → `<div>OK</div>` with **no** `await params` / DB / `MarketingLayout`.
-   * Root `app/layout.tsx` still runs — if `curl -I` stays 500, check that layout, middleware, or hooks.
-   * Pair with `buildBlogMetadataInner` smoke (same env) so `generateMetadata` does not call Supabase.
-   */
-  if (process.env.BLOG_SLUG_PAGE_SMOKE === "1") {
-    return (
-      <div data-blog-slug-page-smoke="1" className="p-8 text-lg">
-        OK
-      </div>
-    );
-  }
-
   let slug: string;
   let sp: Record<string, string | string[] | undefined>;
   try {
