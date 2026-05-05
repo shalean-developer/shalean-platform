@@ -8,8 +8,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Full path segment after `/api/admin/` — copy exactly; typos yield HTML 404. */
-export const RECURRING_BATCH_BACKFILL_PATH = "/api/admin/recurring-batch-backfill-may-to-today";
+/** Full path — copy exactly in clients/docs; typos yield HTML 404. Not exported (Next route modules may only export handlers/config). */
+const RECURRING_BATCH_BACKFILL_PATH = "/api/admin/recurring-batch-backfill-may-to-today";
 
 /** Lets you verify the route is deployed (`GET` returns JSON; backfill still requires `POST` + admin JWT). */
 export function GET() {
