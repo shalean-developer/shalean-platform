@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { todayJohannesburg, compareYmd } from "@/lib/recurring/johannesburgCalendar";
+import { todayJohannesburg, compareYmd, lastDayYmdOfInvoiceMonth } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
 import { insertRecurringOccurrenceBooking } from "@/lib/recurring/insertRecurringOccurrenceBooking";
@@ -14,8 +14,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_RECURRING = 200;
-/** Cap new occurrences processed per plan per cron invocation (backlog safety). */
-const MAX_OCCURRENCES_PER_PLAN = 3;
+/** Cap new occurrences processed per plan per cron invocation (backlog safety; ≥ max days per month). */
+const MAX_OCCURRENCES_PER_PLAN = 35;
 
 /**
  * Cron: `verifyCronSecret` — `Authorization: Bearer CRON_SECRET` or `x-cron-secret` (Supabase pg_net).
@@ -25,6 +25,11 @@ const MAX_OCCURRENCES_PER_PLAN = 3;
  *
  * `user_profiles.schedule_type` (`fixed_schedule` | `on_demand`) does **not** gate generation — both receive
  * spawned visits; monthly collection runs via `/api/cron/charge-monthly-invoices` (finalize + Paystack link).
+ *
+ * Generation window: **current calendar month** (Africa/Johannesburg), capped by `end_date`.
+ * Floor: `fromYmd = max(month_start, start_date)` so the whole month is reconciled (e.g. weekly from 1 May → all
+ * May visits). Existing rows stay aligned: duplicate dates return `duplicate_occurrence` and are skipped.
+ * Plans are still queued when `next_run_date <= month_end` (cursor); `next_run_date` is not used as the window floor.
  *
  * Schedule: e.g. Supabase pg_cron every 10 minutes → POST this route (see migration `20260910_supabase_cron_recurring_bookings_http.sql`).
  */
@@ -57,13 +62,16 @@ export async function POST(request: Request) {
 
   try {
   const today = todayJohannesburg();
+  const monthYm = today.slice(0, 7);
+  const monthStart = `${monthYm}-01`;
+  const monthEnd = lastDayYmdOfInvoiceMonth(monthYm);
   const { data: rows, error } = await admin
     .from("recurring_bookings")
     .select(
       "id, customer_id, price, frequency, days_of_week, start_date, end_date, next_run_date, status, skip_next_occurrence_date, booking_snapshot_template, monthly_pattern, monthly_nth",
     )
     .eq("status", "active")
-    .lte("next_run_date", today)
+    .lte("next_run_date", monthEnd)
     .limit(MAX_RECURRING);
 
   if (error) {
@@ -104,9 +112,10 @@ export async function POST(request: Request) {
       monthly_nth: typeof r.monthly_nth === "number" ? r.monthly_nth : null,
     };
 
-    const fromYmd =
-      compareYmd(r.next_run_date, r.start_date) < 0 ? r.start_date : r.next_run_date;
-    const throughYmd = r.end_date && compareYmd(r.end_date, today) < 0 ? r.end_date : today;
+    /** Full current month from calendar day 1 (or plan start), not `next_run_date` — avoids gaps vs already-inserted rows. */
+    const fromYmd = compareYmd(monthStart, r.start_date) >= 0 ? monthStart : r.start_date;
+    const throughYmd =
+      r.end_date && compareYmd(r.end_date, monthEnd) < 0 ? r.end_date : monthEnd;
 
     if (compareYmd(fromYmd, throughYmd) > 0) {
       const nextRun = calculateNextRunDate(schedule, today);
@@ -281,7 +290,7 @@ export async function POST(request: Request) {
 
     const nextRun = partialBacklog
       ? datesAll[MAX_OCCURRENCES_PER_PLAN]!
-      : calculateNextRunDate(schedule, today);
+      : calculateNextRunDate(schedule, throughYmd);
     await admin
       .from("recurring_bookings")
       .update({
@@ -296,15 +305,37 @@ export async function POST(request: Request) {
     level: "info",
     source: "cron/generate-recurring-bookings",
     message: "Cron finished",
-    context: { scanned: rows?.length ?? 0, generated, skipped, today },
+    context: {
+      scanned: rows?.length ?? 0,
+      generated,
+      skipped,
+      today,
+      month_start: monthStart,
+      month_end: monthEnd,
+    },
   });
   await logCronRun({
     jobName: "generate-recurring-bookings",
     status: "success",
-    message: JSON.stringify({ scanned: rows?.length ?? 0, generated, skipped, today }),
+    message: JSON.stringify({
+      scanned: rows?.length ?? 0,
+      generated,
+      skipped,
+      today,
+      month_start: monthStart,
+      month_end: monthEnd,
+    }),
   });
 
-  return NextResponse.json({ ok: true, scanned: rows?.length ?? 0, generated, skipped, today });
+  return NextResponse.json({
+    ok: true,
+    scanned: rows?.length ?? 0,
+    generated,
+    skipped,
+    today,
+    month_start: monthStart,
+    month_end: monthEnd,
+  });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await reportOperationalIssue("error", "cron/generate-recurring-bookings", msg);

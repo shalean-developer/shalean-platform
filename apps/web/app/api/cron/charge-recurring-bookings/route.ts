@@ -9,6 +9,7 @@ import { chargePaystackAuthorization } from "@/lib/recurring/chargePaystackAutho
 import { runRecurringPaymentLinkFallback } from "@/lib/recurring/recurringPaymentLinkFallback";
 import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
+import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -64,12 +65,14 @@ export async function POST(request: Request) {
   let failed = 0;
   let fallback = 0;
   let skippedMonthlyDeferred = 0;
+  let skippedFutureVisitDate = 0;
+  const todayYmd = todayJohannesburg();
 
   try {
   const { data: bookings, error } = await admin
     .from("bookings")
     .select(
-      "id, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking",
+      "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking",
     )
     .eq("status", "pending_payment")
     .eq("is_recurring_generated", true)
@@ -97,6 +100,7 @@ export async function POST(request: Request) {
   for (const b of dueRows) {
     const row = b as {
       id: string;
+      date?: string | null;
       recurring_id: string;
       customer_email: string | null;
       paystack_reference: string | null;
@@ -114,6 +118,12 @@ export async function POST(request: Request) {
     if (row.payment_status === "pending_monthly" || row.is_monthly_billing_booking === true) {
       skippedMonthlyDeferred++;
       console.log("[charge] skipped monthly booking (deferred billing)", { booking_id: row.id });
+      continue;
+    }
+
+    const visitYmd = typeof row.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.date.trim()) ? row.date.trim() : null;
+    if (visitYmd && compareYmd(visitYmd, todayYmd) > 0) {
+      skippedFutureVisitDate++;
       continue;
     }
 
@@ -312,6 +322,7 @@ export async function POST(request: Request) {
       failed,
       fallback,
       skipped_monthly_deferred: skippedMonthlyDeferred,
+      skipped_future_visit_date: skippedFutureVisitDate,
     },
   });
   await logCronRun({
@@ -325,6 +336,7 @@ export async function POST(request: Request) {
       failed,
       fallback,
       skipped_monthly_deferred: skippedMonthlyDeferred,
+      skipped_future_visit_date: skippedFutureVisitDate,
     }),
   });
 
@@ -337,6 +349,7 @@ export async function POST(request: Request) {
     failed,
     fallback,
     skipped_monthly_deferred: skippedMonthlyDeferred,
+    skipped_future_visit_date: skippedFutureVisitDate,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
