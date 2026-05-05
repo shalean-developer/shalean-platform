@@ -32,6 +32,11 @@ export async function middleware(request: NextRequest) {
 async function runMiddleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /** Cron uses header auth only; skip Supabase session cloning work (and avoid any edge header quirks). */
+  if (pathname.startsWith("/api/cron")) {
+    return NextResponse.next();
+  }
+
   /** Thin “best cleaners in {area}” clones → canonical neighbourhood hub (`cleaning-services-{area}-cape-town`). */
   const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
   if (bestCleaningBlog) {

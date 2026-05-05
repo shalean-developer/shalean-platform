@@ -1,6 +1,6 @@
 # Runbook: `CRON_SECRET` rotation & recurring cron alignment
 
-Supabase **`pg_cron`** calls the Next.js recurring endpoints. Those routes authenticate with **`CRON_SECRET`** via `verifyCronSecret` (`apps/web/lib/cron/verifyCronSecret.ts`): accept **`Authorization: Bearer &lt;secret&gt;`** or **`x-cron-secret: &lt;secret&gt;`** (trimmed, exact match).
+Supabase **`pg_cron`** calls the Next.js recurring endpoints. Those routes authenticate with **`CRON_SECRET`** via `verifyCronSecret` (`apps/web/lib/cron/verifyCronSecret.ts`): accept **`Authorization: Bearer &lt;secret&gt;`** (scheme is matched case-insensitively per RFC 7235; token trimmed) or **`x-cron-secret: &lt;secret&gt;`** (trimmed, exact match).
 
 Cron job SQL template: `supabase/migrations/20260910_supabase_cron_recurring_bookings_http.sql` (replace placeholders before scheduling; do not commit real secrets).
 
