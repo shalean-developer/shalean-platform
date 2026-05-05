@@ -49,6 +49,9 @@ export const dynamic = "force-dynamic";
 /** If the conflicting booking was created this recently, surface `recent_duplicate` for calmer admin UX. */
 const RECENT_DUPLICATE_MS = 4 * 60 * 1000;
 
+/** "Top customers" must not reuse the paginated list slice (default 4000 rows) or recurring-heavy emails undercount. */
+const TOP_CUSTOMERS_AGG_ROW_CAP = 80_000;
+
 function formatAdminRaceSlotLabels(params: {
   date: string;
   timeHm: string;
@@ -276,7 +279,31 @@ export async function GET(request: Request) {
   if (!recurringListScope && to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
     bookingQuery = bookingQuery.lte("date", to);
   }
-  const { data: rawRows, error: selErr } = await bookingQuery;
+
+  const topSpendSince = new Date();
+  topSpendSince.setFullYear(topSpendSince.getFullYear() - 1);
+  let topSpendQuery = admin
+    .from("bookings")
+    .select("customer_email, total_paid_zar, amount_paid_cents")
+    .not("customer_email", "is", null);
+  if (recurringIdFilter) {
+    topSpendQuery = topSpendQuery.eq("recurring_id", recurringIdFilter);
+  }
+  if (!recurringListScope && from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    topSpendQuery = topSpendQuery.gte("date", from);
+  }
+  if (!recurringListScope && to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    topSpendQuery = topSpendQuery.lte("date", to);
+  }
+  if (!recurringListScope && !from && !to) {
+    topSpendQuery = topSpendQuery.gte("created_at", topSpendSince.toISOString());
+  }
+  if (cityId && !recurringListScope) {
+    topSpendQuery = topSpendQuery.eq("city_id", cityId);
+  }
+  topSpendQuery = topSpendQuery.limit(TOP_CUSTOMERS_AGG_ROW_CAP);
+
+  const [{ data: rawRows, error: selErr }, topSpendRes] = await Promise.all([bookingQuery, topSpendQuery]);
 
   if (selErr) {
     await reportOperationalIssue("error", "api/admin/bookings", selErr.message);
@@ -354,9 +381,11 @@ export async function GET(request: Request) {
   const revenuePerCustomerZar =
     distinctCustomers > 0 ? Math.round(totalRevenueZar / distinctCustomers) : 0;
 
+  const spendAggRows =
+    !topSpendRes.error && Array.isArray(topSpendRes.data) ? (topSpendRes.data as Row[]) : rows;
   const spendByEmail = new Map<string, { spendZar: number; bookings: number }>();
-  for (const r of rows) {
-    const em = r.customer_email?.trim().toLowerCase();
+  for (const r of spendAggRows) {
+    const em = normalizeEmail(String(r.customer_email ?? ""));
     if (!em) continue;
     const z = zar(r);
     const cur = spendByEmail.get(em) ?? { spendZar: 0, bookings: 0 };
@@ -368,6 +397,9 @@ export async function GET(request: Request) {
     .map(([email, v]) => ({ email, spendZar: v.spendZar, bookings: v.bookings }))
     .sort((a, b) => b.spendZar - a.spendZar)
     .slice(0, 10);
+  const topCustomersAggRows = spendAggRows.length;
+  const topCustomersAggTruncated =
+    !topSpendRes.error && (topSpendRes.data?.length ?? 0) >= TOP_CUSTOMERS_AGG_ROW_CAP;
 
   const { data: profileRows } = await admin.from("user_profiles").select("tier");
   const demandSupply = await getDemandSupplySnapshotByCity(admin, cityId || null);
@@ -443,6 +475,8 @@ export async function GET(request: Request) {
       liveSurgeMultiplier: demandSupply.multiplier,
       slaBreachMinutes: getDispatchSlaBreachMinutes(),
       paymentLinkChannelStats,
+      topCustomersAggRows,
+      topCustomersAggTruncated,
     },
     failedJobs: failedJobs ?? [],
     cities: cityRows ?? [],

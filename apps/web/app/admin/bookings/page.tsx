@@ -49,6 +49,9 @@ type Metrics = {
     platinum: number;
   };
   topCustomers?: { email: string; spendZar: number; bookings: number }[];
+  /** Rows scanned for `topCustomers` (wide query, not the 4000 list cap). */
+  topCustomersAggRows?: number;
+  topCustomersAggTruncated?: boolean;
   demandOpenBookings?: number;
   supplyAvailableCleaners?: number;
   liveSurgeMultiplier?: number;
@@ -824,6 +827,16 @@ export default function AdminBookingsPage() {
               <div className="mb-6 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="border-b border-zinc-100 bg-zinc-50 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900/80">
                   <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Top customers (by spend)</h2>
+                  <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                    Uses service-date filters when set; otherwise bookings created in the last 12 months (up to{" "}
+                    {typeof metrics.topCustomersAggRows === "number"
+                      ? metrics.topCustomersAggRows.toLocaleString("en-ZA")
+                      : "—"}{" "}
+                    rows).
+                    {metrics.topCustomersAggTruncated
+                      ? " Row cap reached — narrow the date range for full accuracy."
+                      : ""}
+                  </p>
                 </div>
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-zinc-100 text-xs uppercase text-zinc-500 dark:border-zinc-800">
