@@ -83,7 +83,7 @@ const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cle
 /** CMS-backed posts must not be SSG-only — new `blog_posts` rows appear without rebuild. */
 export const dynamic = "force-dynamic";
 
-/** Node runtime: `getPostBySlug` uses `node:crypto`; rich text uses `isomorphic-dompurify` + jsdom during SSR. */
+/** Node runtime: `getPostBySlug` uses `node:crypto`; rich text HTML is sanitized with `sanitize-html` during SSR. */
 export const runtime = "nodejs";
 
 type Props = {
