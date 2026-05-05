@@ -247,15 +247,6 @@ export async function POST(request: Request) {
   }
 
   let content = contentRes.data;
-  if (parsed.data.status === "published") {
-    const pub = validateBlogPublish(content);
-    if (!pub.ok) {
-      return NextResponse.json(
-        { error: "Publish validation failed.", validation: pub },
-        { status: 400 },
-      );
-    }
-  }
 
   let row: Record<string, unknown>;
   try {
@@ -268,9 +259,10 @@ export async function POST(request: Request) {
     throw e;
   }
 
+  let injected: BlogContentJson = content;
   const slugForInject = String(row.slug ?? "");
   try {
-    const injected = await injectLinksForSave(
+    injected = await injectLinksForSave(
       admin,
       slugForInject,
       String(row.title ?? ""),
@@ -284,7 +276,22 @@ export async function POST(request: Request) {
     row.content_json = injected;
     row.reading_time_minutes = computeReadingTimeMinutes(injected);
   } catch {
-    /* non-fatal */
+    row.content_json = content;
+    row.reading_time_minutes = computeReadingTimeMinutes(content);
+  }
+
+  if (parsed.data.status === "published") {
+    const pub = validateBlogPublish(injected);
+    if (!pub.ok) {
+      console.warn("[admin/blog POST] Publish validation failed", {
+        slug: slugForInject,
+        issues: pub.issues,
+      });
+      return NextResponse.json(
+        { error: "Publish validation failed.", validation: pub },
+        { status: 400 },
+      );
+    }
   }
 
   const { data, error } = await admin.from("blog_posts").insert(row).select("id,slug").single();
@@ -335,15 +342,6 @@ export async function PUT(request: Request) {
   }
 
   let content = contentRes.data;
-  if (parsed.data.status === "published") {
-    const pub = validateBlogPublish(content);
-    if (!pub.ok) {
-      return NextResponse.json(
-        { error: "Publish validation failed.", validation: pub },
-        { status: 400 },
-      );
-    }
-  }
 
   const { id, ...fields } = parsed.data;
   let row: Record<string, unknown>;
@@ -357,9 +355,10 @@ export async function PUT(request: Request) {
     throw e;
   }
 
+  let injected: BlogContentJson = content;
   const slugForInject = String(row.slug ?? "");
   try {
-    const injected = await injectLinksForSave(
+    injected = await injectLinksForSave(
       admin,
       slugForInject,
       String(row.title ?? ""),
@@ -373,7 +372,22 @@ export async function PUT(request: Request) {
     row.content_json = injected;
     row.reading_time_minutes = computeReadingTimeMinutes(injected);
   } catch {
-    /* non-fatal */
+    row.content_json = content;
+    row.reading_time_minutes = computeReadingTimeMinutes(content);
+  }
+
+  if (parsed.data.status === "published") {
+    const pub = validateBlogPublish(injected);
+    if (!pub.ok) {
+      console.warn("[admin/blog PUT] Publish validation failed", {
+        slug: slugForInject,
+        issues: pub.issues,
+      });
+      return NextResponse.json(
+        { error: "Publish validation failed.", validation: pub },
+        { status: 400 },
+      );
+    }
   }
 
   const { data, error } = await admin.from("blog_posts").update(row).eq("id", id).select("id,slug").maybeSingle();

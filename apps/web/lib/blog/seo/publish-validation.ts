@@ -11,8 +11,9 @@ function wc(s: string): number {
 }
 
 export function countWordsInContent(content: BlogContentJson): number {
+  const blocks = Array.isArray(content.blocks) ? content.blocks : [];
   let n = 0;
-  for (const b of content.blocks) {
+  for (const b of blocks) {
     n += blockWords(b);
   }
   return n;
@@ -23,6 +24,17 @@ function extractHrefsFromHtml(html: string): string[] {
   const re = /href\s*=\s*(["'])([^"']*)\1/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
+    out.push(m[2]);
+  }
+  return out;
+}
+
+/** Markdown-style `[label](url)` in legacy `paragraph` blocks (CMS / seeds). */
+function extractMarkdownLinks(text: string): string[] {
+  const out: string[] = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
     out.push(m[2]);
   }
   return out;
@@ -103,9 +115,9 @@ function hasBookingPath(blocks: BlogContentBlock[]): boolean {
       const p = normPath(b.link);
       if (p === "/booking" || p.startsWith("/booking")) return true;
     }
-    if (b.type === "internal_links") {
+    if (b.type === "internal_links" && Array.isArray(b.links)) {
       for (const l of b.links) {
-        const p = normPath(l.url);
+        const p = normPath(String(l?.url ?? ""));
         if (p === "/booking" || p.startsWith("/booking")) return true;
       }
     }
@@ -122,8 +134,14 @@ function hasBookingPath(blocks: BlogContentBlock[]): boolean {
 function collectInternalPaths(blocks: BlogContentBlock[]): string[] {
   const out: string[] = [];
   for (const b of blocks) {
-    if (b.type === "internal_links") {
-      for (const l of b.links) out.push(normPath(l.url));
+    if (b.type === "internal_links" && Array.isArray(b.links)) {
+      for (const l of b.links) out.push(normPath(String(l?.url ?? "")));
+    }
+    if (b.type === "rich_text") {
+      for (const h of extractHrefsFromHtml(b.html)) out.push(normPath(h));
+    }
+    if (b.type === "paragraph") {
+      for (const h of extractMarkdownLinks(b.content)) out.push(normPath(h));
     }
   }
   return out;
@@ -132,8 +150,9 @@ function collectInternalPaths(blocks: BlogContentBlock[]): string[] {
 export function validateBlogPublish(content: BlogContentJson): PublishValidationResult {
   const words = countWordsInContent(content);
   const issues: PublishValidationIssue[] = [];
+  const blocks = Array.isArray(content.blocks) ? content.blocks : [];
 
-  const hasH2Section = content.blocks.some((b) => {
+  const hasH2Section = blocks.some((b) => {
     if (b.type === "section") {
       return (b.heading_level ?? 2) <= 2 && b.title.trim().length > 0;
     }
@@ -145,11 +164,11 @@ export function validateBlogPublish(content: BlogContentJson): PublishValidation
     }
     return false;
   });
-  const hasFaq = content.blocks.some((b) => b.type === "faq" && b.items.length > 0);
-  const hasCta = content.blocks.some((b) => b.type === "cta" && b.title.trim() && b.button_text.trim());
-  const paths = collectInternalPaths(content.blocks);
+  const hasFaq = blocks.some((b) => b.type === "faq" && Array.isArray(b.items) && b.items.length > 0);
+  const hasCta = blocks.some((b) => b.type === "cta" && b.title.trim() && b.button_text.trim());
+  const paths = collectInternalPaths(blocks);
   const hasInternalLinks = paths.some((p) => p.startsWith("/locations") || p.startsWith("/services") || p.startsWith("/blog"));
-  const hasBookingLink = hasBookingPath(content.blocks);
+  const hasBookingLink = hasBookingPath(blocks);
 
   if (words < MIN_WORDS_PUBLISH) {
     issues.push({

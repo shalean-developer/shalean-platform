@@ -23,7 +23,12 @@ import {
   buildDbBlogGraphJsonLd,
   collectFaqItemsFromContent,
 } from "@/lib/blog/db-blog-jsonld";
-import { buildKeywordsPhrase, getPostBySlug, getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
+import {
+  buildKeywordsPhrase,
+  getPostBySlug,
+  getPublishedBlogSlugs,
+  type GetPostBySlugOptions,
+} from "@/lib/blog/get-post-by-slug";
 import type { HighConversionBlogArticle } from "@/lib/blog/highConversionBlogArticle";
 import { getHighConversionBlogPost, ROUTED_HIGH_CONVERSION_POSTS } from "@/lib/blog/highConversionPosts";
 import {
@@ -42,9 +47,15 @@ import {
 } from "@/lib/blog/get-blog-sidebar-data";
 import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
-const SITE = "https://www.shalean.co.za";
+/** Preserve Next.js `notFound()` / `redirect()` errors inside broad try/catch wrappers. */
+function isNextNavigationError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null || !("digest" in err)) return false;
+  const digest = String((err as { digest?: unknown }).digest);
+  return digest.startsWith("NEXT_NOT_FOUND") || digest.startsWith("NEXT_REDIRECT");
+}
 
 function toAbsoluteAssetUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -55,7 +66,41 @@ function toAbsoluteAssetUrl(url: string): string {
 /** Publisher logo in JSON-LD (distinct from per-post hero art). */
 const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
 
-type Props = { params: Promise<{ slug: string }> };
+/** CMS-backed posts must not be SSG-only — new `blog_posts` rows appear without rebuild. */
+export const dynamic = "force-dynamic";
+
+/** Node runtime: `getPostBySlug` uses `node:crypto`; rich text uses `isomorphic-dompurify` + jsdom during SSR. */
+export const runtime = "nodejs";
+
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function previewTokenFromSearchParams(sp: Record<string, string | string[] | undefined>): string | undefined {
+  const v = sp.preview;
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+function getPostOptsFromSearchParams(sp: Record<string, string | string[] | undefined>): GetPostBySlugOptions {
+  const token = previewTokenFromSearchParams(sp);
+  return token ? { previewToken: token } : {};
+}
+
+/** Coerce CMS strings so metadata never calls unsafe helpers on odd DB types. */
+function safeBlogMetaText(primary: string | null | undefined, fallback: string): string {
+  const p = typeof primary === "string" ? primary.trim() : "";
+  if (p) return p;
+  const f = typeof fallback === "string" ? fallback.trim() : "";
+  return f || "Shalean Cleaning Services";
+}
+
+function isReasonableIsoDate(s: string | undefined): boolean {
+  if (!s || typeof s !== "string") return false;
+  const ms = Date.parse(s.trim());
+  return Number.isFinite(ms);
+}
 
 export async function generateStaticParams() {
   const dbSlugs = await getPublishedBlogSlugs();
@@ -67,16 +112,21 @@ export async function generateStaticParams() {
   return [...map.values()];
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;
+  const sp = await searchParams;
 
-  const dbPost = await getPostBySlug(slug);
+  if (process.env.NODE_ENV === "development") {
+    console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", previewTokenFromSearchParams(sp) ?? "(none)");
+  }
+
+  const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
   if (dbPost) {
     const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
-    const titleBase = dbPost.metaTitle?.trim() || dbPost.title;
-    const description = dbPost.metaDescription?.trim() || dbPost.excerpt || dbPost.title;
+    const titleBase = safeBlogMetaText(dbPost.metaTitle, safeBlogMetaText(dbPost.title, "Blog"));
+    const description = safeBlogMetaText(dbPost.metaDescription, safeBlogMetaText(dbPost.excerpt, titleBase));
     const heroSrc = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
-    const heroAlt = dbPost.featuredImageAlt.trim() || dbPost.h1;
+    const heroAlt = safeBlogMetaText(dbPost.featuredImageAlt, safeBlogMetaText(dbPost.h1, titleBase));
     const kwPhrase = buildKeywordsPhrase(dbPost);
     const keywords =
       kwPhrase != null
@@ -85,19 +135,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             .map((s) => s.trim())
             .filter(Boolean)
         : undefined;
+    const pubOk = isReasonableIsoDate(dbPost.publishedAt);
+    const modOk = isReasonableIsoDate(dbPost.updatedAt);
     return {
       title: `${titleBase} | Shalean Blog`,
       description,
       alternates: { canonical: canonicalAbsolute },
       ...(keywords && keywords.length > 0 ? { keywords } : {}),
-      robots: dbPost.noindex ? { index: false, follow: true } : SEO_INDEX_FOLLOW,
+      robots: dbPost.indexedForSearch ? SEO_INDEX_FOLLOW : { index: false, follow: true },
       openGraph: {
         title: `${titleBase} | Shalean Blog`,
         description,
         url: canonicalAbsolute,
         type: "article",
-        publishedTime: dbPost.publishedAt,
-        modifiedTime: dbPost.updatedAt,
+        ...(pubOk ? { publishedTime: dbPost.publishedAt } : {}),
+        ...(modOk ? { modifiedTime: dbPost.updatedAt } : {}),
         images: [{ url: heroSrc, alt: heroAlt }],
       },
       twitter: {
@@ -170,7 +222,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const prog = getProgrammaticPost(slug);
-  if (!prog) notFound();
+  if (!prog) {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[blog/[slug] generateMetadata] notFound(): draft DB posts need ?preview=true in dev — slug:", JSON.stringify(slug));
+    }
+    notFound();
+  }
 
   const path = `/blog/${prog.slug}`;
   const url = `${SITE}${path}`;
@@ -204,6 +261,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: [heroOg],
     },
   };
+}
+
+const METADATA_FALLBACK: Metadata = {
+  title: "Blog | Shalean Blog",
+  description: "Shalean Cleaning Services — trusted home cleaning in Cape Town.",
+};
+
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  try {
+    const data = await buildBlogMetadata(props);
+    return data ?? METADATA_FALLBACK;
+  } catch (err) {
+    if (isNextNavigationError(err)) throw err;
+    console.error("❌ METADATA CRASH:", err);
+    return METADATA_FALLBACK;
+  }
 }
 
 function buildProgrammaticBlogPostingJsonLd(post: ProgrammaticPost) {
@@ -365,8 +438,15 @@ function buildHighConversionGraphJsonLd(post: HighConversionBlogArticle) {
   };
 }
 
-export default async function BlogPostPage({ params }: Props) {
+async function BlogPostPageImpl({ params, searchParams }: Props) {
   const { slug } = await params;
+  const sp = await searchParams;
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[blog/[slug]] PARAM SLUG:", JSON.stringify(slug));
+    console.log("[blog/[slug]] SEARCH PARAMS:", JSON.stringify(sp));
+    console.log("[blog/[slug]] preview token:", previewTokenFromSearchParams(sp) ?? "(none)");
+  }
 
   const [indexPosts, sidebarCategories] = await Promise.all([
     getBlogIndexPostsCached(),
@@ -374,8 +454,37 @@ export default async function BlogPostPage({ params }: Props) {
   ]);
   const sidebarTrending = pickTrendingSidebarPosts(indexPosts, slug, 5);
 
-  const dbPost = await getPostBySlug(slug);
+  const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
+  if (process.env.NODE_ENV === "development") {
+    console.log("[blog/[slug]] POST BEFORE BRANCH (dbPost):", dbPost ? `hit id=${dbPost.id} status=${dbPost.dbStatus}` : "null");
+  }
   if (dbPost) {
+    if (process.env.NODE_ENV === "development") {
+      const types = Array.isArray(dbPost.content?.blocks)
+        ? dbPost.content.blocks.map((b) => b.type)
+        : [];
+      console.log(
+        "POST DATA:",
+        JSON.stringify(
+          {
+            id: dbPost.id,
+            slug: dbPost.slug,
+            title: dbPost.title,
+            dbStatus: dbPost.dbStatus,
+            hasContentJson: Boolean(dbPost.content),
+            blockCount: dbPost.content?.blocks?.length ?? 0,
+            blockTypes: types,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+    if (!dbPost.content || !Array.isArray(dbPost.content.blocks)) {
+      console.error("BLOG PAGE ERROR: missing content_json.blocks for post", dbPost.id);
+      notFound();
+    }
+
     const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
     const heroSrcAbs = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
     const faqItems = collectFaqItemsFromContent(dbPost.content);
@@ -395,7 +504,7 @@ export default async function BlogPostPage({ params }: Props) {
 
     const hero = {
       src: dbPost.featuredImageUrl,
-      alt: dbPost.featuredImageAlt.trim() || dbPost.h1,
+      alt: (dbPost.featuredImageAlt ?? "").trim() || dbPost.h1,
     };
 
     const contentForRender = stripFirstDuplicateFeaturedImage(
@@ -416,6 +525,18 @@ export default async function BlogPostPage({ params }: Props) {
         <main className="bg-white text-zinc-900">
           <GrowthTracking event="page_view" payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
+
+          {dbPost.dbStatus === "draft" || dbPost.dbStatus === "scheduled" ? (
+            <div
+              className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
+              role="status"
+            >
+              Unpublished preview — not indexed until published. Dev:{" "}
+              <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=true</code> · Prod:{" "}
+              <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=…</code> using{" "}
+              <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">BLOG_DRAFT_PREVIEW_TOKEN</code>.
+            </div>
+          ) : null}
 
           <BlogPostLayout
             breadcrumbCurrentLabel={dbPost.title}
@@ -533,7 +654,15 @@ export default async function BlogPostPage({ params }: Props) {
   }
 
   const prog = getProgrammaticPost(slug);
-  if (!prog) notFound();
+  if (!prog) {
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        "[blog/[slug]] notFound(): no DB post (see getPostBySlug), no HC/airbnb slug match, programmatic miss for slug:",
+        JSON.stringify(slug),
+      );
+    }
+    notFound();
+  }
 
   const jsonLdStr = JSON.stringify(buildProgrammaticGraphJsonLd(prog)).replace(/</g, "\\u003c");
   const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, prog.slug, 6));
@@ -578,4 +707,29 @@ export default async function BlogPostPage({ params }: Props) {
       </main>
     </MarketingLayout>
   );
+}
+
+function BlogPostFatalErrorUi() {
+  return (
+    <main className="mx-auto max-w-lg px-4 py-20 text-center text-zinc-800">
+      <h1 className="text-lg font-semibold">Page error</h1>
+      <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+        This article could not be loaded. Please try again later or return to the{" "}
+        <a className="font-medium text-blue-700 underline-offset-2 hover:underline" href="/blog">
+          blog home
+        </a>
+        .
+      </p>
+    </main>
+  );
+}
+
+export default async function BlogPostPage(props: Props) {
+  try {
+    return await BlogPostPageImpl(props);
+  } catch (err) {
+    if (isNextNavigationError(err)) throw err;
+    console.error("❌ PAGE CRASH:", err);
+    return <BlogPostFatalErrorUi />;
+  }
 }

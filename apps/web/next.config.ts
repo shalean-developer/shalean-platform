@@ -26,19 +26,28 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       /**
-       * Canonical host: `.co.za` only. Apex + `www` `.com` → `https://www.shalean.co.za` with path + query preserved.
+       * Canonical host: apex `https://shalean.co.za`. `www.shalean.co.za` → apex (backup if DNS/Vercel redirect differs).
        * Next uses **308** for `permanent: true` (same semantics as 301 for SEO; method/body preserved).
        */
       {
         source: "/:path*",
+        has: [{ type: "host", value: "www.shalean.co.za" }],
+        destination: "https://shalean.co.za/:path*",
+        permanent: true,
+      },
+      /**
+       * Legacy `.com` → canonical apex `.co.za` with path + query preserved.
+       */
+      {
+        source: "/:path*",
         has: [{ type: "host", value: "shalean.com" }],
-        destination: "https://www.shalean.co.za/:path*",
+        destination: "https://shalean.co.za/:path*",
         permanent: true,
       },
       {
         source: "/:path*",
         has: [{ type: "host", value: "www.shalean.com" }],
-        destination: "https://www.shalean.co.za/:path*",
+        destination: "https://shalean.co.za/:path*",
         permanent: true,
       },
       {

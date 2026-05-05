@@ -1,13 +1,14 @@
 import type { BlogContentJson } from "./content-json";
 import type { BlogFaqItem } from "./content-json";
 
-const SITE = "https://www.shalean.co.za";
+import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
 
 export function collectFaqItemsFromContent(content: BlogContentJson): BlogFaqItem[] {
+  const blocks = Array.isArray(content.blocks) ? content.blocks : [];
   const out: BlogFaqItem[] = [];
-  for (const block of content.blocks) {
-    if (block.type === "faq") {
+  for (const block of blocks) {
+    if (block.type === "faq" && Array.isArray(block.items)) {
       out.push(...block.items);
     }
   }
@@ -15,10 +16,16 @@ export function collectFaqItemsFromContent(content: BlogContentJson): BlogFaqIte
 }
 
 export function absoluteUrlFromCanonicalPath(canonicalPath: string): string {
-  if (canonicalPath.startsWith("http://") || canonicalPath.startsWith("https://")) {
-    return canonicalPath;
+  const raw = typeof canonicalPath === "string" ? canonicalPath.trim() : "";
+  if (!raw) return `${SITE}/`;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      return new URL(raw).href;
+    } catch {
+      return `${SITE}/`;
+    }
   }
-  const path = canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`;
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
   return `${SITE}${path}`;
 }
 

@@ -40,8 +40,10 @@ function primaryServicePath(serviceSlug: string, citySlug: string): string | nul
 function collectInternalLinkUrls(blocks: BlogContentBlock[]): string[] {
   const urls: string[] = [];
   for (const b of blocks) {
-    if (b.type === "internal_links") {
-      for (const l of b.links) urls.push(normPath(l.url));
+    if (b.type === "internal_links" && Array.isArray(b.links)) {
+      for (const l of b.links) {
+        if (l?.url) urls.push(normPath(String(l.url)));
+      }
     }
   }
   return urls;
@@ -66,6 +68,8 @@ export function injectInternalLinks(
   content_json: BlogContentJson,
   context: InjectInternalLinksContext,
 ): BlogContentJson {
+  const baseBlocks = Array.isArray(content_json.blocks) ? content_json.blocks : [];
+
   const locationName = context.location.trim();
   const cityName = context.city.trim();
   const serviceName = context.service.trim();
@@ -73,7 +77,7 @@ export function injectInternalLinks(
   const citySlug = (context.citySlug ?? slugifyTitle(cityName)).replace(/^\/+|\/+$/g, "");
   const serviceSlug = (context.serviceSlug ?? slugifyTitle(serviceName)).replace(/^\/+|\/+$/g, "");
 
-  const existing = collectInternalLinkUrls(content_json.blocks);
+  const existing = collectInternalLinkUrls(baseBlocks);
   const simulated = [...existing];
   const toAdd: { label: string; url: string }[] = [];
   const seen = new Set(simulated);
@@ -175,15 +179,15 @@ export function injectInternalLinks(
     );
   }
 
-  if (toAdd.length === 0) return content_json;
+  if (toAdd.length === 0) return { ...content_json, blocks: baseBlocks };
 
-  const blocks = content_json.blocks.map((b) => ({ ...b })) as BlogContentBlock[];
+  const blocks = baseBlocks.map((b) => ({ ...b })) as BlogContentBlock[];
   const idx = blocks.findIndex((b) => b.type === "internal_links");
 
   if (idx >= 0) {
     const cur = blocks[idx] as BlogInternalLinksBlock;
-    const merged = [...cur.links];
-    const mseen = new Set(merged.map((l) => normPath(l.url)));
+    const merged = Array.isArray(cur.links) ? [...cur.links] : [];
+    const mseen = new Set(merged.map((l) => normPath(String(l.url ?? ""))));
     for (const l of toAdd) {
       const p = normPath(l.url);
       if (!mseen.has(p)) {

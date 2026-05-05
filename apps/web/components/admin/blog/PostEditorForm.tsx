@@ -362,12 +362,19 @@ export function PostEditorForm({ mode, postId }: Props) {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = (await res.json().catch(() => ({}))) as { error?: string; post?: { id: string } };
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      post?: { id: string };
+      validation?: { issues?: { code: string; message: string }[] };
+    };
     setSaving(false);
     if (!res.ok) {
+      const pubIssues = json.validation?.issues?.map((i) => i.message).filter(Boolean) ?? [];
+      setFieldErrors(pubIssues);
       setFormError(json.error ?? "Save failed.");
       return;
     }
+    setFieldErrors([]);
     if (mode === "create" && json.post?.id) {
       router.push(`/admin/blog/${json.post.id}`);
       router.refresh();
@@ -416,9 +423,9 @@ export function PostEditorForm({ mode, postId }: Props) {
     <div className="mx-auto max-w-7xl space-y-8 pb-16 px-4">
       {(formError || fieldErrors.length > 0) && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {formError ? <p>{formError}</p> : null}
+          {formError ? <p className="font-medium">{formError}</p> : null}
           {fieldErrors.length > 0 ? (
-            <ul className="mt-2 list-disc pl-5">
+            <ul className={cn("list-disc pl-5", formError ? "mt-2" : "")}>
               {fieldErrors.map((e, idx) => (
                 <li key={`${idx}-${e}`}>{e}</li>
               ))}

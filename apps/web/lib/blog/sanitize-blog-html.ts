@@ -27,9 +27,14 @@ const ALLOWED_URI_REGEXP = /^(?:(?:https?):|mailto:|tel:|\/|#)/i;
  * Keeps a TipTap-friendly subset aligned with on-page SEO headings (h2–h3).
  */
 export function sanitizeBlogRichHtml(html: string): string {
-  return DOMPurify.sanitize(html ?? "", {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOWED_URI_REGEXP,
-  });
+  try {
+    return DOMPurify.sanitize(html ?? "", {
+      ALLOWED_TAGS,
+      ALLOWED_ATTR,
+      ALLOWED_URI_REGEXP,
+    });
+  } catch (err) {
+    console.error("[blog] sanitizeBlogRichHtml failed (falling back to empty string)", err);
+    return "";
+  }
 }

@@ -168,7 +168,9 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
         </div>
       );
 
-    case "comparison_table":
+    case "comparison_table": {
+      const cols = Array.isArray(block.columns) ? block.columns : [];
+      const rows = Array.isArray(block.rows) ? block.rows : [];
       return (
         <div
           id={block.id}
@@ -177,7 +179,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           <table className="w-full min-w-[280px] border-collapse text-left text-sm text-zinc-700">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50">
-                {block.columns.map((col, i) => (
+                {cols.map((col, i) => (
                   <th
                     key={i}
                     scope="col"
@@ -189,9 +191,9 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
               </tr>
             </thead>
             <tbody>
-              {block.rows.map((row, ri) => (
+              {rows.map((row, ri) => (
                 <tr key={ri} className="border-b border-zinc-100 last:border-0">
-                  {row.map((cell, ci) => (
+                  {(Array.isArray(row) ? row : []).map((cell, ci) => (
                     <td key={ci} className="px-3 py-3 align-top sm:px-4">
                       {cell}
                     </td>
@@ -202,6 +204,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           </table>
         </div>
       );
+    }
 
     case "bullets":
       return (
@@ -242,10 +245,11 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
       );
 
     case "faq": {
+      const faqItems = Array.isArray(block.items) ? block.items : [];
       const headingId = blogFaqHeadingDomId(block, index);
       const accordion = (
         <Accordion type="single" collapsible className="mt-4 w-full">
-          {block.items.map((item, i) => (
+          {faqItems.map((item, i) => (
             <AccordionItem value={`faq-${index}-${i}`} key={i}>
               <AccordionTrigger className="text-left text-base">{item.question}</AccordionTrigger>
               <AccordionContent className="text-base leading-relaxed text-zinc-600">
@@ -399,14 +403,15 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
         </blockquote>
       );
 
-    case "internal_links":
+    case "internal_links": {
+      const links = Array.isArray(block.links) ? block.links : [];
       return (
         <nav id={block.id} className="space-y-3" aria-label={block.title ?? "Related links"}>
           {block.title ? (
             <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
           ) : null}
           <ul className="space-y-2">
-            {block.links.map((l) => (
+            {links.map((l) => (
               <li key={l.url + l.label}>
                 <Link
                   href={l.url}
@@ -419,6 +424,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           </ul>
         </nav>
       );
+    }
 
     case "service_area":
       return (
@@ -434,7 +440,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {block.locations.map((loc) => (
+            {(Array.isArray(block.locations) ? block.locations : []).map((loc) => (
               <span
                 key={loc}
                 className="inline-flex items-center rounded-full border border-white bg-white/90 px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-sm"
@@ -454,7 +460,26 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
 }
 
 export function BlogContentRenderer({ content }: Props) {
-  const hasFaq = content.blocks.some((b) => b.type === "faq");
+  const blocks = Array.isArray(content.blocks) ? content.blocks : [];
+  const hasFaq = blocks.some((b) => b.type === "faq");
+
+  if (blocks.length === 0) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[BlogContentRenderer] No blocks to render (invalid or empty content_json after parse).");
+    }
+    return (
+      <div
+        className="blog-body mx-auto max-w-[65ch] rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-6 text-sm text-amber-950"
+        data-blog-content-root
+        data-has-faq="false"
+        role="status"
+      >
+        Content is unavailable for this article. If you edit the post in the admin CMS, ensure{" "}
+        <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">content_json</code> matches the block schema (see{" "}
+        <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">blogContentJsonSchema</code>).
+      </div>
+    );
+  }
 
   return (
     <div
@@ -462,7 +487,7 @@ export function BlogContentRenderer({ content }: Props) {
       data-blog-content-root
       data-has-faq={hasFaq ? "true" : "false"}
     >
-      {content.blocks.map((block, i) => (
+      {blocks.map((block, i) => (
         <Block key={block.id ?? `${block.type}-${i}`} block={block} index={i} />
       ))}
     </div>

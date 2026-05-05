@@ -1,6 +1,5 @@
 import Image from "next/image";
-
-const SITE = "https://www.shalean.co.za";
+import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 
 /** Editorial byline — organization as author (matches BlogPosting JSON-LD). */
 export function BlogAuthorCard() {

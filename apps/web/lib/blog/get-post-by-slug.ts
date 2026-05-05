@@ -1,4 +1,5 @@
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { isBlogDraftPreviewAllowed } from "@/lib/blog/blog-draft-preview";
 import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
 import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-related-posts";
 import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
@@ -11,6 +12,18 @@ import { excerptFromFirstIntroBlock } from "./excerpt-from-content-json";
 
 const SELECT =
   "id,slug,title,h1,excerpt,status,source,content_json,meta_title,meta_description,canonical_url,featured_image_url,featured_image_alt,author_id,category_id,reading_time_minutes,published_at,updated_at,created_at,noindex,primary_keyword,secondary_keywords,search_intent,seo_internal_link_context,blog_categories(slug,name)";
+
+/** Avoid Invalid Date strings leaking to layout/metadata (Intl.format throws). */
+function clampToValidIso(value: string | null | undefined, fallbackIso: string): string {
+  if (value == null) return fallbackIso;
+  const s = String(value).trim();
+  if (!s) return fallbackIso;
+  const ms = Date.parse(s);
+  if (Number.isNaN(ms)) return fallbackIso;
+  return new Date(ms).toISOString();
+}
+
+export type BlogPostDbStatus = "draft" | "published" | "scheduled";
 
 export type NormalizedDbBlogPost = {
   id: string;
@@ -25,8 +38,13 @@ export type NormalizedDbBlogPost = {
   featuredImageUrl: string;
   featuredImageAlt: string;
   readingTimeMinutes: number | null;
+  /** ISO date for display / JSON-LD — drafts use `created_at` when `published_at` is null. */
   publishedAt: string;
   updatedAt: string;
+  /** Raw row status from `blog_posts.status`. */
+  dbStatus: BlogPostDbStatus;
+  /** True only when the post is published, live (`published_at` ≤ now), and not `noindex`. */
+  indexedForSearch: boolean;
   noindex: boolean;
   primaryKeyword: string | null;
   secondaryKeywords: string[];
@@ -37,13 +55,18 @@ export type NormalizedDbBlogPost = {
   relatedPosts: { slug: string; title: string }[];
 };
 
+export type GetPostBySlugOptions = {
+  previewToken?: string | null;
+};
+
 function normalizeContentJson(raw: unknown): BlogContentJson {
   const parsed = safeParseBlogContentJson(raw);
   if (!parsed.success) {
     console.error("[blog] Invalid content_json", parsed.error.flatten());
     return emptyBlogContentJson();
   }
-  return parsed.data;
+  const blocks = Array.isArray(parsed.data.blocks) ? parsed.data.blocks : [];
+  return { ...parsed.data, blocks };
 }
 
 async function fetchTagSlugsForPost(
@@ -90,31 +113,84 @@ async function fetchRelatedForInject(
   return ranked.map((p) => ({ slug: p.slug, title: p.title }));
 }
 
-export async function getPostBySlug(slug: string): Promise<NormalizedDbBlogPost | null> {
+export async function getPostBySlug(
+  slug: string,
+  opts?: GetPostBySlugOptions,
+): Promise<NormalizedDbBlogPost | null> {
   const trimmed = slug.trim();
   if (!trimmed) return null;
 
+  const trace =
+    process.env.NODE_ENV === "development" || process.env.BLOG_DEBUG_FETCH === "1";
+  if (trace) {
+    console.log("🔍 FETCHING SLUG:", trimmed);
+  }
+
   const supabase = getSupabaseServer();
-  if (!supabase) return null;
+  if (!supabase) {
+    console.error("❌ getPostBySlug: Supabase server client is NULL — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    return null;
+  }
 
   const nowIso = new Date().toISOString();
+  const allowPreview = isBlogDraftPreviewAllowed(opts?.previewToken ?? null);
 
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(SELECT)
-    .eq("slug", trimmed)
-    .eq("status", "published")
-    .lte("published_at", nowIso)
-    .maybeSingle();
+  if (process.env.NODE_ENV === "development") {
+    console.log("[blog] getPostBySlug query", {
+      slug: trimmed,
+      previewToken: opts?.previewToken ?? null,
+      allowPreview,
+      filter: allowPreview ? "status IN draft|published|scheduled" : "status=published AND published_at<=now",
+    });
+  }
+
+  let query = supabase.from("blog_posts").select(SELECT).eq("slug", trimmed);
+  if (!allowPreview) {
+    query = query.eq("status", "published").lte("published_at", nowIso);
+  } else {
+    query = query.in("status", ["draft", "published", "scheduled"]);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     console.error("[blog] getPostBySlug", error.message);
     return null;
   }
-  if (!data) return null;
+  if (!data) {
+    if (trace) {
+      console.log("[blog] getPostBySlug: no row for slug after query", trimmed);
+    }
+    return null;
+  }
+  if (trace) {
+    console.log("[blog] getPostBySlug hit row id=", (data as { id?: string }).id, "status=", (data as { status?: string }).status);
+  }
 
   const row = data as Record<string, unknown>;
+  if (row.content_json == null) {
+    console.error("❌ getPostBySlug: row has null content_json", { slug: trimmed, id: row.id });
+  }
+  const rawStatus = String(row.status ?? "draft");
+  const dbStatus: BlogPostDbStatus =
+    rawStatus === "published" || rawStatus === "scheduled" || rawStatus === "draft"
+      ? rawStatus
+      : "draft";
+  const publishedAtRaw = row.published_at == null || row.published_at === "" ? null : String(row.published_at);
+  const createdAtRaw = row.created_at == null || row.created_at === "" ? null : String(row.created_at);
+
+  if (!allowPreview) {
+    if (dbStatus !== "published" || !publishedAtRaw || new Date(publishedAtRaw) > new Date()) {
+      return null;
+    }
+  } else if (dbStatus === "published" && !publishedAtRaw) {
+    return null;
+  }
   let content = normalizeContentJson(row.content_json);
+  if (!Array.isArray(content.blocks)) {
+    console.error("❌ getPostBySlug: normalized content missing blocks array", { slug: trimmed, id: row.id });
+    content = { ...content, blocks: [] };
+  }
 
   const title = String(row.title ?? "");
   const rawH1 = row.h1 == null || row.h1 === "" ? null : String(row.h1);
@@ -156,6 +232,21 @@ export async function getPostBySlug(slug: string): Promise<NormalizedDbBlogPost 
 
   const storedCtx = parseSeoInternalLinkContext(row.seo_internal_link_context);
 
+  const nowFallback = new Date().toISOString();
+  const displayPublishedAt = clampToValidIso(
+    publishedAtRaw ?? createdAtRaw ?? (row.updated_at != null && row.updated_at !== "" ? String(row.updated_at) : null),
+    nowFallback,
+  );
+  const updatedAtNormalized = clampToValidIso(
+    row.updated_at != null && row.updated_at !== "" ? String(row.updated_at) : null,
+    displayPublishedAt,
+  );
+  const indexedForSearch =
+    dbStatus === "published" &&
+    Boolean(publishedAtRaw) &&
+    new Date(publishedAtRaw!) <= new Date() &&
+    !Boolean(row.noindex);
+
   const related = await fetchRelatedForInject(supabase, trimmed, {
     slug: trimmed,
     title,
@@ -193,8 +284,10 @@ export async function getPostBySlug(slug: string): Promise<NormalizedDbBlogPost 
     ),
     readingTimeMinutes:
       typeof row.reading_time_minutes === "number" ? row.reading_time_minutes : null,
-    publishedAt: String(row.published_at),
-    updatedAt: String(row.updated_at),
+    publishedAt: displayPublishedAt,
+    updatedAt: updatedAtNormalized,
+    dbStatus,
+    indexedForSearch,
     noindex: Boolean(row.noindex),
     primaryKeyword,
     secondaryKeywords,

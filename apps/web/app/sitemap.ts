@@ -4,8 +4,7 @@ import { listActiveCategorySlugs, listTagSlugs } from "@/lib/blog/get-taxonomy-p
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 import { AIRBNB_AREA_LANDING_PATHS } from "@/lib/seo/airbnbAreaLandingPages";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
-
-const BASE = "https://www.shalean.co.za";
+import { SITE_ORIGIN } from "@/lib/site/canonical";
 
 /** Never list transactional Paystack return URLs (including query variants if ever added). */
 const SITEMAP_EXCLUDED_PATHNAMES = new Set(["/booking/success", "/payment/success"]);
@@ -45,31 +44,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entries.push({ url: normalized, lastModified, priority });
   };
 
-  push(BASE, 1);
+  push(SITE_ORIGIN, 1);
 
-  push(`${BASE}/services`, 0.9);
+  push(`${SITE_ORIGIN}/services`, 0.9);
   for (const p of Object.values(CAPE_TOWN_SERVICE_SEO)) {
-    push(`${BASE}${p.path}`, 0.9);
+    push(`${SITE_ORIGIN}${p.path}`, 0.9);
   }
 
-  push(`${BASE}/locations`, 0.8);
-  push(`${BASE}/locations/cape-town-cleaning-services`, 0.8);
+  push(`${SITE_ORIGIN}/locations`, 0.8);
+  push(`${SITE_ORIGIN}/locations/cape-town-cleaning-services`, 0.8);
   for (const p of Object.values(LOCATION_SEO_PAGES)) {
-    push(`${BASE}${p.path}`, 0.8);
+    push(`${SITE_ORIGIN}${p.path}`, 0.8);
   }
 
   for (const path of AIRBNB_AREA_LANDING_PATHS) {
-    push(`${BASE}${path}`, 0.8);
+    push(`${SITE_ORIGIN}${path}`, 0.8);
   }
 
-  push(`${BASE}/cleaning-prices-cape-town`, 0.8);
-  push(`${BASE}/maid-services-cape-town`, 0.8);
+  push(`${SITE_ORIGIN}/cleaning-prices-cape-town`, 0.8);
+  push(`${SITE_ORIGIN}/maid-services-cape-town`, 0.8);
 
-  push(`${BASE}/about`, 0.65);
-  push(`${BASE}/faq`, 0.65);
-  push(`${BASE}/reviews`, 0.65);
+  push(`${SITE_ORIGIN}/about`, 0.65);
+  push(`${SITE_ORIGIN}/faq`, 0.65);
+  push(`${SITE_ORIGIN}/reviews`, 0.65);
 
-  push(`${BASE}/blog`, 0.7);
+  push(`${SITE_ORIGIN}/blog`, 0.7);
 
   const dbSlugs = await getPublishedBlogSlugs();
   const categorySlugs = await listActiveCategorySlugs();
@@ -80,15 +79,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(post.slug);
 
   for (const slug of blogSlugSet) {
-    push(`${BASE}/blog/${slug}`, 0.7);
+    push(`${SITE_ORIGIN}/blog/${slug}`, 0.7);
   }
 
   for (const slug of categorySlugs) {
-    push(`${BASE}/blog/category/${slug}`, 0.65);
+    push(`${SITE_ORIGIN}/blog/category/${slug}`, 0.65);
   }
 
   for (const slug of tagSlugs) {
-    push(`${BASE}/blog/tag/${slug}`, 0.65);
+    push(`${SITE_ORIGIN}/blog/tag/${slug}`, 0.65);
   }
 
   return entries;

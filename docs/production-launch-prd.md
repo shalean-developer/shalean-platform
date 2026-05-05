@@ -72,8 +72,8 @@ Without correct configuration and verification:
 
 | ID | Requirement | Acceptance criteria |
 |----|-------------|---------------------|
-| FR-P01 | Customer **charge** webhooks are delivered to the **booking** handler. | Paystack Dashboard shows URL `https://www.shalean.co.za/api/paystack/webhook`; test `charge.success` creates/updates booking as designed. |
-| FR-P02 | **Transfer** webhooks (if payouts enabled) use the **transfer** handler. | Dashboard shows `https://www.shalean.co.za/api/webhooks/paystack` for transfer events only; transfer success/failure reflected in payout pipeline. |
+| FR-P01 | Customer **charge** webhooks are delivered to the **booking** handler. | Paystack Dashboard shows URL `https://shalean.co.za/api/paystack/webhook`; test `charge.success` creates/updates booking as designed. |
+| FR-P02 | **Transfer** webhooks (if payouts enabled) use the **transfer** handler. | Dashboard shows `https://shalean.co.za/api/webhooks/paystack` for transfer events only; transfer success/failure reflected in payout pipeline. |
 | FR-P03 | Server can authenticate to Paystack for initialize and verify. | `PAYSTACK_SECRET_KEY` present in production; successful test initialize + verify in staging or prod test. |
 
 ### 7.2 Data and recovery

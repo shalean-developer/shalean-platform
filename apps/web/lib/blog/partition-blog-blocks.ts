@@ -10,6 +10,7 @@ export type PartitionBlogBlocksResult = {
  * before FAQ when present, else before internal_links, else append slot after full body.
  */
 export function partitionBlogBlocks(blocks: BlogContentBlock[]): PartitionBlogBlocksResult {
+  if (!Array.isArray(blocks)) return { before: [], after: [] };
   const faqIdx = blocks.findIndex((b) => b.type === "faq");
   if (faqIdx >= 0) {
     return { before: blocks.slice(0, faqIdx), after: blocks.slice(faqIdx) };

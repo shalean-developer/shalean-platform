@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let cached: SupabaseClient | null | undefined;
 let loggedMissingServer = false;
@@ -12,7 +13,11 @@ function logMissingSupabaseServerOnce(urlPresent: boolean, keyPresent: boolean):
   });
 }
 
-/** Server-side public Supabase client for cached marketing reads. */
+/**
+ * Server-side Supabase for RSC, route handlers, and cron-style callers.
+ * Uses `@supabase/ssr` (aligned with middleware) with no-op cookies: sufficient for
+ * anonymous `anon` reads (blog, marketing). Auth-bound flows should use request-scoped cookies.
+ */
 export function getSupabaseServer(): SupabaseClient | null {
   if (cached !== undefined) return cached;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
@@ -22,6 +27,18 @@ export function getSupabaseServer(): SupabaseClient | null {
     cached = null;
     return cached;
   }
-  cached = createClient(url, key, { auth: { persistSession: false } });
+
+  cached = createServerClient(url, key, {
+    auth: {
+      persistSession: false,
+      lockAcquireTimeout: process.env.NODE_ENV === "development" ? 60_000 : 15_000,
+    },
+    cookies: {
+      getAll() {
+        return [];
+      },
+      setAll() {},
+    },
+  });
   return cached;
 }

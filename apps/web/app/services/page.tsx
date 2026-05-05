@@ -18,6 +18,7 @@ import {
   type CapeTownSeoServiceSlug,
 } from "@/lib/seo/capeTownSeoPages";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import {
   AppWindow,
@@ -36,7 +37,6 @@ import {
   Star,
 } from "lucide-react";
 
-const SITE = "https://www.shalean.co.za";
 const CANONICAL = "/services";
 const PAGE_URL = `${SITE}${CANONICAL}`;
 

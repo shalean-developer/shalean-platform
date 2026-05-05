@@ -2,7 +2,7 @@
  * Google Search Console–oriented constants for filtering and URL hygiene.
  *
  * Recommended GSC views:
- * - Page filter prefix: `https://www.shalean.co.za/locations/`
+ * - Page filter prefix: `https://shalean.co.za/locations/` (use `SITE_ORIGIN` in tooling)
  * - Regex query filter example: `cleaning services in .* cape town`
  * - Compare hub templates vs blog `/blog/*` guides using secondary dimensions (page + query).
  *

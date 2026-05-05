@@ -7,9 +7,8 @@ import { cityNameFromSlug, locationNameForCity, SERVICE_LOCATIONS } from "@/lib/
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
-
-const SITE_ORIGIN = "https://www.shalean.co.za";
 
 type Props = { params: Promise<{ city: string; location: string }> };
 

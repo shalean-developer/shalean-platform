@@ -7,10 +7,10 @@ Action plan derived from the pre-launch audit (payments, SEO, ops). Treat each d
 ## Day 1 — Paystack and webhooks (hard prerequisites)
 
 - [ ] In **Paystack Dashboard → Webhooks**, set the **customer charge** URL to:  
-  `https://www.shalean.co.za/api/paystack/webhook`  
+  `https://shalean.co.za/api/paystack/webhook`  
   (Handler: `apps/web/app/api/paystack/webhook/route.ts` — `charge.success`, `charge.failed`, monthly invoice path.)
 - [ ] Confirm **payout / transfer** events (if used) point to:  
-  `https://www.shalean.co.za/api/webhooks/paystack`  
+  `https://shalean.co.za/api/webhooks/paystack`  
   (`apps/web/app/api/webhooks/paystack/route.ts` — `transfer.success` / `transfer.failed` only.)
 - [ ] Record a **test payment** in production (or staging with live keys only if policy allows): verify one row in `bookings` and expected `paystack_reference`.
 - [ ] Verify **`PAYSTACK_SECRET_KEY`** is set in the production deployment (initialize + verify + webhooks all depend on it).
@@ -64,7 +64,7 @@ Action plan derived from the pre-launch audit (payments, SEO, ops). Treat each d
 
 ## Day 7 — Go-live checklist and performance
 
-- [ ] **`NEXT_PUBLIC_APP_URL`**: matches live canonical (www vs apex) so email links and redirects match `getPublicAppUrlBase()` / `metadataBase` (`https://www.shalean.co.za`).
+- [ ] **`NEXT_PUBLIC_SITE_URL`** (and optional **`NEXT_PUBLIC_APP_URL`**): match live apex `https://shalean.co.za` so metadata, email links, and redirects stay aligned.
 - [ ] **Lighthouse / PageSpeed** (mobile + desktop) on `/` and one location page; note **LCP** and font loading (Geist from `next/font` in root layout).
 - [ ] **Email path**: one booking end-to-end with inbox check (payment confirmed, assignment if applicable).
 - [ ] **Rollback / comms**: who toggles maintenance, who answers Paystack + support if `failed_jobs` spikes in the first 48 hours.

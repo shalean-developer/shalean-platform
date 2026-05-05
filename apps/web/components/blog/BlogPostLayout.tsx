@@ -18,6 +18,22 @@ import type { BlogSidebarCategory, RelatedGridPost } from "@/lib/blog/get-blog-s
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
+const ZA_LONG_DATE: Intl.DateTimeFormatOptions = {
+  dateStyle: "long",
+  timeZone: "Africa/Johannesburg",
+};
+
+/** `Intl.DateTimeFormat#format` throws RangeError on Invalid Date — CMS rows must never take down the page. */
+function formatZaLongDate(iso: string): string {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-ZA", ZA_LONG_DATE).format(new Date(ms));
+  } catch {
+    return "—";
+  }
+}
+
 export type BlogPostLayoutProps = {
   breadcrumbCurrentLabel: string;
   h1: string;
@@ -65,26 +81,18 @@ export function BlogPostLayout({
       ? `${readingTimeMinutes} min read`
       : null;
 
-  const publishedLabel = new Intl.DateTimeFormat("en-ZA", {
-    dateStyle: "long",
-    timeZone: "Africa/Johannesburg",
-  }).format(new Date(publishedAtIso));
+  const publishedLabel = formatZaLongDate(publishedAtIso);
 
-  const publishedMs = new Date(publishedAtIso).getTime();
-  const updatedMs = updatedAtIso ? new Date(updatedAtIso).getTime() : NaN;
+  const publishedMs = Date.parse(publishedAtIso);
+  const updatedMs = updatedAtIso ? Date.parse(updatedAtIso) : NaN;
   const showUpdated =
     updatedAtIso != null &&
     updatedAtIso !== "" &&
+    !Number.isNaN(publishedMs) &&
     !Number.isNaN(updatedMs) &&
     updatedMs > publishedMs;
 
-  const updatedLabel =
-    showUpdated && updatedAtIso
-      ? new Intl.DateTimeFormat("en-ZA", {
-          dateStyle: "long",
-          timeZone: "Africa/Johannesburg",
-        }).format(new Date(updatedAtIso))
-      : null;
+  const updatedLabel = showUpdated && updatedAtIso ? formatZaLongDate(updatedAtIso) : null;
 
   return (
     <>

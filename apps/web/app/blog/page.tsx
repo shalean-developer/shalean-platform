@@ -17,10 +17,8 @@ import {
   type BlogTopicFilterId,
 } from "@/lib/blog/blog-index-hub";
 import { getAllPublishedPosts } from "@/lib/blog/get-all-posts";
-import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
-
-const SITE = "https://www.shalean.co.za";
 const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
 const PAGE_URL = CANONICAL_ABS;
 

@@ -30,6 +30,7 @@ import {
   computeBundledExtrasTotalZarSnapshot,
   extrasLineItemsFromSnapshot,
 } from "@/lib/pricing/extrasConfig";
+import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getStoredReferral } from "@/lib/referrals/client";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
@@ -517,7 +518,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     const origin =
       typeof window !== "undefined"
         ? window.location.origin
-        : envOrigin || "https://www.shalean.co.za";
+        : envOrigin || SITE_ORIGIN;
     const redirectTo = origin ? `${origin}${bookingHref("checkout")}` : undefined;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,

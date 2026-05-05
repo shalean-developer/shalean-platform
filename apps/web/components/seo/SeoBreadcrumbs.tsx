@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const SITE_ORIGIN = "https://www.shalean.co.za";
+import { SITE_ORIGIN } from "@/lib/site/canonical";
 
 export type SeoBreadcrumbItem = {
   name: string;

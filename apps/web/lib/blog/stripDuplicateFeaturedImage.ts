@@ -21,7 +21,8 @@ export function stripFirstDuplicateFeaturedImage(content: BlogContentJson, featu
 
   let removed = false;
   const blocks: BlogContentBlock[] = [];
-  for (const b of content.blocks) {
+  const rawBlocks = Array.isArray(content.blocks) ? content.blocks : [];
+  for (const b of rawBlocks) {
     if (!removed && b.type === "image" && normalizeAssetPath(b.url) === target) {
       removed = true;
       continue;

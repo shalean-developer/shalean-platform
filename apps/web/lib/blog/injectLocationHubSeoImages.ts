@@ -113,22 +113,23 @@ function buildHubImageBlocks(slug: string): [BlogImageBlock, BlogImageBlock, Blo
  * after services bullet_list, after “when” paragraph, immediately before CTA.
  */
 export function injectLocationHubSeoImages(slug: string, blocks: BlogContentBlock[]): BlogContentBlock[] {
-  if (!LOCATION_HUB_SEO_IMAGE_SLUGS.has(slug)) return blocks;
+  const safe = Array.isArray(blocks) ? blocks : [];
+  if (!LOCATION_HUB_SEO_IMAGE_SLUGS.has(slug)) return safe;
 
   const imgs = buildHubImageBlocks(slug);
-  if (!imgs) return blocks;
+  if (!imgs) return safe;
 
-  const servicesIdx = findServiceBulletListIndex(blocks);
-  const whenParaIdx = findWhenParagraphIndex(blocks);
-  const ctaIdx = blocks.findIndex((b) => b.type === "cta");
+  const servicesIdx = findServiceBulletListIndex(safe);
+  const whenParaIdx = findWhenParagraphIndex(safe);
+  const ctaIdx = safe.findIndex((b) => b.type === "cta");
 
-  if (servicesIdx === -1 || whenParaIdx === -1 || ctaIdx <= 0) return blocks;
+  if (servicesIdx === -1 || whenParaIdx === -1 || ctaIdx <= 0) return safe;
 
   const [imgServices, imgWhen, imgPreCta] = imgs;
   const out: BlogContentBlock[] = [];
 
-  for (let i = 0; i < blocks.length; i++) {
-    out.push(blocks[i]);
+  for (let i = 0; i < safe.length; i++) {
+    out.push(safe[i]);
     if (i === servicesIdx) out.push(imgServices);
     if (i === whenParaIdx) out.push(imgWhen);
     if (i === ctaIdx - 1) out.push(imgPreCta);

@@ -1,9 +1,8 @@
 "use client";
 
 import { Mail, MessageCircle } from "lucide-react";
+import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { cn } from "@/lib/utils";
-
-const SITE = "https://www.shalean.co.za";
 
 function FacebookIcon({ className }: { className?: string }) {
   return (
