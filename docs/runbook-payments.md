@@ -109,3 +109,9 @@ where metric like 'pricing.%'
 order by created_at desc
 limit 50;
 ```
+
+---
+
+## See also
+
+- **Recurring cron auth & `CRON_SECRET` rotation:** `docs/runbook-cron-secret-rotation.md`

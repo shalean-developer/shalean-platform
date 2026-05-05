@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     await logCronRun({
       jobName: "generate-recurring-bookings",
       status: "error",
-      message: cronAuth.body.error,
+      message: `[auth] ${cronAuth.body.error}`,
     });
     return NextResponse.json(cronAuth.body, { status: cronAuth.status });
   }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     await logCronRun({
       jobName: "generate-recurring-bookings",
       status: "error",
-      message: "Supabase not configured.",
+      message: "[env] Supabase not configured.",
     });
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     await logCronRun({
       jobName: "generate-recurring-bookings",
       status: "error",
-      message: error.message,
+      message: `[recurring_bookings_select] ${error.message}`,
     });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -281,7 +281,7 @@ export async function POST(request: Request) {
     await logCronRun({
       jobName: "generate-recurring-bookings",
       status: "error",
-      message: msg,
+      message: `[handler] ${msg}`,
     });
     return NextResponse.json({ error: msg }, { status: 500 });
   }
