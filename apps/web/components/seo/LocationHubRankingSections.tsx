@@ -448,7 +448,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
               Check availability for {name}
             </SeoHubGrowthCtaLink>
             <Link
-              href={`/locations/${slug}#location-hub-faq`}
+              href="#location-hub-faq"
               className={`inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 ${linkEmphasisClassName}`}
             >
               Read FAQs

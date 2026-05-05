@@ -3,6 +3,7 @@ import type { BlogContentBlock, BlogContentJson, BlogInternalLinksBlock } from "
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { getLocation, LOCATIONS } from "@/lib/locations";
 import { CAPE_TOWN_SEO_SERVICE_SLUGS } from "@/lib/seo/capeTownSeoPages";
+import { resolveHubFromCleaningServicesCapeTownBlogSlug } from "@/lib/blog/seo/cleaning-services-blog-hub";
 import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 
 export type InjectInternalLinksContext = {
@@ -12,6 +13,8 @@ export type InjectInternalLinksContext = {
   locationSlug?: string;
   citySlug?: string;
   serviceSlug?: string;
+  /** Post slug — used to map `cleaning-services-*-cape-town` to the right location hub. */
+  postSlug?: string;
   relatedBlogPosts?: { slug: string; title: string }[];
 };
 
@@ -93,6 +96,15 @@ export function injectInternalLinks(
   const locPrimary = locationHref(locationSlug);
   const locRow = getLocation(locationSlug);
   const neighborSlug = locRow?.nearby?.[0];
+  const editorialHub = resolveHubFromCleaningServicesCapeTownBlogSlug(context.postSlug ?? "");
+  if (editorialHub) {
+    const editorialHubAnchors = [
+      `Cleaning services in ${editorialHub.placeName}`,
+      `House cleaning in ${editorialHub.placeName}`,
+      `Professional cleaners in ${editorialHub.placeName}`,
+    ];
+    push(anchorPick(editorialHubAnchors, `edit-hub-${context.postSlug ?? "x"}`, 0), editorialHub.href);
+  }
 
   let locGuard = 0;
   while (countPrefix(simulated, "/locations") < MIN_LOCATION && locGuard++ < 8) {
@@ -173,10 +185,15 @@ export function injectInternalLinks(
   /** Booking funnel — required for conversion-focused internal linking. */
   const bookingPath = normPath("/booking");
   if (!seen.has(bookingPath)) {
-    push(
-      anchorPick(["Book a cleaner online", "Get an instant quote", "Start your booking"], "booking-funnel", 0),
-      "/booking",
-    );
+    const bookingAnchors = editorialHub
+      ? [
+          `Book a cleaner in ${editorialHub.placeName}`,
+          "Book a cleaner online",
+          "Get an instant quote",
+          "Start your booking",
+        ]
+      : ["Book a cleaner online", "Get an instant quote", "Start your booking"];
+    push(anchorPick(bookingAnchors, "booking-funnel", 0), "/booking");
   }
 
   if (toAdd.length === 0) return { ...content_json, blocks: baseBlocks };

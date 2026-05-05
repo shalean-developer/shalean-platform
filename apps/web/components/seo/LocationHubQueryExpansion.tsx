@@ -32,7 +32,7 @@ export function LocationHubQueryExpansion({ location, slug, tier }: Props) {
         : `Deep cleaning resets ovens, grout-adjacent zones, and bathrooms after busy seasons—ideal before guests, handovers, or when ${name} kitchens have fallen behind standard upkeep.`,
       links: [
         { href: deep, label: `Deep cleaning guide (${city})` },
-        { href: `/locations/${slug}#location-hub-faq`, label: "FAQ: pricing & scope" },
+        { href: "#location-hub-faq", label: "FAQ: pricing & scope" },
       ],
     },
     {
@@ -57,7 +57,7 @@ export function LocationHubQueryExpansion({ location, slug, tier }: Props) {
         : `Move-out visits prioritise kitchens, bathrooms, floors, and dust-downs landlords photograph—pair with accurate room counts so ${name} quotes match inspection expectations.`,
       links: [
         { href: moveOut, label: `Move-out cleaning (${city})` },
-        { href: `/locations/${slug}#location-hub-faq`, label: "Related FAQs" },
+        { href: "#location-hub-faq", label: "Related FAQs" },
       ],
     },
     {

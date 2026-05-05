@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MarketingHomeNewsletterForm } from "@/components/marketing-home/MarketingHomeNewsletterForm";
+import { PopularCapeTownStrip } from "@/components/seo/PopularCapeTownStrip";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 import {
   CUSTOMER_SUPPORT_EMAIL,
@@ -16,6 +17,7 @@ export function MarketingHomeFooter() {
   return (
     <footer id="contact" className="scroll-mt-24 bg-black py-14 text-white sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <PopularCapeTownStrip theme="marketing" className="mb-10" />
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4 lg:gap-10">
           <div>
             <div className="relative inline-block">

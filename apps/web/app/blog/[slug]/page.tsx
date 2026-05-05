@@ -114,7 +114,7 @@ export async function generateStaticParams() {
   return [...map.values()];
 }
 
-async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metadata> {
+async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metadata | null> {
   const { slug } = await params;
   const sp = await searchParams;
 
@@ -124,52 +124,58 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
 
   const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
   if (dbPost) {
-    const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
-    const titleBase = safeBlogMetaText(dbPost.metaTitle, safeBlogMetaText(dbPost.title, "Blog"));
-    const description = resolveBlogDbMetaDescription({
-      metaTitle: dbPost.metaTitle,
-      title: dbPost.title,
-      metaDescription: dbPost.metaDescription,
-      excerpt: dbPost.excerpt,
-    });
-    const heroSrc = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
-    const heroAlt = safeBlogMetaText(dbPost.featuredImageAlt, safeBlogMetaText(dbPost.h1, titleBase));
-    const kwPhrase = buildKeywordsPhrase(dbPost);
-    const keywords =
-      kwPhrase != null
-        ? kwPhrase
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : undefined;
-    const pubOk = isReasonableIsoDate(dbPost.publishedAt);
-    const modOk = isReasonableIsoDate(dbPost.updatedAt);
-    const pageTitle = generateBlogArticleTitle({
-      headline: titleBase,
-      slugKey: dbPost.slug,
-    });
-    return {
-      title: pageTitle,
-      description,
-      alternates: { canonical: canonicalAbsolute },
-      ...(keywords && keywords.length > 0 ? { keywords } : {}),
-      robots: dbPost.indexedForSearch ? SEO_INDEX_FOLLOW : { index: false, follow: true },
-      openGraph: {
+    try {
+      const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
+      const titleBase = safeBlogMetaText(dbPost.metaTitle, safeBlogMetaText(dbPost.title, "Blog"));
+      const description = resolveBlogDbMetaDescription({
+        metaTitle: dbPost.metaTitle,
+        title: dbPost.title,
+        metaDescription: dbPost.metaDescription,
+        excerpt: dbPost.excerpt,
+      });
+      const heroSrc = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
+      const heroAlt = safeBlogMetaText(dbPost.featuredImageAlt, safeBlogMetaText(dbPost.h1, titleBase));
+      const kwPhrase = buildKeywordsPhrase(dbPost);
+      const keywords =
+        kwPhrase != null
+          ? kwPhrase
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : undefined;
+      const pubOk = isReasonableIsoDate(dbPost.publishedAt);
+      const modOk = isReasonableIsoDate(dbPost.updatedAt);
+      const pageTitle = generateBlogArticleTitle({
+        headline: titleBase,
+        slugKey: dbPost.slug,
+      });
+      return {
         title: pageTitle,
         description,
-        url: canonicalAbsolute,
-        type: "article",
-        ...(pubOk ? { publishedTime: dbPost.publishedAt } : {}),
-        ...(modOk ? { modifiedTime: dbPost.updatedAt } : {}),
-        images: [{ url: heroSrc, alt: heroAlt }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: pageTitle,
-        description,
-        images: [heroSrc],
-      },
-    };
+        alternates: { canonical: canonicalAbsolute },
+        ...(keywords && keywords.length > 0 ? { keywords } : {}),
+        robots: dbPost.indexedForSearch ? SEO_INDEX_FOLLOW : { index: false, follow: true },
+        openGraph: {
+          title: pageTitle,
+          description,
+          url: canonicalAbsolute,
+          type: "article",
+          ...(pubOk ? { publishedTime: dbPost.publishedAt } : {}),
+          ...(modOk ? { modifiedTime: dbPost.updatedAt } : {}),
+          images: [{ url: heroSrc, alt: heroAlt }],
+        },
+        twitter: {
+          card: "summary_large_image",
+          title: pageTitle,
+          description,
+          images: [heroSrc],
+        },
+      };
+    } catch (err) {
+      if (isNextNavigationError(err)) throw err;
+      console.error("❌ METADATA DB BRANCH:", { slug: dbPost.slug, err });
+      return null;
+    }
   }
 
   const hc = getHighConversionBlogPost(slug);
@@ -476,124 +482,151 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
     console.log("[blog/[slug]] POST BEFORE BRANCH (dbPost):", dbPost ? `hit id=${dbPost.id} status=${dbPost.dbStatus}` : "null");
   }
   if (dbPost) {
-    if (process.env.NODE_ENV === "development") {
-      const types = Array.isArray(dbPost.content?.blocks)
-        ? dbPost.content.blocks.map((b) => b.type)
-        : [];
-      console.log(
-        "POST DATA:",
-        JSON.stringify(
-          {
-            id: dbPost.id,
-            slug: dbPost.slug,
-            title: dbPost.title,
-            dbStatus: dbPost.dbStatus,
-            hasContentJson: Boolean(dbPost.content),
-            blockCount: dbPost.content?.blocks?.length ?? 0,
-            blockTypes: types,
-          },
-          null,
-          2,
-        ),
+    try {
+      if (process.env.NODE_ENV === "development") {
+        const types = Array.isArray(dbPost.content?.blocks)
+          ? dbPost.content.blocks.map((b) => b.type)
+          : [];
+        console.log(
+          "POST DATA:",
+          JSON.stringify(
+            {
+              id: dbPost.id,
+              slug: dbPost.slug,
+              title: dbPost.title,
+              dbStatus: dbPost.dbStatus,
+              hasContentJson: Boolean(dbPost.content),
+              blockCount: dbPost.content?.blocks?.length ?? 0,
+              blockTypes: types,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+
+      const safeBlocks = Array.isArray(dbPost.content?.blocks) ? dbPost.content.blocks : [];
+      if (safeBlocks.length === 0) {
+        console.warn("[blog] DB post has empty blocks — rendering shell only", { slug: dbPost.slug, id: dbPost.id });
+      }
+      const contentSafe = { ...dbPost.content, blocks: safeBlocks };
+
+      const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
+      const heroSrcAbs = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
+
+      let faqItems: ReturnType<typeof collectFaqItemsFromContent> = [];
+      try {
+        faqItems = collectFaqItemsFromContent(contentSafe);
+      } catch (err) {
+        console.error("[blog] collectFaqItemsFromContent failed", { slug: dbPost.slug, err });
+      }
+
+      const kwPhrase = buildKeywordsPhrase(dbPost);
+      const jsonLd = buildDbBlogGraphJsonLd({
+        headline: dbPost.h1,
+        description: resolveBlogDbMetaDescription({
+          metaTitle: dbPost.metaTitle,
+          title: dbPost.title,
+          metaDescription: dbPost.metaDescription,
+          excerpt: dbPost.excerpt,
+        }),
+        publishedAt: dbPost.publishedAt,
+        dateModified: dbPost.updatedAt,
+        pageUrl,
+        imageUrls: [heroSrcAbs],
+        faqItems,
+        keywords: kwPhrase,
+        articleSection: dbPost.categoryName,
+      });
+      const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+
+      const hero = {
+        src: dbPost.featuredImageUrl,
+        alt: (dbPost.featuredImageAlt ?? "").trim() || dbPost.h1,
+      };
+
+      let injectedBlocks = safeBlocks;
+      try {
+        injectedBlocks = injectLocationHubSeoImages(dbPost.slug, safeBlocks);
+      } catch (err) {
+        console.error("[blog] injectLocationHubSeoImages failed", { slug: dbPost.slug, err });
+      }
+
+      const contentForRender = stripFirstDuplicateFeaturedImage(
+        {
+          ...contentSafe,
+          blocks: injectedBlocks,
+        },
+        hero.src,
       );
-    }
-    if (!dbPost.content || !Array.isArray(dbPost.content.blocks)) {
-      console.error("BLOG PAGE ERROR: missing content_json.blocks for post", dbPost.id);
+
+      let relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
+      try {
+        if (dbPost.relatedPosts.length >= 2) {
+          relatedGrid = enrichRelatedPostsForGrid(dbPost.relatedPosts, indexPosts).slice(0, 6);
+        }
+      } catch (err) {
+        console.error("[blog] related grid enrichment failed", { slug: dbPost.slug, err });
+      }
+
+      return (
+        <MarketingLayout>
+          <main className="bg-white text-zinc-900">
+            <GrowthTracking event="page_view" payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
+
+            {dbPost.dbStatus === "draft" || dbPost.dbStatus === "scheduled" ? (
+              <div
+                className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
+                role="status"
+              >
+                Unpublished preview — not indexed until published. Dev:{" "}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=true</code> · Prod:{" "}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=…</code> using{" "}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">BLOG_DRAFT_PREVIEW_TOKEN</code>.
+              </div>
+            ) : null}
+
+            <BlogPostLayout
+              breadcrumbCurrentLabel={dbPost.title}
+              h1={dbPost.h1}
+              lede={dbPost.excerpt}
+              publishedAtIso={dbPost.publishedAt}
+              updatedAtIso={dbPost.updatedAt}
+              readingTimeMinutes={dbPost.readingTimeMinutes}
+              hero={hero}
+              trackingSlug={dbPost.slug}
+              categorySlug={dbPost.categorySlug}
+              categoryName={dbPost.categoryName}
+              sidebarCategories={sidebarCategories}
+              sidebarTrending={sidebarTrending}
+              relatedGridPosts={relatedGrid}
+              showLayoutMidBanner={false}
+            >
+              <BlogDbArticleBody
+                content={contentForRender}
+                autoLinkSlug={dbPost.slug}
+                midArticleSlot={
+                  <section
+                    className="not-prose space-y-10 border-t border-zinc-200 pt-10"
+                    aria-label="Services, areas, and booking"
+                  >
+                    <BlogConversionMidBanner trackingSlug={dbPost.slug} />
+                    <BlogContextualServiceLinks embedded />
+                    <BlogServiceLinks trackingSlug={dbPost.slug} service={getBlogServiceType(dbPost.slug)} dense />
+                    <RelatedLinks placement="blog" emphasizeLocalBooking />
+                  </section>
+                }
+              />
+            </BlogPostLayout>
+          </main>
+        </MarketingLayout>
+      );
+    } catch (err) {
+      if (isNextNavigationError(err)) throw err;
+      console.error("❌ BLOG DB PAGE ERROR:", { slug: dbPost.slug, id: dbPost.id, err });
       notFound();
     }
-
-    const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
-    const heroSrcAbs = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
-    const faqItems = collectFaqItemsFromContent(dbPost.content);
-    const kwPhrase = buildKeywordsPhrase(dbPost);
-    const jsonLd = buildDbBlogGraphJsonLd({
-      headline: dbPost.h1,
-      description: resolveBlogDbMetaDescription({
-        metaTitle: dbPost.metaTitle,
-        title: dbPost.title,
-        metaDescription: dbPost.metaDescription,
-        excerpt: dbPost.excerpt,
-      }),
-      publishedAt: dbPost.publishedAt,
-      dateModified: dbPost.updatedAt,
-      pageUrl,
-      imageUrls: [heroSrcAbs],
-      faqItems,
-      keywords: kwPhrase,
-      articleSection: dbPost.categoryName,
-    });
-    const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
-
-    const hero = {
-      src: dbPost.featuredImageUrl,
-      alt: (dbPost.featuredImageAlt ?? "").trim() || dbPost.h1,
-    };
-
-    const contentForRender = stripFirstDuplicateFeaturedImage(
-      {
-        ...dbPost.content,
-        blocks: injectLocationHubSeoImages(dbPost.slug, dbPost.content.blocks),
-      },
-      hero.src,
-    );
-
-    const relatedGrid =
-      dbPost.relatedPosts.length >= 2
-        ? enrichRelatedPostsForGrid(dbPost.relatedPosts, indexPosts).slice(0, 6)
-        : indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
-
-    return (
-      <MarketingLayout>
-        <main className="bg-white text-zinc-900">
-          <GrowthTracking event="page_view" payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
-          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
-
-          {dbPost.dbStatus === "draft" || dbPost.dbStatus === "scheduled" ? (
-            <div
-              className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
-              role="status"
-            >
-              Unpublished preview — not indexed until published. Dev:{" "}
-              <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=true</code> · Prod:{" "}
-              <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=…</code> using{" "}
-              <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">BLOG_DRAFT_PREVIEW_TOKEN</code>.
-            </div>
-          ) : null}
-
-          <BlogPostLayout
-            breadcrumbCurrentLabel={dbPost.title}
-            h1={dbPost.h1}
-            lede={dbPost.excerpt}
-            publishedAtIso={dbPost.publishedAt}
-            updatedAtIso={dbPost.updatedAt}
-            readingTimeMinutes={dbPost.readingTimeMinutes}
-            hero={hero}
-            trackingSlug={dbPost.slug}
-            categorySlug={dbPost.categorySlug}
-            categoryName={dbPost.categoryName}
-            sidebarCategories={sidebarCategories}
-            sidebarTrending={sidebarTrending}
-            relatedGridPosts={relatedGrid}
-            showLayoutMidBanner={false}
-          >
-            <BlogDbArticleBody
-              content={contentForRender}
-              midArticleSlot={
-                <section
-                  className="not-prose space-y-10 border-t border-zinc-200 pt-10"
-                  aria-label="Services, areas, and booking"
-                >
-                  <BlogConversionMidBanner trackingSlug={dbPost.slug} />
-                  <BlogContextualServiceLinks embedded />
-                  <BlogServiceLinks service={getBlogServiceType(dbPost.slug)} dense />
-                  <RelatedLinks placement="blog" emphasizeLocalBooking />
-                </section>
-              }
-            />
-          </BlogPostLayout>
-        </main>
-      </MarketingLayout>
-    );
   }
 
   const hc = getHighConversionBlogPost(slug);
@@ -623,7 +656,7 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
             belowArticleSlot={
               <>
                 <BlogContextualServiceLinks />
-                <BlogServiceLinks service={getBlogServiceType(hc.slug)} />
+                <BlogServiceLinks trackingSlug={hc.slug} service={getBlogServiceType(hc.slug)} />
               </>
             }
           >
@@ -664,7 +697,7 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
             belowArticleSlot={
               <>
                 <BlogContextualServiceLinks />
-                <BlogServiceLinks service={getBlogServiceType(hostGuide.slug)} />
+                <BlogServiceLinks trackingSlug={hostGuide.slug} service={getBlogServiceType(hostGuide.slug)} />
               </>
             }
           >
@@ -720,7 +753,7 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
           belowArticleSlot={
             <>
               <BlogContextualServiceLinks />
-              <BlogServiceLinks service={getBlogServiceType(prog.slug)} />
+              <BlogServiceLinks trackingSlug={prog.slug} service={getBlogServiceType(prog.slug)} />
             </>
           }
         >
@@ -731,27 +764,12 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
   );
 }
 
-function BlogPostFatalErrorUi() {
-  return (
-    <main className="mx-auto max-w-lg px-4 py-20 text-center text-zinc-800">
-      <h1 className="text-lg font-semibold">Page error</h1>
-      <p className="mt-3 text-sm leading-relaxed text-zinc-600">
-        This article could not be loaded. Please try again later or return to the{" "}
-        <a className="font-medium text-blue-700 underline-offset-2 hover:underline" href="/blog">
-          blog home
-        </a>
-        .
-      </p>
-    </main>
-  );
-}
-
 export default async function BlogPostPage(props: Props) {
   try {
     return await BlogPostPageImpl(props);
   } catch (err) {
     if (isNextNavigationError(err)) throw err;
     console.error("❌ PAGE CRASH:", err);
-    return <BlogPostFatalErrorUi />;
+    notFound();
   }
 }

@@ -27,10 +27,12 @@ export function buildInjectInternalLinksContext(params: {
   primaryKeyword?: string | null;
   relatedBlogPosts?: { slug: string; title: string }[];
 }): InjectInternalLinksContext {
+  const postSlug = params.slug;
   if (params.stored) {
     return {
       ...params.stored,
       relatedBlogPosts: params.relatedBlogPosts,
+      postSlug,
     };
   }
 
@@ -63,6 +65,7 @@ export function buildInjectInternalLinksContext(params: {
     locationSlug,
     citySlug,
     serviceSlug,
+    postSlug,
     relatedBlogPosts: params.relatedBlogPosts,
   };
 }

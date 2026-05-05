@@ -1,36 +1,33 @@
 import Link from "next/link";
-import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
-import { linkInNavClassName } from "@/lib/ui/linkClassNames";
+import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { BlogServiceLinkKind } from "@/lib/blog/getBlogServiceType";
+import {
+  getBlogExploreLocationLinkGardensCbd,
+  getBlogExploreLocationLinks,
+  getBlogIntentServicePair,
+  getPricingBlogLink,
+} from "@/lib/seo/internalLinks";
+import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 
-type Props = { service?: BlogServiceLinkKind; /** Tighter top margin when stacked under contextual copy */ dense?: boolean };
+type Props = {
+  /** Post slug — drives deterministic anchors + intent pairing. */
+  trackingSlug: string;
+  service?: BlogServiceLinkKind;
+  /** Tighter top margin when stacked under contextual copy */
+  dense?: boolean;
+};
 
-export function BlogServiceLinks({ service = "standard", dense = false }: Props) {
-  const deepHref = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
-  const standardHref = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
-  const airbnbHref = CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path;
-  const moveOutHref = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
-  const carpetHref = CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path;
-  const officeHref = CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path;
-  const windowHref = CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path;
-  const overviewHref = "/locations/cape-town-cleaning-services";
+export function BlogServiceLinks({ trackingSlug, service = "standard", dense = false }: Props) {
+  const key = trackingSlug.trim() || "blog";
+  const serviceLinks = getBlogIntentServicePair(service, key);
+  const locationLinks = [...getBlogExploreLocationLinks(key), getBlogExploreLocationLinkGardensCbd(key)];
+  const pricing = getPricingBlogLink(key);
 
-  const items: { href: string; label: string }[] = [
-    { href: deepHref, label: "deep cleaning service in Cape Town" },
-    { href: standardHref, label: "home cleaning services in Cape Town" },
-    { href: overviewHref, label: "cleaners near you across Cape Town suburbs" },
-    { href: officeHref, label: "office cleaning services in Cape Town" },
+  const rows: { href: string; label: string }[] = [
+    ...serviceLinks.map((l) => ({ href: l.href, label: l.anchor })),
+    ...locationLinks.map((l) => ({ href: l.href, label: l.anchor })),
+    { href: pricing.href, label: pricing.anchor },
   ];
-
-  if (service === "airbnb") {
-    items.push({ href: airbnbHref, label: "Airbnb turnover cleaning in Cape Town" });
-  } else if (service === "move-out") {
-    items.push({ href: moveOutHref, label: "move-out cleaning service in Cape Town" });
-  } else if (service === "carpet") {
-    items.push({ href: carpetHref, label: "carpet cleaning services in Cape Town" });
-  } else {
-    items.push({ href: windowHref, label: "window cleaning services in Cape Town" });
-  }
 
   return (
     <section
@@ -40,9 +37,20 @@ export function BlogServiceLinks({ service = "standard", dense = false }: Props)
       <h2 id="blog-service-links-heading" className="text-lg font-bold tracking-tight text-zinc-900">
         Related Cleaning Services in Cape Town
       </h2>
-      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-zinc-800">
-        {items.map((item) => (
-          <li key={item.href}>
+      <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+        Explore Cape Town-wide service guides, high-intent suburb hubs, and pricing—then{" "}
+        <GrowthCtaLink
+          href="/booking"
+          source={`blog_internal_links_book_${service}`}
+          className="font-semibold text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline"
+        >
+          book cleaning online in Cape Town
+        </GrowthCtaLink>{" "}
+        when you are ready.
+      </p>
+      <ul className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-zinc-800">
+        {rows.map((item) => (
+          <li key={item.href + item.label}>
             <Link href={item.href} className={linkInNavClassName}>
               {item.label}
             </Link>

@@ -60,13 +60,18 @@ export type GetPostBySlugOptions = {
 };
 
 function normalizeContentJson(raw: unknown): BlogContentJson {
-  const parsed = safeParseBlogContentJson(raw);
-  if (!parsed.success) {
-    console.error("[blog] Invalid content_json", parsed.error.flatten());
+  try {
+    const parsed = safeParseBlogContentJson(raw);
+    if (!parsed.success) {
+      console.error("[blog] Invalid content_json", parsed.error.flatten());
+      return emptyBlogContentJson();
+    }
+    const blocks = Array.isArray(parsed.data.blocks) ? parsed.data.blocks : [];
+    return { ...parsed.data, blocks };
+  } catch (err) {
+    console.error("[blog] normalizeContentJson fatal — falling back to empty blocks", err);
     return emptyBlogContentJson();
   }
-  const blocks = Array.isArray(parsed.data.blocks) ? parsed.data.blocks : [];
-  return { ...parsed.data, blocks };
 }
 
 async function fetchTagSlugsForPost(
@@ -261,8 +266,27 @@ export async function getPostBySlug(
     relatedBlogPosts: related,
   });
 
-  content = injectInternalLinks(content, ctx);
-  content = assignStableBlogBlockIds(content);
+  try {
+    content = injectInternalLinks(content, ctx);
+  } catch (err) {
+    console.error("[blog] injectInternalLinks failed — serving post without injected blocks", {
+      slug: trimmed,
+      id: row.id,
+      err,
+    });
+  }
+  try {
+    content = assignStableBlogBlockIds(content);
+  } catch (err) {
+    console.error("[blog] assignStableBlogBlockIds failed — keeping blocks as-is", {
+      slug: trimmed,
+      id: row.id,
+      err,
+    });
+    if (!Array.isArray(content.blocks)) {
+      content = { ...content, blocks: [] };
+    }
+  }
 
   return {
     id: postId,
@@ -314,7 +338,8 @@ export async function getPublishedBlogSlugs(): Promise<string[]> {
     .from("blog_posts")
     .select("slug")
     .eq("status", "published")
-    .lte("published_at", nowIso);
+    .lte("published_at", nowIso)
+    .not("content_json", "is", null);
 
   if (error) {
     console.error("[blog] getPublishedBlogSlugs", error.message);

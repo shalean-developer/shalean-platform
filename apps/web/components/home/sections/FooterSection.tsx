@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import { locationPageServiceLinks } from "@/lib/seo/capeTownSeoPages";
+import { PopularCapeTownStrip } from "@/components/seo/PopularCapeTownStrip";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 
 const waHref = "https://wa.me/27215550123?text=Hi%20Shalean%20Cleaning%20Services";
@@ -11,6 +12,8 @@ export function FooterSection() {
   return (
     <footer id="contact" className="scroll-mt-28 border-t border-blue-100 bg-zinc-950 py-14 text-zinc-100">
       <div className="mx-auto max-w-7xl px-4">
+        <PopularCapeTownStrip theme="zinc" className="mb-10" />
+
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-lg font-bold text-white">Shalean Cleaning Services</p>

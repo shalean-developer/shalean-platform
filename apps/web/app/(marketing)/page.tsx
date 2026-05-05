@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import StructuredData from "@/components/home/StructuredData";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeAboutSection } from "@/components/marketing-home/sections/MarketingHomeAboutSection";
@@ -16,7 +15,6 @@ import { MarketingHomeTrustSection } from "@/components/marketing-home/sections/
 import { getHomePageData } from "@/lib/home/data";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
-import { getHomepageInternalSeoLinks } from "@/lib/seo/capeTownSeoPages";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
@@ -65,15 +63,6 @@ export default async function MarketingHomePage() {
   return (
     <>
       <StructuredData services={services} locations={locations} faqs={faqs} />
-      <nav className="sr-only" aria-label="Cape Town service and suburb pages">
-        <ul>
-          {getHomepageInternalSeoLinks().map((item) => (
-            <li key={item.href}>
-              <Link href={item.href}>{item.label}</Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
       <div className="bg-white text-slate-900">
         <MarketingHomeHeader bookingHref={bookingHref} />
         <main>

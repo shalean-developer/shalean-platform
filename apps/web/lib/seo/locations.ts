@@ -95,3 +95,34 @@ export function nearbyProgrammaticLocations(slug: string, count = 4): Programmat
   return out;
 }
 
+/**
+ * Same neighbour discovery as {@link nearbyProgrammaticLocations}, but surfaces **same-region** hubs first
+ * for topical geo clusters (location → location authority).
+ */
+export function nearbyProgrammaticLocationsPreferRegion(slug: string, count = 6): ProgrammaticLocation[] {
+  const row = resolveCapeTownHubRowFromAreaInput(slug);
+  const pool = nearbyProgrammaticLocations(slug, Math.max(count + 6, count * 2));
+  if (!row) return pool.slice(0, count);
+
+  const region = row.region;
+  const scored = pool.map((loc) => {
+    const other = resolveCapeTownHubRowFromAreaInput(loc.slug);
+    const sameRegion = other?.region === region ? 0 : 1;
+    return { loc, sameRegion };
+  });
+  scored.sort((a, b) => {
+    if (a.sameRegion !== b.sameRegion) return a.sameRegion - b.sameRegion;
+    return a.loc.name.localeCompare(b.loc.name);
+  });
+
+  const seen = new Set<string>([slug]);
+  const out: ProgrammaticLocation[] = [];
+  for (const { loc } of scored) {
+    if (seen.has(loc.slug)) continue;
+    seen.add(loc.slug);
+    out.push(loc);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+

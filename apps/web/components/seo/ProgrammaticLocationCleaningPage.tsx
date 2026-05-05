@@ -40,8 +40,10 @@ import { getLocationGeoHints } from "@/lib/seo/location-geo-enrichment";
 import { primaryLocationKeywordPhrase } from "@/lib/seo/location-keyword";
 import { getLocationSeoPriority, hubContentTierFromPriority } from "@/lib/seo/location-priority";
 import { CAPE_TOWN_SERVICE_SEO, type LocationSeoBlock } from "@/lib/seo/capeTownSeoPages";
+import { getLocationHubAboveFoldServiceLink, getLocationHubRelatedServiceLinks } from "@/lib/seo/internalLinks";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
-import { buildDynamicLocationFaqs, nearbyProgrammaticLocations } from "@/lib/seo/locations";
+import { pickNearbyHubAnchor } from "@/lib/seo/anchorVariants";
+import { buildDynamicLocationFaqs, nearbyProgrammaticLocationsPreferRegion } from "@/lib/seo/locations";
 import { buildPeopleAlsoAskFaqs, mergeLocationFaqs } from "@/lib/seo/location-paa-faqs";
 import { buildLocationLocalProofBullets } from "@/lib/seo/location-hub-local-proof";
 import { buildCostFaqAnswer } from "@/lib/seo/location-ranking-asset-copy";
@@ -120,7 +122,7 @@ export function ProgrammaticLocationCleaningPage({
   const intro = seo?.intro?.length
     ? mergeIntroWithPrimaryKeyword(seo.intro, location)
     : buildStructuredLocationIntro(location);
-  const nearby = nearbyProgrammaticLocations(slug, 6);
+  const nearby = nearbyProgrammaticLocationsPreferRegion(slug, 6);
   const geoHints = getLocationGeoHints(slug);
   const nearbyNamesForCopy = nearby.map((l) => l.name);
   const nearbyListSentence = formatNearbyNames(nearbyNamesForCopy);
@@ -145,6 +147,7 @@ export function ProgrammaticLocationCleaningPage({
   );
   const eyebrow = `${location.city} · ${location.region}`;
   const bookCtaLabel = `Book a cleaner in ${location.name}`;
+  const hubAboveFoldServiceLink = getLocationHubAboveFoldServiceLink(location.name, slug);
 
   const seoCtx = {
     page_slug: slug,
@@ -217,6 +220,13 @@ export function ProgrammaticLocationCleaningPage({
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</p>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{h1}</h1>
           <div className="mt-6 space-y-4 text-lg leading-relaxed text-zinc-600">
+            <p>
+              Need recurring visits or a once-off reset? Start with{" "}
+              <Link href={hubAboveFoldServiceLink.href} className={`font-semibold ${linkEmphasisClassName}`}>
+                {hubAboveFoldServiceLink.anchor}
+              </Link>{" "}
+              — then compare deep and move-out scope in the sections below.
+            </p>
             {rankingHeroParagraphs
               ? rankingHeroParagraphs.map((p, i) => <p key={i}>{p}</p>)
               : intro.map((p, i) => (
@@ -239,7 +249,7 @@ export function ProgrammaticLocationCleaningPage({
                 <span key={loc.slug}>
                   {i > 0 ? (i === arr.length - 1 ? " or " : ", ") : null}
                   <Link href={`/locations/${loc.slug}`} className={`${linkEmphasisClassName} font-medium`}>
-                    cleaning services in {loc.name}
+                    {pickNearbyHubAnchor(`${slug}|hero-near|${loc.slug}`, loc.name)}
                   </Link>
                 </span>
               ))}
@@ -322,6 +332,19 @@ export function ProgrammaticLocationCleaningPage({
               );
             })}
           </div>
+          <p className="mt-3 text-base font-semibold text-zinc-900">
+            <SeoHubGrowthCtaLink
+              href="/booking"
+              source={`seo_loc_${slug}_intent_book_cleaner`}
+              ctx={seoCtx}
+              ctaLocation="hero_after_buttons"
+              ctaLabel={bookCtaLabel}
+              ctaKind="book_now"
+              className={linkEmphasisClassName}
+            >
+              {bookCtaLabel}
+            </SeoHubGrowthCtaLink>
+          </p>
           <p className="mt-4 text-sm font-medium text-emerald-900">{locationHeroCtaMicrocopy(location)}</p>
         </div>
       </section>
@@ -462,6 +485,22 @@ export function ProgrammaticLocationCleaningPage({
             <p className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3 text-base font-medium leading-relaxed text-zinc-800">
               {directAnswerWhatCleaningServicesAreAvailable(location)}
             </p>
+            <h3 className="mt-8 text-lg font-semibold tracking-tight text-zinc-900">
+              Related services in {location.name}
+            </h3>
+            <p className="mt-3 text-base leading-relaxed text-zinc-600">
+              Looking for reliable cleaning services in {location.name}? Explore our Cape Town-wide guides—your quote
+              still locks to your {location.name} address at checkout.
+            </p>
+            <ul className="mt-4 list-disc space-y-2 pl-5 text-base leading-relaxed text-zinc-700">
+              {getLocationHubRelatedServiceLinks(location.name, slug).map((item) => (
+                <li key={item.href}>
+                  <Link href={item.href} className={`font-medium ${linkEmphasisClassName}`}>
+                    {item.anchor}
+                  </Link>
+                </li>
+              ))}
+            </ul>
             <p className="mt-4 text-base text-zinc-600">
               Open a Cape Town-wide guide, enter your {location.name} address at checkout, and lock scope before we
               dispatch.
@@ -524,7 +563,7 @@ export function ProgrammaticLocationCleaningPage({
 
       <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
         <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Nearby areas we serve</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Nearby Areas We Serve</h2>
           {nearbyListSentence ? (
             <p className="mt-3 text-base leading-relaxed text-zinc-600">
               We also provide cleaning services in nearby areas such as {nearbyListSentence}. Each hub explains local
@@ -543,7 +582,7 @@ export function ProgrammaticLocationCleaningPage({
                   href={`/locations/${loc.slug}`}
                   className="inline-flex max-w-full rounded-full border border-zinc-200 bg-white px-4 py-2 text-left text-sm font-medium leading-snug text-zinc-700 shadow-sm transition hover:border-emerald-200 hover:text-emerald-900"
                 >
-                  Cleaning services in {loc.name}
+                  {pickNearbyHubAnchor(`${slug}|nearby-pill|${loc.slug}`, loc.name)}
                 </Link>
               </li>
             ))}

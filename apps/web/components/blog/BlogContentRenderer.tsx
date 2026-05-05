@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { blogFaqHeadingDomId, defaultBlogBlockAnchorId } from "@/lib/blog/blog-block-anchors";
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
+import { injectMarkdownAutoLinks } from "@/lib/blog/seo/auto-link-keywords";
 import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,8 @@ import {
 
 type Props = {
   content: BlogContentJson;
+  /** Trusted CMS articles only — first-hit keyword → internal URL in paragraph blocks. */
+  autoLinkSlug?: string;
 };
 
 function SectionHeading({
@@ -45,21 +48,24 @@ function ParagraphWithOptionalInlineLinks({
   id,
   className,
   text,
+  autoLinkSlug,
 }: {
   id?: string;
   className?: string;
   text: string;
+  autoLinkSlug?: string;
 }) {
   const linkClass =
     "font-medium text-blue-600 underline-offset-4 hover:text-blue-700 hover:underline";
   const parts: React.ReactNode[] = [];
+  const body = autoLinkSlug ? injectMarkdownAutoLinks(text) : text;
   const re = /\[([^\]]+)\]\(([^)]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let k = 0;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = re.exec(body)) !== null) {
     if (m.index > last) {
-      parts.push(text.slice(last, m.index));
+      parts.push(body.slice(last, m.index));
     }
     parts.push(
       <Link key={`${k++}-${m.index}`} href={m[2]} className={linkClass}>
@@ -68,12 +74,12 @@ function ParagraphWithOptionalInlineLinks({
     );
     last = m.index + m[0].length;
   }
-  if (last < text.length) {
-    parts.push(text.slice(last));
+  if (last < body.length) {
+    parts.push(body.slice(last));
   }
   return (
     <p id={id} className={className}>
-      {parts.length ? parts : text}
+      {parts.length ? parts : body}
     </p>
   );
 }
@@ -110,7 +116,15 @@ function ArticleHeading({
   );
 }
 
-function Block({ block, index }: { block: BlogContentBlock; index: number }) {
+function Block({
+  block,
+  index,
+  autoLinkSlug,
+}: {
+  block: BlogContentBlock;
+  index: number;
+  autoLinkSlug?: string;
+}) {
   switch (block.type) {
     case "intro":
       return (
@@ -308,6 +322,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
           id={block.id}
           className="max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed whitespace-pre-line"
           text={block.content}
+          autoLinkSlug={autoLinkSlug}
         />
       );
 
@@ -459,7 +474,7 @@ function Block({ block, index }: { block: BlogContentBlock; index: number }) {
   }
 }
 
-export function BlogContentRenderer({ content }: Props) {
+export function BlogContentRenderer({ content, autoLinkSlug }: Props) {
   const blocks = Array.isArray(content.blocks) ? content.blocks : [];
   const hasFaq = blocks.some((b) => b.type === "faq");
 
@@ -488,7 +503,7 @@ export function BlogContentRenderer({ content }: Props) {
       data-has-faq={hasFaq ? "true" : "false"}
     >
       {blocks.map((block, i) => (
-        <Block key={block.id ?? `${block.type}-${i}`} block={block} index={i} />
+        <Block key={block.id ?? `${block.type}-${i}`} block={block} index={i} autoLinkSlug={autoLinkSlug} />
       ))}
     </div>
   );

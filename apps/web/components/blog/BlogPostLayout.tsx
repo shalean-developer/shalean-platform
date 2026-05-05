@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BlogArticleEndCta } from "@/components/blog/BlogArticleConversionBlocks";
+import { BlogLocationBookCta } from "@/components/blog/BlogLocationBookCta";
+import { BlogIntroServiceLink } from "@/components/blog/BlogIntroServiceLink";
 import { BlogEngagementAnalytics } from "@/components/blog/BlogEngagementAnalytics";
 import { BlogPreFooterTrust } from "@/components/blog/BlogPreFooterTrust";
 import { BlogArticleEnhancements } from "@/components/blog/engine/BlogArticleEnhancements";
@@ -165,6 +167,7 @@ export function BlogPostLayout({
                 {lede ? (
                   <p className="text-lg leading-relaxed text-zinc-600 sm:text-[1.125rem]">{lede}</p>
                 ) : null}
+                <BlogIntroServiceLink slug={trackingSlug} />
               </header>
 
               <BlogContent prose={false}>{children}</BlogContent>
@@ -203,6 +206,8 @@ export function BlogPostLayout({
                   className="rounded-2xl border border-zinc-200 bg-zinc-50/90 p-6"
                 />
               </div>
+
+              <BlogLocationBookCta trackingSlug={trackingSlug} />
 
               <BlogPreFooterTrust />
 
