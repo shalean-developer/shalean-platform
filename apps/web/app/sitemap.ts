@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
 import { listActiveCategorySlugs, listTagSlugs } from "@/lib/blog/get-taxonomy-posts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import { shouldExcludeBlogSlugFromSitemap } from "@/lib/seo/programmaticBlogCleanupRedirects";
 import { AIRBNB_AREA_LANDING_PATHS } from "@/lib/seo/airbnbAreaLandingPages";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
@@ -80,6 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(post.slug);
 
   for (const slug of blogSlugSet) {
+    if (shouldExcludeBlogSlugFromSitemap(slug)) continue;
     push(`${SITE_ORIGIN}/blog/${slug}`, 0.7);
   }
 

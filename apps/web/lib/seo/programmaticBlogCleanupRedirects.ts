@@ -157,3 +157,30 @@ export const programmaticBlogCleanupRedirects = [
     permanent: true,
   },
 ] as const;
+
+function blogSlugFromRedirectSource(source: string): string | null {
+  const path = source.replace(/\/+$/, "");
+  if (!path.startsWith("/blog/")) return null;
+  const slug = path.slice("/blog/".length);
+  return slug.length > 0 ? slug : null;
+}
+
+/**
+ * Slugs that respond with a redirect to another blog URL — omit from `sitemap.ts` (final/canonical URLs only).
+ * Derived from {@link programmaticBlogCleanupRedirects}.
+ */
+export const BLOG_SLUGS_EXCLUDED_FROM_SITEMAP = new Set<string>(
+  programmaticBlogCleanupRedirects.map((r) => blogSlugFromRedirectSource(r.source)).filter((s): s is string => Boolean(s)),
+);
+
+/** Matches `middleware.ts` thin-clone pattern → `/blog/cleaning-services-{area}-cape-town`. */
+const BEST_CLEANING_SERVICES_REDIRECT_SLUG = /^best-cleaning-services-.+-cape-town$/;
+
+/**
+ * True when `/blog/{slug}` would redirect (Next redirects or middleware) — do not list in sitemap.
+ */
+export function shouldExcludeBlogSlugFromSitemap(slug: string): boolean {
+  if (BLOG_SLUGS_EXCLUDED_FROM_SITEMAP.has(slug)) return true;
+  if (BEST_CLEANING_SERVICES_REDIRECT_SLUG.test(slug)) return true;
+  return false;
+}
