@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { compareYmd, mayFirstOfSameYear, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
+import { compareYmd, lastDayYmdOfInvoiceMonth, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
 import { insertMonthlyRecurringOccurrenceBooking } from "@/lib/recurring/insertMonthlyRecurringOccurrenceBooking";
@@ -11,13 +11,23 @@ import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshR
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
-/** Safety cap per request (weekly ~52/yr; monthly fewer; avoids runaway CPU). */
+/** Safety cap per request (one calendar month is ≤31 days; cap allows multi-month if window widens later). */
 export const RECURRING_BACKFILL_MAX_DATES = 400;
+
+export type BackfillRecurringOccurrencesOptions = {
+  /**
+   * `YYYY-MM` — materialize that Africa/Johannesburg calendar month (default: month of {@link todayJohannesburg}).
+   * Use after month rollover to repair gaps left by the legacy generator (e.g. `2026-05` in June).
+   */
+  invoiceMonthYm?: string;
+};
 
 export type BackfillRecurringOccurrencesResult = {
   ok: true;
   recurring_id: string;
   today: string;
+  /** `YYYY-MM` window used for this run. */
+  invoice_month_ym: string;
   from_ymd: string;
   through_ymd: string;
   dates_considered: number;
@@ -27,19 +37,20 @@ export type BackfillRecurringOccurrencesResult = {
   skipped_other: number;
   failures: { date: string; error: string }[];
   next_run_date: string;
-  /** Lower bound used for this run: 1 May of Johannesburg `today`’s year (later of that and plan `start_date`). */
+  /** Same as first day of `invoice_month_ym` (kept name for admin API compatibility). */
   campaign_floor_ymd: string;
 };
 
 /**
- * Creates **recurring-only** occurrence `bookings` for schedule dates from **1 May (same year as Johannesburg
- * `today`)** through **today** inclusive — lower bound is `max(start_date, YYYY-05-01)`. Respects `end_date`.
- * Existing plan + date rows are skipped (`duplicate_occurrence`). Updates `next_run_date` so **`generate-recurring-bookings`**
- * cron continues normally afterward (same tail as generator).
+ * Creates **recurring-only** occurrence `bookings` for schedule dates in one **Johannesburg calendar month**:
+ * `fromYmd = max(month_start, start_date)`, `throughYmd = min(month_end, end_date)` — same window as
+ * `generate-recurring-bookings`. Existing plan + date rows are skipped (`duplicate_occurrence`).
+ * Updates `next_run_date` like the generator (`calculateNextRunDate` from `through_ymd` when not truncated).
  */
 export async function backfillRecurringOccurrencesToToday(
   admin: SupabaseClient,
   recurringId: string,
+  options?: BackfillRecurringOccurrencesOptions,
 ): Promise<
   | BackfillRecurringOccurrencesResult
   | { ok: false; error: string; billing_type?: string; status?: string }
@@ -90,9 +101,15 @@ export async function backfillRecurringOccurrencesToToday(
   };
 
   const today = todayJohannesburg();
-  const campaignFloor = mayFirstOfSameYear(today);
-  const throughYmd = r.end_date && compareYmd(r.end_date, today) < 0 ? r.end_date : today;
-  const fromYmd = compareYmd(r.start_date, campaignFloor) < 0 ? campaignFloor : r.start_date;
+  const rawYm = options?.invoiceMonthYm?.trim() ?? today.slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(rawYm)) {
+    return { ok: false, error: "Invalid invoice month (use YYYY-MM)." };
+  }
+  const invoiceMonthYm = rawYm;
+  const monthStart = `${invoiceMonthYm}-01`;
+  const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
+  const fromYmd = compareYmd(monthStart, r.start_date) >= 0 ? monthStart : r.start_date;
+  const throughYmd = r.end_date && compareYmd(r.end_date, monthEnd) < 0 ? r.end_date : monthEnd;
 
   const persistPlannerTail = async (nextRun: string) => {
     await admin
@@ -112,6 +129,7 @@ export async function backfillRecurringOccurrencesToToday(
       ok: true,
       recurring_id: r.id,
       today,
+      invoice_month_ym: invoiceMonthYm,
       from_ymd: fromYmd,
       through_ymd: throughYmd,
       dates_considered: 0,
@@ -121,7 +139,7 @@ export async function backfillRecurringOccurrencesToToday(
       skipped_other: 0,
       failures: [],
       next_run_date: nextRun,
-      campaign_floor_ymd: campaignFloor,
+      campaign_floor_ymd: monthStart,
     };
   }
 
@@ -246,9 +264,7 @@ export async function backfillRecurringOccurrencesToToday(
     }
   }
 
-  const nextRun = truncated
-    ? datesAll[RECURRING_BACKFILL_MAX_DATES]!
-    : calculateNextRunDate(schedule, today);
+  const nextRun = truncated ? datesAll[RECURRING_BACKFILL_MAX_DATES]! : calculateNextRunDate(schedule, throughYmd);
 
   await persistPlannerTail(nextRun);
 
@@ -256,6 +272,7 @@ export async function backfillRecurringOccurrencesToToday(
     ok: true,
     recurring_id: r.id,
     today,
+    invoice_month_ym: invoiceMonthYm,
     from_ymd: fromYmd,
     through_ymd: throughYmd,
     dates_considered: dates.length,
@@ -265,6 +282,6 @@ export async function backfillRecurringOccurrencesToToday(
     skipped_other: skippedOther,
     failures,
     next_run_date: nextRun,
-    campaign_floor_ymd: campaignFloor,
+    campaign_floor_ymd: monthStart,
   };
 }

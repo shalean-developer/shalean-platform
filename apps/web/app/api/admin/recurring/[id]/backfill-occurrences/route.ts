@@ -9,7 +9,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Admin: create missing occurrence rows from plan `start_date` through Johannesburg today (same rules as cron).
+ * Admin: create missing occurrence rows for one **Johannesburg calendar month** (same window as
+ * `generate-recurring-bookings`). Optional `?month=YYYY-MM` (e.g. repair May after June started).
  * Idempotent: existing `recurring_id` + `date` rows are skipped.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -22,7 +23,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await backfillRecurringOccurrencesToToday(admin, id.trim());
+  const monthYm = new URL(request.url).searchParams.get("month")?.trim();
+  const result = await backfillRecurringOccurrencesToToday(
+    admin,
+    id.trim(),
+    monthYm ? { invoiceMonthYm: monthYm } : undefined,
+  );
   if (!result.ok) {
     const status =
       result.error.includes("not found") || result.error.includes("Only active")

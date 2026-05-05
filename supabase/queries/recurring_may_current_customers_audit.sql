@@ -1,16 +1,16 @@
 -- ============================================================================
 -- Audit: active recurring plans (billing per_booking/monthly; missing user_profiles → per_booking)
--- Window: 1 May (same calendar year as Johannesburg today) → Johannesburg today
+-- Window (this file only): 1 May (JHB calendar year of “today”) → Johannesburg today (May gap analysis).
 -- ============================================================================
 -- Run in Supabase → SQL Editor (service role / dashboard runs as postgres).
 --
 -- Why there is no safe "seed bookings" INSERT here:
 --   Recurring visits require `booking_snapshot` JSON built from
 --   `recurring_bookings.booking_snapshot_template` (locked date, Paystack ref, etc.).
---   Use Admin → Recurring → **Backfill to today** per plan, **Backfill all (May→today)** for all eligible plans, or:
---     POST /api/admin/recurring/{recurring_id}/backfill-occurrences
---     POST /api/admin/recurring-batch-backfill-may-to-today   (?limit=50 optional)
---   with an admin Bearer token (same logic as the app; skips duplicates).
+--   Use Admin → Recurring → backfill per plan / **Backfill all (month window)** for all eligible plans, or:
+--     POST /api/admin/recurring/{recurring_id}/backfill-occurrences?month=YYYY-MM   (month optional; default = current JHB month)
+--     POST /api/admin/recurring-batch-backfill-may-to-today?month=YYYY-MM&limit=50
+--   with an admin Bearer token (same rules as `generate-recurring-bookings`; skips duplicates).
 -- ============================================================================
 
 with params as (

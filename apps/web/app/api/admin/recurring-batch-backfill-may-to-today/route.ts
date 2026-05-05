@@ -17,7 +17,7 @@ export function GET() {
     ok: true,
     path: RECURRING_BATCH_BACKFILL_PATH,
     method: "POST",
-    hint: "Optional JSON body: { \"recurring_ids\": [\"uuid\", ...] }. Query: ?limit=1–500",
+    hint: 'Optional JSON body: { "recurring_ids": ["uuid", ...] }. Query: ?limit=1–500 & ?month=YYYY-MM (defaults to current JHB month; use month= to repair a past month, e.g. legacy May gaps).',
   });
 }
 
@@ -66,6 +66,7 @@ function parseRecurringIdsFilter(bodyText: string): { ok: true; ids: string[] | 
  *
  * Optional JSON body: `{ "recurring_ids": ["uuid", ...] }` — only those plans (must still be **active**).
  * Optional `?limit=` caps how many plans are processed after filtering (default: all). Idempotent per plan + date.
+ * Optional **`?month=YYYY-MM`** — materialize that Johannesburg month for each plan (default: **current** month).
  */
 export async function POST(request: Request) {
   const auth = await requireAdminSession(request);
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const monthYm = searchParams.get("month")?.trim() || undefined;
   const limitRaw = searchParams.get("limit");
   let limit: number | null = null;
   if (limitRaw != null && limitRaw.trim() !== "") {
@@ -162,7 +164,11 @@ export async function POST(request: Request) {
   const planFailures: { recurring_id: string; error: string }[] = [];
 
   for (const p of eligible) {
-    const result = await backfillRecurringOccurrencesToToday(admin, p.id);
+    const result = await backfillRecurringOccurrencesToToday(
+      admin,
+      p.id,
+      monthYm ? { invoiceMonthYm: monthYm } : undefined,
+    );
     if (!result.ok) {
       planFailures.push({ recurring_id: p.id, error: result.error });
       continue;
@@ -187,11 +193,13 @@ export async function POST(request: Request) {
       truncated_by_limit: truncatedByLimit,
       recurring_ids_filter_count: recurringIdsFilter?.length ?? null,
       requested_not_active_or_missing: requestedMissing.length,
+      invoice_month_ym: monthYm ?? null,
     },
   });
 
   return NextResponse.json({
     ok: true,
+    invoice_month_ym: monthYm ?? null,
     recurring_ids_filter: recurringIdsFilter,
     requested_not_active_or_missing: requestedMissing,
     plans_eligible: eligibleAll.length,

@@ -137,11 +137,22 @@ export default function AdminRecurringPage() {
   async function postBackfill(id: string) {
     if (
       !window.confirm(
-        "Create missing recurring visit rows from 1 May (this year, Johannesburg) through today — or from the plan start date if that is later. Already-created dates are skipped. Afterward, the normal generator cron continues from the updated next run.",
+        "Create missing recurring visit rows for one Johannesburg calendar month: from max(month-start, plan start) through month-end (same rules as the generator cron). Already-created dates are skipped; next_run_date is updated. You can target a past month in the next step (e.g. 2026-05).",
       )
     ) {
       return;
     }
+    const monthRaw = window.prompt(
+      "Optional: month to backfill as YYYY-MM (e.g. 2026-05). Leave empty for the current Johannesburg calendar month:",
+      "",
+    );
+    if (monthRaw === null) return;
+    const monthYm = monthRaw.trim();
+    if (monthYm && !/^\d{4}-\d{2}$/.test(monthYm)) {
+      emitAdminToast("Invalid month — use YYYY-MM or leave empty.", "error");
+      return;
+    }
+    const qs = monthYm ? `?month=${encodeURIComponent(monthYm)}` : "";
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
     if (!token) {
@@ -150,7 +161,7 @@ export default function AdminRecurringPage() {
     }
     setBusyId(id);
     try {
-      const res = await fetch(`/api/admin/recurring/${encodeURIComponent(id)}/backfill-occurrences`, {
+      const res = await fetch(`/api/admin/recurring/${encodeURIComponent(id)}/backfill-occurrences${qs}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -163,6 +174,7 @@ export default function AdminRecurringPage() {
         from_ymd?: string;
         through_ymd?: string;
         campaign_floor_ymd?: string;
+        invoice_month_ym?: string;
         truncated?: boolean;
         next_run_date?: string;
         failures?: { date: string; error: string }[];
@@ -196,11 +208,22 @@ export default function AdminRecurringPage() {
   async function postBatchBackfillMayToToday() {
     if (
       !window.confirm(
-        "Run May→today backfill on ALL active recurring plans (per_booking or monthly billing; missing profile defaults to per_booking). This can take a while. Existing dates are skipped; next_run_date is updated per plan.",
+        "Run month-window backfill on ALL active recurring plans (per_booking or monthly; missing profile defaults to per_booking). Same date rules as the generator cron. This can take a while. Existing dates are skipped; next_run_date is updated per plan.",
       )
     ) {
       return;
     }
+    const monthRaw = window.prompt(
+      "Optional: month for ALL plans as YYYY-MM (e.g. 2026-05 to repair legacy May). Leave empty for current Johannesburg month:",
+      "",
+    );
+    if (monthRaw === null) return;
+    const monthYm = monthRaw.trim();
+    if (monthYm && !/^\d{4}-\d{2}$/.test(monthYm)) {
+      emitAdminToast("Invalid month — use YYYY-MM or leave empty.", "error");
+      return;
+    }
+    const qs = monthYm ? `?month=${encodeURIComponent(monthYm)}` : "";
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
     if (!token) {
@@ -209,12 +232,13 @@ export default function AdminRecurringPage() {
     }
     setBatchBusy(true);
     try {
-      const res = await fetch("/api/admin/recurring-batch-backfill-may-to-today", {
+      const res = await fetch(`/api/admin/recurring-batch-backfill-may-to-today${qs}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = (await res.json()) as {
         error?: string;
+        invoice_month_ym?: string | null;
         plans_processed?: number;
         plans_eligible?: number;
         totals?: { generated?: number; skipped_duplicate?: number; skipped_other?: number };
@@ -299,7 +323,7 @@ export default function AdminRecurringPage() {
             disabled={loading || batchBusy || busyId != null}
             onClick={() => void postBatchBackfillMayToToday()}
           >
-            Backfill all (May→today)
+            Backfill all (month window)
           </Button>
           <Link
             href="/admin/bookings"
