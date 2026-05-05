@@ -87,6 +87,10 @@ export type LocationSeoSlug = ProgrammaticLocationSlug;
 export type CapeTownServiceSeoBlock = {
   slug: CapeTownSeoServiceSlug;
   path: string;
+  /**
+   * Human-readable reference for editors — **not** the HTTP `<title>`.
+   * Service routes use `generateCtrTitle()` inside `buildCapeTownServiceMetadata()`.
+   */
   title: string;
   description: string;
   /** Optional `<meta name="keywords">` — use sparingly; primary targeting still lives in title, H1, and body copy. */

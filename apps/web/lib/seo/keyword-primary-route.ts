@@ -3,7 +3,8 @@
  * Reference when authoring titles/H1s; enforce manually in content reviews for now.
  */
 export const KEYWORD_PRIMARY_ROUTE: Record<string, string> = {
-  "cleaning services cape town": "/locations/cape-town-cleaning-services",
+  /** Head commercial intent → money page; city-wide geo hub is `/locations/cape-town-cleaning-services`. */
+  "cleaning services cape town": "/services/standard-cleaning-cape-town",
   "cleaning services claremont": "/locations/claremont-cleaning-services",
   "deep cleaning cape town": "/services/deep-cleaning-cape-town",
   "standard cleaning cape town": "/services/standard-cleaning-cape-town",

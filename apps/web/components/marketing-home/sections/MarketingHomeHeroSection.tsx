@@ -33,7 +33,7 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
           <div className="flex flex-col justify-center gap-4">
             <div>
               <h1 className="font-sans text-3xl font-bold tracking-tight text-slate-900 leading-[1.05] sm:text-4xl lg:text-[2.6rem] xl:text-[2.9rem]">
-                Cleaning Services Cape Town
+                Book trusted home cleaning across Cape Town
               </h1>
 
               <p className="mt-2 text-lg font-semibold tracking-tight text-slate-800">
