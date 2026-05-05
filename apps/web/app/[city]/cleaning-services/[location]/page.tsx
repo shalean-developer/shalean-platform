@@ -7,6 +7,11 @@ import { cityNameFromSlug, locationNameForCity, SERVICE_LOCATIONS } from "@/lib/
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
+import { resolveCapeTownHubRowFromAreaInput } from "@/lib/seo/capeTownLocations";
+import { extractLeadPriceFromMetaHint } from "@/lib/seo/location-title-variants";
+import { generateMetaDescription, hubRegionGeoBoostLine } from "@/lib/seo/metaDescription";
+import { generateCtrTitle } from "@/lib/seo/metaTitle";
+import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -28,13 +33,35 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const canonicalUrl = capeTownCanonical ? `${SITE_ORIGIN}${capeTownCanonical}` : dupAbsolute;
 
   const defaultTitle = "Cleaning Services | Shalean";
+  const hubRow = city === "cape-town" ? resolveCapeTownHubRowFromAreaInput(location) : undefined;
   const title =
     cityName && locationName
-      ? `House Cleaning in ${locationName}, ${cityName} | Shalean`
+      ? hubRow
+        ? generateCtrTitle({
+            base: "Home Cleaning Services",
+            place: `${locationName}, ${cityName}`,
+            fromPrice: extractLeadPriceFromMetaHint(getLocationMetaPriceHint(hubRow)),
+            templateKey: `${hubRow.slug}|growth`,
+            brandSuffix: "Shalean",
+            pageIntent: "location",
+          })
+        : generateCtrTitle({
+            base: "Home Cleaning Services",
+            place: `${locationName}, ${cityName}`,
+            templateKey: `growth|${city}|${location}`,
+            brandSuffix: "Shalean",
+            pageIntent: "location",
+          })
       : defaultTitle;
   const description =
     cityName && locationName
-      ? `Book trusted house cleaning in ${locationName}, ${cityName}. Fast quotes, vetted cleaners, secure checkout.`
+      ? generateMetaDescription({
+          service: "Home cleaning services",
+          location: `${locationName}, ${cityName}`,
+          variant: "Trusted local cleaners near you",
+          geoBoost: hubRow ? hubRegionGeoBoostLine(hubRow.region) : undefined,
+          templateKey: hubRow?.slug ?? `growth|${city}|${location}`,
+        })
       : undefined;
 
   const shared: Metadata = {

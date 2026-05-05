@@ -11,6 +11,7 @@ import { ServicesGrid } from "@/components/locations/cape-town-cleaning-services
 import { TrustBar } from "@/components/locations/cape-town-cleaning-services/TrustBar";
 import { WhyChooseUs } from "@/components/locations/cape-town-cleaning-services/WhyChooseUs";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -18,25 +19,26 @@ const PATH = "/locations/cape-town-cleaning-services";
 const CANONICAL_ABSOLUTE = absoluteCanonicalUrl(PATH);
 const OG = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
 
+const CT_CLEANING_HUB_DESC = clampMetaDescription(
+  "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
+);
+
 export const metadata: Metadata = {
   title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
-  description:
-    "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
+  description: CT_CLEANING_HUB_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL_ABSOLUTE },
   openGraph: {
     type: "website",
     url: CANONICAL_ABSOLUTE,
     title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
-    description:
-      "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
+    description: CT_CLEANING_HUB_DESC,
     images: [{ url: OG, width: 1024, height: 576, alt: "Home cleaning services in Cape Town" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
-    description:
-      "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
+    description: CT_CLEANING_HUB_DESC,
     images: [OG],
   },
 };

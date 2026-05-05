@@ -4,17 +4,36 @@ import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { getBlogPostsByCategorySlug } from "@/lib/blog/get-taxonomy-posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ slug: string }> };
 
+function titleCaseFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const label = slug.replace(/-/g, " ");
-  const title = `${label} | Blog categories | Shalean`;
+  const label = titleCaseFromSlug(slug);
+  const title = generateCtrTitle({
+    base: `${label} Articles`,
+    place: "Cape Town",
+    templateKey: `blog-cat|${slug}`,
+    brandSuffix: "Shalean Blog",
+    pageIntent: "hub",
+    maxLen: BLOG_SERP_TITLE_MAX,
+  });
   const canonicalAbs = absoluteCanonicalUrl(`/blog/category/${slug}`);
-  const description = `${label} articles—Cape Town cleaning guides, pricing context, and booking tips from Shalean.`;
+  const description = clampMetaDescription(
+    `${label} articles—Cape Town cleaning guides, pricing context, and booking tips from Shalean.`,
+  );
   return {
     title,
     description,

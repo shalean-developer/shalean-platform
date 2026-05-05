@@ -17,14 +17,17 @@ import {
   type BlogTopicFilterId,
 } from "@/lib/blog/blog-index-hub";
 import { getAllPublishedPosts } from "@/lib/blog/get-all-posts";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
 const PAGE_URL = CANONICAL_ABS;
 
 const H1 = "Cleaning Guides & Prices in Cape Town";
-const DEFAULT_DESCRIPTION =
-  "Practical cleaning guides for Cape Town homes and hosts—cleaning prices Cape Town, deep cleaning vs standard, Airbnb turnovers, move-out checklists, and booking cleaners near me with an instant quote when you are ready.";
+const DEFAULT_DESCRIPTION = clampMetaDescription(
+  "Practical cleaning guides for Cape Town homes and hosts—cleaning prices Cape Town, deep cleaning vs standard, Airbnb turnovers, move-out checklists, and booking cleaners near me with an instant quote when you are ready.",
+);
 
 const ogImage = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
 
@@ -35,13 +38,30 @@ type BlogPageProps = {
 export async function generateMetadata({ searchParams }: BlogPageProps): Promise<Metadata> {
   const sp = await searchParams;
   const topic = parseBlogTopicParam(sp.topic);
-  const titleBase = H1;
   const title =
-    topic === "all" ? `${titleBase} | Shalean` : `${blogTopicMetaLabel(topic)} | ${titleBase} | Shalean`;
+    topic === "all"
+      ? generateCtrTitle({
+          base: "Home Cleaning Guides",
+          place: "Cape Town",
+          templateKey: "blog-index|all",
+          brandSuffix: "Shalean Blog",
+          pageIntent: "hub",
+          maxLen: BLOG_SERP_TITLE_MAX,
+        })
+      : generateCtrTitle({
+          base: `${blogTopicMetaLabel(topic)} Tips`,
+          place: "Cape Town",
+          templateKey: `blog-index|topic|${topic}`,
+          brandSuffix: "Shalean Blog",
+          pageIntent: "hub",
+          maxLen: BLOG_SERP_TITLE_MAX,
+        });
   const description =
     topic === "all"
       ? DEFAULT_DESCRIPTION
-      : `${blogTopicMetaLabel(topic)}—Shalean Cape Town cleaning articles with clear scope tips and online booking.`;
+      : clampMetaDescription(
+          `${blogTopicMetaLabel(topic)}—Shalean Cape Town cleaning articles with clear scope tips and online booking.`,
+        );
 
   return {
     title,
@@ -112,7 +132,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
     blogPost: enriched.slice(0, 20).map((post) => ({
       "@type": ["BlogPosting", "Article"],
       headline: post.title,
-      description: post.displayExcerpt,
+      description: clampMetaDescription(post.displayExcerpt),
       url: `${SITE}/blog/${post.slug}`,
       datePublished: post.publishedAt,
       image: post.image.src.startsWith("http") ? post.image.src : `${SITE}${post.image.src}`,

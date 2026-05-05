@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { AuthRoleChoicePageClient } from "./AuthRoleChoicePageClient";
 
 export const metadata: Metadata = {
   title: "Sign in — Shalean",
-  description: "Continue as a customer or cleaner.",
+  description: clampMetaDescription("Continue as a customer or cleaner."),
   robots: { index: false, follow: false },
 };
 

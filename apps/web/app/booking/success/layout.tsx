@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { canonicalUrl } from "@/lib/site/canonicalUrl";
 
-/** Path-only canonical joins root `metadataBase` (`app/layout.tsx`) — query strings never become canonical. */
+/** Absolute apex canonical — query strings never become canonical. */
 export const metadata: Metadata = {
   title: "Booking confirmed | Shalean",
   robots: "noindex, nofollow, noimageindex",
-  alternates: { canonical: "/booking/success" },
+  alternates: { canonical: canonicalUrl("/booking/success") },
 };
 
 export default function BookingSuccessLayout({ children }: { children: React.ReactNode }) {

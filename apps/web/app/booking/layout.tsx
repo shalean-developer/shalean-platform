@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "Book Cleaning Services in Cape Town | Shalean",
   description:
     "Get instant pricing and book trusted cleaners in minutes. Choose your service, address, and time online.",
+  robots: { index: false, follow: true },
 };
 
 export default function BookingRootLayout({ children }: { children: React.ReactNode }) {

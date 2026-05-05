@@ -20,7 +20,11 @@ export function absoluteUrlFromCanonicalPath(canonicalPath: string): string {
   if (!raw) return `${SITE}/`;
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     try {
-      return new URL(raw).href;
+      const u = new URL(raw);
+      if (u.hostname.toLowerCase() === "www.shalean.co.za") {
+        u.hostname = "shalean.co.za";
+      }
+      return u.href;
     } catch {
       return `${SITE}/`;
     }

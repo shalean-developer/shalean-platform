@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
+import { canonicalUrl } from "@/lib/site/canonicalUrl";
 
-/** Path-only canonical joins root `metadataBase` (`app/layout.tsx`) — query strings never become canonical. */
+/** Absolute apex canonical — query strings never become canonical. */
 export const metadata: Metadata = {
   title: "Payment successful | Shalean",
   robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
-  alternates: { canonical: "/payment/success" },
+  alternates: { canonical: canonicalUrl("/payment/success") },
 };
 
 export const dynamic = "force-dynamic";

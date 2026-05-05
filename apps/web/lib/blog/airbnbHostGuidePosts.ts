@@ -1,4 +1,5 @@
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
 
 export type AirbnbHostGuidePost = {
   slug: string;
@@ -251,7 +252,7 @@ export function buildAirbnbHostGuideGraphJsonLd(post: AirbnbHostGuidePost, siteO
   const blogPosting = {
     "@type": ["BlogPosting", "Article"],
     headline: post.h1,
-    description: post.description,
+    description: clampMetaDescription(post.description),
     datePublished: post.publishedAt,
     dateModified: post.dateModified,
     image: [heroAbsolute],

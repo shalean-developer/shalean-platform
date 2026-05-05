@@ -18,6 +18,9 @@ import {
   type CapeTownSeoServiceSlug,
 } from "@/lib/seo/capeTownSeoPages";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { generateCtrTitle } from "@/lib/seo/metaTitle";
+import { leadPriceForServiceSlug } from "@/lib/seo/serviceTitleLeadPrice";
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import {
@@ -52,9 +55,20 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "window-cleaning-cape-town",
 ];
 
-const title = "Professional Cleaning Services Cape Town | Book Online | Shalean";
-const description =
-  "Book trusted cleaners in Cape Town for homes, apartments, and offices. Transparent pricing, flexible scheduling, and instant online booking with Shalean.";
+const title = generateCtrTitle({
+  base: "Home Cleaning Services",
+  place: "Cape Town",
+  fromPrice: leadPriceForServiceSlug("standard-cleaning-cape-town"),
+  templateKey: "services-hub",
+  brandSuffix: "Shalean",
+  pageIntent: "hub",
+});
+const description = clampMetaDescription(
+  "Book trusted cleaners in Cape Town for homes, apartments, and offices. Transparent pricing, flexible scheduling, and instant online booking with Shalean.",
+);
+const servicesItemListDescription = clampMetaDescription(
+  "Main Shalean cleaning service guides for Cape Town customers.",
+);
 
 const hubPageJsonLd = {
   "@context": "https://schema.org",
@@ -80,7 +94,7 @@ const hubPageJsonLd = {
       "@type": "ItemList",
       "@id": `${PAGE_URL}#services-itemlist`,
       name: "Cleaning services offered in Cape Town",
-      description: "Main Shalean cleaning service guides for Cape Town customers.",
+      description: servicesItemListDescription,
       numberOfItems: HUB_SERVICE_SLUGS.length,
       itemListElement: HUB_SERVICE_SLUGS.map((slug, i) => {
         const block = p[slug];

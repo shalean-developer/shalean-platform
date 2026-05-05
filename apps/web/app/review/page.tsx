@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { PublicReviewForm } from "@/components/review/PublicReviewForm";
+import { noIndexNoFollowCanonical } from "@/lib/site/transactionalMetadata";
+
+export const metadata: Metadata = noIndexNoFollowCanonical("/review");
 
 export const dynamic = "force-dynamic";
 

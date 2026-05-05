@@ -1,4 +1,5 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
+import { generateCtrTitle } from "@/lib/seo/metaTitle";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 
 export type LocationTitleVariantId = "A" | "B" | "C";
@@ -9,32 +10,23 @@ export function extractLeadPriceFromMetaHint(hint: string): string {
   return m ? m[0].replace(/,/g, "") : "~R380";
 }
 
-function clipTitle(raw: string, maxLen = 58): string {
-  const t = raw.trim();
-  if (t.length <= maxLen) return t;
-  const ellipsis = "…";
-  return `${t.slice(0, maxLen - ellipsis.length).trimEnd()}${ellipsis}`;
-}
-
 /**
- * CTR title templates for Search Console A/B/C testing.
- * Pair with `LOCATION_SEO_FEEDBACK_JSON.titleVariant` per slug (or `defaultTitleVariant`).
+ * CTR `<title>` with deterministic structural rotation + band-aware lead price.
+ * Pair with `LOCATION_SEO_FEEDBACK_JSON.titleVariant` per slug (`templateKey` suffix shifts hash).
  */
 export function buildLocationPageMetaTitleForVariant(
   row: CapeTownLocationRow,
   variant: LocationTitleVariantId,
 ): string {
-  const area = row.name.trim();
   const fromPrice = extractLeadPriceFromMetaHint(getLocationMetaPriceHint(row));
-  const year = new Date().getFullYear();
-
-  const candidates: Record<LocationTitleVariantId, string> = {
-    A: `Cleaning Services ${area} (From ${fromPrice}) | Trusted Local Cleaners | Shalean`,
-    B: `Affordable Cleaning Services in ${area} – From ${fromPrice} | Book Today | Shalean`,
-    C: `Best Cleaners in ${area} (${year}) | From ${fromPrice} – Book Now | Shalean`,
-  };
-
-  return clipTitle(candidates[variant]);
+  return generateCtrTitle({
+    base: "Home Cleaning Services",
+    place: `${row.name.trim()}, ${row.city.trim()}`,
+    fromPrice,
+    templateKey: `${row.slug}|${variant}`,
+    brandSuffix: "Shalean",
+    pageIntent: "location",
+  });
 }
 
 /** Preview all three variants (for spreadsheets / GSC experiments). */

@@ -2,12 +2,13 @@ import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 
 /** Primary query pattern targeted on hub pages (title, H1, lead copy). */
 export function primaryLocationKeywordPhrase(row: Pick<CapeTownLocationRow, "name" | "city">): string {
-  return `Cleaning services in ${row.name}, ${row.city}`;
+  return `Home cleaning services in ${row.name}, ${row.city}`;
 }
 
 export function introContainsPrimaryKeyword(text: string, row: Pick<CapeTownLocationRow, "name">): boolean {
-  const needle = `cleaning services in ${row.name}`.toLowerCase();
-  return text.toLowerCase().includes(needle);
+  const t = text.toLowerCase();
+  const n = row.name.toLowerCase();
+  return t.includes(`home cleaning services in ${n}`) || t.includes(`cleaning services in ${n}`);
 }
 
 /** Prepends the primary phrase when meta descriptions omit it (keeps editorial body intact). */
@@ -17,6 +18,8 @@ export function ensureMetaDescriptionKeyword(
 ): string {
   const trimmed = description.trim();
   if (!trimmed) return primaryLocationKeywordPhrase(row);
-  if (trimmed.toLowerCase().includes(`cleaning services in ${row.name.toLowerCase()}`)) return trimmed;
+  const low = trimmed.toLowerCase();
+  const n = row.name.toLowerCase();
+  if (low.includes(`home cleaning services in ${n}`) || low.includes(`cleaning services in ${n}`)) return trimmed;
   return `${primaryLocationKeywordPhrase(row)}. ${trimmed}`;
 }

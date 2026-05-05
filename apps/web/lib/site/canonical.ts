@@ -17,6 +17,10 @@ function readPublicSiteOrigin(): string {
   try {
     const url = new URL(candidate);
     if (!url.hostname) return FALLBACK_SITE_ORIGIN;
+    // Apex is canonical in production; mis-set env (www) must not leak into metadataBase / JSON-LD.
+    if (url.hostname.toLowerCase() === "www.shalean.co.za") {
+      url.hostname = "shalean.co.za";
+    }
     return url.origin;
   } catch {
     return FALLBACK_SITE_ORIGIN;

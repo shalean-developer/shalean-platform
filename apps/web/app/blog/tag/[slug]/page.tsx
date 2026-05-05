@@ -4,17 +4,36 @@ import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { getBlogPostsByTagSlug } from "@/lib/blog/get-taxonomy-posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ slug: string }> };
 
+function titleCaseFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const label = slug.replace(/-/g, " ");
-  const title = `${label} | Blog tags | Shalean`;
+  const label = titleCaseFromSlug(slug);
+  const title = generateCtrTitle({
+    base: `${label} Posts`,
+    place: "Cape Town",
+    templateKey: `blog-tag|${slug}`,
+    brandSuffix: "Shalean Blog",
+    pageIntent: "hub",
+    maxLen: BLOG_SERP_TITLE_MAX,
+  });
   const canonicalAbs = absoluteCanonicalUrl(`/blog/tag/${slug}`);
-  const description = `Posts tagged “${label}”—practical Cape Town cleaning tips, scopes, and instant-quote booking from Shalean.`;
+  const description = clampMetaDescription(
+    `Posts tagged “${label}”—practical Cape Town cleaning tips, scopes, and instant-quote booking from Shalean.`,
+  );
   return {
     title,
     description,

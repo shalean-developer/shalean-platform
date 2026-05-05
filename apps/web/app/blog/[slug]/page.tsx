@@ -47,6 +47,8 @@ import {
 } from "@/lib/blog/get-blog-sidebar-data";
 import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { clampMetaDescription, resolveBlogDbMetaDescription } from "@/lib/seo/metaDescription";
+import { generateBlogArticleTitle } from "@/lib/seo/metaTitle";
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -124,7 +126,12 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
   if (dbPost) {
     const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
     const titleBase = safeBlogMetaText(dbPost.metaTitle, safeBlogMetaText(dbPost.title, "Blog"));
-    const description = safeBlogMetaText(dbPost.metaDescription, safeBlogMetaText(dbPost.excerpt, titleBase));
+    const description = resolveBlogDbMetaDescription({
+      metaTitle: dbPost.metaTitle,
+      title: dbPost.title,
+      metaDescription: dbPost.metaDescription,
+      excerpt: dbPost.excerpt,
+    });
     const heroSrc = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
     const heroAlt = safeBlogMetaText(dbPost.featuredImageAlt, safeBlogMetaText(dbPost.h1, titleBase));
     const kwPhrase = buildKeywordsPhrase(dbPost);
@@ -137,14 +144,18 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
         : undefined;
     const pubOk = isReasonableIsoDate(dbPost.publishedAt);
     const modOk = isReasonableIsoDate(dbPost.updatedAt);
+    const pageTitle = generateBlogArticleTitle({
+      headline: titleBase,
+      slugKey: dbPost.slug,
+    });
     return {
-      title: `${titleBase} | Shalean Blog`,
+      title: pageTitle,
       description,
       alternates: { canonical: canonicalAbsolute },
       ...(keywords && keywords.length > 0 ? { keywords } : {}),
       robots: dbPost.indexedForSearch ? SEO_INDEX_FOLLOW : { index: false, follow: true },
       openGraph: {
-        title: `${titleBase} | Shalean Blog`,
+        title: pageTitle,
         description,
         url: canonicalAbsolute,
         type: "article",
@@ -154,7 +165,7 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
       },
       twitter: {
         card: "summary_large_image",
-        title: `${titleBase} | Shalean Blog`,
+        title: pageTitle,
         description,
         images: [heroSrc],
       },
@@ -167,14 +178,16 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
     const heroPath = resolveBlogFeaturedSrc(hc.slug);
     const heroAbs = `${SITE}${heroPath}`;
     const heroAlt = resolveBlogFeaturedAlt(hc.slug);
+    const description = clampMetaDescription(hc.description);
+    const pageTitle = generateBlogArticleTitle({ headline: hc.title, slugKey: hc.slug });
     return {
-      title: `${hc.title} | Shalean Blog`,
-      description: hc.description,
+      title: pageTitle,
+      description,
       robots: SEO_INDEX_FOLLOW,
       alternates: { canonical: url },
       openGraph: {
-        title: `${hc.title} | Shalean Blog`,
-        description: hc.description,
+        title: pageTitle,
+        description,
         url,
         type: "article",
         publishedTime: hc.publishedAt,
@@ -183,8 +196,8 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
       },
       twitter: {
         card: "summary_large_image",
-        title: `${hc.title} | Shalean Blog`,
-        description: hc.description,
+        title: pageTitle,
+        description,
         images: [heroAbs],
       },
     };
@@ -197,15 +210,17 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
     const heroPath = resolveBlogFeaturedSrc(hostGuide.slug);
     const heroOg = `${SITE}${heroPath}`;
     const heroOgAlt = resolveBlogFeaturedAlt(hostGuide.slug);
+    const description = clampMetaDescription(hostGuide.description);
+    const pageTitle = generateBlogArticleTitle({ headline: hostGuide.title, slugKey: hostGuide.slug });
     return {
-      title: `${hostGuide.title} | Shalean Blog`,
-      description: hostGuide.description,
+      title: pageTitle,
+      description,
       robots: SEO_INDEX_FOLLOW,
       alternates: { canonical: url },
       keywords: [hostGuide.primaryKeyword, "Airbnb Cape Town", "Shalean", "turnover cleaning"],
       openGraph: {
-        title: hostGuide.title,
-        description: hostGuide.description,
+        title: pageTitle,
+        description,
         url,
         type: "article",
         publishedTime: hostGuide.publishedAt,
@@ -214,8 +229,8 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
       },
       twitter: {
         card: "summary_large_image",
-        title: hostGuide.title,
-        description: hostGuide.description,
+        title: pageTitle,
+        description,
         images: [heroOg],
       },
     };
@@ -234,9 +249,11 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
   const heroPath = resolveBlogFeaturedSrc(prog.slug);
   const heroOg = `${SITE}${heroPath}`;
   const heroOgAlt = resolveBlogFeaturedAlt(prog.slug);
+  const description = clampMetaDescription(prog.description);
+  const pageTitle = generateBlogArticleTitle({ headline: prog.title, slugKey: prog.slug });
   return {
-    title: `${prog.title} | Shalean Blog`,
-    description: prog.description,
+    title: pageTitle,
+    description,
     robots: SEO_INDEX_FOLLOW,
     alternates: { canonical: url },
     keywords: [
@@ -246,8 +263,8 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
       "Shalean",
     ].filter((x): x is string => Boolean(x)),
     openGraph: {
-      title: prog.title,
-      description: prog.description,
+      title: pageTitle,
+      description,
       url,
       type: "article",
       publishedTime: prog.publishedAt,
@@ -256,16 +273,16 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
     },
     twitter: {
       card: "summary_large_image",
-      title: prog.title,
-      description: prog.description,
+      title: pageTitle,
+      description,
       images: [heroOg],
     },
   };
 }
 
 const METADATA_FALLBACK: Metadata = {
-  title: "Blog | Shalean Blog",
-  description: "Shalean Cleaning Services — trusted home cleaning in Cape Town.",
+  title: generateBlogArticleTitle({ headline: "Cleaning guides & tips", slugKey: "fallback" }),
+  description: clampMetaDescription("Shalean Cleaning Services — trusted home cleaning in Cape Town."),
 };
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -293,7 +310,7 @@ function buildProgrammaticBlogPostingJsonLd(post: ProgrammaticPost) {
   return {
     "@type": ["BlogPosting", "Article"],
     headline: post.h1,
-    description: post.description,
+    description: clampMetaDescription(post.description),
     datePublished: post.publishedAt,
     dateModified,
     image: [heroAbsolute],
@@ -378,7 +395,7 @@ function buildHighConversionBlogPostingJsonLd(post: HighConversionBlogArticle) {
   return {
     "@type": ["BlogPosting", "Article"],
     headline: post.h1,
-    description: post.description,
+    description: clampMetaDescription(post.description),
     datePublished: post.publishedAt,
     dateModified,
     image: [heroAbsolute],
@@ -491,7 +508,12 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
     const kwPhrase = buildKeywordsPhrase(dbPost);
     const jsonLd = buildDbBlogGraphJsonLd({
       headline: dbPost.h1,
-      description: dbPost.metaDescription?.trim() || dbPost.excerpt || dbPost.title,
+      description: resolveBlogDbMetaDescription({
+        metaTitle: dbPost.metaTitle,
+        title: dbPost.title,
+        metaDescription: dbPost.metaDescription,
+        excerpt: dbPost.excerpt,
+      }),
       publishedAt: dbPost.publishedAt,
       dateModified: dbPost.updatedAt,
       pageUrl,

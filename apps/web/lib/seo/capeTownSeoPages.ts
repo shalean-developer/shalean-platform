@@ -7,6 +7,9 @@ import {
   PROGRAMMATIC_LOCATIONS,
   type ProgrammaticLocationSlug,
 } from "@/lib/seo/locations";
+import { clampMetaDescription, generateMetaDescription, hubRegionGeoBoostLine } from "@/lib/seo/metaDescription";
+import { generateCtrTitle, serviceTitleBaseForCtr } from "@/lib/seo/metaTitle";
+import { leadPriceForServiceSlug } from "@/lib/seo/serviceTitleLeadPrice";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import {
@@ -48,15 +51,20 @@ export function buildLocationPageMetaTitle(
   return `${kwMid} | Shalean`.slice(0, 57).trimEnd() + "…";
 }
 
-/** Strong meta description for suburb landing pages (≤158 chars); leads with primary keyword. */
+/** Meta description for suburb hubs — structural variation + hub region geo line + near-me intent (GSC overrides still clamped). */
 export function buildLocationPageMetaDescription(
-  suburb: string,
-  city: string,
-  priceHint: string = DEFAULT_LOCATION_META_PRICE_HINT,
+  row: CapeTownLocationRow,
+  _priceHint: string = DEFAULT_LOCATION_META_PRICE_HINT,
 ): string {
-  const hint = priceHint.trim() || DEFAULT_LOCATION_META_PRICE_HINT;
-  const t = `Cleaning services in ${suburb}, ${city}: vetted cleaners, totals locked online before payment. Typical scopes ${hint}. Same-week slots when routing allows.`;
-  return t.length <= 158 ? t : `${t.slice(0, 155)}…`;
+  void _priceHint;
+  const geoBoost = hubRegionGeoBoostLine(row.region);
+  return generateMetaDescription({
+    service: "Home cleaning services",
+    location: `${row.name}, ${row.city}`,
+    variant: "Trusted local cleaners near you",
+    geoBoost,
+    templateKey: row.slug,
+  });
 }
 
 export const CAPE_TOWN_SEO_SERVICE_SLUGS = [
@@ -224,10 +232,10 @@ export function resolveLocationSeoMetaFields(
   const baseTitle = buildLocationPageMetaTitleForVariant(row, getLocationTitleVariant(row.slug));
   const baseDescription = seo?.description?.trim()
     ? ensureMetaDescriptionKeyword(seo.description.trim(), row)
-    : buildLocationPageMetaDescription(row.name, row.city, priceHint);
+    : buildLocationPageMetaDescription(row, priceHint);
   return {
     title: mergeLocationMetaTitle(row.slug, baseTitle),
-    description: mergeLocationMetaDescription(row.slug, baseDescription),
+    description: clampMetaDescription(mergeLocationMetaDescription(row.slug, baseDescription)),
   };
 }
 
@@ -241,10 +249,10 @@ export async function resolveLocationSeoMetaFieldsAsync(
   const baseTitle = buildLocationPageMetaTitleForVariant(row, variant);
   const baseDescription = seo?.description?.trim()
     ? ensureMetaDescriptionKeyword(seo.description.trim(), row)
-    : buildLocationPageMetaDescription(row.name, row.city, priceHint);
+    : buildLocationPageMetaDescription(row, priceHint);
   return {
     title: mergeLocationMetaTitle(row.slug, baseTitle),
-    description: mergeLocationMetaDescription(row.slug, baseDescription),
+    description: clampMetaDescription(mergeLocationMetaDescription(row.slug, baseDescription)),
   };
 }
 
@@ -1503,8 +1511,16 @@ export function locationSeoPathFromLegacyAreaSlug(areaSlug: string): string | nu
 export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Metadata {
   const url = absoluteCanonicalUrl(data.path);
   const metaDescription = buildServicePageMetaDescription(data);
+  const title = generateCtrTitle({
+    base: serviceTitleBaseForCtr(data.bookingLabel, data.slug),
+    place: "Cape Town",
+    fromPrice: leadPriceForServiceSlug(data.slug),
+    templateKey: data.slug,
+    brandSuffix: "Shalean",
+    pageIntent: "service",
+  });
   return {
-    title: data.title,
+    title,
     description: metaDescription,
     robots: SEO_INDEX_FOLLOW,
     ...(data.keywords?.length ? { keywords: data.keywords } : {}),
@@ -1512,27 +1528,40 @@ export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Met
     openGraph: {
       type: "website",
       url,
-      title: data.title,
+      title,
       description: metaDescription,
       images: [{ url: data.ogImage, alt: data.h1 }],
     },
     twitter: {
       card: "summary_large_image",
-      title: data.title,
+      title,
       description: metaDescription,
       images: [data.ogImage],
     },
   };
 }
 
+function bookingLabelToServicePhrase(label: string): string {
+  const t = label.trim();
+  if (!t) return "Cleaning services";
+  const cap = t.charAt(0).toUpperCase() + t.slice(1);
+  if (/\bservice\b/i.test(cap)) return cap;
+  return `${cap} service`;
+}
+
+function serviceSolutionVariant(bookingLabel: string): string {
+  const t = bookingLabel.trim().toLowerCase();
+  const phrase = t ? `${t} for homes and apartments` : "Professional cleaning for homes and apartments";
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
 function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string {
-  const base = data.description.trim().replace(/\s+/g, " ");
-  const suffix =
-    " Instant pricing, vetted cleaners, secure checkout — book trusted cleaners in Cape Town.";
-  const combined = `${base} ${suffix}`.trim();
-  if (combined.length <= 158) return combined;
-  const trimmed = `${base.slice(0, Math.max(40, 158 - suffix.length - 4)).trim()}… ${suffix}`;
-  return trimmed.length <= 158 ? trimmed : trimmed.slice(0, 158);
+  return generateMetaDescription({
+    service: bookingLabelToServicePhrase(data.bookingLabel),
+    location: "Cape Town",
+    variant: serviceSolutionVariant(data.bookingLabel),
+    templateKey: data.slug,
+  });
 }
 
 export function buildLocationSeoMetadata(data: LocationSeoBlock, row: CapeTownLocationRow): Metadata {

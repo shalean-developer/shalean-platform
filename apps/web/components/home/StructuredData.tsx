@@ -5,6 +5,7 @@ import {
   PRIMARY_LOCAL_BUSINESS_ID,
 } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { HOME_PAGE_OFFER_CATALOG_ID, homeBookableServiceJsonLdId } from "@/lib/seo/homeBookableServiceJsonLd";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { buildWebPageJsonLdNode, buildWebSiteJsonLdNode } from "@/lib/seo/schemaGraph";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 
@@ -89,7 +90,7 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     "@type": "Service",
     "@id": homeBookableServiceJsonLdId(service.id),
     name: service.title,
-    description: service.description,
+    description: clampMetaDescription(service.description),
     url: SITE_ORIGIN,
     areaServed: locationPlaces,
     serviceArea: capeTownAdministrativeServiceArea(),
@@ -101,7 +102,9 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     buildWebPageJsonLdNode({
       canonicalUrl: SITE_ORIGIN,
       name: "Shalean Cleaning Services",
-      description: "Book vetted home cleaners in Cape Town online — transparent quotes for standard, deep, move-out, and recurring cleans.",
+      description: clampMetaDescription(
+        "Book vetted home cleaners in Cape Town online — transparent quotes for standard, deep, move-out, and recurring cleans.",
+      ),
       primaryEntityId: CLEANING_SERVICE_ID,
       speakableCssSelectors: ["main h1", ".marketing-hero-lead"],
     }),

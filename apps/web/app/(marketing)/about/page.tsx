@@ -4,29 +4,38 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/about";
 const CANONICAL = absoluteCanonicalUrl(PATH);
 
+const ABOUT_META_DESC = clampMetaDescription(
+  "Vetted cleaners, transparent pricing, and reliable home cleaning across Cape Town. Learn how Shalean works and book online with upfront quotes.",
+);
+const ABOUT_OG_DESC = clampMetaDescription(
+  "Background-checked teams, clear totals before payment, and suburb hubs across the metro—book standard, deep, or move-out cleaning.",
+);
+const ABOUT_TWITTER_DESC = clampMetaDescription(
+  "Why homeowners choose Shalean: vetted cleaners, transparent pricing, same-day when routing allows.",
+);
+
 export const metadata: Metadata = {
   title: "About Shalean | Trusted Home Cleaning Cape Town",
-  description:
-    "Vetted cleaners, transparent pricing, and reliable home cleaning across Cape Town. Learn how Shalean works and book online with upfront quotes.",
+  description: ABOUT_META_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
   openGraph: {
     type: "website",
     url: CANONICAL,
     title: "About Shalean | Trusted Home Cleaning Cape Town",
-    description:
-      "Background-checked teams, clear totals before payment, and suburb hubs across the metro—book standard, deep, or move-out cleaning.",
+    description: ABOUT_OG_DESC,
   },
   twitter: {
     card: "summary_large_image",
     title: "About Shalean | Trusted Home Cleaning Cape Town",
-    description: "Why homeowners choose Shalean: vetted cleaners, transparent pricing, same-day when routing allows.",
+    description: ABOUT_TWITTER_DESC,
   },
 };
 

@@ -17,24 +17,26 @@ import { getHomePageData } from "@/lib/home/data";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { getHomepageInternalSeoLinks } from "@/lib/seo/capeTownSeoPages";
+import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const OG_IMAGE = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
 const HOME_CANONICAL = absoluteCanonicalUrl("/");
+const HOME_META_DESCRIPTION = clampMetaDescription(
+  "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
+);
 
 export const metadata: Metadata = {
   title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
-  description:
-    "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
+  description: HOME_META_DESCRIPTION,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: HOME_CANONICAL },
   openGraph: {
     type: "website",
     url: HOME_CANONICAL,
     title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
-    description:
-      "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
+    description: HOME_META_DESCRIPTION,
     images: [
       {
         url: OG_IMAGE,
@@ -47,7 +49,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Cleaning Services Cape Town | Trusted Home Cleaners | Shalean",
-    description: "Book professional cleaning services in Cape Town. Trusted cleaners, fast booking, and reliable service.",
+    description: HOME_META_DESCRIPTION,
     images: [OG_IMAGE],
   },
 };

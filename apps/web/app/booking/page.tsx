@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { copyAllowedBookingParams } from "@/lib/booking/bookingUrl";
 import { legacyFlowStepQueryToCheckoutPath } from "@/lib/booking/bookingFlow";
+import { noIndexFollowCanonical } from "@/lib/site/transactionalMetadata";
+
+export const metadata: Metadata = noIndexFollowCanonical("/booking");
 
 type BookingIndexPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

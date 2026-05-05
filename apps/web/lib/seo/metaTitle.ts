@@ -1,0 +1,120 @@
+/** Visible SERP window is tight — clip aggressively to preserve CTR cues at the start. */
+export const DEFAULT_SERP_TITLE_MAX = 58;
+export const BLOG_SERP_TITLE_MAX = 72;
+
+export type TitlePageIntent = "location" | "service" | "hub";
+
+function fnv1a32(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+export function stableTitleStructureIndex(key: string, len: number): number {
+  return fnv1a32(`${key}|title`) % len;
+}
+
+export function clipSerpTitle(raw: string, maxLen = DEFAULT_SERP_TITLE_MAX): string {
+  const t = raw.trim();
+  if (t.length <= maxLen) return t;
+  const ellipsis = "…";
+  return `${t.slice(0, maxLen - ellipsis.length).trimEnd()}${ellipsis}`;
+}
+
+export type GenerateCtrTitleArgs = {
+  base: string;
+  place: string;
+  /** Lead price token for template 0, e.g. "~R450" */
+  fromPrice?: string;
+  templateKey: string;
+  /** Appended as ` | Shalean` when non-empty */
+  brandSuffix?: string;
+  /** Location hubs use proximity language; service & hub pages use standard CTR rotation. */
+  pageIntent?: TitlePageIntent;
+  maxLen?: number;
+};
+
+const DEFAULT_FROM_PRICE = "~R380";
+
+/**
+ * Deterministic CTR `<title>` templates (location + service hubs). Same stability rules as meta descriptions.
+ */
+export function generateCtrTitle({
+  base,
+  place,
+  fromPrice = DEFAULT_FROM_PRICE,
+  templateKey,
+  brandSuffix = "Shalean",
+  pageIntent = "service",
+  maxLen = DEFAULT_SERP_TITLE_MAX,
+}: GenerateCtrTitleArgs): string {
+  const b = base.trim() || "Cleaning services";
+  const p = place.trim() || "Cape Town";
+  const fp = (fromPrice ?? DEFAULT_FROM_PRICE).trim() || DEFAULT_FROM_PRICE;
+  const brand = brandSuffix.trim() ? ` | ${brandSuffix.trim()}` : "";
+
+  type Args = { b: string; p: string; fp: string; brand: string };
+
+  const serviceOrHubTemplates: ((a: Args) => string)[] = [
+    ({ b, p, fp, brand }) => `${b} in ${p} (From ${fp}) – Same-Day Booking${brand}`,
+    ({ b, p, brand }) => `Best ${b} in ${p} – Instant Booking & Trusted Cleaners${brand}`,
+    ({ b, p, brand }) => `${p} ${b} – Affordable, Trusted & Easy Booking${brand}`,
+    ({ b, p, brand }) => `Book ${b} in ${p} Today – Fast & Reliable Cleaning${brand}`,
+  ];
+
+  /** Lead with proximity phrases so aggressive SERP clipping still keeps “near you”. */
+  const locationTemplates: ((a: Args) => string)[] = [
+    ({ b, p, fp, brand }) => `${b} Near You in ${p} (From ${fp}) – Same-Day Booking${brand}`,
+    ({ b, p, fp, brand }) => `Best ${b} Near You in ${p} – From ${fp}${brand}`,
+    ({ b, p, brand }) => `${b} Near You – ${p} – Trusted Cleaners & Booking${brand}`,
+    ({ b, p, fp, brand }) => `Book ${b} Near You in ${p} Today – From ${fp}${brand}`,
+  ];
+
+  const templates = pageIntent === "location" ? locationTemplates : serviceOrHubTemplates;
+  const idx = stableTitleStructureIndex(templateKey, templates.length);
+  return clipSerpTitle(templates[idx]({ b, p, fp, brand }), maxLen);
+}
+
+/** Matches service meta description base phrase (booking funnel labels → title case + "service"). */
+export function serviceTitleBaseFromBookingLabel(label: string): string {
+  const t = label.trim();
+  if (!t) return "Cleaning services";
+  const cap = t.charAt(0).toUpperCase() + t.slice(1);
+  if (/\bservice\b/i.test(cap)) return cap;
+  return `${cap} service`;
+}
+
+/**
+ * CTR `<title>` base for `/services/*`: aligns standard cleaning with “home cleaning” queries
+ * without collapsing specialised slugs (deep, move-out, Airbnb, etc.) into one phrase.
+ */
+export function serviceTitleBaseForCtr(bookingLabel: string, slug: string): string {
+  const raw = serviceTitleBaseFromBookingLabel(bookingLabel);
+  if (slug === "standard-cleaning-cape-town") return "Home Cleaning Services";
+  return raw;
+}
+
+const BLOG_TITLE_STRUCTURES: readonly ((h: string, year: number, brand: string) => string)[] = [
+  (h, year, brand) => `${h} (${year} Guide) – Cape Town | ${brand}`,
+  (h, year, brand) => `${h} – Cape Town (${year}) – Instant Booking Tips | ${brand}`,
+];
+
+/**
+ * Blog listing `<title>` — year + geo + deterministic secondary template from slug.
+ */
+export function generateBlogArticleTitle(input: {
+  headline: string;
+  slugKey: string;
+  year?: number;
+  brand?: string;
+}): string {
+  const year = input.year ?? new Date().getFullYear();
+  const h = input.headline.trim() || "Cleaning guide";
+  const brand = (input.brand ?? "Shalean Blog").trim();
+  const idx = stableTitleStructureIndex(input.slugKey.trim() || "blog", BLOG_TITLE_STRUCTURES.length);
+  const raw = BLOG_TITLE_STRUCTURES[idx](h, year, brand);
+  return clipSerpTitle(raw, BLOG_SERP_TITLE_MAX);
+}
