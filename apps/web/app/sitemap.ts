@@ -52,7 +52,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   push(`${SITE_ORIGIN}/locations`, 0.8);
-  push(`${SITE_ORIGIN}/locations/cape-town-cleaning-services`, 0.8);
+  push(`${SITE_ORIGIN}/cleaning-services-cape-town`, 0.85);
   for (const p of Object.values(LOCATION_SEO_PAGES)) {
     push(`${SITE_ORIGIN}${p.path}`, 0.8);
   }

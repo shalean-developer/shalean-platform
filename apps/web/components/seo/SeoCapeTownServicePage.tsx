@@ -73,6 +73,12 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
       <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{data.h1}</h1>
       {heroTrustStrip}
       <p className="mt-4 text-lg leading-relaxed text-zinc-600">{data.description}</p>
+      {slug === "standard-cleaning-cape-town" ? (
+        <p className="mt-3 text-base leading-relaxed text-zinc-600">
+          Looking for <strong className="font-semibold text-zinc-800">cleaning services near you in Cape Town</strong>? Book
+          online with upfront pricing and visible availability.
+        </p>
+      ) : null}
       <div className="mt-8 flex flex-wrap gap-3">
         <GrowthCtaLink
           href={bookingPath}
@@ -150,24 +156,47 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
     })),
   };
 
+  /** Commercial Service + Offer on money page — price signals alongside CleaningService + FAQ + breadcrumbs. */
+  const commercialCleaningServiceOffer =
+    slug === "standard-cleaning-cape-town"
+      ? ({
+          "@type": "Service",
+          "@id": `${pageUrl}#cleaning-services-commercial`,
+          name: "Cleaning Services Cape Town",
+          url: pageUrl,
+          areaServed: { "@type": "City", name: "Cape Town" },
+          provider: { "@id": localBusinessId },
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "ZAR",
+            lowPrice: "250",
+            highPrice: "600",
+            availability: "https://schema.org/InStock",
+          },
+        } as Record<string, unknown>)
+      : null;
+
   /** aggregateRating on money page uses verified GBP aggregate or live review RPC stats when present. */
+  const jsonLdGraph: Record<string, unknown>[] = [
+    localBusinessNode,
+    {
+      "@type": "CleaningService",
+      "@id": serviceNodeId,
+      name: schemaName,
+      serviceType: schemaServiceType,
+      url: pageUrl,
+      areaServed: { "@type": "Place", name: "Cape Town, South Africa" },
+      serviceArea: capeTownAdministrativeServiceArea(),
+      provider: { "@id": localBusinessId },
+    },
+    ...(commercialCleaningServiceOffer ? [commercialCleaningServiceOffer] : []),
+    breadcrumbEntity,
+    faqPageEntity,
+  ];
+
   const jsonLd = {
     "@context": "https://schema.org",
-    "@graph": [
-      localBusinessNode,
-      {
-        "@type": "CleaningService",
-        "@id": serviceNodeId,
-        name: schemaName,
-        serviceType: schemaServiceType,
-        url: pageUrl,
-        areaServed: { "@type": "Place", name: "Cape Town, South Africa" },
-        serviceArea: capeTownAdministrativeServiceArea(),
-        provider: { "@id": localBusinessId },
-      },
-      breadcrumbEntity,
-      faqPageEntity,
-    ],
+    "@graph": jsonLdGraph,
   };
 
   const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
@@ -224,6 +253,46 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
         </div>
       </section>
 
+      {slug === "standard-cleaning-cape-town" ? (
+        <section className="border-b border-blue-100 bg-blue-50/25 py-12" aria-labelledby="std-trust-block-heading">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 id="std-trust-block-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+              Trusted cleaning services in Cape Town
+            </h2>
+            <ul className="mt-6 grid gap-4 text-base leading-relaxed text-zinc-700 sm:grid-cols-2">
+              <li className="flex gap-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+                <span>
+                  <strong className="font-semibold text-zinc-900">Vetted cleaners</strong> — identity-checked professionals on
+                  every visit.
+                </span>
+              </li>
+              <li className="flex gap-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+                <span>
+                  <strong className="font-semibold text-zinc-900">4,500+ homes cleaned</strong> — proven volume across the
+                  metro.
+                </span>
+              </li>
+              <li className="flex gap-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+                <span>
+                  <strong className="font-semibold text-zinc-900">Suburb coverage</strong> — Seaboard, City Bowl, Southern
+                  Suburbs, and beyond.
+                </span>
+              </li>
+              <li className="flex gap-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+                <span>
+                  <strong className="font-semibold text-zinc-900">Repeat bookings &amp; reviews</strong> — customers come back
+                  when schedules stick.
+                </span>
+              </li>
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
       {slug === "standard-cleaning-cape-town" ? <StandardCleaningCapeTownEnhancements bookingPath={bookingPath} /> : null}
 
       <section className="border-b border-blue-100 py-16">
@@ -237,7 +306,14 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                   cleaning services in Cape Town
                 </Link>
                 , Shalean matches you with vetted cleaners and a checklist you confirm online—ideal for busy households that
-                want predictable maintenance between deeper resets.
+                want predictable maintenance between deeper resets. If you need a more intensive service, see our{" "}
+                <Link
+                  href={CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path}
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  deep cleaning services in Cape Town
+                </Link>
+                .
               </p>
             ) : null}
             {data.explanation.map((p, i) => (

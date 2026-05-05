@@ -91,7 +91,7 @@ export function MarketingAreasSection({ locations }: Props) {
                 blog
               </Link>
               , or open the{" "}
-              <Link href="/locations/cape-town-cleaning-services" className={linkInParagraphClassName}>
+              <Link href="/cleaning-services-cape-town" className={linkInParagraphClassName}>
                 Cape Town cleaning overview
               </Link>
               .
@@ -179,7 +179,7 @@ export function MarketingAreasSection({ locations }: Props) {
           <span className="text-slate-300" aria-hidden>
             ·
           </span>
-          <Link href="/locations/cape-town-cleaning-services" className={`font-semibold ${linkInParagraphClassName}`}>
+          <Link href="/cleaning-services-cape-town" className={`font-semibold ${linkInParagraphClassName}`}>
             Cape Town cleaning overview
           </Link>
         </p>

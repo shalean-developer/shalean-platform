@@ -105,7 +105,7 @@ export function LocationHubEngagementClient({
               See price &amp; book
             </SeoHubGrowthCtaLink>
             <Link
-              href="/locations/cape-town-cleaning-services"
+              href="/cleaning-services-cape-town"
               className="text-xs font-semibold text-emerald-800 underline-offset-4 hover:underline"
             >
               Cape Town overview

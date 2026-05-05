@@ -199,7 +199,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
               ))}
             </>
           ) : (
-            <Link href="/locations/cape-town-cleaning-services">Cape Town cleaning hubs</Link>
+            <Link href="/cleaning-services-cape-town">Cape Town cleaning hubs</Link>
           )}
           —plus{" "}
           <Link href={moveOut}>move-out cleaning in Cape Town</Link> and{" "}

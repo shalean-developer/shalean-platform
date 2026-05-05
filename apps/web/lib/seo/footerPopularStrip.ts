@@ -1,6 +1,6 @@
 import { stableHash } from "@/lib/seo/anchorVariants";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
-import { resolveCapeTownHubRowFromAreaInput } from "@/lib/seo/capeTownLocations";
+import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, resolveCapeTownHubRowFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { nearbyProgrammaticLocationsPreferRegion } from "@/lib/seo/locations";
 import { getPopularCapeTownFooterStripLinks } from "@/lib/seo/internalLinks";
 
@@ -44,6 +44,11 @@ function mergeFooterStripPrimaryWithVariant(
 export function footerPopularStripForPathname(pathname: string): FooterPopularStripModel {
   const baseCore = getPopularCapeTownFooterStripLinks();
   const base = mergeFooterStripPrimaryWithVariant(baseCore, pathname);
+
+  const normalized = pathname.trim().replace(/\/+$/, "") || "/";
+  if (normalized === CAPE_TOWN_LOCATIONS_OVERVIEW_PATH || normalized === "/locations/cape-town-cleaning-services") {
+    return { title: "Popular in Cape Town", links: base };
+  }
 
   if (pathname.startsWith("/services/")) {
     return { title: "Popular cleaning services in Cape Town", links: base };

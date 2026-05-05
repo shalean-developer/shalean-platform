@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { cn } from "@/lib/utils";
 
 /** Canonical paths for the SEO hub loop — extend when new money pages ship. */
@@ -8,6 +9,7 @@ export const SEO_HUB_MAID_SERVICES_PATH = "/maid-services-cape-town";
 export type SeoInternalLinksBlockItem = { href: string; label: string };
 
 const DEFAULT_ITEMS: readonly SeoInternalLinksBlockItem[] = [
+  { href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: "Cleaning services Cape Town" },
   { href: SEO_HUB_CLEANING_PRICES_PATH, label: "Cleaning prices in Cape Town" },
   { href: SEO_HUB_MAID_SERVICES_PATH, label: "Maid services in Cape Town" },
   { href: "/services", label: "Cleaning services" },

@@ -12,7 +12,7 @@ const BOOKING = "/booking";
 /** Google Business Profile review URL — aligns on-page trust copy with GBP entity signals. */
 const GOOGLE_BUSINESS_REVIEW_URL = "https://g.page/r/Ceg4n_v9Pr59EBM/review";
 
-const CAPE_TOWN_OVERVIEW_LOCATIONS = "/locations/cape-town-cleaning-services";
+const CAPE_TOWN_OVERVIEW_LOCATIONS = "/cleaning-services-cape-town";
 
 const AIRBNB_SEA_POINT = "/services/airbnb-cleaning-sea-point";
 const AIRBNB_GREEN_POINT = "/services/airbnb-cleaning-green-point";

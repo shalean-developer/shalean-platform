@@ -12,18 +12,30 @@ type Props = {
 export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
   return (
     <>
-      <section className="border-b border-blue-100 bg-white py-14" aria-labelledby="std-ct-prices-heading">
+      <section className="border-b border-blue-100 bg-white py-14" aria-labelledby="std-ct-cost-snippet-heading">
         <div className="mx-auto max-w-4xl px-4">
-          <h2 id="std-ct-prices-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Cleaning services prices in Cape Town
+          <h2 id="std-ct-cost-snippet-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+            How much do cleaning services cost in Cape Town?
           </h2>
+          <blockquote className="mt-4 rounded-2xl border-l-4 border-blue-500 bg-blue-50/60 px-5 py-4 text-base leading-relaxed text-zinc-800 shadow-sm">
+            Cleaning services in Cape Town typically cost <strong className="font-semibold text-zinc-900">R250 to R600+</strong>,
+            depending on property size and service type.
+          </blockquote>
+
+          <h3 id="std-ct-prices-heading" className="mt-10 text-xl font-bold tracking-tight text-zinc-900">
+            Typical standard cleaning price bands
+          </h3>
           <p className="mt-3 text-base leading-relaxed text-zinc-600">
             Maintenance cleaning totals depend on bedrooms, bathrooms, and add-ons—ranges below are typical standard scopes
             before extras. Lock your fixed total in the{" "}
             <Link href={bookingPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               instant quote
             </Link>
-            .
+            . For move-outs or inventory-grade ovens, scope usually steps up—compare{" "}
+            <Link href="/services/deep-cleaning-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              deep cleaning in Cape Town
+            </Link>{" "}
+            when you need a full reset.
           </p>
           <div className="mt-8 overflow-x-auto rounded-2xl border border-blue-100 bg-blue-50/40 shadow-sm">
             <table className="min-w-full border-collapse text-left text-sm">

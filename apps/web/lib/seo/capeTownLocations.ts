@@ -51,10 +51,10 @@ export const CAPE_TOWN_LOCATIONS = normalizeHubs(hubsFile as LocationHubFile);
 export type CapeTownLocationSlug = (typeof CAPE_TOWN_LOCATIONS)[number]["slug"];
 
 /**
- * City-wide hub is a static route (`app/locations/cape-town-cleaning-services/page.tsx`), not a row in
- * `location-hubs.json` — keep redirects and links aligned without synthesising fake slugs.
+ * City-wide commercial hub (`app/(marketing)/cleaning-services-cape-town/page.tsx`). Legacy
+ * `/locations/cape-town-cleaning-services` redirects here — not a row in `location-hubs.json`.
  */
-export const CAPE_TOWN_LOCATIONS_OVERVIEW_PATH = "/locations/cape-town-cleaning-services" as const;
+export const CAPE_TOWN_LOCATIONS_OVERVIEW_PATH = "/cleaning-services-cape-town" as const;
 
 /**
  * Resolve a hub row from user/CMS input: full hub slug (`sea-point-cleaning-services`), short legacy slug
@@ -81,7 +81,7 @@ export function resolveCapeTownHubRowFromAreaInput(raw: string): CapeTownLocatio
  */
 export function locationHubPathFromAreaInput(raw: string): typeof CAPE_TOWN_LOCATIONS_OVERVIEW_PATH | `/locations/${string}` | "/locations" {
   const key = raw.trim().toLowerCase().replace(/^\/+|\/+$/g, "");
-  if (key === "cape-town" || key === "cape-town-cleaning-services") {
+  if (key === "cape-town" || key === "cape-town-cleaning-services" || key === "cleaning-services-cape-town") {
     return CAPE_TOWN_LOCATIONS_OVERVIEW_PATH;
   }
   const row = resolveCapeTownHubRowFromAreaInput(raw);

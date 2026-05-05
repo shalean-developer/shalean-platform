@@ -6,12 +6,20 @@ function hub(slug: string, blocks: BlogContentJson["blocks"]): LocationHubSeed {
   return { slug, content_json: { schema_version: 1, blocks } };
 }
 
+/** Points suburb guides at the citywide service money page (reduces blog vs commercial URL overlap). */
+const STANDARD_CLEANING_CAPE_TOWN_CTX =
+  "Looking for professional cleaning services in Cape Town? [View cleaning services in Cape Town](/services/standard-cleaning-cape-town).";
+
 /**
  * Seven location hubs — competitive SEO copy with inline `[label](/path)` links in paragraphs.
  * Re-export JSON via: `npx tsx apps/web/scripts/export-location-hub-structured-json.ts`
  */
 export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   hub("cleaning-services-claremont-cape-town", [
+    {
+      type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
     {
       type: "paragraph",
       content: `Looking for reliable cleaning services in Claremont, Cape Town? Whether you live near Cavendish Square, manage a rental property, or need help maintaining your home, choosing the right cleaning service can make a big difference in consistency and quality.`,
@@ -174,6 +182,10 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   hub("cleaning-services-sea-point-cape-town", [
     {
       type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
+    {
+      type: "paragraph",
       content: `Cleaning services in Sea Point mean salty film on glass, tight Airbnb gaps, and lifts that eat daylight if you brief them wrong. Shalean pairs upfront pricing with live availability—pull an [instant quote](/booking), lock a slot online, and skip WhatsApp roulette. Same-day opens when calendars allow; most Seaboard bookings confirm within a few days once bedrooms and bathrooms are honest.`,
     },
     {
@@ -329,6 +341,10 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   ]),
 
   hub("cleaning-services-rondebosch-cape-town", [
+    {
+      type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
     {
       type: "paragraph",
       content: `Cleaning services in Rondebosch sit where duplex stairs, shared drives, and campus-adjacent rentals collide—brief gate remotes once, then book online with upfront pricing and visible availability. Compare [standard cleaning](/services/standard-cleaning-cape-town) with heavier resets via [instant quote](/booking) before exams-week chaos eats your weekend. Most Southern Suburb slots confirm within several days; same-day appears only when calendars briefly open.`,
@@ -488,6 +504,10 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   hub("cleaning-services-gardens-cape-town", [
     {
       type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
+    {
+      type: "paragraph",
       content: `Cleaning services in the Gardens thread heritage walk-ups, festival-week footfall, and Bowl kitchens tighter than Southern Suburb spreads—book online with upfront pricing and calendars that respect buzzers, scratch-card parking, and stair-only access. Compare [deep cleaning](/services/deep-cleaning-cape-town) with lighter upkeep, then lock numbers through [instant quote](/booking). Mid-week slots usually open faster than post-event Mondays when hosts race identical turnovers.`,
     },
     {
@@ -645,6 +665,10 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   hub("cleaning-services-wynberg-cape-town", [
     {
       type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
+    {
+      type: "paragraph",
       content: `Cleaning services in Wynberg bridge leaf litter, pet traffic, and school-week kitchens that barely cool—book online with bedrooms-accurate pricing and calendars that respect side gates, estate decals, and mudrooms. Families weigh cadence via [standard cleaning](/services/standard-cleaning-cape-town); hosts align [Airbnb cleaning](/services/airbnb-cleaning-cape-town) before syncing calendars—then confirm totals in [instant quote](/booking). Saturday sport windows tighten slots; mid-week visits recover faster after muddy weekends.`,
     },
     {
@@ -800,6 +824,10 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   ]),
 
   hub("cleaning-services-green-point-cape-town", [
+    {
+      type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
     {
       type: "paragraph",
       content: `Cleaning services in Green Point stack stadium-adjacent energy with Seaboard humidity—book online with upfront pricing and calendars tuned for concierge choreography, lift queues, and humid grease that bonds overnight. Layer [Airbnb cleaning](/services/airbnb-cleaning-cape-town) beside [standard cleaning](/services/standard-cleaning-cape-town), then confirm totals via [instant quote](/booking) before guests WhatsApp Monday resets. Event weekends steal slots fastest; quiet Tuesdays often reopen mid-week sparkle.`,
@@ -2135,6 +2163,10 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
   ]),
 
   hub("cleaning-services-durbanville-cape-town", [
+    {
+      type: "paragraph",
+      content: STANDARD_CLEANING_CAPE_TOWN_CTX,
+    },
     {
       type: "paragraph",
       content: `Cleaning services in Durbanville favour braai patios, estate gatehouses, and mudrooms that swallow winter boots—book online with square-metre honesty, not studio defaults. Heavy resets route through [deep cleaning](/services/deep-cleaning-cape-town); steady cadence locks via [standard cleaning](/services/standard-cleaning-cape-town)—both resolve in [instant quote](/booking) once every bathroom is counted. School-holiday Saturdays vanish early; weekday visits while kids sit in class stay easier to secure.`,

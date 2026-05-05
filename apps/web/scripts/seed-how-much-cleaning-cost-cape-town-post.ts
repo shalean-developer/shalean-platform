@@ -84,7 +84,7 @@ const content_json = {
     {
       type: "paragraph" as const,
       content:
-        "Want suburb-by-suburb context before you commit? Browse coverage on our [Cape Town cleaning services overview](/locations/cape-town-cleaning-services), then return here to compare pricing bands with your address in mind.",
+        "Want suburb-by-suburb context before you commit? Browse coverage on our [Cape Town cleaning services overview](/cleaning-services-cape-town), then return here to compare pricing bands with your address in mind.",
     },
     {
       type: "heading" as const,
@@ -178,7 +178,7 @@ const content_json = {
     {
       type: "paragraph" as const,
       content:
-        "When you are ready to compare suburbs and services side by side, anchor your research with our [Cape Town locations hub](/locations/cape-town-cleaning-services)—it links local context back to the exact booking paths on this site.",
+        "When you are ready to compare suburbs and services side by side, anchor your research with our [Cape Town locations hub](/cleaning-services-cape-town)—it links local context back to the exact booking paths on this site.",
     },
     {
       type: "paragraph" as const,
@@ -237,7 +237,7 @@ const content_json = {
       links: [
         { label: "Standard cleaning in Cape Town", url: "/services/standard-cleaning-cape-town" },
         { label: "Deep cleaning in Cape Town", url: "/services/deep-cleaning-cape-town" },
-        { label: "Cape Town cleaning services by area", url: "/locations/cape-town-cleaning-services" },
+        { label: "Cape Town cleaning services by area", url: "/cleaning-services-cape-town" },
         { label: "Book a clean", url: "/booking/details" },
       ],
     },

@@ -220,7 +220,7 @@ export function BlogPostLayout({
                   </Link>
                 </p>
                 <p className="mt-6 text-sm text-zinc-500">
-                  <Link href="/locations/cape-town-cleaning-services" className={linkInNavClassName}>
+                  <Link href="/cleaning-services-cape-town" className={linkInNavClassName}>
                     Cape Town service areas
                   </Link>
                   {" · "}

@@ -188,7 +188,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
           {hubHref ? (
             <Link href={hubHref}>cleaning services in {loc}</Link>
           ) : (
-            <Link href="/locations/cape-town-cleaning-services">Cape Town cleaning hubs</Link>
+            <Link href="/cleaning-services-cape-town">Cape Town cleaning hubs</Link>
           )}{" "}
           for the shortest path from search → quote → booking.
         </p>
@@ -204,7 +204,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
               ))}
             </>
           ) : (
-            <Link href="/locations/cape-town-cleaning-services">Cape Town overview</Link>
+            <Link href="/cleaning-services-cape-town">Cape Town overview</Link>
           )}
           .
         </p>

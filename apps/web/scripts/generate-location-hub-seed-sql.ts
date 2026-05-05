@@ -70,12 +70,12 @@ For move-out scope compared with maintenance cleans, read [move-out cleaning in 
   {
     location: "Sea Point",
     slug: "cleaning-services-sea-point-cape-town",
-    title: "Cleaning Services in Sea Point (Coastal Homes & Fast Booking)",
-    meta_title: "Sea Point Cleaning Services | Book Online | Shalean",
+    title: "Cleaning Services in Sea Point Cape Town (2026 Guide & Prices)",
+    meta_title: "Cleaning Services in Sea Point Cape Town (2026 Guide & Prices)",
     meta_description:
       "Professional cleaning in Sea Point: apartments & coastal homes. Same-week slots, clear pricing before you pay, and cleaners briefed for lifts, parking & salty air.",
     primary_keyword: "cleaning services in sea point",
-    h1: "Cleaning Services in Sea Point",
+    h1: "Cleaning Services in Sea Point Cape Town (2026 Guide & Prices)",
     excerpt:
       "Professional cleaning in Sea Point for apartments and coastal homes. Same-week slots and upfront pricing before you pay.",
     content: `## Cleaning Services in Sea Point
@@ -127,12 +127,12 @@ Moving out? Align expectations with [/services/move-out-cleaning-cape-town](/ser
   {
     location: "Rondebosch",
     slug: "cleaning-services-rondebosch-cape-town",
-    title: "Cleaning Services in Rondebosch (Student Rentals & Family Homes)",
-    meta_title: "Rondebosch Cleaning Services | Shalean Cape Town",
+    title: "Cleaning Services in Rondebosch Cape Town (2026 Guide & Prices)",
+    meta_title: "Cleaning Services in Rondebosch Cape Town (2026 Guide & Prices)",
     meta_description:
       "Cleaning services in Rondebosch for rentals and family houses. Deep, standard & move-out cleans with upfront quotes. Book trusted Cape Town cleaners online.",
     primary_keyword: "cleaning services in rondebosch",
-    h1: "Cleaning Services in Rondebosch",
+    h1: "Cleaning Services in Rondebosch Cape Town (2026 Guide & Prices)",
     excerpt:
       "Cleaning services in Rondebosch for rentals and family houses. Deep, standard and move-out cleans with upfront quotes.",
     content: `## Cleaning Services in Rondebosch
@@ -184,12 +184,12 @@ Compare move-out detail here: [/services/move-out-cleaning-cape-town](/services/
   {
     location: "Gardens",
     slug: "cleaning-services-gardens-cape-town",
-    title: "Cleaning Services in Gardens (City Bowl Access & Online Booking)",
-    meta_title: "Gardens Cleaning Services | Quote & Book | Shalean",
+    title: "Cleaning Services in Gardens Cape Town (2026 Guide & Prices)",
+    meta_title: "Cleaning Services in Gardens Cape Town (2026 Guide & Prices)",
     meta_description:
       "Trusted cleaning services in Gardens, Cape Town—walk-ups, heritage flats & busy kitchens. Clear pricing, vetted cleaners & secure booking for City Bowl homes.",
     primary_keyword: "cleaning services in gardens",
-    h1: "Cleaning Services in Gardens",
+    h1: "Cleaning Services in Gardens Cape Town (2026 Guide & Prices)",
     excerpt:
       "Trusted cleaning in Gardens, Cape Town—walk-ups, heritage flats and busy kitchens with clear pricing and secure booking.",
     content: `## Cleaning Services in Gardens
@@ -241,12 +241,12 @@ Move-out specifics: [/services/move-out-cleaning-cape-town](/services/move-out-c
   {
     location: "Wynberg",
     slug: "cleaning-services-wynberg-cape-town",
-    title: "Cleaning Services in Wynberg (Southern Suburbs & Reliable Crews)",
-    meta_title: "Wynberg Cleaning Services | Shalean Cape Town",
+    title: "Cleaning Services in Wynberg Cape Town (2026 Guide & Prices)",
+    meta_title: "Cleaning Services in Wynberg Cape Town (2026 Guide & Prices)",
     meta_description:
       "Book cleaning services in Wynberg—family houses, apartments & rentals. Deep, standard, Airbnb & move-out cleans with instant quotes and trusted Cape Town cleaners.",
     primary_keyword: "cleaning services in wynberg",
-    h1: "Cleaning Services in Wynberg",
+    h1: "Cleaning Services in Wynberg Cape Town (2026 Guide & Prices)",
     excerpt:
       "Book cleaning services in Wynberg for family houses, apartments and rentals. Deep, standard and move-out cleans with instant quotes.",
     content: `## Cleaning Services in Wynberg
@@ -298,12 +298,12 @@ Handover help: [/services/move-out-cleaning-cape-town](/services/move-out-cleani
   {
     location: "Green Point",
     slug: "cleaning-services-green-point-cape-town",
-    title: "Cleaning Services in Green Point (Seaboard Apartments & Host Stays)",
-    meta_title: "Green Point Cleaning | Book Trusted Cleaners | Shalean",
+    title: "Cleaning Services in Green Point Cape Town (2026 Guide & Prices)",
+    meta_title: "Cleaning Services in Green Point Cape Town (2026 Guide & Prices)",
     meta_description:
       "Cleaning services in Green Point for Seaboard apartments & rentals. Instant quotes, vetted teams & turnovers built for lifts, parking & Cape Town coastal living.",
     primary_keyword: "cleaning services in green point",
-    h1: "Cleaning Services in Green Point",
+    h1: "Cleaning Services in Green Point Cape Town (2026 Guide & Prices)",
     excerpt:
       "Cleaning services in Green Point for Seaboard apartments and rentals. Instant quotes and teams briefed for lifts, parking and coastal living.",
     content: `## Cleaning Services in Green Point
@@ -355,12 +355,12 @@ Move-out guidance: [/services/move-out-cleaning-cape-town](/services/move-out-cl
   {
     location: "Durbanville",
     slug: "cleaning-services-durbanville-cape-town",
-    title: "Cleaning Services in Durbanville (Family Homes & Larger Layouts)",
-    meta_title: "Durbanville Cleaning Services | Quotes Online | Shalean",
+    title: "Cleaning Services in Durbanville Cape Town (2026 Guide & Prices)",
+    meta_title: "Cleaning Services in Durbanville Cape Town (2026 Guide & Prices)",
     meta_description:
       "House cleaning in Durbanville & Northern Suburbs—deep, standard & move-out services. Upfront Cape Town pricing, vetted cleaners & easy online booking.",
     primary_keyword: "cleaning services in durbanville",
-    h1: "Cleaning Services in Durbanville",
+    h1: "Cleaning Services in Durbanville Cape Town (2026 Guide & Prices)",
     excerpt:
       "House cleaning in Durbanville and the Northern Suburbs. Deep, standard and move-out services with upfront Cape Town pricing.",
     content: `## Cleaning Services in Durbanville

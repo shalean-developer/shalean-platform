@@ -31,7 +31,7 @@ export function LocationHubBlogSection({ locationName, locationSlug, cards }: Pr
                 Cleaning services in {locationName}
               </Link>
               {" · "}
-              <Link href="/locations/cape-town-cleaning-services" className={`font-semibold ${linkEmphasisClassName}`}>
+              <Link href="/cleaning-services-cape-town" className={`font-semibold ${linkEmphasisClassName}`}>
                 Cape Town overview
               </Link>
             </p>

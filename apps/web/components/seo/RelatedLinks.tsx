@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { nearbyProgrammaticLocations, PROGRAMMATIC_LOCATIONS } from "@/lib/seo/locations";
+import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
-const CAPE_TOWN_SEO_HUB_HREF = "/locations/cape-town-cleaning-services";
-const CAPE_TOWN_SEO_HUB_LABEL = "Cleaning services Cape Town (overview)";
+const CAPE_TOWN_SEO_HUB_LABEL = "Cleaning services Cape Town (city hub)";
 
 export type RelatedLinksPlacement = "blog" | "location" | "service" | "services_hub";
 
@@ -54,13 +54,13 @@ function capeTownHubFirst(
   currentLocationSlug: string | undefined,
 ): { slug: string; href: string; label: string }[] {
   if (placement === "blog") {
-    return [{ slug: "cape-town-hub", href: CAPE_TOWN_SEO_HUB_HREF, label: CAPE_TOWN_SEO_HUB_LABEL }];
+    return [{ slug: "cape-town-hub", href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: CAPE_TOWN_SEO_HUB_LABEL }];
   }
-  if (placement === "location" && currentLocationSlug && currentLocationSlug !== CAPE_TOWN_SEO_HUB_HREF.replace("/locations/", "")) {
-    return [{ slug: "cape-town-hub", href: CAPE_TOWN_SEO_HUB_HREF, label: CAPE_TOWN_SEO_HUB_LABEL }];
+  if (placement === "location" && currentLocationSlug) {
+    return [{ slug: "cape-town-hub", href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: CAPE_TOWN_SEO_HUB_LABEL }];
   }
   if (placement === "service" || placement === "services_hub") {
-    return [{ slug: "cape-town-hub", href: CAPE_TOWN_SEO_HUB_HREF, label: CAPE_TOWN_SEO_HUB_LABEL }];
+    return [{ slug: "cape-town-hub", href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: CAPE_TOWN_SEO_HUB_LABEL }];
   }
   return [];
 }

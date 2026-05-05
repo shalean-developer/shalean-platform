@@ -25,7 +25,7 @@ export function StickyBookingCta({ trackingSlug }: Props) {
           Book a cleaner
         </GrowthCtaLink>
         <Link
-          href="/locations/cape-town-cleaning-services"
+          href="/cleaning-services-cape-town"
           className="text-xs font-medium text-blue-700 underline-offset-4 hover:underline"
         >
           Service areas

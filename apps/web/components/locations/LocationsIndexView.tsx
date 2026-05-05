@@ -95,7 +95,7 @@ export function LocationsIndexView() {
             </div>
             <p className="mt-6 text-sm text-zinc-600">
               Prefer the city overview?{" "}
-              <Link href="/locations/cape-town-cleaning-services" className={`font-semibold ${linkEmphasisClassName}`}>
+              <Link href="/cleaning-services-cape-town" className={`font-semibold ${linkEmphasisClassName}`}>
                 Cape Town cleaning hub
               </Link>
             </p>

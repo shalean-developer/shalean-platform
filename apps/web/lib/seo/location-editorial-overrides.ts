@@ -11,7 +11,7 @@ export type LocationEditorialOverride = {
 
 const OVERRIDES: Partial<Record<CapeTownLocationSlug, LocationEditorialOverride>> = {
   "sea-point-cleaning-services": {
-    landmarks: ["Sea Point Promenade", "Main Road"],
+    landmarks: ["Sea Point Promenade", "Main Road", "Beach Road"],
     localLead:
       "Sea Point bookings often combine Atlantic Seaboard apartments, Promenade-adjacent walks, and Main Road access patterns—Shalean crews brief for lifts, visitor parking, and salty-air grit that shows up on glass and balconies.",
     extraFaqs: [
