@@ -376,6 +376,16 @@ export async function updateBooking(id: string, patch: { date?: string; time?: s
   if (!res.ok) throw new Error(json.error ?? "Failed to update booking.");
 }
 
+export async function deleteBookingAdmin(bookingId: string) {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as { error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Failed to delete booking.");
+}
+
 export async function updateCleanerStatus(id: string, status: "available" | "busy" | "offline") {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/cleaners/${encodeURIComponent(id)}`, {

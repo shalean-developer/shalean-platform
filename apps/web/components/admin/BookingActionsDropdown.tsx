@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   NotebookPen,
   RefreshCcw,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -40,6 +41,7 @@ type BookingActionsDropdownProps<TBooking> = {
   onSendInvoice?: (booking: TBooking) => void;
   onAddNote?: (booking: TBooking) => void;
   onFlagIssue?: (booking: TBooking) => void;
+  onDelete?: (booking: TBooking) => void;
 };
 
 export default function BookingActionsDropdown<TBooking>({
@@ -55,6 +57,7 @@ export default function BookingActionsDropdown<TBooking>({
   onSendInvoice,
   onAddNote,
   onFlagIssue,
+  onDelete,
 }: BookingActionsDropdownProps<TBooking>) {
   const [open, setOpen] = useState(false);
   const { refs, floatingStyles, context } = useFloating({
@@ -123,6 +126,17 @@ export default function BookingActionsDropdown<TBooking>({
           {onSendInvoice ? <MenuAction label="Send invoice" icon={<FileText size={14} />} onClick={() => run(onSendInvoice)} /> : null}
           {onAddNote ? <MenuAction label="Add note" icon={<NotebookPen size={14} />} onClick={() => run(onAddNote)} /> : null}
           {onFlagIssue ? <MenuAction label="Flag issue" icon={<BadgeAlert size={14} />} onClick={() => run(onFlagIssue)} /> : null}
+          {onDelete ? (
+            <>
+              <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />
+              <MenuAction
+                label="Delete booking"
+                danger
+                icon={<Trash2 size={14} />}
+                onClick={() => run(onDelete)}
+              />
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -133,19 +147,26 @@ function MenuAction({
   label,
   icon,
   onClick,
+  danger,
 }: {
   label: string;
   icon: ReactNode;
   onClick: () => void;
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      className={[
+        "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition focus-visible:outline-none focus-visible:ring-2",
+        danger
+          ? "text-rose-700 hover:bg-rose-50 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/40"
+          : "text-zinc-700 hover:bg-zinc-100 focus-visible:ring-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800",
+      ].join(" ")}
     >
-      <span className="text-zinc-500 dark:text-zinc-400">{icon}</span>
+      <span className={danger ? "text-rose-500 dark:text-rose-400" : "text-zinc-500 dark:text-zinc-400"}>{icon}</span>
       <span>{label}</span>
     </button>
   );

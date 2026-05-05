@@ -8,6 +8,7 @@ import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import {
   assignCleaner,
   assignTeamToBookingAdmin,
+  deleteBookingAdmin,
   fetchCleaners,
   updateBooking,
   updateBookingStatus,
@@ -505,7 +506,15 @@ async function rescheduleBooking(bookingId: string, newDate: string, newTime: st
   return Promise.resolve({ bookingId, newDate, newTime });
 }
 
-export default function BookingDetailsView({ booking, onClose }: { booking: BookingSeed; onClose?: () => void }) {
+export default function BookingDetailsView({
+  booking,
+  onClose,
+  onBookingDeleted,
+}: {
+  booking: BookingSeed;
+  onClose?: () => void;
+  onBookingDeleted?: (id: string) => void;
+}) {
   const router = useRouter();
   const bookingId = booking.id;
   const [loading, setLoading] = useState(true);
@@ -1455,6 +1464,22 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
     }
   };
 
+  const handleDeleteBooking = async () => {
+    if (!fullBooking?.id) return;
+    const ok = window.confirm(
+      "Permanently delete this booking? This cannot be undone. Bookings with recorded payment, a payout run, or in-progress/completed status are blocked (test bookings can always be removed).",
+    );
+    if (!ok) return;
+    try {
+      await deleteBookingAdmin(fullBooking.id);
+      setToast({ kind: "success", text: "Booking deleted." });
+      onBookingDeleted?.(fullBooking.id);
+      onClose?.();
+    } catch (e) {
+      setToast({ kind: "error", text: e instanceof Error ? e.message : "Could not delete booking." });
+    }
+  };
+
   const openAssignModal = async () => {
     setAssignModalOpen(true);
     try {
@@ -1681,6 +1706,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                   onReschedule={() => setRescheduleOpen(true)}
                   onComplete={() => void setStatusOptimistic("completed")}
                   onCancel={() => void setStatusOptimistic("cancelled")}
+                  onDelete={() => void handleDeleteBooking()}
                 />
               </div>
             </div>

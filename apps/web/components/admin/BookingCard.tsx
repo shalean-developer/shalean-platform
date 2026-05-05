@@ -32,12 +32,12 @@ export type AdminBookingCardProps = {
   sortedCleaners: CleanerOption[];
   retryDispatchBookingId: string | null;
   onOpenDetails: (id: string) => void;
-  onPatchStatus: (id: string, nextStatus: string) => void;
   onPatchCleaner: (id: string, cleanerId: string | null) => void;
   onToggleAssign: (id: string) => void;
   onRetryDispatch: (id: string) => void | Promise<void>;
   onBookingActionsReschedule: () => void;
   onBookingActionsCancel: () => void;
+  onDeleteBooking: (id: string) => void | Promise<void>;
 };
 
 function teamHeadline(row: AdminBookingsListRow): string {
@@ -53,12 +53,12 @@ export function BookingCard({
   sortedCleaners,
   retryDispatchBookingId,
   onOpenDetails,
-  onPatchStatus,
   onPatchCleaner,
   onToggleAssign,
   onRetryDispatch,
   onBookingActionsReschedule,
   onBookingActionsCancel,
+  onDeleteBooking,
 }: AdminBookingCardProps) {
   const roster = r.booking_cleaners ?? [];
   const lead = roster.find((c) => String(c.role).toLowerCase() === "lead");
@@ -73,13 +73,6 @@ export function BookingCard({
   const rosterTip = rosterTooltipNames(roster);
   const missingLead = roster.length > 0 && !lead;
   const shortTeam = Boolean(r.is_team_job) && roster.length >= 1 && roster.length < 2;
-
-  const statusSelectValue = (() => {
-    const st = (r.status ?? "pending").toLowerCase();
-    if (st === "assigned") return "confirmed";
-    const allowed = new Set(["pending", "in_progress", "completed", "cancelled", "failed"]);
-    return allowed.has(st) ? st : "pending";
-  })();
 
   return (
     <article
@@ -238,41 +231,6 @@ export function BookingCard({
       >
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1 space-y-2">
-            <div>
-              <label className="sr-only" htmlFor={`status-${r.id}`}>
-                Booking status
-              </label>
-              <select
-                id={`status-${r.id}`}
-                value={statusSelectValue}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  void onPatchStatus(r.id, v);
-                }}
-                className="w-full max-w-[200px] rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium dark:border-zinc-600 dark:bg-zinc-950"
-              >
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in_progress">In progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="failed">Failed</option>
-              </select>
-              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                {dispatchStateLabel(r.dispatch_status, r.status)}
-                {typeof r.surge_multiplier === "number" && r.surge_multiplier > 1 ? (
-                  <span className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
-                    Surge x{r.surge_multiplier.toFixed(1)}
-                  </span>
-                ) : null}
-              </p>
-              {assignSourceLine ? (
-                <p className="mt-0.5 text-[10px] font-semibold leading-snug text-emerald-800 dark:text-emerald-300/90">
-                  {assignSourceLine}
-                </p>
-              ) : null}
-            </div>
-
             {(r.status ?? "").toLowerCase() === "pending" &&
             !r.cleaner_id &&
             ["failed", "unassignable", "no_cleaner"].includes((r.dispatch_status ?? "").toLowerCase()) ? (
@@ -317,7 +275,7 @@ export function BookingCard({
 
             <div>
               <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-                Solo cleaner (legacy field)
+                Cleaner
               </label>
               <select
                 value={r.cleaner_id ?? ""}
@@ -334,6 +292,19 @@ export function BookingCard({
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                {dispatchStateLabel(r.dispatch_status, r.status)}
+                {typeof r.surge_multiplier === "number" && r.surge_multiplier > 1 ? (
+                  <span className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                    Surge x{r.surge_multiplier.toFixed(1)}
+                  </span>
+                ) : null}
+              </p>
+              {assignSourceLine ? (
+                <p className="mt-0.5 text-[10px] font-semibold leading-snug text-emerald-800 dark:text-emerald-300/90">
+                  {assignSourceLine}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -343,6 +314,7 @@ export function BookingCard({
             onReschedule={onBookingActionsReschedule}
             onCancel={onBookingActionsCancel}
             onView={(booking) => onOpenDetails(booking.id)}
+            onDelete={(booking) => void onDeleteBooking(booking.id)}
           />
         </div>
       </div>

@@ -18,6 +18,7 @@ import {
   sortRowsForAttentionQueue,
   type AttentionQueueFilter,
 } from "@/lib/admin/opsSnapshot";
+import { deleteBookingAdmin } from "@/lib/admin/dashboard";
 
 type BookingRow = AdminBookingsListRow;
 
@@ -496,28 +497,6 @@ export default function AdminBookingsPage() {
     return () => window.clearTimeout(tid);
   }, [load]);
 
-  async function patchBookingStatus(id: string, nextStatus: string) {
-    const sb = getSupabaseBrowser();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
-    if (!token) {
-      emitAdminToast("Session expired.", "error");
-      return;
-    }
-    const bodyStatus = nextStatus === "confirmed" ? "assigned" : nextStatus;
-    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ status: bodyStatus }),
-    });
-    if (!res.ok) {
-      const j = (await res.json()) as { error?: string };
-      emitAdminToast(j.error ?? "Could not update status", "error");
-      return;
-    }
-    emitAdminToast("Status updated", "success");
-    setRows((cur) => cur.map((row) => (row.id === id ? { ...row, status: bodyStatus } : row)));
-  }
-
   async function patchBookingCleaner(id: string, cleanerId: string | null) {
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
@@ -537,6 +516,28 @@ export default function AdminBookingsPage() {
     }
     emitAdminToast("Cleaner updated", "success");
     setRows((cur) => cur.map((row) => (row.id === id ? { ...row, cleaner_id: cleanerId } : row)));
+  }
+
+  async function deleteBookingFromList(id: string) {
+    const ok = window.confirm(
+      "Permanently delete this booking? Bookings with recorded payment, a payout run, or in-progress/completed status cannot be deleted (test bookings can).",
+    );
+    if (!ok) return;
+    try {
+      await deleteBookingAdmin(id);
+      emitAdminToast("Booking deleted.", "success");
+      setRows((cur) => cur.filter((row) => row.id !== id));
+      setSelectedBookingId((cur) => {
+        if (cur !== id) return cur;
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("bookingId");
+        const q = params.toString();
+        router.replace(q ? `${pathname}?${q}` : pathname);
+        return null;
+      });
+    } catch (e) {
+      emitAdminToast(e instanceof Error ? e.message : "Could not delete booking.", "error");
+    }
   }
 
   useEffect(() => {
@@ -1107,7 +1108,6 @@ export default function AdminBookingsPage() {
                 sortedCleaners={sortedCleaners}
                 retryDispatchBookingId={retryDispatchBookingId}
                 onOpenDetails={openDetails}
-                onPatchStatus={(id, next) => void patchBookingStatus(id, next)}
                 onPatchCleaner={(id, cleanerId) => void patchBookingCleaner(id, cleanerId)}
                 onToggleAssign={(id) => setAssignBookingId((cur) => (cur === id ? null : id))}
                 onRetryDispatch={(id) => void retryDispatchFailed(id)}
@@ -1123,6 +1123,7 @@ export default function AdminBookingsPage() {
                     text: "Cancel from booking details or your cancellation endpoint when wired.",
                   })
                 }
+                onDeleteBooking={(id) => void deleteBookingFromList(id)}
               />
               {assignBookingId === r.id ? (
                 <div className="col-span-full">
@@ -1167,7 +1168,14 @@ export default function AdminBookingsPage() {
           <p className="mt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No bookings for this filter.</p>
         ) : null}
       </main>
-      <BookingDetailsSheet bookingId={selectedBookingId} onClose={closeDetails} />
+      <BookingDetailsSheet
+        bookingId={selectedBookingId}
+        onClose={closeDetails}
+        onBookingDeleted={(id) => {
+          setRows((cur) => cur.filter((row) => row.id !== id));
+          if (selectedBookingId === id) closeDetails();
+        }}
+      />
       {toast ? (
         <Toast
           kind={toast.kind}

@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireAdminSession } from "@/lib/admin/requireAdminSession";
 import { invalidateCleanerAvailabilityCache } from "@/lib/admin/cleanerAvailabilityCache";
 import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
 import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
@@ -621,6 +622,89 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       invalidateCleanerAvailabilityCache(nd, nt);
     }
   }
+
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * Hard-delete a booking (cascades child rows). Blocked when money or payout is attached,
+ * or when the job is in progress / completed — except `is_test` bookings (ops cleanup).
+ */
+export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdminSession(request);
+  if (!auth.ok) return auth.response;
+
+  const { id: rawId } = await ctx.params;
+  const id = rawId?.trim();
+  if (!id) return NextResponse.json({ error: "Missing booking id." }, { status: 400 });
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+  const { data: row, error: loadErr } = await admin
+    .from("bookings")
+    .select("id, status, amount_paid_cents, payout_id, is_test, cleaner_id, date, time, payment_status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 });
+  if (!row) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+
+  const r = row as {
+    status?: string | null;
+    amount_paid_cents?: number | null;
+    payout_id?: string | null;
+    is_test?: boolean | null;
+    cleaner_id?: string | null;
+    date?: string | null;
+    time?: string | null;
+    payment_status?: string | null;
+  };
+
+  const st = String(r.status ?? "").toLowerCase();
+  const isTest = Boolean(r.is_test);
+  const paidCents = Math.max(0, Math.round(Number(r.amount_paid_cents ?? 0)));
+  const payoutId = r.payout_id != null && String(r.payout_id).trim() ? String(r.payout_id).trim() : null;
+  const payOk = String(r.payment_status ?? "").toLowerCase() === "success";
+
+  if (!isTest) {
+    if (paidCents > 0 || payOk) {
+      return NextResponse.json(
+        { error: "Cannot delete a booking with a successful or recorded payment." },
+        { status: 409 },
+      );
+    }
+    if (payoutId) {
+      return NextResponse.json({ error: "Cannot delete a booking linked to a payout run." }, { status: 409 });
+    }
+    if (st === "completed" || st === "in_progress") {
+      return NextResponse.json({ error: "Cannot delete completed or in-progress bookings." }, { status: 409 });
+    }
+  }
+
+  const { error: delErr } = await admin.from("bookings").delete().eq("id", id);
+  if (delErr) {
+    await logSystemEvent({
+      level: "error",
+      source: "admin_booking_delete",
+      message: "booking_delete_failed",
+      context: { booking_id: id, admin_id: auth.user.id, pg: delErr.message },
+    });
+    return NextResponse.json({ error: delErr.message }, { status: 500 });
+  }
+
+  const bd = typeof r.date === "string" ? r.date.trim() : "";
+  const bt = normalizeTimeHm(String(r.time ?? ""));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(bd) && /^\d{2}:\d{2}$/.test(bt)) {
+    invalidateCleanerAvailabilityCache(bd, bt);
+  }
+
+  await logSystemEvent({
+    level: "warn",
+    source: "admin_booking_delete",
+    message: "booking_deleted",
+    context: { booking_id: id, admin_id: auth.user.id, prior_status: st, is_test: isTest },
+  });
 
   return NextResponse.json({ ok: true });
 }

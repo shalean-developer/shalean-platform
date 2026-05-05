@@ -6,9 +6,11 @@ import BookingDetailsView from "@/components/admin/BookingDetailsView";
 export default function BookingDetailsSheet({
   bookingId,
   onClose,
+  onBookingDeleted,
 }: {
   bookingId: string | null;
   onClose: () => void;
+  onBookingDeleted?: (id: string) => void;
 }) {
   const [entered, setEntered] = useState(false);
 
@@ -43,7 +45,7 @@ export default function BookingDetailsSheet({
           entered ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
-        <BookingDetailsView booking={{ id: bookingId }} onClose={onClose} />
+        <BookingDetailsView booking={{ id: bookingId }} onClose={onClose} onBookingDeleted={onBookingDeleted} />
       </div>
     </div>
   );
