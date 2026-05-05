@@ -3,11 +3,16 @@ import "server-only";
 import crypto from "crypto";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
+import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
+import {
+  findActiveCustomerSlotOccupant,
+  recurringPlanOccurrenceRowExists,
+} from "@/lib/recurring/recurringBookingInsertGuards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -88,45 +93,92 @@ export async function insertRecurringOccurrenceBooking(
       ? locked.pricing_version_id.trim()
       : null;
 
-  const { data, error } = await admin
-    .from("bookings")
-    .insert({
-      paystack_reference: paystackReference,
-      customer_email: email,
-      customer_name: params.customerName,
-      customer_phone: params.customerPhone,
-      user_id: params.recurring.customer_id,
-      amount_paid_cents: 0,
-      currency: "ZAR",
-      booking_snapshot: snapshot,
-      status: "pending_payment",
-      dispatch_status: "searching",
-      surge_multiplier: 1,
-      surge_reason: null,
-      service: locked.service != null ? getServiceLabel(locked.service) : null,
-      rooms: locked.rooms ?? null,
-      bathrooms: locked.bathrooms ?? null,
-      extras: [],
-      location: locked.location?.trim() || null,
-      location_id: null,
-      city_id: null,
-      date: params.occurrenceDateYmd,
+  if (await recurringPlanOccurrenceRowExists(admin, params.recurring.id, params.occurrenceDateYmd)) {
+    return { ok: false, error: "duplicate_occurrence" };
+  }
+
+  const serviceSlug =
+    typeof locked.service === "string" && locked.service.trim()
+      ? adminBookingServiceSlug(String(locked.service))
+      : "standard";
+
+  const baseRow = {
+    paystack_reference: paystackReference,
+    customer_email: email,
+    customer_name: params.customerName,
+    customer_phone: params.customerPhone,
+    user_id: params.recurring.customer_id,
+    amount_paid_cents: 0,
+    currency: "ZAR",
+    booking_snapshot: snapshot,
+    status: "pending_payment" as const,
+    dispatch_status: "searching" as const,
+    surge_multiplier: 1,
+    surge_reason: null,
+    service: locked.service != null ? getServiceLabel(locked.service) : null,
+    service_slug: serviceSlug,
+    rooms: locked.rooms ?? null,
+    bathrooms: locked.bathrooms ?? null,
+    extras: [],
+    location: locked.location?.trim() || null,
+    location_id: null,
+    city_id: null,
+    date: params.occurrenceDateYmd,
+    time: locked.time ?? null,
+    total_paid_zar: priceZar,
+    pricing_version_id,
+    price_breakdown: null,
+    total_price: null,
+    recurring_id: params.recurring.id,
+    is_recurring_generated: true,
+    payment_status: "pending" as const,
+    recurring_retry_count: 0,
+  };
+
+  const insertRow = (slotDuplicateExempt: boolean) =>
+    admin
+      .from("bookings")
+      .insert({
+        ...baseRow,
+        ...(slotDuplicateExempt ? { slot_duplicate_exempt: true } : {}),
+      })
+      .select("id")
+      .maybeSingle();
+
+  let { data, error } = await insertRow(false);
+
+  if (error?.code === "23505") {
+    if (await recurringPlanOccurrenceRowExists(admin, params.recurring.id, params.occurrenceDateYmd)) {
+      return { ok: false, error: "duplicate_occurrence" };
+    }
+    const occupant = await findActiveCustomerSlotOccupant(admin, {
+      userId: params.recurring.customer_id,
+      dateYmd: params.occurrenceDateYmd,
       time: locked.time ?? null,
-      total_paid_zar: priceZar,
-      pricing_version_id,
-      price_breakdown: null,
-      total_price: null,
-      recurring_id: params.recurring.id,
-      is_recurring_generated: true,
-      payment_status: "pending",
-      recurring_retry_count: 0,
-    })
-    .select("id")
-    .maybeSingle();
+      serviceSlug,
+    });
+    const occupantRecurring = occupant?.recurring_id != null ? String(occupant.recurring_id) : null;
+    if (occupant && occupantRecurring === params.recurring.id) {
+      return { ok: false, error: "duplicate_occurrence" };
+    }
+    if (occupant) {
+      const second = await insertRow(true);
+      data = second.data;
+      error = second.error;
+    } else {
+      if (await recurringPlanOccurrenceRowExists(admin, params.recurring.id, params.occurrenceDateYmd)) {
+        return { ok: false, error: "duplicate_occurrence" };
+      }
+      return { ok: false, error: error.message };
+    }
+  }
 
   if (error) {
     if (error.code === "23505") {
-      return { ok: false, error: "duplicate_occurrence" };
+      if (await recurringPlanOccurrenceRowExists(admin, params.recurring.id, params.occurrenceDateYmd)) {
+        return { ok: false, error: "duplicate_occurrence" };
+      }
+      return { ok: false, error: error.message };
     }
     return { ok: false, error: error.message };
   }

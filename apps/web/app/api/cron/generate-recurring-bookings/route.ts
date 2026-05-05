@@ -213,6 +213,7 @@ export async function POST(request: Request) {
 
       if (ins.ok) {
         generated++;
+        console.log("[generate] generated booking", { planId: r.id, date: d, bookingId: ins.bookingId });
         if (!useMonthlyInvoicePath) {
           const smartAt = await computeInitialRecurringChargeAttemptAt(admin, {
             bookingId: ins.bookingId,
@@ -238,6 +239,7 @@ export async function POST(request: Request) {
         });
       } else if (ins.error === "duplicate_occurrence") {
         skipped++;
+        console.log("[generate] skipped recurring duplicate", { planId: r.id, date: d });
       } else {
         await logSystemEvent({
           level: "warn",
