@@ -6,6 +6,7 @@ import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
+import { provisionalPriceSnapshotFromLocked } from "@/lib/booking/insertPendingPaymentBooking";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
@@ -129,6 +130,7 @@ export async function insertRecurringOccurrenceBooking(
     pricing_version_id,
     price_breakdown: null,
     total_price: null,
+    price_snapshot: provisionalPriceSnapshotFromLocked(locked),
     recurring_id: params.recurring.id,
     is_recurring_generated: true,
     payment_status: "pending" as const,

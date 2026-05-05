@@ -11,7 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
-function provisionalPriceSnapshotFromLocked(locked: LockedBooking): Record<string, unknown> {
+/** Checkout-shaped snapshot for DB `price_snapshot` (required when `bookings_price_snapshot_required_check` is validated). */
+export function provisionalPriceSnapshotFromLocked(locked: LockedBooking): Record<string, unknown> {
   const total = Math.round(
     typeof locked.finalPrice === "number" && Number.isFinite(locked.finalPrice) ? locked.finalPrice : 0,
   );
