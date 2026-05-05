@@ -179,19 +179,6 @@ export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = [
     dateModified: PROGRAMMATIC_DATE_MODIFIED,
   },
   {
-    slug: "best-cleaning-services-sea-point-cape-town",
-    title: "Best Cleaning Services in Sea Point | Vetted Teams · Book Online",
-    description:
-      "How to pick the best cleaning services in Sea Point: trust signals, transparent quoting, and what to avoid before you book.",
-    h1: "Best cleaning services in Sea Point, Cape Town",
-    primaryKeyword: "best cleaning services Sea Point",
-    location: "Sea Point",
-    service: "local-guide",
-    guideVariant: "best_services",
-    publishedAt: PROGRAMMATIC_PUBLISHED_AT,
-    dateModified: PROGRAMMATIC_DATE_MODIFIED,
-  },
-  {
     slug: "apartment-cleaning-tips-sea-point-cape-town",
     title: "Apartment Cleaning Tips for Sea Point | Lift Access & Coastal Dust",
     description:
