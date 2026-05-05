@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { formatIsoInJohannesburgYmd } from "@/lib/booking/dateInJohannesburg";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { CreateRecurringPlanDialog } from "@/components/admin/CreateRecurringPlanDialog";
@@ -158,6 +159,10 @@ export default function AdminRecurringPage() {
         generated?: number;
         skipped_duplicate?: number;
         skipped_other?: number;
+        dates_considered?: number;
+        from_ymd?: string;
+        through_ymd?: string;
+        campaign_floor_ymd?: string;
         truncated?: boolean;
         next_run_date?: string;
         failures?: { date: string; error: string }[];
@@ -168,8 +173,17 @@ export default function AdminRecurringPage() {
       }
       const g = json.generated ?? 0;
       const dup = json.skipped_duplicate ?? 0;
-      const trunc = json.truncated ? " (hit max dates — run again if needed)" : "";
-      emitAdminToast(`Backfill: +${g} created, ${dup} already existed${trunc}`, "success");
+      const so = json.skipped_other ?? 0;
+      const dc = json.dates_considered ?? 0;
+      const win =
+        json.from_ymd && json.through_ymd ? `Window ${json.from_ymd}→${json.through_ymd} (${dc} dates).` : "";
+      const trunc = json.truncated ? " Hit max dates — run again if needed." : "";
+      let detail = `Backfill: +${g} created · ${dup} already existed · ${so} other skips. ${win}${trunc}`.trim();
+      if (g === 0 && dup === 0 && dc === 0) {
+        detail +=
+          " No schedule dates in this range — check start_date / end_date, skip-next flag, or weekdays (weekly/biweekly with no weekdays creates nothing).";
+      }
+      emitAdminToast(detail, "success");
       if ((json.failures?.length ?? 0) > 0) {
         emitAdminToast(`Some dates failed: ${json.failures?.[0]?.error ?? "see logs"}`, "error");
       }
@@ -215,13 +229,14 @@ export default function AdminRecurringPage() {
       const t = json.totals ?? {};
       const g = t.generated ?? 0;
       const dup = t.skipped_duplicate ?? 0;
+      const so = t.skipped_other ?? 0;
       const pf = json.plan_failures?.length ?? 0;
       const lim =
         json.truncated_by_limit && json.limit_applied != null
           ? ` (stopped at limit ${json.limit_applied} — call again with ?limit= or raise limit)`
           : "";
       emitAdminToast(
-        `Batch: ${json.plans_processed ?? 0}/${json.plans_eligible ?? 0} plans · +${g} bookings · ${dup} duplicates skipped${lim}`,
+        `Batch: ${json.plans_processed ?? 0}/${json.plans_eligible ?? 0} plans · +${g} bookings · ${dup} duplicates · ${so} other skips${lim}`,
         "success",
       );
       if (pf > 0) {
@@ -406,6 +421,12 @@ export default function AdminRecurringPage() {
                         <td className="px-3 py-2 align-top text-zinc-700 dark:text-zinc-300">
                           <div>{frequencyLabel(r.frequency)}</div>
                           <div className="text-xs text-zinc-500">{formatDays(r.days_of_week)}</div>
+                          {(r.days_of_week?.length ?? 0) === 0 &&
+                          ["weekly", "biweekly"].includes(String(r.frequency).toLowerCase()) ? (
+                            <div className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">
+                              No weekdays — planner cannot create visits until set.
+                            </div>
+                          ) : null}
                           {r.monthly_pattern && r.frequency.toLowerCase() === "monthly" ? (
                             <div className="text-[11px] text-zinc-400">{r.monthly_pattern}</div>
                           ) : null}
@@ -414,7 +435,9 @@ export default function AdminRecurringPage() {
                           <div>{r.next_run_date || "—"}</div>
                           {skipNote ? <div className="text-xs text-amber-700 dark:text-amber-300">{skipNote}</div> : null}
                           {r.last_generated_at ? (
-                            <div className="text-[11px] text-zinc-400">Last gen: {r.last_generated_at.slice(0, 10)}</div>
+                            <div className="text-[11px] text-zinc-400">
+                              Last gen (JHB): {formatIsoInJohannesburgYmd(r.last_generated_at)}
+                            </div>
                           ) : null}
                         </td>
                         <td className="max-w-[240px] px-3 py-2 align-top text-xs text-zinc-600 dark:text-zinc-400">
