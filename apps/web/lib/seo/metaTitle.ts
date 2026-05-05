@@ -112,9 +112,11 @@ export function generateBlogArticleTitle(input: {
   brand?: string;
 }): string {
   const year = input.year ?? new Date().getFullYear();
-  const h = input.headline.trim() || "Cleaning guide";
-  const brand = (input.brand ?? "Shalean Blog").trim();
-  const idx = stableTitleStructureIndex(input.slugKey.trim() || "blog", BLOG_TITLE_STRUCTURES.length);
+  const headlineRaw = typeof input.headline === "string" ? input.headline : String(input.headline ?? "");
+  const h = headlineRaw.trim() || "Cleaning guide";
+  const brand = typeof input.brand === "string" ? input.brand.trim() : String(input.brand ?? "Shalean Blog").trim();
+  const slugKeyRaw = typeof input.slugKey === "string" ? input.slugKey : String(input.slugKey ?? "");
+  const idx = stableTitleStructureIndex(slugKeyRaw.trim() || "blog", BLOG_TITLE_STRUCTURES.length);
   const raw = BLOG_TITLE_STRUCTURES[idx](h, year, brand);
   return clipSerpTitle(raw, BLOG_SERP_TITLE_MAX);
 }

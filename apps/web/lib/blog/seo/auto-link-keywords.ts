@@ -44,11 +44,12 @@ function normHref(href: string): string {
  * Safe for trusted CMS copy only — runs before `[label](url)` parsing in `BlogContentRenderer`.
  */
 export function injectMarkdownAutoLinks(text: string, budget?: AutoLinkBudget): string {
-  const t = text.trim();
-  if (!t) return text;
+  const raw = typeof text === "string" ? text : String(text ?? "");
+  const t = raw.trim();
+  if (!t) return raw;
   if (budget && budget.inserted >= MAX_AUTO_LINKS_PER_POST) return text;
 
-  let out = text;
+  let out = raw;
   for (const rule of RULES) {
     if (budget && budget.inserted >= MAX_AUTO_LINKS_PER_POST) break;
     const h = normHref(rule.href);
@@ -71,6 +72,7 @@ export function injectParagraphAutoLinksIntoBlocks(
 ): BlogContentBlock[] {
   return blocks.map((b) => {
     if (b.type !== "paragraph") return b;
-    return { ...b, content: injectMarkdownAutoLinks(b.content, budget) };
+    const paraText = typeof b.content === "string" ? b.content : String(b.content ?? "");
+    return { ...b, content: injectMarkdownAutoLinks(paraText, budget) };
   });
 }

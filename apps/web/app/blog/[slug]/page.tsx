@@ -102,6 +102,12 @@ function getPostOptsFromSearchParams(sp: Record<string, string | string[] | unde
   return token ? { previewToken: token } : {};
 }
 
+/** Set `BLOG_DEBUG_FETCH=1` on Vercel temporarily — logs slug branch + DB hit/miss without guessing in Observability. */
+function blogRouteTrace(stage: string, payload: Record<string, unknown>) {
+  if (process.env.BLOG_DEBUG_FETCH !== "1") return;
+  console.log(`[blog/[slug]] trace:${stage}`, payload);
+}
+
 /** Coerce CMS strings so metadata never calls unsafe helpers on odd DB types. */
 function safeBlogMetaText(primary: string | null | undefined, fallback: string): string {
   const p = typeof primary === "string" ? primary.trim() : "";
@@ -142,7 +148,9 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
     console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", previewTokenFromSearchParams(sp) ?? "(none)");
   }
 
+  blogRouteTrace("generateMetadata_pre_fetch", { slug });
   const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
+  blogRouteTrace("generateMetadata_post_fetch", { slug, dbHit: Boolean(dbPost), id: dbPost?.id });
   if (dbPost) {
     try {
       const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
@@ -526,7 +534,14 @@ async function BlogPostPageImpl(props: Props) {
   }
   const sidebarTrending = pickTrendingSidebarPosts(indexPosts, slug, 5);
 
+  blogRouteTrace("page_pre_fetch", { slug });
   const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
+  blogRouteTrace("page_post_fetch", {
+    slug,
+    dbHit: Boolean(dbPost),
+    id: dbPost?.id,
+    blockCount: Array.isArray(dbPost?.content?.blocks) ? dbPost.content.blocks.length : 0,
+  });
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug]] POST BEFORE BRANCH (dbPost):", dbPost ? `hit id=${dbPost.id} status=${dbPost.dbStatus}` : "null");
   }
