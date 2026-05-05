@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
 import { getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
-import { listActiveCategorySlugs, listTagSlugs } from "@/lib/blog/get-taxonomy-posts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 import { shouldExcludeBlogSlugFromSitemap } from "@/lib/seo/programmaticBlogCleanupRedirects";
 import { AIRBNB_AREA_LANDING_PATHS } from "@/lib/seo/airbnbAreaLandingPages";
@@ -73,8 +72,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   /** DB article URLs only — `getPublishedBlogSlugs` requires published, `published_at` ≤ now, non-null `content_json`. */
   const dbSlugs = await getPublishedBlogSlugs();
-  const categorySlugs = await listActiveCategorySlugs();
-  const tagSlugs = await listTagSlugs();
 
   const blogSlugSet = new Set<string>();
   for (const s of dbSlugs) blogSlugSet.add(s);
@@ -85,13 +82,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     push(`${SITE_ORIGIN}/blog/${slug}`, 0.7);
   }
 
-  for (const slug of categorySlugs) {
-    push(`${SITE_ORIGIN}/blog/category/${slug}`, 0.65);
-  }
-
-  for (const slug of tagSlugs) {
-    push(`${SITE_ORIGIN}/blog/tag/${slug}`, 0.65);
-  }
+  /** Tag/category archives are `noindex` — omit from sitemap to match robots & save crawl budget. */
 
   return entries;
 }

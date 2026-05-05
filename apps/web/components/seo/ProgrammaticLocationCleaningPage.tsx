@@ -413,6 +413,38 @@ export function ProgrammaticLocationCleaningPage({
 
       <LocationHubRegionPeersSection location={location} />
 
+      <section className="border-b border-zinc-100 bg-zinc-50/40 py-12" aria-labelledby="hub-popular-ct-services-heading">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 id="hub-popular-ct-services-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Popular cleaning services in Cape Town
+          </h2>
+          <p className="mt-3 text-base leading-relaxed text-zinc-600">
+            Same vetted crews citywide—open a service guide, then confirm your {location.name} address at checkout so scope
+            matches lifts, parking, and bathrooms on the ground.
+          </p>
+          <ul className="mt-6 grid gap-3 md:grid-cols-3">
+            <li className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <Link href={STANDARD_SERVICE} className={`text-base font-semibold ${linkEmphasisClassName}`}>
+                Home cleaning (standard)
+              </Link>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">Recurring or once-off maintenance visits</p>
+            </li>
+            <li className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <Link href={DEEP_SERVICE} className={`text-base font-semibold ${linkEmphasisClassName}`}>
+                Deep cleaning
+              </Link>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">Heavier kitchens, bathrooms &amp; detail zones</p>
+            </li>
+            <li className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <Link href={MOVE_OUT_SERVICE} className={`text-base font-semibold ${linkEmphasisClassName}`}>
+                Move-out cleaning
+              </Link>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">Handover-focused scope before inspections</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
       {rankingResolved?.active && seo ? (
         <LocationHubRankingAsset location={location} seo={seo} ranking={rankingResolved} ctx={seoCtx} />
       ) : null}

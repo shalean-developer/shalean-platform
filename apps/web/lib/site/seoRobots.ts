@@ -5,3 +5,9 @@ export const SEO_INDEX_FOLLOW: NonNullable<Metadata["robots"]> = {
   index: true,
   follow: true,
 };
+
+/** Thin taxonomy / shell URLs — keep follow for equity; drop index to reduce noise in GSC. */
+export const SEO_NOINDEX_FOLLOW: NonNullable<Metadata["robots"]> = {
+  index: false,
+  follow: true,
+};
