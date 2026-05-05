@@ -21,6 +21,13 @@ type Props = {
   autoLinkSlug?: string;
 };
 
+/** CMS / schema drift: never pass non-primitives as React text children. */
+function safeBlockText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  return String(value);
+}
+
 function SectionHeading({
   level,
   className,
@@ -132,7 +139,7 @@ function Block({
           id={block.id}
           className="max-w-prose text-base leading-relaxed text-zinc-700 sm:text-[1.0625rem] sm:leading-[1.65]"
         >
-          {block.content}
+          {safeBlockText(block.content)}
         </p>
       );
 
@@ -143,7 +150,9 @@ function Block({
           className="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-4 text-zinc-800 shadow-sm sm:px-6 sm:py-5"
           aria-label="Quick answer"
         >
-          <p className="whitespace-pre-line text-base leading-relaxed font-medium text-zinc-900">{block.content}</p>
+          <p className="whitespace-pre-line text-base leading-relaxed font-medium text-zinc-900">
+            {safeBlockText(block.content)}
+          </p>
         </aside>
       );
 
@@ -156,16 +165,17 @@ function Block({
             level={level}
             className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl"
           >
-            {block.title}
+            {safeBlockText(block.title)}
           </SectionHeading>
           <p className="max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed whitespace-pre-line">
-            {block.content}
+            {safeBlockText(block.content)}
           </p>
         </section>
       );
     }
 
-    case "comparison":
+    case "comparison": {
+      const cmpItems = Array.isArray(block.items) ? block.items : [];
       return (
         <div
           id={block.id}
@@ -173,14 +183,15 @@ function Block({
           role="list"
           aria-label="Comparison"
         >
-          {block.items.map((item) => (
-            <div key={item.label} role="listitem" className="px-4 py-3.5 sm:px-5 sm:py-4">
-              <p className="text-sm font-semibold text-zinc-900">{item.label}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600">{item.value}</p>
+          {cmpItems.map((item, ii) => (
+            <div key={`${safeBlockText(item.label)}-${ii}`} role="listitem" className="px-4 py-3.5 sm:px-5 sm:py-4">
+              <p className="text-sm font-semibold text-zinc-900">{safeBlockText(item.label)}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600">{safeBlockText(item.value)}</p>
             </div>
           ))}
         </div>
       );
+    }
 
     case "comparison_table": {
       const cols = Array.isArray(block.columns) ? block.columns : [];
@@ -209,7 +220,7 @@ function Block({
                 <tr key={ri} className="border-b border-zinc-100 last:border-0">
                   {(Array.isArray(row) ? row : []).map((cell, ci) => (
                     <td key={ci} className="px-3 py-3 align-top sm:px-4">
-                      {cell}
+                      {safeBlockText(cell)}
                     </td>
                   ))}
                 </tr>
@@ -220,19 +231,21 @@ function Block({
       );
     }
 
-    case "bullets":
+    case "bullets": {
+      const bulletItems = Array.isArray(block.items) ? block.items : [];
       return (
-        <section id={block.id} className="space-y-3" aria-label={block.title ?? "Bullet list"}>
+        <section id={block.id} className="space-y-3" aria-label={safeBlockText(block.title) || "Bullet list"}>
           {block.title ? (
-            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
+            <h3 className="text-lg font-semibold text-zinc-900">{safeBlockText(block.title)}</h3>
           ) : null}
           <ul className="list-disc space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-600 marker:text-blue-600 sm:text-base">
-            {block.items.map((item, i) => (
-              <li key={i}>{item}</li>
+            {bulletItems.map((item, i) => (
+              <li key={i}>{safeBlockText(item)}</li>
             ))}
           </ul>
         </section>
       );
+    }
 
     case "cta":
       return (
@@ -246,13 +259,13 @@ function Block({
           )}
           aria-label="Call to action"
         >
-          <h3 className="text-xl font-semibold tracking-tight text-zinc-900">{block.title}</h3>
+          <h3 className="text-xl font-semibold tracking-tight text-zinc-900">{safeBlockText(block.title)}</h3>
           {block.description ? (
-            <p className="mt-2 text-sm leading-relaxed text-zinc-600">{block.description}</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600">{safeBlockText(block.description)}</p>
           ) : null}
           <div className="mt-5">
             <Button asChild size="lg" variant={block.variant === "secondary" ? "secondary" : "default"}>
-              <Link href={block.link}>{block.button_text}</Link>
+              <Link href={block.link}>{safeBlockText(block.button_text)}</Link>
             </Button>
           </div>
         </aside>
@@ -265,9 +278,9 @@ function Block({
         <Accordion type="single" collapsible className="mt-4 w-full">
           {faqItems.map((item, i) => (
             <AccordionItem value={`faq-${index}-${i}`} key={i}>
-              <AccordionTrigger className="text-left text-base">{item.question}</AccordionTrigger>
+              <AccordionTrigger className="text-left text-base">{safeBlockText(item.question)}</AccordionTrigger>
               <AccordionContent className="text-base leading-relaxed text-zinc-600">
-                {item.answer}
+                {safeBlockText(item.answer)}
               </AccordionContent>
             </AccordionItem>
           ))}
@@ -321,7 +334,7 @@ function Block({
         <ParagraphWithOptionalInlineLinks
           id={block.id}
           className="max-w-prose text-[15px] leading-[1.7] text-zinc-600 sm:text-base sm:leading-relaxed whitespace-pre-line"
-          text={block.content}
+          text={safeBlockText(block.content)}
           autoLinkSlug={autoLinkSlug}
         />
       );
@@ -329,41 +342,46 @@ function Block({
     case "heading":
       return (
         <ArticleHeading id={block.id ?? defaultBlogBlockAnchorId(block, index)} level={block.level}>
-          {block.content}
+          {safeBlockText(block.content)}
         </ArticleHeading>
       );
 
-    case "bullet_list":
+    case "bullet_list": {
+      const blItems = Array.isArray(block.items) ? block.items : [];
       return (
-        <section id={block.id} className="space-y-3" aria-label={block.title ?? "Bullet list"}>
+        <section id={block.id} className="space-y-3" aria-label={safeBlockText(block.title) || "Bullet list"}>
           {block.title ? (
-            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
+            <h3 className="text-lg font-semibold text-zinc-900">{safeBlockText(block.title)}</h3>
           ) : null}
           <ul className="list-disc space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-600 marker:text-blue-600 sm:text-base">
-            {block.items.map((item, i) => (
-              <li key={i}>{item}</li>
+            {blItems.map((item, i) => (
+              <li key={i}>{safeBlockText(item)}</li>
             ))}
           </ul>
         </section>
       );
+    }
 
-    case "numbered_list":
+    case "numbered_list": {
+      const numItems = Array.isArray(block.items) ? block.items : [];
       return (
-        <section id={block.id} className="space-y-3" aria-label={block.title ?? "Numbered list"}>
+        <section id={block.id} className="space-y-3" aria-label={safeBlockText(block.title) || "Numbered list"}>
           {block.title ? (
-            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
+            <h3 className="text-lg font-semibold text-zinc-900">{safeBlockText(block.title)}</h3>
           ) : null}
           <ol className="list-decimal space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-600 marker:text-blue-600 sm:text-base">
-            {block.items.map((item, i) => (
+            {numItems.map((item, i) => (
               <li key={i} className="pl-1">
-                {item}
+                {safeBlockText(item)}
               </li>
             ))}
           </ol>
         </section>
       );
+    }
 
-    case "key_takeaways":
+    case "key_takeaways": {
+      const ktItems = Array.isArray(block.items) ? block.items : [];
       return (
         <aside
           id={block.id}
@@ -372,12 +390,13 @@ function Block({
         >
           <p className="text-sm font-semibold uppercase tracking-wide text-amber-900/90">Key takeaways</p>
           <ul className="mt-3 list-disc space-y-2.5 pl-5 text-[15px] leading-relaxed text-zinc-800 marker:text-amber-700 sm:text-base">
-            {block.items.map((item, i) => (
-              <li key={i}>{item}</li>
+            {ktItems.map((item, i) => (
+              <li key={i}>{safeBlockText(item)}</li>
             ))}
           </ul>
         </aside>
       );
+    }
 
     case "image": {
       if (!block.url?.trim()) {
@@ -389,7 +408,7 @@ function Block({
           <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 ring-1 ring-zinc-200/60 shadow-sm">
             <Image
               src={block.url}
-              alt={block.alt}
+              alt={safeBlockText(block.alt)}
               fill
               className="object-cover"
               sizes="(max-width: 1024px) 100vw, 672px"
@@ -399,7 +418,7 @@ function Block({
             />
           </div>
           {block.caption ? (
-            <figcaption className="text-center text-sm text-zinc-500">{block.caption}</figcaption>
+            <figcaption className="text-center text-sm text-zinc-500">{safeBlockText(block.caption)}</figcaption>
           ) : null}
         </figure>
       );
@@ -411,9 +430,11 @@ function Block({
           id={block.id}
           className="border-l-4 border-blue-500 bg-zinc-50 py-4 pl-5 pr-4 text-lg italic leading-relaxed text-zinc-800"
         >
-          <p>{block.content}</p>
+          <p>{safeBlockText(block.content)}</p>
           {block.attribution ? (
-            <footer className="mt-3 text-sm font-medium not-italic text-zinc-600">— {block.attribution}</footer>
+            <footer className="mt-3 text-sm font-medium not-italic text-zinc-600">
+              — {safeBlockText(block.attribution)}
+            </footer>
           ) : null}
         </blockquote>
       );
@@ -421,18 +442,18 @@ function Block({
     case "internal_links": {
       const links = Array.isArray(block.links) ? block.links : [];
       return (
-        <nav id={block.id} className="space-y-3" aria-label={block.title ?? "Related links"}>
+        <nav id={block.id} className="space-y-3" aria-label={safeBlockText(block.title) || "Related links"}>
           {block.title ? (
-            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
+            <h3 className="text-lg font-semibold text-zinc-900">{safeBlockText(block.title)}</h3>
           ) : null}
           <ul className="space-y-2">
             {links.map((l) => (
-              <li key={l.url + l.label}>
+              <li key={String(l.url) + safeBlockText(l.label)}>
                 <Link
                   href={l.url}
                   className="text-base font-medium text-blue-600 underline-offset-4 hover:text-blue-700 hover:underline"
                 >
-                  {l.label}
+                  {safeBlockText(l.label)}
                 </Link>
               </li>
             ))}

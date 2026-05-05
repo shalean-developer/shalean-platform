@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/** `metadataBase` must stay `metadataBaseUrl()` — never `new URL(process.env.…)` here (bad prod env → global 500). */
 export const metadata: Metadata = {
   metadataBase: metadataBaseUrl(),
   robots: SEO_INDEX_FOLLOW,

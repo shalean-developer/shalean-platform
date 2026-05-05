@@ -127,6 +127,11 @@ export async function generateStaticParams() {
 }
 
 async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
+  /** With page smoke on, skip DB + slug branches so `curl -I` tests route/runtime without data/metadata crashes. */
+  if (process.env.BLOG_SLUG_PAGE_SMOKE === "1") {
+    return { title: "OK", description: "Blog smoke test", robots: SEO_INDEX_FOLLOW };
+  }
+
   let slug: string;
   let sp: Record<string, string | string[] | undefined>;
   try {
@@ -267,7 +272,7 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
     if (process.env.NODE_ENV === "development") {
       console.log("[blog/[slug] generateMetadata] notFound(): draft DB posts need ?preview=true in dev — slug:", JSON.stringify(slug));
     }
-    notFound();
+    return notFound();
   }
 
   const path = `/blog/${prog.slug}`;
@@ -498,6 +503,19 @@ function buildHighConversionGraphJsonLd(post: HighConversionBlogArticle) {
 }
 
 async function BlogPostPageImpl(props: Props) {
+  /**
+   * Prod bisect: `BLOG_SLUG_PAGE_SMOKE=1` on Vercel → `<div>OK</div>` with **no** `await params` / DB / `MarketingLayout`.
+   * Root `app/layout.tsx` still runs — if `curl -I` stays 500, check that layout, middleware, or hooks.
+   * Pair with `buildBlogMetadataInner` smoke (same env) so `generateMetadata` does not call Supabase.
+   */
+  if (process.env.BLOG_SLUG_PAGE_SMOKE === "1") {
+    return (
+      <div data-blog-slug-page-smoke="1" className="p-8 text-lg">
+        OK
+      </div>
+    );
+  }
+
   let slug: string;
   let sp: Record<string, string | string[] | undefined>;
   try {
@@ -506,7 +524,7 @@ async function BlogPostPageImpl(props: Props) {
     sp = await props.searchParams;
   } catch (paramErr) {
     console.error("[blog/[slug]] await params/searchParams failed — notFound", paramErr);
-    notFound();
+    return notFound();
   }
 
   if (process.env.NODE_ENV === "development") {
@@ -613,8 +631,9 @@ async function BlogPostPageImpl(props: Props) {
 
       let relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
       try {
-        if (dbPost.relatedPosts.length >= 2) {
-          relatedGrid = enrichRelatedPostsForGrid(dbPost.relatedPosts, indexPosts).slice(0, 6);
+        const related = Array.isArray(dbPost.relatedPosts) ? dbPost.relatedPosts : [];
+        if (related.length >= 2) {
+          relatedGrid = enrichRelatedPostsForGrid(related, indexPosts).slice(0, 6);
         }
       } catch (err) {
         console.error("[blog] related grid enrichment failed", { slug: dbPost.slug, err });
@@ -676,7 +695,7 @@ async function BlogPostPageImpl(props: Props) {
     } catch (err) {
       if (isNextNavigationError(err)) throw err;
       console.error("❌ BLOG DB PAGE ERROR:", { slug: dbPost.slug, id: dbPost.id, err });
-      notFound();
+      return notFound();
     }
   }
 
@@ -770,7 +789,7 @@ async function BlogPostPageImpl(props: Props) {
         JSON.stringify(slug),
       );
     }
-    notFound();
+    return notFound();
   }
 
   const jsonLdStr = safeJsonLdStringify(buildProgrammaticGraphJsonLd(prog), { kind: "programmatic", slug: prog.slug });
@@ -824,6 +843,6 @@ export default async function BlogPostPage(props: Props) {
   } catch (err) {
     if (isNextNavigationError(err)) throw err;
     console.error("❌ PAGE CRASH:", err);
-    notFound();
+    return notFound();
   }
 }
