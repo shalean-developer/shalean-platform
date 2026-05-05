@@ -1,4 +1,4 @@
-import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { coerceBlogImageSrcForNext, resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { isBlogDraftPreviewAllowed } from "@/lib/blog/blog-draft-preview";
 import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
 import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-related-posts";
@@ -313,9 +313,12 @@ async function loadPostBySlug(
     metaTitle,
     metaDescription,
     content,
-    featuredImageUrl: resolveBlogFeaturedSrc(
+    featuredImageUrl: coerceBlogImageSrcForNext(
       trimmed,
-      row.featured_image_url == null || row.featured_image_url === "" ? null : String(row.featured_image_url),
+      resolveBlogFeaturedSrc(
+        trimmed,
+        row.featured_image_url == null || row.featured_image_url === "" ? null : String(row.featured_image_url),
+      ),
     ),
     featuredImageAlt: resolveBlogFeaturedAlt(
       trimmed,

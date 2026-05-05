@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { blogFaqHeadingDomId, defaultBlogBlockAnchorId } from "@/lib/blog/blog-block-anchors";
+import { coerceBlogImageSrcForNext } from "@/lib/blogImageMap";
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
 import { injectMarkdownAutoLinks } from "@/lib/blog/seo/auto-link-keywords";
 import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
@@ -402,12 +403,13 @@ function Block({
       if (!block.url?.trim()) {
         return null;
       }
-      const remote = isRemoteSrc(block.url);
+      const imageSrc = coerceBlogImageSrcForNext(autoLinkSlug ?? "blog", block.url.trim());
+      const remote = isRemoteSrc(imageSrc);
       return (
         <figure id={block.id} className="my-2 w-full space-y-2">
           <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-zinc-100 ring-1 ring-zinc-200/60 shadow-sm">
             <Image
-              src={block.url}
+              src={imageSrc}
               alt={safeBlockText(block.alt)}
               fill
               className="object-cover"

@@ -497,6 +497,39 @@ export function generateBlogImageAlt(slug: string, suburb?: string | null): stri
 /** Alias for `generateBlogImageAlt` (SEO brief naming). */
 export const generateAlt = generateBlogImageAlt;
 
+let allowedBlogImageRemoteHostsCache: ReadonlySet<string> | null = null;
+
+/** Hostnames allowed by `next.config.ts` `images.remotePatterns` (keep in sync). */
+function allowedBlogImageRemoteHosts(): ReadonlySet<string> {
+  if (allowedBlogImageRemoteHostsCache) return allowedBlogImageRemoteHostsCache;
+  const s = new Set<string>(["images.unsplash.com"]);
+  try {
+    const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    if (raw) s.add(new URL(raw).hostname);
+  } catch {
+    /* ignore invalid env */
+  }
+  allowedBlogImageRemoteHostsCache = s;
+  return s;
+}
+
+/**
+ * `next/image` rejects unknown remote hosts at runtime → RSC 500. Coerce CMS URLs to an allowed remote
+ * or to a local slug-based/mapped hero path.
+ */
+export function coerceBlogImageSrcForNext(slug: string, src: string): string {
+  const resolved = (src ?? "").trim();
+  if (!resolved) return resolveBlogFeaturedSrc(slug.trim(), null);
+  if (resolved.startsWith("/")) return resolved;
+  try {
+    const u = new URL(resolved);
+    if (allowedBlogImageRemoteHosts().has(u.hostname)) return resolved;
+  } catch {
+    return resolveBlogFeaturedSrc(slug.trim(), null);
+  }
+  return resolveBlogFeaturedSrc(slug.trim(), null);
+}
+
 export function resolveBlogFeaturedSrc(slug: string, dbFeaturedSrc?: string | null): string {
   const trimmedSlug = slug.trim();
   const mapped = BLOG_IMAGE_MAP[trimmedSlug];

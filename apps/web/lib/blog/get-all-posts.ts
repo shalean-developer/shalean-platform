@@ -1,4 +1,9 @@
-import { DEFAULT_BLOG_FEATURED_IMAGE, resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import {
+  coerceBlogImageSrcForNext,
+  DEFAULT_BLOG_FEATURED_IMAGE,
+  resolveBlogFeaturedAlt,
+  resolveBlogFeaturedSrc,
+} from "@/lib/blogImageMap";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { emptyBlogContentJson, type BlogContentJson } from "./content-json";
 import { safeParseBlogContentJson } from "./content-json-schema";
@@ -45,7 +50,7 @@ function normalizeDbRow(row: Record<string, unknown>): BlogIndexPost | null {
     row.featured_image_url == null || row.featured_image_url === "" ? null : String(row.featured_image_url);
   const rawAlt =
     row.featured_image_alt == null || row.featured_image_alt === "" ? null : String(row.featured_image_alt);
-  const imgUrl = resolveBlogFeaturedSrc(slug, rawImg);
+  const imgUrl = coerceBlogImageSrcForNext(slug, resolveBlogFeaturedSrc(slug, rawImg));
   const imgAlt = resolveBlogFeaturedAlt(slug, rawAlt);
 
   const rt =
