@@ -2,7 +2,7 @@ import "server-only";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
-import { buildPriceSnapshotV1Checkout } from "@/lib/booking/priceSnapshotBooking";
+import { provisionalPriceSnapshotFromLocked } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -11,20 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
-/** Checkout-shaped snapshot for DB `price_snapshot` (required when `bookings_price_snapshot_required_check` is validated). */
-export function provisionalPriceSnapshotFromLocked(locked: LockedBooking): Record<string, unknown> {
-  const total = Math.round(
-    typeof locked.finalPrice === "number" && Number.isFinite(locked.finalPrice) ? locked.finalPrice : 0,
-  );
-  const st =
-    locked.service && String(locked.service).trim() ? adminBookingServiceSlug(String(locked.service)) : "standard";
-  return buildPriceSnapshotV1Checkout({
-    service_type: st,
-    base_price: total,
-    extras: [],
-    total_price: total,
-  }) as Record<string, unknown>;
-}
+export { provisionalPriceSnapshotFromLocked };
 
 /** Removes a stale `pending_payment` row for the same Paystack reference only (never scoped by email). */
 export async function deletePendingPaymentBookingsWithPaystackReference(

@@ -3,7 +3,7 @@ import "server-only";
 import crypto from "crypto";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
-import { provisionalPriceSnapshotFromLocked } from "@/lib/booking/insertPendingPaymentBooking";
+import { provisionalPriceSnapshotJson } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -108,7 +108,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     pricing_version_id,
     price_breakdown: null,
     total_price: null,
-    price_snapshot: provisionalPriceSnapshotFromLocked(locked),
+    price_snapshot: provisionalPriceSnapshotJson(locked),
     recurring_id: params.recurring.id,
     is_recurring_generated: true,
     is_monthly_billing_booking: true,
