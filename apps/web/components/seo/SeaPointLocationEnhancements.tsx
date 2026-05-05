@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { SeoHubGrowthCtaLink } from "@/components/seo/SeoHubGrowthCtaLink";
 import type { SeoLocationAnalyticsBase } from "@/lib/analytics/track";
-import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 
 type Props = {
@@ -14,6 +14,19 @@ type Props = {
 const STANDARD = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
 const DEEP = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
 const MOVE_OUT = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
+
+/** Neighbouring high-intent hubs — passes crawl paths without stuffing keywords. */
+const NEARBY_HUB_LINKS = (
+  [
+    ["claremont-cleaning-services", "Claremont"],
+    ["green-point-cleaning-services", "Green Point"],
+    ["gardens-cleaning-services", "Gardens"],
+    ["durbanville-cleaning-services", "Durbanville"],
+  ] as const
+).map(([slug, label]) => ({
+  label,
+  href: LOCATION_SEO_PAGES[slug].path,
+}));
 
 /**
  * Location-intent blocks for `/locations/sea-point-cleaning-services` — mirrors money-page depth (trust, snippet pricing, links).
@@ -178,6 +191,66 @@ export function SeaPointLocationEnhancements({ ctx, quoteHref = "/booking/detail
             <li>Sea Point Promenade corridor</li>
             <li>Main Road apartments</li>
             <li>Beachfront properties</li>
+          </ul>
+        </div>
+      </section>
+
+      <section className="border-b border-emerald-100 bg-white py-12" aria-labelledby="sp-choose-heading">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 id="sp-choose-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+            How to choose the best cleaning service in Sea Point
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-zinc-700">
+            Seaboard buildings punish vague briefs—use this checklist before you compare quotes so crews arrive with enough
+            time and the right supplies.
+          </p>
+          <ul className="mt-6 list-disc space-y-3 pl-5 text-base leading-relaxed text-zinc-700">
+            <li>
+              <strong className="font-semibold text-zinc-900">Vetted &amp; insured teams</strong> — confirm onboarding and
+              accountability before you hand over keys or remotes.
+            </li>
+            <li>
+              <strong className="font-semibold text-zinc-900">Fixed totals vs mystery hourly tabs</strong> — lock bedrooms,
+              bathrooms, and add-ons in the{" "}
+              <Link href={quoteHref} className={lc}>
+                instant quote
+              </Link>{" "}
+              so checkout matches the visit.
+            </li>
+            <li>
+              <strong className="font-semibold text-zinc-900">Local Sea Point experience</strong> — lifts, visitor discs, and
+              salty balconies change pacing; brief parking and balcony scope explicitly.
+            </li>
+          </ul>
+          <p className="mt-6 text-base leading-relaxed text-zinc-600">
+            Ready for metro-wide scope standards? Cross-read{" "}
+            <Link href={STANDARD} className={lc}>
+              professional cleaning services in Cape Town
+            </Link>{" "}
+            for what a standard visit typically covers, then tune notes for your Sea Point address.
+          </p>
+        </div>
+      </section>
+
+      <section className="border-b border-emerald-100 bg-emerald-50/25 py-12" aria-labelledby="sp-near-hub-heading">
+        <div className="mx-auto max-w-4xl px-4">
+          <h2 id="sp-near-hub-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+            Cleaning services near you
+          </h2>
+          <p className="mt-3 text-base leading-relaxed text-zinc-600">
+            Explore neighbouring suburb hubs—each uses the same locked-quote flow with local access notes.
+          </p>
+          <ul className="mt-6 flex flex-wrap gap-2">
+            {NEARBY_HUB_LINKS.map(({ href, label }) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="inline-flex rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50"
+                >
+                  {label}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       </section>
