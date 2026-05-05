@@ -1,5 +1,18 @@
 import "server-only";
 
+/**
+ * Recurring occurrence inserts vs other booking types:
+ *
+ * - **Recurring-generated** (`recurring_id` = plan id, `is_recurring_generated` = true): Pay-per recurring
+ *   path and monthly fixed-schedule path both set these on insert.
+ * - **Manual / pay-per one-off** (`recurring_id` null, `is_recurring_generated` false): admin or checkout rows.
+ *
+ * Duplicate **skip** is only when this plan already has a row for the same calendar date (`recurring_id` + `date`),
+ * matching `bookings_recurring_service_date_uidx`. Admin bookings on the same date do **not** satisfy that and
+ * must not block generation; slot collisions with `idx_bookings_unique_active_customer_slot` are handled in
+ * `insertRecurringOccurrenceBooking` / `insertMonthlyRecurringOccurrenceBooking` via `slot_duplicate_exempt` retry.
+ */
+
 import { terminalStatusesNotInDuplicateProbe } from "@/lib/booking/bookingTerminalStatuses";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
