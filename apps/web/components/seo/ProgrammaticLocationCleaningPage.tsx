@@ -11,6 +11,7 @@ import { LocationFAQSection } from "@/components/seo/LocationFAQSection";
 import { LocationHubAuthoritySection } from "@/components/seo/LocationHubAuthoritySection";
 import { LocationHubComparisonSection } from "@/components/seo/LocationHubComparisonSection";
 import { LocationHubEntityStack } from "@/components/seo/LocationHubEntityStack";
+import { LocationHubRegionPeersSection } from "@/components/seo/LocationHubRegionPeersSection";
 import { LocationHubRankingSections } from "@/components/seo/LocationHubRankingSections";
 import { buildRankingHeroParagraphs, LocationHubRankingAsset } from "@/components/seo/LocationHubRankingAsset";
 import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDepth";
@@ -213,6 +214,9 @@ export function ProgrammaticLocationCleaningPage({
             All suburb hubs
           </Link>
         </p>
+        <p className="mt-2 text-xs text-zinc-500">
+          Updated for 2026 · Scope and pricing reflect current Cape Town operations.
+        </p>
       </div>
 
       <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/60 via-white to-white py-14">
@@ -348,6 +352,8 @@ export function ProgrammaticLocationCleaningPage({
           <p className="mt-4 text-sm font-medium text-emerald-900">{locationHeroCtaMicrocopy(location)}</p>
         </div>
       </section>
+
+      <LocationHubRegionPeersSection location={location} />
 
       {rankingResolved?.active && seo ? (
         <LocationHubRankingAsset location={location} seo={seo} ranking={rankingResolved} ctx={seoCtx} />

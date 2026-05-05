@@ -419,6 +419,28 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             {areasHeading}
           </h2>
           <p className="mt-3 text-zinc-600">{areasIntro}</p>
+          {featuredHubLinks.length >= 2 &&
+          slug !== "window-cleaning-cape-town" &&
+          slug !== "airbnb-cleaning-cape-town" ? (
+            <p className="mt-4 text-base leading-relaxed text-zinc-600">
+              Looking for {data.bookingLabel} with suburb-specific context? We serve{" "}
+              <Link
+                href={featuredHubLinks[0]!.href}
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                {featuredHubLinks[0]!.label}
+              </Link>{" "}
+              and{" "}
+              <Link
+                href={featuredHubLinks[1]!.href}
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                {featuredHubLinks[1]!.label}
+              </Link>{" "}
+              alongside the rest of the Cape Town network—open a hub for parking, access, and layout notes before you
+              book.
+            </p>
+          ) : null}
           {slug === "window-cleaning-cape-town" ? (
             <p className="mt-4 text-sm leading-relaxed text-zinc-600">
               Popular hubs for glass work:{" "}

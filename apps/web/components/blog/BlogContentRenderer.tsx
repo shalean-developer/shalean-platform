@@ -468,14 +468,34 @@ function Block({
       );
 
     default: {
-      const _exhaustive: never = block;
-      return _exhaustive;
+      /** Runtime/CMS drift: never render a raw block object (React throws “objects are not valid as a child”). */
+      console.warn("[BlogContentRenderer] unknown block type skipped", {
+        type: (block as { type?: unknown }).type,
+      });
+      return null;
     }
   }
 }
 
 export function BlogContentRenderer({ content, autoLinkSlug }: Props) {
-  const blocks = Array.isArray(content.blocks) ? content.blocks : [];
+  if (content == null || typeof content !== "object") {
+    console.error("[BlogContentRenderer] invalid content root — expected content_json object");
+    return (
+      <div
+        className="blog-body mx-auto max-w-[65ch] rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-6 text-sm text-amber-950"
+        data-blog-content-root
+        data-has-faq="false"
+        role="alert"
+      >
+        This article&apos;s content could not be loaded. Please try again later or contact support if the issue persists.
+      </div>
+    );
+  }
+  const rawBlocks = content.blocks;
+  if (rawBlocks != null && !Array.isArray(rawBlocks)) {
+    console.error("[BlogContentRenderer] Invalid blocks structure — expected array", typeof rawBlocks);
+  }
+  const blocks = Array.isArray(rawBlocks) ? rawBlocks : [];
   const hasFaq = blocks.some((b) => b.type === "faq");
 
   if (blocks.length === 0) {

@@ -1,3 +1,5 @@
+import { stableHash } from "@/lib/seo/anchorVariants";
+import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 import { resolveCapeTownHubRowFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { nearbyProgrammaticLocationsPreferRegion } from "@/lib/seo/locations";
 import { getPopularCapeTownFooterStripLinks } from "@/lib/seo/internalLinks";
@@ -7,9 +9,41 @@ export type FooterPopularStripModel = {
   links: { href: string; label: string }[];
 };
 
+const FOOTER_SECONDARY_VARIANTS: { href: string; label: string }[][] = [
+  [
+    { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning" },
+    { href: LOCATION_SEO_PAGES["green-point-cleaning-services"].path, label: "Green Point cleaning" },
+  ],
+  [
+    { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning" },
+    { href: LOCATION_SEO_PAGES["newlands-cleaning-services"].path, label: "Newlands cleaning" },
+  ],
+  [
+    { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning" },
+    { href: LOCATION_SEO_PAGES["rondebosch-cleaning-services"].path, label: "Rondebosch cleaning" },
+  ],
+];
+
+function mergeFooterStripPrimaryWithVariant(
+  primary: { href: string; label: string }[],
+  pathname: string,
+): { href: string; label: string }[] {
+  const variation = stableHash(pathname.trim() || "/") % FOOTER_SECONDARY_VARIANTS.length;
+  const tail = FOOTER_SECONDARY_VARIANTS[variation] ?? [];
+  const merged: { href: string; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const l of [...primary, ...tail]) {
+    if (seen.has(l.href)) continue;
+    seen.add(l.href);
+    merged.push(l);
+  }
+  return merged.slice(0, 7);
+}
+
 /** Contextual heading + links for the visible footer strip (deterministic per pathname). */
 export function footerPopularStripForPathname(pathname: string): FooterPopularStripModel {
-  const base = getPopularCapeTownFooterStripLinks();
+  const baseCore = getPopularCapeTownFooterStripLinks();
+  const base = mergeFooterStripPrimaryWithVariant(baseCore, pathname);
 
   if (pathname.startsWith("/services/")) {
     return { title: "Popular cleaning services in Cape Town", links: base };

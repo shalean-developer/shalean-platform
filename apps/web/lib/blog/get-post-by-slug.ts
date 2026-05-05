@@ -125,6 +125,21 @@ export async function getPostBySlug(
   const trimmed = slug.trim();
   if (!trimmed) return null;
 
+  try {
+    return await loadPostBySlug(trimmed, opts);
+  } catch (err) {
+    console.error("❌ getPostBySlug FAILED — returning null (maps to 404; check logs for root cause)", {
+      slug: trimmed,
+      error: err,
+    });
+    return null;
+  }
+}
+
+async function loadPostBySlug(
+  trimmed: string,
+  opts?: GetPostBySlugOptions,
+): Promise<NormalizedDbBlogPost | null> {
   const trace =
     process.env.NODE_ENV === "development" || process.env.BLOG_DEBUG_FETCH === "1";
   if (trace) {

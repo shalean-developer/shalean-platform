@@ -103,17 +103,7 @@ export function getBlogIntentServicePair(kind: BlogServiceLinkKind, slugKey: str
 
 /** Sideways links into high-authority `/locations/*` hubs (pair per layout budget). */
 export function getBlogExploreLocationLinks(slugKey: string): SeoInternalLink[] {
-  const key = slugKey.trim() || "blog";
-  return [
-    {
-      href: LOCATION_SEO_PAGES["sea-point-cleaning-services"].path,
-      anchor: pickGeoHubAnchor(`${key}|hub|sea-point`, "Sea Point"),
-    },
-    {
-      href: LOCATION_SEO_PAGES["claremont-cleaning-services"].path,
-      anchor: pickGeoHubAnchor(`${key}|hub|claremont`, "Claremont"),
-    },
-  ];
+  return getRelevantBlogLocationLinks("standard", slugKey).slice(0, 2);
 }
 
 /** Optional third hub for lists that allow an extra CBD-oriented sideways link. */
@@ -123,6 +113,65 @@ export function getBlogExploreLocationLinkGardensCbd(slugKey: string): SeoIntern
     href: LOCATION_SEO_PAGES["gardens-cleaning-services"].path,
     anchor: pickGeoHubAnchor(`${key}|hub|gardens`, "Gardens"),
   };
+}
+
+function intentLocationHubTriples(kind: BlogServiceLinkKind): readonly [LocationSeoSlug, string, string][] {
+  switch (kind) {
+    case "pricing":
+      return [
+        ["gardens-cleaning-services", "cbd", "Gardens"],
+        ["zonnebloem-cleaning-services", "bowl", "Zonnebloem"],
+        ["sea-point-cleaning-services", "metro", "Sea Point"],
+      ];
+    case "airbnb":
+      return [
+        ["sea-point-cleaning-services", "str1", "Sea Point"],
+        ["green-point-cleaning-services", "str2", "Green Point"],
+        ["camps-bay-cleaning-services", "str3", "Camps Bay"],
+      ];
+    case "move-out":
+      return [
+        ["claremont-cleaning-services", "mo1", "Claremont"],
+        ["newlands-cleaning-services", "mo2", "Newlands"],
+        ["rondebosch-cleaning-services", "mo3", "Rondebosch"],
+      ];
+    case "carpet":
+      return [
+        ["claremont-cleaning-services", "cp1", "Claremont"],
+        ["sea-point-cleaning-services", "cp2", "Sea Point"],
+        ["wynberg-cleaning-services", "cp3", "Wynberg"],
+      ];
+    case "deep":
+      return [
+        ["claremont-cleaning-services", "dp1", "Claremont"],
+        ["sea-point-cleaning-services", "dp2", "Sea Point"],
+        ["green-point-cleaning-services", "dp3", "Green Point"],
+      ];
+    default:
+      return [
+        ["claremont-cleaning-services", "fam1", "Claremont"],
+        ["rondebosch-cleaning-services", "fam2", "Rondebosch"],
+        ["newlands-cleaning-services", "fam3", "Newlands"],
+      ];
+  }
+}
+
+/** Topic-matched suburb hubs for blog clusters (3 links, deduped). */
+export function getRelevantBlogLocationLinks(kind: BlogServiceLinkKind, slugKey: string): SeoInternalLink[] {
+  const key = slugKey.trim() || "blog";
+  const out: SeoInternalLink[] = [];
+  const seen = new Set<string>();
+  for (const [locSlug, seed, place] of intentLocationHubTriples(kind)) {
+    const block = LOCATION_SEO_PAGES[locSlug];
+    if (!block?.path) continue;
+    if (seen.has(block.path)) continue;
+    seen.add(block.path);
+    out.push({
+      href: block.path,
+      anchor: pickGeoHubAnchor(`${key}|intent|${seed}`, place),
+    });
+  }
+  return out;
 }
 
 /**

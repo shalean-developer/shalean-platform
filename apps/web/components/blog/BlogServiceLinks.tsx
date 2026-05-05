@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { BlogServiceLinkKind } from "@/lib/blog/getBlogServiceType";
-import {
-  getBlogExploreLocationLinkGardensCbd,
-  getBlogExploreLocationLinks,
-  getBlogIntentServicePair,
-  getPricingBlogLink,
-} from "@/lib/seo/internalLinks";
+import { getBlogIntentServicePair, getPricingBlogLink, getRelevantBlogLocationLinks } from "@/lib/seo/internalLinks";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 
 type Props = {
@@ -20,7 +15,7 @@ type Props = {
 export function BlogServiceLinks({ trackingSlug, service = "standard", dense = false }: Props) {
   const key = trackingSlug.trim() || "blog";
   const serviceLinks = getBlogIntentServicePair(service, key);
-  const locationLinks = [...getBlogExploreLocationLinks(key), getBlogExploreLocationLinkGardensCbd(key)];
+  const locationLinks = getRelevantBlogLocationLinks(service, key);
   const pricing = getPricingBlogLink(key);
 
   const rows: { href: string; label: string }[] = [

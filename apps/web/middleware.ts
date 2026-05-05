@@ -21,6 +21,15 @@ function shouldNoIndexEntireDeployment(): boolean {
  * and fails with ENOENT if only `proxy.ts` exists (upstream webpack integration gap).
  */
 export async function middleware(request: NextRequest) {
+  try {
+    return await runMiddleware(request);
+  } catch (err) {
+    console.error("[middleware] fatal — passthrough", err);
+    return NextResponse.next();
+  }
+}
+
+async function runMiddleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);

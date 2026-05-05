@@ -1,7 +1,7 @@
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
 
-function normalizeAssetPath(url: string): string {
-  const u = url.trim();
+function normalizeAssetPath(url: string | null | undefined): string {
+  const u = String(url ?? "").trim();
   if (!u) return "";
   if (u.startsWith("http://") || u.startsWith("https://")) {
     try {

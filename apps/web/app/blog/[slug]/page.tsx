@@ -54,15 +54,27 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 /** Preserve Next.js `notFound()` / `redirect()` errors inside broad try/catch wrappers. */
 function isNextNavigationError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null || !("digest" in err)) return false;
-  const digest = String((err as { digest?: unknown }).digest);
-  return digest.startsWith("NEXT_NOT_FOUND") || digest.startsWith("NEXT_REDIRECT");
+  if (typeof err !== "object" || err === null) return false;
+  const digest = String((err as { digest?: unknown }).digest ?? "");
+  if (digest.startsWith("NEXT_NOT_FOUND") || digest.startsWith("NEXT_REDIRECT")) return true;
+  const name = String((err as { name?: unknown }).name ?? "");
+  if (name === "NEXT_NOT_FOUND" || name === "NEXT_REDIRECT") return true;
+  return false;
 }
 
 function toAbsoluteAssetUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   const path = url.startsWith("/") ? url : `/${url}`;
   return `${SITE}${path}`;
+}
+
+function safeJsonLdStringify(value: unknown, ctx: { kind: string; slug: string }): string {
+  try {
+    return JSON.stringify(value).replace(/</g, "\\u003c");
+  } catch (err) {
+    console.error("[blog] JSON-LD stringify failed — omitting graph", { ...ctx, err });
+    return "{}";
+  }
 }
 
 /** Publisher logo in JSON-LD (distinct from per-post hero art). */
@@ -114,9 +126,17 @@ export async function generateStaticParams() {
   return [...map.values()];
 }
 
-async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metadata | null> {
-  const { slug } = await params;
-  const sp = await searchParams;
+async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
+  let slug: string;
+  let sp: Record<string, string | string[] | undefined>;
+  try {
+    const p = await props.params;
+    slug = typeof p.slug === "string" ? p.slug : "";
+    sp = await props.searchParams;
+  } catch (paramErr) {
+    console.error("❌ buildBlogMetadata: await params/searchParams failed — using fallback metadata", paramErr);
+    return null;
+  }
 
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", previewTokenFromSearchParams(sp) ?? "(none)");
@@ -286,19 +306,35 @@ async function buildBlogMetadata({ params, searchParams }: Props): Promise<Metad
   };
 }
 
-const METADATA_FALLBACK: Metadata = {
-  title: generateBlogArticleTitle({ headline: "Cleaning guides & tips", slugKey: "fallback" }),
-  description: clampMetaDescription("Shalean Cleaning Services — trusted home cleaning in Cape Town."),
+/**
+ * Last-resort metadata only — **plain strings**, no helpers, so this object never throws during evaluation
+ * or when returned from `generateMetadata` after an unexpected error.
+ */
+const STATIC_BLOG_METADATA_FALLBACK: Metadata = {
+  title: "Cleaning guides & tips | Shalean",
+  description:
+    "Shalean Cleaning Services — trusted home cleaning in Cape Town. Book vetted cleaners with instant pricing.",
+  robots: SEO_INDEX_FOLLOW,
 };
+
+async function buildBlogMetadata(props: Props): Promise<Metadata | null> {
+  try {
+    return await buildBlogMetadataInner(props);
+  } catch (err) {
+    if (isNextNavigationError(err)) throw err;
+    console.error("❌ buildBlogMetadata: unexpected error — fallback metadata", err);
+    return null;
+  }
+}
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   try {
     const data = await buildBlogMetadata(props);
-    return data ?? METADATA_FALLBACK;
+    return data ?? STATIC_BLOG_METADATA_FALLBACK;
   } catch (err) {
     if (isNextNavigationError(err)) throw err;
-    console.error("❌ METADATA CRASH:", err);
-    return METADATA_FALLBACK;
+    console.error("❌ METADATA CRASH (outer) — static fallback", err);
+    return STATIC_BLOG_METADATA_FALLBACK;
   }
 }
 
@@ -461,9 +497,17 @@ function buildHighConversionGraphJsonLd(post: HighConversionBlogArticle) {
   };
 }
 
-async function BlogPostPageImpl({ params, searchParams }: Props) {
-  const { slug } = await params;
-  const sp = await searchParams;
+async function BlogPostPageImpl(props: Props) {
+  let slug: string;
+  let sp: Record<string, string | string[] | undefined>;
+  try {
+    const p = await props.params;
+    slug = typeof p.slug === "string" ? p.slug : "";
+    sp = await props.searchParams;
+  } catch (paramErr) {
+    console.error("[blog/[slug]] await params/searchParams failed — notFound", paramErr);
+    notFound();
+  }
 
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug]] PARAM SLUG:", JSON.stringify(slug));
@@ -471,10 +515,15 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
     console.log("[blog/[slug]] preview token:", previewTokenFromSearchParams(sp) ?? "(none)");
   }
 
-  const [indexPosts, sidebarCategories] = await Promise.all([
-    getBlogIndexPostsCached(),
-    getBlogSidebarCategories(),
-  ]);
+  let indexPosts: Awaited<ReturnType<typeof getBlogIndexPostsCached>> = [];
+  let sidebarCategories: Awaited<ReturnType<typeof getBlogSidebarCategories>> = [];
+  try {
+    const pair = await Promise.all([getBlogIndexPostsCached(), getBlogSidebarCategories()]);
+    indexPosts = pair[0];
+    sidebarCategories = pair[1];
+  } catch (err) {
+    console.error("[blog/[slug]] index/sidebar bootstrap failed — rendering with empty sidebar data", { slug, err });
+  }
   const sidebarTrending = pickTrendingSidebarPosts(indexPosts, slug, 5);
 
   const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
@@ -538,7 +587,7 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
         keywords: kwPhrase,
         articleSection: dbPost.categoryName,
       });
-      const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+      const jsonLdStr = safeJsonLdStringify(jsonLd, { kind: "db", slug: dbPost.slug });
 
       const hero = {
         src: dbPost.featuredImageUrl,
@@ -552,13 +601,15 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
         console.error("[blog] injectLocationHubSeoImages failed", { slug: dbPost.slug, err });
       }
 
-      const contentForRender = stripFirstDuplicateFeaturedImage(
-        {
-          ...contentSafe,
-          blocks: injectedBlocks,
-        },
-        hero.src,
-      );
+      let contentForRender = { ...contentSafe, blocks: injectedBlocks };
+      try {
+        contentForRender = stripFirstDuplicateFeaturedImage(contentForRender, hero.src);
+      } catch (stripErr) {
+        console.error("[blog] stripFirstDuplicateFeaturedImage failed — using unstripped blocks", {
+          slug: dbPost.slug,
+          stripErr,
+        });
+      }
 
       let relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
       try {
@@ -631,7 +682,7 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
 
   const hc = getHighConversionBlogPost(slug);
   if (hc) {
-    const jsonLdStr = JSON.stringify(buildHighConversionGraphJsonLd(hc)).replace(/</g, "\\u003c");
+    const jsonLdStr = safeJsonLdStringify(buildHighConversionGraphJsonLd(hc), { kind: "high_conversion", slug: hc.slug });
     const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, hc.slug, 6));
 
     return (
@@ -669,7 +720,10 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
 
   const hostGuide = getAirbnbHostGuidePost(slug);
   if (hostGuide) {
-    const jsonLdStr = JSON.stringify(buildAirbnbHostGuideGraphJsonLd(hostGuide, SITE)).replace(/</g, "\\u003c");
+    const jsonLdStr = safeJsonLdStringify(buildAirbnbHostGuideGraphJsonLd(hostGuide, SITE), {
+      kind: "airbnb_host_guide",
+      slug: hostGuide.slug,
+    });
     const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, hostGuide.slug, 6));
 
     return (
@@ -719,7 +773,7 @@ async function BlogPostPageImpl({ params, searchParams }: Props) {
     notFound();
   }
 
-  const jsonLdStr = JSON.stringify(buildProgrammaticGraphJsonLd(prog)).replace(/</g, "\\u003c");
+  const jsonLdStr = safeJsonLdStringify(buildProgrammaticGraphJsonLd(prog), { kind: "programmatic", slug: prog.slug });
   const relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, prog.slug, 6));
   const programmaticHubHref = locationHubHrefFromPlaceName(prog.location);
 

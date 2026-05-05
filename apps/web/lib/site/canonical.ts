@@ -30,6 +30,17 @@ function readPublicSiteOrigin(): string {
 /** Public site origin (scheme + host [+ port]); no trailing slash, no path. */
 export const SITE_ORIGIN = readPublicSiteOrigin();
 
+const FALLBACK_ORIGIN_URL = new URL(FALLBACK_SITE_ORIGIN);
+
+/** Root `metadataBase` — never throws (layout metadata must survive bad env in edge runtimes). */
+export function metadataBaseUrl(): URL {
+  try {
+    return new URL(SITE_ORIGIN);
+  } catch {
+    return FALLBACK_ORIGIN_URL;
+  }
+}
+
 /** Normalize internal paths to absolute canonical URLs (no trailing slash normalization — match route paths). */
 export function absoluteCanonicalUrl(pathname: string): string {
   const path = pathname.startsWith("/") ? pathname : `/${pathname}`;

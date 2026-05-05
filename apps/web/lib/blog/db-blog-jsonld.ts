@@ -5,11 +5,15 @@ import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
 
 export function collectFaqItemsFromContent(content: BlogContentJson): BlogFaqItem[] {
-  const blocks = Array.isArray(content.blocks) ? content.blocks : [];
+  const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
   const out: BlogFaqItem[] = [];
   for (const block of blocks) {
-    if (block.type === "faq" && Array.isArray(block.items)) {
-      out.push(...block.items);
+    if (block?.type === "faq" && Array.isArray(block.items)) {
+      for (const item of block.items) {
+        const q = typeof item?.question === "string" ? item.question.trim() : "";
+        const a = typeof item?.answer === "string" ? item.answer.trim() : "";
+        if (q && a) out.push({ question: q, answer: a });
+      }
     }
   }
   return out;

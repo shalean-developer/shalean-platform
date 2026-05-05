@@ -34,15 +34,16 @@ export function hubSlugToDisplayLocation(slug: string): string | null {
     .join(" ");
 }
 
-function isServiceSectionHeading(content: string): boolean {
+function isServiceSectionHeading(content: string | undefined | null): boolean {
+  const c = String(content ?? "");
   return (
-    /what your booking covers/i.test(content) ||
-    /what each cleaning tier delivers/i.test(content) ||
-    /services mapped to real/i.test(content) ||
-    /what we actually clean/i.test(content) ||
-    /what each service line solves/i.test(content) ||
-    /service stack tuned/i.test(content) ||
-    /services sized for bigger/i.test(content)
+    /what your booking covers/i.test(c) ||
+    /what each cleaning tier delivers/i.test(c) ||
+    /services mapped to real/i.test(c) ||
+    /what we actually clean/i.test(c) ||
+    /what each service line solves/i.test(c) ||
+    /service stack tuned/i.test(c) ||
+    /services sized for bigger/i.test(c)
   );
 }
 
@@ -51,9 +52,9 @@ function findServiceBulletListIndex(blocks: BlogContentBlock[]): number {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.type !== "heading") continue;
-    if (!isServiceSectionHeading(b.content)) continue;
+    if (!isServiceSectionHeading("content" in b ? b.content : "")) continue;
     for (let j = i + 1; j < blocks.length; j++) {
-      if (blocks[j].type === "bullet_list") return j;
+      if (blocks[j]?.type === "bullet_list") return j;
     }
   }
   return -1;
@@ -64,9 +65,10 @@ function findWhenParagraphIndex(blocks: BlogContentBlock[]): number {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.type !== "heading") continue;
-    if (!/^when\b/i.test(b.content.trim())) continue;
+    const headingText = String("content" in b ? b.content : "").trim();
+    if (!/^when\b/i.test(headingText)) continue;
     for (let j = i + 1; j < blocks.length; j++) {
-      const t = blocks[j].type;
+      const t = blocks[j]?.type;
       if (t === "paragraph" || t === "rich_text") return j;
     }
   }
@@ -116,24 +118,29 @@ export function injectLocationHubSeoImages(slug: string, blocks: BlogContentBloc
   const safe = Array.isArray(blocks) ? blocks : [];
   if (!LOCATION_HUB_SEO_IMAGE_SLUGS.has(slug)) return safe;
 
-  const imgs = buildHubImageBlocks(slug);
-  if (!imgs) return safe;
+  try {
+    const imgs = buildHubImageBlocks(slug);
+    if (!imgs) return safe;
 
-  const servicesIdx = findServiceBulletListIndex(safe);
-  const whenParaIdx = findWhenParagraphIndex(safe);
-  const ctaIdx = safe.findIndex((b) => b.type === "cta");
+    const servicesIdx = findServiceBulletListIndex(safe);
+    const whenParaIdx = findWhenParagraphIndex(safe);
+    const ctaIdx = safe.findIndex((b) => b.type === "cta");
 
-  if (servicesIdx === -1 || whenParaIdx === -1 || ctaIdx <= 0) return safe;
+    if (servicesIdx === -1 || whenParaIdx === -1 || ctaIdx <= 0) return safe;
 
-  const [imgServices, imgWhen, imgPreCta] = imgs;
-  const out: BlogContentBlock[] = [];
+    const [imgServices, imgWhen, imgPreCta] = imgs;
+    const out: BlogContentBlock[] = [];
 
-  for (let i = 0; i < safe.length; i++) {
-    out.push(safe[i]);
-    if (i === servicesIdx) out.push(imgServices);
-    if (i === whenParaIdx) out.push(imgWhen);
-    if (i === ctaIdx - 1) out.push(imgPreCta);
+    for (let i = 0; i < safe.length; i++) {
+      out.push(safe[i]!);
+      if (i === servicesIdx) out.push(imgServices);
+      if (i === whenParaIdx) out.push(imgWhen);
+      if (i === ctaIdx - 1) out.push(imgPreCta);
+    }
+
+    return out;
+  } catch (err) {
+    console.error("[blog] injectLocationHubSeoImages: unexpected error — skipping injection", { slug, err });
+    return safe;
   }
-
-  return out;
 }

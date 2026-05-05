@@ -8,6 +8,9 @@ import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusines
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 
+/** Bump when refreshing hub copy site-wide (JSON-LD freshness signal). */
+export const LOCATION_HUB_SCHEMA_DATE_MODIFIED = "2026-05-05";
+
 export type LocationHubFaqItem = { q: string; a: string };
 
 export type BuildLocationHubJsonLdParams = {
@@ -20,6 +23,8 @@ export type BuildLocationHubJsonLdParams = {
   faqs: LocationHubFaqItem[];
   /** Nearby programmatic slugs for areaServed enrichment */
   nearbyPlaceNames: readonly { name: string }[];
+  /** ISO date — surfaced on WebPage for freshness signals */
+  dateModified?: string;
 };
 
 /** Schema.org graph for `/locations/[slug]` — WebPage, BreadcrumbList, LocalBusiness, Service, FAQPage. */
@@ -33,6 +38,7 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
     location,
     faqs,
     nearbyPlaceNames,
+    dateModified = LOCATION_HUB_SCHEMA_DATE_MODIFIED,
   } = params;
 
   const localBusinessId = `${pageUrl}#localbusiness`;
@@ -60,6 +66,7 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         name: h1,
         description: metaDescription,
         url: pageUrl,
+        dateModified,
         isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: siteOrigin },
         mainEntityOfPage: { "@id": `${pageUrl}#service` },
         mainEntity: { "@id": `${pageUrl}#service` },

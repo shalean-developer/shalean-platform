@@ -70,6 +70,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   push(`${SITE_ORIGIN}/blog`, 0.7);
 
+  /** DB article URLs only — `getPublishedBlogSlugs` requires published, `published_at` ≤ now, non-null `content_json`. */
   const dbSlugs = await getPublishedBlogSlugs();
   const categorySlugs = await listActiveCategorySlugs();
   const tagSlugs = await listTagSlugs();

@@ -5,6 +5,10 @@ import {
   filterBlocksForDisplay,
   partitionBlogBlocks,
 } from "@/lib/blog/partition-blog-blocks";
+import {
+  createAutoLinkBudget,
+  injectParagraphAutoLinksIntoBlocks,
+} from "@/lib/blog/seo/auto-link-keywords";
 import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
 
 type Props = {
@@ -23,15 +27,21 @@ const DISPLAY_OPTS = { stripInlineCtas: true, skipInvalidImages: true } as const
  */
 export function BlogDbArticleBody({ content, midArticleSlot, autoLinkSlug }: Props) {
   const { before, after } = partitionBlogBlocks(content.blocks);
-  const beforeFiltered = filterBlocksForDisplay(before, DISPLAY_OPTS);
-  const afterFiltered = filterBlocksForDisplay(after, DISPLAY_OPTS);
+  let beforeFiltered = filterBlocksForDisplay(before, DISPLAY_OPTS);
+  let afterFiltered = filterBlocksForDisplay(after, DISPLAY_OPTS);
+
+  if (autoLinkSlug) {
+    const budget = createAutoLinkBudget();
+    beforeFiltered = injectParagraphAutoLinksIntoBlocks(beforeFiltered, budget);
+    afterFiltered = injectParagraphAutoLinksIntoBlocks(afterFiltered, budget);
+  }
 
   return (
     <div className="space-y-10 lg:space-y-12">
-      <BlogContentRenderer content={buildDisplayContentJson(content, beforeFiltered)} autoLinkSlug={autoLinkSlug} />
+      <BlogContentRenderer content={buildDisplayContentJson(content, beforeFiltered)} />
       {midArticleSlot}
       {afterFiltered.length > 0 ? (
-        <BlogContentRenderer content={buildDisplayContentJson(content, afterFiltered)} autoLinkSlug={autoLinkSlug} />
+        <BlogContentRenderer content={buildDisplayContentJson(content, afterFiltered)} />
       ) : null}
     </div>
   );
