@@ -81,6 +81,37 @@ create index if not exists bookings_monthly_invoice_id_idx
 comment on column public.bookings.monthly_invoice_id is
   'Set by trigger for monthly-billed customers (draft invoice for service bucket month).';
 
+-- Pre-check cleanup: legacy/non-canonical payment_status breaks ADD CONSTRAINT (23514).
+update public.bookings
+set payment_status = null
+where payment_status is not null
+  and btrim(payment_status) = '';
+
+update public.bookings
+set payment_status = lower(btrim(payment_status))
+where payment_status is not null
+  and lower(btrim(payment_status)) in ('pending', 'success', 'failed', 'pending_monthly');
+
+update public.bookings
+set payment_status = 'success'
+where payment_status is not null
+  and lower(btrim(payment_status)) in ('succeeded', 'successful', 'paid')
+  and (
+    payment_completed_at is not null
+    or coalesce(amount_paid_cents, 0) > 0
+    or coalesce(total_paid_cents, 0) > 0
+  );
+
+update public.bookings
+set payment_status = null
+where payment_status is not null
+  and lower(btrim(payment_status)) in ('succeeded', 'successful', 'paid');
+
+update public.bookings
+set payment_status = null
+where payment_status is not null
+  and payment_status not in ('pending', 'success', 'failed', 'pending_monthly');
+
 alter table public.bookings drop constraint if exists bookings_payment_status_check;
 alter table public.bookings
   add constraint bookings_payment_status_check

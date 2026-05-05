@@ -4,7 +4,9 @@ import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleR
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
 import { insertRecurringOccurrenceBooking } from "@/lib/recurring/insertRecurringOccurrenceBooking";
 import { insertMonthlyRecurringOccurrenceBooking } from "@/lib/recurring/insertMonthlyRecurringOccurrenceBooking";
-import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
+import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
@@ -12,23 +14,40 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_RECURRING = 200;
+/** Cap new occurrences processed per plan per cron invocation (backlog safety). */
+const MAX_OCCURRENCES_PER_PLAN = 3;
 
 /**
- * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
+ * Cron: `verifyCronSecret` — `Authorization: Bearer CRON_SECRET` or `x-cron-secret` (Supabase pg_net).
  * Generates `pending_payment` bookings from active `recurring_bookings` (Africa/Johannesburg dates).
  *
- * Suggested: daily 05:30 SAST → POST /api/cron/generate-recurring-bookings
+ * Schedule: e.g. Supabase pg_cron every 10 minutes → POST this route (see migration `20260910_supabase_cron_recurring_bookings_http.sql`).
  */
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const cronAuth = verifyCronSecret(request);
+  if (!cronAuth.ok) {
+    await logCronRun({
+      jobName: "generate-recurring-bookings",
+      status: "error",
+      message: cronAuth.body.error,
+    });
+    return NextResponse.json(cronAuth.body, { status: cronAuth.status });
   }
 
   const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+  if (!admin) {
+    await logCronRun({
+      jobName: "generate-recurring-bookings",
+      status: "error",
+      message: "Supabase not configured.",
+    });
+    return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+  }
 
+  let generated = 0;
+  let skipped = 0;
+
+  try {
   const today = todayJohannesburg();
   const { data: rows, error } = await admin
     .from("recurring_bookings")
@@ -41,11 +60,13 @@ export async function POST(request: Request) {
 
   if (error) {
     await reportOperationalIssue("error", "cron/generate-recurring-bookings", error.message);
+    await logCronRun({
+      jobName: "generate-recurring-bookings",
+      status: "error",
+      message: error.message,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  let generated = 0;
-  let skipped = 0;
 
   for (const raw of rows ?? []) {
     const r = raw as {
@@ -157,7 +178,10 @@ export async function POST(request: Request) {
 
     const useMonthlyInvoicePath = billingType === "monthly" && scheduleType === "fixed_schedule";
 
-    const dates = occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
+    const datesAll = occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
+    const dates = datesAll.slice(0, MAX_OCCURRENCES_PER_PLAN);
+    const partialBacklog = datesAll.length > dates.length;
+
     for (const d of dates) {
       if (r.skip_next_occurrence_date && d === r.skip_next_occurrence_date) continue;
 
@@ -199,6 +223,7 @@ export async function POST(request: Request) {
             await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", ins.bookingId);
           }
         }
+        await refreshRecurringPaymentStateForBooking(admin, ins.bookingId);
         await logSystemEvent({
           level: "info",
           source: "cron/generate-recurring-bookings",
@@ -224,7 +249,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const nextRun = calculateNextRunDate(schedule, today);
+    const nextRun = partialBacklog
+      ? datesAll[MAX_OCCURRENCES_PER_PLAN]!
+      : calculateNextRunDate(schedule, today);
     await admin
       .from("recurring_bookings")
       .update({
@@ -241,8 +268,23 @@ export async function POST(request: Request) {
     message: "Cron finished",
     context: { scanned: rows?.length ?? 0, generated, skipped, today },
   });
+  await logCronRun({
+    jobName: "generate-recurring-bookings",
+    status: "success",
+    message: JSON.stringify({ scanned: rows?.length ?? 0, generated, skipped, today }),
+  });
 
   return NextResponse.json({ ok: true, scanned: rows?.length ?? 0, generated, skipped, today });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("error", "cron/generate-recurring-bookings", msg);
+    await logCronRun({
+      jobName: "generate-recurring-bookings",
+      status: "error",
+      message: msg,
+    });
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function GET(request: Request) {

@@ -185,6 +185,7 @@ export default function AdminBookingsPage() {
 
   const today = useMemo(() => todayYmdJohannesburg(), []);
   const opsQuickParam = searchParams.get("opsQuick") ?? "";
+  const recurringIdParam = (searchParams.get("recurring_id") ?? searchParams.get("recurringId") ?? "").trim();
 
   const sortedCleaners = useMemo(
     () =>
@@ -336,6 +337,9 @@ export default function AdminBookingsPage() {
     if (dateFrom.trim()) qs.set("from", dateFrom.trim());
     if (dateTo.trim()) qs.set("to", dateTo.trim());
     if (opsQuickParam) qs.set("opsQuick", opsQuickParam);
+    if (recurringIdParam && /^[0-9a-f-]{36}$/i.test(recurringIdParam)) {
+      qs.set("recurring_id", recurringIdParam);
+    }
     const q = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/admin/bookings${q}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -403,7 +407,7 @@ export default function AdminBookingsPage() {
     }
 
     endLoading();
-  }, [filter, actionFilter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo, opsQuickParam]);
+  }, [filter, actionFilter, today, selectedCityId, bookingStatusFilter, dateFrom, dateTo, opsQuickParam, recurringIdParam]);
 
   const retryDispatchFailed = useCallback(
     async (bookingId: string) => {
@@ -727,6 +731,19 @@ export default function AdminBookingsPage() {
   return (
     <div>
       <main className="mx-auto max-w-6xl">
+        {recurringIdParam && /^[0-9a-f-]{36}$/i.test(recurringIdParam) ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-50">
+            <span>
+              Filtered to recurring plan{" "}
+              <code className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs dark:bg-blue-900/80">
+                {recurringIdParam.slice(0, 8)}…
+              </code>
+            </span>
+            <Link href="/admin/bookings" className="text-sm font-semibold text-blue-800 underline dark:text-blue-200">
+              Clear filter
+            </Link>
+          </div>
+        ) : null}
         <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
           <Link
             href="/admin/bookings/create"

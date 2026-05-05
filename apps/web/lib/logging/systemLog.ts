@@ -12,6 +12,43 @@ export type OperationalIssueLevel = "error" | "warn" | "critical";
  * Optional `context` keys used by notification pipeline: `eventTriggeredAtIso`, `pipelineLatencyMs`
  * (ms from trigger to log write; compare with row `created_at` for end-to-end delivery latency).
  */
+/**
+ * Persists a row to `cron_runs` and mirrors a compact line into `system_logs` (source `cron_run`).
+ * Safe to call from cron routes; never throws.
+ */
+export async function logCronRun(params: {
+  jobName: string;
+  status: "success" | "error";
+  message?: string | null;
+  context?: Record<string, unknown>;
+}): Promise<void> {
+  const detail = (params.message ?? "").trim().slice(0, 8000);
+  try {
+    await logSystemEvent({
+      level: params.status === "error" ? "error" : "info",
+      source: "cron_run",
+      message: params.jobName,
+      context: {
+        status: params.status,
+        detail: detail || undefined,
+        ...(params.context ?? {}),
+      },
+    });
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return;
+    const { error } = await supabase.from("cron_runs").insert({
+      job_name: params.jobName,
+      status: params.status,
+      message: detail || null,
+    });
+    if (error) {
+      console.error("[cron_runs insert]", error.message, params.jobName);
+    }
+  } catch (e) {
+    console.error("[cron_runs]", e);
+  }
+}
+
 export async function logSystemEvent(params: {
   level: SystemLogLevel;
   source: string;

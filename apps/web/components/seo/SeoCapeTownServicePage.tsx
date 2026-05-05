@@ -13,6 +13,7 @@ import {
   WindowCleaningServiceTypesSection,
 } from "@/components/seo/WindowCapeTownServiceExtendedContent";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
+import { ServicePageCommercialIntentSection } from "@/components/seo/ServicePageCommercialIntentSection";
 import { StandardCleaningCapeTownEnhancements } from "@/components/seo/StandardCleaningCapeTownEnhancements";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
@@ -465,6 +466,8 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           </div>
         </div>
       </section>
+
+      <ServicePageCommercialIntentSection slug={slug} />
 
       {slug === "window-cleaning-cape-town" ? <WindowCleaningServiceTypesSection /> : null}
 

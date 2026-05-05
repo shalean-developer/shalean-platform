@@ -18,6 +18,7 @@ import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDept
 import { LocationHubShareBar } from "@/components/seo/LocationHubShareBar";
 import { SeaPointLocationEnhancements } from "@/components/seo/SeaPointLocationEnhancements";
 import { LocationReviewHighlights } from "@/components/seo/LocationReviewHighlights";
+import { LocationHubTrustedResidentsSection } from "@/components/seo/LocationHubTrustedResidentsSection";
 import { LocationTrustSignals } from "@/components/seo/LocationTrustSignals";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
@@ -61,6 +62,7 @@ import { LOCATION_PAGE_CONTENT_GROUP } from "@/lib/seo/search-console-readiness"
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
+import type { LocationHubMarketingReviewSnippet } from "@/lib/seo/location-hub-marketing-reviews";
 
 type Props = {
   location: CapeTownLocationRow;
@@ -73,6 +75,8 @@ type Props = {
   titleVariant: LocationTitleVariantId;
   /** When true, hero booking CTAs swap order and the “see total first” path takes primary visual weight. */
   swapHeroBookCtas?: boolean;
+  /** Optional verified booking reviews whose address matches this suburb (Supabase RPC). */
+  marketingReviewSnippets?: LocationHubMarketingReviewSnippet[] | null;
 };
 
 const STANDARD_SERVICE = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
@@ -112,6 +116,7 @@ export function ProgrammaticLocationCleaningPage({
   blogCards,
   titleVariant,
   swapHeroBookCtas = false,
+  marketingReviewSnippets = null,
 }: Props) {
   const slug = location.slug;
   const editorialOverride = getLocationEditorialOverride(slug);
@@ -420,17 +425,7 @@ export function ProgrammaticLocationCleaningPage({
 
       <LocationHubRegionPeersSection location={location} />
 
-      <section className="border-b border-zinc-100 py-12" aria-labelledby="hub-local-trust-residents-heading">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 id="hub-local-trust-residents-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Trusted by residents in {location.name}
-          </h2>
-          <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            We’ve helped homeowners, tenants, and Airbnb hosts across {location.name} maintain spotless homes with reliable,
-            professional cleaning services.
-          </p>
-        </div>
-      </section>
+      <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
 
       <section className="border-b border-zinc-100 bg-zinc-50/40 py-12" aria-labelledby="hub-popular-ct-services-heading">
         <div className="mx-auto max-w-4xl px-4">

@@ -88,6 +88,10 @@ type BookingDetails = {
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  is_recurring_generated?: boolean | null;
+  recurring_id?: string | null;
+  /** Derived recurring Paystack collection label (see `deriveRecurringPaymentState`). */
+  payment_state?: string | null;
 };
 
 type TeamSummary = { id: string; name: string; member_count: number | null };
@@ -548,6 +552,7 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
   const [markPaidReference, setMarkPaidReference] = useState("");
   const [markPaidAmountZar, setMarkPaidAmountZar] = useState("");
   const [markPaidBusy, setMarkPaidBusy] = useState(false);
+  const [retryChargeBusy, setRetryChargeBusy] = useState(false);
   const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
   const [editDetailsBusy, setEditDetailsBusy] = useState(false);
   const [editBedrooms, setEditBedrooms] = useState(2);
@@ -1218,6 +1223,32 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
       setDetailRefresh((n) => n + 1);
     } finally {
       setResetDispatchBusy(false);
+    }
+  };
+
+  const handleRetryRecurringCharge = async () => {
+    if (!fullBooking?.id) return;
+    setRetryChargeBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) {
+        setToast({ kind: "error", text: "Please sign in as an admin." });
+        return;
+      }
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/retry-charge`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setToast({ kind: "error", text: json.error ?? "Could not queue retry charge." });
+        return;
+      }
+      setToast({ kind: "success", text: "Charge retry queued for the next cron run." });
+      setDetailRefresh((n) => n + 1);
+    } finally {
+      setRetryChargeBusy(false);
     }
   };
 
@@ -2318,6 +2349,24 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
             </div>
           </DetailCard>
           <DetailCard title="Pricing">
+            {fullBooking.is_recurring_generated ? (
+              <div className="mb-3 space-y-1 rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2 text-xs text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/25 dark:text-blue-100">
+                <DetailRow
+                  label="Recurring payment state"
+                  value={fullBooking.payment_state?.trim() ? fullBooking.payment_state.replace(/_/g, " ") : "—"}
+                />
+                {fullBooking.recurring_id ? (
+                  <p className="pt-1">
+                    <Link
+                      href={`/admin/bookings?recurring_id=${encodeURIComponent(fullBooking.recurring_id)}`}
+                      className="font-semibold text-blue-800 underline dark:text-blue-200"
+                    >
+                      All bookings for this plan
+                    </Link>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {fullBooking.payment_mismatch ? (
               <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">
                 payment_mismatch: visit total was raised after payment was recorded — collect the difference from the customer,
@@ -2390,6 +2439,24 @@ export default function BookingDetailsView({ booking, onClose }: { booking: Book
                 >
                   Mark as Paid
                 </button>
+                {fullBooking.is_recurring_generated &&
+                (fullBooking.status ?? "").trim().toLowerCase() === "pending_payment" ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryRecurringCharge()}
+                    disabled={retryChargeBusy || statusBusy !== null}
+                    className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900 transition hover:bg-blue-100 disabled:opacity-50"
+                  >
+                    {retryChargeBusy ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin" />
+                        Queueing…
+                      </span>
+                    ) : (
+                      "Retry Paystack charge (next cron)"
+                    )}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void handleFixEarnings()}

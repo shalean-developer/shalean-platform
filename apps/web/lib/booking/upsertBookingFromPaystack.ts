@@ -18,6 +18,7 @@ import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
+import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
 import { learnFromPaymentSuccess } from "@/lib/ai-autonomy/learningLoop";
 import { recordConversionExperimentResultsOnPayment } from "@/lib/conversion/conversionExperimentOutcomes";
 import { attributePaidBookingToGrowthOutcomes } from "@/lib/growth/growthActionOutcomes";
@@ -734,6 +735,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         }
       }
     }
+
+    await refreshRecurringPaymentStateForBooking(supabase, id);
 
     const referralCode = String(input.paystackMetadata?.referral_code ?? input.paystackMetadata?.client_referralCode ?? "").trim();
     if (referralCode) {

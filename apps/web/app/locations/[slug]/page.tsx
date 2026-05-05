@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { ProgrammaticLocationCleaningPage } from "@/components/seo/ProgrammaticLocationCleaningPage";
 import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
+import { getLocationHubMarketingReviews } from "@/lib/seo/location-hub-marketing-reviews";
 import {
   buildLocationSeoMetadataAsync,
   getLocationSeo,
@@ -71,8 +72,9 @@ export default async function LocationSeoPage({ params }: Props) {
     console.log("LOCATION:", location.slug);
     console.log("SEO:", seo ? { slug: seo.slug, path: seo.path } : null);
   }
-  const trustStats = await getPublicReviewBannerStats();
-  const [metaFields, blogCards, titleVariant, hubUiPatch] = await Promise.all([
+  const [trustStats, marketingReviewSnippets, metaFields, blogCards, titleVariant, hubUiPatch] = await Promise.all([
+    getPublicReviewBannerStats(),
+    getLocationHubMarketingReviews(location.name, 4),
     resolveLocationSeoMetaFieldsAsync(seo, location),
     getLocationHubBlogCards(location.name),
     resolveLocationTitleVariant(slug),
@@ -88,6 +90,7 @@ export default async function LocationSeoPage({ params }: Props) {
         blogCards={blogCards}
         titleVariant={titleVariant}
         swapHeroBookCtas={hubUiPatch.swapHeroBookCtas}
+        marketingReviewSnippets={marketingReviewSnippets}
       />
     </MarketingLayout>
   );

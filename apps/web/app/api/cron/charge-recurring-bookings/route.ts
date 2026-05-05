@@ -7,7 +7,9 @@ import {
 } from "@/lib/recurring/autoChargeRetryPolicy";
 import { chargePaystackAuthorization } from "@/lib/recurring/chargePaystackAuthorization";
 import { runRecurringPaymentLinkFallback } from "@/lib/recurring/recurringPaymentLinkFallback";
-import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
+import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -22,25 +24,49 @@ function isChargeDue(row: { recurring_next_charge_attempt_at?: string | null }):
 }
 
 /**
- * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
+ * Cron: `verifyCronSecret` — Bearer or `x-cron-secret` (Vercel Cron, Supabase pg_net, curl).
  * Recurring auto-charge with lease-claim, exponential-ish backoff, grace window, then payment-link fallback.
  */
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const cronAuth = verifyCronSecret(request);
+  if (!cronAuth.ok) {
+    await logCronRun({
+      jobName: "charge-recurring-bookings",
+      status: "error",
+      message: cronAuth.body.error,
+    });
+    return NextResponse.json(cronAuth.body, { status: cronAuth.status });
   }
 
   const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+  if (!admin) {
+    await logCronRun({
+      jobName: "charge-recurring-bookings",
+      status: "error",
+      message: "Supabase not configured.",
+    });
+    return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+  }
   const paystackSecret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!paystackSecret) return NextResponse.json({ error: "PAYSTACK_SECRET_KEY not configured." }, { status: 503 });
+  if (!paystackSecret) {
+    await logCronRun({
+      jobName: "charge-recurring-bookings",
+      status: "error",
+      message: "PAYSTACK_SECRET_KEY not configured.",
+    });
+    return NextResponse.json({ error: "PAYSTACK_SECRET_KEY not configured." }, { status: 503 });
+  }
 
+  let attempted = 0;
+  let success = 0;
+  let failed = 0;
+  let fallback = 0;
+
+  try {
   const { data: bookings, error } = await admin
     .from("bookings")
     .select(
-      "id, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at",
+      "id, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count",
     )
     .eq("status", "pending_payment")
     .eq("is_recurring_generated", true)
@@ -51,15 +77,16 @@ export async function POST(request: Request) {
 
   if (error) {
     await reportOperationalIssue("error", "cron/charge-recurring-bookings", error.message);
+    await logCronRun({
+      jobName: "charge-recurring-bookings",
+      status: "error",
+      message: error.message,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const dueRows = (bookings ?? []).filter((b) => isChargeDue(b as { recurring_next_charge_attempt_at?: string | null }));
 
-  let attempted = 0;
-  let success = 0;
-  let failed = 0;
-  let fallback = 0;
   const nowIso = new Date().toISOString();
   const maxRetries = recurringAutoChargeMaxRetries();
   const graceMs = recurringChargeGraceMs();
@@ -75,6 +102,8 @@ export async function POST(request: Request) {
       user_id: string | null;
       recurring_retry_count: number | null;
       recurring_first_failure_at: string | null;
+      payment_link_first_sent_at?: string | null;
+      payment_link_send_count?: number | null;
     };
 
     const { data: rec, error: recErr } = await admin
@@ -85,7 +114,23 @@ export async function POST(request: Request) {
 
     if (recErr || !rec) continue;
     const authCode = String((rec as { paystack_authorization_code?: string | null }).paystack_authorization_code ?? "").trim();
-    if (!authCode) continue;
+    if (!authCode) {
+      const sendCount = Number(row.payment_link_send_count ?? 0);
+      const linkEverSent = Boolean(row.payment_link_first_sent_at?.trim()) || sendCount > 0;
+      if (linkEverSent) {
+        continue;
+      }
+      const okFb = await runRecurringPaymentLinkFallback(admin, row.id);
+      if (okFb) fallback++;
+      await logSystemEvent({
+        level: "warn",
+        source: "cron/charge-recurring-bookings",
+        message: "auto_charge_missing_authorization_fallback",
+        context: { booking_id: row.id, recurring_id: row.recurring_id, fallback_ok: okFb },
+      });
+      await refreshRecurringPaymentStateForBooking(admin, row.id);
+      continue;
+    }
 
     let email = normalizeEmail(String(row.customer_email ?? ""));
     if (!email && row.user_id) {
@@ -164,6 +209,7 @@ export async function POST(request: Request) {
         message: "auto_charge_success",
         context: { booking_id: row.id, reference: charge.reference },
       });
+      await refreshRecurringPaymentStateForBooking(admin, row.id);
       continue;
     }
 
@@ -210,6 +256,7 @@ export async function POST(request: Request) {
 
       const okFb = await runRecurringPaymentLinkFallback(admin, row.id);
       if (okFb) fallback++;
+      await refreshRecurringPaymentStateForBooking(admin, row.id);
       continue;
     }
 
@@ -239,6 +286,7 @@ export async function POST(request: Request) {
         terminal: false,
       },
     });
+    await refreshRecurringPaymentStateForBooking(admin, row.id);
   }
 
   await logSystemEvent({
@@ -246,6 +294,18 @@ export async function POST(request: Request) {
     source: "cron/charge-recurring-bookings",
     message: "Cron finished",
     context: { scanned: bookings?.length ?? 0, due: dueRows.length, attempted, success, failed, fallback },
+  });
+  await logCronRun({
+    jobName: "charge-recurring-bookings",
+    status: "success",
+    message: JSON.stringify({
+      scanned: bookings?.length ?? 0,
+      due: dueRows.length,
+      attempted,
+      success,
+      failed,
+      fallback,
+    }),
   });
 
   return NextResponse.json({
@@ -257,6 +317,16 @@ export async function POST(request: Request) {
     failed,
     fallback,
   });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("error", "cron/charge-recurring-bookings", msg);
+    await logCronRun({
+      jobName: "charge-recurring-bookings",
+      status: "error",
+      message: msg,
+    });
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function GET(request: Request) {

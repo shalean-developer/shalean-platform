@@ -56,12 +56,29 @@ function statusTone(status: string): "green" | "amber" | "red" | "zinc" {
   return "zinc";
 }
 
+type CronHealthJob = {
+  job_name: string;
+  last_success_at: string | null;
+  last_run_at: string | null;
+  errors_last_24h: number;
+};
+
+function formatCronTs(iso: string | null): string {
+  if (!iso?.trim()) return "—";
+  try {
+    return new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" });
+  } catch {
+    return iso.slice(0, 16);
+  }
+}
+
 export default function AdminRecurringPage() {
   const [rows, setRows] = useState<RecurringListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [cronHealth, setCronHealth] = useState<CronHealthJob[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +105,22 @@ export default function AdminRecurringPage() {
     const tid = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(tid);
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCronHealth() {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/admin/cron-health", { headers: { Authorization: `Bearer ${token}` } });
+      const json = (await res.json()) as { jobs?: CronHealthJob[] };
+      if (!cancelled && res.ok) setCronHealth(json.jobs ?? []);
+    }
+    void loadCronHealth();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function postAction(id: string, action: "pause" | "resume" | "cancel") {
     if (action === "cancel" && !window.confirm("Cancel this recurring plan? Generated visits may still exist.")) {
@@ -141,6 +174,39 @@ export default function AdminRecurringPage() {
           </Link>
         </div>
       </div>
+
+      <Card className="border-zinc-200 shadow-sm dark:border-zinc-800">
+        <CardHeader>
+          <CardTitle>Cron health (24h)</CardTitle>
+          <CardDescription>
+            From <code className="text-xs">cron_runs</code> — generator + charger jobs after migrations apply.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!cronHealth?.length ? (
+            <p className="text-sm text-zinc-500">No runs recorded yet, or table not migrated.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {cronHealth.map((j) => (
+                <li
+                  key={j.job_name}
+                  className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60"
+                >
+                  <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">{j.job_name}</span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                    Last success: <span className="font-medium text-zinc-900 dark:text-zinc-100">{formatCronTs(j.last_success_at)}</span>
+                    {" · "}
+                    Errors 24h:{" "}
+                    <span className={j.errors_last_24h > 0 ? "font-semibold text-amber-700 dark:text-amber-300" : ""}>
+                      {j.errors_last_24h}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-zinc-200 shadow-sm dark:border-zinc-800">
         <CardHeader>
@@ -259,9 +325,12 @@ export default function AdminRecurringPage() {
                                 Cancel
                               </Button>
                             ) : null}
-                            {!canPause && !canResume && !canCancel ? (
-                              <span className="text-xs text-zinc-400">—</span>
-                            ) : null}
+                            <Link
+                              href={`/admin/bookings?recurring_id=${encodeURIComponent(r.id)}`}
+                              className="inline-flex h-8 items-center rounded-md border border-zinc-300 bg-white px-2 text-xs font-medium text-blue-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-blue-300 dark:hover:bg-zinc-800"
+                            >
+                              Bookings
+                            </Link>
                           </div>
                         </td>
                       </tr>
