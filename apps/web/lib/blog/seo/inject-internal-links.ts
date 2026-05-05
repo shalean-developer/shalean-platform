@@ -22,6 +22,13 @@ const MIN_LOCATION = 2;
 const MIN_SERVICE = 2;
 const MIN_BLOG = 2;
 
+/** Money page — neighbourhood hubs (`cleaning-services-*-cape-town`) should inject twice for contextual equity. */
+const STANDARD_CLEANING_MONEY_PATH = "/services/standard-cleaning-cape-town";
+
+function countPathMatches(urls: readonly string[], p: string): number {
+  return urls.filter((u) => u === p).length;
+}
+
 function normPath(u: string): string {
   try {
     const path = u.startsWith("http") ? new URL(u).pathname : u.split("?")[0] ?? u;
@@ -86,11 +93,16 @@ export function injectInternalLinks(
   const simulated = [...existing];
   const toAdd: { label: string; url: string }[] = [];
   const seen = new Set(simulated);
+  const editorialHub = resolveHubFromCleaningServicesCapeTownBlogSlug(context.postSlug ?? "");
 
   function push(label: string, url: string) {
     const p = normPath(url);
-    if (seen.has(p)) return;
-    seen.add(p);
+    const moneySecondOk =
+      Boolean(editorialHub) &&
+      p === normPath(STANDARD_CLEANING_MONEY_PATH) &&
+      countPathMatches(simulated, p) < 2;
+    if (seen.has(p) && !moneySecondOk) return;
+    if (!seen.has(p)) seen.add(p);
     simulated.push(p);
     toAdd.push({ label, url: p });
   }
@@ -98,7 +110,6 @@ export function injectInternalLinks(
   const locPrimary = locationHref(locationSlug);
   const locRow = getLocation(locationSlug);
   const neighborSlug = locRow?.nearby?.[0];
-  const editorialHub = resolveHubFromCleaningServicesCapeTownBlogSlug(context.postSlug ?? "");
   if (editorialHub) {
     const editorialHubAnchors = [
       `Cleaning services in ${editorialHub.placeName}`,
@@ -198,6 +209,21 @@ export function injectInternalLinks(
     push(anchorPick(bookingAnchors, "booking-funnel", 0), "/booking");
   }
 
+  if (editorialHub) {
+    const p = normPath(STANDARD_CLEANING_MONEY_PATH);
+    if (countPathMatches(simulated, p) < 2) {
+      const secondaryMoneyAnchors = [
+        "cleaning services in Cape Town",
+        "professional cleaning services in Cape Town",
+        "book home cleaning in Cape Town",
+      ];
+      push(
+        anchorPick(secondaryMoneyAnchors, `${context.postSlug ?? "hub"}|money2`, 4),
+        STANDARD_CLEANING_MONEY_PATH,
+      );
+    }
+  }
+
   if (toAdd.length === 0) return { ...content_json, blocks: baseBlocks };
 
   const blocks = baseBlocks.map((b) => ({ ...b })) as BlogContentBlock[];
@@ -209,6 +235,19 @@ export function injectInternalLinks(
     const mseen = new Set(merged.map((l) => normPath(String(l.url ?? ""))));
     for (const l of toAdd) {
       const p = normPath(l.url);
+      const moneyMerged = countPathMatches(
+        merged.map((x) => normPath(String(x.url ?? ""))),
+        p,
+      );
+      if (
+        editorialHub &&
+        p === normPath(STANDARD_CLEANING_MONEY_PATH) &&
+        moneyMerged < 2
+      ) {
+        merged.push({ label: l.label, url: l.url });
+        if (moneyMerged === 1) mseen.add(p);
+        continue;
+      }
       if (!mseen.has(p)) {
         mseen.add(p);
         merged.push({ label: l.label, url: l.url });

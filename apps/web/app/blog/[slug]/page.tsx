@@ -569,6 +569,17 @@ async function BlogPostPageImpl(props: Props) {
         );
       }
 
+      if (
+        dbPost.content !== null &&
+        typeof dbPost.content === "object" &&
+        dbPost.content !== undefined &&
+        !Array.isArray((dbPost.content as { blocks?: unknown }).blocks)
+      ) {
+        console.error("[blog] Invalid blog content_json.blocks — expected array", {
+          slug: dbPost.slug,
+          id: dbPost.id,
+        });
+      }
       const safeBlocks = Array.isArray(dbPost.content?.blocks) ? dbPost.content.blocks : [];
       if (safeBlocks.length === 0) {
         console.warn("[blog] DB post has empty blocks — rendering shell only", { slug: dbPost.slug, id: dbPost.id });

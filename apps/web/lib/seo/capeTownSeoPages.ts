@@ -355,8 +355,11 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     description:
       "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes and vetted Shalean cleaners.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
-    h1: "House cleaning services in Cape Town for consistent, livable homes",
+    h1: "Cleaning Services Cape Town",
+    schemaName: "Cleaning Services Cape Town | Shalean",
     bookingLabel: "standard cleaning",
+    introSectionHeading: "How standard cleaning works in Cape Town",
+    includedSectionHeading: "What's included in our cleaning service",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
       blogPath: "/blog/cleaning-services-claremont-cape-town",
