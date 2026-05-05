@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { todayJohannesburg, compareYmd, lastDayYmdOfInvoiceMonth } from "@/lib/recurring/johannesburgCalendar";
+import {
+  addDaysYmd,
+  todayJohannesburg,
+  compareYmd,
+  lastDayYmdOfInvoiceMonth,
+} from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
 import { insertRecurringOccurrenceBooking } from "@/lib/recurring/insertRecurringOccurrenceBooking";
@@ -29,7 +34,9 @@ const MAX_OCCURRENCES_PER_PLAN = 35;
  * Generation window: **current calendar month** (Africa/Johannesburg), capped by `end_date`.
  * Floor: `fromYmd = max(month_start, start_date)` so the whole month is reconciled (e.g. weekly from 1 May → all
  * May visits). Existing rows stay aligned: duplicate dates return `duplicate_occurrence` and are skipped.
- * Plans are still queued when `next_run_date <= month_end` (cursor); `next_run_date` is not used as the window floor.
+ * Queued when `next_run_date <= month_end + 28d` (cursor may sit in early next month after the old generator);
+ * plan must overlap this month (`start_date <= month_end`, `end_date` null or `>= month_start`). `next_run_date`
+ * is not used as the window floor for which dates to try.
  *
  * Schedule: e.g. Supabase pg_cron every 10 minutes → POST this route (see migration `20260910_supabase_cron_recurring_bookings_http.sql`).
  */
@@ -65,13 +72,17 @@ export async function POST(request: Request) {
   const monthYm = today.slice(0, 7);
   const monthStart = `${monthYm}-01`;
   const monthEnd = lastDayYmdOfInvoiceMonth(monthYm);
+  /** Include plans whose cursor already moved into the next calendar month (legacy behaviour); still bounded. */
+  const cursorEligibilityEnd = addDaysYmd(monthEnd, 28);
   const { data: rows, error } = await admin
     .from("recurring_bookings")
     .select(
       "id, customer_id, price, frequency, days_of_week, start_date, end_date, next_run_date, status, skip_next_occurrence_date, booking_snapshot_template, monthly_pattern, monthly_nth",
     )
     .eq("status", "active")
-    .lte("next_run_date", monthEnd)
+    .lte("start_date", monthEnd)
+    .or(`end_date.is.null,end_date.gte.${monthStart}`)
+    .lte("next_run_date", cursorEligibilityEnd)
     .limit(MAX_RECURRING);
 
   if (error) {
@@ -312,6 +323,7 @@ export async function POST(request: Request) {
       today,
       month_start: monthStart,
       month_end: monthEnd,
+      cursor_eligibility_end: cursorEligibilityEnd,
     },
   });
   await logCronRun({
@@ -324,6 +336,7 @@ export async function POST(request: Request) {
       today,
       month_start: monthStart,
       month_end: monthEnd,
+      cursor_eligibility_end: cursorEligibilityEnd,
     }),
   });
 
@@ -335,6 +348,7 @@ export async function POST(request: Request) {
     today,
     month_start: monthStart,
     month_end: monthEnd,
+    cursor_eligibility_end: cursorEligibilityEnd,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
