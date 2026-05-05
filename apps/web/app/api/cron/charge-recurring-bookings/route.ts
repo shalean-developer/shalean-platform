@@ -30,11 +30,13 @@ function isChargeDue(row: { recurring_next_charge_attempt_at?: string | null }):
 export async function POST(request: Request) {
   const cronAuth = verifyCronSecret(request);
   if (!cronAuth.ok) {
-    await logCronRun({
-      jobName: "charge-recurring-bookings",
-      status: "error",
-      message: `[auth] ${cronAuth.body.error}`,
-    });
+    if (cronAuth.status !== 401) {
+      await logCronRun({
+        jobName: "charge-recurring-bookings",
+        status: "error",
+        message: `[auth] ${cronAuth.body.error}`,
+      });
+    }
     return NextResponse.json(cronAuth.body, { status: cronAuth.status });
   }
 
@@ -61,12 +63,13 @@ export async function POST(request: Request) {
   let success = 0;
   let failed = 0;
   let fallback = 0;
+  let skippedMonthlyDeferred = 0;
 
   try {
   const { data: bookings, error } = await admin
     .from("bookings")
     .select(
-      "id, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count",
+      "id, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking",
     )
     .eq("status", "pending_payment")
     .eq("is_recurring_generated", true)
@@ -104,7 +107,15 @@ export async function POST(request: Request) {
       recurring_first_failure_at: string | null;
       payment_link_first_sent_at?: string | null;
       payment_link_send_count?: number | null;
+      payment_status?: string | null;
+      is_monthly_billing_booking?: boolean | null;
     };
+
+    if (row.payment_status === "pending_monthly" || row.is_monthly_billing_booking === true) {
+      skippedMonthlyDeferred++;
+      console.log("[charge] skipped monthly booking (deferred billing)", { booking_id: row.id });
+      continue;
+    }
 
     const { data: rec, error: recErr } = await admin
       .from("recurring_bookings")
@@ -293,7 +304,15 @@ export async function POST(request: Request) {
     level: "info",
     source: "cron/charge-recurring-bookings",
     message: "Cron finished",
-    context: { scanned: bookings?.length ?? 0, due: dueRows.length, attempted, success, failed, fallback },
+    context: {
+      scanned: bookings?.length ?? 0,
+      due: dueRows.length,
+      attempted,
+      success,
+      failed,
+      fallback,
+      skipped_monthly_deferred: skippedMonthlyDeferred,
+    },
   });
   await logCronRun({
     jobName: "charge-recurring-bookings",
@@ -305,6 +324,7 @@ export async function POST(request: Request) {
       success,
       failed,
       fallback,
+      skipped_monthly_deferred: skippedMonthlyDeferred,
     }),
   });
 
@@ -316,6 +336,7 @@ export async function POST(request: Request) {
     success,
     failed,
     fallback,
+    skipped_monthly_deferred: skippedMonthlyDeferred,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

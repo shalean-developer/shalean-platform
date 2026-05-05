@@ -67,6 +67,18 @@ function emptyChannelStats(): SendInvoiceRemindersChannelStats {
   return { sent: 0, failed: 0, skipped: 0 };
 }
 
+async function incrementMonthlyInvoiceReminderCount(admin: SupabaseClient, invoiceId: string): Promise<void> {
+  const { error } = await admin.rpc("increment_monthly_invoice_reminder_count", {
+    p_invoice_id: invoiceId,
+  });
+  if (error) {
+    await reportOperationalIssue("warn", "cron/send-invoice-reminders", error.message, {
+      invoice_id: invoiceId,
+      rpc: "increment_monthly_invoice_reminder_count",
+    });
+  }
+}
+
 async function appendReminderEvent(
   admin: SupabaseClient,
   invoiceId: string,
@@ -169,6 +181,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
   let total_sent = 0;
   let total_failed = 0;
   const nowIso = nowSnapshot.toISOString();
+  const escalationWarned = new Set<string>();
 
   for (const inv of eligible) {
     const total = Math.max(0, Math.round(Number(inv.total_amount_cents ?? 0)));
@@ -190,6 +203,23 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
     const phoneForWa = phoneRaw ? resolveCustomerPhoneForWhatsApp(phoneRaw) : null;
 
     const zar = (cents: number) => (Number.isFinite(cents) ? cents / 100 : 0);
+
+    if (dayOffset >= 14 && !escalationWarned.has(inv.id)) {
+      escalationWarned.add(inv.id);
+      await logSystemEvent({
+        level: "warn",
+        source: "cron/send-invoice-reminders",
+        message: "monthly_invoice_unpaid_escalation",
+        context: {
+          invoice_id: inv.id,
+          customer_id: inv.customer_id,
+          days_past_due: dayOffset,
+          balance_cents: balance,
+          status: inv.status,
+          reminder_count_note: "see monthly_invoices.reminder_count",
+        },
+      });
+    }
 
     const appendForChannel = async (
       channel: ReminderChannel,
@@ -230,6 +260,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
       });
       if (emailRes.sent) {
         await appendForChannel("email", "sent");
+        await incrementMonthlyInvoiceReminderCount(admin, inv.id);
         total_sent += 1;
         by_channel.email.sent += 1;
         sentKeys.add(emailKey);
@@ -264,6 +295,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
 
       if (waRes.ok) {
         await appendForChannel("whatsapp", "sent");
+        await incrementMonthlyInvoiceReminderCount(admin, inv.id);
         total_sent += 1;
         by_channel.whatsapp.sent += 1;
         sentKeys.add(waKey);

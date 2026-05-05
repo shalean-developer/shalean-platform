@@ -246,13 +246,15 @@ export async function GET(request: Request) {
   const opsQuick = (searchParams.get("opsQuick") ?? "").trim().toLowerCase();
   const recurringIdRaw = (searchParams.get("recurring_id") ?? searchParams.get("recurringId") ?? "").trim();
   const recurringIdFilter = /^[0-9a-f-]{36}$/i.test(recurringIdRaw) ? recurringIdRaw : null;
+  /** Drill-down from `/admin/recurring` — ignore ops/date quick filters so future visits are not hidden. */
+  const recurringListScope = Boolean(recurringIdFilter);
 
   const bookingSelect =
     "id, customer_name, customer_email, service, date, time, location, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect);
 
-  if (filter === "follow-up") {
+  if (filter === "follow-up" && !recurringListScope) {
     bookingQuery = bookingQuery
       .eq("payment_needs_follow_up", true)
       .order("payment_conversion_seconds", { ascending: false, nullsFirst: false })
@@ -261,17 +263,17 @@ export async function GET(request: Request) {
   } else {
     bookingQuery = bookingQuery.order("created_at", { ascending: false }).limit(4000);
   }
-  if (cityId) bookingQuery = bookingQuery.eq("city_id", cityId);
+  if (cityId && !recurringListScope) bookingQuery = bookingQuery.eq("city_id", cityId);
   if (recurringIdFilter) {
     bookingQuery = bookingQuery.eq("recurring_id", recurringIdFilter);
   }
   if (bookingStatus && bookingStatus !== "all") {
     bookingQuery = bookingQuery.eq("status", bookingStatus);
   }
-  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
+  if (!recurringListScope && from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
     bookingQuery = bookingQuery.gte("date", from);
   }
-  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+  if (!recurringListScope && to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
     bookingQuery = bookingQuery.lte("date", to);
   }
   const { data: rawRows, error: selErr } = await bookingQuery;
@@ -285,35 +287,37 @@ export async function GET(request: Request) {
   const today = todayYmdJohannesburg();
 
   let filtered = rows;
-  if (filter === "follow-up") {
-    filtered = rows;
-  } else if (filter === "today") {
-    filtered = rows.filter((r) => classifyBooking(r, today) === "today");
-  } else if (filter === "upcoming") {
-    filtered = rows.filter((r) => classifyBooking(r, today) === "upcoming");
-  } else if (filter === "completed") {
-    filtered = rows.filter((r) => classifyBooking(r, today) === "completed");
-  } else if (filter === "sla") {
-    const slaM = getDispatchSlaBreachMinutes();
-    const nowMs = Date.now();
-    const breachRows = rows.filter((r) => rowMatchesAttentionFilter(toOpsSnapshotRow(r), "sla", nowMs, slaM));
-    const enriched = breachRows.map((r) => {
-      const op = toOpsSnapshotRow(r);
-      return {
-        ...r,
-        slaBreachMinutes: slaBreachOverdueMinutes(op, nowMs, slaM) ?? 0,
-      };
-    });
-    const sorted = sortRowsForAttentionQueue(enriched, "sla", nowMs, slaM);
-    const actions = await fetchSlaDispatchLastActions(admin, sorted.map((r) => r.id));
-    filtered = sorted.map((r) => {
-      const act = actions.get(r.id);
-      return {
-        ...r,
-        dispatchLastAction: act?.displayText ?? "—",
-        lastActionMinutesAgo: act?.lastActionMinutesAgo ?? null,
-      };
-    });
+  if (!recurringListScope) {
+    if (filter === "follow-up") {
+      filtered = rows;
+    } else if (filter === "today") {
+      filtered = rows.filter((r) => classifyBooking(r, today) === "today");
+    } else if (filter === "upcoming") {
+      filtered = rows.filter((r) => classifyBooking(r, today) === "upcoming");
+    } else if (filter === "completed") {
+      filtered = rows.filter((r) => classifyBooking(r, today) === "completed");
+    } else if (filter === "sla") {
+      const slaM = getDispatchSlaBreachMinutes();
+      const nowMs = Date.now();
+      const breachRows = rows.filter((r) => rowMatchesAttentionFilter(toOpsSnapshotRow(r), "sla", nowMs, slaM));
+      const enrichedSla = breachRows.map((r) => {
+        const op = toOpsSnapshotRow(r);
+        return {
+          ...r,
+          slaBreachMinutes: slaBreachOverdueMinutes(op, nowMs, slaM) ?? 0,
+        };
+      });
+      const sorted = sortRowsForAttentionQueue(enrichedSla, "sla", nowMs, slaM);
+      const actions = await fetchSlaDispatchLastActions(admin, sorted.map((r) => r.id));
+      filtered = sorted.map((r) => {
+        const act = actions.get(r.id);
+        return {
+          ...r,
+          dispatchLastAction: act?.displayText ?? "—",
+          lastActionMinutesAgo: act?.lastActionMinutesAgo ?? null,
+        };
+      });
+    }
   }
 
   const zar = (r: Row) =>
@@ -406,15 +410,17 @@ export async function GET(request: Request) {
     };
   });
 
-  if (opsQuick === "monthly_only") {
-    enriched = enriched.filter((r) => (r.customer_billing_type ?? "").toLowerCase() === "monthly");
-  } else if (opsQuick === "awaiting_payment") {
-    enriched = enriched.filter((r) => (r.status ?? "").toLowerCase() === "pending_payment");
-  } else if (opsQuick === "tomorrow") {
-    const tomorrowYmd = addDaysYmd(today, 1);
-    enriched = enriched.filter((r) => r.date === tomorrowYmd);
-  } else if (opsQuick === "today") {
-    enriched = enriched.filter((r) => classifyBooking(r, today) === "today");
+  if (!recurringListScope) {
+    if (opsQuick === "monthly_only") {
+      enriched = enriched.filter((r) => (r.customer_billing_type ?? "").toLowerCase() === "monthly");
+    } else if (opsQuick === "awaiting_payment") {
+      enriched = enriched.filter((r) => (r.status ?? "").toLowerCase() === "pending_payment");
+    } else if (opsQuick === "tomorrow") {
+      const tomorrowYmd = addDaysYmd(today, 1);
+      enriched = enriched.filter((r) => r.date === tomorrowYmd);
+    } else if (opsQuick === "today") {
+      enriched = enriched.filter((r) => classifyBooking(r, today) === "today");
+    }
   }
 
   const withRoster = await attachTeamAndRosterToBookings(admin, enriched);

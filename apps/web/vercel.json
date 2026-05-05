@@ -21,6 +21,10 @@
       "schedule": "45 5 * * *"
     },
     {
+      "path": "/api/cron/charge-monthly-invoices",
+      "schedule": "55 21 * * *"
+    },
+    {
       "path": "/api/cron/seo-optimization",
       "schedule": "20 6 * * 1"
     }

@@ -18,6 +18,12 @@ export type CronHealthRecentError = {
   message: string;
 };
 
+/** Rows logged before we stopped persisting 401s, or stray unauthenticated HTTP hits — not failed job execution. */
+function isCronAuthProbeRow(message: string | null | undefined): boolean {
+  const m = (message ?? "").trim();
+  return m === "Unauthorized." || m === "[auth] Unauthorized." || m.startsWith("[auth] Unauthorized");
+}
+
 /**
  * Recent outcomes from `cron_runs` (generator + charger + future jobs).
  */
@@ -68,10 +74,12 @@ export async function GET(request: Request) {
       agg.last_success_at = created;
     }
     if (status === "error") {
-      agg.errors_last_24h += 1;
-      if (recentErrors.length < 50) {
-        const msg = typeof r.message === "string" ? r.message.trim() : "";
-        recentErrors.push({ job_name: job, created_at: created, message: msg || "(no message)" });
+      const msg = typeof r.message === "string" ? r.message.trim() : "";
+      if (!isCronAuthProbeRow(msg)) {
+        agg.errors_last_24h += 1;
+        if (recentErrors.length < 50) {
+          recentErrors.push({ job_name: job, created_at: created, message: msg || "(no message)" });
+        }
       }
     }
   }

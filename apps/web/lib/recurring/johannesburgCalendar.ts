@@ -43,6 +43,12 @@ export function compareYmd(a: string, b: string): number {
   return a < b ? -1 : 1;
 }
 
+/** 1 May for the same calendar year as `yyyyMmDd` (e.g. recurring catch-up window floor). */
+export function mayFirstOfSameYear(yyyyMmDd: string): string {
+  const y = yyyyMmDd.slice(0, 4);
+  return `${y}-05-01`;
+}
+
 export function todayJohannesburg(): string {
   return todayYmdJohannesburg();
 }

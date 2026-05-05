@@ -19,18 +19,26 @@ const MAX_OCCURRENCES_PER_PLAN = 3;
 
 /**
  * Cron: `verifyCronSecret` — `Authorization: Bearer CRON_SECRET` or `x-cron-secret` (Supabase pg_net).
- * Generates `pending_payment` bookings from active `recurring_bookings` (Africa/Johannesburg dates).
+ * Generates occurrence rows from active `recurring_bookings` (Africa/Johannesburg dates):
+ * - `per_booking`: `pending_payment` + Paystack auto-charge path
+ * - `monthly`: `pending` + `pending_monthly` + draft `monthly_invoices` attach (no immediate charge)
+ *
+ * `user_profiles.schedule_type` (`fixed_schedule` | `on_demand`) does **not** gate generation — both receive
+ * spawned visits; monthly collection runs via `/api/cron/charge-monthly-invoices` (finalize + Paystack link).
  *
  * Schedule: e.g. Supabase pg_cron every 10 minutes → POST this route (see migration `20260910_supabase_cron_recurring_bookings_http.sql`).
  */
 export async function POST(request: Request) {
   const cronAuth = verifyCronSecret(request);
   if (!cronAuth.ok) {
-    await logCronRun({
-      jobName: "generate-recurring-bookings",
-      status: "error",
-      message: `[auth] ${cronAuth.body.error}`,
-    });
+    // Do not record 401 in cron_runs — probes / missing Bearer skew health metrics; 503 is real misconfiguration.
+    if (cronAuth.status !== 401) {
+      await logCronRun({
+        jobName: "generate-recurring-bookings",
+        status: "error",
+        message: `[auth] ${cronAuth.body.error}`,
+      });
+    }
     return NextResponse.json(cronAuth.body, { status: cronAuth.status });
   }
 
@@ -156,12 +164,21 @@ export async function POST(request: Request) {
     const billingType = String((profileRow as { billing_type?: string } | null)?.billing_type ?? "per_booking");
     const scheduleType = String((profileRow as { schedule_type?: string } | null)?.schedule_type ?? "on_demand");
 
-    if (billingType === "monthly" && scheduleType === "on_demand") {
+    /** Explicit supported billing kinds — extend here if new `billing_type` values ship in DB. */
+    const shouldGenerateRecurringOccurrences =
+      billingType === "per_booking" || billingType === "monthly";
+
+    if (!shouldGenerateRecurringOccurrences) {
       await logSystemEvent({
         level: "warn",
         source: "cron/generate-recurring-bookings",
-        message: "recurring_skip_monthly_on_demand",
-        context: { recurring_id: r.id, customer_id: r.customer_id },
+        message: "recurring_skip_unsupported_billing_type",
+        context: {
+          recurring_id: r.id,
+          customer_id: r.customer_id,
+          billing_type: billingType,
+          schedule_type: scheduleType,
+        },
       });
       skipped++;
       const nextRun = calculateNextRunDate(schedule, today);
@@ -176,7 +193,8 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const useMonthlyInvoicePath = billingType === "monthly" && scheduleType === "fixed_schedule";
+    /** Monthly consolidated billing: deferred charge via `monthly_invoices` (see `insertMonthlyRecurringOccurrenceBooking`). */
+    const useMonthlyInvoicePath = billingType === "monthly";
 
     const datesAll = occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
     const dates = datesAll.slice(0, MAX_OCCURRENCES_PER_PLAN);
@@ -213,7 +231,15 @@ export async function POST(request: Request) {
 
       if (ins.ok) {
         generated++;
-        console.log("[generate] generated booking", { planId: r.id, date: d, bookingId: ins.bookingId });
+        if (useMonthlyInvoicePath) {
+          console.log("[generate] created booking for monthly customer", {
+            planId: r.id,
+            date: d,
+            bookingId: ins.bookingId,
+          });
+        } else {
+          console.log("[generate] generated booking", { planId: r.id, date: d, bookingId: ins.bookingId });
+        }
         if (!useMonthlyInvoicePath) {
           const smartAt = await computeInitialRecurringChargeAttemptAt(admin, {
             bookingId: ins.bookingId,
@@ -235,6 +261,8 @@ export async function POST(request: Request) {
             occurrence_date: d,
             paystack_reference: ins.paystackReference,
             monthly_invoice: useMonthlyInvoicePath,
+            billing_type: billingType,
+            schedule_type: scheduleType,
           },
         });
       } else if (ins.error === "duplicate_occurrence") {

@@ -83,6 +83,7 @@ export default function AdminRecurringPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [cronHealth, setCronHealth] = useState<CronHealthJob[] | null>(null);
   const [cronRecentErrors, setCronRecentErrors] = useState<CronHealthRecentError[]>([]);
@@ -132,6 +133,106 @@ export default function AdminRecurringPage() {
     };
   }, []);
 
+  async function postBackfill(id: string) {
+    if (
+      !window.confirm(
+        "Create missing recurring visit rows from 1 May (this year, Johannesburg) through today — or from the plan start date if that is later. Already-created dates are skipped. Afterward, the normal generator cron continues from the updated next run.",
+      )
+    ) {
+      return;
+    }
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      emitAdminToast("Sign in as admin.", "error");
+      return;
+    }
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/admin/recurring/${encodeURIComponent(id)}/backfill-occurrences`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        generated?: number;
+        skipped_duplicate?: number;
+        skipped_other?: number;
+        truncated?: boolean;
+        next_run_date?: string;
+        failures?: { date: string; error: string }[];
+      };
+      if (!res.ok) {
+        emitAdminToast(json.error ?? "Backfill failed", "error");
+        return;
+      }
+      const g = json.generated ?? 0;
+      const dup = json.skipped_duplicate ?? 0;
+      const trunc = json.truncated ? " (hit max dates — run again if needed)" : "";
+      emitAdminToast(`Backfill: +${g} created, ${dup} already existed${trunc}`, "success");
+      if ((json.failures?.length ?? 0) > 0) {
+        emitAdminToast(`Some dates failed: ${json.failures?.[0]?.error ?? "see logs"}`, "error");
+      }
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function postBatchBackfillMayToToday() {
+    if (
+      !window.confirm(
+        "Run May→today backfill on ALL active recurring plans (per_booking or monthly billing; missing profile defaults to per_booking). This can take a while. Existing dates are skipped; next_run_date is updated per plan.",
+      )
+    ) {
+      return;
+    }
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      emitAdminToast("Sign in as admin.", "error");
+      return;
+    }
+    setBatchBusy(true);
+    try {
+      const res = await fetch("/api/admin/recurring-batch-backfill-may-to-today", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        plans_processed?: number;
+        plans_eligible?: number;
+        totals?: { generated?: number; skipped_duplicate?: number; skipped_other?: number };
+        plan_failures?: { recurring_id: string; error: string }[];
+        truncated_by_limit?: boolean;
+        limit_applied?: number | null;
+      };
+      if (!res.ok) {
+        emitAdminToast(json.error ?? "Batch backfill failed", "error");
+        return;
+      }
+      const t = json.totals ?? {};
+      const g = t.generated ?? 0;
+      const dup = t.skipped_duplicate ?? 0;
+      const pf = json.plan_failures?.length ?? 0;
+      const lim =
+        json.truncated_by_limit && json.limit_applied != null
+          ? ` (stopped at limit ${json.limit_applied} — call again with ?limit= or raise limit)`
+          : "";
+      emitAdminToast(
+        `Batch: ${json.plans_processed ?? 0}/${json.plans_eligible ?? 0} plans · +${g} bookings · ${dup} duplicates skipped${lim}`,
+        "success",
+      );
+      if (pf > 0) {
+        emitAdminToast(`${pf} plan(s) failed (first: ${json.plan_failures?.[0]?.error ?? "?"})`, "error");
+      }
+      await load();
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
   async function postAction(id: string, action: "pause" | "resume" | "cancel") {
     if (action === "cancel" && !window.confirm("Cancel this recurring plan? Generated visits may still exist.")) {
       return;
@@ -170,11 +271,20 @@ export default function AdminRecurringPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+          <Button type="button" size="sm" onClick={() => setCreateOpen(true)} disabled={batchBusy}>
             New recurring plan
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading || batchBusy}>
             Refresh
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={loading || batchBusy || busyId != null}
+            onClick={() => void postBatchBackfillMayToToday()}
+          >
+            Backfill all (May→today)
           </Button>
           <Link
             href="/admin/bookings"
@@ -322,8 +432,19 @@ export default function AdminRecurringPage() {
                               <Button
                                 type="button"
                                 size="sm"
+                                variant="secondary"
+                                disabled={busyId === r.id || batchBusy}
+                                onClick={() => void postBackfill(r.id)}
+                              >
+                                Backfill to today
+                              </Button>
+                            ) : null}
+                            {canPause ? (
+                              <Button
+                                type="button"
+                                size="sm"
                                 variant="outline"
-                                disabled={busyId === r.id}
+                                disabled={busyId === r.id || batchBusy}
                                 onClick={() => void postAction(r.id, "pause")}
                               >
                                 Pause
@@ -334,7 +455,7 @@ export default function AdminRecurringPage() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                disabled={busyId === r.id}
+                                disabled={busyId === r.id || batchBusy}
                                 onClick={() => void postAction(r.id, "resume")}
                               >
                                 Resume
@@ -346,7 +467,7 @@ export default function AdminRecurringPage() {
                                 size="sm"
                                 variant="outline"
                                 className="border-rose-300 text-rose-800 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-200 dark:hover:bg-rose-950/40"
-                                disabled={busyId === r.id}
+                                disabled={busyId === r.id || batchBusy}
                                 onClick={() => void postAction(r.id, "cancel")}
                               >
                                 Cancel

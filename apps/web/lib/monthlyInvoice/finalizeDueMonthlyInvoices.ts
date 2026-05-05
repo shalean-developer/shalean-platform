@@ -1,7 +1,10 @@
 import "server-only";
 
 import { buildMonthlyInvoiceSnapshot, wrapSnapshotCurrentV1 } from "@/lib/monthlyInvoice/buildMonthlyInvoiceSnapshot";
-import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
+import {
+  appendMonthlyInvoiceSnapshotEvent,
+  invoicePaymentLinkEmailSentExists,
+} from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { isInvoiceMonthReadyToFinalize, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice";
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
@@ -34,9 +37,18 @@ function formatDueDate(isoDate: string): string {
 }
 
 /**
- * Idempotent finalize: any draft invoice whose calendar month has ended (today ≥ last day of that month,
- * Africa/Johannesburg) is recomputed, then Paystack + email (or zero-close with closure_reason).
- * Missed last-day cron runs still pick up the same drafts on later days.
+ * Idempotent finalize for **closed billing periods only**:
+ * draft rows pass {@link isInvoiceMonthReadyToFinalize} (today ≥ last calendar day of invoice `month`, Johannesburg).
+ * SQL prefilter `month <= todayYm` avoids future buckets; the calendar predicate drops edge cases (e.g. same-month drafts).
+ *
+ * **Schedule (ops):** run **daily** — recommended **23:55 Africa/Johannesburg** (**21:55 UTC** on `vercel.json` crons).
+ * Not tied to recurring generation timing; missed runs still finalize the same drafts later.
+ *
+ * **Collection:** Paystack **transaction/initialize** (hosted payment link + email). This is **not** card-on-file
+ * `charge_authorization`; customer completes payment in browser; webhook applies `paid`.
+ * Invoice unpaid states: `sent` / `partially_paid` / `overdue` (plus `sent_at`, `balance_cents`, `reminder_count`).
+ *
+ * **Zero balance:** `total_amount_cents === 0` → snapshot + mark `paid` with `closure_reason: zero_amount` (no Paystack).
  */
 export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoicesResult> {
   const admin = getSupabaseAdmin();
@@ -67,6 +79,11 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
     const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", { p_invoice_id: inv.id });
     if (rpcErr) {
       errors.push(`${inv.id}: ${rpcErr.message}`);
+      continue;
+    }
+
+    const { data: postRpc } = await admin.from("monthly_invoices").select("status").eq("id", inv.id).maybeSingle();
+    if (String(postRpc?.status ?? "").toLowerCase() !== "draft") {
       continue;
     }
 
@@ -182,7 +199,7 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
       continue;
     }
     const snapshotCurrent = wrapSnapshotCurrentV1(snapshot);
-    const { error: snapErr } = await admin
+    const { data: snapRows, error: snapErr } = await admin
       .from("monthly_invoices")
       .update({
         snapshot_at_finalize: snapshot,
@@ -190,9 +207,13 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
         snapshot_version: 1,
       })
       .eq("id", f.id)
-      .eq("status", "draft");
+      .eq("status", "draft")
+      .select("id");
     if (snapErr) {
       errors.push(`${f.id}: snapshot_failed:${snapErr.message}`);
+      continue;
+    }
+    if (!snapRows?.length) {
       continue;
     }
 
@@ -211,20 +232,81 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
       errors.push(`${f.id}: finalize_event:${finEv.error}`);
     }
 
+    const { data: prePay } = await admin.from("monthly_invoices").select("status").eq("id", f.id).maybeSingle();
+    if (String(prePay?.status ?? "").toLowerCase() !== "draft") {
+      continue;
+    }
+
     const pay = await initializePaystackForMonthlyInvoice(admin, { invoiceId: f.id, customerEmail: email });
     if (!pay.ok) {
-      errors.push(`${inv.id}: ${pay.error}`);
+      errors.push(`${f.id}: ${pay.error}`);
       continue;
     }
 
     const balanceZar = Math.max(0, cents) / 100;
-    await sendMonthlyInvoiceEmail({
+
+    if (await invoicePaymentLinkEmailSentExists(admin, f.id)) {
+      finalized++;
+      continue;
+    }
+
+    const { data: claimRows, error: claimErr } = await admin
+      .from("monthly_invoices")
+      .update({ initial_invoice_email_dispatch_claimed: true })
+      .eq("id", f.id)
+      .eq("initial_invoice_email_dispatch_claimed", false)
+      .select("id");
+
+    if (claimErr) {
+      errors.push(`${f.id}: email_dispatch_claim:${claimErr.message}`);
+      continue;
+    }
+
+    if (!claimRows?.length) {
+      if (await invoicePaymentLinkEmailSentExists(admin, f.id)) {
+        finalized++;
+        continue;
+      }
+      continue;
+    }
+
+    const mail = await sendMonthlyInvoiceEmail({
       to: email,
       monthLabel: formatMonthLabel(f.month),
       totalZar: balanceZar,
       paymentUrl: pay.authorizationUrl,
       dueDateLabel: formatDueDate(f.due_date),
     });
+
+    if (!mail.sent) {
+      await admin
+        .from("monthly_invoices")
+        .update({ initial_invoice_email_dispatch_claimed: false })
+        .eq("id", f.id);
+      errors.push(`${f.id}: invoice_email:${mail.error ?? "send_failed"}`);
+      continue;
+    }
+
+    const evAppend = await appendMonthlyInvoiceSnapshotEvent(
+      admin,
+      f.id,
+      {
+        kind: "invoice_payment_link_email_sent",
+        at: new Date().toISOString(),
+        actor: "system",
+        paystack_reference: pay.reference,
+      },
+      { source: "cron/finalize-monthly-invoices" },
+    );
+
+    if (!evAppend.ok) {
+      await admin
+        .from("monthly_invoices")
+        .update({ initial_invoice_email_dispatch_claimed: false })
+        .eq("id", f.id);
+      errors.push(`${f.id}: invoice_email_event:${evAppend.error}`);
+      continue;
+    }
 
     finalized++;
   }

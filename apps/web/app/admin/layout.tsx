@@ -92,6 +92,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   /** When signed in but `isAdmin()` is false — usually missing or mismatched `ADMIN_EMAIL` / `ADMIN_EMAILS` on the server. */
   const [signedInNonAdminEmail, setSignedInNonAdminEmail] = useState<string | null>(null);
   const [noSupabaseClient, setNoSupabaseClient] = useState(false);
+  /** Set when `fetch("/api/admin/me")` throws (e.g. dev server down, connection reset) — not an auth denial. */
+  const [adminMeFetchError, setAdminMeFetchError] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const redirectTarget = useMemo(() => pathname || "/admin", [pathname]);
@@ -110,6 +112,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           setIsAllowed(false);
           setNoSupabaseClient(true);
           setSignedInNonAdminEmail(null);
+          setAdminMeFetchError(null);
           setLoading(false);
         }
         return;
@@ -125,31 +128,45 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setIsAllowed(false);
           setSignedInNonAdminEmail(null);
+          setAdminMeFetchError(null);
           setLoading(false);
         }
         return;
       }
 
-      const res = await fetch("/api/admin/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = (await res.json()) as {
-        isAdmin?: boolean;
-        user?: { email?: string | null };
-        error?: string;
-      };
-      if (cancelled) return;
+      try {
+        const res = await fetch("/api/admin/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        let json: { isAdmin?: boolean; user?: { email?: string | null }; error?: string };
+        try {
+          json = (await res.json()) as typeof json;
+        } catch {
+          json = {};
+        }
+        if (cancelled) return;
 
-      const okAdmin = Boolean(res.ok && json.isAdmin);
-      setIsAllowed(okAdmin);
-      if (okAdmin) {
-        setSignedInNonAdminEmail(null);
-      } else if (res.ok && json.user?.email && !json.isAdmin) {
-        setSignedInNonAdminEmail(String(json.user.email));
-      } else {
-        setSignedInNonAdminEmail(null);
+        setAdminMeFetchError(null);
+        const okAdmin = Boolean(res.ok && json.isAdmin);
+        setIsAllowed(okAdmin);
+        if (okAdmin) {
+          setSignedInNonAdminEmail(null);
+        } else if (res.ok && json.user?.email && !json.isAdmin) {
+          setSignedInNonAdminEmail(String(json.user.email));
+        } else {
+          setSignedInNonAdminEmail(null);
+        }
+        setLoading(false);
+      } catch {
+        if (!cancelled) {
+          setAdminMeFetchError(
+            "Could not reach the app to verify admin access. If you are developing locally, confirm `npm run dev` is running and refresh.",
+          );
+          setIsAllowed(false);
+          setSignedInNonAdminEmail(null);
+          setLoading(false);
+        }
       }
-      setLoading(false);
     }
 
     void verifyAdminAccess();
@@ -167,6 +184,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           if (!cancelled) {
             setIsAllowed(false);
             setSignedInNonAdminEmail(null);
+            setAdminMeFetchError(null);
             setUserLabel("");
             setLoading(false);
           }
@@ -198,7 +216,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <main className="flex min-h-[55vh] items-center justify-center px-4">
         <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Admin access required</h1>
-          {noSupabaseClient ? (
+          {adminMeFetchError ? (
+            <>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{adminMeFetchError}</p>
+              <button
+                type="button"
+                className="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                onClick={() => window.location.reload()}
+              >
+                Try again
+              </button>
+            </>
+          ) : noSupabaseClient ? (
             <p className="mt-2 text-sm text-amber-800 dark:text-amber-200/90">
               This build is missing <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">NEXT_PUBLIC_SUPABASE_URL</code> or{" "}
               <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> — check{" "}

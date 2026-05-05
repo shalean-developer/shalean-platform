@@ -257,6 +257,7 @@ export default function AdminBookingsPage() {
 
   /** When URL omits `filter` and/or `opsQuick`, restore last choices from localStorage (single navigation). */
   useEffect(() => {
+    if (searchParams.get("recurring_id")?.trim() || searchParams.get("recurringId")?.trim()) return;
     const hasFilter = searchParams.has("filter");
     const hasOpsQuick = searchParams.has("opsQuick");
     if (hasFilter && hasOpsQuick) return;
@@ -330,16 +331,18 @@ export default function AdminBookingsPage() {
     }
 
     const qs = new URLSearchParams();
-    if (actionFilter === "needs_follow_up") qs.set("filter", "follow-up");
-    else if (filter !== "all") qs.set("filter", filter);
-    if (selectedCityId !== "all") qs.set("cityId", selectedCityId);
-    if (bookingStatusFilter !== "all") qs.set("bookingStatus", bookingStatusFilter);
-    if (dateFrom.trim()) qs.set("from", dateFrom.trim());
-    if (dateTo.trim()) qs.set("to", dateTo.trim());
-    if (opsQuickParam) qs.set("opsQuick", opsQuickParam);
-    if (recurringIdParam && /^[0-9a-f-]{36}$/i.test(recurringIdParam)) {
+    const recurringScoped = Boolean(recurringIdParam && /^[0-9a-f-]{36}$/i.test(recurringIdParam));
+    if (recurringScoped) {
       qs.set("recurring_id", recurringIdParam);
+    } else {
+      if (actionFilter === "needs_follow_up") qs.set("filter", "follow-up");
+      else if (filter !== "all") qs.set("filter", filter);
+      if (selectedCityId !== "all") qs.set("cityId", selectedCityId);
+      if (opsQuickParam) qs.set("opsQuick", opsQuickParam);
+      if (dateFrom.trim()) qs.set("from", dateFrom.trim());
+      if (dateTo.trim()) qs.set("to", dateTo.trim());
     }
+    if (bookingStatusFilter !== "all") qs.set("bookingStatus", bookingStatusFilter);
     const q = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/admin/bookings${q}`, {
       headers: { Authorization: `Bearer ${token}` },

@@ -91,6 +91,13 @@ export type InvoiceSnapshotEvent =
       balance_cents_after: number;
       actor: "system";
       reference: string;
+    }
+  | {
+      /** First consolidated invoice email from finalize cron (idempotent guard vs duplicate finalize). */
+      kind: "invoice_payment_link_email_sent";
+      at: string;
+      actor: "system";
+      paystack_reference: string;
     };
 
 /** Narrow unknown JSON from DB into a typed event when possible. */
@@ -196,6 +203,14 @@ export function parseInvoiceSnapshotEvent(raw: unknown): InvoiceSnapshotEvent | 
       error_message: typeof o.error_message === "string" ? o.error_message : null,
     };
   }
+  if (kind === "invoice_payment_link_email_sent") {
+    return {
+      kind: "invoice_payment_link_email_sent",
+      at: String(o.at ?? ""),
+      actor: "system",
+      paystack_reference: String(o.paystack_reference ?? ""),
+    };
+  }
   if (kind === "invoice_reminder_sent") {
     const ch = String(o.channel ?? "").toLowerCase() === "whatsapp" ? "whatsapp" : "email";
     const ds = String(o.delivery_status ?? "sent").toLowerCase() === "failed" ? "failed" : "sent";
@@ -237,11 +252,26 @@ export function invoiceSnapshotEventToRpcPayload(ev: InvoiceSnapshotEvent): Reco
       return { ...ev, kind: "invoice_resent" };
     case "invoice_reminder_sent":
       return { ...ev, kind: "invoice_reminder_sent" };
+    case "invoice_payment_link_email_sent":
+      return { ...ev, kind: "invoice_payment_link_email_sent" };
     default: {
       const _x: never = ev;
       return _x as Record<string, unknown>;
     }
   }
+}
+
+/** True if finalize cron already recorded a first payment-link email (`invoice_payment_link_email_sent`). */
+export async function invoicePaymentLinkEmailSentExists(admin: SupabaseClient, invoiceId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("monthly_invoice_events")
+    .select("id")
+    .eq("invoice_id", invoiceId)
+    .eq("kind", "invoice_payment_link_email_sent")
+    .limit(1)
+    .maybeSingle();
+  if (error) return false;
+  return Boolean(data);
 }
 
 export async function appendMonthlyInvoiceSnapshotEvent(
