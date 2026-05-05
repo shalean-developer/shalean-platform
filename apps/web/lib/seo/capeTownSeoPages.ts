@@ -1559,6 +1559,11 @@ function serviceSolutionVariant(bookingLabel: string): string {
 }
 
 function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string {
+  if (data.slug === "standard-cleaning-cape-town") {
+    return clampMetaDescription(
+      "Book trusted cleaners in Cape Town. From R250, same-day availability, vetted professionals. Get a quote in 60 seconds.",
+    );
+  }
   return generateMetaDescription({
     service: bookingLabelToServicePhrase(data.bookingLabel),
     location: "Cape Town",

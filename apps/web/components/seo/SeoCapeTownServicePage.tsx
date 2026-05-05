@@ -23,7 +23,11 @@ import {
   partitionServiceHubLocationLinks,
   servicePageExtraLocationSentenceLinks,
 } from "@/lib/seo/internalLinks";
-import { googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
+import { googleBusinessAggregateRatingSchema, googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
+import {
+  dedupeFaqsByQuestion,
+  STANDARD_CLEANING_SNIPPET_FAQS,
+} from "@/lib/seo/standardCleaningMoneyPageFaqs";
 import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
@@ -106,6 +110,21 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   };
   if (sameAs.length > 0) localBusinessNode.sameAs = sameAs;
 
+  if (slug === "standard-cleaning-cape-town") {
+    localBusinessNode.aggregateRating = trustStats
+      ? {
+          "@type": "AggregateRating",
+          ratingValue: String(Math.round(trustStats.avgRating * 10) / 10),
+          reviewCount: String(trustStats.reviewCount),
+        }
+      : googleBusinessAggregateRatingSchema();
+  }
+
+  const mergedStandardFaqs =
+    slug === "standard-cleaning-cape-town"
+      ? dedupeFaqsByQuestion(STANDARD_CLEANING_SNIPPET_FAQS, data.faqs)
+      : null;
+
   const breadcrumbEntity = {
     "@type": "BreadcrumbList",
     "@id": `${pageUrl}#breadcrumbs`,
@@ -116,11 +135,12 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
     ],
   };
 
+  const faqSchemaSource = mergedStandardFaqs ?? data.faqs;
   const faqPageEntity = {
     "@type": "FAQPage",
     "@id": `${pageUrl}#faq`,
     url: pageUrl,
-    mainEntity: data.faqs.map((faq) => ({
+    mainEntity: faqSchemaSource.map((faq) => ({
       "@type": "Question",
       name: faq.q,
       acceptedAnswer: {
@@ -130,7 +150,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
     })),
   };
 
-  /** No aggregateRating / Review — trust copy is visible; avoids invalid Review snippets. */
+  /** aggregateRating on money page uses verified GBP aggregate or live review RPC stats when present. */
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -152,8 +172,14 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
 
   const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
 
+  const deepPath = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
+  const moveOutPath = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
+  const greenPointPath = LOCATION_SEO_PAGES["green-point-cleaning-services"].path;
+
   return (
-    <main className="bg-white text-zinc-900">
+    <main
+      className={`bg-white text-zinc-900${slug === "standard-cleaning-cape-town" ? " pb-24 md:pb-0" : ""}`}
+    >
       <GrowthTracking event="page_view" payload={{ page_type: "seo_cape_town_service", slug }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
 
@@ -424,6 +450,80 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
         </div>
       </section>
 
+      {slug === "standard-cleaning-cape-town" ? (
+        <section className="border-b border-blue-100 py-16" aria-labelledby="std-compare-deep-heading">
+          <div className="mx-auto max-w-4xl space-y-14 px-4">
+            <div>
+              <h2 id="std-compare-deep-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+                Standard vs deep cleaning in Cape Town
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-zinc-600">
+                <strong className="text-zinc-800">Standard cleaning</strong> maintains kitchens, bathrooms, floors, and dusting on
+                a predictable rhythm—best when your home needs steady upkeep rather than a heavy reset.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-zinc-600">
+                <strong className="text-zinc-800">Deep cleaning</strong> spends extra time on build-up—grout lines, appliance
+                fronts, detail zones—and usually costs more because visits run longer. Book deep when you&apos;re recovering from
+                hosting, moving in, or skipping cleans for a while.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-zinc-600">
+                Compare full scope on our{" "}
+                <Link href={deepPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  deep cleaning services in Cape Town
+                </Link>{" "}
+                page, then align bedrooms and bathrooms in the quote builder.
+              </p>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">One-off vs recurring cleaning</h2>
+              <p className="mt-4 text-base leading-relaxed text-zinc-600">
+                <strong className="text-zinc-800">Once-off standard cleans</strong> suit move-ins, guest arrivals, or catching up
+                between busy weeks—no commitment to a schedule.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-zinc-600">
+                <strong className="text-zinc-800">Recurring visits</strong> (weekly, bi-weekly, or monthly) keep mess from
+                compounding and often cost less per session because maintenance is lighter. For domestic rhythm and maid-style
+                cadence copy, see{" "}
+                <Link href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  maid services in Cape Town
+                </Link>
+                .
+              </p>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Popular services &amp; hubs</h2>
+              <p className="mt-4 text-base leading-relaxed text-zinc-600">
+                Explore{" "}
+                <Link href={deepPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  deep cleaning services in Cape Town
+                </Link>
+                ,{" "}
+                <Link href={moveOutPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  move out cleaning in Cape Town
+                </Link>
+                , and our{" "}
+                <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  cleaning prices in Cape Town
+                </Link>{" "}
+                hub. Browse priority suburbs like{" "}
+                <Link href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  Sea Point cleaning services
+                </Link>
+                ,{" "}
+                <Link href={LOCATION_SEO_PAGES["claremont-cleaning-services"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  Claremont
+                </Link>
+                , and{" "}
+                <Link href={greenPointPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  Green Point cleaning services
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {data.targetAudience ? (
         <section className="border-b border-blue-100 py-16">
           <div className="mx-auto max-w-4xl px-4">
@@ -475,6 +575,42 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
               </Link>{" "}
               —each page adds typical layouts, parking, and short-stay context before you book.
             </p>
+          ) : null}
+          {slug === "standard-cleaning-cape-town" ? (
+            <div className="mt-8 grid gap-6 md:grid-cols-3">
+              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                <h3 className="text-lg font-semibold text-zinc-900">
+                  <Link href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path} className="text-blue-800 hover:underline">
+                    Sea Point
+                  </Link>
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                  High-rise apartments, Airbnb turnovers, and coastal dust along the Promenade and Main Road—fast access notes for
+                  lifts and parking before you book.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                <h3 className="text-lg font-semibold text-zinc-900">
+                  <Link href={LOCATION_SEO_PAGES["claremont-cleaning-services"].path} className="text-blue-800 hover:underline">
+                    Claremont
+                  </Link>
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                  Family homes, townhouses, and student-adjacent rentals—good mix of weekly upkeep and deeper seasonal resets near
+                  schools and malls.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                <h3 className="text-lg font-semibold text-zinc-900">
+                  <Link href={LOCATION_SEO_PAGES["observatory-cleaning-services"].path} className="text-blue-800 hover:underline">
+                    Observatory
+                  </Link>
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                  Shared houses and compact flats with frequent move-outs—ideal for flexible once-offs or tighter recurring scopes.
+                </p>
+              </div>
+            </div>
           ) : null}
           {featuredHubLinks.length >= 2 &&
           slug !== "window-cleaning-cape-town" &&
@@ -562,22 +698,47 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
         </div>
       </section>
 
-      <section id="faqs" className="scroll-mt-24 border-b border-blue-100 py-16">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Frequently asked questions</h2>
-          <p className="mt-3 text-zinc-600">
-            Straight answers about booking, scope, and what to expect for this service in Cape Town.
-          </p>
-          <div className="mt-8 space-y-5">
-            {data.faqs.map((faq) => (
-              <div key={faq.q} className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                <h3 className="font-semibold text-zinc-900">{faq.q}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-600">{faq.a}</p>
-              </div>
-            ))}
+      {slug !== "standard-cleaning-cape-town" ? (
+        <section id="faqs" className="scroll-mt-24 border-b border-blue-100 py-16">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Frequently asked questions</h2>
+            <p className="mt-3 text-zinc-600">
+              Straight answers about booking, scope, and what to expect for this service in Cape Town.
+            </p>
+            <div className="mt-8 space-y-5">
+              {data.faqs.map((faq) => (
+                <div key={faq.q} className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                  <h3 className="font-semibold text-zinc-900">{faq.q}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{faq.a}</p>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="border-b border-blue-100 py-16" aria-labelledby="std-more-faq-heading">
+          <div className="mx-auto max-w-4xl px-4">
+            <h2 id="std-more-faq-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+              Booking &amp; scope details
+            </h2>
+            <p className="mt-3 text-zinc-600">
+              More answers on recurring visits, supplies, and upgrading scope—snippet-focused FAQs live{" "}
+              <Link href="#faqs" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                under pricing above
+              </Link>
+              .
+            </p>
+            <div className="mt-8 space-y-5">
+              {data.faqs.map((faq) => (
+                <div key={faq.q} className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                  <h3 className="font-semibold text-zinc-900">{faq.q}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{faq.a}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {areaProgrammaticBlogLinks ? (
         <section className="border-b border-blue-100 bg-blue-50/30 py-16">
@@ -669,6 +830,27 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           ) : null}
         </div>
       </section>
+
+      {slug === "standard-cleaning-cape-town" ? (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-blue-200 bg-white/95 backdrop-blur-sm md:hidden">
+          <div className="mx-auto flex max-w-lg gap-2 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <GrowthCtaLink
+              href={bookingPath}
+              source="seo_ct_standard-cleaning-cape-town_sticky_quote"
+              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700"
+            >
+              Book now
+            </GrowthCtaLink>
+            <GrowthCtaLink
+              href="/booking"
+              source="seo_ct_standard-cleaning-cape-town_sticky_book"
+              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-blue-200 bg-white text-sm font-semibold text-blue-800 transition hover:bg-blue-50"
+            >
+              Start booking
+            </GrowthCtaLink>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

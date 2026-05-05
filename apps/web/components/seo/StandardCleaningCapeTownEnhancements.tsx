@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { STANDARD_CLEANING_SNIPPET_FAQS } from "@/lib/seo/standardCleaningMoneyPageFaqs";
 
 type Props = {
   bookingPath: string;
 };
 
 /**
- * Pricing depth + mid-page CTA for `/services/standard-cleaning-cape-town` only.
+ * Pricing, snippet FAQs, and mid-page CTAs for `/services/standard-cleaning-cape-town` only.
  */
 export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
   return (
@@ -59,7 +60,39 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
               </tbody>
             </table>
           </div>
-          <p className="mt-6 text-sm leading-relaxed text-zinc-600">
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <GrowthCtaLink
+              href={bookingPath}
+              source="seo_ct_standard-cleaning-cape-town_after_table_quote"
+              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:flex-none"
+            >
+              Get instant quote
+            </GrowthCtaLink>
+            <GrowthCtaLink
+              href="/booking"
+              source="seo_ct_standard-cleaning-cape-town_after_table_book"
+              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-blue-200 bg-white px-6 text-base font-semibold text-blue-800 transition hover:bg-blue-50 sm:flex-none"
+            >
+              Book now
+            </GrowthCtaLink>
+          </div>
+
+          <section id="faqs" className="scroll-mt-24 mt-12 border-t border-blue-100 pt-12" aria-labelledby="std-ct-faq-heading">
+            <h2 id="std-ct-faq-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+              Frequently asked questions
+            </h2>
+            <div className="mt-8 space-y-5">
+              {STANDARD_CLEANING_SNIPPET_FAQS.map((faq) => (
+                <div key={faq.q} className="rounded-2xl border border-blue-100 bg-blue-50/40 p-5 shadow-sm">
+                  <h3 className="font-semibold text-zinc-900">{faq.q}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{faq.a}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <p className="mt-10 text-sm leading-relaxed text-zinc-600">
             Apartment vs house pricing nuances — plus deep-clean uplifts — are spelled out in our{" "}
             <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               cleaning prices hub
