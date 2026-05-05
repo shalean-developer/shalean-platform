@@ -27,6 +27,10 @@ export type BuildLocationHubJsonLdParams = {
   dateModified?: string;
   /** Service entity `name` — defaults to `h1` when omitted */
   serviceSchemaName?: string;
+  /** When set, `Service.areaServed` is a single Place with this name (suburb-focused clarity). */
+  serviceAreaServedSimpleName?: string;
+  /** Optional indicative price band on the primary `Service` node (location/money pages). */
+  serviceOffers?: { priceCurrency: string; lowPrice: string; highPrice: string };
 };
 
 /** Schema.org graph for `/locations/[slug]` — WebPage, BreadcrumbList, LocalBusiness, Service, FAQPage. */
@@ -42,6 +46,8 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
     nearbyPlaceNames,
     dateModified = LOCATION_HUB_SCHEMA_DATE_MODIFIED,
     serviceSchemaName,
+    serviceAreaServedSimpleName,
+    serviceOffers,
   } = params;
 
   const serviceName = (serviceSchemaName ?? h1).trim() || h1;
@@ -101,9 +107,23 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         name: serviceName,
         serviceType: "Cleaning services",
         url: pageUrl,
-        areaServed: { "@type": "Place", name: primaryPlaceLabel, containedInPlace: cityPlace },
+        areaServed:
+          serviceAreaServedSimpleName ?
+            { "@type": "Place", name: serviceAreaServedSimpleName }
+          : { "@type": "Place", name: primaryPlaceLabel, containedInPlace: cityPlace },
         serviceArea: capeTownAdministrativeServiceArea(),
         provider: { "@id": localBusinessId },
+        ...(serviceOffers ?
+          {
+            offers: {
+              "@type": "Offer",
+              priceCurrency: serviceOffers.priceCurrency,
+              lowPrice: serviceOffers.lowPrice,
+              highPrice: serviceOffers.highPrice,
+              availability: "https://schema.org/InStock",
+            },
+          }
+        : {}),
       },
       {
         "@type": "FAQPage",

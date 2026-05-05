@@ -16,6 +16,7 @@ import { LocationHubRankingSections } from "@/components/seo/LocationHubRankingS
 import { buildRankingHeroParagraphs, LocationHubRankingAsset } from "@/components/seo/LocationHubRankingAsset";
 import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDepth";
 import { LocationHubShareBar } from "@/components/seo/LocationHubShareBar";
+import { SeaPointLocationEnhancements } from "@/components/seo/SeaPointLocationEnhancements";
 import { LocationReviewHighlights } from "@/components/seo/LocationReviewHighlights";
 import { LocationTrustSignals } from "@/components/seo/LocationTrustSignals";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
@@ -121,7 +122,10 @@ export function ProgrammaticLocationCleaningPage({
   const hubTier = hubContentTierFromPriority(seoPriority);
   const lifestyleDepth = buildLifestyleDepthParagraphs(location, hubTier);
   const stickyBookingLine = locationStickyCtaLine(location);
-  const h1 = primaryLocationKeywordPhrase(location);
+  const h1 =
+    slug === "sea-point-cleaning-services" && seo?.h1?.trim()
+      ? seo.h1.trim()
+      : primaryLocationKeywordPhrase(location);
   const intro = seo?.intro?.length
     ? mergeIntroWithPrimaryKeyword(seo.intro, location)
     : buildStructuredLocationIntro(location);
@@ -176,7 +180,15 @@ export function ProgrammaticLocationCleaningPage({
     location,
     faqs: mergedFaqs,
     nearbyPlaceNames: nearby,
-    serviceSchemaName: `Cleaning services in ${location.name}`,
+    serviceSchemaName:
+      slug === "sea-point-cleaning-services" ?
+        "Cleaning Services in Sea Point Cape Town"
+      : `Cleaning services in ${location.name}`,
+    serviceAreaServedSimpleName: slug === "sea-point-cleaning-services" ? "Sea Point" : undefined,
+    serviceOffers:
+      slug === "sea-point-cleaning-services" ?
+        { priceCurrency: "ZAR", lowPrice: "300", highPrice: "650" }
+      : undefined,
   });
 
   const whyChooseItems = seo?.whyChoose?.length ? seo.whyChoose : defaultWhyChooseBullets(location);
@@ -236,6 +248,26 @@ export function ProgrammaticLocationCleaningPage({
         <div className="mx-auto max-w-4xl px-4">
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</p>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{h1}</h1>
+          {slug === "sea-point-cleaning-services" ? (
+            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold tracking-tight text-zinc-800">
+              <span>From R250</span>
+              <span className="hidden text-zinc-300 sm:inline" aria-hidden>
+                •
+              </span>
+              <span>Same-day cleaning</span>
+              <span className="hidden text-zinc-300 sm:inline" aria-hidden>
+                •
+              </span>
+              <span>Trusted local cleaners</span>
+            </p>
+          ) : null}
+          {slug === "sea-point-cleaning-services" ? (
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-600">
+              Looking for{" "}
+              <strong className="font-semibold text-zinc-800">cleaning services near you in Sea Point</strong>? Book online
+              with upfront pricing—your Sea Point address locks scope before checkout.
+            </p>
+          ) : null}
           {editorialOverride ? (
             <div className="mt-5 space-y-2 rounded-xl border border-emerald-100 bg-white/80 px-4 py-4 text-base leading-relaxed text-zinc-700 shadow-sm md:text-lg">
               <p>{editorialOverride.localLead}</p>
@@ -374,6 +406,10 @@ export function ProgrammaticLocationCleaningPage({
           <p className="mt-4 text-sm font-medium text-emerald-900">{locationHeroCtaMicrocopy(location)}</p>
         </div>
       </section>
+
+      {slug === "sea-point-cleaning-services" ? (
+        <SeaPointLocationEnhancements ctx={seoCtx} quoteHref="/booking/details" />
+      ) : null}
 
       <LocationHubRegionPeersSection location={location} />
 

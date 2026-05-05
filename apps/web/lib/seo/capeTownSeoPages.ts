@@ -8,7 +8,7 @@ import {
   type ProgrammaticLocationSlug,
 } from "@/lib/seo/locations";
 import { clampMetaDescription, generateMetaDescription, hubRegionGeoBoostLine } from "@/lib/seo/metaDescription";
-import { generateCtrTitle, serviceTitleBaseForCtr } from "@/lib/seo/metaTitle";
+import { clipSerpTitle, generateCtrTitle, serviceTitleBaseForCtr } from "@/lib/seo/metaTitle";
 import { leadPriceForServiceSlug } from "@/lib/seo/serviceTitleLeadPrice";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
@@ -89,7 +89,8 @@ export type CapeTownServiceSeoBlock = {
   path: string;
   /**
    * Human-readable reference for editors — **not** the HTTP `<title>`.
-   * Service routes use `generateCtrTitle()` inside `buildCapeTownServiceMetadata()`.
+   * Most service routes use `generateCtrTitle()` in `buildCapeTownServiceMetadata()`;
+   * `standard-cleaning-cape-town` uses a fixed CTR title string instead.
    */
   title: string;
   description: string;
@@ -226,11 +227,24 @@ export type LocationSeoBlock = {
   faqs?: { q: string; a: string }[];
 };
 
+/** Fixed SERP pack for the Sea Point hub — bypasses title-variant rotation and feedback merge. */
+function seaPointHubMetaExact(): { title: string; description: string } {
+  return {
+    title: clipSerpTitle("Cleaning Services Sea Point Cape Town | From R250 | Shalean"),
+    description: clampMetaDescription(
+      "Book trusted cleaning services in Sea Point Cape Town. Same-day availability, vetted cleaners, and affordable pricing. Get a quote in 60 seconds.",
+    ),
+  };
+}
+
 /** Single source for `<title>`, meta description, OG/Twitter, and JSON-LD descriptions. */
 export function resolveLocationSeoMetaFields(
   seo: LocationSeoBlock | null,
   row: CapeTownLocationRow,
 ): { title: string; description: string } {
+  if (row.slug === "sea-point-cleaning-services") {
+    return seaPointHubMetaExact();
+  }
   const priceHint = getLocationMetaPriceHint(row);
   /** `<title>`: A/B/C templates via `LOCATION_SEO_FEEDBACK_JSON.titleVariant`, or manual `titles` override from GSC. */
   const baseTitle = buildLocationPageMetaTitleForVariant(row, getLocationTitleVariant(row.slug));
@@ -248,6 +262,9 @@ export async function resolveLocationSeoMetaFieldsAsync(
   seo: LocationSeoBlock | null,
   row: CapeTownLocationRow,
 ): Promise<{ title: string; description: string }> {
+  if (row.slug === "sea-point-cleaning-services") {
+    return seaPointHubMetaExact();
+  }
   const priceHint = getLocationMetaPriceHint(row);
   const variant = await resolveLocationTitleVariant(row.slug);
   const baseTitle = buildLocationPageMetaTitleForVariant(row, variant);
@@ -355,7 +372,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "standard-cleaning-cape-town": {
     slug: "standard-cleaning-cape-town",
     path: "/services/standard-cleaning-cape-town",
-    title: "Cleaning Services Cape Town from R250 | Same-Day Booking | Shalean",
+    title: "Cleaning Services Cape Town from R250 | Book Today | Shalean",
     description:
       "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes and vetted Shalean cleaners.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
@@ -1028,18 +1045,22 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
   "sea-point-cleaning-services": {
     slug: "sea-point-cleaning-services",
     path: "/locations/sea-point-cleaning-services",
-    title: "Sea Point Cleaning Cape Town | Atlantic Seaboard | Shalean",
+    title: "Cleaning Services Sea Point Cape Town | From R250 | Shalean",
     description:
-      "Cleaning services in Sea Point, Cape Town: totals locked online before payment. Typical scopes ~R450–R1,200+. Same-week slots when routing allows. Standard, deep & Airbnb-ready—book Shalean.",
+      "Book trusted cleaning services in Sea Point Cape Town. Same-day availability, vetted cleaners, and affordable pricing. Get a quote in 60 seconds.",
     ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
-    h1: "Sea Point cleaning services in Cape Town for Atlantic Seaboard apartments and busy households",
+    h1: "Cleaning Services in Sea Point Cape Town",
     bookingLabel: "cleaning in Sea Point",
     tier: "high",
     hasAirbnbFocus: true,
     hasApartmentFocus: true,
+    /** Snippet-style pricing lives in `SeaPointLocationEnhancements`; skip duplicate band in ranking asset. */
+    customSections: {
+      pricing: false,
+    },
     rankingHeroIntro: [
-      "Looking for reliable cleaning services in Sea Point? Shalean Cleaning Services provides professional home, Airbnb, and deep cleaning across Sea Point and the Atlantic Seaboard. Whether you live in an apartment along Beach Road, manage a short-term rental, or need a once-off deep clean, our vetted cleaners deliver consistent, high-quality results.",
-      "Sea Point properties require a different level of care. Coastal air brings salt buildup on surfaces and windows, high guest turnover increases cleaning frequency, and compact apartments require efficient, detail-focused cleaning. Our team is trained to handle these challenges, ensuring your space stays spotless, fresh, and guest-ready.",
+      "Looking for reliable cleaning services in Sea Point—or dependable house cleaning Sea Point Cape Town residents book between turnovers—Shalean matches apartments and Airbnb stock with vetted crews and locked totals before you pay. Beach Road blocks, Promenade walks, and salty balconies all change how time stacks up; your quote reflects bedrooms, bathrooms, and add-ons you select online.",
+      "Sea Point stays busy because guest turnover and humid seaboard air accelerate grime on glass, rails, and open-plan kitchens. Compact lifts and basement carries shrink effective cleaning minutes unless access notes are precise—exactly why scoped bookings beat vague “make it shiny” chats.",
     ],
     intro: [
       "Cleaning services in Sea Point, Cape Town are built for compact Atlantic Seaboard apartments, older blocks with sea-air exposure, and walkable Main Road living—salt breeze, wind-blown dust, and high-use kitchens add up fast between professional visits.",
@@ -1518,14 +1539,18 @@ export function locationSeoPathFromLegacyAreaSlug(areaSlug: string): string | nu
 export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Metadata {
   const url = absoluteCanonicalUrl(data.path);
   const metaDescription = buildServicePageMetaDescription(data);
-  const title = generateCtrTitle({
-    base: serviceTitleBaseForCtr(data.bookingLabel, data.slug),
-    place: "Cape Town",
-    fromPrice: leadPriceForServiceSlug(data.slug),
-    templateKey: data.slug,
-    brandSuffix: "Shalean",
-    pageIntent: "service",
-  });
+  /** CTR test: lead with city cleaning intent + price + action (replaces rotated template for this slug only). */
+  const title =
+    data.slug === "standard-cleaning-cape-town"
+      ? clipSerpTitle("Cleaning Services Cape Town from R250 | Book Today | Shalean")
+      : generateCtrTitle({
+          base: serviceTitleBaseForCtr(data.bookingLabel, data.slug),
+          place: "Cape Town",
+          fromPrice: leadPriceForServiceSlug(data.slug),
+          templateKey: data.slug,
+          brandSuffix: "Shalean",
+          pageIntent: "service",
+        });
   return {
     title,
     description: metaDescription,
