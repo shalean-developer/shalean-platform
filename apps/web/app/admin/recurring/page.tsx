@@ -63,6 +63,12 @@ type CronHealthJob = {
   errors_last_24h: number;
 };
 
+type CronHealthRecentError = {
+  job_name: string;
+  created_at: string;
+  message: string;
+};
+
 function formatCronTs(iso: string | null): string {
   if (!iso?.trim()) return "—";
   try {
@@ -79,6 +85,7 @@ export default function AdminRecurringPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [cronHealth, setCronHealth] = useState<CronHealthJob[] | null>(null);
+  const [cronRecentErrors, setCronRecentErrors] = useState<CronHealthRecentError[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,8 +120,11 @@ export default function AdminRecurringPage() {
       const token = (await sb?.auth.getSession())?.data.session?.access_token;
       if (!token) return;
       const res = await fetch("/api/admin/cron-health", { headers: { Authorization: `Bearer ${token}` } });
-      const json = (await res.json()) as { jobs?: CronHealthJob[] };
-      if (!cancelled && res.ok) setCronHealth(json.jobs ?? []);
+      const json = (await res.json()) as { jobs?: CronHealthJob[]; recent_errors?: CronHealthRecentError[] };
+      if (!cancelled && res.ok) {
+        setCronHealth(json.jobs ?? []);
+        setCronRecentErrors(Array.isArray(json.recent_errors) ? json.recent_errors : []);
+      }
     }
     void loadCronHealth();
     return () => {
@@ -205,6 +215,23 @@ export default function AdminRecurringPage() {
               ))}
             </ul>
           )}
+          {cronRecentErrors.length > 0 ? (
+            <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <p className="mb-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">Recent errors (newest first)</p>
+              <ul className="max-h-60 space-y-2 overflow-y-auto text-xs">
+                {cronRecentErrors.map((e, i) => (
+                  <li
+                    key={`${e.created_at}-${e.job_name}-${i}`}
+                    className="rounded border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 font-mono text-zinc-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-zinc-200"
+                  >
+                    <span className="text-zinc-500 dark:text-zinc-400">{formatCronTs(e.created_at)}</span>{" "}
+                    <span className="text-zinc-600 dark:text-zinc-400">{e.job_name}</span>
+                    <div className="mt-0.5 break-all text-[11px]">{e.message}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -12,6 +12,12 @@ export type CronHealthJobSummary = {
   errors_last_24h: number;
 };
 
+export type CronHealthRecentError = {
+  job_name: string;
+  created_at: string;
+  message: string;
+};
+
 /**
  * Recent outcomes from `cron_runs` (generator + charger + future jobs).
  */
@@ -27,7 +33,7 @@ export async function GET(request: Request) {
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
   const { data: rows, error } = await admin
     .from("cron_runs")
-    .select("job_name, status, created_at")
+    .select("job_name, status, created_at, message")
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(2000);
@@ -41,8 +47,10 @@ export async function GET(request: Request) {
     { last_success_at: string | null; last_run_at: string | null; errors_last_24h: number }
   >();
 
+  const recentErrors: CronHealthRecentError[] = [];
+
   for (const raw of rows ?? []) {
-    const r = raw as { job_name?: string; status?: string; created_at?: string };
+    const r = raw as { job_name?: string; status?: string; created_at?: string; message?: string | null };
     const job = typeof r.job_name === "string" ? r.job_name.trim() : "";
     const created = typeof r.created_at === "string" ? r.created_at : "";
     const status = typeof r.status === "string" ? r.status.trim().toLowerCase() : "";
@@ -61,6 +69,10 @@ export async function GET(request: Request) {
     }
     if (status === "error") {
       agg.errors_last_24h += 1;
+      if (recentErrors.length < 50) {
+        const msg = typeof r.message === "string" ? r.message.trim() : "";
+        recentErrors.push({ job_name: job, created_at: created, message: msg || "(no message)" });
+      }
     }
   }
 
@@ -73,5 +85,5 @@ export async function GET(request: Request) {
     }))
     .sort((a, b) => a.job_name.localeCompare(b.job_name));
 
-  return NextResponse.json({ ok: true, since, jobs });
+  return NextResponse.json({ ok: true, since, jobs, recent_errors: recentErrors });
 }
