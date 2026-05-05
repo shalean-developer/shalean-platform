@@ -351,7 +351,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "standard-cleaning-cape-town": {
     slug: "standard-cleaning-cape-town",
     path: "/services/standard-cleaning-cape-town",
-    title: "House Cleaning Cape Town | From R250 | Weekly or Once-Off | Shalean",
+    title: "Cleaning Services Cape Town from R250 | Same-Day Booking | Shalean",
     description:
       "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes and vetted Shalean cleaners.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",

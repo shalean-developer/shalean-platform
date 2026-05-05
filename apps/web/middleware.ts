@@ -32,6 +32,18 @@ export async function middleware(request: NextRequest) {
 async function runMiddleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /** Thin “best cleaners in {area}” clones → canonical neighbourhood hub (`cleaning-services-{area}-cape-town`). */
+  const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
+  if (bestCleaningBlog) {
+    const area = bestCleaningBlog[1] ?? "";
+    if (area) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/blog/cleaning-services-${area}-cape-town`;
+      url.search = "";
+      return NextResponse.redirect(url, 308);
+    }
+  }
+
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);
   if (legacy) {
     const segment = legacy[1] ?? "";

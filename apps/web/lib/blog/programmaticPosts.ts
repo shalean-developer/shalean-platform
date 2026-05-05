@@ -1105,7 +1105,6 @@ export function getLocalGuideEditorialCrossLinks(post: ProgrammaticPost): LocalG
     `home-cleaning-frequency-${base}-cape-town`,
     `deep-cleaning-checklist-${base}-cape-town`,
     `move-out-cleaning-cost-${base}-cape-town`,
-    `best-cleaning-services-${base}-cape-town`,
     `apartment-cleaning-tips-${base}-cape-town`,
   ].filter((s) => slugs.has(s) && s !== post.slug);
 

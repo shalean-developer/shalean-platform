@@ -80,7 +80,7 @@ function buildMaidServiceJsonLdNode(serviceId: string): Record<string, unknown> 
   return {
     "@type": "Service",
     "@id": serviceId,
-    name: "Maid Services in Cape Town",
+    name: "Maid Services in Cape Town (Recurring Domestic Cleaning)",
     serviceType: "House cleaning service",
     url: pageUrl,
     areaServed: primaryLocalBusinessMoneyPageAreaServed(),
@@ -137,7 +137,7 @@ function buildMaidHubJsonLd(): Record<string, unknown> {
     buildWebSiteJsonLdNode(),
     buildWebPageJsonLdNode({
       canonicalUrl: pageUrl,
-      name: "Maid Services in Cape Town",
+      name: "Maid Services in Cape Town (Recurring Domestic Cleaning)",
       description: MAID_SERVICES_META_DESCRIPTION,
       primaryEntityId: serviceId,
       speakableCssSelectors: ["main h1"],
@@ -239,13 +239,14 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl lg:text-[2.35rem] lg:leading-tight">
-              Maid Services in Cape Town
+              Maid Services in Cape Town (Recurring Cleaning)
             </h1>
             <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-              Maid services in Cape Town provide reliable, ongoing home cleaning for busy households, families, and professionals.
+              Weekly, bi-weekly, and monthly domestic cleaning for households that want a dependable rhythm—not a once-off reset.
             </p>
             <p className="mt-3 text-base leading-relaxed text-slate-600 sm:text-lg">
-              Book weekly, bi-weekly, or daily cleaning services with trusted cleaners across Cape Town.
+              Book recurring visits with vetted cleaners across Cape Town; change frequency when your schedule shifts—no long-term
+              contract.
             </p>
             <ul className="mx-auto mt-6 max-w-lg space-y-2.5 text-left text-sm leading-relaxed text-slate-700 sm:max-w-xl sm:text-base">
               <li className="flex gap-2.5">
@@ -302,6 +303,16 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
               </li>
               <li>Pay securely online</li>
             </ul>
+            <p className="mx-auto mt-8 max-w-2xl text-center text-sm leading-relaxed text-slate-600 sm:text-base">
+              Prefer flexible once-off or ad-hoc maintenance cleans rather than a recurring maid rhythm? See{" "}
+              <Link
+                href={svc["standard-cleaning-cape-town"].path}
+                className="font-semibold text-emerald-700 underline-offset-2 hover:underline"
+              >
+                cleaning services in Cape Town
+              </Link>{" "}
+              — this hub focuses on weekly and monthly domestic schedules.
+            </p>
           </div>
         </div>
       </section>

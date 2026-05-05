@@ -35,9 +35,11 @@ function locationHref(locationAreaSlug: string): string {
   return locationHubPathFromAreaInput(locationAreaSlug);
 }
 
+/** `/blog/cleaning-services-{area}-cape-town` parses `serviceSlug` as `cleaning-services`, which is not a real `/services/*` route — send authority to the money page. */
 function primaryServicePath(serviceSlug: string, citySlug: string): string | null {
-  if (citySlug === "cape-town") return `/services/${serviceSlug}-cape-town`;
-  return null;
+  if (citySlug !== "cape-town") return null;
+  if (serviceSlug === "cleaning-services") return "/services/standard-cleaning-cape-town";
+  return `/services/${serviceSlug}-cape-town`;
 }
 
 function collectInternalLinkUrls(blocks: BlogContentBlock[]): string[] {
