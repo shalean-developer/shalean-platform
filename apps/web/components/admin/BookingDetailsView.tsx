@@ -1467,7 +1467,7 @@ export default function BookingDetailsView({
   const handleDeleteBooking = async () => {
     if (!fullBooking?.id) return;
     const ok = window.confirm(
-      "Permanently delete this booking? This cannot be undone. Bookings with recorded payment, a payout run, or in-progress/completed status are blocked (test bookings can always be removed).",
+      "Permanently delete this booking? This cannot be undone. Bookings already linked to a payout run cannot be deleted here — remove them from the payout first if appropriate.",
     );
     if (!ok) return;
     try {

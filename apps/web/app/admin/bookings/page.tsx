@@ -520,7 +520,7 @@ export default function AdminBookingsPage() {
 
   async function deleteBookingFromList(id: string) {
     const ok = window.confirm(
-      "Permanently delete this booking? Bookings with recorded payment, a payout run, or in-progress/completed status cannot be deleted (test bookings can).",
+      "Permanently delete this booking? Only bookings already linked to a payout run are blocked (remove from the payout first if needed).",
     );
     if (!ok) return;
     try {

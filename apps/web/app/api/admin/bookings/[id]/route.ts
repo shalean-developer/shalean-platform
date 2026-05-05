@@ -627,8 +627,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 }
 
 /**
- * Hard-delete a booking (cascades child rows). Blocked when money or payout is attached,
- * or when the job is in progress / completed — except `is_test` bookings (ops cleanup).
+ * Hard-delete a booking (cascades child rows). Only blocks when the row is tied to a
+ * generated payout (`payout_id`) — payment and job status are not restricted.
  */
 export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminSession(request);
@@ -643,7 +643,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
   const { data: row, error: loadErr } = await admin
     .from("bookings")
-    .select("id, status, amount_paid_cents, payout_id, is_test, cleaner_id, date, time, payment_status")
+    .select("id, status, payout_id, cleaner_id, date, time")
     .eq("id", id)
     .maybeSingle();
 
@@ -652,34 +652,20 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
   const r = row as {
     status?: string | null;
-    amount_paid_cents?: number | null;
     payout_id?: string | null;
-    is_test?: boolean | null;
     cleaner_id?: string | null;
     date?: string | null;
     time?: string | null;
-    payment_status?: string | null;
   };
 
   const st = String(r.status ?? "").toLowerCase();
-  const isTest = Boolean(r.is_test);
-  const paidCents = Math.max(0, Math.round(Number(r.amount_paid_cents ?? 0)));
   const payoutId = r.payout_id != null && String(r.payout_id).trim() ? String(r.payout_id).trim() : null;
-  const payOk = String(r.payment_status ?? "").toLowerCase() === "success";
 
-  if (!isTest) {
-    if (paidCents > 0 || payOk) {
-      return NextResponse.json(
-        { error: "Cannot delete a booking with a successful or recorded payment." },
-        { status: 409 },
-      );
-    }
-    if (payoutId) {
-      return NextResponse.json({ error: "Cannot delete a booking linked to a payout run." }, { status: 409 });
-    }
-    if (st === "completed" || st === "in_progress") {
-      return NextResponse.json({ error: "Cannot delete completed or in-progress bookings." }, { status: 409 });
-    }
+  if (payoutId) {
+    return NextResponse.json(
+      { error: "Cannot delete a booking that is already linked to a payout run. Remove it from the payout first if appropriate." },
+      { status: 409 },
+    );
   }
 
   const { error: delErr } = await admin.from("bookings").delete().eq("id", id);
@@ -703,7 +689,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     level: "warn",
     source: "admin_booking_delete",
     message: "booking_deleted",
-    context: { booking_id: id, admin_id: auth.user.id, prior_status: st, is_test: isTest },
+    context: { booking_id: id, admin_id: auth.user.id, prior_status: st },
   });
 
   return NextResponse.json({ ok: true });
