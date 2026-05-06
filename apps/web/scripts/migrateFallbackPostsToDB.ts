@@ -13,6 +13,7 @@ import "./load-apps-web-env";
 
 import { blogContentJsonSchema } from "@/lib/blog/content-json-schema";
 import { computeReadingTimeMinutes } from "@/lib/blog/compute-reading-time";
+import { warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown } from "@/lib/blog/cluster-related-guides-legacy-markdown-guard";
 import { FALLBACK_EDITORIAL_MIGRATE_SEEDS } from "@/lib/blog/seed/fallbackEditorialMigratePayload";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -26,6 +27,10 @@ async function main() {
       process.exitCode = 1;
       return;
     }
+    warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown(parsed.data, {
+      slug: post.slug,
+      source: "migrateFallbackPostsToDB",
+    });
   }
 
   if (dryRun) {

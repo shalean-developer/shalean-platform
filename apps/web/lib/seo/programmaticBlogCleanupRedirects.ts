@@ -5,6 +5,22 @@
  * Enable after hub rows exist in `blog_posts` as published.
  */
 export const programmaticBlogCleanupRedirects = [
+  /** Retired draft-only slug → live pricing authority (no cluster bleed into unrelated blog topics). */
+  {
+    source: "/blog/cleaning-prices-cape-town-guide",
+    destination: "/cleaning-prices-cape-town",
+    permanent: true,
+  },
+  {
+    source: "/blog/move-out-cleaning-checklist-cape-town-renters",
+    destination: "/blog/move-out-cleaning-guide",
+    permanent: true,
+  },
+  {
+    source: "/blog/airbnb-cleaning-vs-regular-home-cleaning-cape-town",
+    destination: "/blog/airbnb-cleaning-checklist",
+    permanent: true,
+  },
   {
     source: "/blog/deep-cleaning-claremont-cape-town",
     destination: "/blog/cleaning-services-claremont-cape-town",

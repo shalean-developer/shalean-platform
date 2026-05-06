@@ -1,6 +1,18 @@
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
 import { computeReadingTimeMinutes } from "@/lib/blog/compute-reading-time";
 import { plainTextFromHtml } from "@/lib/blog/html-plain-text";
+import {
+  collectClusterSemanticOverlapWarnings,
+  type ClusterPeerPost,
+} from "@/lib/blog/seo/blog-cluster-collision";
+import {
+  clusterTagSlugToSemanticLabel,
+  resolveCollisionClusterTagSlug,
+  resolveSemanticClusterKey,
+  semanticClusterIsBookingConfidence,
+  WARN_BOOKING_CONFIDENCE_PRICING_HUB,
+} from "@/lib/seo/blogGovernance";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
 const MIN_WORDS_PUBLISH = 800;
 
@@ -88,9 +100,38 @@ export type PublishValidationIssue = {
   message: string;
 };
 
+/** Non-blocking governance hints (publish still allowed when `ok`). */
+export type PublishValidationWarning = {
+  code: string;
+  message: string;
+  confidence?: "low" | "medium" | "high";
+  relatedSlug?: string;
+  semanticCluster?: string;
+  /** Overlap warnings only: which heuristics fired (tuning / explainability). */
+  matchedSignals?: string[];
+};
+
+export type BlogPublishValidationOptions = {
+  /** Taxonomy tag slugs for the post (e.g. `cluster-2`). */
+  tags?: string[];
+  /** Optional explicit cluster when not represented by tags yet. */
+  semanticCluster?: string;
+  /** Resolved cluster tag (e.g. `cluster-2`) when peers were loaded server-side. */
+  collisionClusterTagSlug?: string | null;
+  /** Published peers in the same cluster (admin API only). */
+  clusterPeers?: ClusterPeerPost[];
+  /** Post slug for overlap heuristics. */
+  slug?: string;
+  /** Post title for overlap heuristics. */
+  title?: string;
+  /** Primary keyword for overlap heuristics. */
+  primaryKeyword?: string | null;
+};
+
 export type PublishValidationResult = {
   ok: boolean;
   issues: PublishValidationIssue[];
+  warnings: PublishValidationWarning[];
   seoScore: number;
   wordCount: number;
   hasH2Section: boolean;
@@ -131,6 +172,13 @@ function hasBookingPath(blocks: BlogContentBlock[]): boolean {
   return false;
 }
 
+/** Serialized scan — warn-level only; catches markdown, HTML hrefs, CTA links, and JSON string fields. */
+function contentJsonMentionsPricingAuthority(content: BlogContentJson, authorityHref: string): boolean {
+  const needle = authorityHref.replace(/\/+$/, "").toLowerCase();
+  const blob = JSON.stringify(content).toLowerCase();
+  return blob.includes(needle);
+}
+
 function collectInternalPaths(blocks: BlogContentBlock[]): string[] {
   const out: string[] = [];
   for (const b of blocks) {
@@ -147,9 +195,13 @@ function collectInternalPaths(blocks: BlogContentBlock[]): string[] {
   return out;
 }
 
-export function validateBlogPublish(content: BlogContentJson): PublishValidationResult {
+export function validateBlogPublish(
+  content: BlogContentJson,
+  options?: BlogPublishValidationOptions,
+): PublishValidationResult {
   const words = countWordsInContent(content);
   const issues: PublishValidationIssue[] = [];
+  const warnings: PublishValidationWarning[] = [];
   const blocks = Array.isArray(content.blocks) ? content.blocks : [];
 
   const hasH2Section = blocks.some((b) => {
@@ -207,9 +259,52 @@ export function validateBlogPublish(content: BlogContentJson): PublishValidation
   score -= !hasBookingLink ? 10 : 0;
   score = Math.max(0, Math.min(100, score));
 
+  if (
+    semanticClusterIsBookingConfidence({
+      semanticCluster: options?.semanticCluster,
+      tags: options?.tags,
+    }) &&
+    contentJsonMentionsPricingAuthority(content, CAPE_TOWN_PRICING_AUTHORITY_HREF)
+  ) {
+    warnings.push({
+      code: WARN_BOOKING_CONFIDENCE_PRICING_HUB,
+      message:
+        "Booking-confidence cluster: content references the Cape Town pricing hub. Prefer operational links unless cost intent is central — see lib/seo/blogGovernance.ts (PRICING_HUB_LINKING_GOVERNANCE).",
+    });
+  }
+
+  const resolvedSemanticKey = resolveSemanticClusterKey({
+    persisted: options?.semanticCluster,
+    tags: options?.tags ?? [],
+  });
+  const clusterTag =
+    options?.collisionClusterTagSlug ??
+    resolveCollisionClusterTagSlug({
+      tags: options?.tags,
+      semanticCluster: options?.semanticCluster,
+    });
+  const peers = options?.clusterPeers ?? [];
+  const slugT = (options?.slug ?? "").trim();
+  const titleT = (options?.title ?? "").trim();
+  const overlapClusterLabel =
+    resolvedSemanticKey || (clusterTag ? clusterTagSlugToSemanticLabel(clusterTag) : "");
+  if (slugT && titleT && peers.length > 0 && overlapClusterLabel) {
+    const overlap = collectClusterSemanticOverlapWarnings({
+      slug: slugT,
+      title: titleT,
+      primary_keyword: options?.primaryKeyword ?? null,
+      semanticClusterLabel: overlapClusterLabel,
+      peers,
+    });
+    for (const w of overlap) {
+      warnings.push(w);
+    }
+  }
+
   return {
     ok: issues.length === 0,
     issues,
+    warnings,
     seoScore: score,
     wordCount: words,
     hasH2Section,
@@ -223,10 +318,13 @@ export function validateBlogPublish(content: BlogContentJson): PublishValidation
 export { MIN_WORDS_PUBLISH };
 
 /** Lightweight score for drafts (reading-time based proxy when word count not computed client-side). */
-export function estimateSeoScoreFromContent(content: BlogContentJson): number {
+export function estimateSeoScoreFromContent(
+  content: BlogContentJson,
+  options?: BlogPublishValidationOptions,
+): number {
   const rt = computeReadingTimeMinutes(content);
   const wordsApprox = rt * 200;
-  const v = validateBlogPublish(content);
+  const v = validateBlogPublish(content, options);
   let s = v.seoScore;
   if (wordsApprox < MIN_WORDS_PUBLISH && v.wordCount === 0) {
     s -= 5;

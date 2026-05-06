@@ -98,6 +98,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const redirectTarget = useMemo(() => pathname || "/admin", [pathname]);
 
+  /** Full-width editorial focus: new post or single post id route (not `/admin/blog` list). */
+  const isBlogEditorFocus = useMemo(
+    () => pathname === "/admin/blog/new" || /^\/admin\/blog\/[^/]+$/.test(pathname ?? ""),
+    [pathname],
+  );
+
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
@@ -269,7 +275,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-zinc-100 dark:bg-zinc-950">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
+      <aside
+        className={cn(
+          "hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900",
+          isBlogEditorFocus && "md:hidden",
+        )}
+      >
         <div className="flex h-14 items-center border-b border-zinc-200 px-4 dark:border-zinc-800">
           <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Admin</span>
         </div>

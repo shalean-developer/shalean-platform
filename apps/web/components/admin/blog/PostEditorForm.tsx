@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Check, ChevronDown, Circle } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { BLOG_CONTENT_JSON_SCHEMA_VERSION, type BlogContentBlock, type BlogContentJson } from "@/lib/blog/content-json";
@@ -11,8 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { validateBlogPublish } from "@/lib/blog/seo/publish-validation";
+import type { ClusterPeerPost } from "@/lib/blog/seo/blog-cluster-collision";
+import { validateBlogPublish, type PublishValidationResult } from "@/lib/blog/seo/publish-validation";
+import { resolveSemanticClusterKey, SEMANTIC_CLUSTER_KEYS } from "@/lib/seo/blogGovernance";
 import {
   buildBlogTemplateContent,
   BLOG_TEMPLATE_OPTIONS,
@@ -127,6 +134,261 @@ async function getToken(): Promise<string | null> {
   return session?.data.session?.access_token ?? null;
 }
 
+function EditorialSectionCard({
+  kicker,
+  title,
+  description,
+  children,
+  className,
+}: {
+  kicker?: string;
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card
+      className={cn(
+        "overflow-hidden border-zinc-200/90 shadow-sm dark:border-zinc-800/90 dark:shadow-none",
+        className,
+      )}
+    >
+      <CardHeader className="space-y-1 border-b border-zinc-100 bg-zinc-50/60 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+        {kicker ? (
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{kicker}</p>
+        ) : null}
+        <CardTitle className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{title}</CardTitle>
+        {description ? <CardDescription className="text-xs leading-relaxed">{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent className="space-y-4 px-5 py-5">{children}</CardContent>
+    </Card>
+  );
+}
+
+function PublishSidebarPanel({
+  saving,
+  onSave,
+  status,
+  onStatusChange,
+  source,
+  onSourceChange,
+  publishedAtLocal,
+  onPublishedAtLocalChange,
+  slug,
+  canonicalUrl,
+  metaTitle,
+  metaDescription,
+  semanticCluster,
+  resolvedClusterKey,
+  preview,
+  clusterPeerCount,
+}: {
+  saving: boolean;
+  onSave: () => void;
+  status: "draft" | "published" | "scheduled";
+  onStatusChange: (v: "draft" | "published" | "scheduled") => void;
+  source: "editorial" | "programmatic" | "high_conversion";
+  onSourceChange: (v: "editorial" | "programmatic" | "high_conversion") => void;
+  publishedAtLocal: string;
+  onPublishedAtLocalChange: (v: string) => void;
+  slug: string;
+  canonicalUrl: string;
+  metaTitle: string;
+  metaDescription: string;
+  semanticCluster: string;
+  resolvedClusterKey: string | null;
+  preview: PublishValidationResult;
+  clusterPeerCount: number;
+}) {
+  const fieldId = useId();
+  const statusVariant =
+    status === "published" ? "success" : status === "scheduled" ? ("warning" as const) : ("outline" as const);
+  const readingMins = Math.max(1, Math.round(preview.wordCount / 220));
+  const sourceLabel = source.replace(/_/g, " ");
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <Button type="button" className="w-full" size="lg" onClick={onSave} disabled={saving}>
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+        <Button type="button" variant="outline" className="w-full" asChild>
+          <Link href="/admin/blog">Back to posts</Link>
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={statusVariant}>{status}</Badge>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">Source · {sourceLabel}</span>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`${fieldId}-status`} className="text-xs text-zinc-500">
+          Status
+        </Label>
+        <select
+          id={`${fieldId}-status`}
+          className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
+          value={status}
+          onChange={(e) => onStatusChange(e.target.value as typeof status)}
+        >
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+          <option value="scheduled">Scheduled</option>
+        </select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${fieldId}-source`} className="text-xs text-zinc-500">
+          Source
+        </Label>
+        <select
+          id={`${fieldId}-source`}
+          className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
+          value={source}
+          onChange={(e) => onSourceChange(e.target.value as typeof source)}
+        >
+          <option value="editorial">Editorial</option>
+          <option value="programmatic">Programmatic</option>
+          <option value="high_conversion">High conversion</option>
+        </select>
+      </div>
+      {(status === "published" || status === "scheduled") && (
+        <div className="space-y-2">
+          <Label htmlFor={`${fieldId}-pub`} className="text-xs text-zinc-500">
+            Publish date / time
+          </Label>
+          <Input
+            id={`${fieldId}-pub`}
+            type="datetime-local"
+            value={publishedAtLocal}
+            onChange={(e) => onPublishedAtLocalChange(e.target.value)}
+            className="rounded-lg"
+          />
+          <p className="text-[11px] leading-relaxed text-zinc-500">
+            Empty uses &quot;now&quot; when publishing. Drafts clear the schedule.
+          </p>
+        </div>
+      )}
+
+      <Separator className="bg-zinc-200/80 dark:bg-zinc-800" />
+
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">SEO snapshot</p>
+        <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
+          {preview.seoScore}
+          <span className="text-sm font-medium text-zinc-400">/100</span>
+        </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          {preview.wordCount.toLocaleString()} words · ~{readingMins} min read
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-zinc-200/90 bg-white/80 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-950/60">
+        <p className="font-medium text-zinc-700 dark:text-zinc-200">URL & canonical</p>
+        <p className="mt-1.5 break-all font-mono text-[11px] text-zinc-600 dark:text-zinc-400" title={slug}>
+          /blog/{slug.trim() || "…"}
+        </p>
+        {canonicalUrl.trim() ? (
+          <p className="mt-1 break-all font-mono text-[11px] text-zinc-500" title={canonicalUrl}>
+            {canonicalUrl}
+          </p>
+        ) : (
+          <p className="mt-1 text-[11px] text-zinc-400">Canonical inherits from slug unless set.</p>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-zinc-200/90 bg-white/80 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-950/60">
+        <p className="font-medium text-zinc-700 dark:text-zinc-200">Cluster</p>
+        <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+          {semanticCluster.trim() ? (
+            <span className="font-mono text-[11px]">{semanticCluster.trim()}</span>
+          ) : (
+            <span className="text-zinc-400">Unset — inferred from tags when applicable</span>
+          )}
+        </p>
+        {resolvedClusterKey ? (
+          <p className="mt-1.5 text-[11px] text-zinc-500">
+            Resolved for checks: <span className="font-mono text-zinc-600 dark:text-zinc-400">{resolvedClusterKey}</span>
+          </p>
+        ) : null}
+        <p className="mt-1 text-[11px] text-zinc-400">{clusterPeerCount} peer posts loaded for overlap hints</p>
+      </div>
+
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Publishing checklist</p>
+        <ul className="mt-2 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
+          {[
+            ["FAQ block", preview.hasFaq],
+            ["CTA block", preview.hasCta],
+            ["Internal links", preview.hasInternalLinks],
+            ["Booking link", preview.hasBookingLink],
+            ["H2 section", preview.hasH2Section],
+          ].map(([label, ok]) => (
+            <li key={String(label)} className="flex items-center gap-2">
+              {ok ? (
+                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              ) : (
+                <Circle className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />
+              )}
+              <span className={ok ? "" : "text-zinc-400"}>{label}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+          Live publish still runs full validation (e.g. ≥800 words).
+        </p>
+      </div>
+
+      {(metaTitle.trim() || metaDescription.trim()) && (
+        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <p className="text-[11px] font-medium text-zinc-500">Meta in use</p>
+          <p className="mt-1 line-clamp-2 text-xs font-medium text-zinc-800 dark:text-zinc-100">{metaTitle || "—"}</p>
+          <p className="mt-1 line-clamp-3 text-[11px] text-zinc-600 dark:text-zinc-400">{metaDescription || "—"}</p>
+        </div>
+      )}
+
+      {preview.warnings.length > 0 ? (
+        <div className="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <p className="text-xs font-medium text-amber-950 dark:text-amber-100">
+            {preview.warnings.length} advisory note{preview.warnings.length > 1 ? "s" : ""}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-amber-900/80 dark:text-amber-100/80">
+            Cluster overlap and intent hints — optional to resolve before publish.
+          </p>
+          <details className="group mt-2">
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-amber-900 underline-offset-2 hover:underline dark:text-amber-100">
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" aria-hidden />
+              View details
+            </summary>
+            <ul className="mt-2 space-y-3 border-t border-amber-200/50 pt-2 dark:border-amber-800/40">
+              {preview.warnings.map((w) => (
+                <li key={`${w.code}-${w.relatedSlug ?? ""}-${w.message.slice(0, 40)}`} className="text-[11px] leading-relaxed text-amber-950/90 dark:text-amber-50/90">
+                  <span className="font-medium">{w.message}</span>
+                  {(w.confidence || w.code) && (
+                    <span className="mt-0.5 block text-[10px] text-amber-800/80 dark:text-amber-200/70">
+                      {w.code}
+                      {w.confidence ? ` · confidence ${w.confidence}` : ""}
+                      {w.relatedSlug ? ` · ${w.relatedSlug}` : ""}
+                    </span>
+                  )}
+                  {w.matchedSignals && w.matchedSignals.length > 0 ? (
+                    <span className="mt-1 block text-[10px] text-amber-800/75 dark:text-amber-200/65">
+                      Signals: {w.matchedSignals.join(", ")}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      ) : (
+        <p className="text-[11px] text-zinc-400">No cluster overlap flags for this draft.</p>
+      )}
+    </div>
+  );
+}
+
 type Props = { mode: "create" | "edit"; postId?: string };
 
 export function PostEditorForm({ mode, postId }: Props) {
@@ -156,7 +418,10 @@ export function PostEditorForm({ mode, postId }: Props) {
   const [secondaryKwText, setSecondaryKwText] = useState("");
   const [searchIntent, setSearchIntent] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [semanticCluster, setSemanticCluster] = useState("");
+  const [relatedGuideOverrideText, setRelatedGuideOverrideText] = useState("");
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [clusterPeers, setClusterPeers] = useState<ClusterPeerPost[]>([]);
   const [categories, setCategories] = useState<{ id: string; slug: string; name: string }[]>([]);
   const [tags, setTags] = useState<{ id: string; slug: string; name: string }[]>([]);
   const [seoGenSlug, setSeoGenSlug] = useState(false);
@@ -174,7 +439,64 @@ export function PostEditorForm({ mode, postId }: Props) {
     [blocks],
   );
 
-  const publishPreview = useMemo(() => validateBlogPublish(contentJson), [contentJson]);
+  const selectedTagSlugs = useMemo(
+    () =>
+      tagIds
+        .map((id) => tags.find((t) => t.id === id)?.slug)
+        .filter((s): s is string => Boolean(s)),
+    [tagIds, tags],
+  );
+
+  const resolvedSemanticClusterKey = useMemo(
+    () =>
+      resolveSemanticClusterKey({
+        persisted: semanticCluster.trim() || null,
+        tags: selectedTagSlugs,
+      }),
+    [semanticCluster, selectedTagSlugs],
+  );
+
+  const publishPreview = useMemo(
+    () =>
+      validateBlogPublish(contentJson, {
+        tags: selectedTagSlugs,
+        semanticCluster: resolvedSemanticClusterKey ?? undefined,
+        clusterPeers,
+        slug: slug.trim(),
+        title: title.trim(),
+        primaryKeyword: primaryKeyword.trim() || null,
+      }),
+    [contentJson, selectedTagSlugs, resolvedSemanticClusterKey, clusterPeers, slug, title, primaryKeyword],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      if (cancelled) return;
+      if (!slug.trim() || !resolvedSemanticClusterKey) {
+        setClusterPeers([]);
+        return;
+      }
+      void (async () => {
+        const token = await getToken();
+        if (cancelled || !token) return;
+        const qp = new URLSearchParams();
+        qp.set("exclude_slug", slug.trim());
+        qp.set("tag_slugs", selectedTagSlugs.join(","));
+        if (semanticCluster.trim()) qp.set("semantic_cluster", semanticCluster.trim());
+        const res = await fetch(`/api/admin/blog/cluster-peers?${qp.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = (await res.json().catch(() => ({}))) as { peers?: ClusterPeerPost[] };
+        if (cancelled || !res.ok) return;
+        setClusterPeers(Array.isArray(json.peers) ? json.peers : []);
+      })();
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [slug, selectedTagSlugs, semanticCluster, resolvedSemanticClusterKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,6 +566,13 @@ export function PostEditorForm({ mode, postId }: Props) {
       setSecondaryKwText(Array.isArray(sec) ? (sec as string[]).join("\n") : "");
       setSearchIntent(p.search_intent == null ? "" : String(p.search_intent));
       setCategoryId(p.category_id == null ? "" : String(p.category_id));
+      setSemanticCluster(
+        (p as { semantic_cluster?: string | null }).semantic_cluster == null
+          ? ""
+          : String((p as { semantic_cluster?: string | null }).semantic_cluster),
+      );
+      const rg = (p as { related_guide_override_slugs?: string[] | null }).related_guide_override_slugs;
+      setRelatedGuideOverrideText(Array.isArray(rg) ? rg.join("\n") : "");
       const tids = (p as { tag_ids?: string[] }).tag_ids;
       setTagIds(Array.isArray(tids) ? tids : []);
       const raw = p.content_json;
@@ -352,6 +681,11 @@ export function PostEditorForm({ mode, postId }: Props) {
         .filter(Boolean),
       search_intent: searchIntent.trim() || null,
       category_id: categoryId.trim() || null,
+      semantic_cluster: semanticCluster.trim() || null,
+      related_guide_override_slugs: relatedGuideOverrideText
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
       tag_ids: tagIds,
       seo_generate_slug_from_keyword: seoGenSlug,
       seo_apply_suggestions: seoApplySuggestions,
@@ -419,10 +753,29 @@ export function PostEditorForm({ mode, postId }: Props) {
     );
   }
 
+  const publishSidebarProps = {
+    saving,
+    onSave: save,
+    status,
+    onStatusChange: setStatus,
+    source,
+    onSourceChange: setSource,
+    publishedAtLocal,
+    onPublishedAtLocalChange: setPublishedAtLocal,
+    slug,
+    canonicalUrl,
+    metaTitle,
+    metaDescription,
+    semanticCluster,
+    resolvedClusterKey: resolvedSemanticClusterKey,
+    preview: publishPreview,
+    clusterPeerCount: clusterPeers.length,
+  };
+
   return (
-    <div className="mx-auto max-w-7xl space-y-8 pb-16 px-4">
+    <div className="w-full min-w-0 pb-28 md:pb-16">
       {(formError || fieldErrors.length > 0) && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
           {formError ? <p className="font-medium">{formError}</p> : null}
           {fieldErrors.length > 0 ? (
             <ul className={cn("list-disc pl-5", formError ? "mt-2" : "")}>
@@ -434,341 +787,455 @@ export function PostEditorForm({ mode, postId }: Props) {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2 space-y-2">
-          <Label htmlFor="title">Title</Label>
-          <Input
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Post title"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="slug">Slug</Label>
-          <Input
-            id="slug"
-            value={slug}
-            onChange={(e) => {
-              setSlugAuto(false);
-              setSlug(e.target.value);
-            }}
-            placeholder="url-slug"
-          />
-          {mode === "create" ? (
-            <label className="flex items-center gap-2 text-xs text-zinc-600">
-              <input type="checkbox" checked={slugAuto} onChange={(e) => setSlugAuto(e.target.checked)} />
-              Auto-generate from title
-            </label>
-          ) : null}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="h1">H1 (optional)</Label>
-          <Input id="h1" value={h1} onChange={(e) => setH1(e.target.value)} placeholder="Overrides visible H1" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <select
-            id="status"
-            className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as typeof status)}
-          >
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-            <option value="scheduled">Scheduled</option>
-          </select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="source">Source</Label>
-          <select
-            id="source"
-            className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            value={source}
-            onChange={(e) => setSource(e.target.value as typeof source)}
-          >
-            <option value="editorial">Editorial</option>
-            <option value="programmatic">Programmatic</option>
-            <option value="high_conversion">High conversion</option>
-          </select>
-        </div>
-        {(status === "published" || status === "scheduled") && (
-          <div className="sm:col-span-2 space-y-2">
-            <Label htmlFor="pub">Publish date / time</Label>
-            <Input
-              id="pub"
-              type="datetime-local"
-              value={publishedAtLocal}
-              onChange={(e) => setPublishedAtLocal(e.target.value)}
-            />
-            <p className="text-xs text-zinc-500">
-              When publishing without a date, the server sets &quot;now&quot;. Drafts clear publish date.
-            </p>
-          </div>
-        )}
-        <div className="sm:col-span-2 space-y-2">
-          <Label htmlFor="excerpt">Excerpt (optional)</Label>
-          <Textarea id="excerpt" value={excerpt} onChange={(e) => setExcerpt(e.target.value)} rows={2} />
-        </div>
-        <div className="sm:col-span-2 space-y-2">
-          <Label htmlFor="feat">Featured image URL</Label>
-          <Input id="feat" value={featuredUrl} onChange={(e) => setFeaturedUrl(e.target.value)} />
-        </div>
-        <div className="sm:col-span-2 space-y-2">
-          <Label htmlFor="feata">Featured image alt</Label>
-          <Input id="feata" value={featuredAlt} onChange={(e) => setFeaturedAlt(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="mt">Meta title</Label>
-          <Input id="mt" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="md">Meta description</Label>
-          <Textarea id="md" value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} rows={2} />
-        </div>
-        <div className="sm:col-span-2 space-y-2">
-          <Label htmlFor="can">Canonical URL (optional)</Label>
-          <Input id="can" value={canonicalUrl} onChange={(e) => setCanonicalUrl(e.target.value)} placeholder="/blog/slug" />
-        </div>
-        <div className="flex items-center gap-2 sm:col-span-2">
-          <input id="noi" type="checkbox" checked={noindex} onChange={(e) => setNoindex(e.target.checked)} />
-          <Label htmlFor="noi">Noindex</Label>
-        </div>
-      </div>
-
-      {mode === "create" ? (
-        <section className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Start from template</h2>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-            Inserts starter blocks — expand copy before publishing (minimum 800 words).
+      <header className="mb-8 flex flex-col gap-4 border-b border-zinc-200/90 pb-8 sm:flex-row sm:items-end sm:justify-between dark:border-zinc-800/90">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Blog</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+            {mode === "create" ? "New article" : "Edit article"}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            Long-form workspace — content, SEO, and cluster governance stay separate so you can focus on the draft.
           </p>
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Template</Label>
-              <select
-                className="flex h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                value={templateChoice}
-                onChange={(e) => setTemplateChoice(e.target.value as BlogTemplateId | "")}
-              >
-                <option value="">— None —</option>
-                {BLOG_TEMPLATE_OPTIONS.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {templateChoice === "location" ? (
-              <>
-                <Input placeholder="Area (e.g. Claremont)" value={tplArea} onChange={(e) => setTplArea(e.target.value)} />
-                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
-                <Input placeholder="Service" value={tplService} onChange={(e) => setTplService(e.target.value)} />
-              </>
-            ) : null}
-            {templateChoice === "comparison" ? (
-              <>
-                <Input placeholder="Option A" value={tplA} onChange={(e) => setTplA(e.target.value)} />
-                <Input placeholder="Option B" value={tplB} onChange={(e) => setTplB(e.target.value)} />
-                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
-              </>
-            ) : null}
-            {templateChoice === "guide" ? (
-              <>
-                <Input placeholder="Topic" value={tplTopic} onChange={(e) => setTplTopic(e.target.value)} />
-                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
-              </>
-            ) : null}
-            <Button type="button" variant="secondary" size="sm" onClick={applyTemplate} disabled={!templateChoice}>
-              Apply template
-            </Button>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">SEO & taxonomy</h2>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="pk">Primary keyword</Label>
-            <Input
-              id="pk"
-              value={primaryKeyword}
-              onChange={(e) => setPrimaryKeyword(e.target.value)}
-              placeholder="e.g. cleaning claremont"
-            />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="sk">Secondary keywords (one per line)</Label>
-            <Textarea
-              id="sk"
-              value={secondaryKwText}
-              onChange={(e) => setSecondaryKwText(e.target.value)}
-              rows={3}
-              placeholder={"house cleaning claremont\ncleaners near me"}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="intent">Search intent</Label>
-            <select
-              id="intent"
-              className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-              value={searchIntent}
-              onChange={(e) => setSearchIntent(e.target.value)}
-            >
-              <option value="">—</option>
-              <option value="informational">informational</option>
-              <option value="transactional">transactional</option>
-              <option value="commercial">commercial</option>
-              <option value="navigational">navigational</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cat">Category</Label>
-            <select
-              id="cat"
-              className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="sm:col-span-2 space-y-2">
-            <Label>Tags</Label>
-            <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
-              {tags.map((t) => {
-                const on = tagIds.includes(t.id);
-                return (
-                  <label key={t.id} className="flex cursor-pointer items-center gap-1.5 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() =>
-                        setTagIds((prev) => (on ? prev.filter((id) => id !== t.id) : [...prev, t.id]))
-                      }
-                    />
-                    {t.name}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2">
-            <input type="checkbox" checked={seoGenSlug} onChange={(e) => setSeoGenSlug(e.target.checked)} />
-            Generate slug from primary keyword on save (server)
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2">
-            <input type="checkbox" checked={seoApplySuggestions} onChange={(e) => setSeoApplySuggestions(e.target.checked)} />
-            Apply meta/H1 suggestions where empty (server)
-          </label>
-          <div className="sm:col-span-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-900">
-            <span className="font-semibold text-zinc-900 dark:text-zinc-50">SEO score: {publishPreview.seoScore}/100</span>
-            <span className="ml-2 text-zinc-600 dark:text-zinc-400">
-              {publishPreview.wordCount} words · publishing requires passing all checks (≥800 words, FAQ, CTA, internal links).
-            </span>
-          </div>
         </div>
-      </section>
+        <Button type="button" variant="outline" className="shrink-0 self-start sm:self-auto" asChild>
+          <Link href="/admin/blog">← All posts</Link>
+        </Button>
+      </header>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <Label>Add block</Label>
-            <select
-              className="flex h-10 min-w-[220px] rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-              value={addType}
-              onChange={(e) => setAddType(e.target.value as AddableType)}
-            >
-              <optgroup label="Rich & structured">
-                <option value="rich_text">rich_text (WordPress-style)</option>
-                <option value="image">image</option>
-                <option value="faq">faq</option>
-                <option value="cta">cta</option>
-                <option value="internal_links">internal_links</option>
-              </optgroup>
-              <optgroup label="Layouts">
-                <option value="intro">intro</option>
-                <option value="quick_answer">quick_answer</option>
-                <option value="section">section</option>
-                <option value="heading">heading</option>
-                <option value="bullets">bullets</option>
-                <option value="bullet_list">bullet_list</option>
-                <option value="numbered_list">numbered_list</option>
-                <option value="key_takeaways">key_takeaways</option>
-                <option value="comparison_table">comparison_table</option>
-              </optgroup>
-            </select>
-          </div>
-          <Button type="button" variant="secondary" onClick={() => setBlocks((b) => [...b, newBlock(addType)])}>
-            Add block
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setBlocks((b) => [...b, newBlock("image")])}
-          >
-            Insert image
-          </Button>
-        </div>
-
-        <details className="rounded-lg border border-zinc-200 bg-zinc-50/80 lg:hidden dark:border-zinc-800">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            Live preview
+      <div className="mb-6 xl:hidden">
+        <details className="group overflow-hidden rounded-2xl border border-zinc-200/90 bg-zinc-50/90 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+            <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Publishing & SEO</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden />
           </summary>
-          <div className="max-h-[55vh] overflow-y-auto border-t border-zinc-200 px-3 py-4 dark:border-zinc-800">
-            <BlogContentRenderer content={contentJson} />
+          <div className="max-h-[min(70vh,520px)] overflow-y-auto border-t border-zinc-200/80 px-4 py-4 dark:border-zinc-800">
+            <PublishSidebarPanel {...publishSidebarProps} />
           </div>
         </details>
+      </div>
 
-        <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-8">
-          <div className="min-w-0 space-y-4">
-            {blocks.map((block, i) => (
-              <div
-                key={block.id ?? `idx-${i}`}
-                className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
-              >
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                    {block.type} · #{i + 1}
-                  </span>
-                  <div className="flex gap-1">
-                    <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, -1)}>
-                      Up
-                    </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, 1)}>
-                      Down
-                    </Button>
-                    <Button type="button" size="sm" variant="destructive" onClick={() => removeBlock(i)}>
-                      Remove
-                    </Button>
+      <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-10 xl:grid xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start xl:gap-12">
+        <div className="min-w-0 space-y-10 xl:max-w-[860px] xl:justify-self-end">
+          <EditorialSectionCard
+            kicker="A — Article basics"
+            title="Article basics"
+            description="Title, URL, excerpt, and how the post is filed in the blog taxonomy."
+          >
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  className="rounded-lg text-base"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Working title"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="slug">Slug</Label>
+                  <Input
+                    id="slug"
+                    className="rounded-lg font-mono text-sm"
+                    value={slug}
+                    onChange={(e) => {
+                      setSlugAuto(false);
+                      setSlug(e.target.value);
+                    }}
+                    placeholder="url-slug"
+                  />
+                  {mode === "create" ? (
+                    <label className="flex items-center gap-2 text-xs text-zinc-500">
+                      <input type="checkbox" checked={slugAuto} onChange={(e) => setSlugAuto(e.target.checked)} />
+                      Auto-generate from title
+                    </label>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="h1">H1 override (optional)</Label>
+                  <Input
+                    id="h1"
+                    className="rounded-lg"
+                    value={h1}
+                    onChange={(e) => setH1(e.target.value)}
+                    placeholder="Visible H1 if different from title"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="excerpt">Excerpt</Label>
+                <Textarea
+                  id="excerpt"
+                  className="rounded-lg"
+                  value={excerpt}
+                  onChange={(e) => setExcerpt(e.target.value)}
+                  rows={3}
+                  placeholder="Short summary for cards and meta fallback"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="cat">Category</Label>
+                  <select
+                    id="cat"
+                    className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                  >
+                    <option value="">— None —</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Tags</Label>
+                  <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto rounded-lg border border-zinc-200/90 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                    {tags.map((t) => {
+                      const on = tagIds.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1 text-xs hover:border-zinc-200 hover:bg-white dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() =>
+                              setTagIds((prev) => (on ? prev.filter((id) => id !== t.id) : [...prev, t.id]))
+                            }
+                          />
+                          {t.name}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
-                <BlockFields block={block} onChange={(next) => updateBlock(i, next)} />
               </div>
-            ))}
-          </div>
+            </div>
+          </EditorialSectionCard>
 
-          <div className="sticky top-6 mt-6 hidden max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-sm lg:mt-0 lg:block dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Live preview
-            </p>
-            <BlogContentRenderer content={contentJson} />
-          </div>
+          {mode === "create" ? (
+            <Card className="border-blue-200/60 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-950/25">
+              <CardHeader className="px-5 py-4">
+                <CardTitle className="text-base">Start from template</CardTitle>
+                <CardDescription>
+                  Inserts starter blocks — expand copy before publishing (minimum 800 words).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 px-5 pb-5">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Template</Label>
+                    <select
+                      className="flex h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                      value={templateChoice}
+                      onChange={(e) => setTemplateChoice(e.target.value as BlogTemplateId | "")}
+                    >
+                      <option value="">— None —</option>
+                      {BLOG_TEMPLATE_OPTIONS.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {templateChoice === "location" ? (
+                    <>
+                      <Input placeholder="Area" value={tplArea} onChange={(e) => setTplArea(e.target.value)} />
+                      <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+                      <Input placeholder="Service" value={tplService} onChange={(e) => setTplService(e.target.value)} />
+                    </>
+                  ) : null}
+                  {templateChoice === "comparison" ? (
+                    <>
+                      <Input placeholder="Option A" value={tplA} onChange={(e) => setTplA(e.target.value)} />
+                      <Input placeholder="Option B" value={tplB} onChange={(e) => setTplB(e.target.value)} />
+                      <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+                    </>
+                  ) : null}
+                  {templateChoice === "guide" ? (
+                    <>
+                      <Input placeholder="Topic" value={tplTopic} onChange={(e) => setTplTopic(e.target.value)} />
+                      <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+                    </>
+                  ) : null}
+                  <Button type="button" variant="secondary" size="sm" onClick={applyTemplate} disabled={!templateChoice}>
+                    Apply template
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <EditorialSectionCard
+            kicker="B — SEO"
+            title="Search & metadata"
+            description="What search engines and social previews use — distinct from the article body below."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="mt">Meta title</Label>
+                <Input id="mt" className="rounded-lg" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="md">Meta description</Label>
+                <Textarea
+                  id="md"
+                  className="rounded-lg"
+                  value={metaDescription}
+                  onChange={(e) => setMetaDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="can">Canonical URL (optional)</Label>
+                <Input
+                  id="can"
+                  className="rounded-lg font-mono text-sm"
+                  value={canonicalUrl}
+                  onChange={(e) => setCanonicalUrl(e.target.value)}
+                  placeholder="/blog/slug"
+                />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-zinc-600 sm:col-span-2 dark:text-zinc-300">
+                <input id="noi" type="checkbox" checked={noindex} onChange={(e) => setNoindex(e.target.checked)} />
+                <Label htmlFor="noi" className="cursor-pointer font-normal">
+                  Noindex
+                </Label>
+              </div>
+            </div>
+            <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">SERP-style preview</p>
+              <p className="mt-2 line-clamp-2 text-sm font-medium text-blue-800 dark:text-blue-300">
+                {metaTitle.trim() || title.trim() || "Meta title preview"}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-emerald-700 dark:text-emerald-400/90">
+                shalean.co.za › blog › {slug.trim() || "your-slug"}
+              </p>
+              <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                {metaDescription.trim() || excerpt.trim() || "Meta description will fall back to excerpt when empty."}
+              </p>
+            </div>
+            <Separator />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="pk">Primary keyword</Label>
+                <Input
+                  id="pk"
+                  className="rounded-lg"
+                  value={primaryKeyword}
+                  onChange={(e) => setPrimaryKeyword(e.target.value)}
+                  placeholder="e.g. cleaning claremont"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="sk">Secondary keywords (one per line)</Label>
+                <Textarea
+                  id="sk"
+                  className="rounded-lg"
+                  value={secondaryKwText}
+                  onChange={(e) => setSecondaryKwText(e.target.value)}
+                  rows={3}
+                  placeholder={"house cleaning claremont\ncleaners near me"}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="intent">Search intent</Label>
+                <select
+                  id="intent"
+                  className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  value={searchIntent}
+                  onChange={(e) => setSearchIntent(e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="informational">informational</option>
+                  <option value="transactional">transactional</option>
+                  <option value="commercial">commercial</option>
+                  <option value="navigational">navigational</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2 dark:text-zinc-400">
+                <input type="checkbox" checked={seoGenSlug} onChange={(e) => setSeoGenSlug(e.target.checked)} />
+                Generate slug from primary keyword on save (server)
+              </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2 dark:text-zinc-400">
+                <input type="checkbox" checked={seoApplySuggestions} onChange={(e) => setSeoApplySuggestions(e.target.checked)} />
+                Apply meta/H1 suggestions where empty (server)
+              </label>
+            </div>
+          </EditorialSectionCard>
+
+          <EditorialSectionCard
+            kicker="D — Cluster governance"
+            title="Topical cluster & related guides"
+            description="Advisory signals — tune intent overlap and footer related guides without blocking your draft."
+          >
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="semantic-cluster">Semantic cluster</Label>
+                <select
+                  id="semantic-cluster"
+                  className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  value={semanticCluster}
+                  onChange={(e) => setSemanticCluster(e.target.value)}
+                >
+                  <option value="">— Unset —</option>
+                  {SEMANTIC_CLUSTER_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Internal topical graph key for validation and peers. Optional <code className="rounded bg-zinc-100 px-1 font-mono text-[11px] dark:bg-zinc-800">cluster-*</code> tags still apply when unset.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="related-guide-overrides">Related guide overrides (optional)</Label>
+                <Textarea
+                  id="related-guide-overrides"
+                  rows={4}
+                  className="rounded-lg font-mono text-xs"
+                  placeholder={"one slug per line"}
+                  value={relatedGuideOverrideText}
+                  onChange={(e) => setRelatedGuideOverrideText(e.target.value)}
+                />
+                <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Pins appear first in &quot;Related guides (Shalean cluster)&quot;; remaining slots fill from peers (max 8).
+                </p>
+              </div>
+              {publishPreview.warnings.length > 0 ? (
+                <div className="rounded-xl border border-amber-200/70 bg-amber-50/35 p-4 dark:border-amber-900/35 dark:bg-amber-950/20">
+                  <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
+                    {publishPreview.warnings.length} overlap / intent advisory{" "}
+                    {publishPreview.warnings.length === 1 ? "note" : "notes"}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-900/85 dark:text-amber-100/80">
+                    Same details appear in the publishing column — expand there for the full list.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">No cluster overlap flags for this draft.</p>
+              )}
+            </div>
+          </EditorialSectionCard>
+
+          <EditorialSectionCard
+            kicker="E — Media"
+            title="Featured image"
+            description="Hero image for listings and social sharing."
+          >
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="feat">Image URL</Label>
+                <Input id="feat" className="rounded-lg font-mono text-sm" value={featuredUrl} onChange={(e) => setFeaturedUrl(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="feata">Alt text</Label>
+                <Input id="feata" className="rounded-lg" value={featuredAlt} onChange={(e) => setFeaturedAlt(e.target.value)} />
+              </div>
+            </div>
+          </EditorialSectionCard>
+
+          <section className="space-y-5">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">C — Content</p>
+              <h2 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Article body</h2>
+              <p className="mt-1 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
+                Blocks render on the public blog in order — use rich text for long copy, then structured blocks for FAQ, CTA, and internal links.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2 rounded-xl border border-zinc-200/90 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
+              <div className="space-y-1">
+                <Label>Add block</Label>
+                <select
+                  className="flex h-10 min-w-[220px] rounded-lg border border-zinc-200 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  value={addType}
+                  onChange={(e) => setAddType(e.target.value as AddableType)}
+                >
+                  <optgroup label="Rich & structured">
+                    <option value="rich_text">rich_text (WordPress-style)</option>
+                    <option value="image">image</option>
+                    <option value="faq">faq</option>
+                    <option value="cta">cta</option>
+                    <option value="internal_links">internal_links</option>
+                  </optgroup>
+                  <optgroup label="Layouts">
+                    <option value="intro">intro</option>
+                    <option value="quick_answer">quick_answer</option>
+                    <option value="section">section</option>
+                    <option value="heading">heading</option>
+                    <option value="bullets">bullets</option>
+                    <option value="bullet_list">bullet_list</option>
+                    <option value="numbered_list">numbered_list</option>
+                    <option value="key_takeaways">key_takeaways</option>
+                    <option value="comparison_table">comparison_table</option>
+                  </optgroup>
+                </select>
+              </div>
+              <Button type="button" variant="secondary" onClick={() => setBlocks((b) => [...b, newBlock(addType)])}>
+                Add block
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setBlocks((b) => [...b, newBlock("image")])}>
+                Insert image
+              </Button>
+            </div>
+
+            <div className="article-editor-canvas space-y-5">
+              {blocks.map((block, i) => (
+                <div
+                  key={block.id ?? `idx-${i}`}
+                  className="rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80"
+                >
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                      {block.type} · #{i + 1}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, -1)}>
+                        Up
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => moveBlock(i, 1)}>
+                        Down
+                      </Button>
+                      <Button type="button" size="sm" variant="destructive" onClick={() => removeBlock(i)}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <BlockFields block={block} onChange={(next) => updateBlock(i, next)} />
+                </div>
+              ))}
+            </div>
+
+            <details className="group overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-5 py-4 text-sm font-semibold text-zinc-800 dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
+                <span>Reading preview (public layout)</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden />
+              </summary>
+              <div className="article-reading-preview max-h-[min(70vh,640px)] overflow-y-auto border-t border-zinc-100 px-5 py-6 dark:border-zinc-800">
+                <div className="mx-auto max-w-[42rem]">
+                  <BlogContentRenderer content={contentJson} />
+                </div>
+              </div>
+            </details>
+          </section>
         </div>
-      </section>
 
-      <div className="flex gap-3">
-        <Button type="button" onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </Button>
-        <Button type="button" variant="outline" asChild>
-          <Link href="/admin/blog">Cancel</Link>
-        </Button>
+        <aside className="hidden min-w-0 xl:block">
+          <div className="sticky top-20 max-h-[calc(100vh-5.5rem)] overflow-y-auto rounded-2xl border border-zinc-200/90 bg-zinc-50/90 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">F — Publishing</p>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Status, save, and a calm summary of SEO + cluster signals.</p>
+            <div className="mt-5">
+              <PublishSidebarPanel {...publishSidebarProps} />
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );
@@ -941,7 +1408,7 @@ function BlockFields({
       );
     case "faq":
       return (
-        <div className="space-y-3">
+        <div className="blog-editor-faq-root space-y-4">
           <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
             <input
               type="checkbox"
@@ -956,36 +1423,48 @@ function BlockFields({
             Omit built-in FAQ title (use a preceding heading block)
           </label>
           {block.items.map((item, j) => (
-            <div key={j} className="rounded border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
-              <label className={lab}>Question</label>
-              <Input
-                className={inp}
-                value={item.question}
-                onChange={(e) => {
-                  const items = [...block.items];
-                  items[j] = { ...items[j], question: e.target.value };
-                  onChange({ ...block, items });
-                }}
-              />
-              <label className={cn(lab, "mt-2 block")}>Answer</label>
-              <Textarea
-                className={cn(inp, "min-h-[72px]")}
-                value={item.answer}
-                onChange={(e) => {
-                  const items = [...block.items];
-                  items[j] = { ...items[j], answer: e.target.value };
-                  onChange({ ...block, items });
-                }}
-              />
-              <Button
-                type="button"
-                className="mt-2"
-                size="sm"
-                variant="outline"
-                onClick={() => onChange({ ...block, items: block.items.filter((_, k) => k !== j) })}
-              >
-                Remove FAQ
-              </Button>
+            <div
+              key={j}
+              className="overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/40 shadow-sm dark:border-zinc-700/90 dark:bg-zinc-900/35"
+            >
+              <div className="border-l-[3px] border-l-zinc-400 bg-zinc-100/30 px-3 py-3 dark:border-l-zinc-500 dark:bg-zinc-800/25">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  FAQ · Question {j + 1}
+                </p>
+                <Input
+                  className={cn(
+                    "mt-2 border-0 border-b border-zinc-200/80 bg-transparent px-0 pb-2 text-base font-semibold leading-snug tracking-tight text-zinc-900 shadow-none placeholder:text-zinc-400 focus-visible:border-zinc-400 focus-visible:ring-0 dark:border-zinc-600 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus-visible:border-zinc-500",
+                  )}
+                  value={item.question}
+                  placeholder="Question shown as a heading on the site"
+                  onChange={(e) => {
+                    const items = [...block.items];
+                    items[j] = { ...items[j], question: e.target.value };
+                    onChange({ ...block, items });
+                  }}
+                />
+              </div>
+              <div className="border-t border-zinc-200/70 bg-white/70 px-3 py-3 dark:border-zinc-700/80 dark:bg-zinc-950/40">
+                <label className={lab}>Answer</label>
+                <Textarea
+                  className={cn(inp, "mt-1 min-h-[88px] rounded-lg")}
+                  value={item.answer}
+                  onChange={(e) => {
+                    const items = [...block.items];
+                    items[j] = { ...items[j], answer: e.target.value };
+                    onChange({ ...block, items });
+                  }}
+                />
+                <Button
+                  type="button"
+                  className="mt-2"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onChange({ ...block, items: block.items.filter((_, k) => k !== j) })}
+                >
+                  Remove FAQ
+                </Button>
+              </div>
             </div>
           ))}
           <Button
@@ -1205,7 +1684,8 @@ function BlockFields({
       return (
         <div className="space-y-3">
           <p className="text-xs text-zinc-500">Edit columns first; row cells must match column count.</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-1 overflow-x-auto px-1">
+          <div className="flex min-w-min flex-wrap gap-2">
             {block.columns.map((c, j) => (
               <Input
                 key={j}
@@ -1255,8 +1735,9 @@ function BlockFields({
               </Button>
             ) : null}
           </div>
+          </div>
           {block.rows.map((row, ri) => (
-            <div key={ri} className="flex flex-wrap gap-2">
+            <div key={ri} className="flex min-w-0 flex-wrap gap-2 overflow-x-auto">
               {row.map((cell, ci) => (
                 <Input
                   key={ci}

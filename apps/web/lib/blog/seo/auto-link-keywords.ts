@@ -1,7 +1,7 @@
 import type { BlogContentBlock } from "@/lib/blog/content-json";
 
-/** Keep in sync with `CAPE_TOWN_PRICING_BLOG_HREF` (`internalLinks.ts`). */
-const PRICING_GUIDE_BLOG = "/blog/how-much-does-cleaning-cost-cape-town";
+/** Keep in sync with `CAPE_TOWN_PRICING_AUTHORITY_HREF` (`internalLinks.ts`). */
+const PRICING_AUTHORITY_PAGE = "/cleaning-prices-cape-town";
 
 /** Post-level cap — avoids repetitive internal-link patterns across long articles. */
 export const MAX_AUTO_LINKS_PER_POST = 5;
@@ -31,7 +31,7 @@ const RULES: Rule[] = [
     pattern: /\bcleaning services in Cape Town\b/i,
     href: "/cleaning-services-cape-town",
   },
-  { pattern: /\bcleaning (?:prices|costs) in Cape Town\b/i, href: PRICING_GUIDE_BLOG },
+  { pattern: /\bcleaning (?:prices|costs) in Cape Town\b/i, href: PRICING_AUTHORITY_PAGE },
 ];
 
 function normHref(href: string): string {

@@ -108,12 +108,8 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
             Apartment vs house pricing nuances — plus deep-clean uplifts — are spelled out in our{" "}
             <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               cleaning prices hub
-            </Link>{" "}
-            and{" "}
-            <Link href="/blog/how-much-does-cleaning-cost-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              Cape Town cleaning cost guide
             </Link>
-            .
+            , with itemised totals for your bedrooms, bathrooms, and add-ons before checkout.
           </p>
         </div>
       </section>

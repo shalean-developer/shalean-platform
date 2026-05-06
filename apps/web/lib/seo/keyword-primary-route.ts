@@ -9,6 +9,6 @@ export const KEYWORD_PRIMARY_ROUTE: Record<string, string> = {
   "deep cleaning cape town": "/services/deep-cleaning-cape-town",
   "standard cleaning cape town": "/services/standard-cleaning-cape-town",
   "move out cleaning cape town": "/services/move-out-cleaning-cape-town",
-  "cleaning prices cape town": "/blog/how-much-does-cleaning-cost-cape-town",
+  "cleaning prices cape town": "/cleaning-prices-cape-town",
   "airbnb cleaning cape town": "/services/airbnb-cleaning-cape-town",
 };

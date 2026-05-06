@@ -1,6 +1,7 @@
 import type { BlogIndexPost } from "@/lib/blog/get-all-posts";
-import { DEFAULT_LIST_HERO } from "@/lib/blog/get-all-posts";
+import { CAPE_TOWN_HUB_BLOG_SLUGS, DEFAULT_LIST_HERO } from "@/lib/blog/get-all-posts";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
 /** Category filters shown on /blog (URL `?topic=`). */
 export type BlogTopicFilterId = "pricing" | "move-out" | "airbnb" | "deep-cleaning" | "booking";
@@ -12,14 +13,12 @@ export type BlogIndexCardPost = BlogIndexPost & {
 };
 
 /** Preferred hero article when published; otherwise newest post is featured. */
-export const BLOG_FEATURED_SLUG_PREFERENCE = "cleaning-prices-cape-town-guide";
+export const BLOG_FEATURED_SLUG_PREFERENCE = "how-much-does-cleaning-cost-cape-town";
 
 /** Curated “most popular” strip (filled from merge list; padded by recency). */
 export const BLOG_MOST_POPULAR_SLUGS: string[] = [
-  "cleaning-prices-cape-town-guide",
-  "deep-cleaning-vs-standard-cleaning-cape-town-choice",
-  "move-out-cleaning-checklist-cape-town-renters",
-  "airbnb-cleaning-vs-regular-home-cleaning-cape-town",
+  "how-much-does-cleaning-cost-cape-town",
+  ...CAPE_TOWN_HUB_BLOG_SLUGS,
 ];
 
 /** Re-export for blog index (same seven priority suburbs as the footer). */
@@ -54,20 +53,20 @@ export const BLOG_START_HERE_CARDS: {
 }[] = [
   {
     title: "Pricing clarity",
-    body: "Cleaning prices Cape Town and cost of cleaning service—what moves quotes before you pay.",
-    href: "/blog/cleaning-prices-cape-town-guide",
-    cta: "Explore pricing guides",
+    body: "Itemised Cape Town totals—bedrooms, bathrooms, tier, and add-ons—before you confirm a slot.",
+    href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
+    cta: "See Cape Town prices",
   },
   {
     title: "Move-out handover",
     body: "Checklists and scope tips for renters—from Wynberg to Sea Point inventory cleans.",
-    href: "/blog/move-out-cleaning-checklist-cape-town-renters",
+    href: "/blog/move-out-cleaning-guide",
     cta: "Move-out guides",
   },
   {
     title: "Airbnb hosting",
     body: "Turnovers, guest-ready polish, and when deep cleaning beats a quick tidy.",
-    href: "/blog/airbnb-cleaning-vs-regular-home-cleaning-cape-town",
+    href: "/blog/airbnb-cleaning-checklist",
     cta: "Airbnb articles",
   },
   {
@@ -79,14 +78,12 @@ export const BLOG_START_HERE_CARDS: {
 ];
 
 const TOPIC_OVERRIDES: Partial<Record<string, BlogTopicFilterId[]>> = {
-  "cleaning-prices-cape-town-guide": ["pricing"],
+  "how-much-does-cleaning-cost-cape-town": ["pricing"],
   "how-much-house-cleaning-costs-cape-town": ["pricing"],
   "book-home-cleaning-online-cape-town-checklist": ["booking"],
   "what-affects-cleaning-quotes-cape-town": ["pricing"],
   "deep-cleaning-vs-standard-cleaning-cape-town-choice": ["deep-cleaning", "pricing"],
-  "airbnb-cleaning-vs-regular-home-cleaning-cape-town": ["airbnb"],
   "last-minute-cleaning-cape-town-rescue-plan": ["booking"],
-  "move-out-cleaning-checklist-cape-town-renters": ["move-out"],
   "prepare-home-professional-cleaning-cape-town": ["booking"],
   "how-often-book-home-cleaning-cape-town": ["pricing", "booking"],
   "airbnb-cleaning-checklist": ["airbnb"],
@@ -137,8 +134,8 @@ const LIST_IMAGE_POOL: { src: string; alt: string }[] = [
 ];
 
 const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
-  "cleaning-prices-cape-town-guide":
-    "Skip guesswork: learn what drives cleaning prices Cape Town quotes so your cost of cleaning service matches real time on site.",
+  "how-much-does-cleaning-cost-cape-town":
+    "Skip guesswork: learn what drives Cape Town cleaning totals—rooms, tier, and add-ons—so your quote matches real time on site.",
   "how-much-house-cleaning-costs-cape-town":
     "See how house cleaning totals shift by rooms, bathrooms, and service tier—then compare cleaners near me with the same scope.",
   "book-home-cleaning-online-cape-town-checklist":
@@ -147,12 +144,8 @@ const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
     "Understand what affects cleaning quotes Cape Town teams prepare—stairs, pets, ovens—so nothing surprises you at handover.",
   "deep-cleaning-vs-standard-cleaning-cape-town-choice":
     "Choose deep vs standard cleaning with confidence: same address, different chemistry and clock time.",
-  "airbnb-cleaning-vs-regular-home-cleaning-cape-town":
-    "Host smarter: know when Airbnb turnovers need guest-ready polish vs a maintenance tidy at home.",
   "last-minute-cleaning-cape-town-rescue-plan":
     "Short-notice mess? A practical rescue plan for Cape Town homes when guests or landlords move faster than dust settles.",
-  "move-out-cleaning-checklist-cape-town-renters":
-    "Protect your deposit: a renter-focused move-out cleaning checklist covering kitchens, wet rooms, and final walk-throughs.",
   "prepare-home-professional-cleaning-cape-town":
     "Maximise every booked hour—prep clutter, pets, and supplies so pros focus on scrubbing, not sorting.",
   "how-often-book-home-cleaning-cape-town":
@@ -162,7 +155,7 @@ const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
   "cleaning-cost-cape-town":
     "Benchmark cost of cleaning service bands in Cape Town and learn what moves your online quote in real time.",
   "move-out-cleaning-guide":
-    "End-of-lease cleaning guide that aligns scope with inspections—fewer callbacks, cleaner handovers.",
+    "Protect your deposit: move-out scope aligned with inspections—kitchens, wet rooms, and final walk-throughs for Cape Town rentals.",
   "deep-vs-standard-cleaning-cape-town":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
 };
@@ -270,17 +263,23 @@ export function resolveFeaturedPost(posts: BlogIndexCardPost[]): BlogIndexCardPo
   return preferred ?? posts[0];
 }
 
-export function resolvePopularPosts(posts: BlogIndexCardPost[]): BlogIndexCardPost[] {
+export function resolvePopularPosts(
+  posts: BlogIndexCardPost[],
+  opts?: { excludeSlugs?: ReadonlySet<string> },
+): BlogIndexCardPost[] {
+  const exclude = opts?.excludeSlugs ?? new Set<string>();
   const map = new Map(posts.map((p) => [p.slug, p]));
   const out: BlogIndexCardPost[] = [];
 
   for (const slug of BLOG_MOST_POPULAR_SLUGS) {
+    if (exclude.has(slug)) continue;
     const p = map.get(slug);
     if (p && !out.some((o) => o.slug === p.slug)) out.push(p);
     if (out.length >= 4) return out;
   }
 
   for (const p of posts) {
+    if (exclude.has(p.slug)) continue;
     if (out.length >= 4) break;
     if (!out.some((o) => o.slug === p.slug)) out.push(p);
   }

@@ -21,6 +21,7 @@ import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
 const PAGE_URL = CANONICAL_ABS;
 
@@ -92,9 +93,11 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
   const enriched = enrichBlogPostsForIndexCards(dbPosts);
 
   const featured = resolveFeaturedPost(enriched);
-  const popular = resolvePopularPosts(enriched);
-  const popularSlugs = new Set(popular.map((p) => p.slug));
   const featuredSlug = featured?.slug ?? null;
+  const popular = resolvePopularPosts(enriched, {
+    excludeSlugs: featuredSlug ? new Set([featuredSlug]) : new Set(),
+  });
+  const popularSlugs = new Set(popular.map((p) => p.slug));
 
   let gridSource =
     activeTopic === "all"
@@ -117,6 +120,15 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
     );
   }
 
+  const jsonLdPosts: typeof enriched = [];
+  const jsonLdSeen = new Set<string>();
+  for (const post of enriched) {
+    if (jsonLdSeen.has(post.slug)) continue;
+    jsonLdSeen.add(post.slug);
+    jsonLdPosts.push(post);
+    if (jsonLdPosts.length >= 20) break;
+  }
+
   const blogIndexJsonLd = {
     "@context": "https://schema.org",
     "@type": "Blog",
@@ -129,7 +141,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
       name: "Shalean Cleaning Services",
       url: SITE,
     },
-    blogPost: enriched.slice(0, 20).map((post) => ({
+    blogPost: jsonLdPosts.map((post) => ({
       "@type": ["BlogPosting", "Article"],
       headline: post.title,
       description: clampMetaDescription(post.displayExcerpt),
@@ -321,10 +333,10 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
               Get instant quote
             </Link>
             <Link
-              href="/blog/cleaning-prices-cape-town-guide"
+              href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
               className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-zinc-600 px-6 py-3 text-sm font-semibold text-white transition hover:border-zinc-400 hover:bg-white/5"
             >
-              Read pricing guide
+              See Cape Town prices
             </Link>
           </div>
         </section>

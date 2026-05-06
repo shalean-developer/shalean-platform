@@ -13,6 +13,7 @@ import "./load-apps-web-env";
 
 import { blogContentJsonSchema } from "@/lib/blog/content-json-schema";
 import { computeReadingTimeMinutes } from "@/lib/blog/compute-reading-time";
+import { warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown } from "@/lib/blog/cluster-related-guides-legacy-markdown-guard";
 import { SEO_TRAFFIC_BLOG_POSTS } from "@/lib/blog/seed/seoTrafficBlogPosts";
 import { countWordsInContent, validateBlogPublish } from "@/lib/blog/seo/publish-validation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -28,6 +29,10 @@ async function main() {
       console.error(`INVALID ${post.slug}:`, parsed.error.flatten());
       continue;
     }
+    warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown(parsed.data, {
+      slug: post.slug,
+      source: "import_seo_traffic_blog_posts",
+    });
     const words = countWordsInContent(parsed.data);
     const pub = validateBlogPublish(parsed.data);
     console.log(

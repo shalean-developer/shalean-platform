@@ -5,6 +5,7 @@ import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
 import { optimizeMeta } from "@/lib/blog/seo/optimize-meta";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { getLocation } from "@/lib/locations";
+import { stableHash } from "@/lib/seo/anchorVariants";
 import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 
 export type GenerateProgrammaticPostInput = {
@@ -51,6 +52,24 @@ export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): 
   const locRow = getLocation(locationSlug);
   const localHint = locRow?.localContext ?? `${locationName} homes and apartments`;
   const propertyHint = locRow?.propertyFocus ?? "local residences";
+  const introVariant = stableHash(`${slug}|intro`) % 3;
+  const quickVariant = stableHash(`${slug}|quick`) % 3;
+  const timingVariant = stableHash(`${slug}|timing`) % 2;
+
+  const introParagraphs = [
+    `Looking for ${serviceName.toLowerCase()} in ${locationName}, ${cityName}? Shalean matches you with vetted cleaners who know ${localHint}. Share your address at booking so scope and timing fit ${propertyHint}.`,
+    `${locationName} bookings for ${serviceName.toLowerCase()} work best when your address, access notes, and room counts are accurate up front. Shalean routes teams familiar with ${localHint} so the visit matches ${propertyHint}.`,
+    `If you need ${serviceName.toLowerCase()} near ${locationName}, start online: you will see live availability for ${cityName} before you pay. Crews plan around ${localHint}—especially parking, gates, and lift access typical of the area.`,
+  ];
+  const quickAnswers = [
+    `${serviceName} in ${locationName} covers kitchens, bathrooms, living areas, and floors using a structured checklist—ideal when you want a dependable reset without managing supplies or scheduling cleaners yourself.`,
+    `Expect checklist-driven coverage for wet areas, dusting, and floors—scaled to your ${locationName} layout rather than a one-size template. That keeps ${serviceName.toLowerCase()} predictable when ${propertyHint} varies week to week.`,
+    `A typical ${serviceName.toLowerCase()} visit prioritises hygiene zones guests notice first, then broader dusting and floors. In ${locationName}, teams also factor ${localHint} so the booked window stays realistic.`,
+  ];
+  const timingHeadings = [
+    `When ${locationName} households choose it`,
+    `Typical ${locationName} triggers for ${serviceName.toLowerCase()}`,
+  ];
 
   const related = (input.relatedBlogPosts ?? [])
     .filter((p) => p.slug && p.slug !== slug)
@@ -88,12 +107,12 @@ export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): 
     {
       id: bid(),
       type: "intro",
-      content: `Looking for ${serviceName.toLowerCase()} in ${locationName}, ${cityName}? Shalean matches you with vetted cleaners who know ${localHint}. Share your address at booking so scope and timing fit ${propertyHint}.`,
+      content: introParagraphs[introVariant]!,
     },
     {
       id: bid(),
       type: "quick_answer",
-      content: `${serviceName} in ${locationName} covers kitchens, bathrooms, living areas, and floors using a structured checklist—ideal when you want a dependable reset without managing supplies or scheduling cleaners yourself.`,
+      content: quickAnswers[quickVariant]!,
     },
     {
       id: bid(),
@@ -105,7 +124,7 @@ export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): 
     {
       id: bid(),
       type: "section",
-      title: `When ${locationName} households choose it`,
+      title: timingHeadings[timingVariant]!,
       heading_level: 2,
       content: `Choose this service when you are preparing for guests, recovering after a busy week, handling rental turnovers, or simply want recurring help in ${locationName}. ${localHint}`,
     },
@@ -152,12 +171,16 @@ export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): 
         {
           question: "How far in advance should I book?",
           answer:
-            "Popular slots fill quickly—especially weekends. Booking a few days ahead improves availability; same-week requests may still work depending on your area.",
+            timingVariant === 0
+              ? `Around ${locationName}, peak weekends and month-end moves tighten calendars fast—booking a few days early usually wins better windows. Same-week can still work when routing has slack.`
+              : `For ${locationName} addresses, mid-week visits often have more slack than Friday handovers. If you are flexible on time-of-day, you can sometimes lock a slot within a few days even when weekends look full.`,
         },
         {
           question: "What if my home has pets or special instructions?",
           answer:
-            "Add notes at checkout (pets, parking, alarms). Cleaners review instructions before arrival so the visit matches your expectations.",
+            stableHash(`${slug}|petsfaq`) % 2 === 0
+              ? `List pets, alarms, parking bays, and estate rules in checkout notes—${locationName} properties vary block by block, and precise instructions prevent crews losing minutes at the gate.`
+              : "Add notes at checkout (pets, parking, alarms). Cleaners review instructions before arrival so the visit matches your expectations.",
         },
         {
           question: "Can I make this a recurring clean?",

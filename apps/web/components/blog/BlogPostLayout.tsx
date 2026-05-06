@@ -47,6 +47,8 @@ export type BlogPostLayoutProps = {
   children: ReactNode;
   trackingSlug: string;
   supplementalInternalLinks?: { label: string; href: string }[];
+  /** Cluster-native related guides (semantic_cluster + peers + optional overrides). */
+  clusterRelatedGuidesSlot?: ReactNode;
   relatedLinksSlot?: ReactNode;
   belowArticleSlot?: ReactNode;
   /** Emerald banner between article body and share (off when banner is injected inside DB body). */
@@ -69,6 +71,7 @@ export function BlogPostLayout({
   children,
   trackingSlug,
   supplementalInternalLinks,
+  clusterRelatedGuidesSlot,
   relatedLinksSlot,
   belowArticleSlot,
   showLayoutMidBanner = true,
@@ -195,6 +198,8 @@ export function BlogPostLayout({
                   </ul>
                 </nav>
               ) : null}
+
+              {clusterRelatedGuidesSlot ? <div className="not-prose mt-12">{clusterRelatedGuidesSlot}</div> : null}
 
               {relatedLinksSlot ? <div className="not-prose mt-12">{relatedLinksSlot}</div> : null}
 

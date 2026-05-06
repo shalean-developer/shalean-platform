@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
+import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
 import { getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
+import { getAllHighConversionBlogPosts } from "@/lib/blog/highConversionPosts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 import { shouldExcludeBlogSlugFromSitemap } from "@/lib/seo/programmaticBlogCleanupRedirects";
 import { AIRBNB_AREA_LANDING_PATHS } from "@/lib/seo/airbnbAreaLandingPages";
@@ -76,6 +78,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const blogSlugSet = new Set<string>();
   for (const s of dbSlugs) blogSlugSet.add(s);
   for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(post.slug);
+  for (const post of getAllHighConversionBlogPosts()) blogSlugSet.add(post.slug);
+  for (const post of AIRBNB_HOST_GUIDE_POSTS) blogSlugSet.add(post.slug);
 
   for (const slug of blogSlugSet) {
     if (shouldExcludeBlogSlugFromSitemap(slug)) continue;

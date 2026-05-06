@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { BlogContextualServiceLinks } from "@/components/blog/BlogContextualServiceLinks";
 import { BlogServiceLinks } from "@/components/blog/BlogServiceLinks";
 import { BlogConversionMidBanner } from "@/components/blog/engine/BlogConversionMidBanner";
+import { BlogClusterRelatedGuides } from "@/components/blog/BlogClusterRelatedGuides";
 import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { HighConversionBlogTemplate } from "@/components/blog/HighConversionBlogTemplate";
@@ -37,7 +39,12 @@ import {
   ROUTED_PROGRAMMATIC_POSTS,
   type ProgrammaticPost,
 } from "@/lib/blog/programmaticPosts";
+import {
+  buildArticleSchemaKeywords,
+  buildHighConversionBlogPostingKeywordsString,
+} from "@/lib/blog/seo/build-blog-posting-schema-keywords";
 import { getBlogServiceType } from "@/lib/blog/getBlogServiceType";
+import { fetchClusterRelatedGuidesForPost } from "@/lib/blog/fetch-cluster-related-guides";
 import {
   enrichRelatedPostsForGrid,
   getBlogIndexPostsCached,
@@ -51,6 +58,7 @@ import { clampMetaDescription, resolveBlogDbMetaDescription } from "@/lib/seo/me
 import { generateBlogArticleTitle } from "@/lib/seo/metaTitle";
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 /** Preserve Next.js `notFound()` / `redirect()` errors inside broad try/catch wrappers. */
 function isNextNavigationError(err: unknown): boolean {
@@ -214,11 +222,17 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
     const heroAlt = resolveBlogFeaturedAlt(hc.slug);
     const description = clampMetaDescription(hc.description);
     const pageTitle = generateBlogArticleTitle({ headline: hc.title, slugKey: hc.slug });
+    const kw = buildHighConversionBlogPostingKeywordsString(hc);
+    const metaKeywords = kw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     return {
       title: pageTitle,
       description,
       robots: SEO_INDEX_FOLLOW,
       alternates: { canonical: url },
+      ...(metaKeywords.length > 0 ? { keywords: metaKeywords } : {}),
       openGraph: {
         title: pageTitle,
         description,
@@ -246,12 +260,27 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
     const heroOgAlt = resolveBlogFeaturedAlt(hostGuide.slug);
     const description = clampMetaDescription(hostGuide.description);
     const pageTitle = generateBlogArticleTitle({ headline: hostGuide.title, slugKey: hostGuide.slug });
+    const hostKw = buildArticleSchemaKeywords({
+      primary: hostGuide.primaryKeyword,
+      secondary: [
+        ...(hostGuide.secondaryKeywords ?? []),
+        "Airbnb short-term rental",
+        "turnover cleaning",
+        hostGuide.title,
+      ],
+      localModifiers: [...(hostGuide.localSeoModifiers ?? []), "Airbnb Cape Town"],
+      intentModifiers: hostGuide.searchIntentModifiers ?? ["hosting operations", "guest-ready cleaning"],
+    });
+    const metaKeywords = hostKw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     return {
       title: pageTitle,
       description,
       robots: SEO_INDEX_FOLLOW,
       alternates: { canonical: url },
-      keywords: [hostGuide.primaryKeyword, "Airbnb Cape Town", "Shalean", "turnover cleaning"],
+      keywords: metaKeywords,
       openGraph: {
         title: pageTitle,
         description,
@@ -442,6 +471,7 @@ function buildHighConversionBlogPostingJsonLd(post: HighConversionBlogArticle) {
   const pageUrl = `${SITE}/blog/${post.slug}`;
   const heroAbsolute = `${SITE}${resolveBlogFeaturedSrc(post.slug)}`;
   const dateModified = post.dateModified ?? post.publishedAt;
+  const keywords = buildHighConversionBlogPostingKeywordsString(post);
   return {
     "@type": ["BlogPosting", "Article"],
     headline: post.h1,
@@ -449,7 +479,7 @@ function buildHighConversionBlogPostingJsonLd(post: HighConversionBlogArticle) {
     datePublished: post.publishedAt,
     dateModified,
     image: [heroAbsolute],
-    keywords: "same day cleaning Cape Town, Shalean, home cleaning, deep cleaning",
+    keywords,
     articleSection: "Cleaning guides",
     author: {
       "@type": "Organization",
@@ -647,6 +677,25 @@ async function BlogPostPageImpl(props: Props) {
         console.error("[blog] related grid enrichment failed", { slug: dbPost.slug, err });
       }
 
+      let clusterRelatedGuidesSlot: ReactNode = null;
+      const supabase = getSupabaseServer();
+      if (supabase) {
+        try {
+          const guides = await fetchClusterRelatedGuidesForPost(supabase, {
+            currentSlug: dbPost.slug,
+            semanticClusterPersisted: dbPost.semanticCluster,
+            tagSlugs: dbPost.tagSlugs,
+            manualRelatedOverrides: dbPost.relatedGuideOverrideSlugs,
+            publishedBeforeIso: new Date().toISOString(),
+          });
+          if (guides.length > 0) {
+            clusterRelatedGuidesSlot = <BlogClusterRelatedGuides items={guides} />;
+          }
+        } catch (err) {
+          console.error("[blog] cluster related guides failed", { slug: dbPost.slug, err });
+        }
+      }
+
       return (
         <MarketingLayout>
           <main className="bg-white text-zinc-900">
@@ -679,6 +728,7 @@ async function BlogPostPageImpl(props: Props) {
               sidebarCategories={sidebarCategories}
               sidebarTrending={sidebarTrending}
               relatedGridPosts={relatedGrid}
+              clusterRelatedGuidesSlot={clusterRelatedGuidesSlot}
               showLayoutMidBanner={false}
             >
               <BlogDbArticleBody
@@ -747,7 +797,7 @@ async function BlogPostPageImpl(props: Props) {
 
   const hostGuide = getAirbnbHostGuidePost(slug);
   if (hostGuide) {
-    const jsonLdStr = safeJsonLdStringify(buildAirbnbHostGuideGraphJsonLd(hostGuide, SITE), {
+    const jsonLdStr = safeJsonLdStringify(buildAirbnbHostGuideGraphJsonLd(hostGuide, SITE, resolveBlogFeaturedSrc(hostGuide.slug)), {
       kind: "airbnb_host_guide",
       slug: hostGuide.slug,
     });

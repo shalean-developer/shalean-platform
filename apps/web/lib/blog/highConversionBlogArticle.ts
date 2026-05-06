@@ -25,6 +25,15 @@ export type HighConversionBlogArticle = {
   description: string;
   /** Visible H1 (main keyword) */
   h1: string;
+  /**
+   * Optional SEO taxonomy — when set, feeds JSON-LD / metadata keywords before automated derivation.
+   */
+  primaryKeyword?: string;
+  secondaryKeywords?: string[];
+  localSeoModifiers?: string[];
+  searchIntentModifiers?: string[];
+  /** Override BlogPosting `keywords` entirely (comma-separated list after join). */
+  schemaKeywords?: string[];
   publishedAt: string;
   dateModified?: string;
   heroImage: { src: string; alt: string };

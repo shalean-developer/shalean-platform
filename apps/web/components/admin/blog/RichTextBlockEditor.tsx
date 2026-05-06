@@ -4,7 +4,17 @@ import { useEffect, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { Bold, Heading2, Heading3, Italic, Link2, List, ListOrdered } from "lucide-react";
+import {
+  Bold,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import "./rich-text-editor.css";
@@ -21,7 +31,7 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
       immediatelyRender: false,
       extensions: [
         StarterKit.configure({
-          heading: { levels: [2, 3] },
+          heading: { levels: [1, 2, 3, 4] },
           blockquote: false,
           code: false,
           codeBlock: false,
@@ -40,7 +50,7 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
       editorProps: {
         attributes: {
           class:
-            "px-3 py-2 text-sm leading-relaxed text-zinc-800 focus:outline-none min-h-[140px]",
+            "px-4 py-4 text-[1.0625rem] leading-[1.7] text-zinc-800 focus:outline-none min-h-[220px] dark:text-zinc-100",
         },
       },
       onUpdate: ({ editor: ed }) => {
@@ -99,7 +109,7 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
   };
 
   return (
-    <div className="rich-text-editor-root rounded-md border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+    <div className="rich-text-editor-root overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/30 dark:border-zinc-700 dark:bg-zinc-950/80">
       <div
         className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 px-1 py-1 dark:border-zinc-700"
         role="toolbar"
@@ -118,6 +128,12 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
           editor.isActive("italic"),
         )}
         {mark(
+          "Heading 1",
+          <Heading1 className="h-4 w-4" />,
+          () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+          editor.isActive("heading", { level: 1 }),
+        )}
+        {mark(
           "Heading 2",
           <Heading2 className="h-4 w-4" />,
           () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
@@ -128,6 +144,12 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
           <Heading3 className="h-4 w-4" />,
           () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
           editor.isActive("heading", { level: 3 }),
+        )}
+        {mark(
+          "Heading 4",
+          <Heading4 className="h-4 w-4" />,
+          () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+          editor.isActive("heading", { level: 4 }),
         )}
         {mark(
           "Bullet list",

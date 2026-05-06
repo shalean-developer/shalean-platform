@@ -11,10 +11,18 @@ const ALLOWED_TAGS = [
   "a",
   "h2",
   "h3",
+  "h4",
   "ul",
   "ol",
   "li",
   "span",
+  "hr",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
 ];
 
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {

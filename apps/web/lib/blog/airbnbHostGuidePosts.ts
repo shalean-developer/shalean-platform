@@ -1,4 +1,4 @@
-import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { buildArticleSchemaKeywords } from "@/lib/blog/seo/build-blog-posting-schema-keywords";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 
 export type AirbnbHostGuidePost = {
@@ -7,6 +7,9 @@ export type AirbnbHostGuidePost = {
   description: string;
   h1: string;
   primaryKeyword: string;
+  secondaryKeywords?: string[];
+  localSeoModifiers?: string[];
+  searchIntentModifiers?: string[];
   publishedAt: string;
   dateModified: string;
   readingTimeMinutes: number;
@@ -243,11 +246,24 @@ function buildFaqJsonLd(faqs: AirbnbHostGuidePost["faqs"]) {
   };
 }
 
-export function buildAirbnbHostGuideGraphJsonLd(post: AirbnbHostGuidePost, siteOrigin: string) {
+/**
+ * @param heroSrcPath Featured image path from {@link resolveBlogFeaturedSrc} (e.g. `/images/...webp`).
+ * Passed in by callers so this module does not import `blogImageMap` (circular: blogImageMap lists these slugs).
+ */
+export function buildAirbnbHostGuideGraphJsonLd(post: AirbnbHostGuidePost, siteOrigin: string, heroSrcPath: string) {
   const pageUrl = `${siteOrigin}/blog/${post.slug}`;
-  const heroAbsolute = `${siteOrigin}${resolveBlogFeaturedSrc(post.slug)}`;
-  const heroAlt = resolveBlogFeaturedAlt(post.slug);
-  const keywords = [post.primaryKeyword, "Airbnb Cape Town", "Shalean", "turnover cleaning"].join(", ");
+  const heroAbsolute = `${siteOrigin}${heroSrcPath.startsWith("/") ? heroSrcPath : `/${heroSrcPath}`}`;
+  const keywords = buildArticleSchemaKeywords({
+    primary: post.primaryKeyword,
+    secondary: [
+      ...(post.secondaryKeywords ?? []),
+      "Airbnb short-term rental",
+      "turnover cleaning",
+      post.title,
+    ],
+    localModifiers: [...(post.localSeoModifiers ?? []), "Airbnb Cape Town"],
+    intentModifiers: post.searchIntentModifiers ?? ["hosting operations", "guest-ready cleaning"],
+  });
 
   const blogPosting = {
     "@type": ["BlogPosting", "Article"],

@@ -1,36 +1,113 @@
-/* TipTap / ProseMirror shell — scoped under .rich-text-editor-root */
+/* TipTap / ProseMirror — editorial reading rhythm + heading hierarchy (scoped under .rich-text-editor-root) */
 
 .rich-text-editor-root .ProseMirror {
   outline: none;
-  min-height: 140px;
+  min-height: 200px;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  letter-spacing: -0.011em;
 }
 
 .rich-text-editor-root .ProseMirror p {
-  margin: 0.35em 0;
+  margin: 0.65em 0;
 }
 
-.rich-text-editor-root .ProseMirror h2 {
-  font-size: 1.25rem;
+.rich-text-editor-root .ProseMirror p:first-child {
+  margin-top: 0;
+}
+
+/* --- H1: in-article title hierarchy (legacy/pasted content + new toolbar) --- */
+.rich-text-editor-root .ProseMirror h1 {
+  font-size: 1.875rem;
   font-weight: 700;
-  margin: 0.75em 0 0.35em;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin: 1.5em 0 0.6em;
+  padding: 0.15em 0 0.5em;
   color: rgb(24 24 27);
+  border-bottom: 1px solid rgb(228 228 231);
 }
 
-.rich-text-editor-root .ProseMirror h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin: 0.65em 0 0.3em;
+.rich-text-editor-root .ProseMirror h1:first-child {
+  margin-top: 0.35em;
+}
+
+/* --- H2: section dividers — tint + left rail --- */
+.rich-text-editor-root .ProseMirror h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.022em;
+  margin: 1.85em 0 0.75em;
+  padding: 0.55em 0.85rem 0.55em 0.95rem;
   color: rgb(24 24 27);
+  background-color: rgb(250 250 250);
+  border-left: 3px solid rgb(161 161 170);
+  border-radius: 0.5rem;
+}
+
+.rich-text-editor-root .ProseMirror h2:first-child {
+  margin-top: 0.5em;
+}
+
+/* --- H3: subsection anchors --- */
+.rich-text-editor-root .ProseMirror h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.018em;
+  margin: 1.45em 0 0.5em;
+  padding: 0.15em 0 0.15em 0.65rem;
+  color: rgb(39 39 42);
+  border-left: 2px solid rgb(212 212 216);
+}
+
+/* --- H4: lightweight subsection labels --- */
+.rich-text-editor-root .ProseMirror h4 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin: 1.2em 0 0.4em;
+  padding-left: 0.35rem;
+  color: rgb(63 63 70);
 }
 
 .rich-text-editor-root .ProseMirror ul,
 .rich-text-editor-root .ProseMirror ol {
-  padding-left: 1.25rem;
-  margin: 0.35em 0;
+  padding-left: 1.35rem;
+  margin: 0.55em 0;
 }
 
 .rich-text-editor-root .ProseMirror li {
-  margin: 0.15em 0;
+  margin: 0.28em 0;
+}
+
+.rich-text-editor-root .ProseMirror li p {
+  margin: 0.2em 0;
+}
+
+.rich-text-editor-root .ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  margin: 1em 0;
+}
+
+.rich-text-editor-root .ProseMirror th,
+.rich-text-editor-root .ProseMirror td {
+  border: 1px solid rgb(228 228 231);
+  padding: 0.45rem 0.65rem;
+  vertical-align: top;
+}
+
+.rich-text-editor-root .ProseMirror th {
+  background: rgb(250 250 250);
+  font-weight: 600;
+  text-align: left;
 }
 
 .rich-text-editor-root .ProseMirror a {
@@ -42,4 +119,38 @@
 
 .rich-text-editor-root .ProseMirror a:hover {
   color: rgb(29 78 216);
+}
+
+/* --- Dark mode --- */
+.dark .rich-text-editor-root .ProseMirror {
+  color: rgb(228 228 231);
+}
+
+.dark .rich-text-editor-root .ProseMirror h1 {
+  color: rgb(250 250 250);
+  border-bottom-color: rgb(63 63 70);
+}
+
+.dark .rich-text-editor-root .ProseMirror h2 {
+  color: rgb(250 250 250);
+  background-color: rgb(39 39 42 / 0.65);
+  border-left-color: rgb(161 161 170);
+}
+
+.dark .rich-text-editor-root .ProseMirror h3 {
+  color: rgb(244 244 245);
+  border-left-color: rgb(113 113 122);
+}
+
+.dark .rich-text-editor-root .ProseMirror h4 {
+  color: rgb(212 212 216);
+}
+
+.dark .rich-text-editor-root .ProseMirror th,
+.dark .rich-text-editor-root .ProseMirror td {
+  border-color: rgb(63 63 70);
+}
+
+.dark .rich-text-editor-root .ProseMirror th {
+  background: rgb(39 39 42);
 }

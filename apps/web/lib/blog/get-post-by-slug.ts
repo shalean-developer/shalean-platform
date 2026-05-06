@@ -5,13 +5,15 @@ import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-relat
 import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
 import { buildInjectInternalLinksContext } from "@/lib/blog/seo/build-internal-link-context";
 import { parseSeoInternalLinkContext } from "@/lib/blog/seo/seo-internal-link-context-schema";
+import { normalizeSemanticClusterInput } from "@/lib/seo/blogGovernance";
+import { normalizeManualRelatedGuideSlugs } from "@/lib/blog/fetch-cluster-related-guides";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { emptyBlogContentJson, type BlogContentJson } from "./content-json";
 import { safeParseBlogContentJson } from "./content-json-schema";
 import { excerptFromFirstIntroBlock } from "./excerpt-from-content-json";
 
 const SELECT =
-  "id,slug,title,h1,excerpt,status,source,content_json,meta_title,meta_description,canonical_url,featured_image_url,featured_image_alt,author_id,category_id,reading_time_minutes,published_at,updated_at,created_at,noindex,primary_keyword,secondary_keywords,search_intent,seo_internal_link_context,blog_categories(slug,name)";
+  "id,slug,title,h1,excerpt,status,source,content_json,meta_title,meta_description,canonical_url,featured_image_url,featured_image_alt,author_id,category_id,reading_time_minutes,published_at,updated_at,created_at,noindex,primary_keyword,secondary_keywords,search_intent,seo_internal_link_context,semantic_cluster,related_guide_override_slugs,blog_categories(slug,name)";
 
 /** Avoid Invalid Date strings leaking to layout/metadata (Intl.format throws). */
 function clampToValidIso(value: string | null | undefined, fallbackIso: string): string {
@@ -52,6 +54,10 @@ export type NormalizedDbBlogPost = {
   categorySlug: string | null;
   categoryName: string | null;
   tagSlugs: string[];
+  /** Governed cluster key from `blog_posts.semantic_cluster` (null when unset / invalid). */
+  semanticCluster: string | null;
+  /** Editorial pins for cluster footer related guides (valid slugs only). */
+  relatedGuideOverrideSlugs: string[];
   relatedPosts: { slug: string; title: string }[];
 };
 
@@ -250,6 +256,17 @@ async function loadPostBySlug(
   const postId = String(row.id ?? "");
   const tagSlugs = postId ? await fetchTagSlugsForPost(supabase, postId) : [];
 
+  const semanticCluster = normalizeSemanticClusterInput(
+    row.semantic_cluster == null || row.semantic_cluster === "" ? null : String(row.semantic_cluster),
+  );
+  const relatedGuideOverrideSlugs =
+    normalizeManualRelatedGuideSlugs(
+      Array.isArray(row.related_guide_override_slugs)
+        ? (row.related_guide_override_slugs as unknown[]).map((x) => String(x))
+        : null,
+      8,
+    ) ?? [];
+
   const storedCtx = parseSeoInternalLinkContext(row.seo_internal_link_context);
 
   const nowFallback = new Date().toISOString();
@@ -337,6 +354,8 @@ async function loadPostBySlug(
     categorySlug,
     categoryName,
     tagSlugs,
+    semanticCluster,
+    relatedGuideOverrideSlugs,
     relatedPosts: related,
   };
 }

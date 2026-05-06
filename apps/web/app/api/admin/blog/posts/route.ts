@@ -9,7 +9,16 @@ import { normalizeSearchIntent, suggestAutoSeo } from "@/lib/blog/seo/auto-seo";
 import { injectInternalLinks } from "@/lib/blog/seo/inject-internal-links";
 import { buildInjectInternalLinksContext } from "@/lib/blog/seo/build-internal-link-context";
 import { parseSeoInternalLinkContext } from "@/lib/blog/seo/seo-internal-link-context-schema";
+import type { ClusterPeerPost } from "@/lib/blog/seo/blog-cluster-collision";
+import { fetchPublishedClusterPeersUnified } from "@/lib/blog/seo/fetch-cluster-peer-posts";
+import { warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown } from "@/lib/blog/cluster-related-guides-legacy-markdown-guard";
+import { normalizeManualRelatedGuideSlugs } from "@/lib/blog/fetch-cluster-related-guides";
 import { validateBlogPublish } from "@/lib/blog/seo/publish-validation";
+import {
+  normalizeSemanticClusterInput,
+  resolveSemanticClusterKey,
+  semanticClusterKeyToCollisionTagSlug,
+} from "@/lib/seo/blogGovernance";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-related-posts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -47,6 +56,10 @@ const basePostSchema = z.object({
     z.string().uuid().nullable().optional(),
   ),
   tag_ids: z.array(z.string().uuid()).optional(),
+  /** Canonical governance cluster (`blog_posts.semantic_cluster`); invalid values stored as null. */
+  semantic_cluster: z.string().nullable().optional(),
+  /** Pin/order slugs in the public cluster related-guides footer (max 8; invalid slugs dropped on save). */
+  related_guide_override_slugs: z.array(z.string()).max(8).optional(),
   seo_generate_slug_from_keyword: z.boolean().optional(),
   seo_apply_suggestions: z.boolean().optional(),
 });
@@ -67,6 +80,52 @@ async function syncPostTags(admin: ReturnType<typeof getSupabaseAdmin>, postId: 
   const rows = tagIds.map((tag_id) => ({ post_id: postId, tag_id }));
   const { error } = await admin.from("blog_post_tags").insert(rows);
   if (error) throw new Error(error.message);
+}
+
+async function blogTagSlugsForIds(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  tagIds: string[] | undefined,
+): Promise<string[]> {
+  if (!tagIds?.length) return [];
+  const { data, error } = await admin.from("blog_tags").select("slug").in("id", tagIds);
+  if (error || !data) return [];
+  return (data as { slug?: string }[]).map((r) => String(r.slug ?? ""));
+}
+
+async function runPublishGovernanceValidation(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  params: {
+    content: BlogContentJson;
+    tag_ids: string[] | undefined;
+    slug: string;
+    title: string;
+    primary_keyword: string | null;
+    semantic_cluster?: string | null;
+  },
+) {
+  const tagSlugs = await blogTagSlugsForIds(admin, params.tag_ids);
+  const semanticKey = resolveSemanticClusterKey({
+    persisted: params.semantic_cluster,
+    tags: tagSlugs,
+  });
+  const clusterTagForLegacy = semanticClusterKeyToCollisionTagSlug(semanticKey);
+  let clusterPeers: ClusterPeerPost[] = [];
+  if (params.slug.trim() && (semanticKey || clusterTagForLegacy)) {
+    clusterPeers = await fetchPublishedClusterPeersUnified(admin, {
+      excludeSlug: params.slug.trim(),
+      semanticClusterKey: semanticKey,
+      clusterTagSlug: clusterTagForLegacy,
+    });
+  }
+  return validateBlogPublish(params.content, {
+    tags: tagSlugs,
+    semanticCluster: semanticKey ?? undefined,
+    clusterPeers,
+    slug: params.slug.trim(),
+    title: params.title.trim(),
+    primaryKeyword: params.primary_keyword,
+    collisionClusterTagSlug: clusterTagForLegacy ?? undefined,
+  });
 }
 
 function revalidateBlog(slug: string) {
@@ -195,6 +254,8 @@ function buildRow(
     search_intent: intent,
     seo_internal_link_context: seo_internal_link_context as Record<string, unknown> | null,
     category_id: input.category_id ?? null,
+    semantic_cluster: normalizeSemanticClusterInput(input.semantic_cluster),
+    related_guide_override_slugs: normalizeManualRelatedGuideSlugs(input.related_guide_override_slugs, 8),
   };
 }
 
@@ -246,7 +307,11 @@ export async function POST(request: Request) {
     );
   }
 
-  let content = contentRes.data;
+  const content = contentRes.data;
+  warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown(content, {
+    slug: parsed.data.slug,
+    source: "admin_blog_posts_POST",
+  });
 
   let row: Record<string, unknown>;
   try {
@@ -280,15 +345,29 @@ export async function POST(request: Request) {
     row.reading_time_minutes = computeReadingTimeMinutes(content);
   }
 
+  let publishGovernanceResult: ReturnType<typeof validateBlogPublish> | null = null;
   if (parsed.data.status === "published") {
-    const pub = validateBlogPublish(injected);
-    if (!pub.ok) {
+    publishGovernanceResult = await runPublishGovernanceValidation(admin, {
+      content: injected,
+      tag_ids: parsed.data.tag_ids,
+      slug: slugForInject,
+      title: String(row.title ?? ""),
+      primary_keyword: row.primary_keyword == null ? null : String(row.primary_keyword),
+      semantic_cluster: row.semantic_cluster == null ? null : String(row.semantic_cluster),
+    });
+    if (publishGovernanceResult.warnings.length) {
+      console.warn("[admin/blog POST] Publish governance warnings", {
+        slug: slugForInject,
+        warnings: publishGovernanceResult.warnings,
+      });
+    }
+    if (!publishGovernanceResult.ok) {
       console.warn("[admin/blog POST] Publish validation failed", {
         slug: slugForInject,
-        issues: pub.issues,
+        issues: publishGovernanceResult.issues,
       });
       return NextResponse.json(
-        { error: "Publish validation failed.", validation: pub },
+        { error: "Publish validation failed.", validation: publishGovernanceResult },
         { status: 400 },
       );
     }
@@ -312,7 +391,13 @@ export async function POST(request: Request) {
     revalidateBlog(String(data.slug));
   }
 
-  return NextResponse.json({ post: data }, { status: 201 });
+  return NextResponse.json(
+    {
+      post: data,
+      ...(publishGovernanceResult ? { governance_warnings: publishGovernanceResult.warnings } : {}),
+    },
+    { status: 201 },
+  );
 }
 
 export async function PUT(request: Request) {
@@ -341,7 +426,11 @@ export async function PUT(request: Request) {
     );
   }
 
-  let content = contentRes.data;
+  const content = contentRes.data;
+  warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown(content, {
+    slug: parsed.data.slug,
+    source: "admin_blog_posts_PUT",
+  });
 
   const { id, ...fields } = parsed.data;
   let row: Record<string, unknown>;
@@ -376,15 +465,29 @@ export async function PUT(request: Request) {
     row.reading_time_minutes = computeReadingTimeMinutes(content);
   }
 
+  let publishGovernanceResultPut: ReturnType<typeof validateBlogPublish> | null = null;
   if (parsed.data.status === "published") {
-    const pub = validateBlogPublish(injected);
-    if (!pub.ok) {
+    publishGovernanceResultPut = await runPublishGovernanceValidation(admin, {
+      content: injected,
+      tag_ids: parsed.data.tag_ids,
+      slug: slugForInject,
+      title: String(row.title ?? ""),
+      primary_keyword: row.primary_keyword == null ? null : String(row.primary_keyword),
+      semantic_cluster: row.semantic_cluster == null ? null : String(row.semantic_cluster),
+    });
+    if (publishGovernanceResultPut.warnings.length) {
+      console.warn("[admin/blog PUT] Publish governance warnings", {
+        slug: slugForInject,
+        warnings: publishGovernanceResultPut.warnings,
+      });
+    }
+    if (!publishGovernanceResultPut.ok) {
       console.warn("[admin/blog PUT] Publish validation failed", {
         slug: slugForInject,
-        issues: pub.issues,
+        issues: publishGovernanceResultPut.issues,
       });
       return NextResponse.json(
-        { error: "Publish validation failed.", validation: pub },
+        { error: "Publish validation failed.", validation: publishGovernanceResultPut },
         { status: 400 },
       );
     }
@@ -409,5 +512,8 @@ export async function PUT(request: Request) {
     revalidateBlog(String(data.slug));
   }
 
-  return NextResponse.json({ post: data });
+  return NextResponse.json({
+    post: data,
+    ...(publishGovernanceResultPut ? { governance_warnings: publishGovernanceResultPut.warnings } : {}),
+  });
 }

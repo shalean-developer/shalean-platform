@@ -13,8 +13,24 @@ import {
 /** Keyword-rich cross-page internal link (render `anchor` as link text). */
 export type SeoInternalLink = { href: string; anchor: string };
 
-/** Canonical pricing guide used across hubs + blogs. */
-export const CAPE_TOWN_PRICING_BLOG_HREF = "/blog/how-much-does-cleaning-cost-cape-town";
+/**
+ * Primary commercial pricing authority (tiers, quote path) — use for most internal “see prices / compare costs” links.
+ * Long-form **blog** pricing education (when published) lives at `/blog/how-much-does-cleaning-cost-cape-town`;
+ * do not resurrect legacy `/blog/cleaning-prices-cape-town-guide` (retired).
+ *
+ * Intent: do not sprinkle this href across every post — follow `PRICING_HUB_LINKING_GOVERNANCE` in
+ * `lib/seo/blogGovernance.ts` (same folder as this module).
+ */
+export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/cleaning-prices-cape-town";
+
+/**
+ * Back-compat name: historically pointed at a retired `/blog/*` guide. Now aliases the pricing hub so
+ * existing imports resolve to a live URL. Prefer {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} in new code.
+ */
+export const CAPE_TOWN_PRICING_GUIDE_BLOG_HREF = CAPE_TOWN_PRICING_AUTHORITY_HREF;
+
+/** @deprecated Use {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} for cross-site pricing links. */
+export const CAPE_TOWN_PRICING_BLOG_HREF = CAPE_TOWN_PRICING_AUTHORITY_HREF;
 
 /**
  * Priority suburb hubs for service pages and blog topic clusters.
@@ -30,7 +46,7 @@ export const PRIORITY_CAPE_TOWN_HUB_SLUGS = [
 export function getPricingBlogLink(slugKey?: string): SeoInternalLink {
   const key = (slugKey ?? "blog").trim() || "blog";
   return {
-    href: CAPE_TOWN_PRICING_BLOG_HREF,
+    href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
     anchor: pickPricingBlogAnchor(`${key}|cluster`),
   };
 }
@@ -194,7 +210,7 @@ export function getLocationHubRelatedServiceLinks(suburbDisplayName: string, hub
       anchor: pickServiceLocationAnchor(`${key}|hubrel|moveout`, "Move-out cleaning services", s),
     },
     {
-      href: CAPE_TOWN_PRICING_BLOG_HREF,
+      href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
       anchor: pickPricingBlogAnchor(`${key}|hubrel|pricing`),
     },
   ];
@@ -255,7 +271,7 @@ export function getLocationHubAboveFoldServiceLink(suburbDisplayName: string, hu
 /** Inline “See pricing” line on Cape Town service SEO pages. */
 export function getServicePagePricingBlogInlineLink(serviceSlug: CapeTownSeoServiceSlug): SeoInternalLink {
   return {
-    href: CAPE_TOWN_PRICING_BLOG_HREF,
+    href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
     anchor: pickPricingBlogAnchor(`${serviceSlug}|service-inline`),
   };
 }

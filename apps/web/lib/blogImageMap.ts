@@ -110,6 +110,11 @@ export const BLOG_IMAGE_MAP_NEW_ADDITIONS: Record<string, string> = {
   "cleaning-mistakes-that-make-your-home-dirtier-cape-town": "/images/blog/cape-town-bathroom-sanitized.jpg",
   "how-long-does-house-cleaning-take-cape-town": "/images/blog/cape-town-bedroom-residential-tidy.jpg",
   "how-often-deep-clean-home-cape-town": "/images/blog/cape-town-bedroom-home-office-clean.jpg",
+  /** Days 7–10 governed drafts (distinct heroes; do not reuse paths already pinned to another slug). */
+  "what-professional-cleaners-can-and-cannot-do-cape-town": "/images/marketing/professional-cleaner-cape-town.webp",
+  "why-home-still-feels-dirty-after-cleaning-cape-town": "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+  "move-out-cleaning-checklist-cape-town-tenants": "/images/marketing/move-out-cleaning-cape-town-handover.webp",
+  "how-often-should-you-deep-clean-your-home-cape-town": "/images/marketing/deep-cleaning-cape-town-kitchen.webp",
   "what-does-professional-cleaner-do-cape-town": "/images/blog/cape-town-kitchen-deep-clean.jpg",
   "how-much-does-cleaning-cost-cape-town-2026": "/images/blog/cape-town-living-room-floor-mop-clean.jpg",
   /** Same photography as mop hero, distinct URL so `validateBlogImages` stays strict; swap asset when you have a dedicated frame. */
