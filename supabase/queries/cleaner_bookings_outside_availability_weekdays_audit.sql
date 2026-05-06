@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Audit: bookings on weekdays outside cleaner roster (availability_weekdays)
 -- ============================================================================
--- `bookings.date` is treated as a civil calendar day (same as app roster logic).
+-- `bookings.date` is **text** (`YYYY-MM-DD`); cast to `date` for ISO weekday (same civil day as app).
 -- `cleaners.availability_weekdays` is lowercase mon..sun (see migration 20260835).
 --
 -- Empty array = treat as "all days" (matches app normalize when no days selected).
@@ -25,7 +25,7 @@ booking_dow as (
     b.status,
     b.recurring_id,
     (b.recurring_id is not null) as is_recurring,
-    (case extract(isodow from b.date)::integer
+    (case extract(isodow from (b.date::date))::integer
       when 1 then 'mon'
       when 2 then 'tue'
       when 3 then 'wed'
@@ -38,8 +38,9 @@ booking_dow as (
   cross join params p
   where b.cleaner_id is not null
     and b.date is not null
-    and b.date >= p.from_date
-    and b.date <= p.to_date
+    and b.date ~ '^\d{4}-\d{2}-\d{2}$'
+    and (b.date::date) >= p.from_date
+    and (b.date::date) <= p.to_date
     and lower(coalesce(b.status, '')) in ('assigned', 'in_progress', 'completed')
 ),
 joined as (
@@ -91,7 +92,7 @@ booking_dow as (
     b.id as booking_id,
     b.cleaner_id,
     b.date as service_date,
-    (case extract(isodow from b.date)::integer
+    (case extract(isodow from (b.date::date))::integer
       when 1 then 'mon' when 2 then 'tue' when 3 then 'wed' when 4 then 'thu'
       when 5 then 'fri' when 6 then 'sat' when 7 then 'sun'
     end) as dow_code
@@ -99,8 +100,9 @@ booking_dow as (
   cross join params p
   where b.cleaner_id is not null
     and b.date is not null
-    and b.date >= p.from_date
-    and b.date <= p.to_date
+    and b.date ~ '^\d{4}-\d{2}-\d{2}$'
+    and (b.date::date) >= p.from_date
+    and (b.date::date) <= p.to_date
     and lower(coalesce(b.status, '')) in ('assigned', 'in_progress', 'completed')
 ),
 joined as (
