@@ -1,4 +1,3 @@
-import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import type { VipTier } from "@/lib/pricing/vipTier";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 import {
@@ -11,6 +10,7 @@ import {
 import {
   computeBundledExtrasTotalZarSnapshot,
   filterExtrasForSnapshot,
+  isExtraAllowedInSnapshot,
   quoteBaseJobZarWithSnapshot,
   quoteCheckoutZarWithSnapshot,
 } from "@/lib/pricing/pricingEngineSnapshot";
@@ -66,6 +66,21 @@ const WIDGET_EXTRA_TO_SLUG: Record<string, string> = {
 
 function mapWidgetExtrasToSlugs(extras: readonly string[]): string[] {
   return extras.map((e) => WIDGET_EXTRA_TO_SLUG[e] ?? e);
+}
+
+/**
+ * Widget / conversion flow uses short keys (`oven`); catalog + checkout use slugs (`inside-oven`).
+ * Keeps selected extras consistent with {@link filterExtrasForSnapshot} for the given service.
+ */
+export function filterWidgetExtrasForCatalogService(
+  snapshot: PricingRatesSnapshot,
+  extras: readonly string[],
+  service: HomeWidgetServiceKey,
+): string[] {
+  return extras.filter((id) => {
+    const slug = WIDGET_EXTRA_TO_SLUG[id] ?? id;
+    return isExtraAllowedInSnapshot(snapshot, slug, service);
+  });
 }
 
 export function calculateHomeWidgetQuoteZar(

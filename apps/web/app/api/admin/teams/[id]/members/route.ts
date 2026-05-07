@@ -8,6 +8,7 @@ import {
   setCachedTeamMemberAddResponse,
   teamMemberAddIdempotencyFingerprint,
 } from "@/lib/admin/teamMemberAddIdempotency";
+import { resyncBookingCleanersForTeamNonFinalizedJobs } from "@/lib/booking/syncBookingCleanersForTeamBooking";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -422,6 +423,26 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     void setCachedTeamMemberAddResponse(fp, { status: 200, body: payload });
   }
 
+  if (inserted > 0) {
+    const { synced, failed } = await resyncBookingCleanersForTeamNonFinalizedJobs(admin, teamId, "admin");
+    void logSystemEvent({
+      level: failed > 0 ? "warn" : "info",
+      source: "TEAM_BOOKING_CLEANERS_RESYNC_AFTER_MEMBER_ADD",
+      message:
+        failed > 0
+          ? "Some booking_cleaners resyncs failed after team member add"
+          : "Rebuilt booking_cleaners for team jobs after member add",
+      context: {
+        teamId,
+        inserted,
+        synced,
+        failed,
+        adminId: auth.adminUserId,
+        adminEmail: auth.adminEmail,
+      },
+    });
+  }
+
   return NextResponse.json(payload);
 }
 
@@ -485,6 +506,17 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     source: "TEAM_MEMBER_REMOVED",
     message: "Admin removed cleaner from team",
     context: { teamId, cleanerId, adminId: auth.adminUserId, adminEmail: auth.adminEmail },
+  });
+
+  const { synced, failed } = await resyncBookingCleanersForTeamNonFinalizedJobs(admin, teamId, "admin");
+  void logSystemEvent({
+    level: failed > 0 ? "warn" : "info",
+    source: "TEAM_BOOKING_CLEANERS_RESYNC_AFTER_MEMBER_REMOVE",
+    message:
+      failed > 0
+        ? "Some booking_cleaners resyncs failed after team member remove"
+        : "Rebuilt booking_cleaners for team jobs after member remove",
+    context: { teamId, cleanerId, synced, failed, adminId: auth.adminUserId, adminEmail: auth.adminEmail },
   });
 
   return NextResponse.json({ ok: true });

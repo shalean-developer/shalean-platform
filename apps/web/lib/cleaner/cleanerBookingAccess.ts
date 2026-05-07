@@ -1,4 +1,91 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+
+/** Stable schedule ordering after merging visibility branches in JS. */
+export function sortBookingsByDateThenTime(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return [...rows].sort((a, b) => {
+    const da = String(a.date ?? "").slice(0, 10);
+    const db = String(b.date ?? "").slice(0, 10);
+    if (da !== db) return da.localeCompare(db);
+    return String(a.time ?? "").localeCompare(String(b.time ?? ""));
+  });
+}
+
+/** Completed-job ordering for earnings / reconcile merges. */
+export function sortBookingsByCompletedAtThenId(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return [...rows].sort((a, b) => {
+    const ca = String(a.completed_at ?? "");
+    const cb = String(b.completed_at ?? "");
+    const cmp = cb.localeCompare(ca);
+    if (cmp !== 0) return cmp;
+    return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+  });
+}
+
+/**
+ * Loads bookings visible to a cleaner using **separate** queries per visibility rule, then merges.
+ * Avoids PostgREST `.or(and(is_team_job…, team_id.in.(…)), …)` parsing quirks that can drop team rows.
+ */
+export async function fetchCleanerVisibleBookingsMerged(
+  admin: SupabaseClient,
+  cleanerId: string,
+  params: {
+    select: string;
+    /** Applied to each branch builder before `.limit` (status excludes, orders, extra `.eq`, …). */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder chain
+    applyEachBranch?: (q: any) => any;
+    /** Soft cap per branch before dedupe (merged list may be shorter after dedupe). */
+    perBranchLimit: number;
+  },
+): Promise<{ data: Record<string, unknown>[] | null; error: PostgrestError | null }> {
+  const cid = cleanerId.trim();
+  if (!cid) {
+    return { data: [], error: null };
+  }
+
+  const [teamIds, rosterBookingIds] = await Promise.all([
+    fetchCleanerTeamIds(admin, cid),
+    fetchBookingIdsWhereCleanerOnRoster(admin, cid),
+  ]);
+
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const safeRoster = rosterBookingIds.filter((id) => uuidRe.test(id));
+
+  const dedupe = new Map<string, Record<string, unknown>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const apply = params.applyEachBranch ?? ((q: any) => q);
+  const lim = Math.max(1, params.perBranchLimit);
+
+  const consume = (rows: Record<string, unknown>[] | null) => {
+    for (const row of rows ?? []) {
+      const id = String(row.id ?? "").trim();
+      if (id) dedupe.set(id, row);
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const exec = async (seed: any): Promise<PostgrestError | null> => {
+    const q = apply(seed).limit(lim);
+    const { data, error } = await q;
+    if (error) return error;
+    consume(data as Record<string, unknown>[]);
+    return null;
+  };
+
+  let err = await exec(admin.from("bookings").select(params.select).or(`cleaner_id.eq.${cid},payout_owner_cleaner_id.eq.${cid}`));
+  if (err) return { data: null, error: err };
+
+  if (teamIds.length > 0) {
+    err = await exec(admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", teamIds));
+    if (err) return { data: null, error: err };
+  }
+
+  if (safeRoster.length > 0) {
+    err = await exec(admin.from("bookings").select(params.select).in("id", safeRoster));
+    if (err) return { data: null, error: err };
+  }
+
+  return { data: [...dedupe.values()], error: null };
+}
 
 export type BookingAccessRow = {
   /** Booking id — enables roster membership checks via `booking_cleaners`. */
@@ -41,6 +128,7 @@ export async function fetchBookingIdsWhereCleanerOnRoster(
     .from("booking_cleaners")
     .select("booking_id")
     .eq("cleaner_id", cleanerId)
+    .order("assigned_at", { ascending: false })
     .limit(limit);
   if (error || !data?.length) return [];
   const out = new Set<string>();
@@ -67,7 +155,7 @@ export function bookingsVisibilityOrFilter(cleanerId: string, teamIds: string[])
   const soloOrOwner = `cleaner_id.eq.${c},payout_owner_cleaner_id.eq.${c}`;
   const list = teamIds.map((t) => t.trim()).filter(Boolean);
   if (!list.length) return soloOrOwner;
-  return `${soloOrOwner},and(is_team_job.is.true,team_id.in.(${list.join(",")}))`;
+  return `${soloOrOwner},and(is_team_job.eq.true,team_id.in.(${list.join(",")}))`;
 }
 
 /**

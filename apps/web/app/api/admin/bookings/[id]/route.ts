@@ -21,6 +21,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -167,6 +168,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const b = booking as Record<string, unknown>;
   const supports_team_assignment = isTeamService({
     service: typeof b.service === "string" ? b.service : null,
+    service_slug: typeof b.service_slug === "string" ? b.service_slug : null,
     booking_snapshot: b.booking_snapshot,
   });
 
@@ -193,6 +195,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }
   }
 
+  const bSvc = booking as { service_slug?: string | null; service?: string | null };
+  const service_qa = await fetchServiceQaForAdminBooking(admin, {
+    bookingId: id,
+    serviceSlug: typeof bSvc.service_slug === "string" ? bSvc.service_slug : null,
+    serviceLabel: typeof bSvc.service === "string" ? bSvc.service : null,
+  });
+
   return NextResponse.json({
     booking,
     booking_line_items: booking_line_items ?? [],
@@ -204,6 +213,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     cleaner_issue_reports: cleanerIssueReports ?? [],
     supports_team_assignment,
     team_summary,
+    ...(service_qa ? { service_qa } : {}),
   });
 }
 

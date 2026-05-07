@@ -189,13 +189,30 @@ const LEGACY_SERVICE_MAP: Record<string, BookingServiceId> = {
   premium: "deep",
 };
 
+/** Checkout / snapshot may store `BookingServiceTypeKey` strings instead of catalog ids. */
+const SERVICE_TYPE_KEY_TO_SERVICE_ID: Record<string, BookingServiceId> = {
+  standard_cleaning: "standard",
+  airbnb_cleaning: "airbnb",
+  deep_cleaning: "deep",
+  move_cleaning: "move",
+  carpet_cleaning: "carpet",
+};
+
 /** Parse a service id from stored snapshot / URL strings (includes legacy aliases). */
 export function parseBookingServiceId(value: unknown): BookingServiceId | null {
   if (typeof value !== "string") return null;
-  if ((BOOKING_SERVICE_IDS as readonly string[]).includes(value)) {
-    return value as BookingServiceId;
+  const v = value.trim();
+  if (!v) return null;
+  if ((BOOKING_SERVICE_IDS as readonly string[]).includes(v)) {
+    return v as BookingServiceId;
   }
-  return LEGACY_SERVICE_MAP[value] ?? null;
+  const norm = v.toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
+  if ((BOOKING_SERVICE_IDS as readonly string[]).includes(norm)) {
+    return norm as BookingServiceId;
+  }
+  const fromTypeKey = SERVICE_TYPE_KEY_TO_SERVICE_ID[norm];
+  if (fromTypeKey) return fromTypeKey;
+  return LEGACY_SERVICE_MAP[v] ?? LEGACY_SERVICE_MAP[norm] ?? null;
 }
 
 export function getServiceById(id: BookingServiceId): ServiceItem {

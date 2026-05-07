@@ -61,7 +61,7 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       /**
-       * Legacy `/cleaning-services/:slug` URLs are handled only in `middleware.ts` so slugs already ending in
+       * Legacy `/cleaning-services/:slug` URLs are handled only in `proxy.ts` so slugs already ending in
        * `-cleaning-services` are never double-suffixed. Unknown slugs redirect to `/locations`.
        */
       ...programmaticBlogCleanupRedirects,

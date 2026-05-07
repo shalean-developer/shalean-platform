@@ -1,8 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { assignCleanerToBooking, type AssignCleanerOptions } from "@/lib/dispatch/assignCleaner";
 import { assignTeamToBooking } from "@/lib/dispatch/assignTeamToBooking";
 import { shouldUseTeamAssignment } from "@/lib/dispatch/shouldUseTeamAssignment";
+import { isTeamService, teamServiceType } from "@/lib/dispatch/teamServiceDetection";
+
+export type { TeamBookingServiceRef } from "@/lib/dispatch/teamServiceDetection";
+export { isTeamService, teamServiceType } from "@/lib/dispatch/teamServiceDetection";
 
 export type AssignBookingResult =
   | { ok: true; assignmentKind: "individual"; cleanerId: string }
@@ -16,32 +19,6 @@ export type AssignBookingResult =
       team_id?: string;
       error_id?: string;
     };
-
-export function isTeamService(booking: { service?: string | null; booking_snapshot?: unknown }): boolean {
-  const snap = booking.booking_snapshot;
-  if (snap && typeof snap === "object" && !Array.isArray(snap)) {
-    const locked = (snap as { locked?: unknown }).locked;
-    if (locked && typeof locked === "object" && !Array.isArray(locked)) {
-      const sid = parseBookingServiceId((locked as { service?: unknown }).service);
-      if (sid === "deep" || sid === "move") return true;
-    }
-  }
-  const s = String(booking.service ?? "").toLowerCase();
-  return s.includes("deep") || s.includes("move");
-}
-
-export function teamServiceType(booking: { service?: string | null; booking_snapshot?: unknown }): "deep_cleaning" | "move_cleaning" {
-  const snap = booking.booking_snapshot;
-  if (snap && typeof snap === "object" && !Array.isArray(snap)) {
-    const locked = (snap as { locked?: unknown }).locked;
-    if (locked && typeof locked === "object" && !Array.isArray(locked)) {
-      const sid = parseBookingServiceId((locked as { service?: unknown }).service);
-      if (sid === "move") return "move_cleaning";
-    }
-  }
-  const s = String(booking.service ?? "").toLowerCase();
-  return s.includes("move") ? "move_cleaning" : "deep_cleaning";
-}
 
 export async function assignBooking(
   supabase: SupabaseClient,

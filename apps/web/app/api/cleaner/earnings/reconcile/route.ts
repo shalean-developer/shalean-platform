@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCleanerVisibleBookingsOrFilter } from "@/lib/cleaner/cleanerBookingAccess";
+import {
+  fetchCleanerVisibleBookingsMerged,
+  sortBookingsByCompletedAtThenId,
+} from "@/lib/cleaner/cleanerBookingAccess";
 import { reconcileEarningsCardsWithLedger } from "@/lib/cleaner/earningsFinanceReconcile";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -33,27 +36,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
   }
 
-  const { orFilter: visibilityOr } = await getCleanerVisibleBookingsOrFilter(admin, session.cleanerId);
-
   const url = new URL(request.url);
   const strict = String(url.searchParams.get("strict") ?? "").trim().toLowerCase() === "true";
 
-  const { data: bookings, error } = await admin
-    .from("bookings")
-    .select(
-      "id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents",
-    )
-    .or(visibilityOr)
-    .eq("status", "completed")
-    .order("completed_at", { ascending: false, nullsFirst: false })
-    .order("id", { ascending: false })
-    .limit(300);
+  const { data: bookingsMerged, error } = await fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
+    select: "id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents",
+    perBranchLimit: 300,
+    applyEachBranch: (q) =>
+      q
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: false }),
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = (bookings ?? []) as BookingRow[];
+  const rows = sortBookingsByCompletedAtThenId((bookingsMerged ?? []) as Record<string, unknown>[]).slice(
+    0,
+    300,
+  ) as BookingRow[];
   const ids = rows.map((b) => b.id).filter(Boolean);
   const ledgerByBooking = new Map<string, number>();
 

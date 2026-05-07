@@ -19,9 +19,12 @@ vi.mock("@/lib/cleaner/scheduleStuckEarningsRecompute", () => ({
   scheduleStuckEarningsRecomputeDebounced: vi.fn(),
 }));
 
-function matchesBookingsVisibilityOr(row: Row, expr: string): boolean {
+/** Legacy mega-.or() used by older tests; production now merges branches instead. */
+function matchesBookingsVisibilityOrLegacy(row: Row, expr: string): boolean {
   const head = /^cleaner_id\.eq\.([^,]+)/.exec(expr);
   if (head && String(row.cleaner_id ?? "") === head[1]) return true;
+  const po = /payout_owner_cleaner_id\.eq\.([^,]+)/.exec(expr);
+  if (po && String(row.payout_owner_cleaner_id ?? "") === po[1]) return true;
   if (!expr.includes("team_id.in.")) return false;
   const inMatch = /team_id\.in\.\(([^)]*)\)/.exec(expr);
   if (!inMatch) return false;
@@ -29,6 +32,19 @@ function matchesBookingsVisibilityOr(row: Row, expr: string): boolean {
   const hasTeamPred = expr.includes("is_team_job.is.true") || expr.includes("is_team_job.eq.true");
   if (!hasTeamPred) return false;
   return row.is_team_job === true && list.includes(String(row.team_id ?? ""));
+}
+
+function matchesBookingsBranchOr(row: Row, expr: string): boolean {
+  if (expr.includes("and(is_team_job")) {
+    return matchesBookingsVisibilityOrLegacy(row, expr);
+  }
+  for (const chunk of expr.split(",").map((s) => s.trim())) {
+    const ce = /^cleaner_id\.eq\.(.+)$/.exec(chunk);
+    if (ce && String(row.cleaner_id ?? "") === ce[1]) return true;
+    const pe = /^payout_owner_cleaner_id\.eq\.(.+)$/.exec(chunk);
+    if (pe && String(row.payout_owner_cleaner_id ?? "") === pe[1]) return true;
+  }
+  return false;
 }
 
 class QueryBuilder {
@@ -100,7 +116,7 @@ class QueryBuilder {
 
   private matches(row: Row): boolean {
     if (this.table === "bookings" && this.orExpr) {
-      if (!matchesBookingsVisibilityOr(row, this.orExpr)) return false;
+      if (!matchesBookingsBranchOr(row, this.orExpr)) return false;
     }
     for (const f of this.filters) {
       if (f.kind === "eq" && row[f.column] !== f.value) return false;

@@ -14,22 +14,19 @@ function shouldNoIndexEntireDeployment(): boolean {
 }
 
 /**
- * Legacy SEO URLs → canonical `/locations/*` hubs via `locationHubPathFromAreaInput` (308).
- * `/cleaning-services/*` is not redirected in `next.config.ts` (avoids double `-cleaning-services` suffix).
- *
- * Kept as `middleware.ts` (not `proxy.ts`) because **`next build --webpack` in Next.js 16.2 still opens this path**
- * and fails with ENOENT if only `proxy.ts` exists (upstream webpack integration gap).
+ * Next.js 16+ request proxy (formerly `middleware.ts`): legacy SEO redirects + Supabase session refresh.
+ * Legacy `/cleaning-services/*` is not listed in `next.config.ts` redirects (avoids double `-cleaning-services` suffix).
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   try {
-    return await runMiddleware(request);
+    return await runProxy(request);
   } catch (err) {
-    console.error("[middleware] fatal — passthrough", err);
+    console.error("[proxy] fatal — passthrough", err);
     return NextResponse.next();
   }
 }
 
-async function runMiddleware(request: NextRequest) {
+async function runProxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   /** Cron uses header auth only; skip Supabase session cloning work (and avoid any edge header quirks). */

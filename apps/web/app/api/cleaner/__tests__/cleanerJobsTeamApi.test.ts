@@ -36,7 +36,13 @@ function rowMatchesVisibilityOr(row: Row, expr: string): boolean {
 }
 
 class BookingsQuery {
+  /** `or` | `team` | `ids` | `direct` — mirrors merged visibility queries + directAssignments. */
+  private branch: "unset" | "or" | "team" | "ids" | "direct" = "unset";
   private orExpr: string | null = null;
+  private teamIdsIn: string[] | null = null;
+  private idsIn: string[] | null = null;
+  private directCleanerId: string | null = null;
+  private isTeamJobEqTrue = false;
   private statusNot = new Set<string>();
 
   constructor(private rows: Row[]) {}
@@ -44,8 +50,31 @@ class BookingsQuery {
   select() {
     return this;
   }
+  eq(col: string, val: unknown) {
+    if (col === "cleaner_id") {
+      this.branch = "direct";
+      this.directCleanerId = String(val ?? "");
+      return this;
+    }
+    if (col === "is_team_job" && val === true) {
+      this.isTeamJobEqTrue = true;
+    }
+    return this;
+  }
   or(expr: string) {
+    this.branch = "or";
     this.orExpr = expr;
+    return this;
+  }
+  in(col: string, vals: unknown[]) {
+    const list = vals.map((v) => String(v ?? "").trim()).filter(Boolean);
+    if (col === "team_id") {
+      this.branch = "team";
+      this.teamIdsIn = list;
+    } else if (col === "id") {
+      this.branch = "ids";
+      this.idsIn = list;
+    }
     return this;
   }
   not(_col: string, _op: string, val: unknown) {
@@ -58,14 +87,31 @@ class BookingsQuery {
   limit() {
     return this;
   }
+  private matches(row: Row): boolean {
+    for (const st of this.statusNot) {
+      if (String(row.status ?? "") === st) return false;
+    }
+    if (this.branch === "direct") {
+      return String(row.cleaner_id ?? "") === this.directCleanerId;
+    }
+    if (this.branch === "or" && this.orExpr) {
+      return rowMatchesVisibilityOr(row, this.orExpr);
+    }
+    if (this.branch === "team") {
+      return (
+        this.isTeamJobEqTrue &&
+        row.is_team_job === true &&
+        this.teamIdsIn != null &&
+        this.teamIdsIn.includes(String(row.team_id ?? ""))
+      );
+    }
+    if (this.branch === "ids") {
+      return this.idsIn != null && this.idsIn.includes(String(row.id ?? ""));
+    }
+    return true;
+  }
   then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
-    const filtered = this.rows.filter((row) => {
-      for (const st of this.statusNot) {
-        if (String(row.status ?? "") === st) return false;
-      }
-      if (this.orExpr) return rowMatchesVisibilityOr(row, this.orExpr);
-      return true;
-    });
+    const filtered = this.rows.filter((row) => this.matches(row));
     const data = filtered.map((r) => ({ ...r }));
     const payload = { data, error: null as null };
     if (onfulfilled) onfulfilled(payload);

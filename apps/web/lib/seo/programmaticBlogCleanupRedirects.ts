@@ -1,7 +1,7 @@
 /**
  * Legacy programmatic `/blog/*` service×location URLs → 7 location hub slugs (where editorial hubs exist).
  * Canonical editorial guides (not redirected): `/blog/move-out-cleaning-rondebosch-cape-town`, `/blog/deep-cleaning-gardens-cape-town`, `/blog/luxury-home-cleaning-camps-bay-cape-town`, `/blog/regular-home-cleaning-wynberg-cape-town`, `/blog/affordable-cleaning-observatory-cape-town`, `/blog/home-cleaning-plumstead-cape-town`, `/blog/home-cleaning-constantia-cape-town`.
- * Thin “best cleaning services in {area}” clones → `/blog/cleaning-services-{area}-cape-town` via `middleware.ts` (not listed here).
+ * Thin “best cleaning services in {area}” clones → `/blog/cleaning-services-{area}-cape-town` via `proxy.ts` (not listed here).
  * Enable after hub rows exist in `blog_posts` as published.
  */
 export const programmaticBlogCleanupRedirects = [
@@ -189,7 +189,7 @@ export const BLOG_SLUGS_EXCLUDED_FROM_SITEMAP = new Set<string>(
   programmaticBlogCleanupRedirects.map((r) => blogSlugFromRedirectSource(r.source)).filter((s): s is string => Boolean(s)),
 );
 
-/** Matches `middleware.ts` thin-clone pattern → `/blog/cleaning-services-{area}-cape-town`. */
+/** Matches `proxy.ts` thin-clone pattern → `/blog/cleaning-services-{area}-cape-town`. */
 const BEST_CLEANING_SERVICES_REDIRECT_SLUG = /^best-cleaning-services-.+-cape-town$/;
 
 /**

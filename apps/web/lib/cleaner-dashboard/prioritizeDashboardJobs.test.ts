@@ -42,4 +42,12 @@ describe("prioritizeDashboardJobsForDisplay", () => {
     expect(merged.some((r) => r.id === "future-1")).toBe(true);
     expect(merged).toHaveLength(12);
   });
+
+  it("puts open jobs with missing or invalid schedule date in the overdue bucket so they still appear", () => {
+    const todayY = "2026-05-07";
+    const noDate = row({ id: "no-date", date: null, status: "assigned" });
+    const badDate = row({ id: "bad-date", date: "not-a-date", status: "assigned" });
+    const merged = prioritizeDashboardJobsForDisplay([noDate, badDate], new Date("2026-05-07T12:00:00Z"), 12, todayY);
+    expect(merged.map((r) => r.id).sort()).toEqual(["bad-date", "no-date"]);
+  });
 });

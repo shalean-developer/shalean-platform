@@ -8,7 +8,7 @@ let cached: SupabaseClient | null | undefined;
  * Browser Supabase client (anon key). Returns null if env is missing.
  *
  * Uses `@supabase/ssr` so the session is stored in cookies — required for
- * `middleware.ts` (cleaner route protection + refresh) to see auth on navigations.
+ * `proxy.ts` (cleaner route protection + refresh) to see auth on navigations.
  *
  * In development, auth uses {@link processLock} instead of the Web Locks API
  * (`navigator.locks` + `steal`). Next.js Fast Refresh / Strict Mode otherwise

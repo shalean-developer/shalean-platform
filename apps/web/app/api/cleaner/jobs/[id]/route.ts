@@ -21,6 +21,7 @@ import {
   type TeamRosterMemberWire,
 } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { metrics } from "@/lib/metrics/counters";
+import { fetchServiceQaForCleanerJob } from "@/lib/booking/bookingServiceQaServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -148,6 +149,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     team_roster_summary = teamRosterPeersSummary(team_roster, session.cleanerId);
   }
 
+  const service_qa = await fetchServiceQaForCleanerJob(admin, {
+    bookingId,
+    cleanerId: session.cleanerId,
+    serviceSlug: typeof record.service_slug === "string" ? record.service_slug : null,
+    serviceLabel: typeof record.service === "string" ? record.service : null,
+  });
+
   return NextResponse.json({
     job: {
       ...safe,
@@ -164,6 +172,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       team_roster,
       team_roster_summary,
       cleaner_has_issue_report,
+      ...(service_qa ? { service_qa } : {}),
       ...augmentCleanerBookingWire(record as Record<string, unknown>, session.cleanerId),
     },
   });

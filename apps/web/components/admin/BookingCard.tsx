@@ -21,6 +21,7 @@ import {
 } from "@/lib/admin/adminBookingListPaymentDisplay";
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
+import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import type { CleanerOption } from "@/lib/admin/assignRanking";
 import { AvatarStack } from "@/components/admin/AvatarStack";
@@ -73,6 +74,11 @@ export function BookingCard({
   const rosterTip = rosterTooltipNames(roster);
   const missingLead = roster.length > 0 && !lead;
   const shortTeam = Boolean(r.is_team_job) && roster.length >= 1 && roster.length < 2;
+  const teamServiceBooking = isTeamService({
+    service: r.service,
+    service_slug: r.service_slug ?? null,
+    booking_snapshot: undefined,
+  });
 
   return (
     <article
@@ -275,8 +281,22 @@ export function BookingCard({
 
             <div>
               <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-                Cleaner
+                {teamServiceBooking ? "Cleaner (solo field)" : "Cleaner"}
               </label>
+              {teamServiceBooking ? (
+                <p className="mb-1.5 max-w-[280px] text-[10px] leading-snug text-zinc-600 dark:text-zinc-400">
+                  Deep/move jobs are staffed via{" "}
+                  <button
+                    type="button"
+                    className="font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                    onClick={() => onOpenDetails(r.id)}
+                  >
+                    Assign team
+                  </button>{" "}
+                  in booking details — not this list. This menu only updates the booking&apos;s{" "}
+                  <span className="font-mono text-[9px]">cleaner_id</span> (e.g. customer&apos;s chosen lead).
+                </p>
+              ) : null}
               <select
                 value={r.cleaner_id ?? ""}
                 onChange={(e) => {

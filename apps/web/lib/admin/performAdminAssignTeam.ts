@@ -10,6 +10,7 @@ import {
 import type { TeamMemberAvailabilityRow } from "@/lib/cleaner/teamMemberAvailability";
 import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
+import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import {
@@ -21,6 +22,7 @@ type BookingRow = {
   id: string;
   date: string | null;
   service: string | null;
+  service_slug?: string | null;
   booking_snapshot?: unknown;
   team_id: string | null;
   is_team_job: boolean | null;
@@ -102,8 +104,12 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   if (!team || !(team as { is_active?: boolean }).is_active) {
     return { ok: false, httpStatus: 400, error: "Team not found or inactive." };
   }
-  if (String((team as { service_type?: string }).service_type ?? "") !== expectedService) {
-    return { ok: false, httpStatus: 400, error: "Team service type does not match this booking." };
+  if (!isDispatchTeamPoolServiceType(String((team as { service_type?: string }).service_type ?? ""))) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: "Team must be a deep or move dispatch team (Admin → Teams).",
+    };
   }
 
   const dateYmd = String(b.date ?? "").trim();
@@ -307,6 +313,8 @@ export type TeamAssignCandidateRow = {
   remaining_slots_today: number;
   /** False when no qualified active cleaner or no spare day slot for this booking to land on this team. */
   assignable: boolean;
+  /** False when the team row is inactive — still listed so admins can see and re-enable in Teams admin. */
+  team_active: boolean;
 };
 
 function activeCleanerIdsSortedOnDate(members: TeamMemberAvailabilityRow[], dateYmd: string): string[] {
@@ -337,7 +345,7 @@ export type ListTeamAssignCandidatesResult = {
 
 export async function listTeamAssignCandidatesForBooking(
   admin: SupabaseClient,
-  booking: Pick<BookingRow, "service" | "booking_snapshot" | "date" | "id">,
+  booking: Pick<BookingRow, "service" | "booking_snapshot" | "date" | "id" | "service_slug">,
 ): Promise<ListTeamAssignCandidatesResult> {
   if (!isTeamService(booking as BookingRow)) {
     return { teams: [], error: null, qualified_for_label: "" };
@@ -350,21 +358,20 @@ export async function listTeamAssignCandidatesForBooking(
   }
   const capGate = serviceCapabilityGateFromTeamServiceType(st);
 
-  const { data: teams, error: tErr } = await admin
+  const { data: teamsRaw, error: tErr } = await admin
     .from("teams")
     .select("id, name, service_type, capacity_per_day, is_active")
-    .eq("service_type", st)
-    .eq("is_active", true)
     .order("name", { ascending: true })
-    .limit(100);
+    .limit(250);
   if (tErr) return { teams: [], error: tErr.message, qualified_for_label: qualifiedLabel };
 
-  const teamRows = (teams ?? []) as Array<{
+  const teamRows = ((teamsRaw ?? []) as Array<{
     id: string;
     name: string;
     service_type: string;
     capacity_per_day: number;
-  }>;
+    is_active?: boolean | null;
+  }>).filter((row) => isDispatchTeamPoolServiceType(row.service_type));
   const teamIds = teamRows.map((t) => String(t.id).trim()).filter(Boolean);
 
   const membersByTeam = new Map<string, TeamMemberAvailabilityRow[]>();
@@ -403,7 +410,8 @@ export async function listTeamAssignCandidatesForBooking(
     const { count: usedFull } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd);
     const { count: usedExcl } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd, booking.id);
     const cap = teamDayCapacitySlots(row.capacity_per_day);
-    const assignable = qualifiedCount > 0 && usedExcl < cap;
+    const teamActive = row.is_active !== false;
+    const assignable = teamActive && qualifiedCount > 0 && usedExcl < cap;
     out.push({
       id: row.id,
       name: row.name,
@@ -415,6 +423,7 @@ export async function listTeamAssignCandidatesForBooking(
       used_slots_today: usedFull,
       remaining_slots_today: Math.max(0, cap - usedFull),
       assignable,
+      team_active: teamActive,
     });
   }
   return { teams: out, error: null, qualified_for_label: qualifiedLabel };

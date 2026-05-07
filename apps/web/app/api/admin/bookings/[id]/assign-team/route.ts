@@ -43,23 +43,41 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, service, booking_snapshot")
+    .select("id, date, service, service_slug, booking_snapshot")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
   if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
 
-  if (!isTeamService(booking as { service?: string | null; booking_snapshot?: unknown })) {
+  if (
+    !isTeamService(
+      booking as {
+        service?: string | null;
+        service_slug?: string | null;
+        booking_snapshot?: unknown;
+      },
+    )
+  ) {
     return NextResponse.json({ supports_team_assignment: false, teams: [] });
   }
 
   const { teams, error, qualified_for_label } = await listTeamAssignCandidatesForBooking(
     admin,
-    booking as { id: string; date: string | null; service: string | null; booking_snapshot?: unknown },
+    booking as {
+      id: string;
+      date: string | null;
+      service: string | null;
+      service_slug?: string | null;
+      booking_snapshot?: unknown;
+    },
   );
   if (error) return NextResponse.json({ error }, { status: 400 });
 
-  return NextResponse.json({ supports_team_assignment: true, teams, qualified_for_label });
+  return NextResponse.json({
+    supports_team_assignment: true,
+    teams,
+    qualified_for_label,
+  });
 }
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCleanerVisibleBookingsOrFilter } from "@/lib/cleaner/cleanerBookingAccess";
+import {
+  fetchCleanerVisibleBookingsMerged,
+  sortBookingsByDateThenTime,
+} from "@/lib/cleaner/cleanerBookingAccess";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import {
   suggestedDailyGoalCentsFromWireRows,
@@ -61,24 +64,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
 
-  const { orFilter } = await getCleanerVisibleBookingsOrFilter(admin, cleanerId);
-
-  const { data: rows, error } = await admin
-    .from("bookings")
-    .select(DASHBOARD_BOOKING_SELECT)
-    .or(orFilter)
-    .not("status", "eq", "failed")
-    .not("status", "eq", "pending_payment")
-    .not("status", "eq", "payment_expired")
-    .order("date", { ascending: true })
-    .order("time", { ascending: true })
-    .limit(80);
+  const { data: mergedRows, error } = await fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
+    select: DASHBOARD_BOOKING_SELECT,
+    perBranchLimit: 240,
+    applyEachBranch: (q) =>
+      q
+        .not("status", "eq", "failed")
+        .not("status", "eq", "pending_payment")
+        .not("status", "eq", "payment_expired")
+        .order("date", { ascending: true })
+        .order("time", { ascending: true }),
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rawList = (rows ?? []) as Record<string, unknown>[];
+  const rawList = sortBookingsByDateThenTime((mergedRows ?? []) as Record<string, unknown>[]).slice(0, 80);
   const now = new Date();
   const { todayYmd } = getJhbTodayRange(now);
   const wired = rawList

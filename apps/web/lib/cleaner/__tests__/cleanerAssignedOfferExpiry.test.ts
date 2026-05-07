@@ -4,13 +4,14 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 
 function row(
   over: Partial<CleanerBookingRow>,
-): Pick<CleanerBookingRow, "status" | "cleaner_response_status" | "date" | "time" | "accepted_at"> {
+): Pick<CleanerBookingRow, "status" | "cleaner_response_status" | "date" | "time" | "accepted_at" | "is_team_job"> {
   return {
     status: "assigned",
     cleaner_response_status: "pending",
     date: "2026-04-30",
     time: "09:00",
     accepted_at: null,
+    is_team_job: false,
     ...over,
   };
 }
@@ -26,6 +27,12 @@ describe("assignedOfferPastAcceptanceDeadline", () => {
     const startMs = Date.parse("2026-04-30T07:00:00.000Z");
     const nowMs = startMs + ASSIGNED_ACCEPT_GRACE_MS + 60_000;
     expect(assignedOfferPastAcceptanceDeadline(row({}), nowMs)).toBe(true);
+  });
+
+  it("is false for team jobs after start + grace (roster visibility must not drop)", () => {
+    const startMs = Date.parse("2026-04-30T07:00:00.000Z");
+    const nowMs = startMs + ASSIGNED_ACCEPT_GRACE_MS + 60_000;
+    expect(assignedOfferPastAcceptanceDeadline(row({ is_team_job: true }), nowMs)).toBe(false);
   });
 
   it("is false once accepted", () => {

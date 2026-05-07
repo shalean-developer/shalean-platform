@@ -21,7 +21,7 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { notifyCleanerBookingPaid } from "@/lib/notifications/notifyCleanerBookingPaid";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
 
-export type AdminMarkPaidMethod = "cash" | "zoho";
+export type AdminMarkPaidMethod = "cash" | "zoho" | "eft";
 
 function buildAutoAssignmentPatch(
   autoAssignmentTag: "auto_dispatch" | "auto_fallback",
@@ -64,6 +64,9 @@ function buildExternalPaystackReference(method: AdminMarkPaidMethod, bookingId: 
     "",
   );
   const safe = raw.length > 0 ? raw.slice(0, 120) : bookingId;
+  if (method === "eft") {
+    return `eft_${safe}`;
+  }
   return `zoho_${safe}`;
 }
 
@@ -186,7 +189,7 @@ export type AdminMarkBookingPaidResult =
   | { ok: false; error: string; httpStatus: number };
 
 /**
- * Marks a booking paid off-platform (cash / Zoho), mirroring Paystack success writes plus
+ * Marks a booking paid off-platform (cash / Zoho / EFT), mirroring Paystack success writes plus
  * `recordBookingSideEffects`, checkout-like auto-dispatch, and the same post-payment analytics hooks as
  * {@link upsertBookingFromPaystack}.
  */
@@ -460,4 +463,89 @@ export async function adminMarkBookingPaid(
       paystack_reference: externalRef,
     },
   };
+}
+
+export type AdminRecordDepositResult =
+  | { ok: true; deposit_paid_cents: number }
+  | { ok: false; error: string; httpStatus: number };
+
+/**
+ * Records or updates a deposit amount without marking the booking fully paid (no payment_completed_at).
+ * Does not run Paystack success side effects or payout hooks.
+ */
+export async function adminRecordBookingDeposit(
+  admin: SupabaseClient,
+  params: {
+    bookingId: string;
+    depositCents: number;
+    method: AdminMarkPaidMethod;
+    reference?: string | null;
+    reason: string;
+    adminUserId: string;
+  },
+): Promise<AdminRecordDepositResult> {
+  const { bookingId, depositCents, method, reference, reason, adminUserId } = params;
+  const cents = Math.round(Number(depositCents));
+  if (!Number.isFinite(cents) || cents <= 0) {
+    return { ok: false, error: "deposit_cents must be a positive integer.", httpStatus: 400 };
+  }
+  const reasonTrim = String(reason ?? "").trim();
+  if (reasonTrim.length < 2) {
+    return { ok: false, error: "Enter a short reason (at least 2 characters).", httpStatus: 400 };
+  }
+
+  const { data: row, error: loadErr } = await admin
+    .from("bookings")
+    .select("id, status, payment_completed_at")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (loadErr || !row) {
+    return { ok: false, error: loadErr?.message ?? "Booking not found.", httpStatus: 404 };
+  }
+
+  const st = String((row as { status?: string | null }).status ?? "").trim().toLowerCase();
+  if (st === "cancelled" || st === "failed") {
+    return { ok: false, error: "Cannot record deposit: booking is cancelled or failed.", httpStatus: 400 };
+  }
+
+  const paidAt = (row as { payment_completed_at?: string | null }).payment_completed_at;
+  if (paidAt != null && String(paidAt).trim() !== "") {
+    return {
+      ok: false,
+      error: "Booking is already fully marked paid. Deposit can only be recorded before full settlement.",
+      httpStatus: 400,
+    };
+  }
+
+  const refTrim = reference != null && String(reference).trim() ? String(reference).trim().slice(0, 500) : null;
+
+  const { error: upErr } = await admin
+    .from("bookings")
+    .update({
+      deposit_paid_cents: cents,
+    })
+    .eq("id", bookingId)
+    .is("payment_completed_at", null);
+
+  if (upErr) {
+    await reportOperationalIssue("error", "adminRecordBookingDeposit", upErr.message, { bookingId });
+    return { ok: false, error: upErr.message, httpStatus: 500 };
+  }
+
+  void logSystemEvent({
+    level: "info",
+    source: "ADMIN_BOOKING_DEPOSIT",
+    message: "deposit_recorded",
+    context: {
+      bookingId,
+      deposit_cents: cents,
+      method,
+      reference: refTrim,
+      reason: reasonTrim.slice(0, 500),
+      admin_user_id: adminUserId.trim() || null,
+    },
+  });
+
+  return { ok: true, deposit_paid_cents: cents };
 }

@@ -50,6 +50,8 @@ import {
   signalCleanerDashboardJobsRefresh,
 } from "@/lib/cleaner/cleanerDashboardSessionCache";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { BookingServiceQaPanel } from "@/components/cleaner/BookingServiceQaPanel";
+import type { ServiceQaCleanerWire } from "@/lib/booking/bookingServiceQa";
 import { cn } from "@/lib/utils";
 
 type CleanerJobDetailWire = {
@@ -94,6 +96,8 @@ type CleanerJobDetailWire = {
   completed_at?: string | null;
   created_at?: string | null;
   cleaner_response_status?: string | null;
+  /** Deep / move cleaning execution QA (optional checklist + photos). */
+  service_qa?: ServiceQaCleanerWire | null;
 };
 
 function resolveWireForLifecycleFlush(
@@ -1273,6 +1277,17 @@ export default function CleanerJobDetailPage() {
               </div>
             </div>
           </section>
+
+          {displayJob.service_qa ? (
+            <Section title="Job checklist & photos">
+              <BookingServiceQaPanel
+                bookingId={id}
+                bookingStatus={displayJob.status}
+                serviceQa={displayJob.service_qa}
+                onUpdated={() => void loadJob()}
+              />
+            </Section>
+          ) : null}
 
           <Section title="Before you start" className="border-dashed">
             <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">

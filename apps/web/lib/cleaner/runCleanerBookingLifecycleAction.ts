@@ -191,6 +191,7 @@ export async function runCleanerBookingLifecycleAction(params: {
         date: bRow.date ?? null,
         time: bRow.time ?? null,
         accepted_at: bRow.accepted_at ?? null,
+        is_team_job: bRow.is_team_job === true,
       })
     ) {
       return {

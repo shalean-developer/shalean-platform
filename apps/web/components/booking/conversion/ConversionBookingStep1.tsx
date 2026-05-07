@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 import { calculateHomeWidgetQuoteZar, getWidgetOptionalExtraPrices, type WidgetOptionalExtraId } from "@/lib/pricing/calculatePrice";
+import { filterWidgetExtrasForCatalogService } from "@/lib/pricing/calculateCatalogPrice";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 import { Button } from "@/components/ui/button";
 import { BookingDateTimeSection } from "@/components/booking/BookingDateTimeSection";
@@ -52,6 +53,15 @@ export function ConversionBookingStep1({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!catalog || locking) return;
+    const filtered = filterWidgetExtrasForCatalogService(catalog, form.extras, form.service);
+    const unchanged =
+      filtered.length === form.extras.length && filtered.every((id, i) => id === form.extras[i]);
+    if (unchanged) return;
+    setForm((p) => ({ ...p, extras: filtered }));
+  }, [catalog, locking, form.extras, form.service, setForm]);
 
   const onConvDateChange = useCallback(
     (ymd: string) => setForm((p) => ({ ...p, date: ymd })),

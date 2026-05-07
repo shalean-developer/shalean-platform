@@ -6,6 +6,8 @@ export type AdminBookingsListRow = {
   customer_name: string | null;
   customer_email: string | null;
   service: string | null;
+  /** Catalog slug when present — used for deep/move team-job detection on list cards. */
+  service_slug?: string | null;
   date: string | null;
   time: string | null;
   location: string | null;

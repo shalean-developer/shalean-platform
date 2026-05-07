@@ -5,7 +5,10 @@ import { jobStartMsJohannesburg } from "@/lib/cleaner/jobStartJohannesburgMs";
 /** Solo assigned jobs: allow accept until scheduled start + this grace (ms). */
 export const ASSIGNED_ACCEPT_GRACE_MS = 30 * 60 * 1000;
 
-type OfferExpiryRow = Pick<CleanerBookingRow, "status" | "cleaner_response_status" | "date" | "time" | "accepted_at">;
+type OfferExpiryRow = Pick<
+  CleanerBookingRow,
+  "status" | "cleaner_response_status" | "date" | "time" | "accepted_at" | "is_team_job"
+>;
 
 function cleanerPastAcceptForExpiry(row: OfferExpiryRow): boolean {
   if (Boolean(String(row.accepted_at ?? "").trim())) return true;
@@ -20,7 +23,8 @@ function cleanerPastAcceptForExpiry(row: OfferExpiryRow): boolean {
 }
 
 /**
- * Assigned solo offer where the cleaner never accepted and the scheduled start + grace is in the past.
+ * Assigned **solo** offer where the cleaner never accepted and the scheduled start + grace is in the past.
+ * Team jobs (`is_team_job`) never use this TTL — roster members must keep seeing the booking until ops fixes acceptance or status.
  * When `start` cannot be parsed from `date`/`time`, returns false (do not expire in-app).
  */
 export function assignedOfferPastAcceptanceDeadline(
@@ -28,6 +32,7 @@ export function assignedOfferPastAcceptanceDeadline(
   nowMs: number = Date.now(),
   graceMs: number = ASSIGNED_ACCEPT_GRACE_MS,
 ): boolean {
+  if (row.is_team_job === true) return false;
   const st = String(row.status ?? "").toLowerCase();
   if (st !== "assigned" && st !== "confirmed") return false;
   if (cleanerPastAcceptForExpiry(row)) return false;

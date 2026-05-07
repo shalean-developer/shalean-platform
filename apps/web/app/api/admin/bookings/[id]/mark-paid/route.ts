@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { adminMarkBookingPaid, type AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
+import {
+  adminMarkBookingPaid,
+  adminRecordBookingDeposit,
+  type AdminMarkPaidMethod,
+} from "@/lib/booking/adminMarkBookingPaid";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -38,7 +42,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Missing admin user id." }, { status: 401 });
   }
 
-  let body: { method?: string; reference?: string; amount_cents?: number };
+  let body: {
+    method?: string;
+    reference?: string;
+    amount_cents?: number;
+    settlement_mode?: string;
+    deposit_cents?: number;
+    reason?: string;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -46,8 +57,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const methodRaw = String(body.method ?? "").trim().toLowerCase();
-  if (methodRaw !== "cash" && methodRaw !== "zoho") {
-    return NextResponse.json({ error: "method must be \"cash\" or \"zoho\"." }, { status: 400 });
+  if (methodRaw !== "cash" && methodRaw !== "zoho" && methodRaw !== "eft") {
+    return NextResponse.json({ error: "method must be \"cash\", \"zoho\", or \"eft\"." }, { status: 400 });
   }
   const method = methodRaw as AdminMarkPaidMethod;
 
@@ -58,6 +69,31 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  const settlementMode = String(body.settlement_mode ?? "full").trim().toLowerCase();
+  if (settlementMode === "deposit") {
+    const depositCents =
+      body.deposit_cents != null && Number.isFinite(Number(body.deposit_cents))
+        ? Math.round(Number(body.deposit_cents))
+        : NaN;
+    const reason = typeof body.reason === "string" ? body.reason : "";
+    const dep = await adminRecordBookingDeposit(admin, {
+      bookingId,
+      depositCents,
+      method,
+      reference: reference ?? null,
+      reason,
+      adminUserId,
+    });
+    if (!dep.ok) {
+      return NextResponse.json({ ok: false, error: dep.error }, { status: dep.httpStatus });
+    }
+    return NextResponse.json({
+      ok: true,
+      deposit_recorded: true,
+      deposit_paid_cents: dep.deposit_paid_cents,
+    });
   }
 
   const result = await adminMarkBookingPaid(admin, {

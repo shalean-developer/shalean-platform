@@ -14,6 +14,12 @@ function dateYmd(r: CleanerBookingRow): string {
   return String(r.date ?? "").trim().slice(0, 10);
 }
 
+/** `YYYY-MM-DD` from `r.date`, or null when missing / not a calendar date string. */
+function scheduleDateYmd(r: CleanerBookingRow): string | null {
+  const d = dateYmd(r);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+}
+
 function isOpen(r: CleanerBookingRow): boolean {
   const s = statusOf(r);
   return s !== "completed" && s !== "cancelled";
@@ -58,12 +64,26 @@ export function prioritizeDashboardJobsForDisplay(
   const deduped = dedupeBookingsById(rows);
 
   const todayOpen = deduped
-    .filter((r) => isOpen(r) && dateYmd(r) === todayY)
+    .filter((r) => isOpen(r) && scheduleDateYmd(r) === todayY)
     .sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? "")));
 
-  const overdue = deduped.filter((r) => isOpen(r) && dateYmd(r) && dateYmd(r) < todayY).sort(sortByDateThenTimeAsc);
+  /** Invalid/missing schedule: still show on dashboard (same idea as schedule tab “Needs attention”). */
+  const overdue = deduped
+    .filter((r) => {
+      if (!isOpen(r)) return false;
+      const d = scheduleDateYmd(r);
+      if (d == null) return true;
+      return d < todayY;
+    })
+    .sort(sortByDateThenTimeAsc);
 
-  const future = deduped.filter((r) => isOpen(r) && dateYmd(r) > todayY).sort(sortByDateThenTimeAsc);
+  const future = deduped
+    .filter((r) => {
+      if (!isOpen(r)) return false;
+      const d = scheduleDateYmd(r);
+      return d != null && d > todayY;
+    })
+    .sort(sortByDateThenTimeAsc);
 
   const completedToday = deduped
     .filter((r) => {

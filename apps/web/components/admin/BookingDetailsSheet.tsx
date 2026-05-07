@@ -41,7 +41,7 @@ export default function BookingDetailsSheet({
       />
       <div
         className={[
-          "absolute right-0 top-0 h-dvh w-full max-w-xl overflow-y-auto border-l border-zinc-200 bg-white shadow-2xl transition-transform duration-250 ease-out",
+          "absolute right-0 top-0 z-10 h-dvh w-full max-w-xl overflow-y-auto border-l border-zinc-200 bg-white shadow-2xl transition-transform duration-250 ease-out",
           entered ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >

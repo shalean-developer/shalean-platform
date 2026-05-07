@@ -9,6 +9,7 @@ import {
 } from "@/lib/booking/serviceCapabilityEligibility";
 import { countActiveTeamMembersOnDate, isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
@@ -610,14 +611,18 @@ export async function assignTeamToBooking(
 
   const tAllocStart = performance.now();
 
-  const { data: teams, error: tErr } = await supabase
+  const { data: teamsRaw, error: tErr } = await supabase
     .from("teams")
-    .select("id, capacity_per_day")
+    .select("id, capacity_per_day, service_type")
     .eq("is_active", true)
-    .eq("service_type", serviceType)
     .order("created_at", { ascending: true })
-    .limit(50);
+    .limit(200);
   if (tErr) return { ok: false, error: "db_error", message: tErr.message };
+
+  const teams = (teamsRaw ?? []).filter((t) =>
+    isDispatchTeamPoolServiceType(String((t as { service_type?: string }).service_type ?? "")),
+  );
+
   if (!teams?.length) {
     void logSystemEvent({
       level: "warn",

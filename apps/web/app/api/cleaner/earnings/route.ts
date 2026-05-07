@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCleanerVisibleBookingsOrFilter } from "@/lib/cleaner/cleanerBookingAccess";
+import {
+  fetchCleanerVisibleBookingsMerged,
+  sortBookingsByCompletedAtThenId,
+} from "@/lib/cleaner/cleanerBookingAccess";
 import {
   suggestedDailyGoalCentsFromWireRows,
   todayCentsAndBreakdownFromBookings,
@@ -152,8 +155,6 @@ export async function GET(request: Request) {
   const useLedgerTotalsEnv = process.env.USE_LEDGER_TOTALS === "true";
   const useLedgerTotals = useLedgerTotalsEnv || useLedgerTotalsFromQuery;
 
-  const { orFilter: visibilityOr } = await getCleanerVisibleBookingsOrFilter(admin, session.cleanerId);
-
   const ledgerTotalsQuery = admin
     .from("cleaner_earnings")
     .select("amount_cents, status, booking_id")
@@ -177,30 +178,28 @@ export async function GET(request: Request) {
     ledgerFilteredQuery = ledgerFilteredQuery.eq("status", statusFilter);
   }
 
-  const [
-    { data: bookings, error },
-    { data: paymentDetails, error: paymentDetailsError },
-    { data: ledgerTotalsRows, error: ledgerTotalsErr },
-    { data: ledgerRows, error: ledgerErr },
-  ] = await Promise.all([
-    admin
-      .from("bookings")
-      .select(
-        "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents",
-      )
-      .or(visibilityOr)
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: false })
-      .limit(300),
-    admin.from("cleaner_payment_details").select("recipient_code").eq("cleaner_id", session.cleanerId).maybeSingle(),
-    ledgerTotalsQuery,
-    ledgerFilteredQuery,
-  ]);
+  const [{ data: bookingsMerged, error }, { data: paymentDetails, error: paymentDetailsError }, { data: ledgerTotalsRows, error: ledgerTotalsErr }, { data: ledgerRows, error: ledgerErr }] =
+    await Promise.all([
+      fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
+        select:
+          "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents",
+        perBranchLimit: 300,
+        applyEachBranch: (q) =>
+          q
+            .eq("status", "completed")
+            .order("completed_at", { ascending: false, nullsFirst: false })
+            .order("id", { ascending: false }),
+      }),
+      admin.from("cleaner_payment_details").select("recipient_code").eq("cleaner_id", session.cleanerId).maybeSingle(),
+      ledgerTotalsQuery,
+      ledgerFilteredQuery,
+    ]);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const bookings = sortBookingsByCompletedAtThenId((bookingsMerged ?? []) as Record<string, unknown>[]).slice(0, 300);
   if (paymentDetailsError) {
     return NextResponse.json({ error: paymentDetailsError.message }, { status: 500 });
   }
@@ -214,7 +213,7 @@ export async function GET(request: Request) {
   /** Wall-clock when this response bundle was assembled (bookings + ledger queries already completed). */
   const as_of = new Date().toISOString();
 
-  const rows = (bookings ?? []) as BookingEarningsRow[];
+  const rows = bookings as BookingEarningsRow[];
 
   const now = new Date();
   const goalWire: CleanerDashboardEarningsWireRow[] = rows.map((r) => ({

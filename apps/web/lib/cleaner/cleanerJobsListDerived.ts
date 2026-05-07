@@ -90,8 +90,9 @@ export function formatJobScopeCompactLine(row: CleanerBookingRow): string | null
 }
 
 export function isOpenCleanerJobRow(row: CleanerBookingRow): boolean {
-  const s = String(row.status ?? "").toLowerCase();
-  return Boolean(s) && s !== "completed" && s !== "cancelled";
+  const s = String(row.status ?? "").toLowerCase().trim();
+  /** Empty status still counts as open — otherwise API rows never appear under Upcoming / All. */
+  return s !== "completed" && s !== "cancelled";
 }
 
 export function isCompletedCleanerJobRow(row: CleanerBookingRow): boolean {

@@ -32,6 +32,7 @@ import {
   resolveCheckoutCleanerSelection,
 } from "@/lib/booking/checkoutCleanerEligibility";
 import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConversionBucket";
+import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackReason";
@@ -347,10 +348,16 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const pricing_version_id =
     priceSnapshot.pricing_version_id ?? lockedRow?.pricing_version_id?.trim() ?? null;
 
-  const extrasSnapshotRaw =
-    Array.isArray(locked?.extras_line_items) && locked.extras_line_items.length > 0
-      ? locked.extras_line_items.map(({ slug, name, price }) => ({ slug, name, price }))
-      : [];
+  let extrasSnapshotRaw: { slug: string; name: string; price: number }[] = [];
+  if (lockedRow) {
+    extrasSnapshotRaw = resolveExtrasLineItems({
+      extras: lockedRow.extras ?? [],
+      extras_line_items: lockedRow.extras_line_items,
+      service: lockedRow.service ?? null,
+    }).map(({ slug, name, price }) => ({ slug, name, price }));
+  } else if (Array.isArray(locked?.extras_line_items) && locked.extras_line_items.length > 0) {
+    extrasSnapshotRaw = locked.extras_line_items.map(({ slug, name, price }) => ({ slug, name, price }));
+  }
   const extrasSnapshot = sanitizeBookingExtrasForPersist(extrasSnapshotRaw, {
     where: "upsertBookingFromPaystack",
     bookingId: existingPendingPaymentId ?? undefined,

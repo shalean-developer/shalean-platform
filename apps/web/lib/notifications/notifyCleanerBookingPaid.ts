@@ -35,7 +35,7 @@ export async function notifyCleanerBookingPaid(params: {
   admin: SupabaseClient;
   bookingId: string;
   cleanerId: string;
-  method: "cash" | "zoho";
+  method: "cash" | "zoho" | "eft";
   externalReference?: string | null;
 }): Promise<void> {
   const { admin, bookingId, cleanerId, method, externalReference } = params;
@@ -78,9 +78,12 @@ export async function notifyCleanerBookingPaid(params: {
       return;
     }
     const jobRef = bookingJobDisplayRef(bookingId);
-    const channel = method === "cash" ? "Cash" : "Zoho";
+    const channel =
+      method === "cash" ? "Cash" : method === "eft" ? "EFT" : "Zoho";
     const refLine =
-      method === "zoho" && externalReference != null && String(externalReference).trim()
+      (method === "zoho" || method === "eft") &&
+      externalReference != null &&
+      String(externalReference).trim()
         ? ` Ref: ${String(externalReference).trim().slice(0, 40)}.`
         : "";
     const body = `Shalean: Customer payment confirmed (${channel}) for ${jobRef}.${refLine} Hi ${firstName} — you're all set for this job.`.slice(

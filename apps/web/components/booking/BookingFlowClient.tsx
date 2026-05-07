@@ -17,6 +17,7 @@ import {
 } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage, readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { BookingFlowProvider } from "@/components/booking/BookingFlowContext";
+import { BookingCatalogExtrasGuard } from "@/components/booking/BookingCatalogExtrasGuard";
 import { BookingPriceProvider } from "@/components/booking/BookingPriceContext";
 import { BookingStep1Provider } from "@/components/booking/useBookingStep1";
 import { StepEntry } from "@/components/booking/steps/StepEntry";
@@ -234,6 +235,7 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
     <BookingFlowProvider step={step} promoParam={promo}>
       <BookingStep1Provider urlPromo={promo}>
         <BookingPriceProvider>
+          <BookingCatalogExtrasGuard />
           <div
             className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950"
             data-booking-funnel

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCleanerVisibleBookingsOrFilter } from "@/lib/cleaner/cleanerBookingAccess";
+import {
+  fetchCleanerVisibleBookingsMerged,
+  sortBookingsByDateThenTime,
+} from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -81,17 +84,21 @@ export async function GET(request: Request) {
         .order("time", { ascending: true })
         .limit(100)
     : await (async () => {
-        const { orFilter } = await getCleanerVisibleBookingsOrFilter(admin, viewerCleanerId);
-        return admin
-          .from("bookings")
-          .select(bookingSelect)
-          .or(orFilter)
-          .not("status", "eq", "failed")
-          .not("status", "eq", "pending_payment")
-          .not("status", "eq", "payment_expired")
-          .order("date", { ascending: true })
-          .order("time", { ascending: true })
-          .limit(100);
+        const { data: merged, error: mergeErr } = await fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
+          select: bookingSelect,
+          perBranchLimit: 300,
+          applyEachBranch: (q) =>
+            q
+              .not("status", "eq", "failed")
+              .not("status", "eq", "pending_payment")
+              .not("status", "eq", "payment_expired")
+              .order("date", { ascending: true })
+              .order("time", { ascending: true }),
+        });
+        return {
+          data: sortBookingsByDateThenTime((merged ?? []) as Record<string, unknown>[]).slice(0, 100),
+          error: mergeErr,
+        };
       })();
 
   if (error) {

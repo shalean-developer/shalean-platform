@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Loader2, MapPin, Pencil, Phone, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import {
@@ -25,6 +26,11 @@ import {
   EmergencyRosterReassignModal,
   type EmergencyRosterCleanerRow,
 } from "@/components/admin/EmergencyRosterReassignModal";
+import type { ServiceQaAdminWire } from "@/lib/booking/bookingServiceQa";
+import {
+  parseAdminBookingPriceSnapshot,
+  type AdminPriceSnapshotCardView,
+} from "@/lib/booking/priceSnapshotAdminDisplay";
 
 type BookingSeed = { id: string };
 
@@ -32,6 +38,8 @@ type BookingDetails = {
   id: string;
   customer_email: string | null;
   service: string | null;
+  /** Catalog slug when persisted (`quick`, `standard`, `move`, …). */
+  service_slug?: string | null;
   date: string | null;
   time: string | null;
   location: string | null;
@@ -39,6 +47,10 @@ type BookingDetails = {
   amount_paid_cents: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
+  /** Team / modern earnings: pool shown to cleaners; `cleaner_payout_cents` may be 0 when `payout_type` is `team_fixed`. */
+  display_earnings_cents?: number | null;
+  /** Ledger total when synced (fallback when display basis is missing). */
+  cleaner_earnings_total_cents?: number | null;
   company_revenue_cents?: number | null;
   payout_percentage?: number | null;
   payout_type?: string | null;
@@ -66,11 +78,13 @@ type BookingDetails = {
   admin_force_slot_override?: boolean | null;
   /** Immutable checkout / admin pricing snapshot (JSON). */
   price_snapshot?: unknown;
+  /** Checkout breakdown blob (`extrasZar`, optional nested `job.extrasZar`, etc.). */
+  price_breakdown?: unknown;
   /** Invoice-style booking payout lifecycle (`pending` | `eligible` | `paid`). */
   payout_status?: string | null;
   payment_completed_at?: string | null;
   payment_status?: string | null;
-  /** Off-platform settlement: cash | zoho (set by admin mark-paid). */
+  /** Off-platform settlement: cash | zoho | eft (set by admin mark-paid). */
   payment_method?: string | null;
   payment_reference_external?: string | null;
   paystack_reference?: string | null;
@@ -83,6 +97,8 @@ type BookingDetails = {
   updated_at?: string | null;
   payment_mismatch?: boolean | null;
   total_paid_cents?: number | null;
+  /** Off-platform deposit recorded by admin (cents); does not imply full settlement. */
+  deposit_paid_cents?: number | null;
   assigned_at?: string | null;
   /** Set when cleaner accepts in app (with `cleaner_response_status` accepted). */
   accepted_at?: string | null;
@@ -94,6 +110,22 @@ type BookingDetails = {
   /** Derived recurring Paystack collection label (see `deriveRecurringPaymentState`). */
   payment_state?: string | null;
 };
+
+/** Solo-cleaner assign card: only these catalog services (deep/move/quick use dispatch / team flows). */
+const ADMIN_SOLO_CLEANER_DETAIL_CARD_SERVICES = new Set(["standard", "airbnb", "carpet"]);
+
+function adminBookingShowsSoloCleanerDetailCard(booking: BookingDetails): boolean {
+  const slugRaw =
+    typeof booking.service_slug === "string" ? booking.service_slug.trim().toLowerCase() : "";
+  if (slugRaw) return ADMIN_SOLO_CLEANER_DETAIL_CARD_SERVICES.has(slugRaw);
+
+  const lab = (booking.service ?? "").trim().toLowerCase();
+  if (!lab) return false;
+  if (lab.includes("standard")) return true;
+  if (lab.includes("airbnb")) return true;
+  if (lab.includes("carpet")) return true;
+  return false;
+}
 
 type TeamSummary = { id: string; name: string; member_count: number | null };
 
@@ -109,6 +141,8 @@ type TeamAssignCandidate = {
   used_slots_today: number;
   remaining_slots_today: number;
   assignable: boolean;
+  /** False when team is deactivated in Admin → Teams (still listed). */
+  team_active?: boolean;
 };
 
 type BookingCleanerRow = {
@@ -238,33 +272,61 @@ function centsToZar(cents: number | null | undefined): number | null {
   return Math.round(Number(cents) / 100);
 }
 
-type PriceSnapshotV1View = {
-  v: 1;
-  service_type: string;
-  base_price: number;
-  extras: { id: string; name: string; price: number }[];
-  total_price: number;
-};
+/**
+ * Team jobs persist cleaner-facing amounts on `display_earnings_cents` and set legacy `cleaner_payout_cents` to 0.
+ * Solo jobs use `cleaner_payout_cents` / `cleaner_bonus_cents`.
+ */
+function adminBookingCleanerPayoutCard(booking: BookingDetails): {
+  payoutLabel: string;
+  payoutZar: number | null;
+  bonusZar: number;
+  pending: boolean;
+  teamPool: boolean;
+} {
+  const payoutType = String(booking.payout_type ?? "").trim().toLowerCase();
+  const teamFixed = payoutType === "team_fixed";
+  const teamJob = booking.is_team_job === true;
+  const useTeamPool = teamFixed || teamJob;
 
-function parsePriceSnapshotV1(raw: unknown): PriceSnapshotV1View | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const o = raw as Record<string, unknown>;
-  if (o.v !== 1) return null;
-  const service_type = typeof o.service_type === "string" ? o.service_type : "";
-  const base_price = typeof o.base_price === "number" && Number.isFinite(o.base_price) ? Math.round(o.base_price) : NaN;
-  const total_price = typeof o.total_price === "number" && Number.isFinite(o.total_price) ? Math.round(o.total_price) : NaN;
-  if (!service_type || !Number.isFinite(base_price) || !Number.isFinite(total_price)) return null;
-  const extrasRaw = Array.isArray(o.extras) ? o.extras : [];
-  const extras: { id: string; name: string; price: number }[] = [];
-  for (const x of extrasRaw) {
-    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
-    const e = x as Record<string, unknown>;
-    const id = typeof e.id === "string" ? e.id : "";
-    const name = typeof e.name === "string" ? e.name : id || "Extra";
-    const price = typeof e.price === "number" && Number.isFinite(e.price) ? Math.round(e.price) : 0;
-    extras.push({ id: id || "extra", name, price });
+  const displayRaw = booking.display_earnings_cents;
+  const displayCents =
+    displayRaw != null && Number.isFinite(Number(displayRaw)) ? Math.max(0, Math.round(Number(displayRaw))) : null;
+
+  const ledgerRaw = booking.cleaner_earnings_total_cents;
+  const ledgerCents =
+    ledgerRaw != null && Number.isFinite(Number(ledgerRaw)) ? Math.max(0, Math.round(Number(ledgerRaw))) : null;
+
+  if (useTeamPool) {
+    const poolCents =
+      displayCents ??
+      (ledgerCents != null && ledgerCents > 0 ? ledgerCents : null);
+    if (poolCents != null) {
+      return {
+        payoutLabel: "Team cleaner pool",
+        payoutZar: centsToZar(poolCents),
+        bonusZar: 0,
+        pending: false,
+        teamPool: true,
+      };
+    }
+    return {
+      payoutLabel: "Team cleaner pool",
+      payoutZar: null,
+      bonusZar: 0,
+      pending: true,
+      teamPool: true,
+    };
   }
-  return { v: 1, service_type, base_price, extras, total_price };
+
+  const payoutZar = centsToZar(booking.cleaner_payout_cents);
+  const bonusZar = centsToZar(booking.cleaner_bonus_cents) ?? 0;
+  return {
+    payoutLabel: "Cleaner payout",
+    payoutZar,
+    bonusZar,
+    pending: payoutZar == null,
+    teamPool: false,
+  };
 }
 
 function formatZar(n: number): string {
@@ -279,10 +341,16 @@ function statusBadgeClass(status: string | null): string {
   return "bg-amber-100 text-amber-800";
 }
 
-/** Human label when payment was recorded off-platform (cash / Zoho). */
+/** Human label when payment was recorded off-platform (cash / Zoho / EFT). */
 function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null {
   const pm = String(booking.payment_method ?? "").trim().toLowerCase();
   if (pm === "cash") return "Paid (Cash)";
+  if (pm === "eft") {
+    const ext = String(booking.payment_reference_external ?? "").trim();
+    if (!ext) return "Paid (EFT)";
+    const short = ext.length > 42 ? `${ext.slice(0, 42)}…` : ext;
+    return `Paid (EFT: ${short})`;
+  }
   if (pm === "zoho") {
     const ext = String(booking.payment_reference_external ?? "").trim();
     if (!ext) return "Paid (Zoho)";
@@ -291,6 +359,11 @@ function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null 
   }
   const ref = String(booking.paystack_reference ?? "").trim().toLowerCase();
   if (ref.startsWith("cash_")) return "Paid (Cash)";
+  if (ref.startsWith("eft_")) {
+    const tail = ref.replace(/^eft_/, "");
+    const ext = tail.length > 42 ? `${tail.slice(0, 42)}…` : tail;
+    return ext ? `Paid (EFT: ${ext})` : "Paid (EFT)";
+  }
   if (ref.startsWith("zoho_")) {
     const tail = ref.replace(/^zoho_/, "");
     const ext = tail.length > 42 ? `${tail.slice(0, 42)}…` : tail;
@@ -488,6 +561,127 @@ function extrasSlugsFromBookingPayload(
 
 const BOOKING_EXTRA_CHECKBOX_SLUGS = [...BOOKING_EXTRA_ID_SET].sort((a, b) => a.localeCompare(b));
 
+function positiveRoomCount(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.round(v);
+  if (n < 1 || n > 50) return null;
+  return n;
+}
+
+function positiveDurationHours(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = v;
+  if (n <= 0 || n > 72) return null;
+  const rounded = Math.round(n * 100) / 100;
+  return rounded;
+}
+
+function readLockedFromBookingSnapshot(booking: BookingDetails): Record<string, unknown> | null {
+  const snap = booking.booking_snapshot;
+  if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
+  const locked = (snap as { locked?: unknown }).locked;
+  if (!locked || typeof locked !== "object" || Array.isArray(locked)) return null;
+  return locked as Record<string, unknown>;
+}
+
+/** Bedrooms / bathrooms / duration: DB columns first, then checkout lock snapshot (same precedence as edit-details seed). */
+function adminServiceHomeSummary(booking: BookingDetails): {
+  bedrooms: number | null;
+  bathrooms: number | null;
+  durationHours: number | null;
+  propertyType: string | null;
+  extraRooms: number | null;
+  cleaningFrequency: string | null;
+} {
+  const locked = readLockedFromBookingSnapshot(booking);
+  const bedrooms =
+    positiveRoomCount(booking.rooms) ??
+    positiveRoomCount(locked?.bedrooms) ??
+    positiveRoomCount(locked?.rooms) ??
+    null;
+  const bathrooms =
+    positiveRoomCount(booking.bathrooms) ?? positiveRoomCount(locked?.bathrooms) ?? null;
+
+  let durationHours: number | null = positiveDurationHours(booking.duration_hours);
+  if (durationHours == null && locked) {
+    durationHours =
+      positiveDurationHours(locked.finalHours) ?? positiveDurationHours(locked.duration) ?? null;
+  }
+
+  const ptRaw = locked?.propertyType;
+  const propertyType =
+    ptRaw === "apartment" ||
+    ptRaw === "house" ||
+    ptRaw === "studio" ||
+    ptRaw === "office"
+      ? String(ptRaw)
+      : null;
+
+  let extraRooms: number | null = null;
+  const er = locked?.extraRooms;
+  if (typeof er === "number" && Number.isFinite(er)) {
+    const n = Math.round(er);
+    if (n >= 0 && n <= 50) extraRooms = n;
+  }
+
+  const freqRaw = locked?.cleaningFrequency;
+  const cleaningFrequency =
+    freqRaw === "weekly" ||
+    freqRaw === "biweekly" ||
+    freqRaw === "monthly" ||
+    freqRaw === "one_time"
+      ? String(freqRaw)
+      : null;
+
+  return { bedrooms, bathrooms, durationHours, propertyType, extraRooms, cleaningFrequency };
+}
+
+function formatPropertyTypeLabel(pt: string): string {
+  return pt.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatCleaningFrequencyLabel(freq: string): string {
+  switch (freq) {
+    case "weekly":
+      return "Weekly";
+    case "biweekly":
+      return "Every 2 weeks";
+    case "monthly":
+      return "Monthly";
+    case "one_time":
+      return "One-time";
+    default:
+      return formatPropertyTypeLabel(freq);
+  }
+}
+
+/** Prefer persisted `bookings.extras`; fall back to checkout snapshot locked payload when columns were empty. */
+function extrasPayloadForAdminServiceCard(booking: BookingDetails): unknown[] {
+  if (Array.isArray(booking.extras) && booking.extras.length > 0) return booking.extras;
+  const snap = booking.booking_snapshot;
+  if (!snap || typeof snap !== "object" || Array.isArray(snap)) return [];
+  const locked = (snap as { locked?: unknown }).locked;
+  if (!locked || typeof locked !== "object" || Array.isArray(locked)) return [];
+  const l = locked as { extras_line_items?: unknown; extras?: unknown };
+  const lineItems = l.extras_line_items;
+  if (Array.isArray(lineItems) && lineItems.length > 0) return lineItems;
+  const ex = l.extras;
+  if (!Array.isArray(ex)) return [];
+  const slugs = ex
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .map((s) => s.trim());
+  if (!slugs.length) return [];
+  return slugs.map((slug) => ({
+    slug,
+    name: slug
+      .split("-")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" "),
+    price: 0,
+  }));
+}
+
 function formatBookingExtraChip(item: unknown): { key: string; label: string } {
   if (typeof item === "string") {
     const s = item.trim();
@@ -499,11 +693,84 @@ function formatBookingExtraChip(item: unknown): { key: string; label: string } {
     const slug = typeof o.slug === "string" ? o.slug.trim() : "";
     const price = typeof o.price === "number" && Number.isFinite(o.price) ? Math.round(o.price) : null;
     const label =
-      name && price != null ? `${name} · R${price.toLocaleString("en-ZA")}` : name || slug || "Extra";
+      name && price != null && price > 0
+        ? `${name} · R${price.toLocaleString("en-ZA")}`
+        : name && price === 0
+          ? `${name} · included in visit total`
+          : name || slug || "Extra";
     const key = slug || name || JSON.stringify(o);
     return { key, label };
   }
   return { key: "extra", label: "Extra" };
+}
+
+type AdminPricingExtraRow = { id: string; name: string; price: number };
+
+/** Persisted `price_breakdown.extrasZar` or legacy nested `job.extrasZar` from Paystack init. */
+function readPriceBreakdownExtrasZar(pb: unknown): number | null {
+  if (!pb || typeof pb !== "object" || Array.isArray(pb)) return null;
+  const o = pb as Record<string, unknown>;
+  const job = o.job;
+  if (job && typeof job === "object" && !Array.isArray(job)) {
+    const ez = (job as { extrasZar?: unknown }).extrasZar;
+    if (typeof ez === "number" && Number.isFinite(ez)) return Math.round(ez);
+  }
+  const top = o.extrasZar;
+  if (typeof top === "number" && Number.isFinite(top)) return Math.round(top);
+  return null;
+}
+
+function pricingExtraRowsFromServicePayload(payload: unknown[]): AdminPricingExtraRow[] {
+  const out: AdminPricingExtraRow[] = [];
+  for (const item of payload) {
+    if (typeof item === "object" && item !== null) {
+      const o = item as Record<string, unknown>;
+      const slug = typeof o.slug === "string" ? o.slug.trim() : "";
+      const name = typeof o.name === "string" ? o.name.trim() : slug || "Extra";
+      const price =
+        typeof o.price === "number" && Number.isFinite(o.price) ? Math.round(o.price) : 0;
+      out.push({ id: slug || name, name, price });
+      continue;
+    }
+    if (typeof item === "string" && item.trim()) {
+      const slug = item.trim();
+      out.push({ id: slug, name: slug, price: 0 });
+    }
+  }
+  return out;
+}
+
+/**
+ * Checkout snapshots usually expose one “Add-ons (subtotal)” line; when that total is R0 but the customer still
+ * picked tasks, show those rows and explain that no separate add-on fee applied on this quote.
+ */
+function mergeAdminPricingSnapshotExtras(params: {
+  snapExtras: AdminPricingExtraRow[];
+  bookingExtrasPayload: unknown[];
+  extrasZarFromBreakdown: number | null;
+}): { rows: AdminPricingExtraRow[]; showBundledExplanation: boolean } {
+  const snap = params.snapExtras;
+  const bookingRows = pricingExtraRowsFromServicePayload(params.bookingExtrasPayload);
+  const ez = params.extrasZarFromBreakdown;
+
+  if (snap.some((r) => r.price > 0)) {
+    return { rows: snap, showBundledExplanation: false };
+  }
+
+  const onlyZeroAddonsAggregate =
+    snap.length === 1 && snap[0].price === 0 && /add-?on/i.test(String(snap[0].name ?? ""));
+
+  if (bookingRows.length > 0 && (snap.length === 0 || onlyZeroAddonsAggregate)) {
+    const showBundledExplanation = ez === 0 || ez == null;
+    return { rows: bookingRows, showBundledExplanation };
+  }
+
+  if (snap.length > 0) {
+    const showBundledExplanation = ez === 0 && snap.every((r) => r.price === 0);
+    return { rows: snap, showBundledExplanation };
+  }
+
+  return { rows: [], showBundledExplanation: false };
 }
 
 async function rescheduleBooking(bookingId: string, newDate: string, newTime: string) {
@@ -546,6 +813,7 @@ export default function BookingDetailsView({
   const [notificationLogs, setNotificationLogs] = useState<BookingNotificationLogRow[]>([]);
   const [notificationLogsLoading, setNotificationLogsLoading] = useState(false);
   const [cleanerIssueReports, setCleanerIssueReports] = useState<CleanerIssueReportRow[]>([]);
+  const [serviceQa, setServiceQa] = useState<ServiceQaAdminWire | null>(null);
   const [supportsTeamAssignment, setSupportsTeamAssignment] = useState(false);
   const [teamSummary, setTeamSummary] = useState<TeamSummary | null>(null);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
@@ -553,6 +821,8 @@ export default function BookingDetailsView({
   const [teamAssignQualifiedLabel, setTeamAssignQualifiedLabel] = useState("");
   const [teamPickId, setTeamPickId] = useState<string | null>(null);
   const [assigningTeam, setAssigningTeam] = useState(false);
+  const [teamModalLoading, setTeamModalLoading] = useState(false);
+  const [teamModalError, setTeamModalError] = useState<string | null>(null);
   const [bookingCleaners, setBookingCleaners] = useState<BookingCleanerRow[]>([]);
   const [emergencyRosterOpen, setEmergencyRosterOpen] = useState(false);
   const [repairRosterBusy, setRepairRosterBusy] = useState(false);
@@ -562,9 +832,11 @@ export default function BookingDetailsView({
   const [resetEarningsBusy, setResetEarningsBusy] = useState(false);
   const [resetEarningsModalOpen, setResetEarningsModalOpen] = useState(false);
   const [markPaidModalOpen, setMarkPaidModalOpen] = useState(false);
-  const [markPaidMethod, setMarkPaidMethod] = useState<"cash" | "zoho">("cash");
+  const [markPaidMethod, setMarkPaidMethod] = useState<"cash" | "zoho" | "eft">("cash");
   const [markPaidReference, setMarkPaidReference] = useState("");
   const [markPaidAmountZar, setMarkPaidAmountZar] = useState("");
+  const [markPaidSettlementMode, setMarkPaidSettlementMode] = useState<"full" | "deposit">("full");
+  const [markPaidDepositReason, setMarkPaidDepositReason] = useState("");
   const [markPaidBusy, setMarkPaidBusy] = useState(false);
   const [retryChargeBusy, setRetryChargeBusy] = useState(false);
   const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
@@ -610,6 +882,7 @@ export default function BookingDetailsView({
         return;
       }
       setLoading(true);
+      setServiceQa(null);
       setFleetBestUxVariant(null);
       setLedgerCleanerEarnings([]);
       setSelectedCleaner(null);
@@ -640,6 +913,7 @@ export default function BookingDetailsView({
           cleaner_earnings?: Array<{ id: string; status?: string | null }>;
           supports_team_assignment?: boolean;
           team_summary?: TeamSummary | null;
+          service_qa?: ServiceQaAdminWire;
           error?: string;
         }>,
         anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
@@ -675,6 +949,17 @@ export default function BookingDetailsView({
       setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
       setCleanerIssueReports(Array.isArray(json.cleaner_issue_reports) ? json.cleaner_issue_reports : []);
       setIssueReportNowMs(Date.now());
+      const rawQa = json.service_qa;
+      if (
+        rawQa &&
+        typeof rawQa === "object" &&
+        !Array.isArray(rawQa) &&
+        Array.isArray((rawQa as ServiceQaAdminWire).sections)
+      ) {
+        setServiceQa(rawQa as ServiceQaAdminWire);
+      } else {
+        setServiceQa(null);
+      }
       setSupportsTeamAssignment(json.supports_team_assignment === true);
       setTeamSummary(json.team_summary ?? null);
       let roster: BookingCleanerRow[] = [];
@@ -845,8 +1130,15 @@ export default function BookingDetailsView({
       const z = Number(raw.replace(",", "."));
       if (Number.isFinite(z) && z > 0) return z;
     }
+    if (markPaidSettlementMode === "deposit") return null;
     return money(fullBooking);
-  }, [fullBooking, markPaidAmountZar]);
+  }, [fullBooking, markPaidAmountZar, markPaidSettlementMode]);
+
+  const existingDepositZar = useMemo(() => {
+    const c = fullBooking?.deposit_paid_cents;
+    if (typeof c !== "number" || !Number.isFinite(c) || c <= 0) return null;
+    return c / 100;
+  }, [fullBooking?.deposit_paid_cents]);
 
   const editBookingClientBlockReason = useMemo(() => {
     if (!fullBooking) return null;
@@ -1148,13 +1440,19 @@ export default function BookingDetailsView({
   }
 
   const total = money(fullBooking);
+  const adminServiceHome = adminServiceHomeSummary(fullBooking);
+  const showAdminSoloCleanerDetailCard = adminBookingShowsSoloCleanerDetailCard(fullBooking);
+  const serviceExtrasForAdmin = extrasPayloadForAdminServiceCard(fullBooking);
   const basePrice = Math.round(total * 0.85);
   const extrasPrice = Math.max(total - basePrice, 0);
-  const cleanerPayoutZar = centsToZar(fullBooking.cleaner_payout_cents);
-  const cleanerBonusZar = centsToZar(fullBooking.cleaner_bonus_cents) ?? 0;
+  const cleanerPayoutCard = adminBookingCleanerPayoutCard(fullBooking);
+  const cleanerPayoutZar = cleanerPayoutCard.payoutZar;
+  const cleanerBonusZar = cleanerPayoutCard.bonusZar;
   const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
   const companyRevenueZar = centsToZar(fullBooking.company_revenue_cents);
   const isAssigned = !!fullBooking.cleaner_id;
+  const jobRosterLocked =
+    (fullBooking.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0;
   const assignmentSummaryLine = assignmentSourceLabel({
     cleaner_id: fullBooking.cleaner_id ?? null,
     status: fullBooking.status ?? null,
@@ -1324,19 +1622,52 @@ export default function BookingDetailsView({
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
       }
-      const body: { method: "cash" | "zoho"; reference?: string; amount_cents?: number } = { method: markPaidMethod };
-      if (markPaidMethod === "zoho" && markPaidReference.trim()) {
-        body.reference = markPaidReference.trim();
-      }
-      const zarRaw = markPaidAmountZar.trim();
-      if (zarRaw) {
-        const z = Number(zarRaw.replace(",", "."));
-        if (!Number.isFinite(z) || z <= 0) {
-          setToast({ kind: "error", text: "Enter a valid amount in ZAR." });
+      const body: {
+        method: "cash" | "zoho" | "eft";
+        reference?: string;
+        amount_cents?: number;
+        settlement_mode?: "full" | "deposit";
+        deposit_cents?: number;
+        reason?: string;
+      } = { method: markPaidMethod };
+
+      if (markPaidSettlementMode === "deposit") {
+        const reason = markPaidDepositReason.trim();
+        if (reason.length < 2) {
+          setToast({ kind: "error", text: "Enter a reason for the deposit (at least 2 characters)." });
           return;
         }
-        body.amount_cents = Math.round(z * 100);
+        const zarRaw = markPaidAmountZar.trim();
+        if (!zarRaw) {
+          setToast({ kind: "error", text: "Enter the deposit amount in ZAR." });
+          return;
+        }
+        const z = Number(zarRaw.replace(",", "."));
+        if (!Number.isFinite(z) || z <= 0) {
+          setToast({ kind: "error", text: "Enter a valid deposit amount in ZAR." });
+          return;
+        }
+        body.settlement_mode = "deposit";
+        body.deposit_cents = Math.round(z * 100);
+        body.reason = reason;
+        if ((markPaidMethod === "zoho" || markPaidMethod === "eft") && markPaidReference.trim()) {
+          body.reference = markPaidReference.trim();
+        }
+      } else {
+        if ((markPaidMethod === "zoho" || markPaidMethod === "eft") && markPaidReference.trim()) {
+          body.reference = markPaidReference.trim();
+        }
+        const zarRaw = markPaidAmountZar.trim();
+        if (zarRaw) {
+          const z = Number(zarRaw.replace(",", "."));
+          if (!Number.isFinite(z) || z <= 0) {
+            setToast({ kind: "error", text: "Enter a valid amount in ZAR." });
+            return;
+          }
+          body.amount_cents = Math.round(z * 100);
+        }
       }
+
       const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/mark-paid`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -1347,6 +1678,8 @@ export default function BookingDetailsView({
         skipped?: boolean;
         reason?: string;
         error?: string;
+        deposit_recorded?: boolean;
+        deposit_paid_cents?: number;
         settlement?: {
           amount_cents: number;
           total_paid_zar: number;
@@ -1356,7 +1689,24 @@ export default function BookingDetailsView({
         };
       };
       if (!res.ok) {
-        setToast({ kind: "error", text: json.error ?? "Could not mark as paid." });
+        setToast({
+          kind: "error",
+          text: json.error ?? (markPaidSettlementMode === "deposit" ? "Could not record deposit." : "Could not mark as paid."),
+        });
+        return;
+      }
+      if (json.deposit_recorded === true && typeof json.deposit_paid_cents === "number") {
+        setFullBooking({
+          ...fullBooking,
+          deposit_paid_cents: json.deposit_paid_cents,
+        });
+        setToast({ kind: "success", text: "Deposit recorded." });
+        setMarkPaidModalOpen(false);
+        setMarkPaidReference("");
+        setMarkPaidAmountZar("");
+        setMarkPaidDepositReason("");
+        setMarkPaidSettlementMode("full");
+        setDetailRefresh((n) => n + 1);
         return;
       }
       if (json.skipped && json.reason === "already_paid") {
@@ -1384,6 +1734,8 @@ export default function BookingDetailsView({
       setMarkPaidModalOpen(false);
       setMarkPaidReference("");
       setMarkPaidAmountZar("");
+      setMarkPaidDepositReason("");
+      setMarkPaidSettlementMode("full");
       setDetailRefresh((n) => n + 1);
     } finally {
       setMarkPaidBusy(false);
@@ -1506,35 +1858,66 @@ export default function BookingDetailsView({
     }
   };
 
-  const openTeamModal = async () => {
+  const loadTeamsForTeamModal = async () => {
     if (!bookingId) return;
-    setTeamModalOpen(true);
-    setTeamPickId(null);
-    setTeamCandidates([]);
-    setTeamAssignQualifiedLabel("");
+    setTeamModalLoading(true);
+    setTeamModalError(null);
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
     if (!token) {
-      setToast({ kind: "error", text: "Please sign in as an admin." });
-      setTeamModalOpen(false);
+      setTeamModalLoading(false);
+      const msg = "Please sign in as an admin.";
+      setTeamModalError(msg);
+      setToast({ kind: "error", text: msg });
       return;
     }
     try {
       const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const j = (await res.json()) as {
+      const raw = await res.text();
+      let j: {
         teams?: TeamAssignCandidate[];
         qualified_for_label?: string;
         error?: string;
-      };
-      if (!res.ok) throw new Error(j.error ?? "Could not load teams.");
+        supports_team_assignment?: boolean;
+      } = {};
+      if (raw.trim()) {
+        try {
+          j = JSON.parse(raw) as typeof j;
+        } catch {
+          throw new Error(`Invalid response from server (${res.status}).`);
+        }
+      }
+      if (!res.ok) throw new Error(j.error ?? `Could not load teams (${res.status}).`);
+      if (j.supports_team_assignment === false) {
+        setTeamAssignQualifiedLabel("");
+        setTeamCandidates([]);
+        setTeamModalError(
+          "Team assignment is not available for this booking from the server. Refresh the page if this surprises you.",
+        );
+        return;
+      }
       setTeamAssignQualifiedLabel(typeof j.qualified_for_label === "string" ? j.qualified_for_label : "");
       setTeamCandidates(Array.isArray(j.teams) ? j.teams : []);
     } catch (e) {
-      setToast({ kind: "error", text: e instanceof Error ? e.message : "Could not load teams." });
-      setTeamModalOpen(false);
+      setTeamModalError(e instanceof Error ? e.message : "Could not load teams.");
+    } finally {
+      setTeamModalLoading(false);
     }
+  };
+
+  const openTeamModal = () => {
+    if (!bookingId) {
+      setToast({ kind: "error", text: "Missing booking ID." });
+      return;
+    }
+    setTeamModalOpen(true);
+    setTeamPickId(null);
+    setTeamCandidates([]);
+    setTeamAssignQualifiedLabel("");
+    setTeamModalError(null);
+    void loadTeamsForTeamModal();
   };
 
   const handleAssignTeam = async () => {
@@ -1766,12 +2149,39 @@ export default function BookingDetailsView({
           </DetailCard>
           <DetailCard title="Service">
             <p className="text-base font-medium text-zinc-900">{fullBooking.service ?? "—"}</p>
-            <DetailRow label="Duration" value={fullBooking.duration_hours ? `${fullBooking.duration_hours} hrs` : "Not specified"} />
+            <DetailRow
+              label="Bedrooms"
+              value={adminServiceHome.bedrooms != null ? String(adminServiceHome.bedrooms) : "—"}
+            />
+            <DetailRow
+              label="Bathrooms"
+              value={adminServiceHome.bathrooms != null ? String(adminServiceHome.bathrooms) : "—"}
+            />
+            {adminServiceHome.extraRooms != null && adminServiceHome.extraRooms > 0 ? (
+              <DetailRow label="Extra rooms" value={String(adminServiceHome.extraRooms)} />
+            ) : null}
+            {adminServiceHome.propertyType ? (
+              <DetailRow label="Property type" value={formatPropertyTypeLabel(adminServiceHome.propertyType)} />
+            ) : null}
+            {adminServiceHome.cleaningFrequency ? (
+              <DetailRow
+                label="Cleaning frequency"
+                value={formatCleaningFrequencyLabel(adminServiceHome.cleaningFrequency)}
+              />
+            ) : null}
+            <DetailRow
+              label="Duration"
+              value={
+                adminServiceHome.durationHours != null
+                  ? `${adminServiceHome.durationHours % 1 === 0 ? String(adminServiceHome.durationHours) : adminServiceHome.durationHours.toFixed(1).replace(/\.0$/, "")} hrs`
+                  : "Not specified"
+              }
+            />
             <div>
               <p className="text-xs text-zinc-500">Extras</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {Array.isArray(fullBooking.extras) && fullBooking.extras.length ? (
-                  fullBooking.extras.map((item) => {
+                {serviceExtrasForAdmin.length ? (
+                  serviceExtrasForAdmin.map((item) => {
                     const { key, label } = formatBookingExtraChip(item);
                     return (
                       <span
@@ -1786,6 +2196,13 @@ export default function BookingDetailsView({
                   <span className="text-sm text-zinc-500">No extras selected</span>
                 )}
               </div>
+              {serviceExtrasForAdmin.length > 0 ? (
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  If a tag says <span className="font-medium text-zinc-600 dark:text-zinc-300">included in visit total</span>
+                  , checkout did not add a separate rand line for that task — it may follow catalog rules for this service
+                  type or sit inside base / room pricing. Compare with the Pricing snapshot card for the frozen totals.
+                </p>
+              ) : null}
             </div>
           </DetailCard>
           <DetailCard title="Schedule">
@@ -1851,7 +2268,7 @@ export default function BookingDetailsView({
               </>
             )}
             <div className="rounded-lg bg-zinc-50 px-3 py-2">
-              <p className="text-xs text-zinc-500">Starts in</p>
+              <p className="text-xs text-zinc-500">{startsInIsPast ? "Started" : "Starts in"}</p>
               <p className={["text-base font-semibold", startsInClass].join(" ")}>{startsInText}</p>
             </div>
           </DetailCard>
@@ -1871,21 +2288,66 @@ export default function BookingDetailsView({
           />
           <DetailCard title="Pricing snapshot">
             {(() => {
-              const snap = fullBooking ? parsePriceSnapshotV1(fullBooking.price_snapshot) : null;
+              const snap: AdminPriceSnapshotCardView | null = fullBooking
+                ? parseAdminBookingPriceSnapshot(fullBooking.price_snapshot, {
+                    serviceSlug:
+                      typeof (fullBooking as { service_slug?: unknown }).service_slug === "string"
+                        ? String((fullBooking as { service_slug: string }).service_slug).trim()
+                        : null,
+                    serviceLabel: fullBooking.service ?? null,
+                  })
+                : null;
               if (!snap) {
+                const homeHint =
+                  adminServiceHome.bedrooms != null ||
+                  adminServiceHome.bathrooms != null ||
+                  adminServiceHome.durationHours != null;
                 return (
                   <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-50">
                     <span className="inline-flex items-center gap-1.5 font-medium">
                       <TriangleAlert size={14} aria-hidden />
-                      No snapshot (legacy)
+                      No pricing snapshot
                     </span>
                     <p className="mt-1 text-xs font-normal text-amber-900/90 dark:text-amber-100/85">
-                      This booking was created before immutable pricing snapshots were stored. Totals on the booking
-                      row still apply; this section does not recompute from current catalog prices.
+                      This booking has no recognizable immutable snapshot JSON (legacy rows or corrupted payload).
+                      Totals on the booking row still apply; this section cannot show the frozen checkout breakdown.
                     </p>
+                    {homeHint ? (
+                      <dl className="mt-3 space-y-1 border-t border-amber-200/80 pt-3 text-xs dark:border-amber-800/50">
+                        {adminServiceHome.bedrooms != null ? (
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-amber-900/80 dark:text-amber-100/80">Bedrooms</dt>
+                            <dd className="font-medium tabular-nums">{adminServiceHome.bedrooms}</dd>
+                          </div>
+                        ) : null}
+                        {adminServiceHome.bathrooms != null ? (
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-amber-900/80 dark:text-amber-100/80">Bathrooms</dt>
+                            <dd className="font-medium tabular-nums">{adminServiceHome.bathrooms}</dd>
+                          </div>
+                        ) : null}
+                        {adminServiceHome.durationHours != null ? (
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-amber-900/80 dark:text-amber-100/80">Quoted duration</dt>
+                            <dd className="font-medium tabular-nums">
+                              {adminServiceHome.durationHours % 1 === 0
+                                ? `${adminServiceHome.durationHours} hrs`
+                                : `${adminServiceHome.durationHours.toFixed(1).replace(/\.0$/, "")} hrs`}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    ) : null}
                   </div>
                 );
               }
+              const extrasZarFromBreakdown = readPriceBreakdownExtrasZar(fullBooking.price_breakdown);
+              const { rows: pricingExtrasRows, showBundledExplanation } = mergeAdminPricingSnapshotExtras({
+                snapExtras: snap.extras,
+                bookingExtrasPayload: serviceExtrasForAdmin,
+                extrasZarFromBreakdown: extrasZarFromBreakdown,
+              });
+
               return (
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between gap-4">
@@ -1893,23 +2355,74 @@ export default function BookingDetailsView({
                     <dd className="font-mono text-zinc-900 dark:text-zinc-100">{snap.service_type}</dd>
                   </div>
                   <div className="flex justify-between gap-4">
+                    <dt className="text-zinc-500">Bedrooms</dt>
+                    <dd className="tabular-nums text-zinc-900 dark:text-zinc-100">
+                      {adminServiceHome.bedrooms != null ? adminServiceHome.bedrooms : "—"}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-zinc-500">Bathrooms</dt>
+                    <dd className="tabular-nums text-zinc-900 dark:text-zinc-100">
+                      {adminServiceHome.bathrooms != null ? adminServiceHome.bathrooms : "—"}
+                    </dd>
+                  </div>
+                  {adminServiceHome.extraRooms != null && adminServiceHome.extraRooms > 0 ? (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Extra rooms</dt>
+                      <dd className="tabular-nums text-zinc-900 dark:text-zinc-100">{adminServiceHome.extraRooms}</dd>
+                    </div>
+                  ) : null}
+                  {adminServiceHome.durationHours != null ? (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Quoted duration</dt>
+                      <dd className="tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {adminServiceHome.durationHours % 1 === 0
+                          ? `${adminServiceHome.durationHours} hrs`
+                          : `${adminServiceHome.durationHours.toFixed(1).replace(/\.0$/, "")} hrs`}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between gap-4">
                     <dt className="text-zinc-500">Base (rooms &amp; core)</dt>
                     <dd className="font-medium text-zinc-900 dark:text-zinc-100">{formatZar(snap.base_price)}</dd>
                   </div>
                   <div>
                     <dt className="text-zinc-500">Extras</dt>
                     <dd className="mt-1">
-                      {snap.extras.length === 0 ? (
+                      {pricingExtrasRows.length === 0 ? (
                         <p className="text-zinc-500">None</p>
                       ) : (
-                        <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">
-                          {snap.extras.map((ex) => (
-                            <li key={`${ex.id}-${ex.name}`} className="flex justify-between gap-4 px-2 py-1.5 text-zinc-800 dark:text-zinc-200">
-                              <span>{ex.name}</span>
-                              <span className="font-medium tabular-nums">{formatZar(ex.price)}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <>
+                          {showBundledExplanation ? (
+                            <p className="mb-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                              Checkout recorded no extra rand amount for these add-ons on this quote (they can still be
+                              selected for the job). Typical reasons: not billed separately for this service in your
+                              catalog, or the visit total already bundles them into base / room pricing —{" "}
+                              <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                                not a missing payment line if Base matches Total (visit).
+                              </span>
+                            </p>
+                          ) : null}
+                          <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">
+                            {pricingExtrasRows.map((ex) => (
+                              <li
+                                key={`${ex.id}-${ex.name}`}
+                                className="flex justify-between gap-4 px-2 py-1.5 text-zinc-800 dark:text-zinc-200"
+                              >
+                                <span>{ex.name}</span>
+                                <span className="text-right font-medium tabular-nums">
+                                  {ex.price > 0 ? (
+                                    formatZar(ex.price)
+                                  ) : (
+                                    <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                                      Included in visit total
+                                    </span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
                       )}
                     </dd>
                   </div>
@@ -1929,10 +2442,17 @@ export default function BookingDetailsView({
             </DetailCard>
           ) : null}
           <DetailCard title="Cleaner-reported issues">
-            <p className="text-sm text-zinc-600">
-              Logged from the cleaner app (&quot;Report a problem&quot;). Also written to system logs. Configure the
-              dispatch alert webhook and CLEANER_ISSUE_OPS_NOTIFY_EMAIL if you want instant ops pings.
-            </p>
+            <div className="space-y-2 text-sm text-zinc-600">
+              <p>
+                When a cleaner uses <span className="font-medium text-zinc-800 dark:text-zinc-200">Report a problem</span>{" "}
+                in their app, the issue appears here with the reason and any notes they added. Use this list to follow up
+                on the job and mark items resolved when you are done.
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                A copy is also kept in system logs. Optional email or webhook alerts for new reports are configured in
+                your deployment settings—not in this screen.
+              </p>
+            </div>
             {cleanerIssueReports.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-500">No reports on this booking yet.</p>
             ) : (
@@ -2037,6 +2557,87 @@ export default function BookingDetailsView({
               </ul>
             )}
           </DetailCard>
+          {serviceQa ? (
+            <DetailCard title="Execution QA (checklist & photos)">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Deep / move job checklist and optional before-after photos from cleaners. Image links are signed and expire —
+                refresh if thumbnails fail.
+              </p>
+              <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Checklist</p>
+                {serviceQa.checklist.length === 0 ? (
+                  <p className="mt-2 text-sm text-zinc-500">No sections marked yet.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {serviceQa.checklist.map((row, idx) => (
+                      <li
+                        key={`${row.cleaner_id}-${row.section_key}-${idx}`}
+                        className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/40"
+                      >
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{row.section_label}</span>
+                        <span className={row.completed ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-500"}>
+                          {row.completed ? "Done" : "Pending"}
+                        </span>
+                        <span className="w-full text-xs text-zinc-500 sm:w-auto">
+                          {row.cleaner_name?.trim() || `Cleaner ${row.cleaner_id.slice(0, 8)}…`}
+                          {row.completed_at
+                            ? ` · ${new Date(row.completed_at).toLocaleString("en-ZA", { dateStyle: "short", timeStyle: "short" })}`
+                            : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Photos</p>
+                {serviceQa.photos.length === 0 ? (
+                  <p className="mt-2 text-sm text-zinc-500">No photos uploaded.</p>
+                ) : (
+                  <div className="mt-3 space-y-4">
+                    {(["before", "after"] as const).map((kind) => {
+                      const list = serviceQa.photos.filter((p) => p.photo_type === kind);
+                      if (list.length === 0) return null;
+                      return (
+                        <div key={kind}>
+                          <p className="mb-2 text-xs font-medium capitalize text-zinc-600 dark:text-zinc-400">{kind}</p>
+                          <ul className="flex flex-wrap gap-3">
+                            {list.map((ph) => (
+                              <li key={ph.id} className="text-xs">
+                                {ph.signed_url ? (
+                                  <a
+                                    href={ph.signed_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="group block"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={ph.signed_url}
+                                      alt={`${kind} ${ph.section_label}`}
+                                      className="h-20 w-20 rounded-md border border-zinc-200 object-cover group-hover:opacity-95 dark:border-zinc-700"
+                                    />
+                                    <span className="mt-1 block max-w-[5.5rem] truncate text-zinc-600 dark:text-zinc-400">
+                                      {ph.section_label}
+                                    </span>
+                                    <span className="block truncate text-[10px] text-zinc-500">
+                                      {ph.cleaner_name?.trim() || ph.cleaner_id.slice(0, 8)}
+                                    </span>
+                                  </a>
+                                ) : (
+                                  <span className="text-zinc-500">Unavailable (refresh)</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </DetailCard>
+          ) : null}
           <DetailCard title="Notification timeline">
             <p className="text-sm text-zinc-600">
               Outbound delivery attempts for this booking (email, WhatsApp, SMS).{" "}
@@ -2060,48 +2661,68 @@ export default function BookingDetailsView({
                   return (
                     <li
                       key={row.id}
-                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-sm"
+                      className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40"
                     >
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-zinc-800">
-                          {row.channel} · {row.template_key}
-                        </span>
-                        {row.role ? (
-                          <span className="ml-2 text-xs text-zinc-500">({row.role})</span>
-                        ) : null}
-                        {row.event_type ? (
-                          <span className="ml-2 text-xs text-zinc-500">{row.event_type}</span>
-                        ) : null}
-                        {retriedFrom ? (
-                          <span className="mt-1 block font-mono text-[11px] text-zinc-500">
-                            ↳ retry of {retriedFrom.slice(0, 8)}…
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <span className="shrink-0 font-medium capitalize text-zinc-800 dark:text-zinc-100">
+                              {row.channel}
+                            </span>
+                            <span className="text-zinc-400 dark:text-zinc-500" aria-hidden>
+                              ·
+                            </span>
+                            <span className="min-w-0 break-words font-mono text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+                              {row.template_key}
+                            </span>
+                            {row.role ? (
+                              <span className="shrink-0 rounded-md bg-zinc-200/80 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-700/60 dark:text-zinc-200">
+                                {row.role}
+                              </span>
+                            ) : null}
+                          </div>
+                          {row.event_type ? (
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                              <span className="font-medium text-zinc-500 dark:text-zinc-500">Event</span>{" "}
+                              <span className="break-all font-mono">{row.event_type}</span>
+                            </p>
+                          ) : null}
+                          {retriedFrom ? (
+                            <p className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+                              ↳ retry of {retriedFrom.slice(0, 8)}…
+                            </p>
+                          ) : null}
+                          {fb ? (
+                            <p className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                              Automated SMS after WhatsApp
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-1 border-t border-zinc-200/80 pt-2 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0 dark:border-zinc-700">
+                          <span
+                            className={
+                              row.status === "sent"
+                                ? "inline-flex w-fit rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                : "inline-flex w-fit rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                            }
+                          >
+                            {row.status}
                           </span>
-                        ) : null}
-                        {fb ? (
-                          <span className="mt-1 block text-[11px] font-medium text-amber-800">Automated SMS after WhatsApp</span>
-                        ) : null}
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <span
-                          className={
-                            row.status === "sent"
-                              ? "text-xs font-semibold text-emerald-700"
-                              : "text-xs font-semibold text-rose-700"
-                          }
-                        >
-                          {row.status}
-                        </span>
-                        <p className="text-[11px] text-zinc-500">
-                          {row.created_at
-                            ? new Date(row.created_at).toLocaleString("en-ZA", {
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: false,
-                              })
-                            : "—"}
-                        </p>
+                          <time
+                            className="whitespace-nowrap text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400"
+                            dateTime={row.created_at ?? undefined}
+                          >
+                            {row.created_at
+                              ? new Date(row.created_at).toLocaleString("en-ZA", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: false,
+                                })
+                              : "—"}
+                          </time>
+                        </div>
                       </div>
                     </li>
                   );
@@ -2169,6 +2790,7 @@ export default function BookingDetailsView({
               </div>
             )}
           </DetailCard>
+          {showAdminSoloCleanerDetailCard ? (
           <DetailCard title="Cleaner">
             {fullBooking.cleaner_id ? (
               <div className="space-y-2">
@@ -2303,6 +2925,7 @@ export default function BookingDetailsView({
               </div>
             ) : null}
           </DetailCard>
+          ) : null}
           {supportsTeamAssignment ? (
             <DetailCard title="Team assignment">
               {fullBooking.team_id && teamSummary ? (
@@ -2317,23 +2940,51 @@ export default function BookingDetailsView({
               ) : (
                 <p className="text-sm text-zinc-600">No team assigned yet.</p>
               )}
-              <div className="mt-3">
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => void openTeamModal()}
+                  className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700 sm:flex-1"
+                >
+                  {fullBooking.team_id ? "Change team" : "Assign team"}
+                </button>
+                <button
+                  type="button"
+                  disabled={jobRosterLocked}
+                  title={
+                    jobRosterLocked
+                      ? "Roster is locked after cleaner earnings were finalized for this booking."
+                      : "Add or swap cleaners on this visit only (does not change team templates)."
+                  }
+                  onClick={() => setEmergencyRosterOpen(true)}
+                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:flex-1"
+                >
+                  Edit job roster
+                </button>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                <span className="font-medium text-zinc-600">Tip:</span> deep and move bookings share the same teams from
+                Admin → Teams; assigning usually fills the roster from the template. Use{" "}
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Edit job roster</span> to adjust this visit
+                without editing templates.
+              </p>
+              <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Job roster</p>
                 {bookingCleaners.length > 0 ? (
                   <ul className="mt-2 space-y-1.5">
                     {bookingCleaners.map((r) => (
                       <li
                         key={r.id}
-                        className="flex items-center justify-between gap-2 rounded-md border border-zinc-100 bg-zinc-50 px-2 py-1.5"
+                        className="flex items-center justify-between gap-2 rounded-md border border-zinc-100 bg-zinc-50 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900/40"
                       >
-                        <span className="truncate text-sm font-medium text-zinc-900">
+                        <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                           {r.cleaner_name ?? r.cleaner_id}
                         </span>
                         <span
                           className={
                             String(r.role).toLowerCase() === "lead"
-                              ? "shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
-                              : "shrink-0 rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-700"
+                              ? "shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100"
+                              : "shrink-0 rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-700 dark:bg-zinc-600 dark:text-zinc-100"
                           }
                         >
                           {String(r.role).toLowerCase() === "lead" ? "Lead" : "Member"}
@@ -2343,7 +2994,8 @@ export default function BookingDetailsView({
                   </ul>
                 ) : (
                   <p className="mt-1 text-xs text-zinc-500">
-                    No roster rows yet. Assign a team or use &quot;Edit job roster&quot; to add cleaners.
+                    Nobody on this job yet. Use <span className="font-medium text-zinc-600 dark:text-zinc-400">Assign team</span>{" "}
+                    or <span className="font-medium text-zinc-600 dark:text-zinc-400">Edit job roster</span> above.
                   </p>
                 )}
                 {fullBooking.team_id && bookingCleaners.length === 0 ? (
@@ -2351,35 +3003,11 @@ export default function BookingDetailsView({
                     type="button"
                     disabled={repairRosterBusy}
                     onClick={() => void repairRosterFromTeam()}
-                    className="mt-2 w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                    className="mt-2 w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-950/50"
                   >
                     {repairRosterBusy ? "Repairing roster…" : "Repair roster from team"}
                   </button>
                 ) : null}
-              </div>
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50/80 p-3 dark:border-red-900/50 dark:bg-red-950/20">
-                <p className="text-xs font-bold uppercase tracking-wide text-red-900 dark:text-red-200">
-                  Emergency reassign
-                </p>
-                <p className="mt-1 text-xs text-red-900/90 dark:text-red-100/90">
-                  Last-minute roster changes on this booking only. Does not edit team templates.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setEmergencyRosterOpen(true)}
-                  className="mt-2 w-full rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-950 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-50 dark:hover:bg-red-950/70"
-                >
-                  Edit roster
-                </button>
-              </div>
-              <div className="mt-3 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => void openTeamModal()}
-                  className="w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
-                >
-                  Change team
-                </button>
               </div>
             </DetailCard>
           ) : null}
@@ -2420,13 +3048,16 @@ export default function BookingDetailsView({
             <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">TOTAL</span><span className="text-2xl font-bold text-emerald-700">R {total.toLocaleString("en-ZA")}</span></div>
           </DetailCard>
           <DetailCard title="Cleaner payout">
-            {cleanerTotalZar == null ? (
+            {cleanerPayoutCard.pending || cleanerTotalZar == null ? (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
                 Pending payout calculation
               </p>
             ) : (
               <>
-                <DetailRow label="Cleaner payout" value={`R ${cleanerPayoutZar!.toLocaleString("en-ZA")}`} />
+                <DetailRow
+                  label={cleanerPayoutCard.payoutLabel}
+                  value={`R ${cleanerPayoutZar!.toLocaleString("en-ZA")}`}
+                />
                 <DetailRow label="Cleaner bonus" value={`R ${cleanerBonusZar.toLocaleString("en-ZA")}`} />
                 <DetailRow label="Total cleaner earnings" value={`R ${cleanerTotalZar.toLocaleString("en-ZA")}`} strong />
                 <DetailRow
@@ -2441,6 +3072,12 @@ export default function BookingDetailsView({
                       : ""
                   }`}
                 />
+                {cleanerPayoutCard.teamPool ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Per-member shares follow the team roster / member payout rows; booking-level legacy{" "}
+                    <code className="text-[11px]">cleaner_payout_cents</code> stays 0 for this model.
+                  </p>
+                ) : null}
               </>
             )}
           </DetailCard>
@@ -2471,6 +3108,8 @@ export default function BookingDetailsView({
                     setMarkPaidMethod("cash");
                     setMarkPaidReference("");
                     setMarkPaidAmountZar("");
+                    setMarkPaidSettlementMode("full");
+                    setMarkPaidDepositReason("");
                     setMarkPaidModalOpen(true);
                   }}
                   disabled={!canMarkPaid || markPaidBusy || statusBusy !== null}
@@ -2721,12 +3360,52 @@ export default function BookingDetailsView({
           <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-zinc-900">Mark as paid</h3>
             <p className="mt-2 text-sm text-zinc-600">
-              Record cash or Zoho settlement. By default the amount comes from <code className="text-xs">total_price</code>{" "}
-              (ZAR) then <code className="text-xs">total_paid_cents</code>. Use the field below if the quote is missing.
+              {markPaidSettlementMode === "deposit" ? (
+                <>
+                  Record or update the deposit only. The booking stays <strong className="font-medium text-zinc-700">unpaid</strong>{" "}
+                  until you use <strong className="font-medium text-zinc-700">Full settlement</strong>.
+                </>
+              ) : (
+                <>
+                  Log cash, EFT, or Zoho as <strong className="font-medium text-zinc-700">fully paid</strong>. Amount defaults from{" "}
+                  <code className="text-xs">total_price</code>, then <code className="text-xs">total_paid_cents</code>—enter a figure
+                  below only if there’s no quote or it’s wrong.
+                </>
+              )}
             </p>
+            {existingDepositZar != null ? (
+              <p className="mt-2 text-xs text-zinc-500">
+                Recorded deposit: <strong className="text-zinc-700">{formatZar(existingDepositZar)}</strong>
+                {markPaidSettlementMode === "deposit" ? " · Confirm replaces this amount." : null}
+              </p>
+            ) : null}
+            <div className="mt-4 flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setMarkPaidSettlementMode("full")}
+                className={`flex-1 rounded-md px-2 py-2 text-sm font-medium transition ${
+                  markPaidSettlementMode === "full"
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Full settlement
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkPaidSettlementMode("deposit")}
+                className={`flex-1 rounded-md px-2 py-2 text-sm font-medium transition ${
+                  markPaidSettlementMode === "deposit"
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Deposit only
+              </button>
+            </div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-zinc-800">
-                Amount (ZAR), optional override
+                {markPaidSettlementMode === "deposit" ? "Deposit amount (ZAR)" : "Amount (ZAR), optional override"}
                 <input
                   type="text"
                   inputMode="decimal"
@@ -2736,25 +3415,42 @@ export default function BookingDetailsView({
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                 />
               </label>
+              {markPaidSettlementMode === "deposit" ? (
+                <label className="block text-sm font-medium text-zinc-800">
+                  Reason (required)
+                  <textarea
+                    value={markPaidDepositReason}
+                    onChange={(e) => setMarkPaidDepositReason(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Customer paid 50% upfront via EFT"
+                    className="mt-1 w-full resize-y rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              ) : null}
               <label className="block text-sm font-medium text-zinc-800">
                 Method
                 <select
                   value={markPaidMethod}
-                  onChange={(e) => setMarkPaidMethod(e.target.value === "zoho" ? "zoho" : "cash")}
+                  onChange={(e) => setMarkPaidMethod(e.target.value as "cash" | "zoho" | "eft")}
                   className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                 >
                   <option value="cash">Cash</option>
+                  <option value="eft">EFT</option>
                   <option value="zoho">Zoho</option>
                 </select>
               </label>
-              {markPaidMethod === "zoho" ? (
+              {markPaidMethod === "zoho" || markPaidMethod === "eft" ? (
                 <label className="block text-sm font-medium text-zinc-800">
                   Reference (optional)
                   <input
                     type="text"
                     value={markPaidReference}
                     onChange={(e) => setMarkPaidReference(e.target.value)}
-                    placeholder="Invoice or payment reference"
+                    placeholder={
+                      markPaidMethod === "eft"
+                        ? "Bank reference or proof ID"
+                        : "Invoice or payment reference"
+                    }
                     className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                   />
                 </label>
@@ -2764,22 +3460,34 @@ export default function BookingDetailsView({
               <p className="font-semibold text-zinc-900">Confirm</p>
               <ul className="mt-1 list-inside list-disc text-xs text-zinc-700">
                 <li>
-                  Amount:{" "}
+                  {markPaidSettlementMode === "deposit" ? "Deposit: " : "Amount: "}
                   <strong>
-                    {markPaidPreviewZar != null && markPaidPreviewZar > 0
-                      ? formatZar(markPaidPreviewZar)
-                      : "— (server will resolve from quote)"}
+                    {markPaidSettlementMode === "deposit"
+                      ? markPaidPreviewZar != null && markPaidPreviewZar > 0
+                        ? formatZar(markPaidPreviewZar)
+                        : "— (enter amount)"
+                      : markPaidPreviewZar != null && markPaidPreviewZar > 0
+                        ? formatZar(markPaidPreviewZar)
+                        : "— (server will resolve from quote)"}
                   </strong>
                 </li>
                 <li>
-                  Method: <strong>{markPaidMethod === "zoho" ? "Zoho" : "Cash"}</strong>
+                  Method:{" "}
+                  <strong>
+                    {markPaidMethod === "zoho" ? "Zoho" : markPaidMethod === "eft" ? "EFT" : "Cash"}
+                  </strong>
                 </li>
-                {markPaidMethod === "zoho" && markPaidReference.trim() ? (
+                {(markPaidMethod === "zoho" || markPaidMethod === "eft") && markPaidReference.trim() ? (
                   <li>
                     Reference: <strong>{markPaidReference.trim().slice(0, 80)}</strong>
                   </li>
                 ) : null}
               </ul>
+              {markPaidSettlementMode === "deposit" ? (
+                <p className="mt-2 text-xs text-zinc-600">
+                  Does not mark the booking fully paid — use <strong>Full settlement</strong> when the balance is settled.
+                </p>
+              ) : null}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -2789,6 +3497,8 @@ export default function BookingDetailsView({
                   setMarkPaidModalOpen(false);
                   setMarkPaidReference("");
                   setMarkPaidAmountZar("");
+                  setMarkPaidDepositReason("");
+                  setMarkPaidSettlementMode("full");
                 }}
                 className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
               >
@@ -2805,6 +3515,8 @@ export default function BookingDetailsView({
                     <Loader2 size={14} className="animate-spin" />
                     Saving…
                   </span>
+                ) : markPaidSettlementMode === "deposit" ? (
+                  "Save deposit"
                 ) : (
                   "Confirm"
                 )}
@@ -2892,71 +3604,157 @@ export default function BookingDetailsView({
           initialRoster={bookingCleaners as EmergencyRosterCleanerRow[]}
           onSaved={(roster) => {
             setBookingCleaners(roster as BookingCleanerRow[]);
-            setToast({ kind: "success", text: "Team updated successfully" });
+            setToast({ kind: "success", text: "Job roster updated." });
             setDetailRefresh((n) => n + 1);
           }}
         />
       ) : null}
 
-      {teamModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
-            <h3 className="text-lg font-semibold text-zinc-900">Assign team</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Overrides auto-dispatch for this booking. Per-member payouts are reset to the standard team rate.
-            </p>
-            <div className="mt-4 space-y-2">
-              <label htmlFor="admin-team-pick" className="text-xs font-medium text-zinc-500">
-                Team
-              </label>
-              <select
-                id="admin-team-pick"
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
-                value={teamPickId ?? ""}
-                onChange={(e) => setTeamPickId(e.target.value || null)}
-                disabled={assigningTeam}
-              >
-                <option value="">Select a team…</option>
-                {teamCandidates.map((t) => {
-                  const activeN = t.active_member_count ?? t.member_count;
-                  const qualN = t.qualified_member_count ?? t.member_count;
-                  const qualBit =
-                    teamAssignQualifiedLabel !== ""
-                      ? `${activeN} active · ${qualN} qualified for ${teamAssignQualifiedLabel}`
-                      : `${activeN} active · ${qualN} qualified`;
-                  return (
-                    <option key={t.id} value={t.id} disabled={!t.assignable}>
-                      {t.name} · {qualBit} · {t.used_slots_today}/{t.capacity_per_day} today
-                      {!t.assignable ? " (unavailable)" : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={assigningTeam}
-                onClick={() => {
+      {teamModalOpen
+        ? createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="admin-team-modal-title"
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+              onClick={() => {
+                if (!assigningTeam) {
                   setTeamModalOpen(false);
                   setTeamPickId(null);
-                }}
-                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
+                  setTeamModalError(null);
+                }
+              }}
+            >
+              <div
+                className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+                onClick={(e) => e.stopPropagation()}
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={assigningTeam || !teamPickId}
-                onClick={() => void handleAssignTeam()}
-                className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-              >
-                {assigningTeam ? "Assigning…" : "Assign team"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <h3 id="admin-team-modal-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  {fullBooking?.team_id ? "Change team" : "Assign team"}
+                </h3>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Overrides auto-dispatch for this booking. Per-member payouts are reset to the standard team rate.
+                </p>
+                {!teamModalLoading && !teamModalError ? (
+                  <p className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-200">
+                    Deep and move bookings use the <span className="font-semibold">same team list</span> (every team
+                    tagged Deep cleaning or Move cleaning under Admin → Teams). Row counts still reflect members active on
+                    the job date who pass this visit&apos;s capability gate
+                    {teamAssignQualifiedLabel.trim() ? (
+                      <>
+                        {" "}
+                        (<span className="font-semibold">{teamAssignQualifiedLabel}</span>)
+                      </>
+                    ) : null}
+                    .
+                  </p>
+                ) : null}
+                {teamModalLoading ? (
+                  <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                    Loading teams…
+                  </div>
+                ) : null}
+                {teamModalError ? (
+                  <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-100">
+                    <p>{teamModalError}</p>
+                    <button
+                      type="button"
+                      disabled={teamModalLoading}
+                      onClick={() => void loadTeamsForTeamModal()}
+                      className="mt-2 text-sm font-semibold text-rose-950 underline hover:no-underline disabled:opacity-50 dark:text-rose-50"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : null}
+                <div className="mt-4 space-y-2">
+                  <label htmlFor="admin-team-pick" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    Team
+                  </label>
+                  <select
+                    id="admin-team-pick"
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                    value={teamPickId ?? ""}
+                    onChange={(e) => setTeamPickId(e.target.value || null)}
+                    disabled={assigningTeam || teamModalLoading}
+                  >
+                    <option value="">Select a team…</option>
+                    {teamCandidates.map((t) => {
+                      const activeN = t.active_member_count ?? t.member_count;
+                      const qualN = t.qualified_member_count ?? t.member_count;
+                      const qualBit =
+                        teamAssignQualifiedLabel !== ""
+                          ? `${activeN} active · ${qualN} qualified for ${teamAssignQualifiedLabel}`
+                          : `${activeN} active · ${qualN} qualified`;
+                      const inactive = t.team_active === false;
+                      return (
+                        <option key={t.id} value={t.id} disabled={!t.assignable}>
+                          {t.name}
+                          {inactive ? " · inactive" : ""} · {qualBit} · {t.used_slots_today}/{t.capacity_per_day} today
+                          {!t.assignable ? " (cannot assign)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                {!teamModalLoading && teamModalError === null && teamCandidates.length === 0 ? (
+                  <div className="mt-2 space-y-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    <p>
+                      No dispatch teams are showing — create an active Deep cleaning or Move cleaning team under Admin →
+                      Teams, add members for this date, and ensure at least one passes the capability check for this visit
+                      {teamAssignQualifiedLabel.trim() ? (
+                        <>
+                          {" "}
+                          (<span className="font-medium text-zinc-700 dark:text-zinc-300">
+                            {teamAssignQualifiedLabel}
+                          </span>
+                          ).
+                        </>
+                      ) : (
+                        "."
+                      )}
+                    </p>
+                    <p>
+                      Create or activate teams under{" "}
+                      <Link
+                        href="/admin/teams"
+                        className="font-semibold text-emerald-700 underline hover:text-emerald-800 dark:text-emerald-400"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Admin → Teams
+                      </Link>
+                      , then open this dialog again.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={assigningTeam}
+                    onClick={() => {
+                      setTeamModalOpen(false);
+                      setTeamPickId(null);
+                      setTeamModalError(null);
+                    }}
+                    className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={assigningTeam || teamModalLoading || !teamPickId || Boolean(teamModalError)}
+                    onClick={() => void handleAssignTeam()}
+                    className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+                  >
+                    {assigningTeam ? "Saving…" : fullBooking?.team_id ? "Save team" : "Assign team"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {assignModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -3057,7 +3855,7 @@ function Toast({ kind, text, onClose }: { kind: "success" | "error" | "info"; te
         ? "bg-rose-600 text-white"
         : "bg-zinc-700 text-white";
   return (
-    <div className="fixed bottom-4 right-4 z-[60]">
+    <div className="fixed bottom-4 right-4 z-[100]">
       <div className={["rounded-lg px-4 py-2 text-sm font-medium shadow-lg", barClass].join(" ")}>
         {text}
       </div>
