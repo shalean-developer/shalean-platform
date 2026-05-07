@@ -13,8 +13,15 @@ export type AdminBookingsListRow = {
   location: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  /** Quoted visit total (ZAR) when not yet in paid columns — used for admin payout estimates. */
+  total_price?: number | null;
+  base_amount_cents?: number | null;
+  service_fee_cents?: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
+  /** Team / roster model: pool shown to cleaners (admin list uses with team payout helper). */
+  display_earnings_cents?: number | null;
+  cleaner_earnings_total_cents?: number | null;
   company_revenue_cents?: number | null;
   payout_percentage?: number | null;
   payout_type?: string | null;

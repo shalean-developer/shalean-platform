@@ -1,6 +1,7 @@
 "use client";
 
 import type { AdminBookingsListRow } from "@/lib/admin/adminBookingsListRow";
+import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
 import {
   centsToZar,
   cleanerDisplayName,
@@ -66,10 +67,29 @@ export function BookingCard({
   const leadName = lead?.full_name?.trim() || null;
   const startMins = startsInMinutes(r.date, r.time);
   const assignSourceLine = assignmentSourceLabel(r);
-  const cleanerPayoutZar = centsToZar(r.cleaner_payout_cents);
-  const cleanerBonusZar = centsToZar(r.cleaner_bonus_cents) ?? 0;
+  const payoutCard = computeAdminBookingCleanerPayoutDisplay({
+    payout_type: r.payout_type,
+    is_team_job: r.is_team_job,
+    display_earnings_cents: r.display_earnings_cents,
+    cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
+    cleaner_payout_cents: r.cleaner_payout_cents,
+    cleaner_bonus_cents: r.cleaner_bonus_cents,
+    total_paid_zar: r.total_paid_zar,
+    amount_paid_cents: r.amount_paid_cents,
+    total_price: r.total_price,
+    base_amount_cents: r.base_amount_cents,
+    service_fee_cents: r.service_fee_cents,
+    service: r.service,
+    booking_snapshot: undefined,
+  });
+  const cleanerPayoutZar = payoutCard.payoutZar;
+  const cleanerBonusZar = payoutCard.bonusZar;
   const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
   const companyRevenueZar = centsToZar(r.company_revenue_cents);
+  const companyLineZar =
+    payoutCard.projected === true && payoutCard.projectedCompanyZar != null
+      ? payoutCard.projectedCompanyZar
+      : companyRevenueZar;
   const locationLabel = r.location?.trim() || "Location TBC";
   const rosterTip = rosterTooltipNames(roster);
   const missingLead = roster.length > 0 && !lead;
@@ -209,16 +229,31 @@ export function BookingCard({
             {cleanerTotalZar == null ? (
               <span className="font-medium text-amber-700 dark:text-amber-300">Pending payout</span>
             ) : (
-              <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                R {cleanerTotalZar.toLocaleString("en-ZA")}
-              </span>
+              <>
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  R {cleanerTotalZar.toLocaleString("en-ZA")}
+                </span>
+                {payoutCard.projected ? (
+                  <span
+                    className="ml-1 font-medium text-zinc-400 dark:text-zinc-500"
+                    title="From quoted or recorded visit total; new-cleaner rate until assignment locks tenure."
+                  >
+                    (est.)
+                  </span>
+                ) : null}
+              </>
             )}
           </p>
-          {cleanerPayoutZar != null ? (
+          {!payoutCard.pending && payoutCard.teamPool ? (
             <p className="mt-0.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-              Payout R {cleanerPayoutZar.toLocaleString("en-ZA")}
+              Team pool (roster splits) · co.{" "}
+              {companyLineZar != null ? `R ${companyLineZar.toLocaleString("en-ZA")}` : "—"}
+            </p>
+          ) : cleanerPayoutZar != null ? (
+            <p className="mt-0.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+              {payoutCard.projected ? "Est. " : ""}Payout R {cleanerPayoutZar.toLocaleString("en-ZA")}
               {cleanerBonusZar > 0 ? ` + bonus R ${cleanerBonusZar.toLocaleString("en-ZA")}` : ""}
-              {companyRevenueZar != null ? ` · co. R ${companyRevenueZar.toLocaleString("en-ZA")}` : ""}
+              {companyLineZar != null ? ` · co. R ${companyLineZar.toLocaleString("en-ZA")}` : ""}
             </p>
           ) : null}
           <p className="mt-1 font-medium text-zinc-800 dark:text-zinc-200">{adminBookingPaymentPrimaryLabel(r)}</p>

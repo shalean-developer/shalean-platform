@@ -298,7 +298,7 @@ export function EmergencyRosterReassignModal({
   const focusAddSearch = () => {
     setAddExpanded(true);
     window.setTimeout(() => {
-      document.getElementById("emergency-add-cleaners")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      document.getElementById("emergency-add-cleaners")?.scrollIntoView({ behavior: "smooth", block: "start" });
       addSearchRef.current?.focus();
     }, 0);
   };
@@ -373,9 +373,12 @@ export function EmergencyRosterReassignModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "flex max-h-[92vh] min-h-0 w-[calc(100%-1.5rem)] max-w-[420px] flex-col gap-0 overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-0 shadow-xl",
+          // Pin to viewport (override default centered translate — avoids bottom clip when roster is tall).
+          "fixed z-50 flex translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border border-zinc-200/90 bg-white p-0 shadow-xl",
           "dark:border-zinc-800 dark:bg-zinc-950",
-          "sm:max-w-[440px]",
+          // Mobile: full-screen sheet. Desktop: tall centered panel (vertical insets only — no vertical translate clip).
+          "inset-0 h-[100dvh] max-h-[100dvh] w-full max-w-full rounded-none border-x-0 border-b-0 border-t-0",
+          "sm:inset-x-auto sm:left-1/2 sm:right-auto sm:top-4 sm:bottom-4 sm:h-[min(92dvh,calc(100dvh-2rem))] sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:w-[min(calc(100%-2rem),42rem)] sm:max-w-2xl sm:-translate-x-1/2 sm:translate-y-0 sm:rounded-xl sm:border",
           "[&>button]:text-zinc-400 [&>button]:opacity-70 [&>button:hover]:opacity-100",
         )}
       >
@@ -388,7 +391,7 @@ export function EmergencyRosterReassignModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden overscroll-contain px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden overscroll-contain px-5 py-4 [scrollbar-gutter:stable]">
           {locked ? (
             <p className="rounded-lg border border-zinc-200/80 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200">
               This booking is locked (earnings finalized). {BOOKING_ROSTER_LOCKED_HINT}
@@ -559,7 +562,8 @@ export function EmergencyRosterReassignModal({
                     autoComplete="off"
                   />
                   <div className="overflow-hidden rounded-lg border border-zinc-100 bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-900/30">
-                    <div className="max-h-[min(34vh,240px)] overflow-y-auto overscroll-contain">
+                    {/* Single outer scroll on the dialog body — list can grow so results are never trapped behind the footer */}
+                    <div className="max-h-[min(55dvh,420px)] overflow-y-auto overscroll-contain sm:max-h-[min(50dvh,480px)]">
                       {searching ? (
                         <div className="flex items-center gap-2 px-3 py-4 text-sm text-zinc-500">
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -634,7 +638,7 @@ export function EmergencyRosterReassignModal({
                       No suggestions right now. Use search above.
                     </p>
                   ) : (
-                    <ul className="max-h-[min(30vh,220px)] space-y-1.5 overflow-y-auto overscroll-contain">
+                    <ul className="max-h-[min(40dvh,320px)] space-y-1.5 overflow-y-auto overscroll-contain sm:max-h-[min(36dvh,360px)]">
                       {suggestions.map((s, idx) => (
                         <li
                           key={s.cleanerId}

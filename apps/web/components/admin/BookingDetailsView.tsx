@@ -31,6 +31,7 @@ import {
   parseAdminBookingPriceSnapshot,
   type AdminPriceSnapshotCardView,
 } from "@/lib/booking/priceSnapshotAdminDisplay";
+import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
 
 type BookingSeed = { id: string };
 
@@ -45,6 +46,8 @@ type BookingDetails = {
   location: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  base_amount_cents?: number | null;
+  service_fee_cents?: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
   /** Team / modern earnings: pool shown to cleaners; `cleaner_payout_cents` may be 0 when `payout_type` is `team_fixed`. */
@@ -270,63 +273,6 @@ function money(booking: BookingDetails): number {
 function centsToZar(cents: number | null | undefined): number | null {
   if (cents == null || !Number.isFinite(Number(cents))) return null;
   return Math.round(Number(cents) / 100);
-}
-
-/**
- * Team jobs persist cleaner-facing amounts on `display_earnings_cents` and set legacy `cleaner_payout_cents` to 0.
- * Solo jobs use `cleaner_payout_cents` / `cleaner_bonus_cents`.
- */
-function adminBookingCleanerPayoutCard(booking: BookingDetails): {
-  payoutLabel: string;
-  payoutZar: number | null;
-  bonusZar: number;
-  pending: boolean;
-  teamPool: boolean;
-} {
-  const payoutType = String(booking.payout_type ?? "").trim().toLowerCase();
-  const teamFixed = payoutType === "team_fixed";
-  const teamJob = booking.is_team_job === true;
-  const useTeamPool = teamFixed || teamJob;
-
-  const displayRaw = booking.display_earnings_cents;
-  const displayCents =
-    displayRaw != null && Number.isFinite(Number(displayRaw)) ? Math.max(0, Math.round(Number(displayRaw))) : null;
-
-  const ledgerRaw = booking.cleaner_earnings_total_cents;
-  const ledgerCents =
-    ledgerRaw != null && Number.isFinite(Number(ledgerRaw)) ? Math.max(0, Math.round(Number(ledgerRaw))) : null;
-
-  if (useTeamPool) {
-    const poolCents =
-      displayCents ??
-      (ledgerCents != null && ledgerCents > 0 ? ledgerCents : null);
-    if (poolCents != null) {
-      return {
-        payoutLabel: "Team cleaner pool",
-        payoutZar: centsToZar(poolCents),
-        bonusZar: 0,
-        pending: false,
-        teamPool: true,
-      };
-    }
-    return {
-      payoutLabel: "Team cleaner pool",
-      payoutZar: null,
-      bonusZar: 0,
-      pending: true,
-      teamPool: true,
-    };
-  }
-
-  const payoutZar = centsToZar(booking.cleaner_payout_cents);
-  const bonusZar = centsToZar(booking.cleaner_bonus_cents) ?? 0;
-  return {
-    payoutLabel: "Cleaner payout",
-    payoutZar,
-    bonusZar,
-    pending: payoutZar == null,
-    teamPool: false,
-  };
 }
 
 function formatZar(n: number): string {
@@ -1445,11 +1391,14 @@ export default function BookingDetailsView({
   const serviceExtrasForAdmin = extrasPayloadForAdminServiceCard(fullBooking);
   const basePrice = Math.round(total * 0.85);
   const extrasPrice = Math.max(total - basePrice, 0);
-  const cleanerPayoutCard = adminBookingCleanerPayoutCard(fullBooking);
+  const cleanerPayoutCard = computeAdminBookingCleanerPayoutDisplay(fullBooking);
   const cleanerPayoutZar = cleanerPayoutCard.payoutZar;
   const cleanerBonusZar = cleanerPayoutCard.bonusZar;
   const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
-  const companyRevenueZar = centsToZar(fullBooking.company_revenue_cents);
+  const companyRevenueZar =
+    cleanerPayoutCard.projected === true && cleanerPayoutCard.projectedCompanyZar != null
+      ? cleanerPayoutCard.projectedCompanyZar
+      : centsToZar(fullBooking.company_revenue_cents);
   const isAssigned = !!fullBooking.cleaner_id;
   const jobRosterLocked =
     (fullBooking.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0;
@@ -3072,6 +3021,12 @@ export default function BookingDetailsView({
                       : ""
                   }`}
                 />
+                {cleanerPayoutCard.projected ? (
+                  <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                    Shown from visit total before payout fields are stored on this booking (new-cleaner rate until tenure is
+                    known). Final amounts appear after earnings persist.
+                  </p>
+                ) : null}
                 {cleanerPayoutCard.teamPool ? (
                   <p className="mt-2 text-xs text-zinc-500">
                     Per-member shares follow the team roster / member payout rows; booking-level legacy{" "}
