@@ -42,6 +42,8 @@ class BookingsQuery {
   private teamIdsIn: string[] | null = null;
   private idsIn: string[] | null = null;
   private directCleanerId: string | null = null;
+  /** Single-row fetch by primary key (e.g. `previewDisplayEarningsCentsForCleanerJob`). */
+  private idEq: string | null = null;
   private isTeamJobEqTrue = false;
   private statusNot = new Set<string>();
 
@@ -51,6 +53,10 @@ class BookingsQuery {
     return this;
   }
   eq(col: string, val: unknown) {
+    if (col === "id") {
+      this.idEq = String(val ?? "");
+      return this;
+    }
     if (col === "cleaner_id") {
       this.branch = "direct";
       this.directCleanerId = String(val ?? "");
@@ -87,7 +93,13 @@ class BookingsQuery {
   limit() {
     return this;
   }
+  maybeSingle() {
+    const filtered = this.rows.filter((row) => this.matches(row));
+    const hit = filtered[0] ?? null;
+    return Promise.resolve({ data: hit ? { ...hit } : null, error: null });
+  }
   private matches(row: Row): boolean {
+    if (this.idEq && String(row.id ?? "") !== this.idEq) return false;
     for (const st of this.statusNot) {
       if (String(row.status ?? "") === st) return false;
     }
@@ -159,6 +171,7 @@ class CleanersQuery {
 
 class BookingCleanersQuery {
   private bookingIdsIn: string[] | null = null;
+  private bookingIdEq: string | null = null;
   private cleanerIdEq: string | null = null;
   constructor(private db: MockSupabase) {}
   select() {
@@ -166,6 +179,7 @@ class BookingCleanersQuery {
   }
   eq(col: string, value: unknown) {
     if (col === "cleaner_id") this.cleanerIdEq = String(value ?? "");
+    if (col === "booking_id") this.bookingIdEq = String(value ?? "");
     return this;
   }
   in(col: string, values: unknown[]) {
@@ -180,13 +194,23 @@ class BookingCleanersQuery {
   order() {
     return this;
   }
-  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+  maybeSingle() {
+    const rows = this.filteredRows();
+    const hit = rows[0] ?? null;
+    return Promise.resolve({ data: hit ? { ...hit } : null, error: null });
+  }
+  private filteredRows(): Row[] {
     let rows = [...(this.db.tables.booking_cleaners ?? [])];
     if (this.cleanerIdEq) rows = rows.filter((r) => String(r.cleaner_id ?? "") === this.cleanerIdEq);
+    if (this.bookingIdEq) rows = rows.filter((r) => String(r.booking_id ?? "") === this.bookingIdEq);
     if (this.bookingIdsIn?.length) {
       const set = new Set(this.bookingIdsIn);
       rows = rows.filter((r) => set.has(String(r.booking_id ?? "")));
     }
+    return rows;
+  }
+  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+    const rows = this.filteredRows();
     const payload = { data: rows, error: null as null };
     if (onfulfilled) onfulfilled(payload);
     return Promise.resolve(payload);
@@ -198,6 +222,9 @@ class BookingLineItemsEmptyQuery {
     return this;
   }
   in() {
+    return this;
+  }
+  eq() {
     return this;
   }
   order() {

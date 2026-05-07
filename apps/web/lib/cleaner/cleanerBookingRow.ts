@@ -64,6 +64,8 @@ export type CleanerBookingRow = {
   displayEarningsIsEstimate?: boolean;
   earnings_cents?: number | null;
   earnings_estimated?: boolean;
+  /** Snake_case mirror of {@link earnings_estimated} / {@link displayEarningsIsEstimate} for clients. */
+  earnings_is_estimate?: boolean;
   payout_status?: string | null;
   payout_paid_at?: string | null;
   payout_frozen_cents?: number | null;

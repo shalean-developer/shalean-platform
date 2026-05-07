@@ -43,16 +43,18 @@ import {
   mobilePhaseDisplayForDashboard,
 } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
-import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
+import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
 import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
 import {
   clearAllCleanerDashboardSessionCaches,
   signalCleanerDashboardJobsRefresh,
 } from "@/lib/cleaner/cleanerDashboardSessionCache";
+import { cleanerLifecycleFailureMessage } from "@/lib/cleaner/cleanerLifecycleClientErrors";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { BookingServiceQaPanel } from "@/components/cleaner/BookingServiceQaPanel";
 import type { ServiceQaCleanerWire } from "@/lib/booking/bookingServiceQa";
 import { cn } from "@/lib/utils";
+import { useCleanerRealtime } from "@/lib/realtime/useCleanerRealtime";
 
 type CleanerJobDetailWire = {
   id?: string;
@@ -85,6 +87,7 @@ type CleanerJobDetailWire = {
   earnings_cents?: number | null;
   displayEarningsIsEstimate?: boolean;
   earnings_estimated?: boolean;
+  earnings_is_estimate?: boolean;
   is_team_job?: boolean | null;
   teamMemberCount?: number | null;
   team_roster_summary?: string | null;
@@ -98,6 +101,8 @@ type CleanerJobDetailWire = {
   cleaner_response_status?: string | null;
   /** Deep / move cleaning execution QA (optional checklist + photos). */
   service_qa?: ServiceQaCleanerWire | null;
+  /** DB `cleaner_earnings_total_cents` when present on wire (snake_case from API). */
+  cleaner_earnings_total_cents?: number | null;
 };
 
 function resolveWireForLifecycleFlush(
@@ -190,9 +195,14 @@ function wireToBookingRow(j: CleanerJobDetailWire): CleanerBookingRow {
     teamMemberCount: j.teamMemberCount ?? null,
     cleaner_response_status: j.cleaner_response_status ?? null,
     displayEarningsCents: j.displayEarningsCents ?? null,
+    cleaner_earnings_total_cents:
+      typeof (j as { cleaner_earnings_total_cents?: unknown }).cleaner_earnings_total_cents === "number"
+        ? ((j as { cleaner_earnings_total_cents?: number }).cleaner_earnings_total_cents as number)
+        : null,
     earnings_cents: j.earnings_cents ?? null,
     displayEarningsIsEstimate: j.displayEarningsIsEstimate,
     earnings_estimated: j.earnings_estimated,
+    earnings_is_estimate: j.earnings_is_estimate,
     team_roster_summary: j.team_roster_summary ?? null,
   };
 }
@@ -210,11 +220,20 @@ function lifecyclePhaseBeforeLabel(
   }
 }
 
-function optimisticPatchForAction(action: "accept" | "en_route" | "start" | "complete"): Partial<CleanerJobDetailWire> {
+function optimisticPatchForAction(
+  action: "accept" | "en_route" | "start" | "complete",
+  base: CleanerJobDetailWire | null,
+): Partial<CleanerJobDetailWire> {
   const now = new Date().toISOString();
   switch (action) {
-    case "accept":
-      return { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
+    case "accept": {
+      const cur = String(base?.status ?? "").toLowerCase();
+      const dst = String(base?.dispatch_status ?? "").trim().toLowerCase();
+      const patch: Partial<CleanerJobDetailWire> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
+      if (cur === "offered" || cur === "confirmed") patch.status = "assigned";
+      if (dst === "offered") patch.dispatch_status = "assigned";
+      return patch;
+    }
     case "en_route":
       return { en_route_at: now, cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY };
     case "start":
@@ -228,6 +247,15 @@ function optimisticPatchForAction(action: "accept" | "en_route" | "start" | "com
     default:
       return {};
   }
+}
+
+function acceptPersistSessionPatch(base: CleanerJobDetailWire | null): Record<string, unknown> {
+  const cur = String(base?.status ?? "").toLowerCase();
+  const dst = String(base?.dispatch_status ?? "").trim().toLowerCase();
+  const patch: Record<string, unknown> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
+  if (cur === "offered" || cur === "confirmed") patch.status = "assigned";
+  if (dst === "offered") patch.dispatch_status = "assigned";
+  return patch;
 }
 
 const NOTE_ALERT_RE = /\b(dog|dogs|alarm|key|keys|gate|codes?|code|pet|pets|lock)\b/i;
@@ -273,6 +301,7 @@ export default function CleanerJobDetailPage() {
   const [ttlCompleteLock, setTtlCompleteLock] = useState(false);
   const [contactSheetOpen, setContactSheetOpen] = useState(false);
   const jobControlRef = useRef<HTMLElement | null>(null);
+  const postActionReconcileTimerRef = useRef<number | null>(null);
   const lifecycleGuardRef = useRef(false);
   const latestJobRef = useRef<CleanerJobDetailWire | null>(null);
   const optimisticPatchRef = useRef<Partial<CleanerJobDetailWire> | null>(null);
@@ -364,6 +393,51 @@ export default function CleanerJobDetailPage() {
     return true;
   }, [id]);
 
+  const loadJobRef = useRef(loadJob);
+  useLayoutEffect(() => {
+    loadJobRef.current = loadJob;
+  }, [loadJob]);
+
+  /** `public.cleaners.id` + team ids for Realtime (matches jobs list). */
+  const [rtCleanerId, setRtCleanerId] = useState<string | null>(null);
+  const [rtTeamIds, setRtTeamIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRtCleanerId(null);
+    setRtTeamIds([]);
+    void (async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (!headers || cancelled) return;
+      const res = await cleanerAuthenticatedFetch("/api/cleaner/me", { headers });
+      const m = (await res.json().catch(() => ({}))) as { cleaner?: { id?: string }; teamIds?: unknown };
+      if (!res.ok || cancelled) return;
+      if (m.cleaner && typeof m.cleaner.id === "string") {
+        const cid = m.cleaner.id.trim();
+        if (cid) setRtCleanerId(cid);
+      }
+      const tis = Array.isArray(m.teamIds)
+        ? m.teamIds.filter((x): x is string => typeof x === "string" && Boolean(String(x).trim())).map((x) => String(x).trim())
+        : [];
+      setRtTeamIds(tis);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useCleanerRealtime({
+    cleanerId: rtCleanerId ?? undefined,
+    debounceMs: 300,
+    subscribeBookings: true,
+    subscribeWorkSettings: false,
+    workspaceBookingsRealtime: true,
+    workspaceTeamIds: rtTeamIds,
+    onBookingChange: () => {
+      void loadJobRef.current();
+    },
+  });
+
   /** Merge lifecycle fields into session cache before `loadJob` (survives fast navigation). */
   const persistLifecycleSessionPatch = useCallback((patch: Record<string, unknown>) => {
     const bid = id.trim();
@@ -449,6 +523,13 @@ export default function CleanerJobDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (postActionReconcileTimerRef.current != null) {
+      window.clearTimeout(postActionReconcileTimerRef.current);
+      postActionReconcileTimerRef.current = null;
+    }
+  }, [id]);
+
+  useEffect(() => {
     if (!id) {
       setLoading(false);
       setErr("Missing job.");
@@ -475,6 +556,10 @@ export default function CleanerJobDetailPage() {
     })();
     return () => {
       cancelled = true;
+      if (postActionReconcileTimerRef.current != null) {
+        window.clearTimeout(postActionReconcileTimerRef.current);
+        postActionReconcileTimerRef.current = null;
+      }
     };
   }, [id, loadJob]);
 
@@ -485,14 +570,28 @@ export default function CleanerJobDetailPage() {
   }, [completionSuccess]);
 
   useEffect(() => {
-    if (!job || !optimisticPatch) return;
-    const js = String(job.status ?? "").toLowerCase();
+    if (!optimisticPatch) return;
     const os = optimisticPatch.status != null ? String(optimisticPatch.status).toLowerCase() : null;
+    const optimisticCompletedAt = optimisticPatch.completed_at != null && String(optimisticPatch.completed_at).trim() !== "";
+    const optimisticClaimsDone = os === "completed" || optimisticCompletedAt;
+    if (!optimisticClaimsDone) return;
+
+    if (!job) {
+      return;
+    }
+    const js = String(job.status ?? "").toLowerCase();
+    const serverCompletedAt = job.completed_at != null && String(job.completed_at).trim() !== "";
+    const serverAuthoritativeDone = js === "completed" || serverCompletedAt;
+    /** Drop stale “completed” overlay when the server row never finished (failed sync / retry). */
+    if (!serverAuthoritativeDone) {
+      setOptimisticPatch(null);
+      return;
+    }
     if (js === "completed" && os != null && os !== "completed") {
       setOptimisticPatch(null);
       setCompletionSuccess(true);
     }
-  }, [job?.status, optimisticPatch?.status]);
+  }, [job?.status, job?.completed_at, optimisticPatch?.status, optimisticPatch?.completed_at]);
 
   const scopeSource = useMemo(() => {
     if (!displayJob) return null;
@@ -557,7 +656,12 @@ export default function CleanerJobDetailPage() {
   }, [displayJob]);
 
   const earningsCents = displayJob?.displayEarningsCents ?? displayJob?.earnings_cents ?? null;
-  const earningsEstimated = displayJob?.displayEarningsIsEstimate === true || displayJob?.earnings_estimated === true;
+  const earningsEstimated =
+    displayJob?.displayEarningsIsEstimate === true ||
+    displayJob?.earnings_estimated === true ||
+    displayJob?.earnings_is_estimate === true;
+
+  const showLifecycleDebugStrip = process.env.NEXT_PUBLIC_CLEANER_JOB_LIFECYCLE_DEBUG === "1";
 
   const scheduleModel = useMemo(
     () =>
@@ -613,7 +717,9 @@ export default function CleanerJobDetailPage() {
 
       const applyOptimistic = () => {
         if (optimistic) {
-          setOptimisticPatch(optimisticPatchForAction(action as "accept" | "en_route" | "start" | "complete"));
+          setOptimisticPatch(
+            optimisticPatchForAction(action as "accept" | "en_route" | "start" | "complete", latestJobRef.current),
+          );
         }
       };
 
@@ -660,7 +766,7 @@ export default function CleanerJobDetailPage() {
             applyOptimistic();
             const nowQueued = new Date().toISOString();
             if (action === "accept") {
-              persistLifecycleSessionPatch({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED });
+              persistLifecycleSessionPatch(acceptPersistSessionPatch(latestJobRef.current));
             } else if (action === "en_route") {
               persistLifecycleSessionPatch({
                 cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY,
@@ -689,6 +795,21 @@ export default function CleanerJobDetailPage() {
           });
 
           if (!result.ok) {
+            const friendly = cleanerLifecycleFailureMessage({
+              action,
+              code: result.code,
+              baseMessage: result.error ?? "Action failed.",
+              httpStatus: result.status,
+            });
+
+            /** Server rejected completion (e.g. payout) — never hide behind offline queue + empty error. */
+            if (action === "complete" && result.status >= 500) {
+              setOptimisticPatch(null);
+              setActionErr(friendly);
+              setConfirmPending(null);
+              return { applyPostEnqueueTail: false };
+            }
+
             if (result.status === 0 || result.status >= 500) {
               const enq = await enqueuePendingLifecycle({
                 bookingId: id,
@@ -698,7 +819,7 @@ export default function CleanerJobDetailPage() {
               });
               if (!enq.ok) {
                 setOptimisticPatch(null);
-                setActionErr(enq.reason);
+                setActionErr(action === "complete" ? friendly : enq.reason);
                 setConfirmPending(null);
                 return { applyPostEnqueueTail: false };
               }
@@ -710,12 +831,16 @@ export default function CleanerJobDetailPage() {
                 networkOnline: readNavigatorOnline(),
                 phaseBefore,
               });
-              setActionErr(null);
+              setActionErr(
+                action === "complete"
+                  ? "You're offline — completion is saved and will send when you're back online."
+                  : null,
+              );
               setConfirmPending(null);
               return { armBackoffAfterPostEnqueue: true };
             }
             setOptimisticPatch(null);
-            setActionErr(result.error ?? "Action failed.");
+            setActionErr(friendly);
             setConfirmPending(null);
             return { applyPostEnqueueTail: false };
           }
@@ -726,7 +851,7 @@ export default function CleanerJobDetailPage() {
             clearCleanerJobDetailCache(id);
             const nowIso = new Date().toISOString();
             if (action === "accept") {
-              persistLifecycleSessionPatch({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED });
+              persistLifecycleSessionPatch(acceptPersistSessionPatch(latestJobRef.current));
             } else if (action === "en_route") {
               persistLifecycleSessionPatch({
                 cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY,
@@ -745,7 +870,7 @@ export default function CleanerJobDetailPage() {
               });
             }
           }
-          if (action === "complete") {
+          if (result.ok && action === "complete") {
             setCompletionSuccess(true);
           }
           try {
@@ -764,6 +889,14 @@ export default function CleanerJobDetailPage() {
           setNeedsJobRefresh(false);
           signalCleanerDashboardJobsRefresh();
           scrollJobControlIntoView();
+          if (postActionReconcileTimerRef.current != null) {
+            window.clearTimeout(postActionReconcileTimerRef.current);
+            postActionReconcileTimerRef.current = null;
+          }
+          postActionReconcileTimerRef.current = window.setTimeout(() => {
+            postActionReconcileTimerRef.current = null;
+            void loadJob();
+          }, 1500);
           return {};
         });
       } finally {
@@ -956,10 +1089,36 @@ export default function CleanerJobDetailPage() {
                       )}
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Address on file will appear here.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Address on file will appear here.</p>
                 )}
               </div>
+
+              {showLifecycleDebugStrip ? (
+                <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/40 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                  <span className="font-semibold text-foreground">Lifecycle debug</span>
+                  <br />
+                  status: {displayJob.status ?? "—"}
+                  <br />
+                  dispatch: {displayJob.dispatch_status ?? "—"}
+                  <br />
+                  response: {displayJob.cleaner_response_status ?? "—"}
+                  <br />
+                  accepted_at: {displayJob.accepted_at ?? "—"}
+                  <br />
+                  en_route_at: {displayJob.en_route_at ?? "—"}
+                  <br />
+                  started_at: {displayJob.started_at ?? "—"}
+                  <br />
+                  completed_at: {displayJob.completed_at ?? "—"}
+                  <br />
+                  displayEarningsCents: {displayJob.displayEarningsCents ?? "—"}
+                  <br />
+                  earnings_cents: {displayJob.earnings_cents ?? "—"}
+                  <br />
+                  cleaner_earnings_total_cents: {displayJob.cleaner_earnings_total_cents ?? "—"}
+                </div>
+              ) : null}
 
               {scheduleModel?.durText || scheduleModel?.endRange ? (
                 <div className="space-y-1 text-sm">
@@ -1019,15 +1178,19 @@ export default function CleanerJobDetailPage() {
 
               {unified.propertyLine ? <p className="text-base font-medium text-foreground">{unified.propertyLine}</p> : null}
 
-              {typeof earningsCents === "number" && earningsCents > 0 ? (
+              {typeof earningsCents === "number" && Number.isFinite(earningsCents) && earningsCents > 0 ? (
                 <div className={cn(unified.propertyLine ? "mt-1" : "")}>
                   <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                    You earn: {formatZarFromCents(earningsCents)}
+                    You earn: {formatCleanerJobEarningsLabel(earningsCents, { estimate: earningsEstimated })}
                   </p>
                   {earningsEstimated ? (
-                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">Estimate — final amount follows roster and payout rules.</p>
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">Final amount follows roster and payout rules after the job is recorded.</p>
                   ) : null}
                 </div>
+              ) : typeof earningsCents === "number" && Number.isFinite(earningsCents) && earningsCents === 0 ? (
+                <p className={cn("text-sm text-muted-foreground", unified.propertyLine || completionSuccess ? "mt-1" : "")}>
+                  You earn: {formatCleanerJobEarningsLabel(0)}
+                </p>
               ) : (
                 <p
                   className={cn(
@@ -1037,7 +1200,7 @@ export default function CleanerJobDetailPage() {
                 >
                   {completionSuccess
                     ? "Processing your earnings… refresh in a moment if the amount still shows as empty."
-                    : "Your pay for this job will show here once earnings are calculated and attached to the booking."}
+                    : "Your pay for this job will show here once the booking has enough payment data to apply payout rules."}
                 </p>
               )}
 
@@ -1069,7 +1232,15 @@ export default function CleanerJobDetailPage() {
               ) : null}
 
               <div className="mt-4 space-y-3 border-t border-border pt-4" aria-label="Job actions">
-                {actionErr ? <p className="text-sm text-destructive">{actionErr}</p> : null}
+                {actionErr ? (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  >
+                    <p className="font-semibold text-destructive">Couldn&apos;t update this job</p>
+                    <p className="mt-1 text-sm leading-snug">{actionErr}</p>
+                  </div>
+                ) : null}
                 {jobUi.phase === "expired" ? (
                   <div className="rounded-lg border border-muted-foreground/30 bg-muted/30 px-3 py-3 text-sm text-foreground">
                     <p className="font-semibold">This job is no longer available</p>

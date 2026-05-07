@@ -30,6 +30,8 @@ import {
 } from "@/lib/cleaner/cleanerLifecycleTelemetryClient";
 import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRank";
 import { shouldDropStaleQueuedLifecycleAction } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
+import { CLEANER_LIFECYCLE_CODE } from "@/lib/cleaner/cleanerLifecycleErrors";
+import { emitCleanerLifecycleFlushError } from "@/lib/cleaner/cleanerLifecycleFlushErrorBus";
 
 function nextFlushBackoffUntilMs(baseMs: number): number {
   const jitter = Math.floor(Math.random() * 10_000);
@@ -475,11 +477,36 @@ export function useCleanerLifecycleOrchestrator(
             continue;
           }
           if (!result.ok && result.status >= 400 && result.status < 500) {
-            await removePendingLifecycleByKey(item.idempotencyKey);
-            lifecyclePeekSessionCacheRef.current.delete(item.bookingId.trim());
+            const msg = result.error ?? "Action failed.";
+            const acceptRace =
+              result.status === 412 ||
+              result.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW ||
+              result.code === CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED;
+            emitCleanerLifecycleFlushError({
+              kind: acceptRace ? "booking_changed" : "action_failed",
+              status: result.status,
+              message: msg,
+              bookingId: item.bookingId,
+              action: item.action,
+            });
+            void logCleanerLifecycleClientEvent({
+              bookingId: item.bookingId,
+              action: item.action,
+              status: "flush_failed",
+              finalStatus: "client_error_kept_queue",
+              detail: `http=${result.status}${result.code ? `;code=${result.code}` : ""}`,
+              queuedAtMs: item.queuedAt,
+              networkOnline: readNavigatorOnline(),
+              phaseBefore,
+              queueDepthAtFlush,
+              flushCycleSteps: flushCycleStep,
+              bcEventsReceivedSession: bcEventsSnap(),
+              casRetriesCount: getCasRetriesTotal() - casItemStart,
+            });
+            flushBackoffUntilMsRef.current = Math.max(flushBackoffUntilMsRef.current, Date.now() + 5_000);
             refreshQueueFromDisk();
-            flushItemsSucceeded += 1;
-            continue;
+            flushItemsFailed += 1;
+            break;
           }
           await recordFlushFailure(item.idempotencyKey);
           const after = listPendingLifecycle().find((x) => x.idempotencyKey === item.idempotencyKey);

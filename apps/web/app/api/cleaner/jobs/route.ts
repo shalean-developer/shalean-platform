@@ -23,6 +23,10 @@ import {
   type TeamRosterMemberWire,
 } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
+import {
+  applyPreviewEarningsToCleanerJobRows,
+  DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
+} from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -154,6 +158,7 @@ export async function GET(request: Request) {
       displayEarningsIsEstimate: false,
       earnings_cents: displayEarningsCents,
       earnings_estimated: false,
+      earnings_is_estimate: false,
       __teamSnap: teamSnap as number | null,
     };
   });
@@ -311,6 +316,24 @@ export async function GET(request: Request) {
         scope_lines: cleanerBookingScopeLines(j as CleanerBookingRow),
       }))
     : jobsWithRoster;
+
+  if (cardView) {
+    const out = await applyPreviewEarningsToCleanerJobRows(admin, {
+      cleanerId: viewerCleanerId,
+      rows: jobsPayload as Record<string, unknown>[],
+      maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
+    });
+    return NextResponse.json({ jobs: out });
+  }
+
+  if (!lite) {
+    const out = await applyPreviewEarningsToCleanerJobRows(admin, {
+      cleanerId: viewerCleanerId,
+      rows: jobsPayload as Record<string, unknown>[],
+      maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
+    });
+    return NextResponse.json({ jobs: out });
+  }
 
   return NextResponse.json({ jobs: jobsPayload });
 }

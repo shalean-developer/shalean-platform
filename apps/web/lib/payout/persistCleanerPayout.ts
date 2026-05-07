@@ -16,6 +16,10 @@ import { computeCleanerEarningsForBooking } from "@/lib/payout/computeCleanerEar
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { buildTeamJobMemberPayoutInsertRows } from "@/lib/payout/teamRosterPayoutAllocation";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  assertHybridPayoutWithinFinancialCap,
+  bookingFinancialDiagnostics,
+} from "@/lib/payout/bookingPayoutCapCents";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -26,7 +30,7 @@ const EARNINGS_MODEL_VERSION_FALLBACK = "v1_2026_earnings";
 export type PersistCleanerPayoutIfUnsetResult =
   | { ok: true; skipped: false; payout?: CleanerPayoutResult }
   | { ok: true; skipped: true; skipReason: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: "payout_exceeds_financial_cap" };
 
 function resolveServiceId(snapshot: unknown, serviceLabel: string | null | undefined): string {
   if (snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
@@ -172,6 +176,229 @@ async function buildFallbackEarnings(params: {
   };
 }
 
+type PersistBookingRowForEarnings = {
+  is_team_job?: boolean | null;
+  base_amount_cents?: number | null;
+  service_fee_cents?: number | null;
+  total_paid_zar?: number | null;
+  total_paid_cents?: number | null;
+  amount_paid_cents?: number | null;
+  service?: string | null;
+  booking_snapshot?: unknown;
+  date?: string | null;
+  time?: string | null;
+  cleaner_payout_cents?: number | null;
+};
+
+export type ResolvePersistEarningsComputationResult =
+  | {
+      ok: true;
+      earnings: ComputeBookingEarningsOutput;
+      usedLineItemBasis: boolean;
+      usedFallback: boolean;
+      lineItemRows: { id: string; item_type: string; total_price_cents: number }[];
+      payoutBaseCents: number;
+      serviceFeeCents: number;
+      bookingDateIso: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Same earnings resolution as {@link persistCleanerPayoutIfUnsetCore} (line items → compute → fallback),
+ * without writing. Used for cleaner-facing previews when `display_earnings_cents` is not yet persisted.
+ */
+export async function resolvePersistEarningsComputation(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  expectedCleanerId: string;
+  r: PersistBookingRowForEarnings;
+}): Promise<ResolvePersistEarningsComputationResult> {
+  const { admin, bookingId, expectedCleanerId, r } = params;
+  const isTeamJob = r.is_team_job === true;
+
+  const { payoutBaseCents, serviceFeeCents } = resolvePayoutBaseAndServiceFeeCents({
+    baseAmountCents: r.base_amount_cents,
+    serviceFeeCents: r.service_fee_cents,
+    totalPaidZar: r.total_paid_zar,
+    amountPaidCents: r.total_paid_cents ?? r.amount_paid_cents,
+  });
+  const bookingDateIso = resolveBookingDateIso(r.date, r.time);
+  const serviceId = resolveServiceId(r.booking_snapshot ?? null, r.service ?? null);
+
+  let lineItemRows: { id: string; item_type: string; total_price_cents: number }[] = [];
+  if (!isTeamJob) {
+    const { data: li } = await admin
+      .from("booking_line_items")
+      .select("id, item_type, total_price_cents")
+      .eq("booking_id", bookingId);
+    lineItemRows = (li ?? [])
+      .map((x) => x as { id?: string; item_type?: string; total_price_cents?: number })
+      .filter((x) => typeof x.id === "string" && typeof x.item_type === "string")
+      .map((x) => ({
+        id: String(x.id),
+        item_type: String(x.item_type),
+        total_price_cents: Number(x.total_price_cents) || 0,
+      }));
+  }
+
+  let earnings: ComputeBookingEarningsOutput | null = null;
+  let usedFallback = false;
+  let computeRejectReason: string | null = null;
+  let usedLineItemBasis = false;
+
+  async function tryComputeEarnings(servicePriceCents: number, team: boolean): Promise<ComputeBookingEarningsOutput | null> {
+    try {
+      const computed = await computeBookingEarnings({
+        servicePriceCents,
+        serviceId,
+        cleanerId: expectedCleanerId,
+        isTeamJob: team,
+        bookingDate: bookingDateIso,
+      });
+      if (isValidEarningsShape(computed)) return computed;
+      computeRejectReason = "invalid_compute_output";
+    } catch (e) {
+      computeRejectReason = `compute_threw:${String(e)}`;
+    }
+    return null;
+  }
+
+  if (!isTeamJob) {
+    const lineSubtotal = sumEligibleLineItemsSubtotalCents(lineItemRows);
+    if (lineSubtotal > 0) {
+      const fromLines = await tryComputeEarnings(lineSubtotal, false);
+      if (fromLines) {
+        earnings = fromLines;
+        usedLineItemBasis = true;
+      }
+    }
+  }
+
+  if (!earnings) {
+    const fromBooking = await tryComputeEarnings(payoutBaseCents, isTeamJob);
+    if (fromBooking) earnings = fromBooking;
+  }
+
+  if (!earnings) {
+    const fb = await buildFallbackEarnings({ admin, r, expectedCleanerId, isTeamJob });
+    if (!fb) {
+      return { ok: false, error: "Could not resolve earnings" };
+    }
+    earnings = fb;
+    usedFallback = true;
+  }
+
+  return {
+    ok: true,
+    earnings,
+    usedLineItemBasis,
+    usedFallback,
+    lineItemRows,
+    payoutBaseCents,
+    serviceFeeCents,
+    bookingDateIso,
+  };
+}
+
+async function previewTeamMemberAllocatedCents(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  teamId: string;
+  cleanerId: string;
+  earnings: ComputeBookingEarningsOutput;
+  bookingDateIso: string;
+}): Promise<number | null> {
+  const { admin, bookingId, teamId, cleanerId, earnings, bookingDateIso } = params;
+  const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
+  if (poolCents <= 0) return null;
+
+  const { data: members, error: membersErr } = await admin
+    .from("team_members")
+    .select("cleaner_id, active_from, active_to")
+    .eq("team_id", teamId)
+    .not("cleaner_id", "is", null);
+  if (membersErr) return null;
+
+  const bookingMs = new Date(bookingDateIso).getTime();
+  const activeMembers = (members ?? [])
+    .map((m) => m as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
+    .filter((m) => {
+      const cid = String(m.cleaner_id ?? "").trim();
+      if (!cid) return false;
+      const from = m.active_from ? new Date(m.active_from).getTime() : null;
+      const to = m.active_to ? new Date(m.active_to).getTime() : null;
+      if (from != null && !Number.isNaN(from) && bookingMs < from) return false;
+      if (to != null && !Number.isNaN(to) && bookingMs > to) return false;
+      return true;
+    });
+  if (!activeMembers.length) return null;
+
+  const activeIds = activeMembers.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean);
+
+  const { data: rosterRows, error: rosterErr } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id, role, payout_weight, lead_bonus_cents")
+    .eq("booking_id", bookingId)
+    .order("cleaner_id", { ascending: true });
+  if (rosterErr) return null;
+
+  const payoutRows = buildTeamJobMemberPayoutInsertRows({
+    bookingId,
+    teamId,
+    poolCents,
+    rosterRows: rosterRows ?? [],
+    fallbackCleanerIds: activeIds,
+  });
+  const exp = cleanerId.trim();
+  const mine = payoutRows.find((pr) => pr.cleaner_id === exp);
+  return mine != null ? Math.max(0, Math.floor(mine.payout_cents)) : null;
+}
+
+/**
+ * Read-only cents the viewer should see when `display_earnings_cents` is unset: same path as payout persist
+ * (caps + tenure for solo; team pool split via roster / equal fallback).
+ */
+export async function previewDisplayEarningsCentsForCleanerJob(
+  admin: SupabaseClient,
+  params: { bookingId: string; cleanerId: string },
+): Promise<number | null> {
+  const { bookingId, cleanerId } = params;
+  const { data: row, error: selErr } = await admin
+    .from("bookings")
+    .select(bookingsPersistSelectListForPersist())
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (selErr || !row) return null;
+
+  const r = row as PersistBookingRowForEarnings & {
+    cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
+    team_id?: string | null;
+  };
+
+  if (!(await isCleanerAllowedForPersist(admin, r, cleanerId, bookingId))) return null;
+
+  const isTeamJob = r.is_team_job === true;
+  const earned = await resolvePersistEarningsComputation({ admin, bookingId, expectedCleanerId: cleanerId, r });
+  if (!earned.ok) return null;
+
+  if (!isTeamJob) {
+    return Math.max(0, Math.floor(Number(earned.earnings.display_earnings_cents) || 0));
+  }
+
+  const teamId = String(r.team_id ?? "").trim();
+  if (!teamId) return null;
+  const allocated = await previewTeamMemberAllocatedCents({
+    admin,
+    bookingId,
+    teamId,
+    cleanerId,
+    earnings: earned.earnings,
+    bookingDateIso: earned.bookingDateIso,
+  });
+  return allocated;
+}
+
 async function persistCleanerPayoutIfUnsetCore(
   params: { admin: SupabaseClient; bookingId: string; cleanerId: string; forceDisplayRecompute?: boolean },
 ): Promise<PersistCleanerPayoutIfUnsetResult> {
@@ -203,6 +430,9 @@ async function persistCleanerPayoutIfUnsetCore(
     total_paid_zar?: number | null;
     total_paid_cents?: number | null;
     amount_paid_cents?: number | null;
+    billing_type?: string | null;
+    is_monthly_billing_booking?: boolean | null;
+    monthly_invoice_id?: string | null;
     base_amount_cents?: number | null;
     service_fee_cents?: number | null;
     service?: string | null;
@@ -277,81 +507,21 @@ async function persistCleanerPayoutIfUnsetCore(
     return { ok: true, skipped: true, skipReason };
   }
 
-  const { payoutBaseCents, serviceFeeCents } = resolvePayoutBaseAndServiceFeeCents({
-    baseAmountCents: r.base_amount_cents,
-    serviceFeeCents: r.service_fee_cents,
-    totalPaidZar: r.total_paid_zar,
-    amountPaidCents: r.total_paid_cents ?? r.amount_paid_cents,
+  const earned = await resolvePersistEarningsComputation({
+    admin,
+    bookingId,
+    expectedCleanerId,
+    r,
   });
-  const bookingDateIso = resolveBookingDateIso(r.date, r.time);
-  const serviceId = resolveServiceId(r.booking_snapshot ?? null, r.service ?? null);
-
-  let lineItemRows: { id: string; item_type: string; total_price_cents: number }[] = [];
-  if (!isTeamJob) {
-    const { data: li } = await admin
-      .from("booking_line_items")
-      .select("id, item_type, total_price_cents")
-      .eq("booking_id", bookingId);
-    lineItemRows = (li ?? [])
-      .map((x) => x as { id?: string; item_type?: string; total_price_cents?: number })
-      .filter((x) => typeof x.id === "string" && typeof x.item_type === "string")
-      .map((x) => ({
-        id: String(x.id),
-        item_type: String(x.item_type),
-        total_price_cents: Number(x.total_price_cents) || 0,
-      }));
+  if (!earned.ok) {
+    await reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", "earnings fallback unresolved", {
+      bookingId,
+      cleanerId: expectedCleanerId,
+    });
+    return { ok: false, error: earned.error };
   }
-
-  let earnings: ComputeBookingEarningsOutput | null = null;
-  let usedFallback = false;
-  let computeRejectReason: string | null = null;
-  let usedLineItemBasis = false;
-
-  async function tryComputeEarnings(servicePriceCents: number, team: boolean): Promise<ComputeBookingEarningsOutput | null> {
-    try {
-      const computed = await computeBookingEarnings({
-        servicePriceCents,
-        serviceId,
-        cleanerId: expectedCleanerId,
-        isTeamJob: team,
-        bookingDate: bookingDateIso,
-      });
-      if (isValidEarningsShape(computed)) return computed;
-      computeRejectReason = "invalid_compute_output";
-    } catch (e) {
-      computeRejectReason = `compute_threw:${String(e)}`;
-    }
-    return null;
-  }
-
-  if (!isTeamJob) {
-    const lineSubtotal = sumEligibleLineItemsSubtotalCents(lineItemRows);
-    if (lineSubtotal > 0) {
-      const fromLines = await tryComputeEarnings(lineSubtotal, false);
-      if (fromLines) {
-        earnings = fromLines;
-        usedLineItemBasis = true;
-      }
-    }
-  }
-
-  if (!earnings) {
-    const fromBooking = await tryComputeEarnings(payoutBaseCents, isTeamJob);
-    if (fromBooking) earnings = fromBooking;
-  }
-
-  if (!earnings) {
-    const fb = await buildFallbackEarnings({ admin, r, expectedCleanerId, isTeamJob });
-    if (!fb) {
-      await reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", "earnings fallback unresolved", {
-        bookingId,
-        cleanerId: expectedCleanerId,
-      });
-      return { ok: false, error: "Could not resolve earnings" };
-    }
-    earnings = fb;
-    usedFallback = true;
-  }
+  const { earnings, usedFallback, usedLineItemBasis, lineItemRows, payoutBaseCents, serviceFeeCents, bookingDateIso } =
+    earned;
 
   if (isTeamJob) {
     const teamId = String(r.team_id ?? "").trim();
@@ -504,6 +674,54 @@ async function persistCleanerPayoutIfUnsetCore(
     cleanerCreatedAtIso: createdAt || null,
   });
 
+  const capRow = {
+    billing_type: r.billing_type,
+    is_monthly_billing_booking: r.is_monthly_billing_booking,
+    payment_status: r.payment_status,
+    monthly_invoice_id: r.monthly_invoice_id,
+    total_paid_cents: r.total_paid_cents,
+    amount_paid_cents: r.amount_paid_cents,
+    total_paid_zar: r.total_paid_zar,
+  };
+  const finDiag = bookingFinancialDiagnostics(capRow);
+  const capOk = assertHybridPayoutWithinFinancialCap({
+    row: capRow,
+    payoutCents: payout.payoutCents,
+    bonusCents: payout.bonusCents,
+  });
+  void logSystemEvent({
+    level: "info",
+    source: "persistCleanerPayoutIfUnset",
+    message: "payout_financial_cap_precheck",
+    context: {
+      bookingId,
+      cleanerId: expectedCleanerId,
+      ...finDiag,
+      cleaner_payout_cents: payout.payoutCents,
+      cleaner_bonus_cents: payout.bonusCents,
+    },
+  });
+  if (!capOk.ok) {
+    await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", "Hybrid payout exceeds mode financial cap (precheck)", {
+      bookingId,
+      cleanerId: expectedCleanerId,
+      cap: capOk.cap,
+      hybrid: capOk.hybrid,
+      ...finDiag,
+    });
+    return {
+      ok: false,
+      code: "payout_exceeds_financial_cap",
+      error:
+        "Cleaner payout exceeds the allowed financial cap for this billing mode (payout_exceeds_financial_cap).",
+    };
+  }
+
+  /**
+   * Solo payout columns: do not require `bookings.cleaner_id = expectedCleanerId`.
+   * Cleaners may see and complete jobs via `payout_owner_cleaner_id` or roster while `cleaner_id` is null or lagging;
+   * `isCleanerAllowedForPersist` above is the access gate.
+   */
   let soloUp = admin
     .from("bookings")
     .update({
@@ -521,7 +739,7 @@ async function persistCleanerPayoutIfUnsetCore(
       earnings_tenure_months_at_assignment: earnings.earnings_tenure_months_at_assignment ?? null,
     })
     .eq("id", bookingId)
-    .eq("cleaner_id", expectedCleanerId);
+    .not("is_team_job", "eq", true);
   soloUp = forceDisplay
     ? soloUp
     : recomputeZeroDisplay

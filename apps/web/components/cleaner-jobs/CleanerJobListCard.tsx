@@ -3,13 +3,8 @@ import { Navigation } from "lucide-react";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { formatJobScopeCompactLine, getCleanerJobUrgencyUi, splitJobLocationPrimarySecondary } from "@/lib/cleaner/cleanerJobsListDerived";
 import { cleanerFacingDisplayEarningsCents, mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
-import {
-  cleanerUxEstimatedPayZar,
-  formatCleanerUxEstimatedPayRangeLabel,
-  jobTotalZarFromCleanerBookingLike,
-} from "@/lib/cleaner/cleanerUxEstimatedPayZar";
 import { directionsHrefFromQuery } from "@/lib/cleaner/directionsHref";
-import { formatZarWhole } from "@/lib/cleaner/cleanerZarFormat";
+import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import { cn } from "@/lib/utils";
 
@@ -40,30 +35,15 @@ export function CleanerJobListCard({ row, variant, now = new Date() }: CleanerJo
   const estimate =
     row.displayEarningsIsEstimate === true ||
     row.earnings_estimated === true ||
+    row.earnings_is_estimate === true ||
     rec.displayEarningsIsEstimate === true ||
-    rec.earnings_estimated === true;
-
-  const jobTotalZar = jobTotalZarFromCleanerBookingLike(row);
-  const uxEst = cents == null && jobTotalZar != null ? cleanerUxEstimatedPayZar(undefined, jobTotalZar, now) : null;
+    rec.earnings_estimated === true ||
+    rec.earnings_is_estimate === true;
 
   const payBlock =
     cents != null ? (
-      estimate ? (
-        <p className="text-lg font-bold tabular-nums tracking-tight text-foreground">
-          Estimated: {formatZarWhole(Math.round(cents / 100))}
-        </p>
-      ) : (
-        <p className="text-lg font-bold tabular-nums tracking-tight text-foreground">
-          {formatZarWhole(Math.round(cents / 100))}
-        </p>
-      )
-    ) : uxEst?.kind === "exact" ? (
       <p className="text-lg font-bold tabular-nums tracking-tight text-foreground">
-        Estimated: {formatZarWhole(uxEst.zar)}
-      </p>
-    ) : uxEst?.kind === "range" ? (
-      <p className="text-lg font-bold tabular-nums tracking-tight text-foreground">
-        Estimated: {formatCleanerUxEstimatedPayRangeLabel()}
+        {formatCleanerJobEarningsLabel(cents, { estimate })}
       </p>
     ) : (
       <p className="text-lg font-semibold text-muted-foreground">Processing…</p>

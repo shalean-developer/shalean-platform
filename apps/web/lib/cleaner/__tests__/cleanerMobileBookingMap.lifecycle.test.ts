@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveCleanerJobLifecycleSlot,
   deriveCleanerJobUiState,
+  deriveMobilePhase,
   isCleanerAssignmentAccepted,
   mobilePhaseDisplayForDashboard,
 } from "@/lib/cleaner/cleanerMobileBookingMap";
@@ -91,6 +92,49 @@ describe("deriveCleanerJobUiState", () => {
         else if (ui.phase === "complete") expect(slot).toEqual({ kind: "complete" });
       }
     }
+  });
+});
+
+describe("authoritative completion (no false positives)", () => {
+  it("does not show Completed when only cleaner_response is completed-like but DB is in_progress", () => {
+    const row = baseRow({
+      status: "in_progress",
+      cleaner_response_status: "completed",
+      completed_at: null,
+    });
+    expect(mobilePhaseDisplayForDashboard(row, { nowMs: nowBeforeOfferExpiry })).toBe("In progress");
+    expect(deriveMobilePhase(row, { nowMs: nowBeforeOfferExpiry })).toBe("in_progress");
+  });
+
+  it("shows Completed when status is completed", () => {
+    const row = baseRow({ status: "completed", cleaner_response_status: "started", completed_at: "2026-04-30T12:00:00Z" });
+    expect(mobilePhaseDisplayForDashboard(row, { nowMs: nowBeforeOfferExpiry })).toBe("Completed");
+  });
+
+  it("shows Completed when completed_at is set even if status lags", () => {
+    const row = baseRow({
+      status: "in_progress",
+      cleaner_response_status: "started",
+      completed_at: "2026-04-30T12:00:00Z",
+    });
+    expect(mobilePhaseDisplayForDashboard(row, { nowMs: nowBeforeOfferExpiry })).toBe("Completed");
+  });
+});
+
+describe("offered status (dispatch)", () => {
+  it("treats offered like assignable for accept / travel / start", () => {
+    expect(
+      deriveCleanerJobUiState(baseRow({ status: "offered", cleaner_response_status: "pending" }), { nowMs: nowBeforeOfferExpiry }),
+    ).toEqual({ phase: "accept", canReject: true });
+    expect(
+      deriveCleanerJobUiState(baseRow({ status: "offered", cleaner_response_status: "accepted" }), { nowMs: nowBeforeOfferExpiry }),
+    ).toEqual({ phase: "on_my_way" });
+    expect(
+      deriveCleanerJobUiState(baseRow({ status: "offered", cleaner_response_status: "on_my_way" }), { nowMs: nowBeforeOfferExpiry }),
+    ).toEqual({ phase: "start" });
+    expect(mobilePhaseDisplayForDashboard(baseRow({ status: "offered", cleaner_response_status: "pending" }), { nowMs: nowBeforeOfferExpiry })).toBe(
+      "Needs accept",
+    );
   });
 });
 

@@ -110,6 +110,7 @@ export async function GET(request: Request) {
         displayEarningsIsEstimate,
         earnings_cents: displayEarningsCents,
         earnings_estimated: displayEarningsIsEstimate,
+        earnings_is_estimate: displayEarningsIsEstimate,
         booking: safeBooking,
       };
     });

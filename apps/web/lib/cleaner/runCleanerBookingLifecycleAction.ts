@@ -5,7 +5,7 @@ import { cleanerHasBookingAccess } from "@/lib/cleaner/cleanerBookingAccess";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import {
   fetchBookingDisplayEarningsCents,
@@ -20,34 +20,80 @@ import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssign
 import { cleanerResponseAllowsProgression } from "@/lib/cleaner/cleanerResponseProgression";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { isCleanerAssignmentAccepted } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { isAssignableForCleanerLifecycleStatus } from "@/lib/cleaner/cleanerBookingLifecycleStatuses";
+import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
 
 export type CleanerLifecycleAction = "accept" | "reject" | "en_route" | "start" | "complete";
 
 export type CleanerLifecycleResult = { status: number; json: Record<string, unknown> };
 
-/** Post-payment operational rows may still be `confirmed` in legacy data; treat like `assigned` for lifecycle. */
-function isAssignedLikeStatus(status: string | null | undefined): boolean {
-  const s = String(status ?? "")
-    .trim()
-    .toLowerCase();
-  return s === "assigned" || s === "confirmed";
+function traceCleanerLifecycle(params: {
+  outcome: "entered" | "blocked" | "success" | "duplicate";
+  bookingId: string;
+  cleanerId: string;
+  action: CleanerLifecycleAction;
+  bookingStatus: string;
+  cleanerResponseStatus: string | null | undefined;
+  dispatchStatus: string | null | undefined;
+  httpStatus?: number;
+  reasonCode?: string;
+}): void {
+  void logSystemEvent({
+    level: params.outcome === "blocked" ? "warn" : "info",
+    source: "cleaner_lifecycle_trace",
+    message: params.reasonCode ?? `cleaner_lifecycle_${params.outcome}`,
+    context: {
+      outcome: params.outcome,
+      booking_id: params.bookingId,
+      cleaner_id: params.cleanerId,
+      action: params.action,
+      booking_status: params.bookingStatus,
+      cleaner_response_status: params.cleanerResponseStatus ?? null,
+      dispatch_status: params.dispatchStatus ?? null,
+      http_status: params.httpStatus,
+      reason_code: params.reasonCode,
+    },
+  });
+}
+
+function httpStatusForAcceptPatchFailure(code: string): number {
+  if (code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW || code === CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED) {
+    return 412;
+  }
+  return 500;
 }
 
 /**
- * Accept-related updates: optimistic lock on `assigned` or legacy `confirmed`. PostgREST does not error when
- * zero rows match — callers must inspect returned rows.
+ * Accept-related updates: re-read `status` then update by `id` only (avoids PostgREST 0-row “success” when the row
+ * left the assignable set (`offered` / `assigned` / `confirmed`) between the lifecycle read and this write).
  */
 async function updateAssignedBookingOrFail(params: {
   admin: SupabaseClient;
   bookingId: string;
   patch: Record<string, unknown>;
 }): Promise<{ ok: true } | { ok: false; message: string; code: string }> {
-  const { data, error } = await params.admin
+  const { data: cur, error: selErr } = await params.admin
     .from("bookings")
-    .update(params.patch)
+    .select("id,status")
     .eq("id", params.bookingId)
-    .in("status", ["assigned", "confirmed"])
-    .select("id");
+    .maybeSingle();
+  if (selErr) {
+    return { ok: false, message: selErr.message, code: "accept_persist_failed" };
+  }
+  if (!cur) {
+    return { ok: false, message: "Booking not found.", code: "accept_persist_failed" };
+  }
+  const curSt = String((cur as { status?: string | null }).status ?? "")
+    .trim()
+    .toLowerCase();
+  if (!isAssignableForCleanerLifecycleStatus(curSt)) {
+    return {
+      ok: false,
+      message: "Could not save — this job is no longer in an assignable state. Refresh the page and try again.",
+      code: CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED,
+    };
+  }
+  const { data, error } = await params.admin.from("bookings").update(params.patch).eq("id", params.bookingId).select("id");
   if (error) {
     return { ok: false, message: error.message, code: "accept_persist_failed" };
   }
@@ -76,12 +122,23 @@ export async function runCleanerBookingLifecycleAction(params: {
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at",
+      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, display_earnings_cents, cleaner_earnings_total_cents",
     )
     .eq("id", bookingId)
     .maybeSingle();
 
   if (bErr || !booking) {
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: "",
+      cleanerResponseStatus: null,
+      dispatchStatus: null,
+      httpStatus: 404,
+      reasonCode: "booking_not_found",
+    });
     return { status: 404, json: { error: "Booking not found." } };
   }
 
@@ -99,6 +156,9 @@ export async function runCleanerBookingLifecycleAction(params: {
     accepted_at?: string | null;
     dispatch_status?: string | null;
     en_route_at?: string | null;
+    started_at?: string | null;
+    display_earnings_cents?: number | null;
+    cleaner_earnings_total_cents?: number | null;
   };
   const canAccess = await cleanerHasBookingAccess(admin, cleanerId, {
     id: bRow.id ?? bookingId,
@@ -108,12 +168,34 @@ export async function runCleanerBookingLifecycleAction(params: {
     is_team_job: bRow.is_team_job === true,
   });
   if (!canAccess) {
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: String(bRow.status ?? "").toLowerCase(),
+      cleanerResponseStatus: bRow.cleaner_response_status,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 403,
+      reasonCode: "cleaner_forbidden",
+    });
     return { status: 403, json: { error: "Not your job." } };
   }
 
   const isTeamJob = bRow.is_team_job === true;
 
   if (isTeamJob && action === "reject") {
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: String(bRow.status ?? "").toLowerCase(),
+      cleanerResponseStatus: bRow.cleaner_response_status,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 400,
+      reasonCode: CLEANER_LIFECYCLE_CODE.TEAM_REJECT_FORBIDDEN,
+    });
     return {
       status: 400,
       json: {
@@ -126,11 +208,35 @@ export async function runCleanerBookingLifecycleAction(params: {
   const st = String(bRow.status ?? "").toLowerCase();
   const now = new Date().toISOString();
 
+  traceCleanerLifecycle({
+    outcome: "entered",
+    bookingId,
+    cleanerId,
+    action,
+    bookingStatus: st,
+    cleanerResponseStatus: bRow.cleaner_response_status,
+    dispatchStatus: bRow.dispatch_status,
+  });
+
   if (action === "accept") {
-    if (!isAssignedLikeStatus(bRow.status)) {
+    if (!isAssignableForCleanerLifecycleStatus(bRow.status)) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.NOT_ASSIGNED,
+      });
       return {
         status: 400,
-        json: { error: "Job is not in assigned state.", code: CLEANER_LIFECYCLE_CODE.NOT_ASSIGNED },
+        json: {
+          error: "Job is not in an assignable state (offered, assigned, or confirmed). Refresh if this looks wrong.",
+          code: CLEANER_LIFECYCLE_CODE.NOT_ASSIGNED,
+        },
       };
     }
     let resp = String(bRow.cleaner_response_status ?? "")
@@ -147,7 +253,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     if (orphanAcceptedAt) {
       const heal: Record<string, unknown> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
       if (dispatchLower === "offered") heal.dispatch_status = "assigned";
-      if (st === "confirmed") heal.status = "assigned";
+      if (st === "confirmed" || st === "offered") heal.status = "assigned";
       const healRes = await updateAssignedBookingOrFail({ admin, bookingId, patch: heal });
       if (healRes.ok) {
         bRow.cleaner_response_status = CLEANER_RESPONSE.ACCEPTED;
@@ -167,21 +273,45 @@ export async function runCleanerBookingLifecycleAction(params: {
       const patch: Record<string, unknown> = {};
       if (!acceptedAt) patch.accepted_at = now;
       if (dispatchLower === "offered") patch.dispatch_status = "assigned";
-      if (st === "confirmed") patch.status = "assigned";
+      if (st === "confirmed" || st === "offered") patch.status = "assigned";
       if (Object.keys(patch).length > 0) {
         const patchRes = await updateAssignedBookingOrFail({ admin, bookingId, patch });
         if (!patchRes.ok) {
-          const stHttp = patchRes.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW ? 412 : 500;
-          if (patchRes.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW) {
+          const stHttp = httpStatusForAcceptPatchFailure(patchRes.code);
+          if (
+            patchRes.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW ||
+            patchRes.code === CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED
+          ) {
             void reportOperationalIssue("warn", "cleaner/jobs/accept", "accept_patch_zero_rows", {
               bookingId,
               cleanerId,
             });
           }
+          traceCleanerLifecycle({
+            outcome: "blocked",
+            bookingId,
+            cleanerId,
+            action,
+            bookingStatus: st,
+            cleanerResponseStatus: bRow.cleaner_response_status,
+            dispatchStatus: bRow.dispatch_status,
+            httpStatus: stHttp,
+            reasonCode: patchRes.code,
+          });
           return { status: stHttp, json: { error: patchRes.message, code: patchRes.code } };
         }
       }
       await syncCleanerBusyFromBookings(admin, cleanerId);
+      traceCleanerLifecycle({
+        outcome: "success",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: CLEANER_RESPONSE.ACCEPTED,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 200,
+      });
       return { status: 200, json: { ok: true, status: "assigned", cleaner_response_status: CLEANER_RESPONSE.ACCEPTED } };
     }
     if (
@@ -194,6 +324,17 @@ export async function runCleanerBookingLifecycleAction(params: {
         is_team_job: bRow.is_team_job === true,
       })
     ) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.ACCEPT_OFFER_EXPIRED,
+      });
       return {
         status: 400,
         json: {
@@ -204,6 +345,16 @@ export async function runCleanerBookingLifecycleAction(params: {
     }
     if (resp === CLEANER_RESPONSE.ON_MY_WAY || resp === CLEANER_RESPONSE.STARTED) {
       await syncCleanerBusyFromBookings(admin, cleanerId);
+      traceCleanerLifecycle({
+        outcome: "success",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: String(bRow.cleaner_response_status ?? resp),
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 200,
+      });
       return {
         status: 200,
         json: {
@@ -215,6 +366,17 @@ export async function runCleanerBookingLifecycleAction(params: {
     }
     if (!cleanerResponseAllowsProgression(resp, CLEANER_RESPONSE.ACCEPTED, { allowEqual: true })) {
       await syncCleanerBusyFromBookings(admin, cleanerId);
+      traceCleanerLifecycle({
+        outcome: "duplicate",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: String(bRow.cleaner_response_status ?? resp),
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 200,
+        reasonCode: "accept_duplicate_state",
+      });
       return {
         status: 200,
         json: {
@@ -229,7 +391,7 @@ export async function runCleanerBookingLifecycleAction(params: {
       cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
       accepted_at: now,
     };
-    if (st === "confirmed") {
+    if (st === "confirmed" || st === "offered") {
       acceptPayload.status = "assigned";
     }
     if (dispatchLower === "offered") {
@@ -237,22 +399,57 @@ export async function runCleanerBookingLifecycleAction(params: {
     }
     const accRes = await updateAssignedBookingOrFail({ admin, bookingId, patch: acceptPayload });
     if (!accRes.ok) {
-      const stHttp = accRes.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW ? 412 : 500;
-      if (accRes.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW) {
+      const stHttp = httpStatusForAcceptPatchFailure(accRes.code);
+      if (
+        accRes.code === CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW ||
+        accRes.code === CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED
+      ) {
         void reportOperationalIssue("warn", "cleaner/jobs/accept", "accept_primary_zero_rows", {
           bookingId,
           cleanerId,
           cleaner_response_status: resp,
         });
       }
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: stHttp,
+        reasonCode: accRes.code,
+      });
       return { status: stHttp, json: { error: accRes.message, code: accRes.code } };
     }
     await syncCleanerBusyFromBookings(admin, cleanerId);
+    traceCleanerLifecycle({
+      outcome: "success",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: "assigned",
+      cleanerResponseStatus: CLEANER_RESPONSE.ACCEPTED,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+    });
     return { status: 200, json: { ok: true, status: "assigned", cleaner_response_status: CLEANER_RESPONSE.ACCEPTED } };
   }
 
   if (action === "reject") {
-    if (!isAssignedLikeStatus(bRow.status)) {
+    if (!isAssignableForCleanerLifecycleStatus(bRow.status)) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.NOT_ASSIGNED_FOR_REJECT,
+      });
       return {
         status: 400,
         json: { error: "You can only reject before starting the job.", code: CLEANER_LIFECYCLE_CODE.NOT_ASSIGNED_FOR_REJECT },
@@ -275,6 +472,17 @@ export async function runCleanerBookingLifecycleAction(params: {
       .eq("id", bookingId);
 
     if (uErr) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 500,
+        reasonCode: "reject_update_failed",
+      });
       return { status: 500, json: { error: uErr.message } };
     }
 
@@ -294,11 +502,32 @@ export async function runCleanerBookingLifecycleAction(params: {
       }
     }
 
+    traceCleanerLifecycle({
+      outcome: "success",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: "pending",
+      cleanerResponseStatus: CLEANER_RESPONSE.NONE,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+    });
     return { status: 200, json: { ok: true, status: "pending", reassigned: auto } };
   }
 
   if (action === "en_route") {
-    if (!isAssignedLikeStatus(bRow.status)) {
+    if (!isAssignableForCleanerLifecycleStatus(bRow.status)) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.INVALID_EN_ROUTE_STATE,
+      });
       return {
         status: 400,
         json: { error: "Invalid state for en_route.", code: CLEANER_LIFECYCLE_CODE.INVALID_EN_ROUTE_STATE },
@@ -324,55 +553,261 @@ export async function runCleanerBookingLifecycleAction(params: {
       accepted_at: bRow.accepted_at ?? null,
     } as CleanerBookingRow);
     if (!acceptedForTravel) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.ACCEPT_REQUIRED_BEFORE_TRAVEL,
+      });
       return {
         status: 400,
         json: { error: "Accept the job before heading out.", code: CLEANER_LIFECYCLE_CODE.ACCEPT_REQUIRED_BEFORE_TRAVEL },
       };
     }
     if (!cleanerResponseAllowsProgression(String(bRow.cleaner_response_status ?? ""), CLEANER_RESPONSE.ON_MY_WAY)) {
+      traceCleanerLifecycle({
+        outcome: "duplicate",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 200,
+        reasonCode: "en_route_duplicate",
+      });
       return { status: 200, json: { ok: true, duplicate: true, status: st } };
     }
     const enRoutePatch: Record<string, unknown> = {
       en_route_at: now,
       cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY,
     };
-    if (st === "confirmed") enRoutePatch.status = "assigned";
+    if (st === "confirmed" || st === "offered") enRoutePatch.status = "assigned";
     const { error: uErr } = await admin.from("bookings").update(enRoutePatch).eq("id", bookingId);
-    if (uErr) return { status: 500, json: { error: uErr.message } };
-    return { status: 200, json: { ok: true, status: st === "confirmed" ? "assigned" : st } };
+    if (uErr) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 500,
+        reasonCode: "en_route_update_failed",
+      });
+      return { status: 500, json: { error: uErr.message } };
+    }
+    const normalizedSt = st === "confirmed" || st === "offered" ? "assigned" : st;
+    traceCleanerLifecycle({
+      outcome: "success",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: normalizedSt,
+      cleanerResponseStatus: CLEANER_RESPONSE.ON_MY_WAY,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+    });
+    return { status: 200, json: { ok: true, status: normalizedSt } };
   }
 
   if (action === "start") {
-    if (!isAssignedLikeStatus(bRow.status)) {
+    const startableBooking = isAssignableForCleanerLifecycleStatus(bRow.status) || st === "in_progress";
+    if (!startableBooking) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.START_REQUIRES_ASSIGNED,
+      });
       return {
         status: 400,
-        json: { error: "Start requires assigned state.", code: CLEANER_LIFECYCLE_CODE.START_REQUIRES_ASSIGNED },
+        json: {
+          error: "Start requires an active assignment or an in-progress job that needs syncing.",
+          code: CLEANER_LIFECYCLE_CODE.START_REQUIRES_ASSIGNED,
+        },
       };
     }
     const startResp = String(bRow.cleaner_response_status ?? "")
       .trim()
       .toLowerCase();
     const travelAcked = Boolean(bRow.en_route_at) || startResp === CLEANER_RESPONSE.ON_MY_WAY;
+    const acceptedForStart = isCleanerAssignmentAccepted({
+      id: bookingId,
+      service: null,
+      date: bRow.date ?? null,
+      time: bRow.time ?? null,
+      location: null,
+      status: bRow.status ?? null,
+      total_paid_zar: null,
+      customer_name: null,
+      customer_phone: null,
+      assigned_at: null,
+      en_route_at: null,
+      started_at: null,
+      completed_at: null,
+      created_at: null,
+      cleaner_response_status: bRow.cleaner_response_status ?? null,
+      accepted_at: bRow.accepted_at ?? null,
+    } as CleanerBookingRow);
     if (!travelAcked) {
-      return {
-        status: 400,
-        json: { error: "Mark on the way before starting the job.", code: CLEANER_LIFECYCLE_CODE.EN_ROUTE_REQUIRED_BEFORE_START },
-      };
+      if (!acceptedForStart) {
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 400,
+          reasonCode: CLEANER_LIFECYCLE_CODE.EN_ROUTE_REQUIRED_BEFORE_START,
+        });
+        return {
+          status: 400,
+          json: {
+            error: "Mark on the way before starting the job.",
+            code: CLEANER_LIFECYCLE_CODE.EN_ROUTE_REQUIRED_BEFORE_START,
+          },
+        };
+      }
     }
     if (!cleanerResponseAllowsProgression(startResp, CLEANER_RESPONSE.STARTED)) {
+      /**
+       * Idempotent retries: `cleaner_response_status` can already be `started` while `status` stayed
+       * `assigned`/`offered`/`confirmed` (partial writes / legacy drift). Promote operational status in one update.
+       */
+      if (startResp === CLEANER_RESPONSE.STARTED && st !== "in_progress") {
+        const healPatch: Record<string, unknown> = {
+          status: "in_progress",
+          cleaner_response_status: CLEANER_RESPONSE.STARTED,
+          started_at: String(bRow.started_at ?? "").trim() || now,
+        };
+        if (!String(bRow.en_route_at ?? "").trim()) {
+          healPatch.en_route_at = now;
+        }
+        const { error: healErr } = await admin.from("bookings").update(healPatch).eq("id", bookingId);
+        if (healErr) {
+          traceCleanerLifecycle({
+            outcome: "blocked",
+            bookingId,
+            cleanerId,
+            action,
+            bookingStatus: st,
+            cleanerResponseStatus: bRow.cleaner_response_status,
+            dispatchStatus: bRow.dispatch_status,
+            httpStatus: 500,
+            reasonCode: "start_operational_heal_failed",
+          });
+          return { status: 500, json: { error: healErr.message } };
+        }
+        void logSystemEvent({
+          level: "info",
+          source: "cleaner/jobs/start",
+          message: "healed_booking_status_in_progress",
+          context: {
+            booking_id: bookingId,
+            cleaner_id: cleanerId,
+            prior_status: st,
+            operational_phase: deriveBookingOperationalPhase({
+              status: "in_progress",
+              cleaner_response_status: CLEANER_RESPONSE.STARTED,
+              en_route_at: (healPatch.en_route_at as string) ?? bRow.en_route_at,
+              started_at: (healPatch.started_at as string) ?? bRow.started_at,
+              completed_at: null,
+              dispatch_status: bRow.dispatch_status,
+            }),
+          },
+        });
+        await syncCleanerBusyFromBookings(admin, cleanerId);
+        traceCleanerLifecycle({
+          outcome: "success",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: "in_progress",
+          cleanerResponseStatus: CLEANER_RESPONSE.STARTED,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 200,
+          reasonCode: "start_operational_heal",
+        });
+        return { status: 200, json: { ok: true, status: "in_progress", healed: true } };
+      }
+      traceCleanerLifecycle({
+        outcome: "duplicate",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 200,
+        reasonCode: "start_duplicate",
+      });
       return { status: 200, json: { ok: true, duplicate: true, status: st } };
     }
-    const { error: uErr } = await admin
-      .from("bookings")
-      .update({ status: "in_progress", started_at: now, cleaner_response_status: CLEANER_RESPONSE.STARTED })
-      .eq("id", bookingId);
-    if (uErr) return { status: 500, json: { error: uErr.message } };
+    const implicitEnRoute = !travelAcked && acceptedForStart;
+    const startPatch: Record<string, unknown> = {
+      status: "in_progress",
+      started_at: String(bRow.started_at ?? "").trim() || now,
+      cleaner_response_status: CLEANER_RESPONSE.STARTED,
+    };
+    if (implicitEnRoute) {
+      startPatch.en_route_at = String(bRow.en_route_at ?? "").trim() || now;
+    }
+    const { error: uErr } = await admin.from("bookings").update(startPatch).eq("id", bookingId);
+    if (uErr) {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 500,
+        reasonCode: "start_update_failed",
+      });
+      return { status: 500, json: { error: uErr.message } };
+    }
     await syncCleanerBusyFromBookings(admin, cleanerId);
+    traceCleanerLifecycle({
+      outcome: "success",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: "in_progress",
+      cleanerResponseStatus: CLEANER_RESPONSE.STARTED,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+    });
     return { status: 200, json: { ok: true, status: "in_progress" } };
   }
 
   if (action === "complete") {
     if (st !== "in_progress") {
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.COMPLETE_REQUIRES_IN_PROGRESS,
+      });
       return {
         status: 400,
         json: {
@@ -382,21 +817,61 @@ export async function runCleanerBookingLifecycleAction(params: {
       };
     }
 
+    void logSystemEvent({
+      level: "info",
+      source: "cleaner_lifecycle_complete",
+      message: "complete_attempt",
+      context: {
+        booking_id: bookingId,
+        cleaner_id: cleanerId,
+        status: st,
+        cleaner_response_status: bRow.cleaner_response_status ?? null,
+        display_earnings_cents: bRow.display_earnings_cents ?? null,
+        cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
+      },
+    });
+
     try {
       const payout = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
       if (payout.ok === false) {
         const error_id = newPayoutMoneyPathErrorId();
+        const persistCode = payout.code ?? "payout_persist_failed";
         await reportOperationalIssue("error", "cleaner/jobs/complete", `payout before completion: ${payout.error}`, {
           bookingId,
           cleanerId,
           error_id,
-          code: "payout_persist_failed",
+          code: persistCode,
+        });
+        void logSystemEvent({
+          level: "warn",
+          source: "cleaner_lifecycle_complete",
+          message: "complete_failed_payout",
+          context: {
+            booking_id: bookingId,
+            cleaner_id: cleanerId,
+            reason: persistCode,
+            detail: payout.error ?? null,
+            display_earnings_cents: bRow.display_earnings_cents ?? null,
+            cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
+            error_id,
+          },
+        });
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 500,
+          reasonCode: persistCode,
         });
         return {
           status: 500,
           json: {
             error: payout.error ?? "Could not record earnings for this job.",
-            code: "payout_persist_failed",
+            code: persistCode,
             error_id,
           },
         };
@@ -410,10 +885,35 @@ export async function runCleanerBookingLifecycleAction(params: {
           error_id,
           code: "payout_verify_failed",
         });
+        void logSystemEvent({
+          level: "warn",
+          source: "cleaner_lifecycle_complete",
+          message: "complete_failed_payout",
+          context: {
+            booking_id: bookingId,
+            cleaner_id: cleanerId,
+            reason: "payout_verify_failed",
+            display_earnings_cents_after_fetch: displayCents,
+            display_earnings_cents_on_row: bRow.display_earnings_cents ?? null,
+            cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
+            error_id,
+          },
+        });
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 500,
+          reasonCode: "payout_verify_failed",
+        });
         return {
           status: 500,
           json: {
-            error: "Could not record earnings for this job.",
+            error: "Cleaner earnings could not be verified for this job. Try again later or contact support.",
             code: "payout_verify_failed",
             error_id,
           },
@@ -428,6 +928,31 @@ export async function runCleanerBookingLifecycleAction(params: {
         error_id,
         code: "payout_persist_failed",
       });
+      void logSystemEvent({
+        level: "warn",
+        source: "cleaner_lifecycle_complete",
+        message: "complete_failed_payout",
+        context: {
+          booking_id: bookingId,
+          cleaner_id: cleanerId,
+          reason: "payout_persist_threw",
+          detail: msg,
+          display_earnings_cents: bRow.display_earnings_cents ?? null,
+          cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
+          error_id,
+        },
+      });
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 500,
+        reasonCode: "payout_persist_failed",
+      });
       return {
         status: 500,
         json: { error: "Could not record earnings for this job.", code: "payout_persist_failed", error_id },
@@ -436,6 +961,17 @@ export async function runCleanerBookingLifecycleAction(params: {
 
     const respComplete = String(bRow.cleaner_response_status ?? "").trim().toLowerCase();
     if (respComplete === CLEANER_RESPONSE.COMPLETED) {
+      traceCleanerLifecycle({
+        outcome: "duplicate",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 200,
+        reasonCode: "complete_duplicate",
+      });
       return { status: 200, json: { ok: true, duplicate: true, status: "completed" } };
     }
     /**
@@ -456,7 +992,48 @@ export async function runCleanerBookingLifecycleAction(params: {
       }
     }
 
-    if (uErr) return { status: 500, json: { error: uErr.message } };
+    if (uErr) {
+      void logSystemEvent({
+        level: "warn",
+        source: "cleaner_lifecycle_complete",
+        message: "complete_failed_booking_update",
+        context: {
+          booking_id: bookingId,
+          cleaner_id: cleanerId,
+          pg_message: uErr.message,
+          pg_code: (uErr as { code?: string }).code ?? null,
+        },
+      });
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 500,
+        reasonCode: "complete_update_failed",
+      });
+      return {
+        status: 500,
+        json: {
+          error: uErr.message || "Could not mark this job complete.",
+          code: "complete_update_failed",
+        },
+      };
+    }
+
+    void logSystemEvent({
+      level: "info",
+      source: "cleaner_lifecycle_complete",
+      message: "complete_success",
+      context: {
+        booking_id: bookingId,
+        cleaner_id: cleanerId,
+        completed_at: now,
+      },
+    });
 
     void notifyBookingEvent({ type: "completed", supabase: admin, bookingId });
 
@@ -473,8 +1050,29 @@ export async function runCleanerBookingLifecycleAction(params: {
       /* learning is best-effort */
     }
 
+    traceCleanerLifecycle({
+      outcome: "success",
+      bookingId,
+      cleanerId,
+      action,
+      bookingStatus: "completed",
+      cleanerResponseStatus: CLEANER_RESPONSE.COMPLETED,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+    });
     return { status: 200, json: { ok: true, status: "completed" } };
   }
 
+  traceCleanerLifecycle({
+    outcome: "blocked",
+    bookingId,
+    cleanerId,
+    action,
+    bookingStatus: st,
+    cleanerResponseStatus: bRow.cleaner_response_status,
+    dispatchStatus: bRow.dispatch_status,
+    httpStatus: 400,
+    reasonCode: CLEANER_LIFECYCLE_CODE.UNSUPPORTED,
+  });
   return { status: 400, json: { error: "Unsupported.", code: CLEANER_LIFECYCLE_CODE.UNSUPPORTED } };
 }

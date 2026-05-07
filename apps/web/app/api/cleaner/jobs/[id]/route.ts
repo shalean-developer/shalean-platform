@@ -22,12 +22,13 @@ import {
 } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { metrics } from "@/lib/metrics/counters";
 import { fetchServiceQaForCleanerJob } from "@/lib/booking/bookingServiceQaServer";
+import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -66,15 +67,34 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     .maybeSingle();
   const cleaner_has_issue_report = Boolean(issueHit && typeof (issueHit as { id?: string }).id === "string");
 
-  const displayEarningsCents = resolveCleanerEarningsCents({
+  let displayEarningsCents = resolveCleanerEarningsCents({
     cleaner_earnings_total_cents: record.cleaner_earnings_total_cents,
     payout_frozen_cents: record.payout_frozen_cents,
     display_earnings_cents: record.display_earnings_cents,
   });
-  const displayEarningsIsEstimate = false;
+  let displayEarningsIsEstimate = false;
+  if (displayEarningsCents == null) {
+    const previewCents = await previewDisplayEarningsCentsForCleanerJob(admin, {
+      bookingId,
+      cleanerId: session.cleanerId,
+    });
+    if (previewCents != null) {
+      displayEarningsCents = previewCents;
+      displayEarningsIsEstimate = true;
+    }
+  }
   const snapRaw = record.team_member_count_snapshot;
   const snapCount =
     typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
+  const totalPaidZarRaw = record.total_paid_zar;
+  const totalPriceRaw = record.total_price;
+  const amountPaidCentsRaw = record.amount_paid_cents;
+  const totalPaidZarCoerced =
+    typeof totalPaidZarRaw === "number" && Number.isFinite(totalPaidZarRaw)
+      ? totalPaidZarRaw
+      : typeof totalPaidZarRaw === "string" && totalPaidZarRaw.trim()
+        ? ((n) => (Number.isFinite(n) && n > 0 ? n : null))(Number(totalPaidZarRaw.trim()))
+        : null;
   const {
     cleaner_payout_cents: _legacyPayout,
     display_earnings_cents: _displayRaw,
@@ -85,6 +105,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     amount_paid_cents: _omitAmountPaid,
     ...safe
   } = record;
+  const jobPayHintWire =
+    displayEarningsCents == null
+      ? {
+          total_paid_zar: totalPaidZarCoerced,
+          total_price: totalPriceRaw as number | string | null | undefined,
+          amount_paid_cents:
+            typeof amountPaidCentsRaw === "number" && Number.isFinite(amountPaidCentsRaw)
+              ? Math.round(amountPaidCentsRaw)
+              : null,
+        }
+      : {};
 
   const snap = record.booking_snapshot;
   const snapCust =
@@ -159,6 +190,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   return NextResponse.json({
     job: {
       ...safe,
+      ...jobPayHintWire,
       server_now_ms: Date.now(),
       customer_name,
       customer_phone,
@@ -168,6 +200,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       displayEarningsIsEstimate,
       earnings_cents: displayEarningsCents,
       earnings_estimated: displayEarningsIsEstimate,
+      earnings_is_estimate: displayEarningsIsEstimate,
       teamMemberCount,
       team_roster,
       team_roster_summary,

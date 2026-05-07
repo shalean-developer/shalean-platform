@@ -34,7 +34,7 @@ export function assignedOfferPastAcceptanceDeadline(
 ): boolean {
   if (row.is_team_job === true) return false;
   const st = String(row.status ?? "").toLowerCase();
-  if (st !== "assigned" && st !== "confirmed") return false;
+  if (st !== "assigned" && st !== "confirmed" && st !== "offered") return false;
   if (cleanerPastAcceptForExpiry(row)) return false;
   const startMs = jobStartMsJohannesburg(row.date, row.time);
   if (startMs == null) return false;

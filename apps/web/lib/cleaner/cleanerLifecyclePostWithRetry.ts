@@ -14,6 +14,8 @@ export type LifecyclePostResult = {
   ok: boolean;
   duplicate?: boolean;
   error?: string;
+  /** Stable machine code from API JSON when present (e.g. `lifecycle_accept_update_no_row`). */
+  code?: string;
   status: number;
 };
 
@@ -43,7 +45,12 @@ export async function postCleanerLifecycleWithRetry(params: {
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ action, idempotency_key: idempotencyKey }),
       });
-      const j = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean; duplicate?: boolean };
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        ok?: boolean;
+        duplicate?: boolean;
+        code?: string;
+      };
 
       if (isRetryableStatus(res.status) && attempt < BACKOFF_MS.length) {
         await sleep(BACKOFF_MS[attempt] ?? 1_000);
@@ -62,7 +69,12 @@ export async function postCleanerLifecycleWithRetry(params: {
         return { ok: true, duplicate: j.duplicate === true, status: res.status };
       }
 
-      return { ok: false, error: j.error ?? "Action failed.", status: res.status };
+      return {
+        ok: false,
+        error: j.error ?? "Action failed.",
+        status: res.status,
+        code: typeof j.code === "string" && j.code.trim() ? j.code.trim() : undefined,
+      };
     } catch {
       if (attempt < BACKOFF_MS.length) {
         await sleep(BACKOFF_MS[attempt] ?? 1_000);

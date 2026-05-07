@@ -1,6 +1,11 @@
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 
-export type LifecycleClientTelemetryStatus = "queued" | "synced" | "flush_failed";
+export type LifecycleClientTelemetryStatus =
+  | "queued"
+  | "synced"
+  | "flush_failed"
+  /** Client 4xx: item left on disk for retry / manual handling (distinct from transport `flush_failed`). */
+  | "client_error_kept_queue";
 
 /** Why a flush run started (for `flush_cycle_metrics` dashboards). */
 export type LifecycleFlushTrigger =

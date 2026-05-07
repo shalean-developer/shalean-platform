@@ -18,4 +18,6 @@ export const CLEANER_LIFECYCLE_CODE = {
    * Usually status left `assigned` between read and write, or booking was cleared elsewhere.
    */
   ACCEPT_UPDATE_NO_ROW: "lifecycle_accept_update_no_row",
+  /** Pre-check: booking `status` left assignable set (`offered` / `assigned` / `confirmed`) before accept-related write. */
+  BOOKING_STATE_CHANGED: "lifecycle_booking_state_changed",
 } as const;

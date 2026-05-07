@@ -4,7 +4,7 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { cleanerBookingCardDetailsFromRow } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import { suburbFromLocationForOffer } from "@/lib/cleaner/cleanerOfferLocationSuburb";
-import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
+import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
 
 function bookingRowFromOfferBooking(b: NonNullable<CleanerOfferRow["booking"]>): CleanerBookingRow {
   return {
@@ -32,7 +32,14 @@ function bookingRowFromOfferBooking(b: NonNullable<CleanerOfferRow["booking"]>):
 export function mapOfferToDashboardCard(offer: CleanerOfferRow, now: Date): CleanerJobOffer {
   const cents = offer.displayEarningsCents ?? offer.earnings_cents;
   const payZarLabel =
-    typeof cents === "number" && Number.isFinite(cents) ? formatZarFromCents(Math.max(0, cents)) : "—";
+    typeof cents === "number" && Number.isFinite(cents)
+      ? formatCleanerJobEarningsLabel(Math.max(0, cents), {
+          estimate:
+            offer.earnings_estimated === true ||
+            offer.displayEarningsIsEstimate === true ||
+            offer.earnings_is_estimate === true,
+        })
+      : "—";
 
   const b = offer.booking;
   if (!b) {

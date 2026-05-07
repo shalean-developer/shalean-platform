@@ -18,6 +18,8 @@ export type CleanerOfferRow = {
   earnings_cents?: number | null;
   /** Mirrors `displayEarningsIsEstimate`. */
   earnings_estimated?: boolean;
+  /** Snake_case mirror of {@link earnings_estimated}. */
+  earnings_is_estimate?: boolean;
   booking: {
     id: string;
     service: string | null;

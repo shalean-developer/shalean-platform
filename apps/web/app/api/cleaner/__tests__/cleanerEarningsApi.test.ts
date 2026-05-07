@@ -190,6 +190,7 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(row.displayEarningsCents).toBe(25_000);
     expect(row.earnings_cents).toBe(25_000);
     expect(row.earnings_estimated).toBe(false);
+    expect(row.earnings_is_estimate).toBe(false);
     expect(row.cleaner_bonus_cents).toBeUndefined();
     expect(row.payout_earnings_cents).toBeUndefined();
     expect(row.internal_earnings_cents).toBeUndefined();
@@ -226,6 +227,7 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(offer.displayEarningsCents).toBeDefined();
     expect(Number(offer.displayEarningsCents)).toBeGreaterThan(0);
     expect(offer.earnings_cents).toBe(offer.displayEarningsCents);
+    expect(offer.earnings_is_estimate).toBe(false);
     expect(offer.offer_token).toBe("aaaa0001-0000-4000-8000-000000000001");
   });
 
@@ -263,6 +265,7 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(json.offers).toHaveLength(1);
     expect(json.offers[0]!.displayEarningsCents).toBeNull();
     expect(json.offers[0]!.earnings_cents).toBeNull();
+    expect(json.offers[0]!.earnings_is_estimate).toBe(false);
   });
 
   it("offers return null display when booking has no stored cleaner earnings", async () => {
@@ -302,6 +305,7 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(offer.displayEarningsIsEstimate).toBe(false);
     expect(offer.earnings_cents).toBeNull();
     expect(offer.earnings_estimated).toBe(false);
+    expect(offer.earnings_is_estimate).toBe(false);
   });
 
   it("team job offer has null display when booking has no stored cleaner earnings", async () => {
@@ -335,9 +339,10 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
 
     expect(json.offers[0]!.displayEarningsCents).toBeNull();
     expect(json.offers[0]!.displayEarningsIsEstimate).toBe(false);
+    expect(json.offers[0]!.earnings_is_estimate).toBe(false);
   });
 
-  it("jobs use frozen then display only (no cleaner_payout path in API)", async () => {
+  it("jobs default list previews earnings when resolved display/frozen/line total are unset", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],
       bookings: [
@@ -357,11 +362,13 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     const res = await GET(new Request("http://localhost/api/cleaner/jobs"));
     const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
 
-    expect(json.jobs[0]!.displayEarningsCents).toBeNull();
-    expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(false);
+    expect(json.jobs[0]!.displayEarningsCents).toBe(19_000);
+    expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(true);
+    expect(json.jobs[0]!.earnings_estimated).toBe(true);
+    expect(json.jobs[0]!.earnings_is_estimate).toBe(true);
   });
 
-  it("jobs view=card includes pay totals when display earnings are null (list estimate support)", async () => {
+  it("jobs view=card applies rule preview when display earnings are null and keeps pay totals for hints", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],
       bookings: [
@@ -384,7 +391,10 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
     const row = json.jobs[0]!;
 
-    expect(row.displayEarningsCents).toBeNull();
+    expect(typeof row.displayEarningsCents).toBe("number");
+    expect(row.displayEarningsIsEstimate).toBe(true);
+    expect(row.earnings_estimated).toBe(true);
+    expect(row.earnings_is_estimate).toBe(true);
     expect(row.total_paid_zar).toBe(450);
   });
 
@@ -412,6 +422,7 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
 
     expect(json.jobs[0]!.displayEarningsCents).toBeNull();
     expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(false);
+    expect(json.jobs[0]!.earnings_is_estimate).toBe(false);
   });
 });
 

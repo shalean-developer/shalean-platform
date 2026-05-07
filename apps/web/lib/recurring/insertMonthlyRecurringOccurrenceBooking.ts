@@ -112,6 +112,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     recurring_id: params.recurring.id,
     is_recurring_generated: true,
     is_monthly_billing_booking: true,
+    billing_type: "recurring_invoice" as const,
     payment_status: "pending_monthly" as const,
     recurring_retry_count: 0,
   };

@@ -14,6 +14,10 @@ import { dedupeBookingsById, prioritizeDashboardJobsForDisplay } from "@/lib/cle
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  applyPreviewEarningsToCleanerJobRows,
+  DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
+} from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,7 +90,12 @@ export async function GET(request: Request) {
   const wired = rawList
     .map(wireDashboardJob)
     .filter((row) => !assignedOfferPastAcceptanceDeadline(row));
-  const jobs = prioritizeDashboardJobsForDisplay(dedupeBookingsById(wired), now, 12, todayYmd);
+  const prioritized = prioritizeDashboardJobsForDisplay(dedupeBookingsById(wired), now, 12, todayYmd);
+  const jobs = (await applyPreviewEarningsToCleanerJobRows(admin, {
+    cleanerId,
+    rows: prioritized as unknown as Record<string, unknown>[],
+    maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
+  })) as unknown as typeof prioritized;
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(
     rawList as unknown as CleanerDashboardEarningsWireRow[],

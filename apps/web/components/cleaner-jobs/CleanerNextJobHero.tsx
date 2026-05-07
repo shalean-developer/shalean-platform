@@ -4,7 +4,7 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerJobUrgencyUi, splitJobLocationPrimarySecondary } from "@/lib/cleaner/cleanerJobsListDerived";
 import { cleanerFacingDisplayEarningsCents } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { directionsHrefFromQuery } from "@/lib/cleaner/directionsHref";
-import { formatZarWhole } from "@/lib/cleaner/cleanerZarFormat";
+import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { cn } from "@/lib/utils";
@@ -31,14 +31,12 @@ export function CleanerNextJobHero({ row, now }: CleanerNextJobHeroProps) {
   const estimate =
     row.displayEarningsIsEstimate === true ||
     row.earnings_estimated === true ||
+    row.earnings_is_estimate === true ||
     rec.displayEarningsIsEstimate === true ||
-    rec.earnings_estimated === true;
+    rec.earnings_estimated === true ||
+    rec.earnings_is_estimate === true;
   const earningsNudge =
-    cents != null
-      ? estimate
-        ? `Next job (estimated): ${formatZarWhole(Math.round(cents / 100))}`
-        : `Next job earns ${formatZarWhole(Math.round(cents / 100))}`
-      : null;
+    cents != null ? `Next job: ${formatCleanerJobEarningsLabel(cents, { estimate })}` : "Next job: —";
 
   return (
     <div
