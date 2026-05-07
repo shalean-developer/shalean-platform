@@ -53,6 +53,8 @@ export async function GET(request: Request) {
   const lite = url.searchParams.get("lite") === "1" || url.searchParams.get("lite") === "true";
   const cardView = url.searchParams.get("view") === "card";
   const slimWire = lite || cardView;
+  /** Legacy `lite=1` only — card view still runs stuck-earnings recompute so rows can populate `display_earnings_cents`. */
+  const skipStuckEarningsSideEffects = lite;
   const directAssignments = !slimWire && url.searchParams.get("assignments") === "direct";
 
   if (process.env.TRACE_BOOKING_ASSIGN === "1") {
@@ -70,7 +72,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents";
 
   const { data: jobs, error } = directAssignments
     ? await admin
@@ -115,6 +117,15 @@ export async function GET(request: Request) {
     const snapRaw = row.team_member_count_snapshot;
     const teamSnap =
       typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
+    const totalPaidZarRaw = row.total_paid_zar;
+    const totalPriceRaw = row.total_price;
+    const amountPaidCentsRaw = row.amount_paid_cents;
+    const totalPaidZarCoerced =
+      typeof totalPaidZarRaw === "number" && Number.isFinite(totalPaidZarRaw)
+        ? totalPaidZarRaw
+        : typeof totalPaidZarRaw === "string" && totalPaidZarRaw.trim()
+          ? ((n) => (Number.isFinite(n) && n > 0 ? n : null))(Number(totalPaidZarRaw.trim()))
+          : null;
     const {
       cleaner_payout_cents: _legacyPayout,
       display_earnings_cents: _displayRaw,
@@ -125,8 +136,20 @@ export async function GET(request: Request) {
       amount_paid_cents: _omitAmountPaid,
       ...safe
     } = row;
+    const cardPayHint =
+      cardView && displayEarningsCents == null
+        ? {
+            total_paid_zar: totalPaidZarCoerced,
+            total_price: totalPriceRaw as number | string | null | undefined,
+            amount_paid_cents:
+              typeof amountPaidCentsRaw === "number" && Number.isFinite(amountPaidCentsRaw)
+                ? Math.round(amountPaidCentsRaw)
+                : null,
+          }
+        : null;
     return {
       ...safe,
+      ...(cardPayHint ? cardPayHint : {}),
       displayEarningsCents,
       displayEarningsIsEstimate: false,
       earnings_cents: displayEarningsCents,
@@ -264,7 +287,7 @@ export async function GET(request: Request) {
     };
   });
 
-  if (!slimWire) {
+  if (!skipStuckEarningsSideEffects) {
     for (const j of jobsWithRoster) {
       const rec = j as Record<string, unknown>;
       const id = String(rec.id ?? "").trim();

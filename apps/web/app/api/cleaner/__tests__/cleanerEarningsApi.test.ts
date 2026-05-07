@@ -361,6 +361,33 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(json.jobs[0]!.displayEarningsIsEstimate).toBe(false);
   });
 
+  it("jobs view=card includes pay totals when display earnings are null (list estimate support)", async () => {
+    mockState.admin = new MockSupabaseClient({
+      cleaners: [{ id: "cleaner-1" }],
+      bookings: [
+        {
+          id: "b-card-hint",
+          cleaner_id: "cleaner-1",
+          service: "Standard Cleaning",
+          status: "assigned",
+          display_earnings_cents: null,
+          cleaner_payout_cents: null,
+          payout_frozen_cents: null,
+          total_paid_zar: 450,
+          amount_paid_cents: null,
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/jobs/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/jobs?view=card"));
+    const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
+    const row = json.jobs[0]!;
+
+    expect(row.displayEarningsCents).toBeNull();
+    expect(row.total_paid_zar).toBe(450);
+  });
+
   it("team job without stored display earnings returns null from jobs API", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],

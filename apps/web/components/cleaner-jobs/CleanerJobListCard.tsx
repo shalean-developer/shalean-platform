@@ -3,6 +3,11 @@ import { Navigation } from "lucide-react";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { formatJobScopeCompactLine, getCleanerJobUrgencyUi, splitJobLocationPrimarySecondary } from "@/lib/cleaner/cleanerJobsListDerived";
 import { cleanerFacingDisplayEarningsCents, mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
+import {
+  cleanerUxEstimatedPayZar,
+  formatCleanerUxEstimatedPayRangeLabel,
+  jobTotalZarFromCleanerBookingLike,
+} from "@/lib/cleaner/cleanerUxEstimatedPayZar";
 import { directionsHrefFromQuery } from "@/lib/cleaner/directionsHref";
 import { formatZarWhole } from "@/lib/cleaner/cleanerZarFormat";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
@@ -38,6 +43,9 @@ export function CleanerJobListCard({ row, variant, now = new Date() }: CleanerJo
     rec.displayEarningsIsEstimate === true ||
     rec.earnings_estimated === true;
 
+  const jobTotalZar = jobTotalZarFromCleanerBookingLike(row);
+  const uxEst = cents == null && jobTotalZar != null ? cleanerUxEstimatedPayZar(undefined, jobTotalZar, now) : null;
+
   const payBlock =
     cents != null ? (
       estimate ? (
@@ -49,6 +57,14 @@ export function CleanerJobListCard({ row, variant, now = new Date() }: CleanerJo
           {formatZarWhole(Math.round(cents / 100))}
         </p>
       )
+    ) : uxEst?.kind === "exact" ? (
+      <p className="text-lg font-bold tabular-nums tracking-tight text-foreground">
+        Estimated: {formatZarWhole(uxEst.zar)}
+      </p>
+    ) : uxEst?.kind === "range" ? (
+      <p className="text-lg font-bold tabular-nums tracking-tight text-foreground">
+        Estimated: {formatCleanerUxEstimatedPayRangeLabel()}
+      </p>
     ) : (
       <p className="text-lg font-semibold text-muted-foreground">Processing…</p>
     );
