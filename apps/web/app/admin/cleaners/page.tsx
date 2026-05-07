@@ -104,6 +104,8 @@ export default function AdminCleanersPage() {
 
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "busy" | "offline">("all");
   const [cityFilter, setCityFilter] = useState("all");
+  /** `all` | `__none__` (no location set) | trimmed location string (exact match, case-sensitive) */
+  const [locationFilter, setLocationFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -262,6 +264,16 @@ export default function AdminCleanersPage() {
     }
   }
 
+  const locationOptions = useMemo(() => {
+    const unique = new Set<string>();
+    for (const r of rows) {
+      const loc = (r.location ?? "").trim();
+      if (!loc) continue;
+      unique.add(loc);
+    }
+    return [...unique].sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
@@ -269,6 +281,14 @@ export default function AdminCleanersPage() {
       if (!statusMatch) return false;
       const cityMatch = cityFilter === "all" ? true : r.city_id === cityFilter;
       if (!cityMatch) return false;
+      const locTrim = (r.location ?? "").trim();
+      if (locationFilter === "all") {
+        /* no-op */
+      } else if (locationFilter === "__none__") {
+        if (locTrim.length > 0) return false;
+      } else if (locTrim !== locationFilter) {
+        return false;
+      }
       if (!q) return true;
       return (
         (r.full_name ?? "").toLowerCase().includes(q) ||
@@ -276,7 +296,7 @@ export default function AdminCleanersPage() {
         (r.email ?? "").toLowerCase().includes(q)
       );
     });
-  }, [rows, search, statusFilter, cityFilter]);
+  }, [rows, search, statusFilter, cityFilter, locationFilter]);
 
   const metrics = useMemo(() => {
     const totalCleaners = rows.length;
@@ -528,7 +548,7 @@ export default function AdminCleanersPage() {
         <MetricsGrid items={metrics} />
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
@@ -548,6 +568,19 @@ export default function AdminCleanersPage() {
               {cities.map((city) => (
                 <option key={city.id} value={city.id}>
                   {city.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="h-10 min-w-0 rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="all">All locations</option>
+              <option value="__none__">No location</option>
+              {locationOptions.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
                 </option>
               ))}
             </select>

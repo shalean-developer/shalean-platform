@@ -222,6 +222,7 @@ export function StepSchedule({ onNext, onBack }: StepScheduleProps) {
         params.set("date", selectedDate);
         params.set("duration", String(Math.max(30, Math.round(canonicalDurationHours * 60))));
         if (resolvedLocationId) params.set("locationId", resolvedLocationId);
+        if (lockBaseState.service) params.set("serviceType", lockBaseState.service);
         const res = await fetch(`/api/booking/time-slots?${params.toString()}`);
         const json = (await res.json()) as { slots?: RawAvailabilitySlot[]; error?: string };
         if (!active) return;

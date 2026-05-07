@@ -29,6 +29,8 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: ALLOWED_TAGS,
   allowedAttributes: {
     a: ["href", "class", "rel", "target"],
+    h2: ["id", "class"],
+    h3: ["id", "class"],
     "*": ["class"],
   },
   allowedSchemes: ["http", "https", "mailto", "tel"],

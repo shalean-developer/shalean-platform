@@ -27,6 +27,7 @@ import {
 } from "@/lib/blog/templates";
 import { legacyParagraphToRichHtml } from "@/lib/blog/legacy-paragraph-to-rich-html";
 import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
+import { BlogContent } from "@/components/blog/engine/BlogContent";
 import { RichTextBlockEditor } from "./RichTextBlockEditor";
 
 type AddableType =
@@ -1219,9 +1220,9 @@ export function PostEditorForm({ mode, postId }: Props) {
                 <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden />
               </summary>
               <div className="article-reading-preview max-h-[min(70vh,640px)] overflow-y-auto border-t border-zinc-100 px-5 py-6 dark:border-zinc-800">
-                <div className="mx-auto max-w-[42rem]">
+                <BlogContent prose>
                   <BlogContentRenderer content={contentJson} />
-                </div>
+                </BlogContent>
               </div>
             </details>
           </section>

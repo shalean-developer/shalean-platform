@@ -11,7 +11,7 @@ import { countEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 export async function validateLockSlotAgainstEligibility(
   admin: SupabaseClient,
   body: Record<string, unknown>,
-  opts: { timeHm: string; durationHours: number },
+  opts: { timeHm: string; durationHours: number; catalogServiceId?: string | null },
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const strict = useStrictAvailability();
   const loc = String(body.locationId ?? body.location_id ?? "").trim();
@@ -48,6 +48,7 @@ export async function validateLockSlotAgainstEligibility(
     durationMinutes,
     locationId: loc,
     locationExpandedIds: [loc],
+    serviceType: opts.catalogServiceId ?? null,
   });
 
   if (serverCount < 1) {

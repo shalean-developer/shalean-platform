@@ -11,7 +11,7 @@ export function BlogConversionMidBanner({ trackingSlug, className }: Props) {
   return (
     <aside
       className={cn(
-        "not-prose flex flex-col gap-5 rounded-xl bg-blue-600 px-5 py-6 text-white shadow-lg shadow-blue-900/15 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-8 sm:py-7",
+        "not-prose flex flex-col gap-4 rounded-xl bg-blue-600 px-5 py-5 text-white shadow-md shadow-blue-900/10 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-7 sm:py-6",
         className,
       )}
       aria-labelledby="blog-mid-conversion-heading"

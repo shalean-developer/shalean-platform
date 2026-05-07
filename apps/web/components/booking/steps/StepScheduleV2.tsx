@@ -282,7 +282,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
 
   useEffect(() => {
     if (!lockBaseState) return;
-    const cacheKey = `${selectedDate}|${durationMinutesForApi}|${resolvedLocationId ?? ""}`;
+    const cacheKey = `${selectedDate}|${durationMinutesForApi}|${resolvedLocationId ?? ""}|${lockBaseState.service ?? ""}`;
     const bypassCache = skipAvailabilityCacheOnceRef.current;
     if (bypassCache) skipAvailabilityCacheOnceRef.current = false;
     const cached = availabilitySlotCache.get(cacheKey);
@@ -301,6 +301,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
         params.set("date", selectedDate);
         params.set("duration", String(durationMinutesForApi));
         if (resolvedLocationId) params.set("locationId", resolvedLocationId);
+        if (lockBaseState.service) params.set("serviceType", lockBaseState.service);
         const url = `/api/booking/time-slots?${params.toString()}`;
         let lastSlots: RawAvailabilitySlot[] = [];
         let ok = false;
@@ -352,7 +353,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       cancelled = true;
       setSlotsLoading(false);
     };
-  }, [lockBaseState, selectedDate, durationMinutesForApi, resolvedLocationId, slotFetchNonce]);
+  }, [lockBaseState, lockBaseState?.service, selectedDate, durationMinutesForApi, resolvedLocationId, slotFetchNonce]);
 
   const windowedAvailableSlots = useMemo(() => {
     return rawSlots.filter((s) => {
@@ -556,6 +557,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
       selectedTime: defaultPickTime,
       durationMinutes: durationMinutesForApi,
       locationId: resolvedLocationId ?? null,
+      serviceType: lockBaseState.service ?? null,
     });
   }, [lockBaseState, isTeamService, defaultPickTime, selectedDate, durationMinutesForApi, resolvedLocationId]);
 
@@ -565,6 +567,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
     selectedTime: cleanerSlotTime,
     durationMinutes: durationMinutesForApi,
     locationId: resolvedLocationId,
+    serviceType: lockBaseState?.service ?? null,
     enabled: !isTeamService,
   });
 
@@ -847,6 +850,7 @@ export function StepScheduleV2({ onNext, onBack }: StepScheduleProps) {
               selectedTime: time,
               durationMinutes: durationMinutesForApi,
               locationId: resolvedLocationId ?? null,
+              serviceType: lockBaseState?.service ?? null,
             });
             const minDelay = 160 + Math.floor(Math.random() * 140);
             await sleep(minDelay);

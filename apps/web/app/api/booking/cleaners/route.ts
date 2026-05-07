@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAvailableCleaners } from "@/lib/booking/availabilityEngine";
 import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
+import { parsePricingServiceParams, resolveServiceForPricing } from "@/lib/pricing/pricingEngine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,19 @@ export async function GET(request: Request) {
   const durationRaw = Number(url.searchParams.get("duration"));
   const durationMinutes =
     Number.isFinite(durationRaw) && durationRaw >= 30 ? Math.round(durationRaw) : 120;
+  const serviceRaw = (url.searchParams.get("serviceType") ?? url.searchParams.get("service") ?? "").trim();
+  let bookingServiceSlug: string | null = null;
+  if (serviceRaw) {
+    const { service, serviceType } = parsePricingServiceParams(serviceRaw);
+    bookingServiceSlug = resolveServiceForPricing({
+      service,
+      serviceType,
+      rooms: 1,
+      bathrooms: 1,
+      extraRooms: 0,
+      extras: [],
+    });
+  }
   if (!selectedDate || !selectedTime) {
     return NextResponse.json({ error: "date and time are required." }, { status: 400 });
   }
@@ -31,6 +45,7 @@ export async function GET(request: Request) {
       durationMinutes,
       limit: 5,
       locationId,
+      bookingServiceSlug,
     });
     return NextResponse.json({ cleaners });
   } catch (error) {

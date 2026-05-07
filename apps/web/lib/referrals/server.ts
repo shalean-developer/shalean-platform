@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  emitCleanerReferralConversionCompleted,
+  emitCleanerReferralRewardCredited,
+  emitCustomerReferralLifecycleRewardEvents,
+} from "@/lib/referrals/referralLifecycleEvents";
 
 function randDigits(len: number): string {
   let out = "";
@@ -275,10 +280,18 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
   const { data: profile } = await params.admin.from("user_profiles").select("credit_balance_zar").eq("id", referrerId).maybeSingle();
   const bal = Number((profile as { credit_balance_zar?: number } | null)?.credit_balance_zar ?? 0);
   const credit = Math.max(0, reward);
-  await params.admin
+  const { error: creditErr } = await params.admin
     .from("user_profiles")
     .update({ credit_balance_zar: Math.max(0, bal) + credit })
     .eq("id", referrerId);
+  if (creditErr) {
+    await reportOperationalIssue("warn", "referrals/walletCredit", creditErr.message, {
+      referralId: pending.id,
+      referrerId,
+      bookingId: params.bookingId ?? null,
+    });
+    return;
+  }
 
   await logReferralUserEvent({
     admin: params.admin,
@@ -290,6 +303,19 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
       reward_zar: credit,
       kind: "wallet",
     },
+  });
+
+  const refereeResolved =
+    params.bookingUserId ?? (pending as { referred_user_id?: string | null }).referred_user_id ?? null;
+  const bookingUuid =
+    typeof params.bookingId === "string" && /^[0-9a-f-]{36}$/i.test(params.bookingId.trim()) ? params.bookingId.trim() : null;
+  await emitCustomerReferralLifecycleRewardEvents({
+    admin: params.admin,
+    referralId: pending.id,
+    referrerId,
+    refereeUserId: refereeResolved,
+    bookingId: bookingUuid,
+    rewardZar: credit,
   });
 }
 
@@ -364,7 +390,7 @@ export async function completeCleanerReferralOnFirstJob(params: {
 
   const { data: pending } = await params.admin
     .from("referrals")
-    .select("id, referrer_id")
+    .select("id, referrer_id, reward_amount")
     .eq("referrer_type", "cleaner")
     .eq("status", "pending")
     .eq("referred_user_id", cleanerId)
@@ -383,22 +409,57 @@ export async function completeCleanerReferralOnFirstJob(params: {
     .maybeSingle();
   if (done?.id) return;
 
-  await params.admin
+  const { error: referralCompleteErr } = await params.admin
     .from("referrals")
     .update({
       status: "completed",
       completed_at: new Date().toISOString(),
     })
     .eq("id", pending.id);
+  if (referralCompleteErr) {
+    await reportOperationalIssue("warn", "referrals/completeCleanerReferralRow", referralCompleteErr.message, {
+      referralId: pending.id,
+      cleanerId,
+    });
+    return;
+  }
 
+  const referralRewardNominal = Math.max(
+    0,
+    Math.round(Number((pending as { reward_amount?: number }).reward_amount ?? 100)),
+  );
+  await emitCleanerReferralConversionCompleted({
+    admin: params.admin,
+    referralId: pending.id,
+    referrerCleanerId: String(pending.referrer_id),
+    refereeCleanerId: cleanerId,
+    rewardAmountZar: referralRewardNominal,
+  });
+
+  const bonusCredit = 100;
   const { data: cleaner } = await params.admin
     .from("cleaners")
     .select("bonus_payout_zar")
     .eq("id", String(pending.referrer_id))
     .maybeSingle();
   const bonus = Number((cleaner as { bonus_payout_zar?: number } | null)?.bonus_payout_zar ?? 0);
-  await params.admin
+  const { error: bonusErr } = await params.admin
     .from("cleaners")
-    .update({ bonus_payout_zar: Math.max(0, bonus) + 100 })
+    .update({ bonus_payout_zar: Math.max(0, bonus) + bonusCredit })
     .eq("id", String(pending.referrer_id));
+  if (bonusErr) {
+    await reportOperationalIssue("warn", "referrals/cleanerBonusPayout", bonusErr.message, {
+      referralId: pending.id,
+      referrerCleanerId: String(pending.referrer_id),
+    });
+    return;
+  }
+
+  await emitCleanerReferralRewardCredited({
+    admin: params.admin,
+    referralId: pending.id,
+    referrerCleanerId: String(pending.referrer_id),
+    refereeCleanerId: cleanerId,
+    rewardZar: bonusCredit,
+  });
 }

@@ -46,9 +46,11 @@ export async function POST(request: Request) {
   }
 
   const b = body as Record<string, unknown>;
+  const catalogServiceId = resolveServiceForPricing(r.job);
   const slotCheck = await validateLockSlotAgainstEligibility(admin, b, {
     timeHm: r.timeHm,
     durationHours: r.quote.hours,
+    catalogServiceId,
   });
   if (!slotCheck.ok) {
     return NextResponse.json({ ok: false, error: slotCheck.error }, { status: slotCheck.status });
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
   }
   const lockExpiresAt = new Date(Date.now() + LOCK_HOLD_MS).toISOString();
 
-  const svc = resolveServiceForPricing(r.job);
+  const svc = catalogServiceId;
   const extras_line_items = extrasLineItemsFromSnapshot(snapshot, r.job.extras, svc);
 
   let pricing_version_id: string | undefined;

@@ -412,8 +412,12 @@ export async function findSmartDispatchCandidates(
     timeHm: string;
     locationId: string;
     cityId?: string | null;
-    /** Canonical booking service slug for preference match (e.g. `standard`). */
+    /** Service key for preference scoring (slug and/or normalized label). */
     jobServiceSlug?: string | null;
+    /** `bookings.service_slug` only — capability gating (never derive from free-text label here). */
+    jobServiceCapabilitySlug?: string | null;
+    /** `bookings.service` display label — capability fallback when slug missing. */
+    jobServiceCapabilityLabel?: string | null;
     newJobDurationMinutes?: number | null;
     searchExpansion?: "none" | "city" | "broadcast";
     demandLevel?: DemandLevel;
@@ -491,6 +495,8 @@ export async function findSmartDispatchCandidates(
     locationId,
     locationExpandedIds: expandedForEligibility,
     limit: 500,
+    serviceType: params.jobServiceCapabilitySlug ?? null,
+    serviceLabelForCapability: params.jobServiceCapabilityLabel ?? null,
   });
   const eligibleFromUnified = new Set(eligibleCards.map((c) => c.id));
 
@@ -1163,9 +1169,12 @@ export async function smartAssignCleaner(
   const timeHm = String((booking as { time?: string }).time ?? "");
   const locationId = String((booking as { location_id?: string | null }).location_id ?? "");
   const cityId = String((booking as { city_id?: string | null }).city_id ?? "");
+  const jobCapabilitySlug =
+    String((booking as { service_slug?: string | null }).service_slug ?? "").trim().toLowerCase() || null;
+  const jobCapabilityLabel = String((booking as { service?: string | null }).service ?? "").trim() || null;
   const jobServiceSlug =
-    String((booking as { service_slug?: string | null }).service_slug ?? "").trim().toLowerCase() ||
-    String((booking as { service?: string | null }).service ?? "").trim().toLowerCase() ||
+    jobCapabilitySlug ||
+    (jobCapabilityLabel ? jobCapabilityLabel.toLowerCase() : "") ||
     null;
   const durationMinutes = (booking as { duration_minutes?: number | null }).duration_minutes ?? null;
   const surgeMultiplier = Number((booking as { surge_multiplier?: number | null }).surge_multiplier ?? 1) || 1;
@@ -1251,6 +1260,8 @@ export async function smartAssignCleaner(
       locationId: params.locationId,
       cityId: cityId || null,
       jobServiceSlug,
+      jobServiceCapabilitySlug: jobCapabilitySlug,
+      jobServiceCapabilityLabel: jobCapabilityLabel,
       newJobDurationMinutes: durationMinutes,
       searchExpansion,
       demandLevel,

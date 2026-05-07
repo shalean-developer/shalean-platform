@@ -150,6 +150,7 @@ export function CheckoutRescheduleModal({
           params.set("date", selectedDate);
           params.set("duration", String(durationMinutesForApi));
           if (resolvedLocationId) params.set("locationId", resolvedLocationId);
+          if (lockBaseState.service) params.set("serviceType", lockBaseState.service);
           const url = `/api/booking/time-slots?${params.toString()}`;
           let lastSlots: RawAvailabilitySlot[] = [];
           let ok = false;

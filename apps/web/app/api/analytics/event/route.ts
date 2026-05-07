@@ -29,6 +29,8 @@ const ALLOWED = new Set([
   "blog_scroll",
   "blog_cta_click",
   "blog_time_on_page",
+  "blog_toc_click",
+  "blog_toc_section_engagement",
   "seo_location_scroll",
   "seo_cta_click",
   "seo_service_card_click",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { quoteLockFromRequestBodyWithSnapshot } from "@/lib/booking/bookingLockQuote";
 import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
+import { resolveServiceForPricing } from "@/lib/pricing/pricingEngine";
 import { calculateDynamicPrice } from "@/lib/marketplace-intelligence/dynamicPricing";
 import { getAiAutonomyFlags } from "@/lib/ai-autonomy/flags";
 import { calculateDynamicPriceWithAiLayers } from "@/lib/ai-autonomy/dynamicPricingWithAi";
@@ -60,12 +61,14 @@ export async function POST(request: Request) {
     let cleanersN: number | null = null;
     if (loc && /^\d{4}-\d{2}-\d{2}$/.test(dateYmd) && r.timeHm) {
       const durationMin = Math.max(30, Math.round((q.hours ?? 2) * 60));
+      const catalogSvc = resolveServiceForPricing(r.job);
       cleanersN = await countEligibleCleaners(admin, {
         date: dateYmd,
         startTime: r.timeHm,
         durationMinutes: durationMin,
         locationId: loc,
         locationExpandedIds: [loc],
+        serviceType: catalogSvc,
       });
     }
     const availRatio = cleanersN != null ? Math.min(1, cleanersN / 12) : null;

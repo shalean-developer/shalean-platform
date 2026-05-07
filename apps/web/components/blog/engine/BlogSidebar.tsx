@@ -32,7 +32,7 @@ function SidebarSection({
 
 export function BlogSidebar({ categories, trending, trackingSlug, className }: Props) {
   return (
-    <aside className={cn("space-y-6 lg:sticky lg:top-24 lg:self-start", className)}>
+    <aside className={cn("space-y-6", className)}>
       <BlogSidebarSearch />
 
       {categories.length > 0 ? (
@@ -78,16 +78,16 @@ export function BlogSidebar({ categories, trending, trackingSlug, className }: P
         </ul>
       </SidebarSection>
 
-      <div className="rounded-xl border border-blue-200/90 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-blue-950">Book a service</p>
-        <p className="mt-2 text-sm leading-relaxed text-blue-900/85">
+      <div className="rounded-xl border border-zinc-200/90 bg-gradient-to-br from-zinc-50 to-white p-5 shadow-sm">
+        <p className="text-sm font-semibold text-zinc-900">Book a service</p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-600">
           Instant quote for Cape Town—pick rooms, tier, and add-ons.
         </p>
         <GrowthCtaLink
           href="/booking"
           source={`blog_${trackingSlug}_sidebar_book`}
           blogAnalyticsPlacement={`${trackingSlug}_sidebar_book`}
-          className="mt-4 flex w-full min-h-11 items-center justify-center rounded-lg bg-blue-600 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          className="mt-4 flex w-full min-h-11 items-center justify-center rounded-lg bg-blue-600 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
         >
           Book cleaning
         </GrowthCtaLink>

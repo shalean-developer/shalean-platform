@@ -26,7 +26,7 @@ export function BlogServiceLinks({ trackingSlug, service = "standard", dense = f
 
   return (
     <section
-      className={`not-prose rounded-2xl border border-zinc-200 bg-zinc-50/80 px-6 py-8 ${dense ? "mt-0" : "mt-12"}`}
+      className={`not-prose rounded-2xl border border-zinc-200/90 bg-zinc-50/70 px-5 py-6 shadow-sm sm:px-6 sm:py-7 ${dense ? "mt-0" : "mt-12"}`}
       aria-labelledby="blog-service-links-heading"
     >
       <h2 id="blog-service-links-heading" className="text-lg font-bold tracking-tight text-zinc-900">

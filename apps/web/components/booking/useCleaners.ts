@@ -28,6 +28,7 @@ function cleanersCacheKey(args: {
   userLat?: number | null;
   userLng?: number | null;
   locationId?: string | null;
+  serviceType?: string | null;
 }): string {
   return JSON.stringify({
     date: args.selectedDate,
@@ -36,6 +37,7 @@ function cleanersCacheKey(args: {
     lng: args.userLng ?? null,
     duration: args.durationMinutes,
     locationId: typeof args.locationId === "string" ? args.locationId.trim() : "",
+    serviceType: typeof args.serviceType === "string" ? args.serviceType.trim() : "",
   });
 }
 
@@ -49,6 +51,8 @@ export async function prefetchBookingCleaners(args: {
   userLat?: number | null;
   userLng?: number | null;
   locationId?: string | null;
+  /** Catalog service id (`deep`, `move`, …) for capability-filtered pool. */
+  serviceType?: string | null;
 }): Promise<void> {
   if (typeof window === "undefined") return;
   const durationMinutes =
@@ -62,6 +66,7 @@ export async function prefetchBookingCleaners(args: {
     userLat: args.userLat,
     userLng: args.userLng,
     locationId: args.locationId,
+    serviceType: args.serviceType ?? null,
   });
   if (cache.has(key)) return;
   try {
@@ -74,6 +79,8 @@ export async function prefetchBookingCleaners(args: {
     if (typeof args.userLng === "number") params.set("lng", String(args.userLng));
     const loc = typeof args.locationId === "string" ? args.locationId.trim() : "";
     if (loc) params.set("locationId", loc);
+    const st = typeof args.serviceType === "string" ? args.serviceType.trim() : "";
+    if (st) params.set("serviceType", st);
     const res = await fetch(`/api/booking/cleaners?${params.toString()}`);
     const json = (await res.json()) as { cleaners?: LiveCleaner[]; error?: string };
     if (!res.ok) return;
@@ -110,6 +117,8 @@ export function useCleaners(args: {
   durationMinutes?: number;
   /** Resolved `locations.id` from step-1 area — required for strict availability alignment. */
   locationId?: string | null;
+  /** Catalog service id for capability-filtered cleaner pool. */
+  serviceType?: string | null;
   /** When false, skips fetch and clears state (e.g. team-assigned services). */
   enabled?: boolean;
 }) {
@@ -130,8 +139,9 @@ export function useCleaners(args: {
         userLat: args.userLat,
         userLng: args.userLng,
         locationId: args.locationId,
+        serviceType: args.serviceType ?? null,
       }),
-    [args.selectedDate, args.selectedTime, args.userLat, args.userLng, durationMinutes, args.locationId],
+    [args.selectedDate, args.selectedTime, args.userLat, args.userLng, durationMinutes, args.locationId, args.serviceType],
   );
 
   useEffect(() => {
@@ -174,6 +184,8 @@ export function useCleaners(args: {
         if (typeof args.userLng === "number") params.set("lng", String(args.userLng));
         const loc = typeof args.locationId === "string" ? args.locationId.trim() : "";
         if (loc) params.set("locationId", loc);
+        const st = typeof args.serviceType === "string" ? args.serviceType.trim() : "";
+        if (st) params.set("serviceType", st);
         const res = await fetch(`/api/booking/cleaners?${params.toString()}`);
         const json = (await res.json()) as { cleaners?: LiveCleaner[]; error?: string };
         if (!active) return;
@@ -218,7 +230,17 @@ export function useCleaners(args: {
       active = false;
       window.clearTimeout(t);
     };
-  }, [args.enabled, args.selectedDate, args.selectedTime, args.userLat, args.userLng, args.locationId, durationMinutes, key]);
+  }, [
+    args.enabled,
+    args.selectedDate,
+    args.selectedTime,
+    args.userLat,
+    args.userLng,
+    args.locationId,
+    args.serviceType,
+    durationMinutes,
+    key,
+  ]);
 
   const recommendedCleaner = cleaners[0] ?? null;
   return { cleaners, recommendedCleaner, loading, error };

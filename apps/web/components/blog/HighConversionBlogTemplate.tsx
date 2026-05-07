@@ -4,8 +4,8 @@ import type { HighConversionBlogArticle } from "@/lib/blog/highConversionBlogArt
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { linkInParagraphClassName } from "@/lib/ui/linkClassNames";
 
-const proseArticle =
-  "prose prose-lg prose-zinc mx-auto w-full max-w-[65ch] prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-li:marker:text-blue-600";
+/** Parent `BlogContent prose` supplies typography — avoid nested `prose` here. */
+const articleStack = "mx-auto w-full";
 
 const standardPath = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
 const deepPath = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
@@ -45,7 +45,7 @@ function MandatoryInternalLinks({ article }: { article: HighConversionBlogArticl
   const standardLabel = labels?.standard ?? "standard home cleaning in Cape Town";
   const deepLabel = labels?.deep ?? "deep cleaning services in Cape Town";
   return (
-    <div className={proseArticle}>
+    <div className={articleStack}>
       <p>
         When you are ready to move from reading to booking, start with our Cape Town service guides:{" "}
         <Link href={standardPath} className={linkInParagraphClassName}>
@@ -107,13 +107,13 @@ function RelatedServicesSection() {
 
 function renderSection(section: HighConversionBlogArticle["sections"][number]) {
   return (
-    <div key={section.id} id={`hc-section-${section.id}`} className={proseArticle}>
+    <div key={section.id} id={`hc-section-${section.id}`} className={articleStack}>
       {section.level === "h2" ? <h2>{section.heading}</h2> : <h3>{section.heading}</h3>}
       {section.paragraphs.map((p, i) => (
         <p key={`${section.id}-p-${i}`}>{p}</p>
       ))}
       {section.bullets?.length ? (
-        <ul className="mt-3 list-disc space-y-2 pl-5 marker:text-zinc-400">
+        <ul className="not-prose mt-3 list-disc space-y-2.5 pl-5 text-base leading-relaxed text-zinc-600 marker:text-blue-600">
           {section.bullets.map((item, i) => (
             <li key={`${section.id}-li-${i}`}>{item}</li>
           ))}
@@ -132,7 +132,7 @@ export function HighConversionBlogTemplate({ article }: Props) {
 
   return (
     <>
-      <div className={proseArticle}>
+      <div className={articleStack}>
         <p className="lead text-lg text-zinc-700">{article.introParagraphs[0]}</p>
         {article.introParagraphs.slice(1).map((p, i) => (
           <p key={`intro-${i}`}>{p}</p>
@@ -169,7 +169,7 @@ export function HighConversionBlogTemplate({ article }: Props) {
       </section>
 
       {article.conclusionParagraphs?.length ? (
-        <section className={`${proseArticle} mt-12`} aria-labelledby="hc-conclusion-heading">
+        <section className={`${articleStack} mt-12`} aria-labelledby="hc-conclusion-heading">
           <h2 id="hc-conclusion-heading">Conclusion</h2>
           {article.conclusionParagraphs.map((p, i) => (
             <p key={`conclusion-${i}`}>{p}</p>

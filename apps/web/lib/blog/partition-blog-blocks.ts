@@ -42,3 +42,19 @@ export function buildDisplayContentJson(
 ): BlogContentJson {
   return { ...content, blocks };
 }
+
+/** Same filter as `BlogDbArticleBody` — keep TOC / anchors aligned with split renderers. */
+export const BLOG_DB_DISPLAY_FILTER_OPTS = { stripInlineCtas: true, skipInvalidImages: true } as const;
+
+/**
+ * Blocks in on-page order after partition + display filtering (no mid-slot).
+ * Use with `extractTocFromBlogBlocks` so anchor ids match `BlogContentRenderer` + `blockIndexOffset`.
+ */
+export function getMergedBlogDisplayBlocks(content: BlogContentJson): BlogContentBlock[] {
+  const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
+  const { before, after } = partitionBlogBlocks(blocks);
+  return [
+    ...filterBlocksForDisplay(before, BLOG_DB_DISPLAY_FILTER_OPTS),
+    ...filterBlocksForDisplay(after, BLOG_DB_DISPLAY_FILTER_OPTS),
+  ];
+}

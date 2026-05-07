@@ -41,10 +41,14 @@ export type GrowthEventType =
   | "payment_completed"
   /** Blog — payload: slug, depth (25|50|75|100) */
   | "blog_scroll"
-  /** Blog booking/marketing CTA; payload: slug, placement, href? */
+  /** Blog booking/marketing CTA; payload: slug, placement, href?, optional TOC bridge: last_engaged_heading_*, engagement_*, heading_* */
   | "blog_cta_click"
   /** Blog dwell time signal; payload: slug, seconds */
   | "blog_time_on_page"
+  /** Blog TOC jump; payload: slug, heading, heading_depth, toc_target_id */
+  | "blog_toc_click"
+  /** After a TOC click: scroll completion + dwell proxy; payload: slug, heading_id, heading_label, heading_depth, max_scroll_after_click_pct, time_after_click_ms, … */
+  | "blog_toc_section_engagement"
   /** Location hub scroll milestone; payload: depth (25|50|75|100), page_slug, suburb, … */
   | "seo_location_scroll"
   /** Hub booking / pricing CTA; payload: cta_location, cta_label, cta_kind, page_slug, suburb, … */

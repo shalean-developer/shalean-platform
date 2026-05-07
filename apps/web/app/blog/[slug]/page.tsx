@@ -15,6 +15,8 @@ import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImage
 import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
 import { AirbnbHostGuideBlogTemplate } from "@/components/blog/AirbnbHostGuideBlogTemplate";
 import { BlogPostLayout } from "@/components/blog/BlogPostLayout";
+import { extractTocFromBlogBlocks, shouldShowBlogTableOfContents, type BlogTocEntry } from "@/lib/blog/extract-blog-toc";
+import { getMergedBlogDisplayBlocks } from "@/lib/blog/partition-blog-blocks";
 import {
   AIRBNB_HOST_GUIDE_POSTS,
   buildAirbnbHostGuideGraphJsonLd,
@@ -696,6 +698,16 @@ async function BlogPostPageImpl(props: Props) {
         }
       }
 
+      let tocEntries: BlogTocEntry[] | undefined;
+      try {
+        const merged = getMergedBlogDisplayBlocks(contentForRender);
+        const raw = extractTocFromBlogBlocks(merged);
+        tocEntries = shouldShowBlogTableOfContents(raw, dbPost.readingTimeMinutes) ? raw : undefined;
+      } catch (tocErr) {
+        console.error("[blog] TOC extraction failed", { slug: dbPost.slug, tocErr });
+        tocEntries = undefined;
+      }
+
       return (
         <MarketingLayout>
           <main className="bg-white text-zinc-900">
@@ -730,13 +742,14 @@ async function BlogPostPageImpl(props: Props) {
               relatedGridPosts={relatedGrid}
               clusterRelatedGuidesSlot={clusterRelatedGuidesSlot}
               showLayoutMidBanner={false}
+              tocEntries={tocEntries}
             >
               <BlogDbArticleBody
                 content={contentForRender}
                 autoLinkSlug={dbPost.slug}
                 midArticleSlot={
                   <section
-                    className="not-prose space-y-10 border-t border-zinc-200 pt-10"
+                    className="not-prose space-y-8 border-t border-zinc-200/80 pt-8 sm:space-y-9 sm:pt-9"
                     aria-label="Services, areas, and booking"
                   >
                     <BlogConversionMidBanner trackingSlug={dbPost.slug} />

@@ -1,5 +1,7 @@
 import { blogFaqHeadingDomId, defaultBlogBlockAnchorId } from "@/lib/blog/blog-block-anchors";
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
+import { injectRichTextHeadingAnchors } from "@/lib/blog/inject-rich-text-heading-anchors";
+import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
 
 export type BlogTocEntry = {
   id: string;
@@ -27,12 +29,17 @@ export function extractTocFromBlogBlocks(blocks: BlogContentBlock[]): BlogTocEnt
         level,
       });
     }
-    if (block.type === "faq" && !block.omit_section_heading) {
+    if (block.type === "faq") {
       out.push({
         id: blogFaqHeadingDomId(block, index),
-        label: "Frequently asked questions",
+        label: block.omit_section_heading ? "FAQ" : "Frequently asked questions",
         level: 2,
       });
+    }
+    if (block.type === "rich_text") {
+      const safe = sanitizeBlogRichHtml(block.html);
+      const scope = block.id?.trim() || defaultBlogBlockAnchorId(block, index);
+      out.push(...injectRichTextHeadingAnchors(safe, scope).entries);
     }
   });
   return out;
@@ -40,4 +47,30 @@ export function extractTocFromBlogBlocks(blocks: BlogContentBlock[]): BlogTocEnt
 
 export function extractTocFromBlogContent(content: BlogContentJson): BlogTocEntry[] {
   return extractTocFromBlogBlocks(content.blocks);
+}
+
+/**
+ * TOC rows from sanitized rich HTML (`h2` / `h3` only). Uses the same anchor injection as
+ * {@link BlogContentRenderer} — pass the same `scope` string (`block.id` or `defaultBlogBlockAnchorId`).
+ */
+export function extractTocFromRichText(html: string, scope: string): BlogTocEntry[] {
+  const safe = sanitizeBlogRichHtml(html ?? "");
+  return injectRichTextHeadingAnchors(safe, scope).entries;
+}
+
+/**
+ * Long-form / structure gate — TOC stays off short pages to avoid clutter.
+ * - ≥3 level-2 entries (H2-equivalent), or
+ * - ~8+ min read with at least 3 TOC rows.
+ */
+export function shouldShowBlogTableOfContents(
+  entries: BlogTocEntry[],
+  readingTimeMinutes: number | null | undefined,
+): boolean {
+  if (entries.length < 2) return false;
+  const h2 = entries.filter((e) => e.level === 2).length;
+  if (h2 >= 3) return true;
+  const rt = readingTimeMinutes ?? 0;
+  if (rt >= 8 && entries.length >= 3) return true;
+  return false;
 }

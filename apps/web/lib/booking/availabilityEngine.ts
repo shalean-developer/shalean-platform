@@ -14,6 +14,7 @@ const CLEANERS_LIST_SELECT_WITH_WEEKDAYS =
   "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
 const CLEANERS_LIST_SELECT_BASE =
   "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
+const CLEANERS_CAPABILITY_SUFFIX = ", can_do_deep_cleaning, can_do_move_cleaning";
 
 function sanitizeReviewQuote(raw: string | null | undefined): string {
   if (!raw || typeof raw !== "string") return "";
@@ -97,6 +98,9 @@ export type GetAvailableCleanersArgs = {
   locationId?: string | null;
   /** When provided, overrides single-id expansion (e.g. city-wide dispatch). */
   locationExpandedIds?: string[] | null;
+  /** Catalog service slug for deep/move capability filtering (`getEligibleCleaners`). */
+  bookingServiceSlug?: string | null;
+  serviceLabelForCapability?: string | null;
 };
 
 export async function getAvailableCleaners(
@@ -123,18 +127,28 @@ export async function getAvailableCleaners(
   let cleanersRaw: CleanerBase[] | null = null;
   let cErr = null as { message?: string } | null;
   {
-    const r1 = await admin
-      .from("cleaners")
-      .select(CLEANERS_LIST_SELECT_WITH_WEEKDAYS)
-      .eq("is_available", true)
-      .neq("status", "offline");
-    cleanersRaw = (r1.data ?? null) as unknown as CleanerBase[] | null;
-    cErr = r1.error;
-    if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
-      const r2 = await admin.from("cleaners").select(CLEANERS_LIST_SELECT_BASE).eq("is_available", true).neq("status", "offline");
-      cleanersRaw = (r2.data ?? null) as unknown as CleanerBase[] | null;
-      cErr = r2.error;
+    const run = (cols: string) =>
+      admin.from("cleaners").select(cols).eq("is_available", true).neq("status", "offline");
+    let r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS + CLEANERS_CAPABILITY_SUFFIX);
+    if (
+      r.error &&
+      (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+        isUnknownColumnError(r.error, "can_do_move_cleaning"))
+    ) {
+      r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS);
     }
+    if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
+      r = await run(CLEANERS_LIST_SELECT_BASE + CLEANERS_CAPABILITY_SUFFIX);
+      if (
+        r.error &&
+        (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+          isUnknownColumnError(r.error, "can_do_move_cleaning"))
+      ) {
+        r = await run(CLEANERS_LIST_SELECT_BASE);
+      }
+    }
+    cleanersRaw = (r.data ?? null) as unknown as CleanerBase[] | null;
+    cErr = r.error;
   }
 
   if (cErr || !cleanersRaw?.length) {
@@ -158,6 +172,8 @@ export async function getAvailableCleaners(
     preloadedCleaners,
     preloadedAvailability: availRows,
     preloadedCleanerLocations: preloadedLocs,
+    serviceType: args.bookingServiceSlug ?? null,
+    serviceLabelForCapability: args.serviceLabelForCapability ?? null,
   });
 
   const sliced = cleaners.slice(0, limit);
@@ -180,6 +196,8 @@ export async function isCleanerInAvailablePoolForSlot(
     durationMinutes?: number;
     locationId?: string | null;
     locationExpandedIds?: string[] | null;
+    bookingServiceSlug?: string | null;
+    serviceLabelForCapability?: string | null;
   },
 ): Promise<boolean> {
   const pool = await getAvailableCleaners(admin, {
@@ -189,6 +207,8 @@ export async function isCleanerInAvailablePoolForSlot(
     limit: 500,
     locationId: args.locationId,
     locationExpandedIds: args.locationExpandedIds,
+    bookingServiceSlug: args.bookingServiceSlug ?? null,
+    serviceLabelForCapability: args.serviceLabelForCapability ?? null,
   });
   return pool.some((c) => c.id === args.cleanerId);
 }
@@ -205,6 +225,8 @@ export async function getAvailableTimeSlots(
     stepMinutes?: number;
     locationId?: string | null;
     locationExpandedIds?: string[] | null;
+    bookingServiceSlug?: string | null;
+    serviceLabelForCapability?: string | null;
   },
 ): Promise<Array<{ time: string; available: boolean; cleanersCount: number; locationId: string | null }>> {
   const startHour = args.startHour ?? 7;
@@ -217,16 +239,27 @@ export async function getAvailableTimeSlots(
 
     let cleanersRaw: CleanerBase[] | null = null;
     {
-      const r1 = await admin
-        .from("cleaners")
-        .select(CLEANERS_LIST_SELECT_WITH_WEEKDAYS)
-        .eq("is_available", true)
-        .neq("status", "offline");
-      cleanersRaw = (r1.data ?? null) as unknown as CleanerBase[] | null;
-      if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
-        const r2 = await admin.from("cleaners").select(CLEANERS_LIST_SELECT_BASE).eq("is_available", true).neq("status", "offline");
-        cleanersRaw = (r2.data ?? null) as unknown as CleanerBase[] | null;
+      const run = (cols: string) =>
+        admin.from("cleaners").select(cols).eq("is_available", true).neq("status", "offline");
+      let r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS + CLEANERS_CAPABILITY_SUFFIX);
+      if (
+        r.error &&
+        (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+          isUnknownColumnError(r.error, "can_do_move_cleaning"))
+      ) {
+        r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS);
       }
+      if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
+        r = await run(CLEANERS_LIST_SELECT_BASE + CLEANERS_CAPABILITY_SUFFIX);
+        if (
+          r.error &&
+          (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+            isUnknownColumnError(r.error, "can_do_move_cleaning"))
+        ) {
+          r = await run(CLEANERS_LIST_SELECT_BASE);
+        }
+      }
+      cleanersRaw = (r.data ?? null) as unknown as CleanerBase[] | null;
     }
 
     const preloadedCleaners = (cleanersRaw ?? []) as CleanerBase[];
@@ -260,6 +293,8 @@ export async function getAvailableTimeSlots(
         preloadedCleaners,
         preloadedAvailability: availabilityRows,
         preloadedCleanerLocations: preloadedLocs,
+        serviceType: args.bookingServiceSlug ?? null,
+        serviceLabelForCapability: args.serviceLabelForCapability ?? null,
       });
 
       out.push({

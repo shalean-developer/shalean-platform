@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
-import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
+import { loadCleanerCapabilityColumnsById } from "@/lib/booking/cleanerServiceCapabilityDb";
+import type { ServiceCapabilityGate } from "@/lib/booking/serviceCapabilityEligibility";
+import {
+  activeRosterHasServiceQualifiedMember,
+  cleanerPassesServiceCapabilityGate,
+  serviceCapabilityGateFromTeamServiceType,
+} from "@/lib/booking/serviceCapabilityEligibility";
+import { countActiveTeamMembersOnDate, isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -228,11 +235,16 @@ async function fetchTeamBookingAggregates(
   return { assignedByTeam, slotLoadByTeam, sameSlotAssignedByTeam };
 }
 
-/** One round-trip: roster rows for all teams, then in-memory active counts per team. */
+/**
+ * Active roster counts per team for `dateYmd`.
+ * When `capabilityGate` is set (deep/move team jobs), teams with **no** certified active member count as 0
+ * so they are excluded like empty rosters (≥1 qualified cleaner required).
+ */
 async function fetchTeamRosterSnapshots(
   supabase: SupabaseClient,
   teamIds: string[],
   dateYmd: string,
+  capabilityGate: ServiceCapabilityGate | null,
 ): Promise<Map<string, number> | null> {
   if (!teamIds.length) return new Map();
   const { data, error } = await supabase
@@ -250,10 +262,28 @@ async function fetchTeamRosterSnapshots(
     if (!byTeam.has(tid)) byTeam.set(tid, []);
     byTeam.get(tid)!.push(row);
   }
-  const out = new Map<string, number>();
+
+  const activeIdsByTeam = new Map<string, string[]>();
+  const allActiveIds = new Set<string>();
   for (const tid of teamIds) {
     const members = byTeam.get(tid) ?? [];
-    const n = countActiveTeamMembersOnDate(members, dateYmd);
+    const ids = members
+      .filter((m) => m.cleaner_id != null && String(m.cleaner_id).trim() !== "")
+      .filter((m) => isTeamMemberActiveOnBookingDate(m, dateYmd))
+      .map((m) => String(m.cleaner_id).trim());
+    activeIdsByTeam.set(tid, ids);
+    for (const id of ids) allActiveIds.add(id);
+  }
+
+  const loaded = await loadCleanerCapabilityColumnsById(supabase, [...allActiveIds]);
+  if (!loaded.ok) return null;
+  const capMap = loaded.map;
+
+  const out = new Map<string, number>();
+  for (const tid of teamIds) {
+    const ids = activeIdsByTeam.get(tid) ?? [];
+    const n =
+      ids.length > 0 && activeRosterHasServiceQualifiedMember(ids, capMap, capabilityGate) ? ids.length : 0;
     out.set(tid, n);
   }
   return out;
@@ -378,18 +408,44 @@ async function finalizeBookingTeamAssignment(
     return { ok: false, error: "no_candidate", message: "capacity_claim_rejected" };
   }
 
-  const { data: leadRow } = await supabase
+  const teamSvc: "deep_cleaning" | "move_cleaning" =
+    serviceType === "move_cleaning" ? "move_cleaning" : "deep_cleaning";
+  const payoutGate = serviceCapabilityGateFromTeamServiceType(teamSvc);
+
+  const { data: memberRowsForLead, error: leadMembersErr } = await supabase
     .from("team_members")
-    .select("cleaner_id")
+    .select("cleaner_id, active_from, active_to")
     .eq("team_id", selected.id)
-    .not("cleaner_id", "is", null)
-    .order("cleaner_id", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .not("cleaner_id", "is", null);
+  if (leadMembersErr) {
+    await supabase.rpc("release_team_capacity_slot", {
+      p_team_id: selected.id,
+      p_booking_date: dateYmd,
+    });
+    return { ok: false, error: "db_error", message: leadMembersErr.message };
+  }
+
+  const activeSortedIds = [
+    ...new Set(
+      (memberRowsForLead ?? [])
+        .filter((m) => isTeamMemberActiveOnBookingDate(m, dateYmd))
+        .map((m) => String((m as { cleaner_id: string }).cleaner_id).trim())
+        .filter(Boolean),
+    ),
+  ].sort();
+
+  const capsForLead = await loadCleanerCapabilityColumnsById(supabase, activeSortedIds);
+  if (!capsForLead.ok) {
+    await supabase.rpc("release_team_capacity_slot", {
+      p_team_id: selected.id,
+      p_booking_date: dateYmd,
+    });
+    return { ok: false, error: "db_error", message: capsForLead.error };
+  }
+
   const payoutOwnerCleanerId =
-    leadRow && typeof (leadRow as { cleaner_id?: string }).cleaner_id === "string"
-      ? String((leadRow as { cleaner_id: string }).cleaner_id).trim()
-      : null;
+    activeSortedIds.find((id) => cleanerPassesServiceCapabilityGate(capsForLead.map.get(id) ?? {}, payoutGate)) ??
+    null;
 
   if (!payoutOwnerCleanerId) {
     await supabase.rpc("release_team_capacity_slot", {
@@ -581,9 +637,11 @@ export async function assignTeamToBooking(
   const includeBookingTimeInAgg = useSlotWeight;
   const bookingTimeSlotKey = useSlotWeight ? normalizeBookingTimeSlotKey(booking.time) : null;
 
+  const capabilityGate = serviceCapabilityGateFromTeamServiceType(serviceType);
+
   const [agg, roster] = await Promise.all([
     fetchTeamBookingAggregates(supabase, teamIds, dateYmd, bookingTimeSlotKey, includeBookingTimeInAgg),
-    fetchTeamRosterSnapshots(supabase, teamIds, dateYmd),
+    fetchTeamRosterSnapshots(supabase, teamIds, dateYmd, capabilityGate),
   ]);
   if (!agg || !roster) {
     return { ok: false, error: "db_error", message: "Could not load team assignment data." };

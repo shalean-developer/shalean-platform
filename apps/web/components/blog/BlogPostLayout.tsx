@@ -13,10 +13,17 @@ import { BlogLayout } from "@/components/blog/engine/BlogLayout";
 import { BlogRelatedPostsGrid } from "@/components/blog/engine/BlogRelatedPostsGrid";
 import { BlogShareBar } from "@/components/blog/engine/BlogShareBar";
 import { BlogSidebar } from "@/components/blog/engine/BlogSidebar";
+import { BlogReadingProgressBar } from "@/components/blog/BlogReadingProgressBar";
+import {
+  BlogTableOfContentsInline,
+  BlogTableOfContentsSidebar,
+  BlogTocScrollHub,
+} from "@/components/blog/BlogTableOfContents";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { StickyBookingCta } from "@/components/blog/StickyBookingCta";
 import type { BlogIndexPost } from "@/lib/blog/get-all-posts";
 import type { BlogSidebarCategory, RelatedGridPost } from "@/lib/blog/get-blog-sidebar-data";
+import type { BlogTocEntry } from "@/lib/blog/extract-blog-toc";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +65,8 @@ export type BlogPostLayoutProps = {
   relatedGridPosts: RelatedGridPost[];
   categorySlug?: string | null;
   categoryName?: string | null;
+  /** DB long-form: heading-derived TOC (mobile inline + desktop sidebar). Omit on short posts. */
+  tocEntries?: BlogTocEntry[] | null;
 };
 
 export function BlogPostLayout({
@@ -80,6 +89,7 @@ export function BlogPostLayout({
   relatedGridPosts,
   categorySlug,
   categoryName,
+  tocEntries,
 }: BlogPostLayoutProps) {
   const readLabel =
     readingTimeMinutes != null && readingTimeMinutes > 0
@@ -99,11 +109,16 @@ export function BlogPostLayout({
 
   const updatedLabel = showUpdated && updatedAtIso ? formatZaLongDate(updatedAtIso) : null;
 
+  const showReadingProgressBar =
+    (tocEntries != null && tocEntries.length >= 2) || (readingTimeMinutes ?? 0) >= 6;
+
   return (
     <>
+      {showReadingProgressBar ? <BlogReadingProgressBar /> : null}
       <BlogArticleEnhancements />
       <BlogEngagementAnalytics slug={trackingSlug} />
       <StickyBookingCta trackingSlug={trackingSlug} />
+      {tocEntries && tocEntries.length >= 2 ? <BlogTocScrollHub items={tocEntries} /> : null}
 
       <div className="bg-gradient-to-b from-zinc-50/90 via-white to-white pb-16 pt-8 lg:pb-24 lg:pt-10">
         <BlogLayout
@@ -173,7 +188,15 @@ export function BlogPostLayout({
                 <BlogIntroServiceLink slug={trackingSlug} />
               </header>
 
-              <BlogContent prose={false}>{children}</BlogContent>
+              {tocEntries && tocEntries.length >= 2 ? (
+                <BlogTableOfContentsInline
+                  items={tocEntries}
+                  trackingSlug={trackingSlug}
+                  className="not-prose"
+                />
+              ) : null}
+
+              <BlogContent prose>{children}</BlogContent>
 
               {showLayoutMidBanner ? <BlogConversionMidBanner trackingSlug={trackingSlug} /> : null}
 
@@ -237,11 +260,20 @@ export function BlogPostLayout({
             </article>
           }
           sidebar={
-            <BlogSidebar
-              categories={sidebarCategories}
-              trending={sidebarTrending}
-              trackingSlug={trackingSlug}
-            />
+            <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+              {tocEntries && tocEntries.length >= 2 ? (
+                <BlogTableOfContentsSidebar
+                  items={tocEntries}
+                  trackingSlug={trackingSlug}
+                  className="not-prose"
+                />
+              ) : null}
+              <BlogSidebar
+                categories={sidebarCategories}
+                trending={sidebarTrending}
+                trackingSlug={trackingSlug}
+              />
+            </div>
           }
         />
       </div>

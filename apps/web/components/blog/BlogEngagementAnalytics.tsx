@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import {
+  flushTocSectionEngagementForLeave,
+  getCurrentTocEngagementSnapshot,
+  updateTocSectionEngagementScrollPct,
+} from "@/lib/blog/blog-toc-section-engagement";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 type Props = {
@@ -27,6 +32,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
       const scrollable = doc.scrollHeight - doc.clientHeight;
       if (scrollable <= 0) return;
       const pct = Math.min(100, Math.round((doc.scrollTop / scrollable) * 100));
+      updateTocSectionEngagementScrollPct(slug, pct);
       for (const m of [25, 50, 75, 100] as const) {
         if (pct >= m && !milestones.current.has(m)) {
           milestones.current.add(m);
@@ -70,7 +76,13 @@ export function BlogEngagementAnalytics({ slug }: Props) {
         href.includes("paystack") ||
         a.dataset.blogTrackCta === "1"
       ) {
-        trackGrowthEvent("blog_cta_click", { slug, placement, href });
+        const engagement = getCurrentTocEngagementSnapshot(slug);
+        trackGrowthEvent("blog_cta_click", {
+          slug,
+          placement,
+          href,
+          ...(engagement ?? {}),
+        });
       }
     };
 
@@ -88,6 +100,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
       window.removeEventListener("pagehide", flushTotal);
       window.clearInterval(interval);
       flushTotal();
+      flushTocSectionEngagementForLeave();
     };
   }, [slug]);
 

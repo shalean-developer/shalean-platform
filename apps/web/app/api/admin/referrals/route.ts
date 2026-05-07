@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { buildAdminReferralsReadModel } from "@/lib/admin/referralsReadModel";
+import { loadReferralsDashboardExtras } from "@/lib/admin/referralsDashboardExtras";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -21,18 +23,14 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const [rewardRows, checkoutSummary] = await Promise.all([
-    admin
-      .from("referrals")
-      .select(
-        "id, referrer_id, referrer_type, referred_email_or_phone, referred_user_id, status, reward_amount, created_at, completed_at, rewarded_at, code",
-      )
-      .order("created_at", { ascending: false })
-      .limit(2000),
+  const [readModel, checkoutSummary, dashboardExtras] = await Promise.all([
+    buildAdminReferralsReadModel(admin),
     admin.from("admin_referral_checkout_redemption_summary").select("referral_code, redemption_count, total_discount_zar"),
+    loadReferralsDashboardExtras(admin),
   ]);
 
-  if (rewardRows.error) return NextResponse.json({ error: rewardRows.error.message }, { status: 500 });
+  if (!readModel.ok) return NextResponse.json({ error: readModel.error }, { status: 500 });
+  if (!dashboardExtras.ok) return NextResponse.json({ error: dashboardExtras.error }, { status: 500 });
   if (checkoutSummary.error) {
     return NextResponse.json({ error: checkoutSummary.error.message }, { status: 500 });
   }
@@ -46,7 +44,8 @@ export async function GET(request: Request) {
   checkoutDiscounts.sort((a, b) => b.totalDiscountZar - a.totalDiscountZar);
 
   return NextResponse.json({
-    referrals: rewardRows.data ?? [],
+    referrals: readModel.rows,
     checkoutDiscounts,
+    dashboard: dashboardExtras.data,
   });
 }

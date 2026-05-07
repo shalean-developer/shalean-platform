@@ -53,13 +53,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ supports_team_assignment: false, teams: [] });
   }
 
-  const { teams, error } = await listTeamAssignCandidatesForBooking(
+  const { teams, error, qualified_for_label } = await listTeamAssignCandidatesForBooking(
     admin,
     booking as { id: string; date: string | null; service: string | null; booking_snapshot?: unknown },
   );
   if (error) return NextResponse.json({ error }, { status: 400 });
 
-  return NextResponse.json({ supports_team_assignment: true, teams });
+  return NextResponse.json({ supports_team_assignment: true, teams, qualified_for_label });
 }
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {

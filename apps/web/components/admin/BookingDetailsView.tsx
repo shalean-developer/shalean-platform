@@ -101,7 +101,11 @@ type TeamAssignCandidate = {
   id: string;
   name: string;
   capacity_per_day: number;
+  /** Assignment-eligible cleaners (capability-qualified); legacy field from API. */
   member_count: number;
+  /** Present on newer APIs; falls back to `member_count` in UI when missing. */
+  active_member_count?: number;
+  qualified_member_count?: number;
   used_slots_today: number;
   remaining_slots_today: number;
   assignable: boolean;
@@ -546,6 +550,7 @@ export default function BookingDetailsView({
   const [teamSummary, setTeamSummary] = useState<TeamSummary | null>(null);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
   const [teamCandidates, setTeamCandidates] = useState<TeamAssignCandidate[]>([]);
+  const [teamAssignQualifiedLabel, setTeamAssignQualifiedLabel] = useState("");
   const [teamPickId, setTeamPickId] = useState<string | null>(null);
   const [assigningTeam, setAssigningTeam] = useState(false);
   const [bookingCleaners, setBookingCleaners] = useState<BookingCleanerRow[]>([]);
@@ -1506,6 +1511,7 @@ export default function BookingDetailsView({
     setTeamModalOpen(true);
     setTeamPickId(null);
     setTeamCandidates([]);
+    setTeamAssignQualifiedLabel("");
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
     if (!token) {
@@ -1517,8 +1523,13 @@ export default function BookingDetailsView({
       const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const j = (await res.json()) as { teams?: TeamAssignCandidate[]; error?: string };
+      const j = (await res.json()) as {
+        teams?: TeamAssignCandidate[];
+        qualified_for_label?: string;
+        error?: string;
+      };
       if (!res.ok) throw new Error(j.error ?? "Could not load teams.");
+      setTeamAssignQualifiedLabel(typeof j.qualified_for_label === "string" ? j.qualified_for_label : "");
       setTeamCandidates(Array.isArray(j.teams) ? j.teams : []);
     } catch (e) {
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Could not load teams." });
@@ -1533,7 +1544,10 @@ export default function BookingDetailsView({
     }
     const picked = teamCandidates.find((t) => t.id === teamPickId);
     if (!picked?.assignable) {
-      setToast({ kind: "error", text: "That team cannot take this booking (capacity or empty roster)." });
+      setToast({
+        kind: "error",
+        text: "That team cannot take this booking (no capacity, or no cleaner qualified for this service on the roster date).",
+      });
       return;
     }
     setAssigningTeam(true);
@@ -2903,12 +2917,20 @@ export default function BookingDetailsView({
                 disabled={assigningTeam}
               >
                 <option value="">Select a team…</option>
-                {teamCandidates.map((t) => (
-                  <option key={t.id} value={t.id} disabled={!t.assignable}>
-                    {t.name} · {t.member_count} members · {t.used_slots_today}/{t.capacity_per_day} today
-                    {!t.assignable ? " (unavailable)" : ""}
-                  </option>
-                ))}
+                {teamCandidates.map((t) => {
+                  const activeN = t.active_member_count ?? t.member_count;
+                  const qualN = t.qualified_member_count ?? t.member_count;
+                  const qualBit =
+                    teamAssignQualifiedLabel !== ""
+                      ? `${activeN} active · ${qualN} qualified for ${teamAssignQualifiedLabel}`
+                      : `${activeN} active · ${qualN} qualified`;
+                  return (
+                    <option key={t.id} value={t.id} disabled={!t.assignable}>
+                      {t.name} · {qualBit} · {t.used_slots_today}/{t.capacity_per_day} today
+                      {!t.assignable ? " (unavailable)" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div className="mt-4 flex justify-end gap-2">

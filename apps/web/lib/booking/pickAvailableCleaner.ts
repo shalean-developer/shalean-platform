@@ -3,6 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
+import type { ServiceCapabilityGate } from "@/lib/booking/serviceCapabilityEligibility";
+import { cleanerPassesServiceCapabilityGate } from "@/lib/booking/serviceCapabilityEligibility";
 
 export type CleanerPick = { id: string; phone: string; /** `cleaners.full_name` for WhatsApp template {{1}} */ fullName: string };
 
@@ -47,6 +49,8 @@ type CleanerRow = {
   avg_response_time_ms?: number | null;
   total_offers?: number | null;
   availability_weekdays?: string[] | null;
+  can_do_deep_cleaning?: boolean | null;
+  can_do_move_cleaning?: boolean | null;
 };
 
 export type DispatchPickBehavior = {
@@ -439,7 +443,7 @@ export async function pickAvailableCleaner(
   slotDate: string,
   slotTime: string,
   excludeCleanerIds: string[] = [],
-  options?: { randomFn?: () => number },
+  options?: { randomFn?: () => number; serviceCapabilityGate?: ServiceCapabilityGate | null },
 ): Promise<CleanerPick | null> {
   const randomFn = options?.randomFn ?? Math.random;
   const exclude = new Set(excludeCleanerIds.filter((id) => typeof id === "string" && id.length > 0));
@@ -466,18 +470,31 @@ export async function pickAvailableCleaner(
   const selWithWd =
     "id, phone, phone_number, full_name, acceptance_rate, avg_response_time_ms, total_offers, availability_weekdays";
   const selBase = "id, phone, phone_number, full_name, acceptance_rate, avg_response_time_ms, total_offers";
+  const cap = ", can_do_deep_cleaning, can_do_move_cleaning";
 
   let cleaners: CleanerRow[] | null = null;
   let error = null as { message?: string } | null;
   {
-    const r1 = await admin.from("cleaners").select(selWithWd).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES);
-    cleaners = (r1.data ?? null) as CleanerRow[] | null;
-    error = r1.error;
-    if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
-      const r2 = await admin.from("cleaners").select(selBase).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES);
-      cleaners = (r2.data ?? null) as CleanerRow[] | null;
-      error = r2.error;
+    let r = await admin.from("cleaners").select(selWithWd + cap).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES);
+    if (
+      r.error &&
+      (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+        isUnknownColumnError(r.error, "can_do_move_cleaning"))
+    ) {
+      r = (await admin.from("cleaners").select(selWithWd).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES)) as typeof r;
     }
+    if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
+      r = (await admin.from("cleaners").select(selBase + cap).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES)) as typeof r;
+      if (
+        r.error &&
+        (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+          isUnknownColumnError(r.error, "can_do_move_cleaning"))
+      ) {
+        r = (await admin.from("cleaners").select(selBase).eq("is_available", true).limit(MAX_CLEANER_CANDIDATES)) as typeof r;
+      }
+    }
+    cleaners = (r.data ?? null) as CleanerRow[] | null;
+    error = r.error;
   }
 
   if (error || !cleaners?.length) {
@@ -486,13 +503,15 @@ export async function pickAvailableCleaner(
   }
 
   const list = cleaners as CleanerRow[];
+  const capGate = options?.serviceCapabilityGate ?? null;
   const eligible = list.filter((c) => {
     const hasPhone = String(c.phone_number || c.phone || "").trim().length > 0;
     return (
       hasPhone &&
       !busyCleanerIds.has(c.id) &&
       !exclude.has(c.id) &&
-      cleanerWorksOnScheduledWeekday(c.availability_weekdays, slotDate)
+      cleanerWorksOnScheduledWeekday(c.availability_weekdays, slotDate) &&
+      cleanerPassesServiceCapabilityGate(c, capGate)
     );
   });
   if (!eligible.length) return null;

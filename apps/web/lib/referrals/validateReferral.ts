@@ -4,6 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  emitReferralCheckoutRedemptionEvents,
+  type ReferralRedemptionSnapshot,
+} from "@/lib/referrals/referralCheckoutEvents";
 import { countPaidBookingsForCustomer, resolveReferrerFromCode } from "@/lib/referrals/server";
 
 const REFERRAL_CHECKOUT_DISCOUNT_ZAR = 50;
@@ -135,6 +139,38 @@ async function markBookingReferralReconciliationRequired(admin: SupabaseClient, 
   }
 }
 
+async function fetchReferralRedemptionSnapshotForEmit(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<ReferralRedemptionSnapshot | null> {
+  const { data, error } = await admin
+    .from("referral_discount_redemptions")
+    .select("id, booking_id, referral_code, referrer_type, referrer_id, discount_zar, redeemed_by_user_id")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as {
+    id: string;
+    booking_id: string;
+    referral_code?: string | null;
+    referrer_type?: string | null;
+    referrer_id?: string | null;
+    discount_zar?: number | null;
+    redeemed_by_user_id?: string | null;
+  };
+  const rt = row.referrer_type === "customer" || row.referrer_type === "cleaner" ? row.referrer_type : null;
+  if (!rt || !row.referrer_id) return null;
+  return {
+    redemptionId: row.id,
+    bookingId: row.booking_id,
+    referralCode: String(row.referral_code ?? "").trim().toUpperCase(),
+    referrerId: String(row.referrer_id),
+    referrerType: rt,
+    refereeUserId: row.redeemed_by_user_id ? String(row.redeemed_by_user_id) : null,
+    valueZar: Math.max(0, Math.round(Number(row.discount_zar ?? 0))),
+  };
+}
+
 export type RecordReferralCheckoutRedemptionResult =
   | { outcome: "skipped" }
   | { outcome: "inserted" }
@@ -191,52 +227,70 @@ export async function recordReferralCheckoutRedemption(params: {
   const redeemedEmail = params.userId ? null : email || null;
   const fp = String(params.metadata.referral_checkout_fingerprint ?? "").trim() || null;
 
-  const { error } = await params.admin.from("referral_discount_redemptions").insert({
-    referral_code: code,
-    referrer_type: refType,
-    referrer_id: refId,
-    redeemed_by_user_id: params.userId,
-    redeemed_by_email: redeemedEmail,
-    booking_id: params.bookingId,
-    discount_zar: discountZar,
-    checkout_fingerprint: fp && fp.length > 0 ? fp : null,
-  });
+  const { data: inserted, error: insertError } = await params.admin
+    .from("referral_discount_redemptions")
+    .insert({
+      referral_code: code,
+      referrer_type: refType,
+      referrer_id: refId,
+      redeemed_by_user_id: params.userId,
+      redeemed_by_email: redeemedEmail,
+      booking_id: params.bookingId,
+      discount_zar: discountZar,
+      checkout_fingerprint: fp && fp.length > 0 ? fp : null,
+    })
+    .select("id")
+    .maybeSingle();
 
-  if (!error) {
+  if (!insertError && inserted?.id) {
+    await emitReferralCheckoutRedemptionEvents(params.admin, {
+      redemptionId: inserted.id,
+      bookingId: params.bookingId,
+      referralCode: code,
+      referrerId: refId,
+      referrerType: refType as "customer" | "cleaner",
+      refereeUserId: params.userId,
+      valueZar: discountZar,
+    });
     return { outcome: "inserted" };
   }
 
-  if (error.code === "23505") {
+  if (insertError?.code === "23505") {
     const { data: byBooking } = await params.admin
       .from("referral_discount_redemptions")
       .select("id")
       .eq("booking_id", params.bookingId)
       .maybeSingle();
     if (byBooking?.id) {
+      const snap = await fetchReferralRedemptionSnapshotForEmit(params.admin, params.bookingId);
+      if (snap) await emitReferralCheckoutRedemptionEvents(params.admin, snap);
       return { outcome: "idempotent_duplicate_verify" };
     }
     await reportOperationalIssue("warn", "referrals/recordReferralCheckoutRedemption", "23505 not booking-scoped", {
       bookingId: params.bookingId,
       referralCode: code,
-      hint: error.message,
+      hint: insertError.message,
     });
     await markBookingReferralReconciliationRequired(params.admin, params.bookingId);
     return { outcome: "unique_conflict_reconciled" };
   }
 
-  if (error.code === "23514" || /referral_code_expired|referral_code_max_uses_reached/i.test(error.message ?? "")) {
-    await reportOperationalIssue("warn", "referrals/recordReferralCheckoutRedemption", error.message ?? "limit", {
+  if (
+    insertError?.code === "23514" ||
+    /referral_code_expired|referral_code_max_uses_reached/i.test(insertError?.message ?? "")
+  ) {
+    await reportOperationalIssue("warn", "referrals/recordReferralCheckoutRedemption", insertError?.message ?? "limit", {
       bookingId: params.bookingId,
       referralCode: code,
     });
     await markBookingReferralReconciliationRequired(params.admin, params.bookingId);
-    return { outcome: "insert_failed_reconciled", message: error.message ?? "limit_violation" };
+    return { outcome: "insert_failed_reconciled", message: insertError?.message ?? "limit_violation" };
   }
 
-  await reportOperationalIssue("error", "referrals/recordReferralCheckoutRedemption", error.message, {
+  await reportOperationalIssue("error", "referrals/recordReferralCheckoutRedemption", insertError?.message ?? "unknown", {
     bookingId: params.bookingId,
     referralCode: code,
   });
   await markBookingReferralReconciliationRequired(params.admin, params.bookingId);
-  return { outcome: "insert_failed_reconciled", message: error.message };
+  return { outcome: "insert_failed_reconciled", message: insertError?.message ?? "unknown" };
 }

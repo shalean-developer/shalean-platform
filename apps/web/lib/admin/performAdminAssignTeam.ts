@@ -1,6 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
-import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
+import { loadCleanerCapabilityColumnsById } from "@/lib/booking/cleanerServiceCapabilityDb";
+import {
+  activeRosterHasServiceQualifiedMember,
+  cleanerPassesServiceCapabilityGate,
+  countCleanersPassingServiceCapabilityGate,
+  serviceCapabilityGateFromTeamServiceType,
+} from "@/lib/booking/serviceCapabilityEligibility";
+import type { TeamMemberAvailabilityRow } from "@/lib/cleaner/teamMemberAvailability";
+import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
 import { logSystemEvent } from "@/lib/logging/systemLog";
@@ -109,9 +117,35 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     .eq("team_id", tid)
     .not("cleaner_id", "is", null);
   if (mErr) return { ok: false, httpStatus: 500, error: mErr.message };
-  const rosterCount = countActiveTeamMembersOnDate(memberRows ?? [], dateYmd);
+
+  const activeCleanerIds = [
+    ...new Set(
+      (memberRows ?? [])
+        .filter((row) => {
+          const r = row as TeamMemberAvailabilityRow;
+          return Boolean(r.cleaner_id && String(r.cleaner_id).trim()) && isTeamMemberActiveOnBookingDate(r, dateYmd);
+        })
+        .map((row) => String((row as { cleaner_id: string }).cleaner_id).trim()),
+    ),
+  ].sort();
+
+  const rosterCount = activeCleanerIds.length;
   if (rosterCount <= 0) {
     return { ok: false, httpStatus: 400, error: "Team has no active members on the booking date." };
+  }
+
+  const capGate = serviceCapabilityGateFromTeamServiceType(expectedService);
+  const capsLoaded = await loadCleanerCapabilityColumnsById(admin, activeCleanerIds);
+  if (!capsLoaded.ok) {
+    return { ok: false, httpStatus: 500, error: capsLoaded.error };
+  }
+  if (!activeRosterHasServiceQualifiedMember(activeCleanerIds, capsLoaded.map, capGate)) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error:
+        "Team has no member certified for this service on the booking date. Enable `can_do_deep_cleaning` / `can_do_move_cleaning` on at least one active roster cleaner.",
+    };
   }
 
   const cap = teamDayCapacitySlots((team as { capacity_per_day?: number }).capacity_per_day);
@@ -171,16 +205,8 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     }
   }
 
-  const activeCleanerIds = [
-    ...new Set(
-      (memberRows ?? [])
-        .map((row) => row as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
-        .filter((row) => countActiveTeamMembersOnDate([row], dateYmd) > 0)
-        .map((row) => String(row.cleaner_id ?? "").trim())
-        .filter(Boolean),
-    ),
-  ].sort();
-  const payoutOwnerCleanerId = activeCleanerIds[0] ?? null;
+  const payoutOwnerCleanerId =
+    activeCleanerIds.find((id) => cleanerPassesServiceCapabilityGate(capsLoaded.map.get(id) ?? {}, capGate)) ?? null;
   if (!payoutOwnerCleanerId) {
     return {
       ok: false,
@@ -268,25 +294,62 @@ export type TeamAssignCandidateRow = {
   name: string;
   service_type: string;
   capacity_per_day: number;
+  /** Distinct cleaners active on the booking date (membership window). */
+  active_member_count: number;
+  /** Subset of active cleaners who pass the deep/move capability gate for this booking. */
+  qualified_member_count: number;
+  /**
+   * Same as `qualified_member_count` (assignment-eligible headcount).
+   * Kept for older clients that only read `member_count`.
+   */
   member_count: number;
   used_slots_today: number;
   remaining_slots_today: number;
-  /** False when roster empty or no spare day slot for this booking to land on this team. */
+  /** False when no qualified active cleaner or no spare day slot for this booking to land on this team. */
   assignable: boolean;
+};
+
+function activeCleanerIdsSortedOnDate(members: TeamMemberAvailabilityRow[], dateYmd: string): string[] {
+  return [
+    ...new Set(
+      members
+        .filter(
+          (m) =>
+            isTeamMemberActiveOnBookingDate(m, dateYmd) &&
+            m.cleaner_id != null &&
+            String(m.cleaner_id).trim() !== "",
+        )
+        .map((m) => String(m.cleaner_id).trim()),
+    ),
+  ].sort();
+}
+
+function teamQualifiedForDisplayLabel(st: "deep_cleaning" | "move_cleaning"): string {
+  return st === "move_cleaning" ? "move cleaning" : "deep cleaning";
+}
+
+export type ListTeamAssignCandidatesResult = {
+  teams: TeamAssignCandidateRow[];
+  error: string | null;
+  /** Human label for the capability gate (e.g. “move cleaning”) when `teams` is for a team-service booking. */
+  qualified_for_label: string;
 };
 
 export async function listTeamAssignCandidatesForBooking(
   admin: SupabaseClient,
   booking: Pick<BookingRow, "service" | "booking_snapshot" | "date" | "id">,
-): Promise<{ teams: TeamAssignCandidateRow[]; error: string | null }> {
+): Promise<ListTeamAssignCandidatesResult> {
   if (!isTeamService(booking as BookingRow)) {
-    return { teams: [], error: null };
+    return { teams: [], error: null, qualified_for_label: "" };
   }
   const dateYmd = String(booking.date ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
-    return { teams: [], error: "Booking date invalid." };
-  }
   const st = teamServiceType(booking as BookingRow);
+  const qualifiedLabel = teamQualifiedForDisplayLabel(st);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
+    return { teams: [], error: "Booking date invalid.", qualified_for_label: qualifiedLabel };
+  }
+  const capGate = serviceCapabilityGateFromTeamServiceType(st);
+
   const { data: teams, error: tErr } = await admin
     .from("teams")
     .select("id, name, service_type, capacity_per_day, is_active")
@@ -294,31 +357,65 @@ export async function listTeamAssignCandidatesForBooking(
     .eq("is_active", true)
     .order("name", { ascending: true })
     .limit(100);
-  if (tErr) return { teams: [], error: tErr.message };
+  if (tErr) return { teams: [], error: tErr.message, qualified_for_label: qualifiedLabel };
+
+  const teamRows = (teams ?? []) as Array<{
+    id: string;
+    name: string;
+    service_type: string;
+    capacity_per_day: number;
+  }>;
+  const teamIds = teamRows.map((t) => String(t.id).trim()).filter(Boolean);
+
+  const membersByTeam = new Map<string, TeamMemberAvailabilityRow[]>();
+  if (teamIds.length > 0) {
+    const { data: allMembers, error: mErr } = await admin
+      .from("team_members")
+      .select("team_id, cleaner_id, active_from, active_to")
+      .in("team_id", teamIds)
+      .not("cleaner_id", "is", null);
+    if (mErr) return { teams: [], error: mErr.message, qualified_for_label: qualifiedLabel };
+    for (const raw of allMembers ?? []) {
+      const tid = String((raw as { team_id?: string }).team_id ?? "").trim();
+      if (!tid) continue;
+      const row = raw as TeamMemberAvailabilityRow;
+      const list = membersByTeam.get(tid);
+      if (list) list.push(row);
+      else membersByTeam.set(tid, [row]);
+    }
+  }
+
+  const allActiveCleanerIds = new Set<string>();
+  for (const arr of membersByTeam.values()) {
+    for (const id of activeCleanerIdsSortedOnDate(arr, dateYmd)) {
+      allActiveCleanerIds.add(id);
+    }
+  }
+  const capsLoaded = await loadCleanerCapabilityColumnsById(admin, [...allActiveCleanerIds]);
+  if (!capsLoaded.ok) return { teams: [], error: capsLoaded.error, qualified_for_label: qualifiedLabel };
 
   const out: TeamAssignCandidateRow[] = [];
-  for (const raw of teams ?? []) {
-    const row = raw as { id: string; name: string; service_type: string; capacity_per_day: number };
-    const { data: members } = await admin
-      .from("team_members")
-      .select("cleaner_id, active_from, active_to")
-      .eq("team_id", row.id)
-      .not("cleaner_id", "is", null);
-    const memberCount = countActiveTeamMembersOnDate(members ?? [], dateYmd);
+  for (const row of teamRows) {
+    const members = membersByTeam.get(row.id) ?? [];
+    const activeCleanerIds = activeCleanerIdsSortedOnDate(members, dateYmd);
+    const activeCount = activeCleanerIds.length;
+    const qualifiedCount = countCleanersPassingServiceCapabilityGate(activeCleanerIds, capsLoaded.map, capGate);
     const { count: usedFull } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd);
     const { count: usedExcl } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd, booking.id);
     const cap = teamDayCapacitySlots(row.capacity_per_day);
-    const assignable = memberCount > 0 && usedExcl < cap;
+    const assignable = qualifiedCount > 0 && usedExcl < cap;
     out.push({
       id: row.id,
       name: row.name,
       service_type: row.service_type,
       capacity_per_day: cap,
-      member_count: memberCount,
+      active_member_count: activeCount,
+      qualified_member_count: qualifiedCount,
+      member_count: qualifiedCount,
       used_slots_today: usedFull,
       remaining_slots_today: Math.max(0, cap - usedFull),
       assignable,
     });
   }
-  return { teams: out, error: null };
+  return { teams: out, error: null, qualified_for_label: qualifiedLabel };
 }

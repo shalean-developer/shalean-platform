@@ -48,9 +48,16 @@ export async function GET(request: Request) {
   const durationParsed = Number(durationParam);
   let durationMinutes = Number.isFinite(durationParsed) ? Math.max(30, Math.round(durationParsed)) : 120;
 
+  const serviceRaw = (url.searchParams.get("serviceType") ?? url.searchParams.get("service") ?? "").trim();
+  let bookingServiceSlug: string | null = null;
+  if (serviceRaw) {
+    const { service, serviceType } = parsePricingServiceParams(serviceRaw);
+    const draft = { service, serviceType, rooms: 1, bathrooms: 1, extraRooms: 0, extras: [] as string[] };
+    bookingServiceSlug = resolveServiceForPricing(draft);
+  }
+
   /** Legacy callers that omit `duration` — infer job length once, without attaching ZAR to slots. */
   if (!Number.isFinite(durationParsed) || durationParsed <= 0) {
-    const serviceRaw = (url.searchParams.get("serviceType") ?? "").trim();
     if (serviceRaw) {
       const bedroomsRaw = Number(url.searchParams.get("bedrooms") ?? 1);
       const bathroomsRaw = Number(url.searchParams.get("bathrooms") ?? 1);
@@ -86,6 +93,7 @@ export async function GET(request: Request) {
       endHour: 18,
       stepMinutes: 30,
       locationId,
+      bookingServiceSlug,
     });
 
     return NextResponse.json({ slots });

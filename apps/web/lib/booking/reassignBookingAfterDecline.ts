@@ -5,6 +5,7 @@ import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment"
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { serviceCapabilityGateFromBookingFields } from "@/lib/booking/serviceCapabilityEligibility";
 
 const BOOKING_ROW_SELECT =
   "id, customer_name, customer_phone, location, service, date, time, status, created_at, cleaner_id, dispatch_status";
@@ -34,7 +35,19 @@ export async function tryOnceReassignAfterDecline(
   },
 ): Promise<void> {
   try {
-    const cleaner = await pickAvailableCleaner(admin, params.slotDate, params.slotTime, [params.declinedCleanerId]);
+    const { data: svcRow } = await admin
+      .from("bookings")
+      .select("service_slug, service")
+      .eq("id", params.bookingId)
+      .maybeSingle();
+    const sr = svcRow as { service_slug?: string | null; service?: string | null } | null;
+    const gate = serviceCapabilityGateFromBookingFields(
+      sr?.service_slug != null ? String(sr.service_slug) : null,
+      sr?.service != null ? String(sr.service) : null,
+    );
+    const cleaner = await pickAvailableCleaner(admin, params.slotDate, params.slotTime, [params.declinedCleanerId], {
+      serviceCapabilityGate: gate,
+    });
     if (!cleaner) return;
 
     const nowIso = new Date().toISOString();

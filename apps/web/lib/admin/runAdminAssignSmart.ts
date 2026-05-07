@@ -52,7 +52,7 @@ export async function runAdminAssignSmart(
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, duration_minutes, city_id, status, location_id")
+    .select("id, date, time, duration_minutes, city_id, status, location_id, service_slug, service")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -123,6 +123,7 @@ export async function runAdminAssignSmart(
   });
 
   const bookingLoc = String((booking as { location_id?: string | null }).location_id ?? "").trim() || null;
+  const bSvc = booking as { service_slug?: string | null; service?: string | null };
   const eligMap = await computeAssignEligibility(admin, {
     bookingId,
     bookingDateYmd: dateYmd,
@@ -130,6 +131,8 @@ export async function runAdminAssignSmart(
     durationMinutes,
     cleanerIds,
     bookingLocationId: bookingLoc,
+    bookingCapabilitySlug: String(bSvc.service_slug ?? "").trim() || null,
+    bookingCapabilityLabel: String(bSvc.service ?? "").trim() || null,
   });
   const eligRecord = eligMapToRankRecord(eligMap);
 

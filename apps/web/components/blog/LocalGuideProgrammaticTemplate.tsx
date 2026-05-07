@@ -15,8 +15,8 @@ import { getStructuredPricingForLocation } from "@/lib/seo/location-pricing-stru
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { hubSlugFromPlaceName, locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 
-const proseArticle =
-  "prose prose-lg prose-zinc mx-auto w-full max-w-[65ch] prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-li:marker:text-blue-600";
+/** Parent `BlogContent prose` supplies typography — avoid nested `prose` here. */
+const articleStack = "mx-auto w-full";
 
 const ctaBtnClass =
   "inline-flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700";
@@ -80,7 +80,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
 
   return (
     <>
-      <div className={proseArticle}>
+      <div className={articleStack}>
         <p className="lead text-lg leading-relaxed text-zinc-700">{variantBody.lead}</p>
 
         {hubHref ? (

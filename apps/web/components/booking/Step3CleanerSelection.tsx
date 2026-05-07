@@ -36,6 +36,7 @@ export function Step3CleanerSelection({ slotTime }: Step3CleanerSelectionProps) 
     selectedTime: slotTime,
     durationMinutes,
     locationId: resolvedLocationId,
+    serviceType: locked?.service ?? null,
   });
   const others = useMemo(() => {
     if (!recommended) return pool.slice(0, 4);

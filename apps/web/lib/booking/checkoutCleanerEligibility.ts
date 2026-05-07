@@ -78,6 +78,8 @@ export async function resolveCheckoutCleanerSelection(
       selectedDate: date,
       selectedTime: time,
       durationMinutes,
+      locationId: input.locked?.serviceAreaLocationId ?? null,
+      bookingServiceSlug: input.locked?.service ?? null,
     });
     if (!inPool) {
       return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE };

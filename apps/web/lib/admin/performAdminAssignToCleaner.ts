@@ -20,6 +20,8 @@ type BookingRow = {
   dispatch_status?: string | null;
   duration_minutes?: number | null;
   location_id?: string | null;
+  service_slug?: string | null;
+  service?: string | null;
 };
 
 /**
@@ -34,7 +36,9 @@ export async function performAdminAssignToCleaner(
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, location_id")
+    .select(
+      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, location_id, service_slug, service",
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -80,13 +84,15 @@ export async function performAdminAssignToCleaner(
       locationExpandedIds: locId ? [locId] : null,
       cleanerIds: [resolvedCleanerId],
       limit: 5,
+      serviceType: String(b.service_slug ?? "").trim() || null,
+      serviceLabelForCapability: String(b.service ?? "").trim() || null,
     });
     if (eligible.length === 0) {
       return {
         ok: false,
         httpStatus: 400,
         error:
-          "Cleaner is not eligible for this slot (calendar, service area, or overlap). Pass force=true to override.",
+          "Cleaner is not eligible for this slot (calendar, service area, overlap, or service capability). Pass force=true to override.",
       };
     }
   }

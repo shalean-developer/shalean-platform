@@ -9,7 +9,8 @@ type Props = {
 };
 
 /**
- * Readable column: optional `prose` + hard cap ~65ch inside main column.
+ * Readable column: optional Tailwind Typography `prose` (~65ch) for long-form articles.
+ * Use `not-prose` on CTAs, cards, and widgets inside children to avoid double-styling.
  */
 export function BlogContent({ children, prose = false, className }: Props) {
   return (
@@ -17,7 +18,15 @@ export function BlogContent({ children, prose = false, className }: Props) {
       className={cn(
         "mx-auto w-full max-w-[65ch]",
         prose &&
-          "prose prose-base prose-zinc max-w-none leading-relaxed md:prose-lg prose-headings:scroll-mt-28 prose-headings:font-semibold prose-headings:text-zinc-900 prose-a:text-blue-700 prose-a:no-underline hover:prose-a:underline prose-li:marker:text-blue-600",
+          [
+            "prose prose-lg prose-zinc leading-relaxed",
+            "prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900 prose-headings:tracking-tight",
+            "prose-h2:mt-10 prose-h2:mb-4",
+            "prose-h3:mt-8 prose-h3:mb-3",
+            "prose-p:text-zinc-600 prose-p:leading-relaxed",
+            "prose-a:font-medium prose-a:text-blue-700 prose-a:no-underline hover:prose-a:underline prose-a:underline-offset-4",
+            "prose-li:marker:text-blue-600",
+          ].join(" "),
         className,
       )}
     >

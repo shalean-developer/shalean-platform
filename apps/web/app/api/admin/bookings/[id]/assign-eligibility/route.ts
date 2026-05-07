@@ -49,7 +49,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, duration_minutes, city_id, location_id")
+    .select("id, date, time, duration_minutes, city_id, location_id, service_slug, service")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -63,6 +63,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     duration_minutes?: number | null;
     city_id?: string | null;
     location_id?: string | null;
+    service_slug?: string | null;
+    service?: string | null;
   };
   const dateYmd = String(b.date ?? "").trim();
   const timeHm = String(b.time ?? "").trim();
@@ -99,6 +101,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     durationMinutes,
     cleanerIds,
     bookingLocationId: b.location_id?.trim() ? String(b.location_id).trim() : null,
+    bookingCapabilitySlug: String(b.service_slug ?? "").trim() || null,
+    bookingCapabilityLabel: String(b.service ?? "").trim() || null,
   });
 
   const eligibility: Record<

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { BlogContentJson } from "@/lib/blog/content-json";
 import {
+  BLOG_DB_DISPLAY_FILTER_OPTS,
   buildDisplayContentJson,
   filterBlocksForDisplay,
   partitionBlogBlocks,
@@ -19,8 +20,6 @@ type Props = {
   autoLinkSlug?: string;
 };
 
-const DISPLAY_OPTS = { stripInlineCtas: true, skipInvalidImages: true } as const;
-
 /**
  * DB-backed blog articles: strips duplicate inline CTAs, drops empty images,
  * and inserts the conversion stack immediately before FAQ (or internal_links / end).
@@ -29,8 +28,8 @@ export function BlogDbArticleBody({ content, midArticleSlot, autoLinkSlug }: Pro
   try {
     const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
     const { before, after } = partitionBlogBlocks(blocks);
-    let beforeFiltered = filterBlocksForDisplay(before, DISPLAY_OPTS);
-    let afterFiltered = filterBlocksForDisplay(after, DISPLAY_OPTS);
+    let beforeFiltered = filterBlocksForDisplay(before, BLOG_DB_DISPLAY_FILTER_OPTS);
+    let afterFiltered = filterBlocksForDisplay(after, BLOG_DB_DISPLAY_FILTER_OPTS);
 
     if (autoLinkSlug) {
       const budget = createAutoLinkBudget();
@@ -40,10 +39,14 @@ export function BlogDbArticleBody({ content, midArticleSlot, autoLinkSlug }: Pro
 
     return (
       <div className="space-y-10 lg:space-y-12">
-        <BlogContentRenderer content={buildDisplayContentJson(content, beforeFiltered)} />
+        <BlogContentRenderer content={buildDisplayContentJson(content, beforeFiltered)} autoLinkSlug={autoLinkSlug} />
         {midArticleSlot}
         {afterFiltered.length > 0 ? (
-          <BlogContentRenderer content={buildDisplayContentJson(content, afterFiltered)} />
+          <BlogContentRenderer
+            content={buildDisplayContentJson(content, afterFiltered)}
+            autoLinkSlug={autoLinkSlug}
+            blockIndexOffset={beforeFiltered.length}
+          />
         ) : null}
       </div>
     );

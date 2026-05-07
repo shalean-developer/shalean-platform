@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
+import {
+  cleanerPassesServiceCapabilityGate,
+  serviceCapabilityGateFromBookingFields,
+} from "@/lib/booking/serviceCapabilityEligibility";
 import type { AvailableCleaner, CleanerAvailabilityRow } from "@/lib/booking/cleanerPoolTypes";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 
@@ -20,7 +24,10 @@ export type GetEligibleCleanersParams = {
    * (after fallback to `cleaners.location_id`).
    */
   locationExpandedIds: string[] | null;
+  /** Catalog service slug/id (e.g. `deep`, `move`) for capability gating. */
   serviceType?: string | null;
+  /** Display label fallback when slug alone is insufficient (legacy rows). */
+  serviceLabelForCapability?: string | null;
   /** When set, only these cleaner ids are considered. */
   cleanerIds?: string[];
   userLat?: number | null;
@@ -59,6 +66,8 @@ export type CleanerBase = {
   location_id?: string | null;
   status?: string | null;
   availability_weekdays?: string[] | null;
+  can_do_deep_cleaning?: boolean | null;
+  can_do_move_cleaning?: boolean | null;
 };
 
 function toMinutes(hm: string): number {
@@ -153,6 +162,10 @@ export async function getEligibleCleaners(
 ): Promise<AvailableCleaner[]> {
   const strict = params.strictAvailability ?? useStrictAvailability();
   const limit = params.limit ?? 500;
+  const capabilityGate = serviceCapabilityGateFromBookingFields(
+    params.serviceType,
+    params.serviceLabelForCapability,
+  );
   const slotHm = params.startTime.trim().slice(0, 5);
   const slotStart = hmToMinutes(slotHm);
   if (slotStart == null) return [];
@@ -163,6 +176,7 @@ export async function getEligibleCleaners(
     cleaners = params.preloadedCleaners.filter((c) => {
       if (c.is_available === false || String(c.status ?? "").toLowerCase() === "offline") return false;
       if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) return false;
+      if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) return false;
       return true;
     });
     if (params.cleanerIds?.length) {
@@ -174,6 +188,7 @@ export async function getEligibleCleaners(
       "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
     const selBase =
       "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
+    const capCols = ", can_do_deep_cleaning, can_do_move_cleaning";
 
     const run = (columns: string) => {
       let q = admin.from("cleaners").select(columns).eq("is_available", true).neq("status", "offline");
@@ -184,14 +199,26 @@ export async function getEligibleCleaners(
     let cleanersRaw: CleanerBase[] | null = null;
     let cErr = null as { message?: string } | null;
     {
-      const r1 = await run(selWithWd);
-      cleanersRaw = (r1.data ?? null) as CleanerBase[] | null;
-      cErr = r1.error;
-      if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
-        const r2 = await run(selBase);
-        cleanersRaw = (r2.data ?? null) as CleanerBase[] | null;
-        cErr = r2.error;
+      let r = await run(selWithWd + capCols);
+      if (
+        r.error &&
+        (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+          isUnknownColumnError(r.error, "can_do_move_cleaning"))
+      ) {
+        r = await run(selWithWd);
       }
+      if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
+        r = await run(selBase + capCols);
+        if (
+          r.error &&
+          (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+            isUnknownColumnError(r.error, "can_do_move_cleaning"))
+        ) {
+          r = await run(selBase);
+        }
+      }
+      cleanersRaw = (r.data ?? null) as CleanerBase[] | null;
+      cErr = r.error;
     }
     if (cErr || !cleanersRaw?.length) return [];
     cleaners = cleanersRaw;
@@ -279,6 +306,8 @@ export async function getEligibleCleaners(
       return isOverlap(slotStart, slotEnd, win.start, win.end);
     });
     if (conflicts) continue;
+
+    if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) continue;
 
     filtered.push(c);
   }

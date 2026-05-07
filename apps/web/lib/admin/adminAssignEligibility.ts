@@ -1,8 +1,12 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
 import { cleanerAreasAllowJob, jobFitsAvailabilityWindows } from "@/lib/booking/getEligibleCleaners";
+import {
+  cleanerPassesServiceCapabilityGate,
+  serviceCapabilityGateFromBookingFields,
+} from "@/lib/booking/serviceCapabilityEligibility";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 
 export const DEFAULT_ASSIGN_JOB_DURATION_MIN = 240;
@@ -161,6 +165,8 @@ export async function computeAssignEligibility(
     bookingLocationId?: string | null;
     /** When set, overrides single-location expansion for eligibility. */
     bookingLocationExpandedIds?: string[] | null;
+    bookingCapabilitySlug?: string | null;
+    bookingCapabilityLabel?: string | null;
   },
 ): Promise<Map<string, AssignEligibilityRow>> {
   const out = new Map<string, AssignEligibilityRow>();
@@ -172,7 +178,10 @@ export async function computeAssignEligibility(
     cleanerIds,
     bookingLocationId,
     bookingLocationExpandedIds,
+    bookingCapabilitySlug,
+    bookingCapabilityLabel,
   } = params;
+  const capabilityGate = serviceCapabilityGateFromBookingFields(bookingCapabilitySlug, bookingCapabilityLabel);
   const startMin = dayMinutes(bookingTimeHm);
   const strict = useStrictAvailability();
   if (!cleanerIds.length || startMin == null) {
@@ -198,27 +207,65 @@ export async function computeAssignEligibility(
     status?: string | null;
     location_id?: string | null;
     availability_weekdays?: string[] | null;
+    can_do_deep_cleaning?: boolean | null;
+    can_do_move_cleaning?: boolean | null;
   };
   let cleaners: CleanerAvailRow[] | null = null;
   {
-    const r1 = await admin.from("cleaners").select("id, status, location_id, availability_weekdays").in("id", cleanerIds);
-    cleaners = (r1.data ?? null) as CleanerAvailRow[] | null;
-    if (r1.error && isUnknownColumnError(r1.error, "availability_weekdays")) {
-      const r2 = await admin.from("cleaners").select("id, status, location_id").in("id", cleanerIds);
-      cleaners = (r2.data ?? null) as CleanerAvailRow[] | null;
+    const cap = ", can_do_deep_cleaning, can_do_move_cleaning";
+    type FetchRow = { data: unknown; error: PostgrestError | null };
+    let r = (await admin
+      .from("cleaners")
+      .select(`id, status, location_id, availability_weekdays${cap}`)
+      .in("id", cleanerIds)) as FetchRow;
+    if (
+      r.error &&
+      (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+        isUnknownColumnError(r.error, "can_do_move_cleaning"))
+    ) {
+      r = (await admin.from("cleaners").select("id, status, location_id, availability_weekdays").in("id", cleanerIds)) as FetchRow;
     }
+    if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
+      r = (await admin.from("cleaners").select(`id, status, location_id${cap}`).in("id", cleanerIds)) as FetchRow;
+      if (
+        r.error &&
+        (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
+          isUnknownColumnError(r.error, "can_do_move_cleaning"))
+      ) {
+        r = (await admin.from("cleaners").select("id, status, location_id").in("id", cleanerIds)) as FetchRow;
+      }
+    }
+    cleaners = (r.data ?? null) as CleanerAvailRow[] | null;
   }
 
   const offlineById = new Map<string, boolean>();
   const fallbackLocationById = new Map<string, string | null>();
   const weekdaysById = new Map<string, string[] | null>();
+  const capabilityOkById = new Map<string, boolean>();
   for (const c of cleaners ?? []) {
-    const row = c as { id?: string; status?: string | null; location_id?: string | null; availability_weekdays?: string[] | null };
+    const row = c as {
+      id?: string;
+      status?: string | null;
+      location_id?: string | null;
+      availability_weekdays?: string[] | null;
+      can_do_deep_cleaning?: boolean | null;
+      can_do_move_cleaning?: boolean | null;
+    };
     if (row.id) {
       const id = String(row.id);
       offlineById.set(id, String(row.status ?? "").toLowerCase() === "offline");
       fallbackLocationById.set(id, row.location_id ? String(row.location_id) : null);
       weekdaysById.set(id, Array.isArray(row.availability_weekdays) ? row.availability_weekdays : null);
+      capabilityOkById.set(
+        id,
+        cleanerPassesServiceCapabilityGate(
+          {
+            can_do_deep_cleaning: row.can_do_deep_cleaning,
+            can_do_move_cleaning: row.can_do_move_cleaning,
+          },
+          capabilityGate,
+        ),
+      );
     }
   }
 
@@ -304,7 +351,9 @@ export async function computeAssignEligibility(
     const overlapJobRangeLabel = overlapDetail.overlapJobRangeLabel;
     const overlapBlocked = busyUntilMin != null;
     const offline = offlineById.get(id) ?? false;
-    const canAssignWithoutForce = weekdayOk && slotCalendarOk && locationOk && !overlapBlocked && !offline;
+    const capabilityOk = capabilityOkById.get(id) ?? true;
+    const canAssignWithoutForce =
+      weekdayOk && slotCalendarOk && locationOk && !overlapBlocked && !offline && capabilityOk;
     let nextAvailableStartHm: string | null = null;
     if (!offline && !canAssignWithoutForce) {
       nextAvailableStartHm = nextAvailableBookingStartHm(startMin, durationMinutes, windows, others);

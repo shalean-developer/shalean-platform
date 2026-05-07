@@ -239,6 +239,30 @@ export function aggregateSeoUserEvents(rows: UserEventRow[]): AggregatedSeoEvent
   };
 }
 
+/**
+ * SEO-relevant `user_events` in `[startIso, endIsoExclusive)` when `endIsoExclusive` is set,
+ * otherwise `[startIso, ∞)`.
+ */
+export async function fetchSeoInsightUserEventsWindow(
+  admin: SupabaseClient,
+  startIso: string,
+  endIsoExclusive: string | null,
+): Promise<{ rows: UserEventRow[]; error: string | null }> {
+  let q = admin
+    .from("user_events")
+    .select("event_type, payload, created_at")
+    .gte("created_at", startIso)
+    .in("event_type", [...SEO_INSIGHTS_EVENT_TYPES])
+    .order("created_at", { ascending: false })
+    .limit(50_000);
+  if (endIsoExclusive) {
+    q = q.lt("created_at", endIsoExclusive);
+  }
+  const { data, error } = await q;
+  if (error) return { rows: [], error: error.message };
+  return { rows: (data ?? []) as UserEventRow[], error: null };
+}
+
 export async function fetchSeoInsightUserEvents(
   admin: SupabaseClient,
   windowDays: number,
@@ -246,17 +270,6 @@ export async function fetchSeoInsightUserEvents(
   const since = new Date();
   since.setDate(since.getDate() - windowDays);
   const sinceIso = since.toISOString();
-
-  const { data, error } = await admin
-    .from("user_events")
-    .select("event_type, payload, created_at")
-    .gte("created_at", sinceIso)
-    .in("event_type", [...SEO_INSIGHTS_EVENT_TYPES])
-    .order("created_at", { ascending: false })
-    .limit(50_000);
-
-  if (error) return { sinceIso, rows: [], error: error.message };
-
-  const rows = (data ?? []) as UserEventRow[];
-  return { sinceIso, rows, error: null };
+  const { rows, error } = await fetchSeoInsightUserEventsWindow(admin, sinceIso, null);
+  return { sinceIso, rows, error };
 }
