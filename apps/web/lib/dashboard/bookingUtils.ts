@@ -1,4 +1,5 @@
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import type { BookingRow, CleanerEmbed, DashboardBooking, NormalizedBookingStatus } from "@/lib/dashboard/types";
 import {
   parseStoredJobPriceBreakdown,
@@ -200,8 +201,9 @@ export function mapBookingRow(row: BookingRow): DashboardBooking {
 }
 
 export function isUpcomingBookingRow(b: DashboardBooking): boolean {
+  if (isAuthoritativeBookingCompleted({ status: b.raw.status ?? b.status, completed_at: b.raw.completed_at })) return false;
   const st = b.status;
-  if (st === "completed" || st === "cancelled" || st === "failed") return false;
+  if (st === "cancelled" || st === "failed") return false;
   const t = new Date(b.scheduledAt).getTime();
   if (!Number.isFinite(t)) return true;
   return t >= Date.now() - 24 * 60 * 60 * 1000;

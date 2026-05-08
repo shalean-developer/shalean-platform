@@ -21,6 +21,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaServer";
 
 export const runtime = "nodejs";
@@ -367,7 +368,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: before } = await admin
     .from("bookings")
-    .select("user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, date, time, selected_cleaner_id")
+    .select(
+      "user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated",
+    )
     .eq("id", id)
     .maybeSingle();
   const beforeRow = before as {
@@ -422,8 +425,37 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
+  if (
+    updates.status === "completed" &&
+    before &&
+    bookingIsRecurringPendingPayment(before as Record<string, unknown>)
+  ) {
+    (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_at = new Date().toISOString();
+    (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_by =
+      (typeof user.email === "string" && user.email.trim()) || user.id;
+  }
+
   const { error } = await admin.from("bookings").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (
+    updates.status === "completed" &&
+    before &&
+    bookingIsRecurringPendingPayment(before as Record<string, unknown>)
+  ) {
+    await logSystemEvent({
+      level: "warn",
+      source: "admin_booking_lifecycle_override",
+      message: "admin_marked_completed_recurring_unpaid_pending_payment",
+      context: {
+        booking_id: id,
+        admin_user_id: user.id,
+        admin_email: user.email ?? null,
+        prior_status: beforeStatus,
+        override_type: "recurring_unpaid_completion",
+      },
+    });
+  }
 
   if (cleanerWasChanged) {
     await resetBookingCleanerLineEarnings(admin, id);

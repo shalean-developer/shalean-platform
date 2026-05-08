@@ -1,11 +1,15 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, resolveCanonicalCleanerPayout, useLegacyPayoutEngine } from "@/lib/payout/canonicalCleanerPayout";
 
 type ComputeBookingEarningsInput = {
   servicePriceCents: number;
   serviceId: string;
   cleanerId?: string;
   isTeamJob: boolean;
+  /** Booking appointment instant (ISO UTC), e.g. from {@link bookingAppointmentIsoUtc}. */
   bookingDate: string;
+  /** Active cleaners on a team job (canonical: N × R250 total internal). Ignored when not `isTeamJob`. */
+  teamCleanerCount?: number | null;
 };
 
 type ServiceCap = {
@@ -27,8 +31,7 @@ export type ComputeBookingEarningsOutput = {
   earnings_tenure_months_at_assignment?: number;
 };
 
-const EARNINGS_MODEL_VERSION = "v1_2026_earnings";
-const TEAM_MEMBER_PAYOUT_CENTS = 25_000;
+const EARNINGS_MODEL_VERSION_LEGACY = "v1_2026_earnings";
 
 function monthsBetween(start: string, end: string): number {
   const d1 = new Date(start);
@@ -127,22 +130,21 @@ async function getServiceCap(serviceId: string, bookingDate: string): Promise<Se
   return { cap_cents: cap };
 }
 
-export async function computeBookingEarnings({
+async function computeBookingEarningsLegacy({
   servicePriceCents,
   serviceId,
   cleanerId,
   isTeamJob,
   bookingDate,
 }: ComputeBookingEarningsInput): Promise<ComputeBookingEarningsOutput> {
-  /** When this is 0, all returned *_cents are 0 — ensure {@link persistCleanerPayout} passes paid `payoutBaseCents`, not missing totals. */
   const normalizedServicePriceCents = Math.max(0, Math.floor(servicePriceCents));
 
   if (isTeamJob) {
     return {
-      display_earnings_cents: TEAM_MEMBER_PAYOUT_CENTS,
-      payout_earnings_cents: TEAM_MEMBER_PAYOUT_CENTS,
-      internal_earnings_cents: TEAM_MEMBER_PAYOUT_CENTS,
-      earnings_model_version: EARNINGS_MODEL_VERSION,
+      display_earnings_cents: CANONICAL_TEAM_POOL_DISPLAY_CENTS,
+      payout_earnings_cents: CANONICAL_TEAM_POOL_DISPLAY_CENTS,
+      internal_earnings_cents: CANONICAL_TEAM_POOL_DISPLAY_CENTS,
+      earnings_model_version: EARNINGS_MODEL_VERSION_LEGACY,
     };
   }
 
@@ -169,7 +171,7 @@ export async function computeBookingEarnings({
       display_earnings_cents: displayUncapped,
       payout_earnings_cents: displayUncapped,
       internal_earnings_cents: percentageEarnings,
-      earnings_model_version: EARNINGS_MODEL_VERSION,
+      earnings_model_version: EARNINGS_MODEL_VERSION_LEGACY,
       earnings_percentage_applied: percentage,
       earnings_cap_cents_applied: undefined,
       earnings_tenure_months_at_assignment: tenureMonths,
@@ -183,9 +185,63 @@ export async function computeBookingEarnings({
     display_earnings_cents: displayEarnings,
     payout_earnings_cents: displayEarnings,
     internal_earnings_cents: internalEarnings,
-    earnings_model_version: EARNINGS_MODEL_VERSION,
+    earnings_model_version: EARNINGS_MODEL_VERSION_LEGACY,
     earnings_percentage_applied: percentage,
     earnings_cap_cents_applied: cap.cap_cents,
     earnings_tenure_months_at_assignment: tenureMonths,
   };
+}
+
+function mapCanonicalToEarningsOutput(c: ReturnType<typeof resolveCanonicalCleanerPayout>): ComputeBookingEarningsOutput {
+  return {
+    display_earnings_cents: c.displayEarningsCents,
+    payout_earnings_cents: c.payoutEarningsCents,
+    internal_earnings_cents: c.internalEarningsCents,
+    earnings_model_version: c.earningsModelVersion,
+    earnings_percentage_applied: c.earningsPercentageApplied ?? undefined,
+    earnings_cap_cents_applied: c.earningsCapCentsApplied ?? undefined,
+    earnings_tenure_months_at_assignment: c.tenureMonths,
+  };
+}
+
+/**
+ * Computes persisted/previewed earnings metadata for a booking.
+ * Default path: {@link resolveCanonicalCleanerPayout} (single business rules engine).
+ * Set `USE_LEGACY_PAYOUT_ENGINE=true` to restore DB-cap + v1 behaviour for rollback.
+ */
+export async function computeBookingEarnings(input: ComputeBookingEarningsInput): Promise<ComputeBookingEarningsOutput> {
+  const normalizedServicePriceCents = Math.max(0, Math.floor(input.servicePriceCents));
+
+  if (useLegacyPayoutEngine()) {
+    return computeBookingEarningsLegacy(input);
+  }
+
+  if (input.isTeamJob) {
+    const appt = String(input.bookingDate ?? "").trim();
+    const c = resolveCanonicalCleanerPayout({
+      serviceId: input.serviceId,
+      bookingValueCents: normalizedServicePriceCents,
+      isTeamJob: true,
+      cleanerJoinedAtIso: null,
+      bookingAppointmentIsoUtc: appt.length > 0 ? appt : null,
+      teamCleanerCount: input.teamCleanerCount ?? 1,
+    });
+    return mapCanonicalToEarningsOutput(c);
+  }
+
+  if (!input.cleanerId) {
+    throw new Error("CleanerId required for individual job");
+  }
+
+  const cleaner = await getCleanerById(input.cleanerId);
+  const appt = String(input.bookingDate ?? "").trim();
+  const c = resolveCanonicalCleanerPayout({
+    serviceId: input.serviceId,
+    cleanerJoinedAtIso: cleaner.joined_at,
+    bookingAppointmentIsoUtc: appt.length > 0 ? appt : null,
+    bookingValueCents: normalizedServicePriceCents,
+    isTeamJob: false,
+  });
+
+  return mapCanonicalToEarningsOutput(c);
 }

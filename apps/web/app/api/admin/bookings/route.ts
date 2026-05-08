@@ -41,6 +41,7 @@ import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
+import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 export const runtime = "nodejs";
@@ -135,6 +136,14 @@ type Row = {
   booking_priority: string | null;
   last_decision_snapshot: unknown;
   payment_status: string | null;
+  cleaner_response_status?: string | null;
+  accepted_at?: string | null;
+  is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  payout_status?: string | null;
+  payout_paid_at?: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
+  admin_recurring_unpaid_completion_override_by?: string | null;
   monthly_invoice_id: string | null;
   customer_billing_type?: string | null;
   customer_schedule_type?: string | null;
@@ -201,16 +210,6 @@ async function attachTeamAndRosterToBookings(admin: SupabaseClient, bookings: Ro
   });
 }
 
-function classifyBooking(row: Row, today: string): "today" | "upcoming" | "completed" {
-  const st = row.status?.toLowerCase();
-  if (st === "completed" || st === "cancelled" || st === "failed" || st === "payment_expired") return "completed";
-  const d = row.date && /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? row.date : null;
-  if (!d) return "upcoming";
-  if (d === today) return "today";
-  if (d > today) return "upcoming";
-  return "completed";
-}
-
 /**
  * Admin dashboard data. Requires signed-in user email in `ADMIN_EMAILS`.
  */
@@ -259,7 +258,7 @@ export async function GET(request: Request) {
   const recurringListScope = Boolean(recurringIdFilter);
 
   const bookingSelect =
-    "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job";
+    "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, billing_type, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect);
 
@@ -324,11 +323,11 @@ export async function GET(request: Request) {
     if (filter === "follow-up") {
       filtered = rows;
     } else if (filter === "today") {
-      filtered = rows.filter((r) => classifyBooking(r, today) === "today");
+      filtered = rows.filter((r) => classifyAdminBookingListRow(r, today) === "today");
     } else if (filter === "upcoming") {
-      filtered = rows.filter((r) => classifyBooking(r, today) === "upcoming");
+      filtered = rows.filter((r) => classifyAdminBookingListRow(r, today) === "upcoming");
     } else if (filter === "completed") {
-      filtered = rows.filter((r) => classifyBooking(r, today) === "completed");
+      filtered = rows.filter((r) => classifyAdminBookingListRow(r, today) === "completed");
     } else if (filter === "sla") {
       const slaM = getDispatchSlaBreachMinutes();
       const nowMs = Date.now();
@@ -358,7 +357,7 @@ export async function GET(request: Request) {
       ? r.total_paid_zar
       : Math.round((r.amount_paid_cents ?? 0) / 100);
 
-  const todayRows = rows.filter((r) => classifyBooking(r, today) === "today");
+  const todayRows = rows.filter((r) => classifyAdminBookingListRow(r, today) === "today");
   const revenueTodayZar = todayRows.reduce((s, r) => s + zar(r), 0);
   const totalBookingsToday = todayRows.length;
   const aovTodayZar = totalBookingsToday > 0 ? Math.round(revenueTodayZar / totalBookingsToday) : 0;
@@ -457,7 +456,7 @@ export async function GET(request: Request) {
       const tomorrowYmd = addDaysYmd(today, 1);
       enriched = enriched.filter((r) => r.date === tomorrowYmd);
     } else if (opsQuick === "today") {
-      enriched = enriched.filter((r) => classifyBooking(r, today) === "today");
+      enriched = enriched.filter((r) => classifyAdminBookingListRow(r, today) === "today");
     }
   }
 

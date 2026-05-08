@@ -2,8 +2,8 @@ export type { CleanerEarningsRowWire, EarningsPeriod } from "@/lib/cleaner/earni
 export { paidThisWeekCents } from "@/lib/cleaner/earnings/paidThisWeek";
 export { priorIsoWeekEarnedCents, weekOverWeekMomentum } from "@/lib/cleaner/earnings/momentum";
 export {
-  bookingStatusBadgeLabel,
   dayHeading,
+  earningsRowOperationalBadge,
   groupRowsByDayForTimeline,
   jhbTimeLabel,
   lastJobInPeriod,

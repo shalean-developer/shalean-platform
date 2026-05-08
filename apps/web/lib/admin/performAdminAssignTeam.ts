@@ -13,7 +13,9 @@ import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, useLegacyPayoutEngine } from "@/lib/payout/canonicalCleanerPayout";
 import {
+  buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
   resolveTeamCleanerPoolCents,
 } from "@/lib/payout/teamRosterPayoutAllocation";
@@ -244,7 +246,6 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     return { ok: false, httpStatus: 500, error: `Failed clearing team assignment rows: ${delAssignErr.message}` };
   }
 
-  const poolCents = await resolveTeamCleanerPoolCents(admin, bookingId);
   const { data: rosterRows, error: rosterErr } = await admin
     .from("booking_cleaners")
     .select("cleaner_id, role, payout_weight, lead_bonus_cents")
@@ -254,13 +255,25 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     return { ok: false, httpStatus: 500, error: `Failed loading roster for payout split: ${rosterErr.message}` };
   }
 
-  const payoutRows = buildTeamJobMemberPayoutInsertRows({
-    bookingId,
-    teamId: tid,
-    poolCents,
-    rosterRows: rosterRows ?? [],
-    fallbackCleanerIds: activeCleanerIds,
-  });
+  let payoutRows: ReturnType<typeof buildTeamJobMemberFixedPerCleanerPayoutRows>;
+  if (useLegacyPayoutEngine()) {
+    let poolCents = await resolveTeamCleanerPoolCents(admin, bookingId);
+    if (poolCents <= 0) poolCents = CANONICAL_TEAM_POOL_DISPLAY_CENTS;
+    payoutRows = buildTeamJobMemberPayoutInsertRows({
+      bookingId,
+      teamId: tid,
+      poolCents,
+      rosterRows: rosterRows ?? [],
+      fallbackCleanerIds: activeCleanerIds,
+    });
+  } else {
+    payoutRows = buildTeamJobMemberFixedPerCleanerPayoutRows({
+      bookingId,
+      teamId: tid,
+      rosterRows: rosterRows ?? [],
+      fallbackCleanerIds: activeCleanerIds,
+    });
+  }
   if (payoutRows.length > 0) {
     const { error: insPayErr } = await admin.from("team_job_member_payouts").insert(payoutRows);
     if (insPayErr) {

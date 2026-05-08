@@ -1,4 +1,5 @@
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
 import { latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
 import { adaptiveWeeklyEarningsGoalZar, cleanerFacingDisplayEarningsCents } from "@/lib/cleaner/cleanerMobileBookingMap";
@@ -91,12 +92,20 @@ export function formatJobScopeCompactLine(row: CleanerBookingRow): string | null
 
 export function isOpenCleanerJobRow(row: CleanerBookingRow): boolean {
   const s = String(row.status ?? "").toLowerCase().trim();
+  if (isAuthoritativeBookingCompleted(row)) return false;
   /** Empty status still counts as open — otherwise API rows never appear under Upcoming / All. */
-  return s !== "completed" && s !== "cancelled";
+  return s !== "cancelled" && s !== "failed";
 }
 
+/** Aligns with {@link isAuthoritativeBookingCompleted} — never infer from `cleaner_response_status` alone. */
 export function isCompletedCleanerJobRow(row: CleanerBookingRow): boolean {
-  return String(row.status ?? "").toLowerCase() === "completed";
+  return isAuthoritativeBookingCompleted(row);
+}
+
+/** Past bucket for jobs list/tabs: finished, cancelled, or failed. */
+export function isPastCleanerJobRow(row: CleanerBookingRow): boolean {
+  const s = String(row.status ?? "").toLowerCase().trim();
+  return isAuthoritativeBookingCompleted(row) || s === "cancelled" || s === "failed";
 }
 
 export type ThisWeekSummary = {

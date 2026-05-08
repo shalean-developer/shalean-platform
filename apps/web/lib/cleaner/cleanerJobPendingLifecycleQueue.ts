@@ -1,6 +1,12 @@
 /** Persist lifecycle POSTs when offline; replay on reconnect. */
 
+import {
+  describeBookingOperationalState,
+  isLifecycleActionAllowedByCapabilities,
+  type OperationalLifecycleQueueAction,
+} from "@/lib/booking/describeBookingOperationalState";
 import { notifyCleanerLifecycleQueueChanged } from "@/lib/cleaner/cleanerLifecycleQueueBroadcast";
+import { logCleanerLifecycleClientEvent } from "@/lib/cleaner/cleanerLifecycleTelemetryClient";
 import { broadcastTtlCompleteLockChanged } from "@/lib/cleaner/cleanerLifecycleTtlLockBroadcast";
 
 /** `localStorage` key — listen for `storage` in other tabs using this constant. */
@@ -446,12 +452,31 @@ export function canEnqueueLifecycleAfterQueued(
  */
 export async function enqueuePendingLifecycle(
   item: Omit<PendingLifecycleItem, "attempts" | "failed"> & { attempts?: number },
+  opts?: { capabilityRow?: Record<string, unknown> | null },
 ): Promise<EnqueueLifecycleResult> {
   const snapshot = readAll();
   const bid = item.bookingId.trim();
   const existing = snapshot.find((x) => x.bookingId === bid) ?? null;
   const gate = canEnqueueLifecycleAfterQueued(existing?.action ?? null, item.action as PendingLifecycleAction);
   if (!gate.ok) return gate;
+
+  if (opts?.capabilityRow) {
+    const op = describeBookingOperationalState({ row: opts.capabilityRow, viewer: "cleaner" });
+    if (!isLifecycleActionAllowedByCapabilities(item.action as OperationalLifecycleQueueAction, op.lifecycleCapabilities)) {
+      void logCleanerLifecycleClientEvent({
+        bookingId: bid,
+        action: item.action,
+        status: "client_error_kept_queue",
+        finalStatus: "client_error_kept_queue",
+        detail: "offline_queue_capability_rejected",
+        networkOnline: typeof navigator === "undefined" ? true : navigator.onLine,
+      });
+      return {
+        ok: false,
+        reason: op.progressionBlockedReason ?? "This action is not available for this booking state.",
+      };
+    }
+  }
 
   const full: PendingLifecycleItem = {
     bookingId: bid,

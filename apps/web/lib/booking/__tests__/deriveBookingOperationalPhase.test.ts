@@ -77,4 +77,31 @@ describe("deriveBookingOperationalPhase", () => {
       }),
     ).toBe("expired");
   });
+
+  it("splits pending_payment into recurring vs one-time operational phase", () => {
+    expect(
+      deriveBookingOperationalPhase({
+        status: "pending_payment",
+        is_recurring_generated: true,
+      }),
+    ).toBe("pending_payment_recurring");
+    expect(
+      deriveBookingOperationalPhase({
+        status: "pending_payment",
+        billing_type: "monthly_contract",
+      }),
+    ).toBe("pending_payment_recurring");
+    expect(
+      deriveBookingOperationalPhase({
+        status: "pending_payment",
+        monthly_invoice_id: "inv-1",
+      }),
+    ).toBe("pending_payment_recurring");
+    expect(
+      deriveBookingOperationalPhase({
+        status: "pending_payment",
+        billing_type: "standard_checkout",
+      }),
+    ).toBe("pending_payment");
+  });
 });

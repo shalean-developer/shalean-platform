@@ -14,6 +14,8 @@ export type CleanerEarningsRowWire = {
   __invalid?: boolean;
   /** Booking lifecycle status (earnings list is completed jobs today). */
   booking_status?: string | null;
+  /** When set, cleaner/admin badge matches "Completed by admin override" via {@link describeBookingOperationalState}. */
+  admin_recurring_unpaid_completion_override_at?: string | null;
   is_team_job?: boolean;
 };
 

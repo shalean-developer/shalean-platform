@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Navigation } from "lucide-react";
+import type { BookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { BookingLiveMapEmbed } from "@/components/tracking/BookingLiveMapEmbed";
 
@@ -31,18 +32,15 @@ function parsePoint(j: unknown): Point | null {
 /** Polls latest GPS every 8s (admin uses service-role API; track-points RLS is cleaner/customer only). */
 export function AdminBookingLiveLocation({
   bookingId,
-  status,
-  cleanerResponseStatus,
+  operationalPhase,
   cleanerId,
 }: {
   bookingId: string;
-  status: string | null;
-  cleanerResponseStatus: string | null;
+  operationalPhase: BookingOperationalPhase;
   cleanerId: string | null;
 }) {
-  const crs = (cleanerResponseStatus ?? "").toLowerCase();
-  const st = (status ?? "").toLowerCase();
-  const show = Boolean(cleanerId) && (crs === "on_my_way" || st === "in_progress");
+  const show =
+    Boolean(cleanerId) && (operationalPhase === "travelling" || operationalPhase === "active");
 
   const [point, setPoint] = useState<Point | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -98,7 +96,7 @@ export function AdminBookingLiveLocation({
       {err ? <p className="mb-2 text-sm text-amber-800 dark:text-amber-200">{err}</p> : null}
       {!point ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {crs === "on_my_way"
+          {operationalPhase === "travelling"
             ? "Waiting for the cleaner’s device to share location…"
             : "No GPS samples yet for this visit."}
         </p>

@@ -1,11 +1,22 @@
 "use client";
 
+import {
+  deriveBookingOperationalPhase,
+  isAuthoritativeBookingCompleted,
+  type PhaseRow,
+} from "@/lib/booking/deriveBookingOperationalPhase";
+
 export type TimelineFields = {
   status: string | null;
+  cleaner_response_status?: string | null;
+  dispatch_status?: string | null;
   assigned_at?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  monthly_invoice_id?: string | null;
 };
 
 const STEPS: { label: string; at?: keyof TimelineFields }[] = [
@@ -15,8 +26,24 @@ const STEPS: { label: string; at?: keyof TimelineFields }[] = [
   { label: "Completed", at: "completed_at" },
 ];
 
+function phaseRowFromTimelineFields(fields: TimelineFields): PhaseRow {
+  return {
+    status: fields.status,
+    cleaner_response_status: fields.cleaner_response_status,
+    en_route_at: fields.en_route_at,
+    started_at: fields.started_at,
+    completed_at: fields.completed_at,
+    dispatch_status: fields.dispatch_status,
+    is_recurring_generated: fields.is_recurring_generated,
+    billing_type: fields.billing_type,
+    monthly_invoice_id: fields.monthly_invoice_id,
+  };
+}
+
 export function BookingTimeline({ fields }: { fields: TimelineFields }) {
   const st = (fields.status ?? "pending").toLowerCase();
+  const phaseRow = phaseRowFromTimelineFields(fields);
+  const phase = deriveBookingOperationalPhase(phaseRow);
 
   if (st === "cancelled" || st === "failed") {
     return (
@@ -27,11 +54,18 @@ export function BookingTimeline({ fields }: { fields: TimelineFields }) {
   }
 
   let doneCount = 0;
-  if (st === "completed" || fields.completed_at) doneCount = 4;
-  else if (st === "in_progress" || fields.started_at) doneCount = 3;
-  else if (fields.en_route_at) doneCount = 2;
-  else if (st === "assigned" || fields.assigned_at) doneCount = 1;
-  else if (st === "pending") doneCount = 0;
+  if (phase === "completed" || isAuthoritativeBookingCompleted(phaseRow)) doneCount = 4;
+  else if (phase === "active") doneCount = 3;
+  else if (phase === "travelling") doneCount = 2;
+  else if (phase === "accepted" || phase === "assigned") doneCount = 1;
+  else if (
+    phase === "pending" ||
+    phase === "pending_payment" ||
+    phase === "pending_payment_recurring" ||
+    phase === "expired" ||
+    phase === "unknown"
+  )
+    doneCount = 0;
 
   const pct = (doneCount / STEPS.length) * 100;
 

@@ -20,4 +20,8 @@ export const CLEANER_LIFECYCLE_CODE = {
   ACCEPT_UPDATE_NO_ROW: "lifecycle_accept_update_no_row",
   /** Pre-check: booking `status` left assignable set (`offered` / `assigned` / `confirmed`) before accept-related write. */
   BOOKING_STATE_CHANGED: "lifecycle_booking_state_changed",
+  /** `pending_payment` — cleaner may see recurring rows on the schedule, but lifecycle POST is blocked until paid. */
+  PENDING_PAYMENT_LIFECYCLE_BLOCKED: "lifecycle_pending_payment_blocked",
+  /** Recurring unpaid visit: accept/decline allowed; travel / start / complete blocked until payment confirms. */
+  RECURRING_PENDING_PAYMENT_PROGRESSION_BLOCKED: "lifecycle_recurring_pending_payment_progression_blocked",
 } as const;

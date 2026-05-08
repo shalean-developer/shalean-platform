@@ -13,6 +13,7 @@ import {
   groupRowsByBookingDateDesc,
   isCompletedCleanerJobRow,
   isOpenCleanerJobRow,
+  isPastCleanerJobRow,
   jobsListAdaptivePollMs,
   sortUpcomingJobsAsc,
 } from "@/lib/cleaner/cleanerJobsListDerived";
@@ -176,10 +177,7 @@ export default function CleanerJobsListPage() {
     return () => window.clearTimeout(id);
   }, [nowTick, upcomingRaw]);
 
-  const pastRaw = useMemo(() => {
-    const st = (r: CleanerBookingRow) => String(r.status ?? "").toLowerCase();
-    return rows.filter((r) => st(r) === "completed" || st(r) === "cancelled");
-  }, [rows]);
+  const pastRaw = useMemo(() => rows.filter((r) => isPastCleanerJobRow(r)), [rows]);
 
   const pastForFilter = useMemo(() => {
     if (filter === "completed") return pastRaw.filter((r) => isCompletedCleanerJobRow(r));

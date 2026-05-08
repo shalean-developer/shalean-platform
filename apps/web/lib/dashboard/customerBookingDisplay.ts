@@ -1,4 +1,5 @@
 import type { DashboardBooking } from "@/lib/dashboard/types";
+import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 
 export type CustomerBookingStatusLabel =
   | "Scheduled"
@@ -13,7 +14,11 @@ export function customerBookingStatusLabel(b: DashboardBooking): CustomerBooking
   const ps = String(b.raw.payment_status ?? "")
     .trim()
     .toLowerCase();
-  if (st === "completed") {
+  const authDone = isAuthoritativeBookingCompleted({
+    status: b.raw.status ?? st,
+    completed_at: b.raw.completed_at,
+  });
+  if (authDone) {
     if (ps === "pending_monthly") return "Completed (billed monthly)";
     return "Completed";
   }

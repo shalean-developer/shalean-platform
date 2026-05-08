@@ -30,6 +30,10 @@ import { useEffect, useState, type ReactNode } from "react";
 
 type BookingActionsDropdownProps<TBooking> = {
   booking: TBooking;
+  /** When false, hides Mark complete even if `onComplete` is set. Defaults to true when omitted. */
+  showMarkComplete?: boolean;
+  /** When false, hides Cancel booking even if `onCancel` is set. Defaults to true when omitted. */
+  showMarkCancel?: boolean;
   onAssign?: (booking: TBooking) => void;
   onReschedule?: (booking: TBooking) => void;
   onComplete?: (booking: TBooking) => void;
@@ -46,6 +50,8 @@ type BookingActionsDropdownProps<TBooking> = {
 
 export default function BookingActionsDropdown<TBooking>({
   booking,
+  showMarkComplete = true,
+  showMarkCancel = true,
   onAssign,
   onReschedule,
   onComplete,
@@ -91,6 +97,9 @@ export default function BookingActionsDropdown<TBooking>({
     setOpen(false);
   };
 
+  const markCompleteVisible = Boolean(onComplete) && showMarkComplete;
+  const markCancelVisible = Boolean(onCancel) && showMarkCancel;
+
   return (
     <div className="relative inline-flex items-center">
       <button
@@ -115,8 +124,8 @@ export default function BookingActionsDropdown<TBooking>({
           {onView ? <MenuAction label="View details" icon={<Eye size={14} />} onClick={() => run(onView)} /> : null}
           {onAssign ? <MenuAction label="Assign cleaner" icon={<UserRound size={14} />} onClick={() => run(onAssign)} /> : null}
           {onReschedule ? <MenuAction label="Reschedule" icon={<Calendar size={14} />} onClick={() => run(onReschedule)} /> : null}
-          {onComplete ? <MenuAction label="Mark complete" icon={<Check size={14} />} onClick={() => run(onComplete)} /> : null}
-          {onCancel ? <MenuAction label="Cancel booking" icon={<X size={14} />} onClick={() => run(onCancel)} /> : null}
+          {markCompleteVisible ? <MenuAction label="Mark complete" icon={<Check size={14} />} onClick={() => run(onComplete)} /> : null}
+          {markCancelVisible ? <MenuAction label="Cancel booking" icon={<X size={14} />} onClick={() => run(onCancel)} /> : null}
           {onReassign ? <MenuAction label="Reassign" icon={<RefreshCcw size={14} />} onClick={() => run(onReassign)} /> : null}
           {onRefund || onDuplicateBooking || onSendInvoice || onAddNote || onFlagIssue ? (
             <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />

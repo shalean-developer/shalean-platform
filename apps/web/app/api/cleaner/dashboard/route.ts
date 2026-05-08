@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+  bookingMatchesRecurringCleanerPendingPayment,
+  cleanerPendingPaymentBannerForRow,
   fetchCleanerVisibleBookingsMerged,
   sortBookingsByDateThenTime,
 } from "@/lib/cleaner/cleanerBookingAccess";
@@ -23,7 +25,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, dispatch_status, service, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id";
+  "id, date, time, location, status, dispatch_status, service, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id, is_recurring_generated, billing_type, monthly_invoice_id";
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
@@ -72,12 +74,7 @@ export async function GET(request: Request) {
     select: DASHBOARD_BOOKING_SELECT,
     perBranchLimit: 240,
     applyEachBranch: (q) =>
-      q
-        .not("status", "eq", "failed")
-        .not("status", "eq", "pending_payment")
-        .not("status", "eq", "payment_expired")
-        .order("date", { ascending: true })
-        .order("time", { ascending: true }),
+      q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
   });
 
   if (error) {
@@ -88,7 +85,21 @@ export async function GET(request: Request) {
   const now = new Date();
   const { todayYmd } = getJhbTodayRange(now);
   const wired = rawList
-    .map(wireDashboardJob)
+    .map((raw) => {
+      const row = wireDashboardJob(raw);
+      const rec = raw as Record<string, unknown>;
+      const banner = cleanerPendingPaymentBannerForRow(rec);
+      const visMode =
+        String(rec.status ?? "").trim().toLowerCase() === "pending_payment" && bookingMatchesRecurringCleanerPendingPayment(rec)
+          ? ("recurring_pending_payment" as const)
+          : null;
+      if (!banner && !visMode) return row;
+      return {
+        ...row,
+        ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
+        ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
+      };
+    })
     .filter((row) => !assignedOfferPastAcceptanceDeadline(row));
   const prioritized = prioritizeDashboardJobsForDisplay(dedupeBookingsById(wired), now, 12, todayYmd);
   const jobs = (await applyPreviewEarningsToCleanerJobRows(admin, {

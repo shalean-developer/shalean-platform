@@ -1,4 +1,5 @@
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { bookingMatchesRecurringCleanerPendingPayment } from "@/lib/cleaner/cleanerBookingAccess";
 
 /**
  * Single derived lifecycle phase from authoritative DB fields (`bookings.status`, `completed_at`)
@@ -20,6 +21,10 @@ export type BookingOperationalPhase =
   | "cancelled"
   | "failed"
   | "expired"
+  /** Unpaid checkout / link; not recurring per cleaner visibility rules. */
+  | "pending_payment"
+  /** Recurring or invoice-backed unpaid visit (same signals as cleaner list policy). */
+  | "pending_payment_recurring"
   | "unknown";
 
 export type PhaseRow = {
@@ -29,6 +34,10 @@ export type PhaseRow = {
   started_at?: string | null;
   completed_at?: string | null;
   dispatch_status?: string | null;
+  /** When set, `pending_payment` splits into recurring vs one-time operational phase. */
+  is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  monthly_invoice_id?: string | null;
 };
 
 export type DeriveBookingOperationalPhaseOpts = {
@@ -98,6 +107,11 @@ export function deriveBookingOperationalPhase(
   if (isAuthoritativeBookingCompleted(row)) {
     maybeLogDerivedCompletedPhase(row, opts, st, crs);
     return "completed";
+  }
+
+  if (st === "pending_payment") {
+    if (bookingMatchesRecurringCleanerPendingPayment(row as Record<string, unknown>)) return "pending_payment_recurring";
+    return "pending_payment";
   }
 
   if (st === "pending" || st === "offered" || st === "pending_assignment") return "pending";

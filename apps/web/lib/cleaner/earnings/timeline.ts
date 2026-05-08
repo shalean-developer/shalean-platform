@@ -1,6 +1,35 @@
+import {
+  describeBookingOperationalState,
+  type OperationalDisplayTone,
+} from "@/lib/booking/describeBookingOperationalState";
 import { earningsPeriodBucketYmd } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
 import { parseYmdSast } from "@/lib/recurring/johannesburgCalendar";
 import type { CleanerEarningsRowWire, EarningsPeriod } from "@/lib/cleaner/earnings/types";
+
+function earningsWireToOperationalRecord(row: CleanerEarningsRowWire): Record<string, unknown> {
+  return {
+    status: row.booking_status ?? "completed",
+    completed_at: row.completed_at,
+    admin_recurring_unpaid_completion_override_at: row.admin_recurring_unpaid_completion_override_at ?? null,
+  };
+}
+
+const DISPLAY_TONE_TO_EARNINGS: Record<OperationalDisplayTone, "ok" | "muted" | "warn"> = {
+  success: "ok",
+  neutral: "muted",
+  warning: "warn",
+  danger: "warn",
+  muted: "muted",
+};
+
+/** Cleaner earnings day timeline — same badge/tone semantics as job cards (describe engine, cleaner viewer). */
+export function earningsRowOperationalBadge(row: CleanerEarningsRowWire): { label: string; tone: "ok" | "muted" | "warn" } {
+  const op = describeBookingOperationalState({
+    row: earningsWireToOperationalRecord(row),
+    viewer: "cleaner",
+  });
+  return { label: op.displayBadge, tone: DISPLAY_TONE_TO_EARNINGS[op.displayTone] };
+}
 
 function cents(n: unknown): number {
   return typeof n === "number" && Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
@@ -83,10 +112,3 @@ export function jhbTimeLabel(iso: string | null | undefined): string {
   return t.toLocaleTimeString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit" });
 }
 
-export function bookingStatusBadgeLabel(status: string | null | undefined): { label: string; tone: "ok" | "muted" | "warn" } {
-  const s = String(status ?? "completed").trim().toLowerCase();
-  if (s === "completed") return { label: "Completed", tone: "ok" };
-  if (s === "cancelled") return { label: "Cancelled", tone: "muted" };
-  if (s === "failed" || s === "no_show" || s === "no-show") return { label: "No-show / issue", tone: "warn" };
-  return { label: s.replace(/_/g, " "), tone: "muted" };
-}

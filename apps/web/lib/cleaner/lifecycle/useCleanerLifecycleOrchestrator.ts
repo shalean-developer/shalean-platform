@@ -29,6 +29,12 @@ import {
   type LifecycleFlushTrigger,
 } from "@/lib/cleaner/cleanerLifecycleTelemetryClient";
 import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRank";
+import {
+  describeBookingOperationalState,
+  isLifecycleActionAllowedByCapabilities,
+  operationalRecordFromLifecycleWire,
+  type OperationalLifecycleQueueAction,
+} from "@/lib/booking/describeBookingOperationalState";
 import { shouldDropStaleQueuedLifecycleAction } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
 import { CLEANER_LIFECYCLE_CODE } from "@/lib/cleaner/cleanerLifecycleErrors";
 import { emitCleanerLifecycleFlushError } from "@/lib/cleaner/cleanerLifecycleFlushErrorBus";
@@ -411,6 +417,49 @@ export function useCleanerLifecycleOrchestrator(
             flushItemsSucceeded += 1;
             continue;
           }
+
+          if (wire != null) {
+            const rowForCaps = operationalRecordFromLifecycleWire(wire);
+            const opFlush = describeBookingOperationalState({ row: rowForCaps, viewer: "cleaner" });
+            const action = item.action as OperationalLifecycleQueueAction;
+            const allowedOnFlushWire = isLifecycleActionAllowedByCapabilities(action, opFlush.lifecycleCapabilities);
+            const localWire = flushWireResolverRef.current(item.bookingId);
+            let reconciliationMismatch = false;
+            if (peeked != null && localWire != null) {
+              const opLocal = describeBookingOperationalState({
+                row: operationalRecordFromLifecycleWire(localWire),
+                viewer: "cleaner",
+              });
+              const allowedOnLocalWire = isLifecycleActionAllowedByCapabilities(action, opLocal.lifecycleCapabilities);
+              reconciliationMismatch = allowedOnLocalWire && !allowedOnFlushWire;
+            }
+            if (!allowedOnFlushWire) {
+              flushFailureStreakRef.current = 0;
+              connectionUnstableSinceMsRef.current = null;
+              setConnectionUnstable(false);
+              await removePendingLifecycleByKey(item.idempotencyKey);
+              lifecyclePeekSessionCacheRef.current.delete(item.bookingId.trim());
+              void logCleanerLifecycleClientEvent({
+                bookingId: item.bookingId,
+                action: item.action,
+                status: "synced",
+                finalStatus: "synced",
+                detail: reconciliationMismatch
+                  ? "offline_queue_reconciliation_mismatch"
+                  : "offline_queue_capability_rejected_on_flush",
+                queuedAtMs: item.queuedAt,
+                networkOnline: readNavigatorOnline(),
+                queueDepthAtFlush,
+                flushCycleSteps: flushCycleStep,
+                bcEventsReceivedSession: bcEventsSnap(),
+                casRetriesCount: getCasRetriesTotal() - casItemStart,
+              });
+              refreshQueueFromDisk();
+              flushItemsSucceeded += 1;
+              continue;
+            }
+          }
+
           const phaseBefore = flushPhaseLabelRef.current(item.bookingId);
           const result = await postCleanerLifecycleWithRetry({
             bookingId: item.bookingId,

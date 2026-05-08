@@ -97,23 +97,6 @@ function createMockAdmin(opts: {
         if (bookingsFrom === 2) {
           return countChain(slotCount);
         }
-        if (bookingsFrom === 3) {
-          return {
-            select: () => ({
-              eq: () => ({
-                maybeSingle: () =>
-                  Promise.resolve({
-                    data: {
-                      cleaner_earnings_total_cents: 60_000,
-                      display_earnings_cents: null,
-                      cleaner_payout_cents: null,
-                    },
-                    error: null,
-                  }),
-              }),
-            }),
-          };
-        }
         throw new Error(`unexpected bookings from() call #${bookingsFrom}`);
       }
       if (table === "teams") {
@@ -144,6 +127,21 @@ function createMockAdmin(opts: {
             eq: () => ({
               not: () => Promise.resolve({ data: members, error: null }),
             }),
+          }),
+        };
+      }
+      if (table === "cleaners") {
+        return {
+          select: () => ({
+            in: (_col: string, idList: string[]) =>
+              Promise.resolve({
+                data: idList.map((id) => ({
+                  id,
+                  can_do_deep_cleaning: true,
+                  can_do_move_cleaning: true,
+                })),
+                error: null,
+              }),
           }),
         };
       }
@@ -240,9 +238,9 @@ describe("performAdminAssignTeam", () => {
     const rows = payoutInserts[0] as Array<{ cleaner_id: string; payout_cents: number; team_id: string }>;
     expect(rows).toHaveLength(2);
     const sum = rows.reduce((s, r) => s + r.payout_cents, 0);
-    expect(sum).toBe(60_000);
+    expect(sum).toBe(50_000);
     expect(rows.every((r) => r.team_id === newTeamId)).toBe(true);
-    expect(rows.every((r) => r.payout_cents === 30_000)).toBe(true);
+    expect(rows.every((r) => r.payout_cents === 25_000)).toBe(true);
     expect(vi.mocked(logSystemEvent)).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "ADMIN_TEAM_OVERRIDE",

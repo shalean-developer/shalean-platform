@@ -1,20 +1,23 @@
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import {
+  bookingMatchesRecurringCleanerPendingPayment,
+  isCleanerAssignmentAcceptedRecord,
+} from "@/lib/cleaner/cleanerBookingAccess";
+import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { cleanerBookingCardDetailsFromRow, cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
-import { isAssignableForCleanerLifecycleStatus } from "@/lib/cleaner/cleanerBookingLifecycleStatuses";
+import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import {
-  deriveBookingOperationalPhase,
-  isAuthoritativeBookingCompleted,
-} from "@/lib/booking/deriveBookingOperationalPhase";
-import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
-import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
+  describeBookingOperationalState,
+  type CleanerJobUiState,
+  type CleanerMobilePhase,
+} from "@/lib/booking/describeBookingOperationalState";
 import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { jobTotalZarFromCleanerBookingLike } from "@/lib/cleaner/cleanerUxEstimatedPayZar";
 
-/** UI lifecycle for cleaner field app (maps DB status + timestamps). */
-export type CleanerMobilePhase = "pending" | "assigned" | "en_route" | "in_progress" | "completed";
+export type { CleanerJobUiState, CleanerMobilePhase };
 
 export type CleanerMobileJobView = {
   id: string;
@@ -143,88 +146,29 @@ function shortArea(location: string | null): string {
 }
 
 /**
- * Single canonical resolver for cleaner primary actions.
- * Combines `bookings.status`, `bookings.dispatch_status`, `bookings.cleaner_response_status`, `en_route_at`, and offer-expiry rules.
- * {@link deriveMobilePhase} and {@link mobilePhaseDisplayForDashboard} delegate here — do not fork lifecycle rules elsewhere.
- */
-export type CleanerJobUiState =
-  | { phase: "none" }
-  | { phase: "expired" }
-  | { phase: "accept"; canReject: boolean }
-  | { phase: "on_my_way" }
-  | { phase: "start" }
-  | { phase: "complete" };
-
-/**
  * Dual-signal “assignment accepted” for UI: canonical column plus `accepted_at` (server must keep both in sync).
  */
 export function isCleanerAssignmentAccepted(row: CleanerBookingRow): boolean {
-  const rec = row as Record<string, unknown>;
-  const raw = (row.cleaner_response_status ?? rec.cleaner_response_status) as string | null | undefined;
-  const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
-  const hasAcceptedAt = Boolean(String(row.accepted_at ?? rec.accepted_at ?? "").trim());
-  return r === CLEANER_RESPONSE.ACCEPTED || hasAcceptedAt;
-}
-
-/**
- * Bookings.status values that should show cleaner primary actions (accept → travel → start).
- * Align with {@link isAssignableForCleanerLifecycleStatus} / server lifecycle.
- */
-function isAssignedOperationalStatus(status: string): boolean {
-  return isAssignableForCleanerLifecycleStatus(status);
+  return isCleanerAssignmentAcceptedRecord(row as Record<string, unknown>);
 }
 
 export function deriveCleanerJobUiState(row: CleanerBookingRow, opts?: { nowMs?: number }): CleanerJobUiState {
-  const st = String(row.status ?? "").toLowerCase();
-  const dst = String(row.dispatch_status ?? "").trim().toLowerCase();
-  if (dst === "expired" && (st === "pending" || st === "offered" || st === "pending_assignment")) {
-    return { phase: "expired" };
-  }
-  /** Terminal / no primary actions: DB-authoritative completion only (never `cleaner_response_status` alone). */
-  if (isAuthoritativeBookingCompleted(row) || st === "cancelled" || st === "failed") return { phase: "none" };
-  if (st === "in_progress") return { phase: "complete" };
-
-  const rec = row as Record<string, unknown>;
-  const raw = (row.cleaner_response_status ?? rec.cleaner_response_status) as string | null | undefined;
-  const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
-  const responseAccepted = isCleanerAssignmentAccepted(row);
-  const isTeam = row.is_team_job === true;
-  const onMyWay = r === CLEANER_RESPONSE.ON_MY_WAY;
-  const hasEnRoute = Boolean(row.en_route_at);
-
-  if (isAssignedOperationalStatus(st)) {
-    const readyToStart = hasEnRoute || onMyWay;
-    if (readyToStart) return { phase: "start" };
-    if (!responseAccepted) {
-      if (assignedOfferPastAcceptanceDeadline(row, opts?.nowMs)) return { phase: "expired" };
-      return { phase: "accept", canReject: !isTeam };
-    }
-    return { phase: "on_my_way" };
-  }
-  return { phase: "none" };
+  return describeBookingOperationalState({
+    row: row as Record<string, unknown>,
+    viewer: "cleaner",
+    nowMs: opts?.nowMs,
+    telemetryBookingId: row.id,
+  }).cleanerJobUi;
 }
 
-/** Legacy coarse phase for schedule — maps {@link deriveBookingOperationalPhase} into `CleanerMobilePhase`. */
+/** Legacy coarse phase for schedule — canonical mapping via {@link describeBookingOperationalState}. */
 export function deriveMobilePhase(row: CleanerBookingRow, opts?: { nowMs?: number }): CleanerMobilePhase {
-  const st = String(row.status ?? "").toLowerCase();
-  const op = deriveBookingOperationalPhase(
-    {
-      status: row.status,
-      cleaner_response_status: row.cleaner_response_status,
-      completed_at: row.completed_at,
-      en_route_at: row.en_route_at,
-      started_at: row.started_at,
-      dispatch_status: row.dispatch_status,
-    },
-    { telemetryBookingId: row.id },
-  );
-  if (op === "completed" || op === "cancelled" || op === "failed") return "completed";
-  if (op === "active") return "in_progress";
-  if (op === "travelling") return "en_route";
-  if (op === "pending" && st === "pending" && row.en_route_at) return "en_route";
-  if (op === "accepted" || op === "assigned") return "assigned";
-  if (op === "pending" || op === "expired") return "pending";
-  return "pending";
+  return describeBookingOperationalState({
+    row: row as Record<string, unknown>,
+    viewer: "cleaner",
+    nowMs: opts?.nowMs,
+    telemetryBookingId: row.id,
+  }).cleanerMobilePhase;
 }
 
 /**
@@ -232,23 +176,12 @@ export function deriveMobilePhase(row: CleanerBookingRow, opts?: { nowMs?: numbe
  * **Completed** uses {@link isAuthoritativeBookingCompleted} only (`status` or `completed_at`), never response-only signals.
  */
 export function mobilePhaseDisplayForDashboard(row: CleanerBookingRow, opts?: { nowMs?: number }): string {
-  const st = String(row.status ?? "").toLowerCase();
-  if (st === "cancelled") return "Cancelled";
-  if (isAuthoritativeBookingCompleted(row)) return "Completed";
-  const dst = String(row.dispatch_status ?? "").toLowerCase();
-  if (dst === "expired") return "Dispatch expired";
-  if (st === "in_progress") return "In progress";
-  if (st === "pending") return row.en_route_at ? "En route" : "Pending";
-  if (isAssignedOperationalStatus(st)) {
-    const ui = deriveCleanerJobUiState(row, opts);
-    if (ui.phase === "expired") return "Offer expired";
-    if (ui.phase === "accept") return "Needs accept";
-    if (ui.phase === "on_my_way") return "Accepted";
-    if (ui.phase === "start" || row.en_route_at) return "En route";
-    if (ui.phase === "complete") return "In progress";
-    return st === "confirmed" ? "Confirmed" : "Assigned";
-  }
-  return "Open";
+  return describeBookingOperationalState({
+    row: row as Record<string, unknown>,
+    viewer: "cleaner",
+    nowMs: opts?.nowMs,
+    telemetryBookingId: row.id,
+  }).displayBadge;
 }
 
 /** At most one primary action group for schedule / job detail (matches server lifecycle rules). */
@@ -382,7 +315,14 @@ export function getNextUpcomingMobileJob(rows: CleanerBookingRow[], now = new Da
   const todayYmd = johannesburgCalendarYmd(now);
   const candidates = rows.filter((r) => {
     const st = String(r.status ?? "").toLowerCase();
-    if (!(st === "assigned" || st === "confirmed" || st === "offered" || st === "pending")) return false;
+    const rec = r as Record<string, unknown>;
+    const openLike =
+      st === "assigned" ||
+      st === "confirmed" ||
+      st === "offered" ||
+      st === "pending" ||
+      (st === "pending_payment" && bookingMatchesRecurringCleanerPendingPayment(rec));
+    if (!openLike) return false;
     const d = String(r.date ?? "").slice(0, 10);
     if (!d) return false;
     return d >= todayYmd;

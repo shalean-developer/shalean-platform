@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
+import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
 import { DashboardListSkeleton } from "@/components/dashboard/dashboard-skeletons";
 
 function StarsRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
@@ -49,7 +50,7 @@ function DashboardReviewsInner() {
   const reviewable = useMemo(
     () =>
       bookings.filter(
-        (b) => b.status === "completed" && b.raw.cleaner_id && !reviewedIds.has(b.id),
+        (b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id),
       ),
     [bookings, reviewedIds],
   );

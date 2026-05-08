@@ -2,6 +2,46 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Active `team_members.cleaner_id` values for `teamId` at the booking appointment instant
+ * (same window semantics as `persistCleanerPayoutIfUnset` team block).
+ */
+export async function fetchActiveTeamMemberIdsAtAppointment(
+  admin: SupabaseClient,
+  teamId: string,
+  bookingAppointmentIso: string,
+): Promise<string[]> {
+  const tid = String(teamId ?? "").trim();
+  if (!tid) return [];
+
+  const { data: members, error: membersErr } = await admin
+    .from("team_members")
+    .select("cleaner_id, active_from, active_to")
+    .eq("team_id", tid)
+    .not("cleaner_id", "is", null);
+  if (membersErr) return [];
+
+  const bookingMs = new Date(bookingAppointmentIso).getTime();
+  if (Number.isNaN(bookingMs)) return [];
+
+  const active = (members ?? [])
+    .map((m) => m as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
+    .filter((m) => {
+      const cid = String(m.cleaner_id ?? "").trim();
+      if (!cid) return false;
+      const from = m.active_from ? new Date(m.active_from).getTime() : null;
+      const to = m.active_to ? new Date(m.active_to).getTime() : null;
+      if (from != null && !Number.isNaN(from) && bookingMs < from) return false;
+      if (to != null && !Number.isNaN(to) && bookingMs > to) return false;
+      return true;
+    });
+
+  return [...new Set(active.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean))];
+}
+
+/** Canonical per-cleaner payout for team bookings (ZAR minor units). Same as fixed-special solo rate. */
+export const TEAM_PER_CLEANER_PAYOUT_CENTS = 25_000;
+
 export type BookingCleanerRosterRow = {
   cleaner_id: string;
   role?: string | null;
@@ -10,14 +50,26 @@ export type BookingCleanerRosterRow = {
 };
 
 /**
- * Canonical cleaner-earnings pool for a booking (cents), aligned with line items when present.
- * Order: finalized `cleaner_earnings_total_cents` → sum of line `cleaner_earnings_cents` (eligible lines)
- * → `display_earnings_cents` → legacy `cleaner_payout_cents`.
+ * Sum of `team_job_member_payouts.payout_cents` for the booking when rows exist; otherwise an estimate
+ * from `display_earnings_cents` × `team_member_count_snapshot` (per-cleaner display × headcount).
  */
 export async function resolveTeamCleanerPoolCents(admin: SupabaseClient, bookingId: string): Promise<number> {
+  const { data: rows, error: pErr } = await admin
+    .from("team_job_member_payouts")
+    .select("payout_cents")
+    .eq("booking_id", bookingId);
+  if (!pErr && rows?.length) {
+    let s = 0;
+    for (const raw of rows) {
+      const c = Number((raw as { payout_cents?: number | null }).payout_cents);
+      if (Number.isFinite(c) && c > 0) s += Math.floor(c);
+    }
+    if (s > 0) return s;
+  }
+
   const { data: b, error } = await admin
     .from("bookings")
-    .select("cleaner_earnings_total_cents, display_earnings_cents, cleaner_payout_cents")
+    .select("cleaner_earnings_total_cents, display_earnings_cents, cleaner_payout_cents, team_member_count_snapshot")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !b) return 0;
@@ -26,6 +78,7 @@ export async function resolveTeamCleanerPoolCents(admin: SupabaseClient, booking
     cleaner_earnings_total_cents?: number | null;
     display_earnings_cents?: number | null;
     cleaner_payout_cents?: number | null;
+    team_member_count_snapshot?: number | null;
   };
 
   const total = Number(row.cleaner_earnings_total_cents);
@@ -47,15 +100,17 @@ export async function resolveTeamCleanerPoolCents(admin: SupabaseClient, booking
   }
 
   const disp = Number(row.display_earnings_cents);
-  if (Number.isFinite(disp) && disp > 0) return Math.floor(disp);
+  const snap = Number(row.team_member_count_snapshot);
+  const headcount = Number.isFinite(snap) && snap > 0 ? Math.floor(snap) : 1;
+  if (Number.isFinite(disp) && disp > 0) return Math.floor(disp) * headcount;
+
   const leg = Number(row.cleaner_payout_cents);
   if (Number.isFinite(leg) && leg > 0) return Math.floor(leg);
   return 0;
 }
 
 /**
- * Weighted split of `totalPoolCents` across roster rows, then remainder + `lead_bonus_cents` to the lead.
- * Sum of returned cents equals `totalPoolCents` when pool > 0 and roster non-empty.
+ * Weighted split of `totalPoolCents` across roster rows (legacy `USE_LEGACY_PAYOUT_ENGINE` team pool only).
  */
 export function allocateTeamMemberPayoutCentsFromRoster(
   totalPoolCents: number,
@@ -112,7 +167,7 @@ export function allocateTeamMemberPayoutCentsFromRoster(
   return out;
 }
 
-/** Equal split across cleaner ids (when roster not yet materialized). */
+/** Equal split across cleaner ids (legacy pool when roster not yet materialized). */
 export function allocateTeamMemberPayoutCentsEqualSplit(totalPoolCents: number, cleanerIds: readonly string[]): Map<string, number> {
   const ids = [...new Set(cleanerIds.map((c) => String(c ?? "").trim()).filter((c) => /^[0-9a-f-]{36}$/i.test(c)))];
   const out = new Map<string, number>();
@@ -128,6 +183,7 @@ export function allocateTeamMemberPayoutCentsEqualSplit(totalPoolCents: number, 
   return out;
 }
 
+/** @deprecated Legacy shared-pool inserts; use {@link buildTeamJobMemberFixedPerCleanerPayoutRows} for canonical team policy. */
 export function buildTeamJobMemberPayoutInsertRows(params: {
   bookingId: string;
   teamId: string;
@@ -152,4 +208,32 @@ export function buildTeamJobMemberPayoutInsertRows(params: {
     });
   }
   return rows;
+}
+
+/**
+ * Canonical team policy: **each** roster cleaner (or fallback active team members) receives
+ * {@link TEAM_PER_CLEANER_PAYOUT_CENTS} — no weighting, no shared pool.
+ */
+export function buildTeamJobMemberFixedPerCleanerPayoutRows(params: {
+  bookingId: string;
+  teamId: string;
+  /** Defaults to {@link TEAM_PER_CLEANER_PAYOUT_CENTS}. */
+  perCleanerCents?: number;
+  rosterRows: readonly { cleaner_id: string }[];
+  fallbackCleanerIds: readonly string[];
+}): Array<{ booking_id: string; team_id: string; cleaner_id: string; payout_cents: number; status: string }> {
+  const cents = Math.max(0, Math.floor(params.perCleanerCents ?? TEAM_PER_CLEANER_PAYOUT_CENTS));
+  const uuid = (s: string) => /^[0-9a-f-]{36}$/i.test(String(s ?? "").trim());
+  const fromRoster = params.rosterRows
+    .map((r) => String(r.cleaner_id ?? "").trim())
+    .filter((id) => uuid(id));
+  const ids = [...new Set(fromRoster.length > 0 ? fromRoster : params.fallbackCleanerIds.map((c) => String(c).trim()).filter(uuid))];
+
+  return ids.map((cleaner_id) => ({
+    booking_id: params.bookingId,
+    team_id: params.teamId,
+    cleaner_id,
+    payout_cents: cents,
+    status: "pending",
+  }));
 }

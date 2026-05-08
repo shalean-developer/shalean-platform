@@ -1,35 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseBookingServiceId } from "@/components/booking/serviceCategories";
+import { bookingAppointmentIsoUtc, normalizeBookingServiceIdForPayout } from "@/lib/payout/canonicalCleanerPayout";
 import { computeBookingEarnings } from "@/lib/payout/computeBookingEarnings";
 import { sumEligibleLineItemsSubtotalCents } from "@/lib/payout/computeEarningsFromLineItems";
 import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
-
-function resolveBookingDateIso(date: string | null | undefined, time: string | null | undefined): string {
-  const d = String(date ?? "").trim();
-  const t = String(time ?? "").trim().slice(0, 5);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d) && /^\d{2}:\d{2}$/.test(t)) return `${d}T${t}:00.000Z`;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d}T12:00:00.000Z`;
-  return new Date().toISOString();
-}
-
-function resolveServiceId(snapshot: unknown, serviceLabel: string | null | undefined): string {
-  if (snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
-    const locked = (snapshot as { locked?: unknown }).locked;
-    if (locked && typeof locked === "object" && !Array.isArray(locked)) {
-      const parsed = parseBookingServiceId((locked as { service?: unknown }).service);
-      if (parsed) return parsed;
-    }
-  }
-  const s = String(serviceLabel ?? "").toLowerCase();
-  if (s.includes("deep")) return "deep";
-  if (s.includes("move")) return "move";
-  if (s.includes("airbnb")) return "airbnb";
-  if (s.includes("carpet")) return "carpet";
-  if (s.includes("quick")) return "quick";
-  return "standard";
-}
 
 function isValidEarningsShape(e: { display_earnings_cents?: unknown } | null): boolean {
   if (!e) return false;
@@ -80,8 +55,8 @@ export async function recomputeBookingCleanerEarningsSnapshot(
     return { ok: true, skipped: true };
   }
 
-  const bookingDateIso = resolveBookingDateIso(r.date, r.time);
-  const serviceId = resolveServiceId(r.booking_snapshot ?? null, r.service ?? null);
+  const bookingDateIso = bookingAppointmentIsoUtc(r.date, r.time) ?? "";
+  const serviceId = normalizeBookingServiceIdForPayout(r.booking_snapshot ?? null, r.service ?? null);
   const earnings = await computeBookingEarnings({
     servicePriceCents: sub,
     serviceId,

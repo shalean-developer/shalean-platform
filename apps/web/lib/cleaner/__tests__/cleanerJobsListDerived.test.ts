@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
-import { isOpenCleanerJobRow } from "@/lib/cleaner/cleanerJobsListDerived";
+import { isCompletedCleanerJobRow, isOpenCleanerJobRow, isPastCleanerJobRow } from "@/lib/cleaner/cleanerJobsListDerived";
 
 function row(p: Partial<CleanerBookingRow>): CleanerBookingRow {
   return {
@@ -29,10 +29,24 @@ describe("isOpenCleanerJobRow", () => {
     expect(isOpenCleanerJobRow(row({ status: "   " }))).toBe(true);
   });
 
-  it("excludes completed and cancelled only", () => {
+  it("excludes completed (including authoritative), cancelled, and failed", () => {
     expect(isOpenCleanerJobRow(row({ status: "completed" }))).toBe(false);
+    expect(isOpenCleanerJobRow(row({ status: "assigned", completed_at: "2026-05-08T10:00:00.000Z" }))).toBe(false);
     expect(isOpenCleanerJobRow(row({ status: "cancelled" }))).toBe(false);
+    expect(isOpenCleanerJobRow(row({ status: "failed" }))).toBe(false);
     expect(isOpenCleanerJobRow(row({ status: "assigned" }))).toBe(true);
     expect(isOpenCleanerJobRow(row({ status: "confirmed" }))).toBe(true);
+  });
+});
+
+describe("isCompletedCleanerJobRow / isPastCleanerJobRow", () => {
+  it("treats completed_at without status as completed", () => {
+    expect(isCompletedCleanerJobRow(row({ status: "assigned", completed_at: "2026-05-08T10:00:00.000Z" }))).toBe(true);
+    expect(isPastCleanerJobRow(row({ status: "assigned", completed_at: "2026-05-08T10:00:00.000Z" }))).toBe(true);
+  });
+
+  it("includes failed in past bucket", () => {
+    expect(isPastCleanerJobRow(row({ status: "failed" }))).toBe(true);
+    expect(isCompletedCleanerJobRow(row({ status: "failed" }))).toBe(false);
   });
 });

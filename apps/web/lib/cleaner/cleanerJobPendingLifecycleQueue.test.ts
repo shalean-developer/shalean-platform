@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import {
   canEnqueueLifecycleAfterQueued,
   CLEANER_PENDING_LIFECYCLE_LOCAL_KEY,
@@ -66,6 +67,54 @@ describe("canEnqueueLifecycleAfterQueued", () => {
 
   it("blocks new work after queued reject", () => {
     expect(canEnqueueLifecycleAfterQueued("reject", "en_route").ok).toBe(false);
+  });
+});
+
+describe("enqueuePendingLifecycle capability gate", () => {
+  const origFetch = globalThis.fetch;
+  beforeAll(() => {
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 204 })) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it("rejects when capabilityRow disallows action", async () => {
+    const row: Record<string, unknown> = {
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      cleaner_response_status: CLEANER_RESPONSE.STARTED,
+    };
+    const res = await enqueuePendingLifecycle(
+      {
+        bookingId: "b-cap-reject",
+        action: "complete",
+        idempotencyKey: "k-cap-reject",
+        queuedAt: Date.now(),
+      },
+      { capabilityRow: row },
+    );
+    expect(res.ok).toBe(false);
+    expect(listPendingLifecycle().some((x) => x.bookingId === "b-cap-reject")).toBe(false);
+  });
+
+  it("allows when capabilityRow allows complete", async () => {
+    const row: Record<string, unknown> = {
+      status: "in_progress",
+      started_at: new Date().toISOString(),
+      cleaner_response_status: CLEANER_RESPONSE.STARTED,
+    };
+    const res = await enqueuePendingLifecycle(
+      {
+        bookingId: "b-cap-ok",
+        action: "complete",
+        idempotencyKey: "k-cap-ok",
+        queuedAt: Date.now(),
+      },
+      { capabilityRow: row },
+    );
+    expect(res.ok).toBe(true);
+    expect(listPendingLifecycle().some((x) => x.bookingId === "b-cap-ok")).toBe(true);
   });
 });
 

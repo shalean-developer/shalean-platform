@@ -23,6 +23,12 @@ export function cleanerLifecycleFailureMessage(params: {
   if (code === "lifecycle_complete_requires_in_progress") {
     return "Start the job in the app before marking it complete.";
   }
+  if (code === "lifecycle_recurring_pending_payment_progression_blocked") {
+    return "This recurring visit is still awaiting payment or invoice approval. You can accept or decline it, but travel, start, and complete stay locked until that confirms.";
+  }
+  if (code === "lifecycle_pending_payment_blocked") {
+    return "This booking is still awaiting payment. Actions unlock after payment is confirmed.";
+  }
   if (params.httpStatus === 503) {
     return "The server is temporarily unavailable. Please try again in a moment.";
   }

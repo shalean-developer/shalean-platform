@@ -21,6 +21,11 @@ import { cleanerResponseAllowsProgression } from "@/lib/cleaner/cleanerResponseP
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { isCleanerAssignmentAccepted } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { isAssignableForCleanerLifecycleStatus } from "@/lib/cleaner/cleanerBookingLifecycleStatuses";
+import {
+  bookingIsRecurringPendingPayment,
+  recurringPendingPaymentLifecycleAllowsAction,
+  recurringPendingPaymentProgressionBlockedMessage,
+} from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
 
 export type CleanerLifecycleAction = "accept" | "reject" | "en_route" | "start" | "complete";
@@ -107,6 +112,314 @@ async function updateAssignedBookingOrFail(params: {
   return { ok: true };
 }
 
+type BookingLifecycleRow = {
+  id?: string;
+  cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
+  team_id?: string | null;
+  is_team_job?: boolean | null;
+  status?: string | null;
+  date?: string | null;
+  time?: string | null;
+  assignment_attempts?: number | null;
+  cleaner_response_status?: string | null;
+  accepted_at?: string | null;
+  dispatch_status?: string | null;
+  en_route_at?: string | null;
+  started_at?: string | null;
+  display_earnings_cents?: number | null;
+  cleaner_earnings_total_cents?: number | null;
+  billing_type?: string | null;
+  is_recurring_generated?: boolean | null;
+  monthly_invoice_id?: string | null;
+};
+
+async function handleRecurringPendingPaymentAccept(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  cleanerId: string;
+  bRow: BookingLifecycleRow;
+  now: string;
+}): Promise<CleanerLifecycleResult> {
+  const { admin, bookingId, cleanerId, bRow, now } = params;
+  const st = "pending_payment";
+  if (
+    assignedOfferPastAcceptanceDeadline({
+      status: bRow.status ?? null,
+      cleaner_response_status: bRow.cleaner_response_status ?? null,
+      date: bRow.date ?? null,
+      time: bRow.time ?? null,
+      accepted_at: bRow.accepted_at ?? null,
+      is_team_job: bRow.is_team_job === true,
+    })
+  ) {
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action: "accept",
+      bookingStatus: st,
+      cleanerResponseStatus: bRow.cleaner_response_status,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 400,
+      reasonCode: CLEANER_LIFECYCLE_CODE.ACCEPT_OFFER_EXPIRED,
+    });
+    return {
+      status: 400,
+      json: {
+        error: "This job is no longer available — the scheduled time has passed.",
+        code: CLEANER_LIFECYCLE_CODE.ACCEPT_OFFER_EXPIRED,
+      },
+    };
+  }
+
+  let resp = String(bRow.cleaner_response_status ?? "")
+    .trim()
+    .toLowerCase();
+  let acceptedAt = String(bRow.accepted_at ?? "").trim();
+  const dispatchLower = String(bRow.dispatch_status ?? "").trim().toLowerCase();
+
+  const orphanAcceptedAt =
+    Boolean(acceptedAt) &&
+    resp !== CLEANER_RESPONSE.ACCEPTED &&
+    (resp === "" || resp === CLEANER_RESPONSE.NONE || resp === CLEANER_RESPONSE.PENDING);
+  if (orphanAcceptedAt) {
+    const { data: healRows, error: healErr } = await admin
+      .from("bookings")
+      .update({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED })
+      .eq("id", bookingId)
+      .eq("status", "pending_payment")
+      .select("id");
+    if (!healErr && healRows?.length) {
+      bRow.cleaner_response_status = CLEANER_RESPONSE.ACCEPTED;
+      resp = CLEANER_RESPONSE.ACCEPTED;
+    }
+  }
+
+  if (resp === CLEANER_RESPONSE.ACCEPTED) {
+    const patch: Record<string, unknown> = {};
+    if (!acceptedAt) patch.accepted_at = now;
+    if (Object.keys(patch).length > 0) {
+      const { data: patchRows, error: pErr } = await admin
+        .from("bookings")
+        .update(patch)
+        .eq("id", bookingId)
+        .eq("status", "pending_payment")
+        .select("id");
+      if (pErr || !patchRows?.length) {
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action: "accept",
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 412,
+          reasonCode: CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED,
+        });
+        return {
+          status: 412,
+          json: {
+            error:
+              "Could not save — this visit is no longer awaiting payment in the same way. Refresh the page and try again.",
+            code: CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED,
+          },
+        };
+      }
+    }
+    await syncCleanerBusyFromBookings(admin, cleanerId);
+    traceCleanerLifecycle({
+      outcome: "success",
+      bookingId,
+      cleanerId,
+      action: "accept",
+      bookingStatus: st,
+      cleanerResponseStatus: CLEANER_RESPONSE.ACCEPTED,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+    });
+    return {
+      status: 200,
+      json: { ok: true, status: "pending_payment", cleaner_response_status: CLEANER_RESPONSE.ACCEPTED },
+    };
+  }
+
+  if (resp === CLEANER_RESPONSE.ON_MY_WAY || resp === CLEANER_RESPONSE.STARTED) {
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action: "accept",
+      bookingStatus: st,
+      cleanerResponseStatus: bRow.cleaner_response_status,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 400,
+      reasonCode: CLEANER_LIFECYCLE_CODE.RECURRING_PENDING_PAYMENT_PROGRESSION_BLOCKED,
+    });
+    return {
+      status: 400,
+      json: {
+        error: recurringPendingPaymentProgressionBlockedMessage(),
+        code: CLEANER_LIFECYCLE_CODE.RECURRING_PENDING_PAYMENT_PROGRESSION_BLOCKED,
+      },
+    };
+  }
+
+  if (!cleanerResponseAllowsProgression(resp, CLEANER_RESPONSE.ACCEPTED, { allowEqual: true })) {
+    await syncCleanerBusyFromBookings(admin, cleanerId);
+    traceCleanerLifecycle({
+      outcome: "duplicate",
+      bookingId,
+      cleanerId,
+      action: "accept",
+      bookingStatus: st,
+      cleanerResponseStatus: String(bRow.cleaner_response_status ?? resp),
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: 200,
+      reasonCode: "accept_duplicate_state",
+    });
+    return {
+      status: 200,
+      json: {
+        ok: true,
+        duplicate: true,
+        status: "pending_payment",
+        cleaner_response_status: String(bRow.cleaner_response_status ?? resp),
+      },
+    };
+  }
+
+  const { data: accRows, error: accErr } = await admin
+    .from("bookings")
+    .update({
+      cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
+      accepted_at: now,
+    })
+    .eq("id", bookingId)
+    .eq("status", "pending_payment")
+    .select("id");
+
+  if (accErr || !accRows?.length) {
+    if (!accErr) {
+      void reportOperationalIssue("warn", "cleaner/jobs/accept", "recurring_pending_accept_zero_rows", {
+        bookingId,
+        cleanerId,
+      });
+    }
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action: "accept",
+      bookingStatus: st,
+      cleanerResponseStatus: bRow.cleaner_response_status,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: accErr ? 500 : 412,
+      reasonCode: accErr ? "recurring_pending_accept_failed" : CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW,
+    });
+    return {
+      status: accErr ? 500 : 412,
+      json: {
+        error: accErr?.message ?? "Could not save acceptance — refresh and try again.",
+        code: accErr ? "recurring_pending_accept_failed" : CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW,
+      },
+    };
+  }
+
+  await syncCleanerBusyFromBookings(admin, cleanerId);
+  traceCleanerLifecycle({
+    outcome: "success",
+    bookingId,
+    cleanerId,
+    action: "accept",
+    bookingStatus: st,
+    cleanerResponseStatus: CLEANER_RESPONSE.ACCEPTED,
+    dispatchStatus: dispatchLower || null,
+    httpStatus: 200,
+  });
+  return {
+    status: 200,
+    json: { ok: true, status: "pending_payment", cleaner_response_status: CLEANER_RESPONSE.ACCEPTED },
+  };
+}
+
+async function handleRecurringPendingPaymentReject(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  cleanerId: string;
+  bRow: BookingLifecycleRow;
+}): Promise<CleanerLifecycleResult> {
+  const { admin, bookingId, cleanerId, bRow } = params;
+  const attempts = Number(bRow.assignment_attempts ?? 0);
+  const { data: rejRows, error: uErr } = await admin
+    .from("bookings")
+    .update({
+      cleaner_id: null,
+      payout_owner_cleaner_id: null,
+      assigned_at: null,
+      accepted_at: null,
+      en_route_at: null,
+      started_at: null,
+      assignment_attempts: attempts + 1,
+      cleaner_response_status: CLEANER_RESPONSE.NONE,
+      status: "pending_payment",
+      ...BOOKING_PAYOUT_COLUMNS_CLEAR,
+    })
+    .eq("id", bookingId)
+    .eq("status", "pending_payment")
+    .select("id");
+
+  if (uErr || !rejRows?.length) {
+    traceCleanerLifecycle({
+      outcome: "blocked",
+      bookingId,
+      cleanerId,
+      action: "reject",
+      bookingStatus: "pending_payment",
+      cleanerResponseStatus: bRow.cleaner_response_status,
+      dispatchStatus: bRow.dispatch_status,
+      httpStatus: uErr ? 500 : 412,
+      reasonCode: uErr ? "reject_recurring_pending_failed" : CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED,
+    });
+    return {
+      status: uErr ? 500 : 412,
+      json: {
+        error: uErr?.message ?? "Could not decline — this visit may have already updated. Refresh and try again.",
+        code: uErr ? "reject_recurring_pending_failed" : CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED,
+      },
+    };
+  }
+
+  await syncCleanerBusyFromBookings(admin, cleanerId);
+
+  const auto = process.env.AUTO_DISPATCH_CLEANERS !== "false";
+  if (auto) {
+    const r = await ensureBookingAssignment(admin, bookingId, {
+      source: "cleaner_job_reject_recurring_pending",
+      smartAssign: { excludeCleanerIds: [cleanerId] },
+    });
+    if (!r.ok) {
+      await reportOperationalIssue("warn", "cleaner/reject", "Re-dispatch failed (recurring pending)", {
+        bookingId,
+        reason: r.error,
+      });
+    }
+  }
+
+  traceCleanerLifecycle({
+    outcome: "success",
+    bookingId,
+    cleanerId,
+    action: "reject",
+    bookingStatus: "pending_payment",
+    cleanerResponseStatus: CLEANER_RESPONSE.NONE,
+    dispatchStatus: bRow.dispatch_status,
+    httpStatus: 200,
+  });
+  return { status: 200, json: { ok: true, status: "pending_payment", reassigned: auto } };
+}
+
 /**
  * Cleaner job state transitions (assigned → in_progress → completed) plus payout on complete.
  * Used by `POST /api/cleaner/jobs/:id` and REST-shaped `/api/cleaner/bookings/:id/*` routes.
@@ -122,7 +435,7 @@ export async function runCleanerBookingLifecycleAction(params: {
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, display_earnings_cents, cleaner_earnings_total_cents",
+      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, display_earnings_cents, cleaner_earnings_total_cents, is_recurring_generated, billing_type, monthly_invoice_id",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -142,24 +455,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     return { status: 404, json: { error: "Booking not found." } };
   }
 
-  const bRow = booking as {
-    id?: string;
-    cleaner_id?: string | null;
-    payout_owner_cleaner_id?: string | null;
-    team_id?: string | null;
-    is_team_job?: boolean | null;
-    status?: string | null;
-    date?: string | null;
-    time?: string | null;
-    assignment_attempts?: number | null;
-    cleaner_response_status?: string | null;
-    accepted_at?: string | null;
-    dispatch_status?: string | null;
-    en_route_at?: string | null;
-    started_at?: string | null;
-    display_earnings_cents?: number | null;
-    cleaner_earnings_total_cents?: number | null;
-  };
+  const bRow = booking as BookingLifecycleRow;
   const canAccess = await cleanerHasBookingAccess(admin, cleanerId, {
     id: bRow.id ?? bookingId,
     cleaner_id: bRow.cleaner_id ?? null,
@@ -207,6 +503,65 @@ export async function runCleanerBookingLifecycleAction(params: {
 
   const st = String(bRow.status ?? "").toLowerCase();
   const now = new Date().toISOString();
+  const rowRec = bRow as Record<string, unknown>;
+  const isRecurringPendingPayment = bookingIsRecurringPendingPayment(rowRec);
+
+  if (st === "pending_payment") {
+    const gate = recurringPendingPaymentLifecycleAllowsAction(action, rowRec);
+    if (!gate.allowed) {
+      if (gate.reason === "recurring_pending_payment_progression") {
+        void logSystemEvent({
+          level: "warn",
+          source: "cleaner_lifecycle_recurring_pending",
+          message: "lifecycle_action_blocked",
+          context: {
+            lifecycle_block_reason: "recurring_pending_payment",
+            action,
+            booking_id: bookingId,
+            cleaner_id: cleanerId,
+            booking_status: st,
+            billing_type: bRow.billing_type ?? null,
+          },
+        });
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 400,
+          reasonCode: CLEANER_LIFECYCLE_CODE.RECURRING_PENDING_PAYMENT_PROGRESSION_BLOCKED,
+        });
+        return {
+          status: 400,
+          json: {
+            error: recurringPendingPaymentProgressionBlockedMessage(),
+            code: CLEANER_LIFECYCLE_CODE.RECURRING_PENDING_PAYMENT_PROGRESSION_BLOCKED,
+          },
+        };
+      }
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 400,
+        reasonCode: CLEANER_LIFECYCLE_CODE.PENDING_PAYMENT_LIFECYCLE_BLOCKED,
+      });
+      return {
+        status: 400,
+        json: {
+          error: "This booking is still awaiting payment. Actions unlock after payment is confirmed.",
+          code: CLEANER_LIFECYCLE_CODE.PENDING_PAYMENT_LIFECYCLE_BLOCKED,
+        },
+      };
+    }
+  }
 
   traceCleanerLifecycle({
     outcome: "entered",
@@ -219,6 +574,9 @@ export async function runCleanerBookingLifecycleAction(params: {
   });
 
   if (action === "accept") {
+    if (isRecurringPendingPayment) {
+      return handleRecurringPendingPaymentAccept({ admin, bookingId, cleanerId, bRow, now });
+    }
     if (!isAssignableForCleanerLifecycleStatus(bRow.status)) {
       traceCleanerLifecycle({
         outcome: "blocked",
@@ -438,6 +796,9 @@ export async function runCleanerBookingLifecycleAction(params: {
   }
 
   if (action === "reject") {
+    if (isRecurringPendingPayment) {
+      return handleRecurringPendingPaymentReject({ admin, bookingId, cleanerId, bRow });
+    }
     if (!isAssignableForCleanerLifecycleStatus(bRow.status)) {
       traceCleanerLifecycle({
         outcome: "blocked",

@@ -1,53 +1,33 @@
-import type { BookingServiceId } from "@/components/booking/serviceCategories";
-import { parseBookingServiceId } from "@/components/booking/serviceCategories";
+import {
+  bookingAppointmentIsoUtc,
+  normalizeBookingServiceIdForPayout,
+  resolveCanonicalCleanerPayout,
+} from "@/lib/payout/canonicalCleanerPayout";
 
-const FIXED_SERVICE_IDS = new Set<BookingServiceId>(["deep", "move", "carpet"]);
-/** R250 in cents */
-export const MIN_PAYOUT_CENTS = 25_000;
-/** R350 in cents: base payout cap; excess cleaner share is stored as bonus. */
-export const MAX_BASE_PAYOUT_CENTS = 35_000;
+export {
+  FIXED_SPECIAL_PAYOUT_CENTS,
+  MAX_STANDARD_BASE_PAYOUT_CENTS as MAX_BASE_PAYOUT_CENTS,
+  MIN_STANDARD_BASE_PAYOUT_CENTS as MIN_PAYOUT_CENTS,
+} from "@/lib/payout/canonicalCleanerPayout";
 
-const NEW_CLEANER_RATE = 0.6;
-const EXPERIENCED_CLEANER_RATE = 0.7;
-const EXPERIENCE_MONTHS_THRESHOLD = 4;
+export {
+  isFixedPayoutSpecial,
+  isFixedPayoutSpecialFromNormalizedId,
+  normalizeBookingServiceIdForPayout,
+} from "@/lib/payout/canonicalCleanerPayout";
 
 export type CleanerPayoutResult = {
   payoutCents: number;
   bonusCents: number;
   companyRevenueCents: number;
-  payoutType: "percentage";
-  /** Decimal rate applied for percentage model, e.g. 0.7 */
-  payoutPercentage: number;
+  payoutType: "percentage" | "fixed_special" | "team_pool" | "team_per_cleaner_fixed";
+  /** Decimal rate for percentage model; null for fixed specials. */
+  payoutPercentage: number | null;
   /** Subtotal cleaner payout was computed from (excludes platform service fee). */
   payoutBaseCents: number;
   /** Platform fee added to company revenue only. */
   serviceFeeCents: number;
 };
-
-function monthsBetween(fromMs: number, toMs: number): number {
-  const msPerMonth = 1000 * 60 * 60 * 24 * 30;
-  return (toMs - fromMs) / msPerMonth;
-}
-
-function resolveServiceIdFromSnapshot(snapshot: unknown): BookingServiceId | null {
-  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
-  const locked = (snapshot as { locked?: unknown }).locked;
-  if (!locked || typeof locked !== "object" || Array.isArray(locked)) return null;
-  return parseBookingServiceId((locked as { service?: unknown }).service);
-}
-
-/**
- * Detect fixed-payout specials using catalog id first, then label heuristics.
- */
-export function isFixedPayoutSpecial(serviceId: BookingServiceId | null, serviceLabel: string | null): boolean {
-  if (serviceId && FIXED_SERVICE_IDS.has(serviceId)) return true;
-  const s = (serviceLabel ?? "").toLowerCase();
-  if (!s) return false;
-  if (/\bdeep\b/i.test(s) || s.includes("deep clean")) return true;
-  if (/\bmove\b/i.test(s) || s.includes("move in") || s.includes("move out")) return true;
-  if (/\bcarpet\b/i.test(s)) return true;
-  return false;
-}
 
 /**
  * Total paid for the job in **cents** (ZAR).
@@ -62,52 +42,6 @@ export function resolveTotalPaidCents(totalPaidZar: number | null | undefined, a
     return Math.max(0, Math.round(cents));
   }
   return 0;
-}
-
-/** Central hybrid payout rules: percentage + minimum + base cap + bonus. */
-export function calculateCleanerPayout(params: {
-  totalPaidCents: number;
-  serviceId: BookingServiceId | null;
-  serviceLabel: string | null;
-  /** Cleaner tenure anchor (e.g. `cleaners.created_at`). Missing → treated as new cleaner. */
-  cleanerTenureStartMs: number | null;
-  nowMs?: number;
-}): CleanerPayoutResult {
-  const total = Math.max(0, Math.floor(params.totalPaidCents));
-  const now = params.nowMs ?? Date.now();
-
-  if (total === 0) {
-    return {
-      payoutCents: 0,
-      bonusCents: 0,
-      companyRevenueCents: 0,
-      payoutType: "percentage",
-      payoutPercentage: NEW_CLEANER_RATE,
-      payoutBaseCents: 0,
-      serviceFeeCents: 0,
-    };
-  }
-
-  const tenureStart = params.cleanerTenureStartMs;
-  const monthsWorked = tenureStart != null && Number.isFinite(tenureStart) ? monthsBetween(tenureStart, now) : 0;
-  const isExperienced = monthsWorked >= EXPERIENCE_MONTHS_THRESHOLD;
-  const percentage = isExperienced ? EXPERIENCED_CLEANER_RATE : NEW_CLEANER_RATE;
-  const percentagePayout = Math.round(total * percentage);
-  const baseBeforeTotalCap = Math.min(Math.max(percentagePayout, MIN_PAYOUT_CENTS), MAX_BASE_PAYOUT_CENTS);
-  const payoutCents = Math.min(baseBeforeTotalCap, total);
-  const rawBonusCents = Math.max(0, percentagePayout - MAX_BASE_PAYOUT_CENTS);
-  const bonusCents = Math.min(rawBonusCents, Math.max(0, total - payoutCents));
-  const companyRevenue = Math.max(0, total - payoutCents - bonusCents);
-
-  return {
-    payoutCents,
-    bonusCents,
-    companyRevenueCents: companyRevenue,
-    payoutType: "percentage",
-    payoutPercentage: percentage,
-    payoutBaseCents: total,
-    serviceFeeCents: 0,
-  };
 }
 
 /**
@@ -142,8 +76,7 @@ export function resolvePayoutBaseAndServiceFeeCents(params: {
 }
 
 /**
- * Convenience: parse snapshot `locked.service` + label for rules.
- * Company revenue includes platform service fee: (payoutBase − cleanerPayout) + serviceFee.
+ * Solo hybrid columns from the canonical engine (same rules as display / preview).
  */
 export function calculateCleanerPayoutFromBookingRow(params: {
   totalPaidZar: number | null | undefined;
@@ -152,7 +85,18 @@ export function calculateCleanerPayoutFromBookingRow(params: {
   serviceFeeCents?: number | null | undefined;
   serviceLabel: string | null | undefined;
   bookingSnapshot: unknown;
-  cleanerCreatedAtIso: string | null | undefined;
+  /** Preferred tenure anchor (`cleaners.joined_at`). */
+  cleanerJoinedAtIso?: string | null | undefined;
+  /**
+   * @deprecated Prefer `cleanerJoinedAtIso`. Used when `joined_at` was not loaded by caller.
+   */
+  cleanerCreatedAtIso?: string | null | undefined;
+  /** Booking `date` (YYYY-MM-DD) for calendar tenure vs appointment. */
+  bookingDate?: string | null | undefined;
+  /** Booking `time` (HH:MM...) for appointment UTC. */
+  bookingTime?: string | null | undefined;
+  bookingId?: string | null;
+  /** Ignored — canonical tenure uses {@link bookingAppointmentIsoUtc} only. */
   nowMs?: number;
 }): CleanerPayoutResult {
   const { payoutBaseCents, serviceFeeCents } = resolvePayoutBaseAndServiceFeeCents({
@@ -162,24 +106,42 @@ export function calculateCleanerPayoutFromBookingRow(params: {
     amountPaidCents: params.amountPaidCents,
   });
 
-  const sid = resolveServiceIdFromSnapshot(params.bookingSnapshot);
-  const label = typeof params.serviceLabel === "string" ? params.serviceLabel : null;
-  const tenureMs =
-    typeof params.cleanerCreatedAtIso === "string" && params.cleanerCreatedAtIso
-      ? new Date(params.cleanerCreatedAtIso).getTime()
-      : null;
-  const inner = calculateCleanerPayout({
-    totalPaidCents: payoutBaseCents,
+  const sid = normalizeBookingServiceIdForPayout(params.bookingSnapshot, params.serviceLabel);
+  const joinedRaw = String(params.cleanerJoinedAtIso ?? params.cleanerCreatedAtIso ?? "").trim();
+  const appt =
+    bookingAppointmentIsoUtc(params.bookingDate, params.bookingTime) ??
+    (() => {
+      const locked =
+        params.bookingSnapshot && typeof params.bookingSnapshot === "object" && !Array.isArray(params.bookingSnapshot)
+          ? (params.bookingSnapshot as { locked?: { date?: unknown; time?: unknown } }).locked
+          : null;
+      if (locked && typeof locked === "object") {
+        return bookingAppointmentIsoUtc(
+          typeof locked.date === "string" ? locked.date : null,
+          typeof locked.time === "string" ? locked.time : null,
+        );
+      }
+      return null;
+    })();
+
+  const canonical = resolveCanonicalCleanerPayout({
+    bookingId: params.bookingId ?? null,
     serviceId: sid,
-    serviceLabel: label,
-    cleanerTenureStartMs: tenureMs != null && Number.isFinite(tenureMs) ? tenureMs : null,
-    nowMs: params.nowMs,
+    serviceLabel: typeof params.serviceLabel === "string" ? params.serviceLabel : null,
+    cleanerJoinedAtIso: joinedRaw || null,
+    bookingAppointmentIsoUtc: appt,
+    bookingValueCents: payoutBaseCents,
+    isTeamJob: false,
+    serviceFeeCents,
   });
 
   return {
-    ...inner,
-    companyRevenueCents: Math.max(0, inner.companyRevenueCents + serviceFeeCents),
-    payoutBaseCents,
+    payoutCents: canonical.cleanerPayoutCents,
+    bonusCents: canonical.cleanerBonusCents,
+    companyRevenueCents: Math.max(0, canonical.companyRevenueFromServiceCents + serviceFeeCents),
+    payoutType: canonical.payoutType,
+    payoutPercentage: canonical.payoutPercentage,
+    payoutBaseCents: payoutBaseCents,
     serviceFeeCents,
   };
 }

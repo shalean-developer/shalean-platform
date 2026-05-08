@@ -27,6 +27,11 @@ import {
   useCleanerLifecycleOrchestrator,
   type UseCleanerLifecycleOrchestratorReturn,
 } from "@/lib/cleaner/lifecycle/useCleanerLifecycleOrchestrator";
+import {
+  describeBookingOperationalState,
+  isLifecycleActionAllowedByCapabilities,
+  type OperationalDisplayTone,
+} from "@/lib/booking/describeBookingOperationalState";
 import type { CleanerBookingLineItemWire, CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import {
   clearCleanerJobDetailCache,
@@ -37,11 +42,7 @@ import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRa
 import { wireLikeFromJobDetailCacheBody } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
 import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
-import {
-  deriveCleanerJobUiState,
-  deriveMobilePhase,
-  mobilePhaseDisplayForDashboard,
-} from "@/lib/cleaner/cleanerMobileBookingMap";
+import { deriveMobilePhase, isCleanerAssignmentAccepted } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
 import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
 import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
@@ -103,6 +104,14 @@ type CleanerJobDetailWire = {
   service_qa?: ServiceQaCleanerWire | null;
   /** DB `cleaner_earnings_total_cents` when present on wire (snake_case from API). */
   cleaner_earnings_total_cents?: number | null;
+  is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  monthly_invoice_id?: string | null;
+  cleaner_pending_payment_banner?: string | null;
+  cleaner_visibility_mode?: "recurring_pending_payment" | null;
+  payment_completed_at?: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
+  admin_recurring_unpaid_completion_override_by?: string | null;
 };
 
 function resolveWireForLifecycleFlush(
@@ -204,6 +213,16 @@ function wireToBookingRow(j: CleanerJobDetailWire): CleanerBookingRow {
     earnings_estimated: j.earnings_estimated,
     earnings_is_estimate: j.earnings_is_estimate,
     team_roster_summary: j.team_roster_summary ?? null,
+    is_recurring_generated: j.is_recurring_generated ?? null,
+    billing_type: j.billing_type ?? null,
+    monthly_invoice_id: j.monthly_invoice_id ?? null,
+    cleaner_pending_payment_banner: j.cleaner_pending_payment_banner ?? null,
+    cleaner_visibility_mode: j.cleaner_visibility_mode ?? null,
+    payment_completed_at: j.payment_completed_at ?? null,
+    payout_status: (j as { payout_status?: string | null }).payout_status ?? null,
+    payout_paid_at: (j as { payout_paid_at?: string | null }).payout_paid_at ?? null,
+    admin_recurring_unpaid_completion_override_at: j.admin_recurring_unpaid_completion_override_at ?? null,
+    admin_recurring_unpaid_completion_override_by: j.admin_recurring_unpaid_completion_override_by ?? null,
   };
 }
 
@@ -230,6 +249,10 @@ function optimisticPatchForAction(
       const cur = String(base?.status ?? "").toLowerCase();
       const dst = String(base?.dispatch_status ?? "").trim().toLowerCase();
       const patch: Partial<CleanerJobDetailWire> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
+      if (cur === "pending_payment") {
+        const now = new Date().toISOString();
+        return { ...patch, accepted_at: now };
+      }
       if (cur === "offered" || cur === "confirmed") patch.status = "assigned";
       if (dst === "offered") patch.dispatch_status = "assigned";
       return patch;
@@ -253,6 +276,10 @@ function acceptPersistSessionPatch(base: CleanerJobDetailWire | null): Record<st
   const cur = String(base?.status ?? "").toLowerCase();
   const dst = String(base?.dispatch_status ?? "").trim().toLowerCase();
   const patch: Record<string, unknown> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
+  if (cur === "pending_payment") {
+    patch.accepted_at = new Date().toISOString();
+    return patch;
+  }
   if (cur === "offered" || cur === "confirmed") patch.status = "assigned";
   if (dst === "offered") patch.dispatch_status = "assigned";
   return patch;
@@ -611,18 +638,19 @@ export default function CleanerJobDetailPage() {
   );
 
   const bookingRow = useMemo(() => (displayJob ? wireToBookingRow(displayJob) : null), [displayJob]);
-  const jobUi = useMemo(
-    () => (bookingRow?.id ? deriveCleanerJobUiState(bookingRow) : ({ phase: "none" } as const)),
-    [bookingRow],
-  );
-  const phaseBadge = useMemo(
-    () => (bookingRow?.id ? mobilePhaseDisplayForDashboard(bookingRow, { nowMs: Date.now() + serverClockOffsetMs }) : "—"),
-    [bookingRow, serverClockOffsetMs, tick],
-  );
-  const mobilePhase = useMemo(
-    () => (bookingRow?.id ? deriveMobilePhase(bookingRow, { nowMs: Date.now() + serverClockOffsetMs }) : null),
-    [bookingRow, serverClockOffsetMs, tick],
-  );
+  const operational = useMemo(() => {
+    if (!bookingRow?.id) return null;
+    return describeBookingOperationalState({
+      row: bookingRow as unknown as Record<string, unknown>,
+      viewer: "cleaner",
+      nowMs: Date.now() + serverClockOffsetMs,
+      telemetryBookingId: bookingRow.id,
+    });
+  }, [bookingRow, serverClockOffsetMs, tick]);
+  const jobUi = operational?.cleanerJobUi ?? ({ phase: "none" } as const);
+  const mobilePhase = operational?.cleanerMobilePhase ?? null;
+  const phaseBadge = operational?.displayBadge ?? "—";
+  const recurringLifecycleRestrictionLine = operational?.progressionBlockedReason ?? null;
 
   useEffect(() => {
     setConfirmPending(null);
@@ -743,13 +771,30 @@ export default function CleanerJobDetailPage() {
 
           const phaseBefore = lifecyclePhaseBeforeLabel(latestJobRef.current, optimisticPatchRef.current);
 
+          const mergedJob = { ...(latestJobRef.current ?? {}), ...(optimisticPatchRef.current ?? {}) } as CleanerJobDetailWire;
+          const mergedRow = wireToBookingRow(mergedJob) as unknown as Record<string, unknown>;
+          const opGate = describeBookingOperationalState({
+            row: mergedRow,
+            viewer: "cleaner",
+            nowMs: Date.now() + serverClockOffsetMs,
+            telemetryBookingId: id,
+          });
+          if (!isLifecycleActionAllowedByCapabilities(action, opGate.lifecycleCapabilities)) {
+            setActionErr(opGate.progressionBlockedReason ?? "This action is not available for this booking yet.");
+            setConfirmPending(null);
+            return { applyPostEnqueueTail: false };
+          }
+
           if (!online) {
-            const enq = await enqueuePendingLifecycle({
-              bookingId: id,
-              action: action as PendingLifecycleAction,
-              idempotencyKey,
-              queuedAt: Date.now(),
-            });
+            const enq = await enqueuePendingLifecycle(
+              {
+                bookingId: id,
+                action: action as PendingLifecycleAction,
+                idempotencyKey,
+                queuedAt: Date.now(),
+              },
+              { capabilityRow: mergedRow },
+            );
             if (!enq.ok) {
               setActionErr(enq.reason);
               setConfirmPending(null);
@@ -811,12 +856,15 @@ export default function CleanerJobDetailPage() {
             }
 
             if (result.status === 0 || result.status >= 500) {
-              const enq = await enqueuePendingLifecycle({
-                bookingId: id,
-                action: action as PendingLifecycleAction,
-                idempotencyKey,
-                queuedAt: Date.now(),
-              });
+              const enq = await enqueuePendingLifecycle(
+                {
+                  bookingId: id,
+                  action: action as PendingLifecycleAction,
+                  idempotencyKey,
+                  queuedAt: Date.now(),
+                },
+                { capabilityRow: mergedRow },
+              );
               if (!enq.ok) {
                 setOptimisticPatch(null);
                 setActionErr(action === "complete" ? friendly : enq.reason);
@@ -905,7 +953,7 @@ export default function CleanerJobDetailPage() {
         setLifecycleWorking(false);
       }
     },
-    [id, loadJob, persistLifecycleSessionPatch, scrollJobControlIntoView],
+    [id, loadJob, persistLifecycleSessionPatch, scrollJobControlIntoView, serverClockOffsetMs],
   );
 
   const openNavigationForCurrentJob = useCallback(() => {
@@ -933,9 +981,18 @@ export default function CleanerJobDetailPage() {
 
   const jobDetailsHeadingId = sectionHeadingId("Job details");
 
+  const JOB_TONE_BADGE: Record<OperationalDisplayTone, string> = {
+    danger: "border-destructive/30 bg-destructive/10 text-destructive",
+    success: "border-border bg-muted text-muted-foreground",
+    warning: "border-amber-600/45 bg-amber-500/12 text-amber-950 dark:border-amber-500/35 dark:bg-amber-950/25 dark:text-amber-50",
+    neutral: "border-border bg-muted text-foreground",
+    muted: "border-border bg-muted/80 text-muted-foreground",
+  };
+
   const jobStatusBadgeClass = useMemo(() => {
     if (cancelled) return "border-destructive/30 bg-destructive/10 text-destructive";
     if (failed) return "border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-50";
+    if (operational) return JOB_TONE_BADGE[operational.displayTone];
     if (completed) return "border-border bg-muted text-muted-foreground";
     const ph = mobilePhase ?? "pending";
     switch (ph) {
@@ -949,7 +1006,7 @@ export default function CleanerJobDetailPage() {
       default:
         return "border-border bg-muted text-foreground";
     }
-  }, [mobilePhase, cancelled, failed, completed]);
+  }, [mobilePhase, cancelled, failed, completed, operational]);
 
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 bg-background p-4">
@@ -1052,6 +1109,25 @@ export default function CleanerJobDetailPage() {
             </p>
             <div className="mt-2 space-y-5">
               <h1 className="text-xl font-semibold leading-snug text-foreground">{title}</h1>
+              {operational?.overrideApplied ? (
+                <p
+                  className="rounded-lg border border-violet-600/35 bg-violet-500/10 px-3 py-2 text-sm text-violet-950 dark:border-violet-500/30 dark:bg-violet-950/30 dark:text-violet-50"
+                  role="status"
+                >
+                  <span className="font-semibold">Completed by admin override</span>
+                  {operational.overrideRecordedBy ? (
+                    <span className="mt-1 block text-xs opacity-90">Recorded for: {operational.overrideRecordedBy}</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {recurringLifecycleRestrictionLine ? (
+                <p
+                  className="rounded-lg border border-sky-600/30 bg-sky-500/10 px-3 py-2 text-sm text-sky-950 dark:border-sky-500/25 dark:bg-sky-950/25 dark:text-sky-50"
+                  role="note"
+                >
+                  {recurringLifecycleRestrictionLine}
+                </p>
+              ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm">
                 <div className="flex min-w-0 flex-1 items-start gap-2">

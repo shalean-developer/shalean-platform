@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import {
+  assignmentSourceForVisibilityLog,
+  bookingMatchesRecurringCleanerPendingPayment,
+  cleanerJobsListRowPostFilter,
+  cleanerPendingPaymentBannerForRow,
   fetchCleanerVisibleBookingsMerged,
+  recurringPendingPaymentVisibilityReason,
   sortBookingsByDateThenTime,
 } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -27,6 +32,7 @@ import {
   applyPreviewEarningsToCleanerJobRows,
   DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
+import { logSystemEvent } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,15 +82,14 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
 
-  const { data: jobs, error } = directAssignments
+  const { data: jobsRaw, error } = directAssignments
     ? await admin
         .from("bookings")
         .select(bookingSelect)
         .eq("cleaner_id", viewerCleanerId)
         .not("status", "eq", "failed")
-        .not("status", "eq", "pending_payment")
         .not("status", "eq", "payment_expired")
         .order("date", { ascending: true })
         .order("time", { ascending: true })
@@ -94,18 +99,15 @@ export async function GET(request: Request) {
           select: bookingSelect,
           perBranchLimit: 300,
           applyEachBranch: (q) =>
-            q
-              .not("status", "eq", "failed")
-              .not("status", "eq", "pending_payment")
-              .not("status", "eq", "payment_expired")
-              .order("date", { ascending: true })
-              .order("time", { ascending: true }),
+            q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
         });
         return {
           data: sortBookingsByDateThenTime((merged ?? []) as Record<string, unknown>[]).slice(0, 100),
           error: mergeErr,
         };
       })();
+
+  const jobs = (jobsRaw ?? []).filter(cleanerJobsListRowPostFilter);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -258,17 +260,41 @@ export async function GET(request: Request) {
     }
   }
 
-  const jobsWithIssueFlag = mappedWithLineItems
+  const jobsWithIssue = mappedWithLineItems
     .map((j) => {
       const id = String((j as { id?: string }).id ?? "").trim();
       return { ...j, cleaner_has_issue_report: slimWire ? false : id ? reportedIds.has(id) : false };
     })
     .filter((j) => !assignedOfferPastAcceptanceDeadline(j as CleanerBookingRow));
 
-  const jobsOut = jobsWithIssueFlag.map((j) => ({
-    ...j,
-    ...augmentCleanerBookingWire(j as Record<string, unknown>, viewerCleanerId),
-  }));
+  const jobsOut = jobsWithIssue.map((j) => {
+    const rec = j as Record<string, unknown>;
+    const banner = cleanerPendingPaymentBannerForRow(rec);
+    const visMode =
+      String(rec.status ?? "").trim().toLowerCase() === "pending_payment" && bookingMatchesRecurringCleanerPendingPayment(rec)
+        ? ("recurring_pending_payment" as const)
+        : null;
+    if (visMode && process.env.SHALEAN_CLEANER_VISIBILITY_DIAGNOSTICS === "1") {
+      void logSystemEvent({
+        level: "info",
+        source: "cleaner_jobs_visibility",
+        message: "recurring_pending_payment_visible",
+        context: {
+          visibility_mode: visMode,
+          booking_id: String(rec.id ?? "").trim() || null,
+          cleaner_id: viewerCleanerId,
+          recurring_reason: recurringPendingPaymentVisibilityReason(rec),
+          assignment_source: assignmentSourceForVisibilityLog(viewerCleanerId, rec),
+        },
+      });
+    }
+    return {
+      ...j,
+      ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
+      ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
+      ...augmentCleanerBookingWire(rec, viewerCleanerId),
+    };
+  });
 
   const teamBookingIds = jobsOut
     .filter((j) => (j as { is_team_job?: boolean }).is_team_job === true)

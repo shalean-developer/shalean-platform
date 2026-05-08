@@ -1,12 +1,19 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  bookingAppointmentIsoUtc,
+  calendarMonthsBetweenCleanerJoinedAndAppointment,
+} from "@/lib/payout/canonicalCleanerPayout";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
-/** Same threshold as {@link computeBookingEarnings} / {@link calculateCleanerPayout}. */
+/** Re-export for line-share + booking rows (single appointment parser). */
+export { bookingAppointmentIsoUtc };
+
+/** Same threshold as {@link computeBookingEarnings} / canonical tenure. */
 export const TENURE_MONTHS_THRESHOLD_FOR_LINE_SHARE = 4;
 
-/** Tenure-based share of eligible line totals (matches display/hybrid tenure bands). */
+/** Tenure-based share of eligible line totals (matches canonical display tenure bands). */
 export const NEW_CLEANER_LINE_SHARE = 0.6;
 export const EXPERIENCED_CLEANER_LINE_SHARE = 0.7;
 
@@ -15,34 +22,10 @@ export const FALLBACK_LINE_CLEANER_SHARE = 0.7;
 
 /**
  * Calendar months between cleaner anchor (`joined_at` / `created_at`) and booking appointment,
- * matching `computeBookingEarnings` / `monthsBetween` semantics.
+ * matching the canonical payout engine.
  */
 export function monthsBetweenCleanerJoinedAndBookingDate(joinedAtIso: string, bookingDateIso: string): number {
-  const d1 = new Date(joinedAtIso);
-  const d2 = new Date(bookingDateIso);
-  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) {
-    return 0;
-  }
-  let months = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
-  if (d2.getDate() < d1.getDate()) {
-    months -= 1;
-  }
-  return Math.max(months, 0);
-}
-
-/**
- * Appointment instant for tenure (UTC Z). Requires `YYYY-MM-DD` date; time optional `HH:MM`.
- * Returns null if date is missing/invalid — callers must not substitute "now" for booking time.
- */
-export function bookingAppointmentIsoUtc(
-  dateYmd: string | null | undefined,
-  timeHm: string | null | undefined,
-): string | null {
-  const d = String(dateYmd ?? "").trim();
-  const t = String(timeHm ?? "").trim().slice(0, 5);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
-  if (/^\d{2}:\d{2}$/.test(t)) return `${d}T${t}:00.000Z`;
-  return `${d}T12:00:00.000Z`;
+  return calendarMonthsBetweenCleanerJoinedAndAppointment(joinedAtIso, bookingDateIso);
 }
 
 export function tenureMonthsToLineSharePercentage(months: number): number {

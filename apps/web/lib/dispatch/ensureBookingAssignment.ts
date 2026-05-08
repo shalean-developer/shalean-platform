@@ -18,6 +18,7 @@ export type EnsureAssignmentSource =
   | "admin_mark_paid"
   | "admin_dispatch_api"
   | "cleaner_job_reject"
+  | "cleaner_job_reject_recurring_pending"
   | "offer_decline_redispatch"
   | "whatsapp_offer_decline"
   | "escalate_ack_timeout"

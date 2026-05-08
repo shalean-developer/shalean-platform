@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import type { AdminBookingsListRow } from "@/lib/admin/adminBookingsListRow";
+import { adminBookingsListRowToOperationalRecord } from "@/lib/admin/adminBookingOperationalRecord";
 import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
 import {
   centsToZar,
@@ -27,6 +29,7 @@ import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import type { CleanerOption } from "@/lib/admin/assignRanking";
 import { AvatarStack } from "@/components/admin/AvatarStack";
 import { BookingCardStatusBadge } from "@/components/admin/BookingCardStatusBadge";
+import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
 
 export type AdminBookingCardProps = {
   row: AdminBookingsListRow;
@@ -62,14 +65,34 @@ export function BookingCard({
   onBookingActionsCancel,
   onDeleteBooking,
 }: AdminBookingCardProps) {
+  const listAdminOp = useMemo(
+    () =>
+      describeBookingOperationalState({
+        row: adminBookingsListRowToOperationalRecord(r),
+        viewer: "admin",
+      }),
+    [r],
+  );
+  const showListMarkCancel =
+    listAdminOp.operationalPhase !== "completed" &&
+    listAdminOp.operationalPhase !== "cancelled" &&
+    listAdminOp.operationalPhase !== "failed";
+
   const roster = r.booking_cleaners ?? [];
   const lead = roster.find((c) => String(c.role).toLowerCase() === "lead");
   const leadName = lead?.full_name?.trim() || null;
   const startMins = startsInMinutes(r.date, r.time);
   const assignSourceLine = assignmentSourceLabel(r);
+  const rosterHeadcount = Math.max(1, roster.length || 0);
   const payoutCard = computeAdminBookingCleanerPayoutDisplay({
     payout_type: r.payout_type,
     is_team_job: r.is_team_job,
+    team_member_count_snapshot:
+      r.team_member_count_snapshot != null && Number.isFinite(Number(r.team_member_count_snapshot))
+        ? Number(r.team_member_count_snapshot)
+        : r.is_team_job === true
+          ? rosterHeadcount
+          : null,
     display_earnings_cents: r.display_earnings_cents,
     cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
     cleaner_payout_cents: r.cleaner_payout_cents,
@@ -131,7 +154,7 @@ export function BookingCard({
               <span className="line-clamp-2">{locationLabel}</span>
             </p>
           </div>
-          <BookingCardStatusBadge status={r.status} />
+          <BookingCardStatusBadge row={r} />
         </div>
 
         <p className="mt-3 text-sm font-medium text-zinc-800 dark:text-zinc-100" title={rosterTip || undefined}>
@@ -368,6 +391,7 @@ export function BookingCard({
             onAssign={(booking) => onToggleAssign(booking.id)}
             onReschedule={onBookingActionsReschedule}
             onCancel={onBookingActionsCancel}
+            showMarkCancel={showListMarkCancel}
             onView={(booking) => onOpenDetails(booking.id)}
             onDelete={(booking) => void onDeleteBooking(booking.id)}
           />

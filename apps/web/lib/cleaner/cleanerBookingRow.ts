@@ -82,4 +82,14 @@ export type CleanerBookingRow = {
   team_roster?: TeamRosterMemberWire[] | null;
   /** Short “other teammates” line for cards (excludes viewer). */
   team_roster_summary?: string | null;
+  /** Set when a recurring `pending_payment` row is visible on cleaner APIs (`recurring_pending_payment`). */
+  cleaner_visibility_mode?: "recurring_pending_payment" | null;
+  /** Payment / invoice line for recurring unpaid rows (e.g. “Recurring invoice pending”). */
+  cleaner_pending_payment_banner?: string | null;
+  is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  monthly_invoice_id?: string | null;
+  payment_completed_at?: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
+  admin_recurring_unpaid_completion_override_by?: string | null;
 };

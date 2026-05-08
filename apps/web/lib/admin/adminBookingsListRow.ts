@@ -27,6 +27,17 @@ export type AdminBookingsListRow = {
   payout_type?: string | null;
   is_test?: boolean | null;
   status: string | null;
+  /** From `bookings.cleaner_response_status` when included on list select (canonical ops). */
+  cleaner_response_status?: string | null;
+  accepted_at?: string | null;
+  is_recurring_generated?: boolean | null;
+  /** Booking `billing_type` when selected (recurring vs checkout). */
+  billing_type?: string | null;
+  payment_completed_at?: string | null;
+  payout_status?: string | null;
+  payout_paid_at?: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
+  admin_recurring_unpaid_completion_override_by?: string | null;
   dispatch_status: "searching" | "offered" | "assigned" | "failed" | "no_cleaner" | "unassignable" | null;
   surge_multiplier?: number | null;
   surge_reason?: string | null;
@@ -56,6 +67,8 @@ export type AdminBookingsListRow = {
   admin_force_slot_override?: boolean | null;
   team_id?: string | null;
   is_team_job?: boolean | null;
+  /** Roster size at team assignment (canonical team total = per-cleaner × snapshot). */
+  team_member_count_snapshot?: number | null;
   team?: { id: string; name: string | null } | null;
   booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
 };

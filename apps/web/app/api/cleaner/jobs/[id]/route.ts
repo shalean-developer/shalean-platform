@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { cleanerHasBookingAccess } from "@/lib/cleaner/cleanerBookingAccess";
+import {
+  assignmentSourceForVisibilityLog,
+  bookingMatchesRecurringCleanerPendingPayment,
+  cleanerHasBookingAccess,
+  cleanerJobsListRowPostFilter,
+  cleanerPendingPaymentBannerForRow,
+  recurringPendingPaymentVisibilityReason,
+} from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { runCleanerBookingLifecycleAction, type CleanerLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -28,7 +35,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -57,6 +64,30 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     is_team_job: record.is_team_job === true,
   });
   if (!canAccess) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+
+  if (!cleanerJobsListRowPostFilter(record)) {
+    return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+  }
+
+  const banner = cleanerPendingPaymentBannerForRow(record);
+  const visMode =
+    String(record.status ?? "").trim().toLowerCase() === "pending_payment" && bookingMatchesRecurringCleanerPendingPayment(record)
+      ? ("recurring_pending_payment" as const)
+      : null;
+  if (visMode && process.env.SHALEAN_CLEANER_VISIBILITY_DIAGNOSTICS === "1") {
+    void logSystemEvent({
+      level: "info",
+      source: "cleaner_job_detail_visibility",
+      message: "recurring_pending_payment_visible",
+      context: {
+        visibility_mode: visMode,
+        booking_id: bookingId,
+        cleaner_id: session.cleanerId,
+        recurring_reason: recurringPendingPaymentVisibilityReason(record),
+        assignment_source: assignmentSourceForVisibilityLog(session.cleanerId, record),
+      },
+    });
+  }
 
   const { data: issueHit } = await admin
     .from("cleaner_job_issue_reports")
@@ -190,6 +221,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   return NextResponse.json({
     job: {
       ...safe,
+      ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
+      ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
       ...jobPayHintWire,
       server_now_ms: Date.now(),
       customer_name,

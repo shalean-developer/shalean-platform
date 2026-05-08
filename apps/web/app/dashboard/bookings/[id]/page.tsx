@@ -17,7 +17,12 @@ import {
 } from "@/lib/dashboard/storedPriceBreakdown";
 import type { DashboardBooking } from "@/lib/dashboard/types";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { StatusBadge } from "@/components/dashboard/status-badge";
+import { CustomerBookingStatusBadge } from "@/components/dashboard/customer-booking-status-badge";
+import {
+  canCustomerModifyDashboardBooking,
+  customerBookingDetailTimelineConfirmedDone,
+  describeDashboardBookingOperational,
+} from "@/lib/dashboard/dashboardBookingOperational";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -42,15 +47,22 @@ function formatZarLine(zar: number): string {
 }
 
 function timelineForBooking(b: DashboardBooking): TimelineStep[] {
-  const s = b.status;
-  if (s === "cancelled" || s === "failed") {
+  const phase = describeDashboardBookingOperational(b).operationalPhase;
+  if (phase === "cancelled") {
     return [
       { label: "Booked", done: true },
       { label: "Confirmed", done: false },
-      { label: s === "failed" ? "Failed" : "Cancelled", done: true, tone: "danger" },
+      { label: "Cancelled", done: true, tone: "danger" },
     ];
   }
-  if (s === "completed") {
+  if (phase === "failed") {
+    return [
+      { label: "Booked", done: true },
+      { label: "Confirmed", done: false },
+      { label: "Failed", done: true, tone: "danger" },
+    ];
+  }
+  if (phase === "completed") {
     return [
       { label: "Booked", done: true },
       { label: "Confirmed", done: true },
@@ -59,16 +71,9 @@ function timelineForBooking(b: DashboardBooking): TimelineStep[] {
   }
   return [
     { label: "Booked", done: true },
-    { label: "Confirmed", done: s !== "pending" },
+    { label: "Confirmed", done: customerBookingDetailTimelineConfirmedDone(b) },
     { label: "Completed", done: false },
   ];
-}
-
-function canCustomerModify(b: DashboardBooking): boolean {
-  const st = b.status;
-  if (st === "completed" || st === "cancelled" || st === "failed") return false;
-  if (b.raw.started_at || b.raw.en_route_at) return false;
-  return st === "pending" || st === "confirmed" || st === "assigned";
 }
 
 export default function BookingDetailPage() {
@@ -180,7 +185,7 @@ export default function BookingDetailPage() {
 
   const current = booking;
   const when = formatBookingWhen(current.date, current.time);
-  const modifiable = canCustomerModify(current);
+  const modifiable = canCustomerModifyDashboardBooking(current);
 
   async function confirmCancel() {
     setBusy(true);
@@ -235,7 +240,7 @@ export default function BookingDetailPage() {
                 <CardTitle className="text-xl">{booking.serviceName}</CardTitle>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Ref {booking.paystackReference}</p>
               </div>
-              <StatusBadge status={booking.status} />
+              <CustomerBookingStatusBadge booking={booking} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-4 text-sm text-zinc-600 dark:text-zinc-400">

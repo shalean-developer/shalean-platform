@@ -1,4 +1,7 @@
-/** Paystack SA recipient bank codes (cleaner payout onboarding). */
+/**
+ * Emergency **fallback** catalogue when Paystack `GET /bank?currency=ZAR` is unavailable.
+ * Primary source: server `getSouthAfricanBanks()` → `GET /api/paystack/banks` (cached Paystack list).
+ */
 export const SOUTH_AFRICAN_PAYSTACK_BANKS = [
   { code: "632005", name: "ABSA Bank" },
   { code: "470010", name: "Capitec Bank" },

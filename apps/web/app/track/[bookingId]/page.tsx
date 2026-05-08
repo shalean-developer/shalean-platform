@@ -6,7 +6,11 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
 import { BookingLiveMapEmbed } from "@/components/tracking/BookingLiveMapEmbed";
-import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import {
+  deriveBookingOperationalPhase,
+  isAuthoritativeBookingCompleted,
+  type PhaseRow,
+} from "@/lib/booking/deriveBookingOperationalPhase";
 
 type Gate = "loading" | "sign_in" | "forbidden" | "not_found" | "ok";
 
@@ -16,8 +20,7 @@ export default function CustomerTrackBookingPage() {
   const { user, loading: userLoading } = useUser();
   const [gate, setGate] = useState<Gate>("loading");
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
-  const [crs, setCrs] = useState<string>("");
-  const [jobStatus, setJobStatus] = useState<string>("");
+  const [phaseRow, setPhaseRow] = useState<PhaseRow | null>(null);
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -45,7 +48,9 @@ export default function CustomerTrackBookingPage() {
     void (async () => {
       const { data, error } = await sb
         .from("bookings")
-        .select("id, user_id, location, status, cleaner_response_status")
+        .select(
+          "id, user_id, location, status, cleaner_response_status, en_route_at, started_at, completed_at, dispatch_status, is_recurring_generated, billing_type, monthly_invoice_id",
+        )
         .eq("id", bookingId)
         .maybeSingle();
 
@@ -54,24 +59,30 @@ export default function CustomerTrackBookingPage() {
         setGate("not_found");
         return;
       }
-      const row = data as {
-        user_id?: string | null;
-        location?: string | null;
-        status?: string | null;
-        cleaner_response_status?: string | null;
-      };
+      const row = data as Record<string, unknown>;
       if (String(row.user_id ?? "").trim() !== user.id) {
         setGate("forbidden");
         return;
       }
       setLocationLabel(typeof row.location === "string" ? row.location : null);
-      const crsNorm = String(row.cleaner_response_status ?? "").trim().toLowerCase();
-      const stNorm = String(row.status ?? "").trim().toLowerCase();
-      setCrs(crsNorm);
-      setJobStatus(stNorm);
+      const pr: PhaseRow = {
+        status: row.status != null ? String(row.status) : null,
+        cleaner_response_status: row.cleaner_response_status != null ? String(row.cleaner_response_status) : null,
+        en_route_at: row.en_route_at != null ? String(row.en_route_at) : null,
+        started_at: row.started_at != null ? String(row.started_at) : null,
+        completed_at: row.completed_at != null ? String(row.completed_at) : null,
+        dispatch_status: row.dispatch_status != null ? String(row.dispatch_status) : null,
+        is_recurring_generated:
+          row.is_recurring_generated === true || row.is_recurring_generated === false ? row.is_recurring_generated : null,
+        billing_type: row.billing_type != null ? String(row.billing_type) : null,
+        monthly_invoice_id: row.monthly_invoice_id != null ? String(row.monthly_invoice_id) : null,
+      };
+      setPhaseRow(pr);
       setGate("ok");
 
-      const trackable = crsNorm === CLEANER_RESPONSE.ON_MY_WAY || stNorm === "in_progress";
+      const phase = deriveBookingOperationalPhase(pr);
+      const trackable =
+        !isAuthoritativeBookingCompleted(pr) && (phase === "travelling" || phase === "active");
       if (!trackable) return;
 
       const { data: last } = await sb
@@ -97,10 +108,16 @@ export default function CustomerTrackBookingPage() {
     };
   }, [bookingId, user, userLoading]);
 
+  const trackable =
+    phaseRow != null &&
+    !isAuthoritativeBookingCompleted(phaseRow) &&
+    (() => {
+      const ph = deriveBookingOperationalPhase(phaseRow);
+      return ph === "travelling" || ph === "active";
+    })();
+
   useEffect(() => {
-    if (gate !== "ok" || !bookingId || !user) return;
-    const trackable = crs === CLEANER_RESPONSE.ON_MY_WAY || jobStatus === "in_progress";
-    if (!trackable) return;
+    if (gate !== "ok" || !bookingId || !user || !trackable) return;
 
     const sb = getSupabaseClient();
     if (!sb) return;
@@ -127,7 +144,7 @@ export default function CustomerTrackBookingPage() {
     return () => {
       void sb.removeChannel(ch);
     };
-  }, [gate, bookingId, user, crs, jobStatus]);
+  }, [gate, bookingId, user, trackable]);
 
   if (!bookingId) {
     return (
@@ -174,8 +191,6 @@ export default function CustomerTrackBookingPage() {
     );
   }
 
-  const showLive = crs === CLEANER_RESPONSE.ON_MY_WAY || jobStatus === "in_progress";
-
   return (
     <div className="mx-auto max-w-md space-y-4 p-4 pb-10">
       <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Live tracking</h1>
@@ -184,7 +199,7 @@ export default function CustomerTrackBookingPage() {
           <span className="font-medium text-zinc-800 dark:text-zinc-200">Job address:</span> {locationLabel}
         </p>
       ) : null}
-      {!showLive ? (
+      {!trackable ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Live map appears when your cleaner is on the way or the job is in progress.
         </p>

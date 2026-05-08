@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useBookings } from "@/hooks/useBookings";
 import { useReviews } from "@/hooks/useReviews";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
+import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { BookingCard } from "@/components/dashboard/booking-card";
 import { CustomerBookingsTable } from "@/components/dashboard/customer-bookings-table";
@@ -23,18 +24,18 @@ export default function DashboardBookingsPage() {
 
   const firstPendingReviewBookingId = useMemo(() => {
     if (revLoading) return null;
-    const row = bookings.find((b) => b.status === "completed" && b.raw.cleaner_id && !reviewedIds.has(b.id));
+    const row = bookings.find((b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id));
     return row?.id ?? null;
   }, [bookings, reviewedIds, revLoading]);
 
   const pendingReviewCount = useMemo(() => {
     if (revLoading) return 0;
-    return bookings.filter((b) => b.status === "completed" && b.raw.cleaner_id && !reviewedIds.has(b.id)).length;
+    return bookings.filter((b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id)).length;
   }, [bookings, reviewedIds, revLoading]);
 
   const leaveReviewHrefFor = (b: (typeof bookings)[0]) => {
     if (revLoading) return null;
-    if (b.status !== "completed" || !b.raw.cleaner_id || reviewedIds.has(b.id)) return null;
+    if (!isDashboardBookingAuthoritativelyCompleted(b) || !b.raw.cleaner_id || reviewedIds.has(b.id)) return null;
     return `/review?booking=${encodeURIComponent(b.id)}`;
   };
 

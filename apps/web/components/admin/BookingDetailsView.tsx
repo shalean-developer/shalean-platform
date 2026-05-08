@@ -32,6 +32,10 @@ import {
   type AdminPriceSnapshotCardView,
 } from "@/lib/booking/priceSnapshotAdminDisplay";
 import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
+import {
+  describeBookingOperationalState,
+  operationalDisplayBadgeClassName,
+} from "@/lib/booking/describeBookingOperationalState";
 
 type BookingSeed = { id: string };
 
@@ -50,8 +54,9 @@ type BookingDetails = {
   service_fee_cents?: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
-  /** Team / modern earnings: pool shown to cleaners; `cleaner_payout_cents` may be 0 when `payout_type` is `team_fixed`. */
+  /** Team: per-cleaner display (R250 each); `cleaner_payout_cents` is 0 when team payout is member rows + `team_per_cleaner_fixed`. */
   display_earnings_cents?: number | null;
+  team_member_count_snapshot?: number | null;
   /** Ledger total when synced (fallback when display basis is missing). */
   cleaner_earnings_total_cents?: number | null;
   company_revenue_cents?: number | null;
@@ -109,6 +114,9 @@ type BookingDetails = {
   started_at?: string | null;
   completed_at?: string | null;
   is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
+  admin_recurring_unpaid_completion_override_by?: string | null;
   recurring_id?: string | null;
   /** Derived recurring Paystack collection label (see `deriveRecurringPaymentState`). */
   payment_state?: string | null;
@@ -279,14 +287,6 @@ function formatZar(n: number): string {
   return `R ${n.toLocaleString("en-ZA")}`;
 }
 
-function statusBadgeClass(status: string | null): string {
-  const st = (status ?? "").toLowerCase();
-  if (st === "completed") return "bg-emerald-100 text-emerald-800";
-  if (st === "cancelled" || st === "failed") return "bg-rose-100 text-rose-800";
-  if (st === "assigned") return "bg-blue-100 text-blue-800";
-  return "bg-amber-100 text-amber-800";
-}
-
 /** Human label when payment was recorded off-platform (cash / Zoho / EFT). */
 function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null {
   const pm = String(booking.payment_method ?? "").trim().toLowerCase();
@@ -325,28 +325,12 @@ function formatShortTs(iso: string | null | undefined): string {
   return d.toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** Solo cleaner_id, team roster, or status shows job is operationally assigned (not “searching”). */
-function adminBookingAssignmentStepDone(b: BookingDetails): boolean {
-  if (Boolean(String(b.cleaner_id ?? "").trim())) return true;
-  if (b.is_team_job === true && Boolean(String(b.team_id ?? "").trim())) return true;
-  const st = String(b.status ?? "")
-    .trim()
-    .toLowerCase();
-  if (["assigned", "confirmed", "in_progress", "completed"].includes(st) && Boolean(String(b.assigned_at ?? "").trim())) {
-    return true;
-  }
-  return false;
-}
-
-function adminBookingCleanerAcceptedDone(b: BookingDetails): boolean {
-  const crs = String(b.cleaner_response_status ?? "")
-    .trim()
-    .toLowerCase();
-  if (crs === "accepted" || crs === "on_my_way" || crs === "started" || crs === "completed") return true;
-  return Boolean(String(b.accepted_at ?? "").trim());
-}
-
 function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
+  const op = describeBookingOperationalState({
+    row: booking as unknown as Record<string, unknown>,
+    viewer: "admin",
+  });
+  const t = op.adminTimeline;
   const paidAt = booking.payment_completed_at;
   const offPlatform = adminOffPlatformPaidBadgeLabel(booking);
   const paidTitle = offPlatform ?? (paidAt ? "Paid (checkout)" : "Pending payment");
@@ -354,7 +338,7 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
   const payoutLabel =
     payoutPs === "paid" ? "Paid out to cleaner" : payoutPs === "eligible" ? "Eligible for payout" : payoutPs ? payoutPs : "—";
 
-  const assignedDone = adminBookingAssignmentStepDone(booking);
+  const assignedDone = t.assignedDone;
   const assignedDetail = (() => {
     if (Boolean(String(booking.cleaner_id ?? "").trim())) {
       return formatShortTs(booking.assigned_at ?? null);
@@ -365,7 +349,7 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
     return assignedDone ? formatShortTs(booking.assigned_at ?? null) : "No cleaner yet";
   })();
 
-  const acceptedDone = adminBookingCleanerAcceptedDone(booking);
+  const acceptedDone = t.acceptedDone;
   const acceptedDetail = acceptedDone
     ? String(booking.accepted_at ?? "").trim()
       ? formatShortTs(booking.accepted_at)
@@ -373,12 +357,12 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
     : "Awaiting cleaner in app";
 
   const steps: { key: string; label: string; detail: string; done: boolean }[] = [
-    { key: "created", label: "Created", detail: formatShortTs(booking.created_at), done: true },
+    { key: "created", label: "Created", detail: formatShortTs(booking.created_at), done: t.createdDone },
     {
       key: "paid",
       label: paidTitle,
       detail: paidAt ? formatShortTs(paidAt) : "Not recorded",
-      done: Boolean(paidAt),
+      done: t.paidDone,
     },
     {
       key: "assigned",
@@ -396,15 +380,31 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
       key: "progress",
       label: "In progress",
       detail: formatShortTs(booking.started_at ?? null),
-      done: String(booking.status ?? "").toLowerCase() === "in_progress" || String(booking.status ?? "").toLowerCase() === "completed",
+      done: t.inProgressDone,
     },
     {
       key: "completed",
       label: "Completed",
       detail: formatShortTs(booking.completed_at ?? null),
-      done: String(booking.status ?? "").toLowerCase() === "completed",
+      done: t.completedDone,
     },
-    { key: "payout", label: "Payout", detail: payoutLabel, done: payoutPs === "paid" },
+    ...(op.overrideApplied
+      ? [
+          {
+            key: "admin_override",
+            label: "Recurring unpaid completion override",
+            detail: [
+              "Completed by admin override",
+              op.overrideRecordedBy ? `· ${op.overrideRecordedBy}` : null,
+              op.overrideRecordedAt ? `· ${formatShortTs(op.overrideRecordedAt)}` : null,
+            ]
+              .filter(Boolean)
+              .join(" "),
+            done: true,
+          },
+        ]
+      : []),
+    { key: "payout", label: "Payout", detail: payoutLabel, done: t.payoutPaid },
   ];
 
   return (
@@ -814,6 +814,31 @@ export default function BookingDetailsView({
   const [issueResolveBusyId, setIssueResolveBusyId] = useState<string | null>(null);
   const [issueReportNowMs, setIssueReportNowMs] = useState(() => Date.now());
 
+  const detailRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bumpDetailRefreshDebounced = useCallback(() => {
+    if (detailRefreshTimerRef.current != null) clearTimeout(detailRefreshTimerRef.current);
+    detailRefreshTimerRef.current = setTimeout(() => {
+      detailRefreshTimerRef.current = null;
+      setDetailRefresh((n) => n + 1);
+    }, 400);
+  }, []);
+
+  const adminOperational = useMemo(() => {
+    if (!fullBooking) return null;
+    return describeBookingOperationalState({
+      row: fullBooking as unknown as Record<string, unknown>,
+      viewer: "admin",
+    });
+  }, [fullBooking]);
+
+  const showAdminMarkComplete = adminOperational?.lifecycleCapabilities.complete === true;
+  const opPhase = adminOperational?.operationalPhase;
+  const showAdminMarkCancel =
+    adminOperational != null &&
+    opPhase !== "completed" &&
+    opPhase !== "cancelled" &&
+    opPhase !== "failed";
+
   useEffect(() => {
     if (cleanerIssueReports.length === 0) return;
     const id = window.setInterval(() => setIssueReportNowMs(Date.now()), 60_000);
@@ -926,6 +951,32 @@ export default function BookingDetailsView({
     }
     void loadDetails();
   }, [bookingId, detailRefresh]);
+
+  useEffect(() => {
+    if (!bookingId) return;
+    const sb = getSupabaseBrowser();
+    if (!sb) return;
+    const channel = sb
+      .channel(`admin-booking-detail-${bookingId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `id=eq.${bookingId}` },
+        () => bumpDetailRefreshDebounced(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "booking_cleaners", filter: `booking_id=eq.${bookingId}` },
+        () => bumpDetailRefreshDebounced(),
+      )
+      .subscribe();
+    return () => {
+      if (detailRefreshTimerRef.current != null) {
+        clearTimeout(detailRefreshTimerRef.current);
+        detailRefreshTimerRef.current = null;
+      }
+      void sb.removeChannel(channel);
+    };
+  }, [bookingId, bumpDetailRefreshDebounced]);
 
   useEffect(() => {
     if (!resetEarningsModalOpen || !bookingId) {
@@ -1061,13 +1112,13 @@ export default function BookingDetailsView({
   }, [fullBooking, ledgerCleanerEarnings]);
 
   const canMarkPaid = useMemo(() => {
-    if (!fullBooking) return false;
-    const s = (fullBooking.status ?? "").toLowerCase();
-    if (s === "cancelled" || s === "failed") return false;
+    if (!fullBooking || !adminOperational) return false;
+    const phase = adminOperational.operationalPhase;
+    if (phase === "cancelled" || phase === "failed") return false;
     const p = fullBooking.payment_completed_at;
     if (p != null && String(p).trim() !== "") return false;
     return true;
-  }, [fullBooking]);
+  }, [fullBooking, adminOperational]);
 
   const markPaidPreviewZar = useMemo(() => {
     if (!fullBooking) return null;
@@ -1145,11 +1196,11 @@ export default function BookingDetailsView({
 
   const editPricingDirty = useMemo(() => {
     if (!editDetailsModalOpen || !fullBooking) return false;
-    if ((fullBooking.status ?? "").trim().toLowerCase() === "in_progress") return false;
+    if (adminOperational?.operationalPhase === "active") return false;
     const seed = editDetailsSeedRef.current;
     const exEq = [...editExtrasSlugs].sort().join("|") === [...seed.extras].sort().join("|");
     return editBedrooms !== seed.bedrooms || editBathrooms !== seed.bathrooms || !exEq;
-  }, [editDetailsModalOpen, fullBooking, editBedrooms, editBathrooms, editExtrasSlugs]);
+  }, [editDetailsModalOpen, fullBooking, adminOperational?.operationalPhase, editBedrooms, editBathrooms, editExtrasSlugs]);
 
   const editSaveBlockedByPreview =
     editDetailsModalOpen &&
@@ -1158,8 +1209,7 @@ export default function BookingDetailsView({
 
   useEffect(() => {
     if (!editDetailsModalOpen || !fullBooking?.id) return;
-    const inProg = (fullBooking.status ?? "").trim().toLowerCase() === "in_progress";
-    if (inProg) {
+    if (adminOperational?.operationalPhase === "active") {
       setEditPricePreview(null);
       return;
     }
@@ -1217,7 +1267,7 @@ export default function BookingDetailsView({
   }, [
     editDetailsModalOpen,
     fullBooking?.id,
-    fullBooking?.status,
+    adminOperational?.operationalPhase,
     editBedrooms,
     editBathrooms,
     editExtrasSlugs,
@@ -1226,8 +1276,8 @@ export default function BookingDetailsView({
 
   const handleEditDetailsConfirm = async () => {
     if (!fullBooking?.id) return;
-    const inProg = (fullBooking.status ?? "").trim().toLowerCase() === "in_progress";
-    if (!inProg && editSaveBlockedByPreview) {
+    const inFieldwork = adminOperational?.operationalPhase === "active";
+    if (!inFieldwork && editSaveBlockedByPreview) {
       setToast({
         kind: "error",
         text: editPricePreviewHttpError
@@ -1246,7 +1296,7 @@ export default function BookingDetailsView({
       setToast({ kind: "error", text: "Missing updated_at on booking — refresh the page and try again." });
       return;
     }
-    if (inProg) {
+    if (inFieldwork) {
       if (editAdminNotes === seed.notes) {
         setToast({ kind: "info", text: "No changes to save." });
         setEditDetailsModalOpen(false);
@@ -1413,7 +1463,7 @@ export default function BookingDetailsView({
   const dispatchSt = (fullBooking.dispatch_status ?? "").toLowerCase();
   const needsDispatchManualAttention =
     !isAssigned &&
-    (fullBooking.status ?? "").toLowerCase() === "pending" &&
+    adminOperational?.operationalPhase === "pending" &&
     ["failed", "unassignable", "no_cleaner"].includes(dispatchSt);
 
   const dispatchHoldHeadline =
@@ -2016,9 +2066,23 @@ export default function BookingDetailsView({
               <h1 className="text-2xl font-semibold text-zinc-900">Booking details</h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className={["rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide", statusBadgeClass(fullBooking.status)].join(" ")}>
-                {(fullBooking.status ?? "pending").toUpperCase()}
-              </span>
+              {adminOperational ? (
+                <span
+                  className={[
+                    "rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide",
+                    operationalDisplayBadgeClassName(adminOperational.displayTone),
+                  ].join(" ")}
+                  title={[
+                    adminOperational.displayBadge,
+                    `phase=${adminOperational.operationalPhase}`,
+                    `payment=${adminOperational.paymentState}`,
+                    `recurring=${adminOperational.recurringState}`,
+                    `payout=${adminOperational.payoutState}`,
+                  ].join(" · ")}
+                >
+                  {adminOperational.displayBadge}
+                </span>
+              ) : null}
               {offPlatformPaidLabel ? (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-200"
@@ -2047,6 +2111,8 @@ export default function BookingDetailsView({
               <div className="rounded-lg border border-zinc-200 bg-white px-1 py-1">
                 <BookingActionsDropdown
                   booking={fullBooking}
+                  showMarkComplete={showAdminMarkComplete}
+                  showMarkCancel={showAdminMarkCancel}
                   onAssign={() => void openAssignModal()}
                   onReassign={() => void openAssignModal()}
                   onReschedule={() => setRescheduleOpen(true)}
@@ -2231,8 +2297,7 @@ export default function BookingDetailsView({
           </DetailCard>
           <AdminBookingLiveLocation
             bookingId={fullBooking.id}
-            status={fullBooking.status}
-            cleanerResponseStatus={fullBooking.cleaner_response_status ?? null}
+            operationalPhase={adminOperational?.operationalPhase ?? "unknown"}
             cleanerId={fullBooking.cleaner_id}
           />
           <DetailCard title="Pricing snapshot">
@@ -3074,7 +3139,7 @@ export default function BookingDetailsView({
                   Mark as Paid
                 </button>
                 {fullBooking.is_recurring_generated &&
-                (fullBooking.status ?? "").trim().toLowerCase() === "pending_payment" ? (
+                adminOperational?.operationalPhase === "pending_payment_recurring" ? (
                   <button
                     type="button"
                     onClick={() => void handleRetryRecurringCharge()}
@@ -3120,12 +3185,22 @@ export default function BookingDetailsView({
                 {resetEarningsClientBlockReason ? (
                   <p className="text-xs leading-snug text-amber-900">{resetEarningsClientBlockReason}</p>
                 ) : null}
-                <button type="button" onClick={() => void setStatusOptimistic("completed")} disabled={statusBusy !== null} className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60">
-                  {statusBusy === "completed" ? <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Saving…</span> : "Mark as completed"}
-                </button>
-                <button type="button" onClick={() => void setStatusOptimistic("cancelled")} disabled={statusBusy !== null} className="w-full rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-60">
-                  {statusBusy === "cancelled" ? <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Saving…</span> : "Cancel booking"}
-                </button>
+                {adminOperational?.canAdminOverride && adminOperational.overrideReason ? (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-950">
+                    <span className="font-semibold">Admin override available: </span>
+                    {adminOperational.overrideReason} Completing here records an explicit admin lifecycle override (audited).
+                  </p>
+                ) : null}
+                {showAdminMarkComplete ? (
+                  <button type="button" onClick={() => void setStatusOptimistic("completed")} disabled={statusBusy !== null} className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60">
+                    {statusBusy === "completed" ? <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Saving…</span> : "Mark as completed"}
+                  </button>
+                ) : null}
+                {showAdminMarkCancel ? (
+                  <button type="button" onClick={() => void setStatusOptimistic("cancelled")} disabled={statusBusy !== null} className="w-full rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-60">
+                    {statusBusy === "cancelled" ? <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Saving…</span> : "Cancel booking"}
+                  </button>
+                ) : null}
               </div>
             </section>
           </div>
@@ -3139,7 +3214,7 @@ export default function BookingDetailsView({
             <p className="mt-2 text-sm text-zinc-600">
               New total will be recalculated automatically from the catalog snapshot locked on this booking.
             </p>
-            {(fullBooking.status ?? "").trim().toLowerCase() === "in_progress" ? (
+            {adminOperational?.operationalPhase === "active" ? (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                 This job is in progress — only admin notes can be edited.
               </p>
@@ -3206,7 +3281,7 @@ export default function BookingDetailsView({
                   min={1}
                   max={10}
                   value={editBedrooms}
-                  disabled={(fullBooking.status ?? "").trim().toLowerCase() === "in_progress"}
+                  disabled={adminOperational?.operationalPhase === "active"}
                   onChange={(e) => setEditBedrooms(Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1))))}
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:bg-zinc-100 disabled:text-zinc-500"
                 />
@@ -3218,7 +3293,7 @@ export default function BookingDetailsView({
                   min={1}
                   max={10}
                   value={editBathrooms}
-                  disabled={(fullBooking.status ?? "").trim().toLowerCase() === "in_progress"}
+                  disabled={adminOperational?.operationalPhase === "active"}
                   onChange={(e) => setEditBathrooms(Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1))))}
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:bg-zinc-100 disabled:text-zinc-500"
                 />
@@ -3231,13 +3306,13 @@ export default function BookingDetailsView({
                   <label
                     key={slug}
                     className={`flex items-center gap-2 text-sm text-zinc-800 ${
-                      (fullBooking.status ?? "").trim().toLowerCase() === "in_progress" ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                      adminOperational?.operationalPhase === "active" ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={editExtrasSlugs.includes(slug)}
-                      disabled={(fullBooking.status ?? "").trim().toLowerCase() === "in_progress"}
+                      disabled={adminOperational?.operationalPhase === "active"}
                       onChange={() => toggleEditExtra(slug)}
                       className="rounded border-zinc-300"
                     />

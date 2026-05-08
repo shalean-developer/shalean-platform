@@ -10,7 +10,7 @@ import { buildEarningsInsightMessages, buildLast7DaysEarningsPoints } from "@/li
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummaryTypes";
 import {
-  bookingStatusBadgeLabel,
+  earningsRowOperationalBadge,
   countJobsAndCentsForToday,
   countJobsInWeek,
   dayHeading,
@@ -710,7 +710,7 @@ export function CleanerEarningsScreen() {
                         </h3>
                         <ul className="mt-2 space-y-3">
                           {list.map((r) => {
-                            const badge = bookingStatusBadgeLabel(r.booking_status);
+                            const badge = earningsRowOperationalBadge(r);
                             const you = cents(r.amount_cents);
                             const earningsRowHref = `/cleaner/earnings?range=week&job=${encodeURIComponent(r.booking_id)}`;
                             return (

@@ -16,13 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { CleanerBankSearchCombobox } from "@/components/cleaner-profile/CleanerBankSearchCombobox";
 import { signOut } from "@/lib/auth/authClient";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { accountHealthBadge, mapCleanerAccountHealthTier } from "@/lib/cleaner/mapCleanerAccountHealth";
 import { payoutArrivalSummaryJohannesburg } from "@/lib/cleaner/earnings/nextPayoutFriday";
-import { bankDisplayNameFromCode, SOUTH_AFRICAN_PAYSTACK_BANKS } from "@/lib/cleaner/southAfricanPaystackBanks";
+import { bankDisplayNameFromCode } from "@/lib/cleaner/southAfricanPaystackBanks";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import { CleanerDashboardInfoHint } from "@/components/cleaner-dashboard/CleanerDashboardInfoHint";
 import type { CleanerProfileSummaryJson } from "@/lib/cleaner/cleanerProfileSummaryTypes";
@@ -79,7 +79,7 @@ export default function CleanerProfilePage() {
   const [bankSaving, setBankSaving] = useState(false);
   const [bankFormError, setBankFormError] = useState<string | null>(null);
   const [bankSaveSuccess, setBankSaveSuccess] = useState(false);
-  const [bankCode, setBankCode] = useState<string>(SOUTH_AFRICAN_PAYSTACK_BANKS[0]?.code ?? "");
+  const [bankCode, setBankCode] = useState<string>("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -150,7 +150,7 @@ export default function CleanerProfilePage() {
     setBankSaveSuccess(false);
     setBankFormError(null);
     const merged = mergePaymentFromSummary(payment, summary);
-    setBankCode(merged?.bankCode?.trim() || SOUTH_AFRICAN_PAYSTACK_BANKS[0]?.code || "");
+    setBankCode(merged?.bankCode?.trim() || "");
     setAccountNumber("");
     setAccountName(String(merged?.accountName ?? "").trim());
     setBankOpen(true);
@@ -160,6 +160,11 @@ export default function CleanerProfilePage() {
     setBankSaving(true);
     setBankFormError(null);
     try {
+      if (!bankCode.trim()) {
+        setBankFormError("Please select your bank.");
+        setBankSaving(false);
+        return;
+      }
       const headers = await getCleanerAuthHeaders();
       if (!headers) {
         setBankFormError("Not signed in.");
@@ -454,7 +459,7 @@ export default function CleanerProfilePage() {
       )}
 
       <Dialog open={bankOpen} onOpenChange={setBankOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-md overflow-visible rounded-2xl">
           <DialogHeader>
             <DialogTitle>{hasRecipient ? "Update bank details" : "Add bank details"}</DialogTitle>
             <DialogDescription>
@@ -463,13 +468,7 @@ export default function CleanerProfilePage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Select id="bank-code" label="Bank" value={bankCode} onChange={(e) => setBankCode(e.target.value)}>
-                {SOUTH_AFRICAN_PAYSTACK_BANKS.map((b) => (
-                  <option key={b.code} value={b.code}>
-                    {b.name}
-                  </option>
-                ))}
-              </Select>
+              <CleanerBankSearchCombobox active={bankOpen} value={bankCode} onChange={setBankCode} disabled={bankSaving} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="acct-num">Account number</Label>
@@ -499,7 +498,12 @@ export default function CleanerProfilePage() {
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setBankOpen(false)} disabled={bankSaving}>
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" disabled={bankSaving} onClick={() => void submitBank()}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              disabled={bankSaving || !bankCode.trim()}
+              onClick={() => void submitBank()}
+            >
               {bankSaving ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>

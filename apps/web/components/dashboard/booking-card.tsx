@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 import { cn } from "@/lib/utils";
+import { dashboardBookingCustomerSurface } from "@/lib/dashboard/dashboardBookingOperational";
 
 type BookingCardProps = {
   booking: DashboardBooking;
@@ -27,13 +28,6 @@ type BookingCardProps = {
   onCancel?: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   onReschedule?: (id: string, date: string, time: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 };
-
-function canCustomerModify(b: DashboardBooking): boolean {
-  const st = b.status;
-  if (st === "completed" || st === "cancelled" || st === "failed") return false;
-  if (b.raw.started_at || b.raw.en_route_at) return false;
-  return st === "pending" || st === "confirmed" || st === "assigned";
-}
 
 export function BookingCard({
   booking,
@@ -52,7 +46,7 @@ export function BookingCard({
   const [resDate, setResDate] = useState(booking.date);
   const [resTime, setResTime] = useState(booking.time);
 
-  const modifiable = canCustomerModify(booking);
+  const { modifiable, showRebook } = useMemo(() => dashboardBookingCustomerSurface(booking), [booking]);
 
   const rescheduleSlots = useMemo(() => filterBookableTimeSlots(resDate), [resDate]);
   const crossMonthBlocked = useMemo(() => rescheduleCrossMonthBlocked(booking, resDate), [booking, resDate]);
@@ -178,7 +172,7 @@ export function BookingCard({
                   Cancel
                 </Button>
               ) : null}
-              {booking.status === "completed" || booking.status === "cancelled" ? (
+              {showRebook ? (
                 <Button asChild variant="outline" size="lg" className="min-h-12 flex-1 rounded-xl sm:flex-none">
                   <Link href="/booking">Rebook</Link>
                 </Button>

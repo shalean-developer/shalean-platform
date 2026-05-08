@@ -46,6 +46,7 @@ type BookingEarningsRow = {
   is_team_job: boolean | null;
   payout_paid_at: string | null;
   payout_run_id: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
   total_paid_zar?: unknown;
   amount_paid_cents?: unknown;
 };
@@ -182,7 +183,7 @@ export async function GET(request: Request) {
     await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
-          "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents",
+          "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, admin_recurring_unpaid_completion_override_at",
         perBranchLimit: 300,
         applyEachBranch: (q) =>
           q
@@ -312,6 +313,7 @@ export async function GET(request: Request) {
       payout_run_id: normalized.payout_run_id,
       in_frozen_batch: inLockedWeeklyBatch,
       booking_status: String(b.status ?? "completed").trim().toLowerCase(),
+      admin_recurring_unpaid_completion_override_at: b.admin_recurring_unpaid_completion_override_at ?? null,
       is_team_job: Boolean(b.is_team_job),
       ...(normalized.__invalid ? { __invalid: true as const } : {}),
     };

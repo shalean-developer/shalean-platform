@@ -195,17 +195,16 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     if (result.ok) expect(result.skipped).toBe(false);
 
     const booking = admin.tables.bookings[0]!;
-    expect(booking.display_earnings_cents).toBe(25_000);
-    expect(booking.payout_earnings_cents).toBe(25_000);
+    expect(booking.display_earnings_cents).toBe(30_000);
+    expect(booking.payout_earnings_cents).toBe(30_000);
     expect(booking.internal_earnings_cents).toBe(30_000);
     expect(booking.earnings_percentage_applied).toBe(0.6);
-    expect(booking.earnings_cap_cents_applied).toBe(25_000);
+    expect(booking.earnings_cap_cents_applied).toBe(35_000);
     expect(Number(booking.earnings_tenure_months_at_assignment)).toBeGreaterThanOrEqual(0);
 
     expect(booking.cleaner_payout_cents).toBe(30_000);
     expect(booking.cleaner_bonus_cents).toBe(0);
     expect(booking.company_revenue_cents).toBe(20_000);
-    expect(Number(booking.display_earnings_cents)).toBeLessThanOrEqual(Number(booking.earnings_cap_cents_applied));
     expect(Number(booking.display_earnings_cents)).toBeGreaterThanOrEqual(0);
     expect(Number(booking.payout_earnings_cents)).toBe(Number(booking.display_earnings_cents));
   });
@@ -261,19 +260,19 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     const booking = admin.tables.bookings[0]!;
     expect(booking.display_earnings_cents).toBe(25_000);
     expect(booking.payout_earnings_cents).toBe(25_000);
-    expect(booking.internal_earnings_cents).toBe(25_000);
+    expect(booking.internal_earnings_cents).toBe(75_000);
     expect(booking.cleaner_payout_cents).toBe(0);
     expect(booking.cleaner_bonus_cents).toBe(0);
-    expect(booking.payout_type).toBe("team_fixed");
+    expect(booking.payout_type).toBe("team_per_cleaner_fixed");
 
     const payouts = admin.tables.team_job_member_payouts;
     expect(payouts).toHaveLength(3);
     const sum = payouts.reduce((s, row) => s + Number((row as { payout_cents?: number }).payout_cents ?? 0), 0);
-    expect(sum).toBe(25_000);
+    expect(sum).toBe(75_000);
     const byId = new Map(payouts.map((row) => [(row as { cleaner_id: string }).cleaner_id, row as { payout_cents: number }]));
-    expect(byId.get(cLead)!.payout_cents).toBe(8334);
-    expect(byId.get(cMem2)!.payout_cents).toBe(8333);
-    expect(byId.get(cMem3)!.payout_cents).toBe(8333);
+    expect(byId.get(cLead)!.payout_cents).toBe(25_000);
+    expect(byId.get(cMem2)!.payout_cents).toBe(25_000);
+    expect(byId.get(cMem3)!.payout_cents).toBe(25_000);
   });
 
   it("freezes on rerun and avoids second write", async () => {
@@ -318,7 +317,7 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
       }
     }
     expect(admin.updateCount.bookings ?? 0).toBe(1);
-    expect(admin.serviceCapSelects).toBeGreaterThanOrEqual(1);
+    expect(admin.serviceCapSelects).toBe(0);
   });
 
   it("does not apply cap when percentage earnings are below cap", async () => {
@@ -354,8 +353,8 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
 
     expect(result.ok).toBe(true);
     const booking = admin.tables.bookings[0]!;
-    expect(booking.display_earnings_cents).toBe(12_000);
-    expect(Number(booking.display_earnings_cents)).toBeLessThanOrEqual(Number(booking.earnings_cap_cents_applied));
+    expect(booking.display_earnings_cents).toBe(20_000);
+    expect(Number(booking.earnings_cap_cents_applied)).toBe(35_000);
     expect(Number(booking.display_earnings_cents)).toBeGreaterThanOrEqual(0);
     expect(Number(booking.payout_earnings_cents)).toBe(Number(booking.display_earnings_cents));
   });
@@ -387,8 +386,6 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
       service_earning_caps: [],
     });
     mockState.admin = admin;
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
     const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
     const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b5", cleanerId: "c1" });
 
@@ -397,15 +394,10 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     expect(admin.updateCount.bookings ?? 0).toBeGreaterThanOrEqual(1);
 
     const booking = admin.tables.bookings[0]!;
-    expect(booking.display_earnings_cents).toBe(24_000);
-    expect(booking.payout_earnings_cents).toBe(24_000);
+    expect(booking.display_earnings_cents).toBe(25_000);
+    expect(booking.payout_earnings_cents).toBe(25_000);
     expect(booking.internal_earnings_cents).toBe(24_000);
-    expect(booking.earnings_cap_cents_applied).toBeNull();
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      "EARNINGS_CAP_MISSING",
-      expect.objectContaining({ serviceId: "standard", reason: "no_active_cap" }),
-    );
+    expect(booking.earnings_cap_cents_applied).toBe(35_000);
   });
 
   it("recomputes solo display when stuck at 0 but customer payment columns show paid amount", async () => {
@@ -441,7 +433,46 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.skipped).toBe(false);
-    expect(admin.tables.bookings[0]!.display_earnings_cents).toBe(25_000);
+    expect(admin.tables.bookings[0]!.display_earnings_cents).toBe(30_000);
+  });
+
+  it("solo deep cleaning uses fixed R250 canonical payout", async () => {
+    const admin = new MockSupabaseClient({
+      bookings: [
+        {
+          id: "b-deep-solo",
+          cleaner_id: "c1",
+          team_id: null,
+          is_team_job: false,
+          date: "2026-04-20",
+          time: "10:00:00",
+          total_paid_zar: 900,
+          total_paid_cents: 90_000,
+          amount_paid_cents: 90_000,
+          base_amount_cents: 90_000,
+          service_fee_cents: 0,
+          service: "Deep Cleaning",
+          booking_snapshot: { locked: { service: "deep" } },
+          cleaner_payout_cents: null,
+          cleaner_bonus_cents: null,
+          company_revenue_cents: null,
+          display_earnings_cents: null,
+        },
+      ],
+      cleaners: [{ id: "c1", joined_at: "2010-01-01T00:00:00.000Z", created_at: "2010-01-01T00:00:00.000Z" }],
+      service_earning_caps: [],
+    });
+    mockState.admin = admin;
+
+    const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
+    const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: "b-deep-solo", cleanerId: "c1" });
+
+    expect(result.ok).toBe(true);
+    const booking = admin.tables.bookings[0]!;
+    expect(booking.display_earnings_cents).toBe(25_000);
+    expect(booking.cleaner_payout_cents).toBe(25_000);
+    expect(booking.cleaner_bonus_cents).toBe(0);
+    expect(booking.payout_type).toBe("fixed_special");
   });
 
   it("persists solo payout for recurring_invoice when amount_paid_cents is 0 but zar quotes line value", async () => {
@@ -483,6 +514,6 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     if (result.ok) expect(result.skipped).toBe(false);
     const booking = admin.tables.bookings[0]!;
     expect(booking.cleaner_payout_cents).toBe(30_000);
-    expect(booking.display_earnings_cents).toBe(25_000);
+    expect(booking.display_earnings_cents).toBe(30_000);
   });
 });

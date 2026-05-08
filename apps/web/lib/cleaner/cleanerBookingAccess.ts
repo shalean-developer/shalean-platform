@@ -1,4 +1,78 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+
+/**
+ * Columns callers should include on `bookings` selects when using {@link cleanerJobsListRowPostFilter}
+ * (otherwise `pending_payment` rows may be dropped if recurring signals are missing from the payload).
+ */
+export const CLEANER_JOBS_LIST_RECURRING_VISIBILITY_COLUMNS =
+  "is_recurring_generated,billing_type,monthly_invoice_id";
+
+/**
+ * Dual-signal “assignment accepted” from a raw `bookings` row (canonical column + `accepted_at`).
+ * Shared by operational state and cleaner mobile mapping to avoid forked interpretation.
+ */
+export function isCleanerAssignmentAcceptedRecord(row: Record<string, unknown>): boolean {
+  const raw = row.cleaner_response_status;
+  const r = raw == null || raw === "" ? "" : String(raw).trim().toLowerCase();
+  const hasAcceptedAt = Boolean(String(row.accepted_at ?? "").trim());
+  return r === CLEANER_RESPONSE.ACCEPTED || hasAcceptedAt;
+}
+
+/** True when an unpaid `pending_payment` row should be visible on cleaner job lists (recurring / invoice-backed only). */
+export function bookingMatchesRecurringCleanerPendingPayment(row: Record<string, unknown>): boolean {
+  const st = String(row.status ?? "").trim().toLowerCase();
+  if (st !== "pending_payment") return false;
+  if (row.is_recurring_generated === true) return true;
+  const bt = String(row.billing_type ?? "").trim().toLowerCase();
+  if (bt === "recurring_invoice" || bt === "monthly_contract") return true;
+  const mid = row.monthly_invoice_id;
+  if (mid != null && String(mid).trim() !== "") return true;
+  return false;
+}
+
+/** Machine-readable reason for {@link bookingMatchesRecurringCleanerPendingPayment} (logging / support). */
+export function recurringPendingPaymentVisibilityReason(row: Record<string, unknown>): string {
+  if (row.is_recurring_generated === true) return "is_recurring_generated";
+  const bt = String(row.billing_type ?? "").trim().toLowerCase();
+  if (bt === "recurring_invoice" || bt === "monthly_contract") return "billing_type";
+  const mid = row.monthly_invoice_id;
+  if (mid != null && String(mid).trim() !== "") return "monthly_invoice_id";
+  return "none";
+}
+
+/**
+ * Cleaner jobs/dashboard list policy: hide terminal payment failures; hide one-time `pending_payment`;
+ * allow recurring / invoice-backed `pending_payment` for assigned/roster/team rows (assignment enforced by queries).
+ */
+export function cleanerJobsListRowPostFilter(row: Record<string, unknown>): boolean {
+  const st = String(row.status ?? "").trim().toLowerCase();
+  if (st === "failed" || st === "payment_expired") return false;
+  if (st === "pending_payment") return bookingMatchesRecurringCleanerPendingPayment(row);
+  return true;
+}
+
+/** How the cleaner row entered the merged visibility set (diagnostics only). */
+export function assignmentSourceForVisibilityLog(viewerId: string, row: Record<string, unknown>): string {
+  const v = viewerId.trim();
+  const cid = String(row.cleaner_id ?? "").trim();
+  const owner = String(row.payout_owner_cleaner_id ?? "").trim();
+  if (cid === v || owner === v) return "direct_or_owner";
+  if (row.is_team_job === true && String(row.team_id ?? "").trim()) return "team_scope";
+  return "roster_or_merged";
+}
+
+/** Customer-facing banner for cleaner apps when a recurring unpaid job is listed. */
+export function cleanerPendingPaymentBannerForRow(row: Record<string, unknown>): string | null {
+  const st = String(row.status ?? "").trim().toLowerCase();
+  if (st !== "pending_payment" || !bookingMatchesRecurringCleanerPendingPayment(row)) return null;
+  const bt = String(row.billing_type ?? "").trim().toLowerCase();
+  if (bt === "monthly_contract" || bt === "recurring_invoice") return "Recurring invoice pending";
+  const mid = row.monthly_invoice_id;
+  if (mid != null && String(mid).trim() !== "") return "Recurring invoice pending";
+  if (row.is_recurring_generated === true) return "Awaiting customer payment";
+  return "Awaiting customer payment";
+}
 
 /** Stable schedule ordering after merging visibility branches in JS. */
 export function sortBookingsByDateThenTime(rows: Record<string, unknown>[]): Record<string, unknown>[] {
@@ -24,6 +98,10 @@ export function sortBookingsByCompletedAtThenId(rows: Record<string, unknown>[])
 /**
  * Loads bookings visible to a cleaner using **separate** queries per visibility rule, then merges.
  * Avoids PostgREST `.or(and(is_team_job…, team_id.in.(…)), …)` parsing quirks that can drop team rows.
+ *
+ * **List policy:** after merge, rows are filtered with {@link cleanerJobsListRowPostFilter} — include
+ * {@link CLEANER_JOBS_LIST_RECURRING_VISIBILITY_COLUMNS} in `select` so recurring `pending_payment` jobs
+ * are not dropped when they should remain visible.
  */
 export async function fetchCleanerVisibleBookingsMerged(
   admin: SupabaseClient,
@@ -84,7 +162,8 @@ export async function fetchCleanerVisibleBookingsMerged(
     if (err) return { data: null, error: err };
   }
 
-  return { data: [...dedupe.values()], error: null };
+  const merged = [...dedupe.values()].filter(cleanerJobsListRowPostFilter);
+  return { data: merged, error: null };
 }
 
 export type BookingAccessRow = {

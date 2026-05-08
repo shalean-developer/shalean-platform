@@ -8,6 +8,8 @@ import {
 export type AdminBookingCleanerPayoutInput = {
   payout_type?: string | null;
   is_team_job?: boolean | null;
+  /** Headcount at assignment; used with `team_per_cleaner_fixed` to show total team payout. */
+  team_member_count_snapshot?: number | null;
   display_earnings_cents?: number | null;
   cleaner_earnings_total_cents?: number | null;
   cleaner_payout_cents?: number | null;
@@ -21,6 +23,10 @@ export type AdminBookingCleanerPayoutInput = {
   service_fee_cents?: number | null;
   service?: string | null;
   booking_snapshot?: unknown;
+  /** When projecting solo payout, pass `cleaners.joined_at` + booking appointment for canonical tenure. */
+  cleaner_joined_at?: string | null;
+  booking_date?: string | null;
+  booking_time?: string | null;
 };
 
 export type AdminBookingCleanerPayoutDisplay = {
@@ -56,7 +62,9 @@ function tryProjectSoloAdminPayout(b: AdminBookingCleanerPayoutInput): AdminBook
     serviceFeeCents: b.service_fee_cents,
     serviceLabel: b.service ?? null,
     bookingSnapshot: b.booking_snapshot ?? null,
-    cleanerCreatedAtIso: null,
+    cleanerJoinedAtIso: b.cleaner_joined_at ?? null,
+    bookingDate: b.booking_date ?? undefined,
+    bookingTime: b.booking_time ?? undefined,
   });
   return {
     payoutLabel: "Cleaner payout",
@@ -77,9 +85,10 @@ export function computeAdminBookingCleanerPayoutDisplay(
   booking: AdminBookingCleanerPayoutInput,
 ): AdminBookingCleanerPayoutDisplay {
   const payoutType = String(booking.payout_type ?? "").trim().toLowerCase();
-  const teamFixed = payoutType === "team_fixed";
+  const teamPerCleanerFixed = payoutType === "team_per_cleaner_fixed";
+  const teamFixedLegacy = payoutType === "team_fixed";
   const teamJob = booking.is_team_job === true;
-  const useTeamPool = teamFixed || teamJob;
+  const useTeamAggregate = teamJob && (teamPerCleanerFixed || teamFixedLegacy || !payoutType);
 
   const displayRaw = booking.display_earnings_cents;
   const displayCents =
@@ -89,20 +98,30 @@ export function computeAdminBookingCleanerPayoutDisplay(
   const ledgerCents =
     ledgerRaw != null && Number.isFinite(Number(ledgerRaw)) ? Math.max(0, Math.round(Number(ledgerRaw))) : null;
 
-  if (useTeamPool) {
-    const poolCents =
-      displayCents ?? (ledgerCents != null && ledgerCents > 0 ? ledgerCents : null);
-    if (poolCents != null) {
+  const snapRaw = Number(booking.team_member_count_snapshot);
+  const teamHeadcount = Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : 1;
+
+  if (useTeamAggregate) {
+    let totalTeamCleanerPayoutCents: number | null = null;
+    if (ledgerCents != null && ledgerCents > 0) {
+      totalTeamCleanerPayoutCents = ledgerCents;
+    } else if (teamPerCleanerFixed && displayCents != null) {
+      totalTeamCleanerPayoutCents = displayCents * teamHeadcount;
+    } else if (displayCents != null) {
+      totalTeamCleanerPayoutCents = teamFixedLegacy ? displayCents : displayCents * teamHeadcount;
+    }
+
+    if (totalTeamCleanerPayoutCents != null) {
       return {
-        payoutLabel: "Team cleaner pool",
-        payoutZar: centsToZar(poolCents),
+        payoutLabel: teamPerCleanerFixed ? "Team cleaner payout (total)" : "Team cleaner pool",
+        payoutZar: centsToZar(totalTeamCleanerPayoutCents),
         bonusZar: 0,
         pending: false,
         teamPool: true,
       };
     }
     return {
-      payoutLabel: "Team cleaner pool",
+      payoutLabel: teamPerCleanerFixed ? "Team cleaner payout (total)" : "Team cleaner pool",
       payoutZar: null,
       bonusZar: 0,
       pending: true,

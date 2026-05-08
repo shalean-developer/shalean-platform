@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { addDaysYmd, compareYmd } from "@/lib/recurring/johannesburgCalendar";
+import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 
@@ -41,23 +42,6 @@ function statusTone(status: string): "green" | "amber" | "red" | "zinc" {
   if (s === "paused") return "amber";
   if (s === "cancelled") return "red";
   return "zinc";
-}
-
-/** Visit / workflow status for generated bookings (customer-friendly). */
-function formatVisitStatusLabel(raw: string | null | undefined): string {
-  const s = (raw ?? "").trim().toLowerCase();
-  if (!s) return "—";
-  const map: Record<string, string> = {
-    pending_payment: "Awaiting payment",
-    payment_expired: "Payment expired",
-    searching: "Finding a cleaner",
-    assigned: "Cleaner assigned",
-    in_progress: "In progress",
-    completed: "Completed",
-    cancelled: "Cancelled",
-    failed: "Failed",
-  };
-  return map[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatPaymentStatusLabel(raw: string | null | undefined): { label: string; tone: "ok" | "wait" | "bad" | "muted" } {
@@ -133,8 +117,38 @@ type MeRecurringItem = {
     status: string | null;
     location: string | null;
     payment_status: string | null;
+    payment_completed_at: string | null;
+    cleaner_response_status: string | null;
+    en_route_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    dispatch_status: string | null;
+    is_recurring_generated: boolean | null;
+    billing_type: string | null;
+    monthly_invoice_id: string | null;
   }[];
 };
+
+type MeRecurringVisitRow = MeRecurringItem["upcoming_bookings"][number];
+
+/** Canonical visit label — matches admin/cleaner operational badge for the same row. */
+function recurringVisitOperationalBadge(b: MeRecurringVisitRow): string {
+  return describeBookingOperationalState({
+    row: {
+      status: b.status,
+      payment_completed_at: b.payment_completed_at ?? null,
+      cleaner_response_status: b.cleaner_response_status ?? null,
+      en_route_at: b.en_route_at ?? null,
+      started_at: b.started_at ?? null,
+      completed_at: b.completed_at ?? null,
+      dispatch_status: b.dispatch_status ?? null,
+      is_recurring_generated: b.is_recurring_generated ?? true,
+      billing_type: b.billing_type ?? null,
+      monthly_invoice_id: b.monthly_invoice_id ?? null,
+    },
+    viewer: "admin",
+  }).displayBadge;
+}
 
 export default function AccountRecurringPage() {
   const toast = useDashboardToast();
@@ -335,7 +349,7 @@ export default function AccountRecurringPage() {
                                   <tr key={b.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/80">
                                     <td className="px-3 py-2 tabular-nums text-zinc-800 dark:text-zinc-200">{b.date ?? "—"}</td>
                                     <td className="px-3 py-2 tabular-nums text-zinc-700 dark:text-zinc-300">{formatHm(b.time) ?? "—"}</td>
-                                    <td className="px-3 py-2 text-zinc-800 dark:text-zinc-200">{formatVisitStatusLabel(b.status)}</td>
+                                    <td className="px-3 py-2 text-zinc-800 dark:text-zinc-200">{recurringVisitOperationalBadge(b)}</td>
                                     <td className={cn("px-3 py-2", paymentToneClass(pay.tone))}>{pay.label}</td>
                                   </tr>
                                 );
