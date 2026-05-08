@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { getDashboardAccessToken } from "@/lib/dashboard/dashboardFetch";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
@@ -74,7 +75,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
     } catch {
       /* ignore */
     }
-    trackGrowthEvent("review_prompt_clicked", { booking_id: bid });
+    trackGrowthEvent(ANALYTICS_EVENTS.REVIEW_PROMPT_CLICKED, { booking_id: bid });
   }, [bookingId]);
 
   const loginHref = `/login?redirect=${encodeURIComponent(bookingId ? `/review?booking=${bookingId}` : "/review")}`;

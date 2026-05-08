@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import type { HubBlogCard } from "@/lib/blog/get-all-posts";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { LocationHubAirbnbCleaningSection } from "@/components/seo/LocationHubAirbnbCleaningSection";
 import { LocationHubBlogSection } from "@/components/seo/LocationHubBlogSection";
 import { LocationHubEngagementClient } from "@/components/seo/LocationHubEngagementClient";
@@ -35,10 +36,7 @@ import {
 import { buildStructuredLocationIntro, mergeIntroWithPrimaryKeyword } from "@/lib/seo/location-content-variation";
 import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, type CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { buildLifestyleDepthParagraphs } from "@/lib/seo/location-lifestyle-depth";
-import {
-  directAnswerHowMuchDoesCleaningCost,
-  directAnswerWhatCleaningServicesAreAvailable,
-} from "@/lib/seo/location-featured-snippet-copy";
+import { directAnswerWhatCleaningServicesAreAvailable } from "@/lib/seo/location-featured-snippet-copy";
 import { getLocationGeoHints } from "@/lib/seo/location-geo-enrichment";
 import { primaryLocationKeywordPhrase } from "@/lib/seo/location-keyword";
 import { getLocationSeoPriority, hubContentTierFromPriority } from "@/lib/seo/location-priority";
@@ -63,6 +61,7 @@ import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
 import type { LocationHubMarketingReviewSnippet } from "@/lib/seo/location-hub-marketing-reviews";
+import { buildSeoBookingHref, locationSlugFromSeoLocationSlug } from "@/lib/booking/seoBookingPrefill";
 
 type Props = {
   location: CapeTownLocationRow;
@@ -159,6 +158,17 @@ export function ProgrammaticLocationCleaningPage({
   const eyebrow = `${location.city} · ${location.region}`;
   const bookCtaLabel = `Book a cleaner in ${location.name}`;
   const hubAboveFoldServiceLink = getLocationHubAboveFoldServiceLink(location.name, slug);
+  const bookingLocationSlug = locationSlugFromSeoLocationSlug(slug);
+  const bookingDetailsHref = buildSeoBookingHref("details", {
+    service: "standard",
+    locationSlug: bookingLocationSlug,
+    source: `seo_loc_${slug}_details`,
+  });
+  const bookingStartHref = buildSeoBookingHref("entry", {
+    service: "standard",
+    locationSlug: bookingLocationSlug,
+    source: `seo_loc_${slug}_start`,
+  });
 
   const seoCtx = {
     page_slug: slug,
@@ -196,7 +206,7 @@ export function ProgrammaticLocationCleaningPage({
   return (
     <main className="bg-white pb-32 text-zinc-900" data-location-hub-root>
       <GrowthTracking
-        event="page_view"
+        event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{
           page_type: "seo_location",
           slug,
@@ -354,14 +364,14 @@ export function ProgrammaticLocationCleaningPage({
               ? [
                   {
                     key: "total_first" as const,
-                    href: "/booking",
+                    href: bookingStartHref,
                     label: "Book now — see total first",
                     source: `seo_loc_${slug}_book_now`,
                     ctaLabel: "Book now — see total first",
                   },
                   {
                     key: "details" as const,
-                    href: "/booking/details",
+                    href: bookingDetailsHref,
                     label: bookCtaLabel,
                     source: `seo_loc_${slug}_hero`,
                     ctaLabel: bookCtaLabel,
@@ -370,14 +380,14 @@ export function ProgrammaticLocationCleaningPage({
               : [
                   {
                     key: "details" as const,
-                    href: "/booking/details",
+                    href: bookingDetailsHref,
                     label: bookCtaLabel,
                     source: `seo_loc_${slug}_hero`,
                     ctaLabel: bookCtaLabel,
                   },
                   {
                     key: "total_first" as const,
-                    href: "/booking",
+                    href: bookingStartHref,
                     label: "Book now — see total first",
                     source: `seo_loc_${slug}_book_now`,
                     ctaLabel: "Book now — see total first",
@@ -404,7 +414,7 @@ export function ProgrammaticLocationCleaningPage({
           </div>
           <p className="mt-3 text-base font-semibold text-zinc-900">
             <SeoHubGrowthCtaLink
-              href="/booking"
+              href={bookingStartHref}
               source={`seo_loc_${slug}_intent_book_cleaner`}
               ctx={seoCtx}
               ctaLocation="hero_after_buttons"
@@ -420,7 +430,7 @@ export function ProgrammaticLocationCleaningPage({
       </section>
 
       {slug === "sea-point-cleaning-services" ? (
-        <SeaPointLocationEnhancements ctx={seoCtx} quoteHref="/booking/details" />
+        <SeaPointLocationEnhancements ctx={seoCtx} quoteHref={bookingDetailsHref} />
       ) : null}
 
       <LocationHubRegionPeersSection location={location} />
@@ -618,9 +628,9 @@ export function ProgrammaticLocationCleaningPage({
             <LocationHubServiceTiles
               ctx={seoCtx}
               tiles={[
-                { href: STANDARD_SERVICE, label: "Standard cleaning" },
-                { href: DEEP_SERVICE, label: "Deep cleaning" },
-                { href: MOVE_OUT_SERVICE, label: "Move-out cleaning" },
+                { href: `${STANDARD_SERVICE}?location=${bookingLocationSlug}`, label: "Standard cleaning" },
+                { href: `${DEEP_SERVICE}?location=${bookingLocationSlug}`, label: "Deep cleaning" },
+                { href: `${MOVE_OUT_SERVICE}?location=${bookingLocationSlug}`, label: "Move-out cleaning" },
               ]}
             />
             <p className="mt-6 text-sm text-zinc-600">
@@ -632,7 +642,7 @@ export function ProgrammaticLocationCleaningPage({
             </p>
             <div className="mt-8">
               <SeoHubGrowthCtaLink
-                href="/booking/details"
+                href={bookingDetailsHref}
                 source={`seo_loc_${slug}_services_book_now`}
                 ctx={seoCtx}
                 ctaLocation="services_section"
@@ -736,7 +746,7 @@ export function ProgrammaticLocationCleaningPage({
         <p className="mx-auto mt-4 max-w-lg text-sm text-zinc-400">{locationFooterCtaMicrocopy(location)}</p>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <SeoHubGrowthCtaLink
-            href="/booking/details"
+            href={bookingDetailsHref}
             source={`seo_loc_${slug}_footer`}
             ctx={seoCtx}
             ctaLocation="footer"
@@ -747,7 +757,7 @@ export function ProgrammaticLocationCleaningPage({
             {bookCtaLabel}
           </SeoHubGrowthCtaLink>
           <SeoHubGrowthCtaLink
-            href="/booking"
+            href={bookingStartHref}
             source={`seo_loc_${slug}_footer_book_now`}
             ctx={seoCtx}
             ctaLocation="footer"

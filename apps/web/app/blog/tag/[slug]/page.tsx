@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { getBlogPostsByTagSlug } from "@/lib/blog/get-taxonomy-posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
@@ -63,13 +63,13 @@ export default async function BlogTagPage({ params }: Props) {
     <MarketingLayout>
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <nav className="text-sm text-zinc-500" aria-label="Breadcrumb">
-          <Link href="/" className={cn(linkInNavClassName, "text-sm")}>
+          <SafeInternalLink href="/" className={cn(linkInNavClassName, "text-sm")}>
             Home
-          </Link>
+          </SafeInternalLink>
           <span className="mx-2 text-zinc-400">/</span>
-          <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
+          <SafeInternalLink href="/blog" className={cn(linkInNavClassName, "text-sm")}>
             Blog
-          </Link>
+          </SafeInternalLink>
           <span className="mx-2 text-zinc-400">/</span>
           <span className="text-zinc-700">Tag</span>
         </nav>
@@ -83,9 +83,9 @@ export default async function BlogTagPage({ params }: Props) {
           ) : (
             posts.map((p) => (
               <li key={p.slug} className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <Link href={`/blog/${p.slug}`} className="text-lg font-semibold text-blue-700 hover:underline">
+                <SafeInternalLink href={`/blog/${p.slug}`} className="text-lg font-semibold text-blue-700 hover:underline">
                   {p.title}
-                </Link>
+                </SafeInternalLink>
                 <p className="mt-2 text-sm text-zinc-600">{p.excerpt}</p>
               </li>
             ))

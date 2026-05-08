@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { CANONICAL_DEEP_VS_STANDARD_BLOG_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 
 const standard = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
@@ -80,8 +81,8 @@ export function CleaningCostCapeTownPost() {
       </ul>
       <p>
         Learn more about{" "}
-        <Link href={deep}>deep cleaning services in Cape Town</Link> vs regular cleaning in our{" "}
-        <Link href="/blog/deep-vs-standard-cleaning-cape-town">deep vs standard cleaning guide</Link>, or jump straight
+        <SafeInternalLink href={deep}>deep cleaning services in Cape Town</SafeInternalLink> vs regular cleaning in our{" "}
+        <SafeInternalLink href={CANONICAL_DEEP_VS_STANDARD_BLOG_HREF}>deep vs standard cleaning guide</SafeInternalLink>, or jump straight
         to the right service page from that comparison.
       </p>
 
@@ -106,7 +107,7 @@ export function CleaningCostCapeTownPost() {
       <p>
         Regular bookings (weekly or bi-weekly) are often more cost-effective than one-off deep cleans. If you&apos;re
         looking for consistent upkeep, explore{" "}
-        <Link href={standard}>standard cleaning services in Cape Town</Link>.
+        <SafeInternalLink href={standard}>standard cleaning services in Cape Town</SafeInternalLink>.
       </p>
 
       <h2>Standard vs deep cleaning: cost difference</h2>
@@ -121,7 +122,7 @@ export function CleaningCostCapeTownPost() {
       </ul>
       <p>
         If your home hasn&apos;t been cleaned thoroughly in a while, a{" "}
-        <Link href={deep}>deep cleaning service in Cape Town</Link> is usually the best starting point.
+        <SafeInternalLink href={deep}>deep cleaning service in Cape Town</SafeInternalLink> is usually the best starting point.
       </p>
 
       <h2>Airbnb cleaning costs in Cape Town</h2>
@@ -134,16 +135,16 @@ export function CleaningCostCapeTownPost() {
       </ul>
       <p>
         Learn more about{" "}
-        <Link href={airbnb}>Airbnb cleaning services in Cape Town</Link> if you manage a rental property, or use our{" "}
-        <Link href="/blog/airbnb-cleaning-checklist">Airbnb cleaning checklist for Cape Town hosts</Link> when you want a
+        <SafeInternalLink href={airbnb}>Airbnb cleaning services in Cape Town</SafeInternalLink> if you manage a rental property, or use our{" "}
+        <SafeInternalLink href="/blog/airbnb-cleaning-checklist">Airbnb cleaning checklist for Cape Town hosts</SafeInternalLink> when you want a
         room-by-room turnover run sheet.
       </p>
 
       <h2>Cleaning costs across Cape Town</h2>
       <p>
         Prices are generally similar across areas like{" "}
-        <Link href={claremont}>Claremont</Link>, <Link href={wynberg}>Wynberg</Link>, and{" "}
-        <Link href={rondebosch}>Rondebosch</Link>. However, availability and travel distance may slightly affect pricing
+        <SafeInternalLink href={claremont}>Claremont</SafeInternalLink>, <SafeInternalLink href={wynberg}>Wynberg</SafeInternalLink>, and{" "}
+        <SafeInternalLink href={rondebosch}>Rondebosch</SafeInternalLink>. However, availability and travel distance may slightly affect pricing
         and scheduling.
       </p>
 

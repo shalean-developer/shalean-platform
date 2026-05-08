@@ -5,12 +5,14 @@ export type NormalizedBookingStatus =
   | "pending"
   | "pending_assignment"
   | "offered"
-  | "confirmed"
   | "assigned"
   | "in_progress"
   | "completed"
   | "cancelled"
-  | "failed";
+  | "failed"
+  | "pending_payment"
+  | "payment_mismatch"
+  | "payment_reconciliation_required";
 
 /** Embedded cleaner row from Supabase join. */
 export type CleanerEmbed = { full_name: string | null; phone: string | null } | null;

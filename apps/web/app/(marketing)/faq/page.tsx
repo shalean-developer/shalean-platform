@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { FaqFinalCta } from "@/components/faq/FaqFinalCta";
 import { FaqHero } from "@/components/faq/FaqHero";
 import { FaqPageExperience } from "@/components/faq/FaqPageExperience";
@@ -53,7 +54,7 @@ export default function FaqPage() {
     <div className="bg-white text-zinc-900">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <GrowthTracking
-        event="page_view"
+        event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "faq", content_group: "marketing_faq", primary_kw: "cleaning FAQ Cape Town" }}
       />
       <MarketingHomeHeader bookingHref={bookingHref} />

@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   BOOKING_NODRAFT_QUERY,
   BOOKING_PROMO_QUERY,
@@ -15,7 +15,7 @@ import {
   sanitizeBookingPromoParam,
   type BookingFlowStep,
 } from "@/lib/booking/bookingFlow";
-import { clearLockedBookingFromStorage, readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
+import { readLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { BookingFlowProvider } from "@/components/booking/BookingFlowContext";
 import { BookingCatalogExtrasGuard } from "@/components/booking/BookingCatalogExtrasGuard";
 import { BookingPriceProvider } from "@/components/booking/BookingPriceContext";
@@ -27,11 +27,15 @@ import { StepPayment } from "@/components/booking/steps/StepPayment";
 import { StepScheduleV2 } from "@/components/booking/steps/StepScheduleV2";
 import { ExitIntentModal } from "@/components/booking/ExitIntentModal";
 import {
+  ANALYTICS_EVENTS,
+  BOOKING_FUNNEL_ROW,
   bookingRouteToFunnelStep,
   getOrCreateBookingFunnelSessionId,
+  trackBookingAnalyticsEvent,
   trackBookingFunnelEvent,
 } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { recordReplayEvent, tagBookingReplayContext } from "@/lib/analytics/sessionReplay";
 
 function firstSearchParamValue(
   record: Record<string, string | string[] | undefined> | undefined,
@@ -44,6 +48,17 @@ function firstSearchParamValue(
   return s ?? null;
 }
 
+function bookingReplayDeviceType(): "mobile" | "tablet" | "desktop" {
+  try {
+    const width = window.innerWidth || document.documentElement.clientWidth || 1280;
+    if (width < 768) return "mobile";
+    if (width < 1024) return "tablet";
+    return "desktop";
+  } catch {
+    return "desktop";
+  }
+}
+
 export type BookingFlowClientProps = {
   /** Snapshot from the Server Component — keeps first paint aligned with SSR when `useSearchParams` lags. */
   initialSearchParams?: Record<string, string | string[] | undefined>;
@@ -52,6 +67,7 @@ export type BookingFlowClientProps = {
 export function BookingFlowClient(props: BookingFlowClientProps = {}) {
   const { initialSearchParams } = props;
   const router = useRouter();
+  const [isRoutePending, startRouteTransition] = useTransition();
   const searchParams = useSearchParams();
   const rawStepQuery =
     searchParams.get(BOOKING_STEP_QUERY) ?? firstSearchParamValue(initialSearchParams, BOOKING_STEP_QUERY);
@@ -73,7 +89,10 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
   const lastExitIntentAt = useRef(0);
   const trackedViewRef = useRef(false);
   const stepRef = useRef(step);
-  stepRef.current = step;
+
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
 
   /** Canonicalize legacy `?step=service` / `who` URLs. */
   useEffect(() => {
@@ -109,27 +128,70 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
 
   const goTo = useCallback(
     (s: BookingFlowStep) => {
-      router.push(withPromo(s));
+      const href = withPromo(s);
+      startRouteTransition(() => {
+        router.push(href);
+      });
     },
-    [router, withPromo],
+    [router, startRouteTransition, withPromo],
   );
+
+  useEffect(() => {
+    const nextSteps: Partial<Record<BookingFlowStep, BookingFlowStep[]>> = {
+      entry: ["quote", "details"],
+      quote: ["details", "when"],
+      details: ["when", "checkout"],
+      when: ["checkout", "details"],
+      checkout: ["when"],
+    };
+    for (const target of nextSteps[step] ?? []) {
+      router.prefetch(withPromo(target));
+    }
+  }, [router, step, withPromo]);
 
   useEffect(() => {
     getOrCreateBookingFunnelSessionId();
   }, []);
 
   useEffect(() => {
-    trackBookingFunnelEvent(bookingRouteToFunnelStep(step), "view", { route_step: step });
+    const sessionId = getOrCreateBookingFunnelSessionId();
+    const funnelStep = bookingRouteToFunnelStep(step);
+    trackBookingFunnelEvent(funnelStep, BOOKING_FUNNEL_ROW.VIEW, { route_step: step });
+    tagBookingReplayContext({
+      bookingSessionId: sessionId,
+      routeStep: step,
+      funnelStep,
+      deviceType: bookingReplayDeviceType(),
+    });
   }, [step]);
 
   useEffect(() => {
     const onPageHide = () => {
       const s = stepRef.current;
-      trackBookingFunnelEvent(bookingRouteToFunnelStep(s), "exit", { route_step: s });
+      trackBookingFunnelEvent(bookingRouteToFunnelStep(s), BOOKING_FUNNEL_ROW.EXIT, { route_step: s });
+      recordReplayEvent(`booking_step_${s}_abandoned`);
     };
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
   }, []);
+
+  useEffect(() => {
+    const seen = new Set<number>();
+    const thresholds = [25, 50, 75, 90] as const;
+    function onScroll() {
+      const root = document.documentElement;
+      const scrollable = Math.max(1, root.scrollHeight - window.innerHeight);
+      const depth = Math.round((window.scrollY / scrollable) * 100);
+      for (const threshold of thresholds) {
+        if (depth < threshold || seen.has(threshold)) continue;
+        seen.add(threshold);
+        recordReplayEvent(`booking_step_${stepRef.current}_scroll_${threshold}`);
+      }
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [step]);
 
   useEffect(() => {
     const redirect = getBookingStepGateRedirect(step);
@@ -150,16 +212,16 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
     if (trackedViewRef.current) return;
     trackedViewRef.current = true;
     markRetargetingCandidate(true);
-    trackGrowthEvent("page_view", { page_type: "booking_flow" });
+    trackGrowthEvent(ANALYTICS_EVENTS.PAGE_VIEW, { page_type: "booking_flow" });
   }, []);
 
   useEffect(() => {
     if (step === "entry") {
-      trackGrowthEvent("start_booking", { step });
-      trackGrowthEvent("booking_started", { step });
+      trackGrowthEvent(ANALYTICS_EVENTS.START_BOOKING, { step });
+      trackGrowthEvent(ANALYTICS_EVENTS.BOOKING_STARTED, { step });
     }
-    if (step === "quote") trackGrowthEvent("view_price", { step });
-    if (step === "when") trackGrowthEvent("select_time", { step });
+    if (step === "quote") trackGrowthEvent(ANALYTICS_EVENTS.VIEW_PRICE, { step });
+    if (step === "when") trackGrowthEvent(ANALYTICS_EVENTS.SELECT_TIME, { step });
   }, [step]);
 
   /** Exit intent: cursor leaves toward browser chrome (throttled). */
@@ -182,7 +244,10 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
     let timer = 0;
     function arm() {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setExitIntentOpen(true), 20_000);
+      timer = window.setTimeout(() => {
+        recordReplayEvent("booking_payment_hesitation_20s");
+        setExitIntentOpen(true);
+      }, 20_000);
     }
     arm();
     const ev = ["mousedown", "keydown", "touchstart", "scroll"] as const;
@@ -201,7 +266,10 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
     let timer = 0;
     function arm() {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setExitIntentOpen(true), 12_000);
+      timer = window.setTimeout(() => {
+        recordReplayEvent("booking_schedule_idle_12s");
+        setExitIntentOpen(true);
+      }, 12_000);
     }
     arm();
     const ev = ["mousedown", "keydown", "touchstart", "scroll"] as const;
@@ -242,6 +310,11 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
             data-booking-route-step={step}
             data-booking-funnel-step={bookingRouteToFunnelStep(step)}
           >
+        {isRoutePending ? (
+          <div className="fixed inset-x-0 top-0 z-[80] h-0.5 overflow-hidden bg-blue-100 dark:bg-blue-950" role="status" aria-label="Loading next booking step">
+            <div className="h-full w-1/2 animate-pulse bg-blue-600 dark:bg-blue-400" />
+          </div>
+        ) : null}
         {step === "entry" && showNoDraftBanner ? (
           <div
             role="status"
@@ -254,11 +327,11 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
-              className="pointer-events-auto flex min-h-0 flex-1 flex-col"
+              className="pointer-events-auto flex min-h-0 flex-1 flex-col will-change-transform"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
             >
               {step === "entry" ? <StepEntry /> : null}
               {step === "quote" ? <StepQuote /> : null}
@@ -266,7 +339,13 @@ export function BookingFlowClient(props: BookingFlowClientProps = {}) {
               {step === "when" ? (
                 <StepScheduleV2
                   onNext={() => {
-                    trackBookingFunnelEvent("datetime", "next", { route_step: "when" });
+                    trackBookingFunnelEvent("datetime", BOOKING_FUNNEL_ROW.NEXT, { route_step: "when" });
+                    trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_CTA_CLICKED, readLockedBookingFromStorage(), {
+                      cta_id: "schedule_continue_checkout",
+                      cta_label: "Continue to checkout",
+                      cta_destination_step: "checkout",
+                      step: "when",
+                    });
                     goTo("checkout");
                   }}
                   onBack={() => goTo("details")}

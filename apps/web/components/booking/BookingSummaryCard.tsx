@@ -138,7 +138,7 @@ export function BookingSummaryCard({
 
   return (
     <section
-      className="rounded-2xl border border-zinc-200/80 bg-zinc-50/90 p-5 shadow-sm shadow-zinc-900/5 backdrop-blur-sm sm:p-6 dark:border-zinc-800 dark:bg-zinc-900/40 dark:shadow-black/25"
+      className="rounded-xl border border-zinc-200/80 bg-zinc-50/95 p-5 shadow-md shadow-zinc-900/[0.06] ring-1 ring-zinc-200/40 backdrop-blur-sm sm:p-6 dark:border-zinc-800 dark:bg-zinc-900/45 dark:shadow-black/30 dark:ring-zinc-700/50"
       aria-label="Booking summary"
     >
       <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -177,7 +177,7 @@ export function BookingSummaryCard({
       ) : null}
 
       {!locked && estimateFromZar != null && !suppressEstimateUntilLocked ? (
-        <div className="mt-4 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/50 dark:bg-blue-950/35">
+        <div className="mt-4 space-y-2 rounded-xl border border-blue-200/90 bg-blue-50 px-4 py-4 shadow-inner shadow-blue-900/5 ring-1 ring-blue-200/50 dark:border-blue-900/55 dark:bg-blue-950/40 dark:ring-blue-900/30">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Estimated price (before time selection)
           </p>
@@ -271,45 +271,47 @@ export function BookingSummaryCard({
               ) : null}
             </div>
           ) : null}
-          <p className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="text-zinc-500 dark:text-zinc-400">Duration (est.)</span>
-            <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
-              {formatHoursLabel(locked.finalHours)} hrs
-            </span>
-          </p>
-          {typeof amountToPayZar === "number" &&
-          Number.isFinite(amountToPayZar) &&
-          Math.round(amountToPayZar) !== Math.round(getLockedBookingDisplayPrice(locked)) ? (
-            <>
-              <p className="flex items-end justify-between gap-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-emerald-900/90 dark:text-emerald-200/90">
-                  Total to pay
-                </span>
-                <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                  R {amountToPayZar.toLocaleString("en-ZA")}
-                </span>
-              </p>
-              <p className="mt-1 flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
-                <span>Visit total</span>
-                <span className="font-medium tabular-nums text-zinc-700 dark:text-zinc-300">
-                  R {getLockedBookingDisplayPrice(locked).toLocaleString("en-ZA")}
-                </span>
-              </p>
-            </>
-          ) : (
-            <p className="flex items-end justify-between gap-3">
-              <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
-                {typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar) ? "Total to pay" : "Visit total"}
-              </span>
-              <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                R{" "}
-                {(typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar)
-                  ? amountToPayZar
-                  : getLockedBookingDisplayPrice(locked)
-                ).toLocaleString("en-ZA")}
+          <div className="mt-1 space-y-2 rounded-xl border border-emerald-200/75 bg-emerald-50/55 p-3 ring-1 ring-emerald-200/35 dark:border-emerald-900/45 dark:bg-emerald-950/30 dark:ring-emerald-900/25">
+            <p className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
+              <span className="text-zinc-500 dark:text-zinc-400">Duration (est.)</span>
+              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+                {formatHoursLabel(locked.finalHours)} hrs
               </span>
             </p>
-          )}
+            {typeof amountToPayZar === "number" &&
+            Number.isFinite(amountToPayZar) &&
+            Math.round(amountToPayZar) !== Math.round(getLockedBookingDisplayPrice(locked)) ? (
+              <>
+                <p className="flex items-end justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-emerald-900/90 dark:text-emerald-200/90">
+                    Total to pay
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    R {amountToPayZar.toLocaleString("en-ZA")}
+                  </span>
+                </p>
+                <p className="mt-1 flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
+                  <span>Visit total</span>
+                  <span className="font-medium tabular-nums text-zinc-700 dark:text-zinc-300">
+                    R {getLockedBookingDisplayPrice(locked).toLocaleString("en-ZA")}
+                  </span>
+                </p>
+              </>
+            ) : (
+              <p className="flex items-end justify-between gap-3">
+                <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                  {typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar) ? "Total to pay" : "Visit total"}
+                </span>
+                <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  R{" "}
+                  {(typeof amountToPayZar === "number" && Number.isFinite(amountToPayZar)
+                    ? amountToPayZar
+                    : getLockedBookingDisplayPrice(locked)
+                  ).toLocaleString("en-ZA")}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
       ) : null}
 

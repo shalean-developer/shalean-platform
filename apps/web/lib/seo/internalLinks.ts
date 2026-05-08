@@ -1,5 +1,11 @@
 import type { BlogServiceLinkKind } from "@/lib/blog/getBlogServiceType";
 import { getBlogServiceType } from "@/lib/blog/getBlogServiceType";
+import {
+  CANONICAL_BEST_AIRBNB_TIPS_CAPE_TOWN_HREF,
+  CANONICAL_DEEP_VS_STANDARD_BLOG_HREF,
+  CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF,
+} from "@/lib/blog/canonicalEditorialBlogLinks";
+import { resolveInternalBlogHref } from "@/lib/blog/resolveInternalBlogHref";
 import { pickGeoHubAnchor, pickPricingBlogAnchor, pickServiceLocationAnchor, stableHash } from "@/lib/seo/anchorVariants";
 import {
   CAPE_TOWN_SERVICE_SEO,
@@ -16,7 +22,7 @@ export type SeoInternalLink = { href: string; anchor: string };
 /**
  * Primary commercial pricing authority (tiers, quote path) — use for most internal “see prices / compare costs” links.
  * Long-form **blog** pricing education (when published) lives at `/blog/how-much-does-cleaning-cost-cape-town`;
- * do not resurrect legacy `/blog/cleaning-prices-cape-town-guide` (retired).
+ * do not resurrect legacy slug cleaning-prices-cape-town-guide (retired blog path).
  *
  * Intent: do not sprinkle this href across every post — follow `PRICING_HUB_LINKING_GOVERNANCE` in
  * `lib/seo/blogGovernance.ts` (same folder as this module).
@@ -276,10 +282,6 @@ export function getServicePagePricingBlogInlineLink(serviceSlug: CapeTownSeoServ
   };
 }
 
-const BLOG_DEEP_VS_STANDARD = "/blog/deep-vs-standard-cleaning-cape-town";
-const BLOG_MOVE_OUT_CHECKLIST = "/blog/move-out-cleaning-checklist-cape-town";
-const BLOG_AIRBNB_HOST_TIPS = "/blog/best-airbnb-cleaning-tips-cape-town";
-
 /** Second editorial guide per service page — topical depth beyond the pricing article. */
 export function getSecondaryEditorialBlogLink(serviceSlug: CapeTownSeoServiceSlug): SeoInternalLink {
   const k = `${serviceSlug}|secondary-editorial`;
@@ -290,7 +292,10 @@ export function getSecondaryEditorialBlogLink(serviceSlug: CapeTownSeoServiceSlu
         "Handover-ready move-out cleaning guide",
         "Renter move-out cleaning checklist",
       ];
-      return { href: BLOG_MOVE_OUT_CHECKLIST, anchor: anchors[stableHash(k) % anchors.length]! };
+      return {
+        href: resolveInternalBlogHref(CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF),
+        anchor: anchors[stableHash(k) % anchors.length]!,
+      };
     }
     case "airbnb-cleaning-cape-town": {
       const anchors = [
@@ -298,7 +303,10 @@ export function getSecondaryEditorialBlogLink(serviceSlug: CapeTownSeoServiceSlu
         "Airbnb turnover playbook for Cape Town hosts",
         "Airbnb cleaning standards hosts actually use",
       ];
-      return { href: BLOG_AIRBNB_HOST_TIPS, anchor: anchors[stableHash(k) % anchors.length]! };
+      return {
+        href: resolveInternalBlogHref(CANONICAL_BEST_AIRBNB_TIPS_CAPE_TOWN_HREF),
+        anchor: anchors[stableHash(k) % anchors.length]!,
+      };
     }
     default: {
       const anchors = [
@@ -306,7 +314,10 @@ export function getSecondaryEditorialBlogLink(serviceSlug: CapeTownSeoServiceSlu
         "Choosing deep vs standard cleaning",
         "When deep cleaning beats standard visits",
       ];
-      return { href: BLOG_DEEP_VS_STANDARD, anchor: anchors[stableHash(k) % anchors.length]! };
+      return {
+        href: resolveInternalBlogHref(CANONICAL_DEEP_VS_STANDARD_BLOG_HREF),
+        anchor: anchors[stableHash(k) % anchors.length]!,
+      };
     }
   }
 }

@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
+import { CANONICAL_DEEP_VS_STANDARD_BLOG_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const moveOut = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
@@ -18,8 +20,8 @@ export function MoveOutCleaningGuidePost() {
         <li>Confirm inventory requirements with your agent—note oven, fridge, and inside-cupboard expectations.</li>
         <li>Book movers and cleaning on separate days where possible so floors stay clean after furniture exits.</li>
         <li>If grease or limescale has built up, compare{" "}
-          <Link href={deep}>deep cleaning in Cape Town</Link> add-ons alongside your{" "}
-          <Link href={moveOut}>move-out cleaning</Link> scope.</li>
+          <SafeInternalLink href={deep}>deep cleaning in Cape Town</SafeInternalLink> add-ons alongside your{" "}
+          <SafeInternalLink href={moveOut}>move-out cleaning</SafeInternalLink> scope.</li>
       </ul>
 
       <h2>48 hours before handover</h2>
@@ -44,14 +46,14 @@ export function MoveOutCleaningGuidePost() {
 
       <p>
         Still deciding between a lighter reset and full handover detail? Compare scopes on our{" "}
-        <Link href={moveOut}>move-out cleaning Cape Town</Link> page, read{" "}
-        <Link href="/blog/cleaning-cost-cape-town">how cleaning pricing works in Cape Town</Link>, or see{" "}
-        <Link href="/blog/deep-vs-standard-cleaning-cape-town">deep vs standard cleaning</Link> if you are unsure which
+        <SafeInternalLink href={moveOut}>move-out cleaning Cape Town</SafeInternalLink> page, read{" "}
+        <SafeInternalLink href={CAPE_TOWN_PRICING_AUTHORITY_HREF}>how cleaning pricing works in Cape Town</SafeInternalLink>, or see{" "}
+        <SafeInternalLink href={CANONICAL_DEEP_VS_STANDARD_BLOG_HREF}>deep vs standard cleaning</SafeInternalLink> if you are unsure which
         tier fits before keys go back.
       </p>
       <p>
         Mid-lease, many rentals stay calmer with{" "}
-        <Link href={standard}>standard cleaning services in Cape Town</Link> on a rhythm so move-out day is less overwhelming.
+        <SafeInternalLink href={standard}>standard cleaning services in Cape Town</SafeInternalLink> on a rhythm so move-out day is less overwhelming.
       </p>
     </div>
   );

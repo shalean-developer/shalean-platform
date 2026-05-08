@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { relatedGuidesServiceTrio } from "@/lib/blog/blogServiceContextLinks";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { resolveRelatedPosts } from "@/lib/blog/resolveRelatedPosts";
@@ -20,10 +20,10 @@ export function BlogRelatedGuidesSection({ post }: { post: BlogPostMeta }) {
 
       <ul className="mt-4 list-inside list-disc space-y-2 text-sm font-medium text-zinc-800">
         {related.map((r) => (
-          <li key={r.slug}>
-            <Link href={`/blog/${r.slug}`} className={linkInNavClassName}>
+          <li key={r.hrefSlug}>
+            <SafeInternalLink href={`/blog/${r.hrefSlug}`} className={linkInNavClassName} linkContext="related guides">
               {r.title}
-            </Link>
+            </SafeInternalLink>
           </li>
         ))}
       </ul>
@@ -32,9 +32,9 @@ export function BlogRelatedGuidesSection({ post }: { post: BlogPostMeta }) {
       <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium">
         {trio.map((item) => (
           <li key={item.href}>
-            <Link href={item.href} className={linkInNavClassName}>
+            <SafeInternalLink href={item.href} className={linkInNavClassName} linkContext="related guides service trio">
               {item.anchor}
-            </Link>
+            </SafeInternalLink>
           </li>
         ))}
       </ul>

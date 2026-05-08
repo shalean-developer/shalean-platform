@@ -41,9 +41,9 @@ export function BookingFooterInsightBanner({ variant, onDismiss }: BookingFooter
       aria-labelledby="footer-insight-headline"
     >
       <div className="mx-auto flex max-w-7xl items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
-        {/* Icon badge — white disc + brand accent icon (Shalean) */}
+        {/* Icon badge hidden on small screens — strip stays copy + CTA only */}
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-md shadow-blue-900/15 ring-2 ring-white/80 sm:h-11 sm:w-11"
+          className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-md shadow-blue-900/15 ring-2 ring-white/80 sm:flex sm:h-11 sm:w-11"
           aria-hidden
         >
           <Sparkles className="h-5 w-5 text-blue-600 sm:h-[1.35rem] sm:w-[1.35rem]" strokeWidth={2} />

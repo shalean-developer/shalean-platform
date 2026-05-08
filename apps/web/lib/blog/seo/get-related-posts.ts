@@ -1,4 +1,5 @@
 import { LOCATIONS } from "@/lib/locations";
+import { getCanonicalBlogSlug } from "@/lib/blog/validBlogRoutes";
 
 export type RelatedPostInput = {
   slug: string;
@@ -59,7 +60,10 @@ export function getRelatedPosts(
   const cur = { ...currentPost, facets: curFacets ?? undefined };
 
   const ranked = allPosts
-    .filter((p) => p.slug !== currentPost.slug)
+    .filter((p) => {
+      if (!p.slug?.trim()) return false;
+      return getCanonicalBlogSlug(p.slug) !== getCanonicalBlogSlug(currentPost.slug);
+    })
     .map((p) => ({
       post: p,
       score: scorePair(cur, { ...p, facets: parseProgrammaticSlugFeatures(p.slug) ?? undefined }),
@@ -74,17 +78,19 @@ export function getRelatedPosts(
   const out: RelatedPostInput[] = [];
   const seen = new Set<string>();
   for (const { post } of ranked) {
-    if (seen.has(post.slug)) continue;
+    const canon = getCanonicalBlogSlug(post.slug);
+    if (seen.has(canon)) continue;
     if (out.length >= limit) break;
-    seen.add(post.slug);
-    out.push(post);
+    seen.add(canon);
+    out.push({ ...post, slug: canon });
   }
 
   if (out.length < 3) {
     for (const { post } of ranked) {
-      if (seen.has(post.slug)) continue;
-      out.push(post);
-      seen.add(post.slug);
+      const canon = getCanonicalBlogSlug(post.slug);
+      if (seen.has(canon)) continue;
+      out.push({ ...post, slug: canon });
+      seen.add(canon);
       if (out.length >= 3) break;
     }
   }

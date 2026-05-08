@@ -94,7 +94,7 @@ export function ServiceGrid({ value, onChange, enabledIds }: ServiceGridProps) {
             >
               <div
                 className={cn(
-                  "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border transition-all duration-200",
+                  "hidden h-14 w-14 shrink-0 items-center justify-center rounded-full border transition-all duration-200",
                   selected
                     ? "border-blue-600 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/50"
                     : "border-gray-200 bg-gray-50 dark:border-zinc-600 dark:bg-zinc-800/80",
@@ -109,7 +109,7 @@ export function ServiceGrid({ value, onChange, enabledIds }: ServiceGridProps) {
                   aria-hidden
                 />
               </div>
-              <span className="mt-2 line-clamp-2 min-h-[2rem] w-full px-0.5 text-xs font-medium leading-tight text-gray-700 dark:text-zinc-200">
+              <span className="mt-0 line-clamp-2 min-h-[2rem] w-full px-0.5 text-xs font-medium leading-tight text-gray-700 lg:mt-2 dark:text-zinc-200">
                 {formatServiceName(item.name)}
               </span>
             </button>

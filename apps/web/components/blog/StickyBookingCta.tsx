@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 
 type Props = {
@@ -24,12 +24,12 @@ export function StickyBookingCta({ trackingSlug }: Props) {
         >
           Book a cleaner
         </GrowthCtaLink>
-        <Link
+        <SafeInternalLink
           href="/cleaning-services-cape-town"
           className="text-xs font-medium text-blue-700 underline-offset-4 hover:underline"
         >
           Service areas
-        </Link>
+        </SafeInternalLink>
       </div>
     </div>
   );

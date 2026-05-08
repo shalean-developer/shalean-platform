@@ -23,6 +23,17 @@ export type TimeSlotAvailability = {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function jsonSlots(slots: TimeSlotAvailability[]) {
+  return NextResponse.json(
+    { slots },
+    {
+      headers: {
+        "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
+      },
+    },
+  );
+}
+
 function parseExtrasParam(raw: string | null): string[] {
   if (!raw || !raw.trim()) return [];
   return raw
@@ -96,9 +107,9 @@ export async function GET(request: Request) {
       bookingServiceSlug,
     });
 
-    return NextResponse.json({ slots });
+    return jsonSlots(slots);
   } catch (error) {
     console.error("[api/booking/time-slots] unexpected error:", error);
-    return NextResponse.json({ slots: [] as TimeSlotAvailability[] });
+    return jsonSlots([]);
   }
 }

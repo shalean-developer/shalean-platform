@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { ClusterRelatedGuideItem } from "@/lib/blog/fetch-cluster-related-guides";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 
@@ -20,13 +20,13 @@ export function BlogClusterRelatedGuides({ items }: { items: ClusterRelatedGuide
       <ul className="mt-4 space-y-3">
         {items.map((it) => (
           <li key={it.slug} className="flex flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2">
-            <Link
+            <SafeInternalLink
               href={`/blog/${it.slug}`}
               className={`${linkInNavClassName} text-base font-medium text-blue-800`}
               aria-label={`${it.title} (${intentLine(it.intentLabel)})`}
             >
               {it.title}
-            </Link>
+            </SafeInternalLink>
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{intentLine(it.intentLabel)}</span>
           </li>
         ))}

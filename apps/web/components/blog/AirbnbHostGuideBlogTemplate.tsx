@@ -1,7 +1,12 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { AirbnbHostGuidePost } from "@/lib/blog/airbnbHostGuidePosts";
 import { AIRBNB_SERVICE_HREF, getAirbnbGuideCrossLinkBundle } from "@/lib/blog/airbnbHostGuideCrossLinks";
+import {
+  CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF,
+  CANONICAL_BEST_AIRBNB_TIPS_CAPE_TOWN_HREF,
+  CANONICAL_DEEP_VS_STANDARD_BLOG_HREF,
+} from "@/lib/blog/canonicalEditorialBlogLinks";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 /** Parent `BlogContent prose` supplies typography — avoid nested `prose` here. */
@@ -56,7 +61,7 @@ function ServiceAnchorParagraph() {
   return (
     <p>
       When you want crews aligned to guest expectations—not just a residential tidy—start from{" "}
-      <Link href={AIRBNB_SERVICE}>airbnb cleaning services in cape town</Link> so bedrooms, bathrooms, and turnover extras
+      <SafeInternalLink href={AIRBNB_SERVICE}>airbnb cleaning services in cape town</SafeInternalLink> so bedrooms, bathrooms, and turnover extras
       match what your listing promises.
     </p>
   );
@@ -70,23 +75,23 @@ function AirbnbGuideCrossLinkFooter({ slug }: { slug: string }) {
       <h2 className="text-lg font-bold text-zinc-900">Keep exploring this cluster</h2>
       <p className="mt-2 text-sm leading-relaxed text-zinc-600">
         Anchor turnover decisions on our central{" "}
-        <Link href={AIRBNB_SERVICE_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+        <SafeInternalLink href={AIRBNB_SERVICE_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
           Airbnb cleaning Cape Town
-        </Link>{" "}
+        </SafeInternalLink>{" "}
         service hub—then pair suburb context from your location guide below with two related articles.
       </p>
       <ul className="mt-4 space-y-2 text-sm">
         {bundle.peerGuides.map((g) => (
           <li key={g.href}>
-            <Link href={g.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={g.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               {g.label}
-            </Link>
+            </SafeInternalLink>
           </li>
         ))}
         <li>
-          <Link href={bundle.locationHub.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+          <SafeInternalLink href={bundle.locationHub.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
             {bundle.locationHub.label}
-          </Link>
+          </SafeInternalLink>
         </li>
       </ul>
     </section>
@@ -94,7 +99,7 @@ function AirbnbGuideCrossLinkFooter({ slug }: { slug: string }) {
 }
 
 export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePost }) {
-  const checklistHref = "/blog/airbnb-cleaning-checklist-cape-town";
+  const checklistHref = CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF;
   const costHref = "/blog/airbnb-cleaning-cost-cape-town";
   const prepareHref = "/blog/prepare-airbnb-for-cleaning";
 
@@ -154,8 +159,8 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Budgeting the week? Pair this checklist with{" "}
-            <Link href={costHref}>how Airbnb cleaning cost works in Cape Town</Link>, then read{" "}
-            <Link href={prepareHref}>how to prepare your Airbnb for cleaning between guests</Link> so access notes and
+            <SafeInternalLink href={costHref}>how Airbnb cleaning cost works in Cape Town</SafeInternalLink>, then read{" "}
+            <SafeInternalLink href={prepareHref}>how to prepare your Airbnb for cleaning between guests</SafeInternalLink> so access notes and
             supplies do not steal crew time.
           </p>
         </>
@@ -210,13 +215,13 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           <p>
             Enter address-level notes honestly—crew planning depends on it. Adjust bedrooms, bathrooms, and extras until
             the quote reflects what your listing photos promise. If you are comparing service tiers, revisit{" "}
-            <Link href="/blog/deep-vs-standard-cleaning-cape-town">deep vs standard cleaning in Cape Town</Link> before you
+            <SafeInternalLink href={CANONICAL_DEEP_VS_STANDARD_BLOG_HREF}>deep vs standard cleaning in Cape Town</SafeInternalLink> before you
             assume a turnover can absorb deferred kitchen build-up.
           </p>
           <p>
             Operational detail belongs alongside pricing: follow{" "}
-            <Link href={checklistHref}>the Airbnb cleaning checklist for Cape Town hosts</Link> and{" "}
-            <Link href={prepareHref}>prep steps between guests</Link> so your next quote matches how the unit actually
+            <SafeInternalLink href={checklistHref}>the Airbnb cleaning checklist for Cape Town hosts</SafeInternalLink> and{" "}
+            <SafeInternalLink href={prepareHref}>prep steps between guests</SafeInternalLink> so your next quote matches how the unit actually
             behaves during peak season.
           </p>
         </>
@@ -267,8 +272,8 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Pair prep with{" "}
-            <Link href={checklistHref}>the Cape Town Airbnb cleaning checklist</Link> and{" "}
-            <Link href={costHref}>cost guidance for turnovers</Link> so budgets and expectations stay aligned through peak
+            <SafeInternalLink href={checklistHref}>the Cape Town Airbnb cleaning checklist</SafeInternalLink> and{" "}
+            <SafeInternalLink href={costHref}>cost guidance for turnovers</SafeInternalLink> so budgets and expectations stay aligned through peak
             weeks.
           </p>
         </>
@@ -295,7 +300,7 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Cross-check cadence with{" "}
-            <Link href="/blog/how-often-to-clean-airbnb-cape-town">how often to clean an Airbnb in Cape Town</Link> before
+            <SafeInternalLink href="/blog/how-often-to-clean-airbnb-cape-town">how often to clean an Airbnb in Cape Town</SafeInternalLink> before
             you assume bi-weekly “touch-ups” replace full turnovers between paying guests.
           </p>
           <NeedHelpCta />
@@ -304,11 +309,11 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
             Intercom sequences, lift fobs, and visitor parking behave differently across CBD-adjacent blocks and Southern
             Suburb estates. Minutes spent decoding access come out of bathroom dwell time unless notes are precise—see how
             preparation discipline compounds in{" "}
-            <Link href="/blog/prepare-airbnb-for-cleaning">how to prepare your Airbnb for cleaning between guests</Link>.
+            <SafeInternalLink href="/blog/prepare-airbnb-for-cleaning">how to prepare your Airbnb for cleaning between guests</SafeInternalLink>.
           </p>
           <p>
             Ground neighbourhood friction using the{" "}
-            <Link href="/locations/gardens-cleaning-services">Gardens cleaning services hub</Link> when your listing sits near
+            <SafeInternalLink href="/locations/gardens-cleaning-services">Gardens cleaning services hub</SafeInternalLink> when your listing sits near
             the City Bowl—parking and loading rules shift block by block.
           </p>
         </>
@@ -330,7 +335,7 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           <p>
             Treat kitchens and bathrooms as every-checkout priorities; treat ovens, grout-adjacent buildup, and balcony glass
             as rotating deep targets when listings start drifting from gallery shots. Pair planning with{" "}
-            <Link href="/blog/airbnb-cleaning-cost-cape-town">Airbnb cleaning cost guidance</Link> so budget matches honest
+            <SafeInternalLink href="/blog/airbnb-cleaning-cost-cape-town">Airbnb cleaning cost guidance</SafeInternalLink> so budget matches honest
             dwell time.
           </p>
           <NeedHelpCta />
@@ -342,12 +347,12 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Avoid the mistakes we outline in{" "}
-            <Link href="/blog/airbnb-cleaning-mistakes-hosts-make">Airbnb cleaning mistakes hosts make</Link>—especially
+            <SafeInternalLink href="/blog/airbnb-cleaning-mistakes-hosts-make">Airbnb cleaning mistakes hosts make</SafeInternalLink>—especially
             optimistic calendars that steal minutes from high-impact zones.
           </p>
           <p>
             Claremont-style family homes often show wear differently than compact Sea Point flats—compare notes with the{" "}
-            <Link href="/locations/claremont-cleaning-services">Claremont cleaning hub</Link> when routing predicts stairs,
+            <SafeInternalLink href="/locations/claremont-cleaning-services">Claremont cleaning hub</SafeInternalLink> when routing predicts stairs,
             gates, and mudrooms.
           </p>
         </>
@@ -376,7 +381,7 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           <p>
             Guests notice missing dishwasher tabs faster than a slightly imperfect cushion angle—stage consumables where
             crews can replenish without unlocking private cupboards mid-slot. Reinforce habits via{" "}
-            <Link href="/blog/best-airbnb-cleaning-tips-cape-town">best Airbnb cleaning tips for Cape Town hosts</Link>.
+            <SafeInternalLink href={CANONICAL_BEST_AIRBNB_TIPS_CAPE_TOWN_HREF}>best Airbnb cleaning tips for Cape Town hosts</SafeInternalLink>.
           </p>
           <NeedHelpCta />
           <h2>Mistake #3: skipping documentation before cleaners arrive</h2>
@@ -386,13 +391,13 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Compare your rhythm against{" "}
-            <Link href="/blog/how-often-to-clean-airbnb-cape-town">how often to clean an Airbnb here</Link>, then sanity-check
+            <SafeInternalLink href="/blog/how-often-to-clean-airbnb-cape-town">how often to clean an Airbnb here</SafeInternalLink>, then sanity-check
             surfaces against the{" "}
-            <Link href="/blog/airbnb-cleaning-checklist-cape-town">room-by-room checklist article</Link> before peak weeks.
+            <SafeInternalLink href={CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF}>room-by-room checklist article</SafeInternalLink> before peak weeks.
           </p>
           <p>
             Hosting near schools and family routes in the Southern Suburbs? Ground parking and gate habits using the{" "}
-            <Link href="/locations/claremont-cleaning-services">Claremont cleaning hub</Link> alongside your turnover brief.
+            <SafeInternalLink href="/locations/claremont-cleaning-services">Claremont cleaning hub</SafeInternalLink> alongside your turnover brief.
           </p>
         </>
       ) : null}

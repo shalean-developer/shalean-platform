@@ -3,6 +3,7 @@
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState, type RefCallback } from "react";
 import { bookingCopy } from "@/lib/booking/copy";
+import { BookingTrustSignals } from "@/components/booking/BookingTrustSignals";
 import { cn } from "@/lib/utils";
 
 const HELD_WINDOW_MS = 5 * 60 * 1000;
@@ -112,6 +113,8 @@ export function CheckoutSideBadge({
 
       {showCountdown ? <SlotHoldCountdown lockedAt={lockedAt} align={mode === "desktop" ? "start" : "center"} /> : null}
 
+      <BookingTrustSignals variant="compact" />
+
       {mode === "desktop" ? (
         <>
           <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
@@ -137,16 +140,16 @@ export function CheckoutSideBadge({
               onClick={onPay}
               disabled={!canPay || paying}
               className={cn(
-                "min-h-14 min-w-0 flex-1 rounded-xl px-4 text-sm font-semibold tracking-tight transition-all",
+                "min-h-14 min-w-0 flex-1 rounded-xl px-5 text-base font-semibold tracking-tight transition-all",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                 canPay
                   ? paying
                     ? "cursor-wait bg-primary text-primary-foreground opacity-95"
-                    : "bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 active:scale-[0.99]"
+                    : "bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-[0.99]"
                   : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
               )}
             >
-              {paying ? "Redirecting…" : continueLabel}
+              {continueLabel}
             </button>
           </div>
           {promoTipHostRef ? (

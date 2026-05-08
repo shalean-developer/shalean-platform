@@ -27,6 +27,7 @@ import {
   extrasUISections,
   mostPopularExtraIdFromSnapshot,
 } from "@/lib/pricing/extrasConfig";
+import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { cn } from "@/lib/utils";
 
@@ -120,7 +121,7 @@ function ExtraCircleToggle({ id, label, selected, disabled, badge, priceLabel, o
         disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer active:scale-[0.98]",
       )}
     >
-      <span className="relative flex h-[4.25rem] w-[4.25rem] shrink-0 items-center justify-center sm:h-[4.5rem] sm:w-[4.5rem]">
+      <span className="relative hidden h-[4.25rem] w-[4.25rem] shrink-0 items-center justify-center sm:flex sm:h-[4.5rem] sm:w-[4.5rem]">
         {badge ? (
           <span
             className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-amber-950 shadow-sm ring-2 ring-white dark:ring-zinc-950"
@@ -198,7 +199,11 @@ export function ExtrasSection({ state, blockedExtras, setState }: ExtrasSectionP
         extras: prev.extras.includes(id) ? prev.extras.filter((e) => e !== id) : [...prev.extras, id],
       }));
       if (turningOn) {
-        trackGrowthEvent("booking_upsell_interaction", {
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_ADDON_SELECTED, state, {
+          addon_id: id,
+          selected_extras: [...state.extras, id],
+        });
+        trackGrowthEvent(ANALYTICS_EVENTS.BOOKING_UPSELL_INTERACTION, {
           action: "toggle_extra",
           extraId: id,
           service: state.service ?? "",
@@ -207,7 +212,7 @@ export function ExtrasSection({ state, blockedExtras, setState }: ExtrasSectionP
         });
       }
     },
-    [blockedExtras, setState, state.extras, state.service],
+    [blockedExtras, setState, state],
   );
 
   if (!catalog) {

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { BLOG_CONTEXT_SERVICE_LINKS } from "@/lib/blog/blogServiceContextLinks";
 
 const proseArticle =
@@ -18,13 +18,13 @@ export function BlogContextualServiceLinks({ embedded = false }: Props) {
       <h2>Trusted cleaning services across Cape Town with upfront pricing</h2>
       <p>
         Whether you need{" "}
-        <Link href={moveOut.href}>{moveOut.anchor}</Link>, Airbnb turnover in busy areas like Sea Point or the CBD, or
+        <SafeInternalLink href={moveOut.href}>{moveOut.anchor}</SafeInternalLink>, Airbnb turnover in busy areas like Sea Point or the CBD, or
         regular home cleaning in Claremont, Rondebosch, or Gardens, you can match the service to your needs. Many
         households start with{" "}
-        <Link href={standard.href}>{standard.anchor}</Link> and add{" "}
-        <Link href={deep.href}>{deep.anchor}</Link> when kitchens, bathrooms, or high-use areas need extra attention.
-        Hosts often combine <Link href={airbnb.href}>Airbnb cleaning</Link> with occasional{" "}
-        <Link href={deep.href}>deep cleans</Link> between peak bookings.
+        <SafeInternalLink href={standard.href}>{standard.anchor}</SafeInternalLink> and add{" "}
+        <SafeInternalLink href={deep.href}>{deep.anchor}</SafeInternalLink> when kitchens, bathrooms, or high-use areas need extra attention.
+        Hosts often combine <SafeInternalLink href={airbnb.href}>Airbnb cleaning</SafeInternalLink> with occasional{" "}
+        <SafeInternalLink href={deep.href}>deep cleans</SafeInternalLink> between peak bookings.
       </p>
     </div>
   );

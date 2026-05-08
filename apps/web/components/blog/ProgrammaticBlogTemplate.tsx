@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import {
   buildProgrammaticWhatIsHeading,
   getNearbySuburbsForProgrammaticPost,
@@ -12,6 +12,8 @@ import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { LocalGuideProgrammaticTemplate } from "@/components/blog/LocalGuideProgrammaticTemplate";
+import { CANONICAL_DEEP_VS_STANDARD_BLOG_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
 const SERVICE_PATH_KEY = {
   deep: "deep-cleaning-cape-town",
@@ -84,15 +86,15 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
         </p>
         <p>
           If you are comparing tiers city-wide, start with our{" "}
-          <Link href="/blog/deep-vs-standard-cleaning-cape-town">deep vs standard cleaning guide</Link>, then return here
+          <SafeInternalLink href={CANONICAL_DEEP_VS_STANDARD_BLOG_HREF}>deep vs standard cleaning guide</SafeInternalLink>, then return here
           for {loc}-specific context. Service scope for{" "}
-          <Link href={svcPath}>{svc} in Cape Town</Link> always follows what you select during booking—this article sets
+          <SafeInternalLink href={svcPath}>{svc} in Cape Town</SafeInternalLink> always follows what you select during booking—this article sets
           expectations before you lock a slot.
         </p>
         {locationHubHref ? (
           <p>
             Prefer suburb FAQs, pricing bands, and booking CTAs in one place? Open the{" "}
-            <Link href={locationHubHref}>cleaning services in {loc}</Link> hub—it links back to this guide and the wider
+            <SafeInternalLink href={locationHubHref}>cleaning services in {loc}</SafeInternalLink> hub—it links back to this guide and the wider
             Cape Town service pages.
           </p>
         ) : null}
@@ -103,12 +105,12 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
             {serviceCrossLinks.relatedBlogs.map((b, i) => (
               <span key={b.href}>
                 {i > 0 ? (i === serviceCrossLinks.relatedBlogs.length - 1 ? " and " : ", ") : null}
-                <Link href={b.href}>{b.label}</Link>
+                <SafeInternalLink href={b.href}>{b.label}</SafeInternalLink>
               </span>
             ))}
             . Read the{" "}
-            <Link href={serviceCrossLinks.primaryServiceHref}>{serviceCrossLinks.primaryServiceLabel}</Link>, then book
-            from the <Link href={serviceCrossLinks.hubHref}>{loc} cleaning hub</Link> when you want suburb FAQs together.
+            <SafeInternalLink href={serviceCrossLinks.primaryServiceHref}>{serviceCrossLinks.primaryServiceLabel}</SafeInternalLink>, then book
+            from the <SafeInternalLink href={serviceCrossLinks.hubHref}>{loc} cleaning hub</SafeInternalLink> when you want suburb FAQs together.
           </p>
         ) : null}
 
@@ -123,8 +125,8 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
           <li>Scope is confirmed from bedrooms, bathrooms, and add-ons—not postcode alone.</li>
           <li>Access and parking notes for {loc} reduce delays so more minutes go to cleaning.</li>
           <li>
-            Bundling with <Link href={deep}>deep cleaning</Link>, <Link href={standard}>standard cleaning</Link>,{" "}
-            <Link href={carpet}>carpet cleaning</Link>, or <Link href={office}>office cleaning in Cape Town</Link> is
+            Bundling with <SafeInternalLink href={deep}>deep cleaning</SafeInternalLink>, <SafeInternalLink href={standard}>standard cleaning</SafeInternalLink>,{" "}
+            <SafeInternalLink href={carpet}>carpet cleaning</SafeInternalLink>, or <SafeInternalLink href={office}>office cleaning in Cape Town</SafeInternalLink> is
             available when your home or workspace needs more than one focus in a single trip.
           </li>
         </ul>
@@ -146,13 +148,13 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
         <p>{whyProBody(loc)}</p>
         <p>
           Compare{" "}
-          <Link href={deep}>deep cleaning services in Cape Town</Link> and{" "}
-          <Link href={standard}>standard cleaning services in Cape Town</Link> when you need a quick tier check before
+          <SafeInternalLink href={deep}>deep cleaning services in Cape Town</SafeInternalLink> and{" "}
+          <SafeInternalLink href={standard}>standard cleaning services in Cape Town</SafeInternalLink> when you need a quick tier check before
           booking for {loc}.
         </p>
         <p>
           Shalean uses vetted cleaners and clear checklists so you are not guessing what &quot;done&quot; means. Read{" "}
-          <Link href="/blog/cleaning-cost-cape-town">how cleaning pricing works in Cape Town</Link> if you want ranges
+          <SafeInternalLink href={CAPE_TOWN_PRICING_AUTHORITY_HREF}>how cleaning pricing works in Cape Town</SafeInternalLink> if you want ranges
           before you open the booking flow.
         </p>
 
@@ -194,16 +196,16 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
               {nearbyHubPieces.map((item, i) => (
                 <span key={item.href}>
                   {i > 0 ? (i === nearbyHubPieces.length - 1 ? ", and " : ", ") : null}
-                  <Link href={item.href}>cleaning services in {item.name}</Link>
+                  <SafeInternalLink href={item.href}>cleaning services in {item.name}</SafeInternalLink>
                 </span>
               ))}
             </>
           ) : (
-            <Link href="/cleaning-services-cape-town">Cape Town cleaning hubs</Link>
+            <SafeInternalLink href="/cleaning-services-cape-town">Cape Town cleaning hubs</SafeInternalLink>
           )}
           —plus{" "}
-          <Link href={moveOut}>move-out cleaning in Cape Town</Link> and{" "}
-          <Link href={airbnb}>Airbnb cleaning in Cape Town</Link> for adjacent use cases.
+          <SafeInternalLink href={moveOut}>move-out cleaning in Cape Town</SafeInternalLink> and{" "}
+          <SafeInternalLink href={airbnb}>Airbnb cleaning in Cape Town</SafeInternalLink> for adjacent use cases.
         </p>
 
         <h2 id={PROGRAMMATIC_DOC_ANCHOR_IDS.faq}>Frequently asked questions</h2>
@@ -217,8 +219,8 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
 
         <p>
           For service-specific scope, open{" "}
-          <Link href={svcPath}>{svc} in Cape Town</Link> and cross-check add-ons—oven, fridge, carpet bundles, or{" "}
-          <Link href={airbnb}>Airbnb turnover</Link> tasks when that matches how you use the home.
+          <SafeInternalLink href={svcPath}>{svc} in Cape Town</SafeInternalLink> and cross-check add-ons—oven, fridge, carpet bundles, or{" "}
+          <SafeInternalLink href={airbnb}>Airbnb turnover</SafeInternalLink> tasks when that matches how you use the home.
         </p>
       </div>
     </>

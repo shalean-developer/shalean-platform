@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { BLOG_TOPIC_FILTER_OPTIONS, type BlogTopicFilterId } from "@/lib/blog/blog-index-hub";
 
 export function BlogTopicFilterNav({ active }: { active: BlogTopicFilterId | "all" }) {
@@ -8,7 +8,7 @@ export function BlogTopicFilterNav({ active }: { active: BlogTopicFilterId | "al
         const href = id === "all" ? "/blog" : `/blog?topic=${encodeURIComponent(id)}`;
         const isActive = active === id;
         return (
-          <Link
+          <SafeInternalLink
             key={id}
             href={href}
             className={`rounded-full border px-5 py-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
@@ -19,7 +19,7 @@ export function BlogTopicFilterNav({ active }: { active: BlogTopicFilterId | "al
             aria-current={isActive ? "page" : undefined}
           >
             {label}
-          </Link>
+          </SafeInternalLink>
         );
       })}
     </nav>

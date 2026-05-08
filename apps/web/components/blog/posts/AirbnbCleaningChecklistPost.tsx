@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { CANONICAL_DEEP_VS_STANDARD_BLOG_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const airbnb = CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path;
@@ -21,7 +22,7 @@ export function AirbnbCleaningChecklistPost() {
         Turnover cleaning is not &quot;a quick tidy&quot;—it is the operating system behind repeat bookings, strong
         ratings, and the confidence to take same-day changeovers when the market allows. When calendars tighten, many
         hosts lean on{" "}
-        <Link href={airbnb}>Airbnb cleaning services in Cape Town</Link> to keep every handover consistent.
+        <SafeInternalLink href={airbnb}>Airbnb cleaning services in Cape Town</SafeInternalLink> to keep every handover consistent.
       </p>
       <p>
         This checklist is written for Cape Town hosts and property managers who want a repeatable, guest-ready standard
@@ -40,15 +41,15 @@ export function AirbnbCleaningChecklistPost() {
       </p>
       <p>
         It differs from{" "}
-        <Link href={standard}>standard home cleaning in Cape Town</Link> because the goal is not only &quot;maintained
+        <SafeInternalLink href={standard}>standard home cleaning in Cape Town</SafeInternalLink> because the goal is not only &quot;maintained
         this week,&quot; but <strong>guest-ready now</strong>—often on a clock.
       </p>
       <p>
         It also differs from{" "}
-        <Link href={deep}>deep cleaning services in Cape Town</Link> in cadence: deep work targets build-up and detail zones you might
+        <SafeInternalLink href={deep}>deep cleaning services in Cape Town</SafeInternalLink> in cadence: deep work targets build-up and detail zones you might
         schedule seasonally or before peak season, while turnover work prioritises presentation, hygiene, and speed. For
         a side-by-side comparison of tiers, read our guide on{" "}
-        <Link href="/blog/deep-vs-standard-cleaning-cape-town">deep cleaning vs standard cleaning</Link>.
+        <SafeInternalLink href={CANONICAL_DEEP_VS_STANDARD_BLOG_HREF}>deep cleaning vs standard cleaning</SafeInternalLink>.
       </p>
       <p>
         In Cape Town, <strong>short-term rental cleaning</strong> often has to contend with coastal dust, wind-blown
@@ -173,12 +174,12 @@ export function AirbnbCleaningChecklistPost() {
         arrivals.
       </p>
       <p>
-        A dedicated workflow from <Link href={airbnb}>Airbnb cleaning services in Cape Town</Link> aligns scope to guest
+        A dedicated workflow from <SafeInternalLink href={airbnb}>Airbnb cleaning services in Cape Town</SafeInternalLink> aligns scope to guest
         expectations and keeps turnovers predictable.
       </p>
       <p>
         If ovens, grout, or built-up dust need more than a turnover pass, schedule{" "}
-        <Link href={deep}>deep cleaning services</Link> between busy blocks so your baseline stays high without slowing
+        <SafeInternalLink href={deep}>deep cleaning services</SafeInternalLink> between busy blocks so your baseline stays high without slowing
         every changeover.
       </p>
 
@@ -241,7 +242,7 @@ export function AirbnbCleaningChecklistPost() {
 
       <p>
         For a scoped turnover aligned to guest expectations, compare what is included on our{" "}
-        <Link href={airbnb}>Airbnb cleaning Cape Town</Link> service page—then book online when you are ready.
+        <SafeInternalLink href={airbnb}>Airbnb cleaning Cape Town</SafeInternalLink> service page—then book online when you are ready.
       </p>
     </div>
   );

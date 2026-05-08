@@ -40,6 +40,8 @@ export type MobileBottomBarProps = {
   omitCta?: boolean;
   /** Checkout: one row — subtle Back | quote (tap) | Continue (replaces separate `BottomCTA`). */
   checkoutDock?: MobileCheckoutDockActions;
+  /** When `checkoutDock` is set, omit the center quote tap — Back + Continue only (e.g. schedule step). */
+  checkoutDockHideCenter?: boolean;
   /** Label when hours are unknown (small top line in horizontal footer). */
   totalSectionLabel?: string;
   /** Subtle text back (booking horizontal footer); keep low visual weight vs CTA. */
@@ -47,6 +49,10 @@ export type MobileBottomBarProps = {
   mobileBackLabel?: string;
   /** Omit ZAR / plan price in center (hours or caption only) — mobile sticky payment. */
   hideMobilePrice?: boolean;
+  /** Larger checkout-style primary CTA (paired with `BookingLayout` `continueVariant="pay"`). */
+  ctaVariant?: "default" | "pay";
+  /** Renders below the main row (e.g. compact trust line on details step). */
+  trustBelowCta?: ReactNode;
 };
 
 export function MobileBottomBar({
@@ -68,10 +74,13 @@ export function MobileBottomBar({
   variant = "flat",
   omitCta = false,
   checkoutDock,
+  checkoutDockHideCenter = false,
   totalSectionLabel = "Total",
   onMobileBack,
   mobileBackLabel = "Back",
   hideMobilePrice = false,
+  ctaVariant = "default",
+  trustBelowCta,
 }: MobileBottomBarProps) {
   const amountLine = amountDisplayOverride ?? totalDisplay;
   const compareBaseZar = typeof totalZar === "number" && Number.isFinite(totalZar) ? totalZar : null;
@@ -157,7 +166,7 @@ export function MobileBottomBar({
       <button
         type="button"
         onClick={onAmountClick}
-        className="min-w-0 flex-1 py-0.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex min-h-[44px] min-w-0 flex-1 items-center py-0.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         aria-label="View booking summary"
       >
         {priceStack}
@@ -170,7 +179,7 @@ export function MobileBottomBar({
       <button
         type="button"
         onClick={onAmountClick}
-        className="flex min-w-0 flex-1 items-center justify-center px-1 py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex min-h-[44px] min-w-0 flex-1 items-center justify-center px-1 py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         aria-label="View booking summary"
       >
         {priceStack}
@@ -189,7 +198,7 @@ export function MobileBottomBar({
         >
           {checkoutDock.backLabel ?? "Back"}
         </button>
-        {centerPriceTap}
+        {checkoutDockHideCenter ? <span className="min-w-2 flex-1" aria-hidden /> : centerPriceTap}
         {checkoutDock.hideContinue ? (
           <span className="w-[5.25rem] shrink-0 sm:w-24" aria-hidden />
         ) : (
@@ -198,12 +207,12 @@ export function MobileBottomBar({
             onClick={checkoutDock.onContinue}
             disabled={checkoutDock.continueDisabled}
             className={cn(
-              "flex min-h-[44px] shrink-0 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-transform duration-150 ease-out",
+              "flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-transform duration-150 ease-out sm:min-h-[44px] sm:flex-initial sm:px-5",
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
               "active:scale-[0.97] motion-reduce:active:scale-100",
               checkoutDock.continueDisabled
                 ? "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
-                : "bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500",
+                : "bg-blue-600 text-white shadow-md shadow-blue-600/30 hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/35 dark:bg-blue-600 dark:hover:bg-blue-500",
             )}
           >
             {checkoutDock.continueLabel ?? "Continue"}
@@ -221,15 +230,24 @@ export function MobileBottomBar({
       ? "px-4 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       : "px-4 py-3";
 
+    const omitBody = (
+      <>
+        {inner}
+        {trustBelowCta ? (
+          <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">{trustBelowCta}</div>
+        ) : null}
+      </>
+    );
+
     if (variant === "elevated") {
       return (
         <div className="rounded-t-2xl border border-b-0 border-zinc-200/90 bg-white/98 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/40">
-          <div className={omitShellPad}>{inner}</div>
+          <div className={omitShellPad}>{omitBody}</div>
         </div>
       );
     }
 
-    return <div className={cn("w-full", omitShellPad)}>{inner}</div>;
+    return <div className={cn("w-full", omitShellPad)}>{omitBody}</div>;
   }
 
   /** Main booking flow: single row — subtle Back | centered hours + price (inline on mobile) | dominant Continue. */
@@ -297,7 +315,7 @@ export function MobileBottomBar({
       <button
         type="button"
         onClick={onAmountClick}
-        className="flex min-w-0 flex-1 flex-row items-center justify-center px-1 py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex min-h-[44px] min-w-0 flex-1 flex-row items-center justify-center px-1 py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         aria-label="View booking summary"
       >
         {centerStack}
@@ -321,7 +339,7 @@ export function MobileBottomBar({
           <button
             type="button"
             onClick={onMobileBack}
-            className="-mx-1 shrink-0 rounded-md px-2 py-2 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="-mx-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 py-2 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             {mobileBackLabel}
           </button>
@@ -336,17 +354,24 @@ export function MobileBottomBar({
           onClick={onCta}
           disabled={disabled || loading}
           className={cn(
-            "flex min-h-[44px] shrink-0 items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold transition-transform duration-150 ease-out",
-            "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+            "flex shrink-0 items-center justify-center rounded-xl font-semibold transition-transform duration-150 ease-out",
             "active:scale-[0.97] motion-reduce:active:scale-100",
+            ctaVariant === "pay"
+              ? "min-h-[52px] px-6 text-base shadow-lg shadow-primary/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              : "min-h-[44px] px-5 py-2.5 text-sm shadow-sm shadow-blue-600/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
             disabled || loading
               ? "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
-              : "bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500",
+              : ctaVariant === "pay"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                : "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500",
           )}
         >
           {loading ? "Wait…" : ctaLabel}
         </button>
       </div>
+      {trustBelowCta ? (
+        <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">{trustBelowCta}</div>
+      ) : null}
     </div>
   );
 }

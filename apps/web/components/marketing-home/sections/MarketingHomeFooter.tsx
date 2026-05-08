@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { MarketingHomeNewsletterForm } from "@/components/marketing-home/MarketingHomeNewsletterForm";
 import { PopularCapeTownStrip } from "@/components/seo/PopularCapeTownStrip";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
@@ -68,34 +68,34 @@ export function MarketingHomeFooter() {
             <p className="text-sm font-bold text-white">Quick Links</p>
             <ul className="mt-4 space-y-3 text-sm text-white/90">
               <li>
-                <Link href="/" className="transition hover:text-white">
+                <SafeInternalLink href="/" className="transition hover:text-white">
                   Home
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/about" className="transition hover:text-white">
+                <SafeInternalLink href="/about" className="transition hover:text-white">
                   About Us
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/services" className="transition hover:text-white">
+                <SafeInternalLink href="/services" className="transition hover:text-white">
                   Services
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/cleaning-prices-cape-town" className="transition hover:text-white">
+                <SafeInternalLink href="/cleaning-prices-cape-town" className="transition hover:text-white">
                   Cleaning prices in Cape Town
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/blog" className="transition hover:text-white">
+                <SafeInternalLink href="/blog" className="transition hover:text-white">
                   Blog
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/review" className="transition hover:text-white">
+                <SafeInternalLink href="/review" className="transition hover:text-white">
                   Reviews
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
                 <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="transition hover:text-white">
@@ -103,9 +103,9 @@ export function MarketingHomeFooter() {
                 </a>
               </li>
               <li>
-                <Link href="/login?role=customer" className="transition hover:text-white">
+                <SafeInternalLink href="/login?role=customer" className="transition hover:text-white">
                   Login
-                </Link>
+                </SafeInternalLink>
               </li>
             </ul>
           </div>
@@ -114,29 +114,29 @@ export function MarketingHomeFooter() {
             <p className="text-sm font-bold text-white">Popular Services</p>
             <ul className="mt-4 space-y-3 text-sm text-white/90">
               <li>
-                <Link href="/services/deep-cleaning-cape-town" className="transition hover:text-white">
+                <SafeInternalLink href="/services/deep-cleaning-cape-town" className="transition hover:text-white">
                   Deep Cleaning
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/services/carpet-cleaning-cape-town" className="transition hover:text-white">
+                <SafeInternalLink href="/services/carpet-cleaning-cape-town" className="transition hover:text-white">
                   Sofa &amp; Carpet Care
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/services/office-cleaning-cape-town" className="transition hover:text-white">
+                <SafeInternalLink href="/services/office-cleaning-cape-town" className="transition hover:text-white">
                   Office Cleaning
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/services/standard-cleaning-cape-town" className="transition hover:text-white">
+                <SafeInternalLink href="/services/standard-cleaning-cape-town" className="transition hover:text-white">
                   Standard Home Cleaning
-                </Link>
+                </SafeInternalLink>
               </li>
               <li>
-                <Link href="/services/window-cleaning-cape-town" className="transition hover:text-white">
+                <SafeInternalLink href="/services/window-cleaning-cape-town" className="transition hover:text-white">
                   Window Cleaning
-                </Link>
+                </SafeInternalLink>
               </li>
             </ul>
           </div>
@@ -204,39 +204,39 @@ export function MarketingHomeFooter() {
             <ul className="max-w-md space-y-2.5 lg:hidden">
               {FOOTER_POPULAR_LOCATION_HUBS.map((hub) => (
                 <li key={hub.slug}>
-                  <Link href={`/locations/${hub.slug}`} className="transition hover:text-white">
+                  <SafeInternalLink href={`/locations/${hub.slug}`} className="transition hover:text-white">
                     {hub.name}
-                  </Link>
+                  </SafeInternalLink>
                 </li>
               ))}
               <li className="pt-1">
-                <Link
+                <SafeInternalLink
                   href="/locations"
                   className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
                 >
                   View all locations
-                </Link>
+                </SafeInternalLink>
               </li>
             </ul>
             <div className="hidden leading-relaxed lg:block">
               {FOOTER_POPULAR_LOCATION_HUBS.map((hub, index) => (
                 <span key={hub.slug}>
                   {index > 0 ? ", " : null}
-                  <Link href={`/locations/${hub.slug}`} className="transition hover:text-white">
+                  <SafeInternalLink href={`/locations/${hub.slug}`} className="transition hover:text-white">
                     {hub.name}
-                  </Link>
+                  </SafeInternalLink>
                 </span>
               ))}
               <span className="text-white/35" aria-hidden>
                 {" "}
                 ·{" "}
               </span>
-              <Link
+              <SafeInternalLink
                 href="/locations"
                 className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
               >
                 View all locations
-              </Link>
+              </SafeInternalLink>
             </div>
           </nav>
         </div>

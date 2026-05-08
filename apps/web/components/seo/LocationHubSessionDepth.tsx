@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import {
   hubAreaKebabFromHubSlug,
@@ -95,26 +95,26 @@ export function LocationHubSessionDepth({ location, slug }: Props) {
               <p className="mt-2 flex-1 text-sm leading-relaxed text-zinc-600">{row.description}</p>
               <ul className="mt-4 space-y-2 text-sm font-medium">
                 <li>
-                  <Link href={row.serviceHref} className={linkEmphasisClassName}>
+                  <SafeInternalLink href={row.serviceHref} className={linkEmphasisClassName}>
                     {row.serviceLabel}
-                  </Link>
+                  </SafeInternalLink>
                 </li>
                 <li>
                   {row.blogHref ? (
-                    <Link href={row.blogHref} className={linkEmphasisClassName}>
+                    <SafeInternalLink href={row.blogHref} className={linkEmphasisClassName}>
                       {row.blogLabel}
-                    </Link>
+                    </SafeInternalLink>
                   ) : (
-                    <Link href="/blog" className={linkEmphasisClassName}>
+                    <SafeInternalLink href="/blog" className={linkEmphasisClassName}>
                       Browse cleaning guides
-                    </Link>
+                    </SafeInternalLink>
                   )}
                 </li>
                 {row.hubHref && row.hubLabel ? (
                   <li>
-                    <Link href={row.hubHref} className={linkEmphasisClassName}>
+                    <SafeInternalLink href={row.hubHref} className={linkEmphasisClassName}>
                       {row.hubLabel}
-                    </Link>
+                    </SafeInternalLink>
                   </li>
                 ) : null}
               </ul>

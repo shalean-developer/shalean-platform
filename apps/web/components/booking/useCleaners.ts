@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 export type LiveCleaner = {
@@ -20,6 +21,27 @@ export type LiveCleaner = {
 };
 
 const cache = new Map<string, LiveCleaner[]>();
+
+function normalizeCleaner(c: LiveCleaner): LiveCleaner {
+  const dz = (c as { price_delta_zar?: unknown }).price_delta_zar;
+  return {
+    ...c,
+    review_count:
+      typeof c.review_count === "number" && Number.isFinite(c.review_count)
+        ? Math.max(0, Math.round(c.review_count))
+        : 0,
+    recent_reviews: Array.isArray((c as { recent_reviews?: unknown }).recent_reviews)
+      ? ((c as { recent_reviews: { rating?: unknown; quote?: unknown }[] }).recent_reviews ?? [])
+          .map((r) => ({
+            rating: Math.round(Number(r.rating)),
+            quote: typeof r.quote === "string" ? r.quote : "",
+          }))
+          .filter((r) => Number.isFinite(r.rating) && r.quote.length > 0)
+          .slice(0, 3)
+      : [],
+    ...(typeof dz === "number" && Number.isFinite(dz) ? { price_delta_zar: Math.round(dz) } : {}),
+  };
+}
 
 function cleanersCacheKey(args: {
   selectedDate: string;
@@ -85,23 +107,7 @@ export async function prefetchBookingCleaners(args: {
     const json = (await res.json()) as { cleaners?: LiveCleaner[]; error?: string };
     if (!res.ok) return;
     const raw = json.cleaners ?? [];
-    const next: LiveCleaner[] = raw.map((c) => {
-      const dz = (c as { price_delta_zar?: unknown }).price_delta_zar;
-      return {
-        ...c,
-        review_count: typeof c.review_count === "number" && Number.isFinite(c.review_count) ? Math.max(0, Math.round(c.review_count)) : 0,
-        recent_reviews: Array.isArray((c as { recent_reviews?: unknown }).recent_reviews)
-          ? ((c as { recent_reviews: { rating?: unknown; quote?: unknown }[] }).recent_reviews ?? [])
-              .map((r) => ({
-                rating: Math.round(Number(r.rating)),
-                quote: typeof r.quote === "string" ? r.quote : "",
-              }))
-              .filter((r) => Number.isFinite(r.rating) && r.quote.length > 0)
-              .slice(0, 3)
-          : [],
-        ...(typeof dz === "number" && Number.isFinite(dz) ? { price_delta_zar: Math.round(dz) } : {}),
-      };
-    });
+    const next = raw.map(normalizeCleaner);
     cache.set(key, next);
   } catch {
     /* ignore prefetch failures */
@@ -171,9 +177,14 @@ export function useCleaners(args: {
       return;
     }
     let active = true;
-    const t = window.setTimeout(async () => {
-      setLoading(true);
-      setError(null);
+    const controller = new AbortController();
+    const loadingTimer = window.setTimeout(() => {
+      if (active) setLoading(true);
+    }, 120);
+    queueMicrotask(() => {
+      if (active) setError(null);
+    });
+    void (async () => {
       try {
         const params = new URLSearchParams({
           date: args.selectedDate!,
@@ -186,7 +197,7 @@ export function useCleaners(args: {
         if (loc) params.set("locationId", loc);
         const st = typeof args.serviceType === "string" ? args.serviceType.trim() : "";
         if (st) params.set("serviceType", st);
-        const res = await fetch(`/api/booking/cleaners?${params.toString()}`);
+        const res = await fetch(`/api/booking/cleaners?${params.toString()}`, { signal: controller.signal });
         const json = (await res.json()) as { cleaners?: LiveCleaner[]; error?: string };
         if (!active) return;
         if (!res.ok) {
@@ -195,40 +206,27 @@ export function useCleaners(args: {
           return;
         }
         const raw = json.cleaners ?? [];
-        const next: LiveCleaner[] = raw.map((c) => {
-          const dz = (c as { price_delta_zar?: unknown }).price_delta_zar;
-          return {
-            ...c,
-            review_count: typeof c.review_count === "number" && Number.isFinite(c.review_count) ? Math.max(0, Math.round(c.review_count)) : 0,
-            recent_reviews: Array.isArray((c as { recent_reviews?: unknown }).recent_reviews)
-              ? ((c as { recent_reviews: { rating?: unknown; quote?: unknown }[] }).recent_reviews ?? [])
-                  .map((r) => ({
-                    rating: Math.round(Number(r.rating)),
-                    quote: typeof r.quote === "string" ? r.quote : "",
-                  }))
-                  .filter((r) => Number.isFinite(r.rating) && r.quote.length > 0)
-                  .slice(0, 3)
-              : [],
-            ...(typeof dz === "number" && Number.isFinite(dz) ? { price_delta_zar: Math.round(dz) } : {}),
-          };
-        });
+        const next = raw.map(normalizeCleaner);
         cache.set(key, next);
         setCleaners(next);
-        trackGrowthEvent("cleaners_loaded", {
+        trackGrowthEvent(ANALYTICS_EVENTS.CLEANERS_LOADED, {
           cleanersCount: next.length,
           selectedTime: args.selectedTime,
         });
-      } catch {
+      } catch (err) {
         if (!active) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setError("Network error loading cleaners.");
       } finally {
+        window.clearTimeout(loadingTimer);
         if (active) setLoading(false);
       }
-    }, 250);
+    })();
 
     return () => {
       active = false;
-      window.clearTimeout(t);
+      controller.abort();
+      window.clearTimeout(loadingTimer);
     };
   }, [
     args.enabled,

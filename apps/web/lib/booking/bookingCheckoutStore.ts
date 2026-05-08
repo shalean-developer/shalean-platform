@@ -30,7 +30,8 @@ export type BookingCheckoutState = {
 
 const initialState: BookingCheckoutState = {
   service: "standard",
-  detailsFlowPhase: "pick-service",
+  /** Blueprint: land on service + property together (dropdown), not the grid-only phase. */
+  detailsFlowPhase: "home-details",
   bedrooms: 2,
   bathrooms: 1,
   extraRooms: 0,
@@ -97,10 +98,12 @@ export const useBookingCheckoutStore = create<BookingCheckoutStore>()(
         const p = (persisted ?? {}) as Partial<BookingCheckoutState>;
         const phase: BookingDetailsFlowPhase =
           p.detailsFlowPhase === "pick-service" || p.detailsFlowPhase === "home-details"
-            ? p.detailsFlowPhase
+            ? p.detailsFlowPhase === "pick-service"
+              ? "home-details"
+              : p.detailsFlowPhase
             : Object.keys(p).length > 0
               ? "home-details"
-              : "pick-service";
+              : "home-details";
         return {
           ...current,
           ...p,

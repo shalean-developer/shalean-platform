@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
+import { getCanonicalBlogSlug } from "@/lib/blog/validBlogRoutes";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getAllPublishedPosts, type BlogIndexPost } from "@/lib/blog/get-all-posts";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
@@ -70,9 +71,10 @@ export function enrichRelatedPostsForGrid(
 ): RelatedGridPost[] {
   const bySlug = new Map(indexPosts.map((p) => [p.slug, p]));
   return related.map((r) => {
-    const full = bySlug.get(r.slug);
+    const slug = getCanonicalBlogSlug(r.slug);
+    const full = bySlug.get(slug) ?? bySlug.get(r.slug);
     return {
-      slug: r.slug,
+      slug,
       title: full?.title ?? r.title,
       excerpt: full?.excerpt ?? "",
       image: full?.image ?? { src: "/images/marketing/cape-town-house-cleaning-kitchen.webp", alt: r.title },

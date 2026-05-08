@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { BLOG_START_HERE_CARDS } from "@/lib/blog/blog-index-hub";
 import type { BlogIndexPost } from "@/lib/blog/get-all-posts";
@@ -40,21 +40,23 @@ export function BlogSidebar({ categories, trending, trackingSlug, className }: P
           <nav aria-label="Blog categories">
             <ul className="space-y-2">
               <li>
-                <Link
+                <SafeInternalLink
                   href="/blog"
                   className="text-sm font-medium text-zinc-700 underline-offset-4 hover:text-blue-800 hover:underline"
+                  linkContext="blog sidebar"
                 >
                   All articles
-                </Link>
+                </SafeInternalLink>
               </li>
               {categories.map((c) => (
                 <li key={c.slug}>
-                  <Link
+                  <SafeInternalLink
                     href={`/blog/category/${c.slug}`}
                     className="text-sm font-medium text-zinc-700 underline-offset-4 hover:text-blue-800 hover:underline"
+                    linkContext="blog sidebar category"
                   >
                     {c.name}
-                  </Link>
+                  </SafeInternalLink>
                 </li>
               ))}
             </ul>
@@ -66,13 +68,14 @@ export function BlogSidebar({ categories, trending, trackingSlug, className }: P
         <ul className="space-y-3">
           {BLOG_START_HERE_CARDS.map((card) => (
             <li key={card.href}>
-              <Link
+              <SafeInternalLink
                 href={card.href}
                 className="group block rounded-lg border border-transparent px-1 py-1 transition hover:border-blue-100 hover:bg-blue-50/60"
+                linkContext="blog sidebar start here"
               >
                 <span className="text-sm font-semibold text-zinc-900 group-hover:text-blue-900">{card.title}</span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-zinc-600">{card.cta}</span>
-              </Link>
+              </SafeInternalLink>
             </li>
           ))}
         </ul>
@@ -102,12 +105,13 @@ export function BlogSidebar({ categories, trending, trackingSlug, className }: P
                   {i + 1}
                 </span>
                 <div className="min-w-0">
-                  <Link
+                  <SafeInternalLink
                     href={`/blog/${post.slug}`}
                     className="text-sm font-semibold leading-snug text-zinc-900 underline-offset-4 hover:text-blue-800 hover:underline"
+                    linkContext="blog sidebar trending"
                   >
                     {post.title}
-                  </Link>
+                  </SafeInternalLink>
                   <p className="mt-1 text-xs text-zinc-500">{post.readingTime} min read</p>
                 </div>
               </li>

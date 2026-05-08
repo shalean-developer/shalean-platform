@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { ArrowUpRight } from "lucide-react";
 import { getPublishedHubBlogCards } from "@/lib/blog/get-all-posts";
 
@@ -20,14 +20,14 @@ export async function BlogLinks() {
             Deep dives on pricing, move-outs, Airbnb turnovers, and choosing a service—then book from this hub or any suburb page.
           </p>
         </div>
-        <Link href="/blog" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+        <SafeInternalLink href="/blog" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           View all articles
-        </Link>
+        </SafeInternalLink>
       </div>
       <ul className="mt-8 grid gap-4 md:grid-cols-2">
         {featured.map((post) => (
           <li key={post.slug}>
-            <Link
+            <SafeInternalLink
               href={`/blog/${post.slug}`}
               className="group flex h-full flex-col rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-blue-900"
             >
@@ -39,7 +39,7 @@ export async function BlogLinks() {
               </div>
               <p className="mt-2 line-clamp-2 flex-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{post.excerpt}</p>
               <span className="mt-4 text-sm font-medium text-blue-600 dark:text-blue-400">Read guide</span>
-            </Link>
+            </SafeInternalLink>
           </li>
         ))}
       </ul>

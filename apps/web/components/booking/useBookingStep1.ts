@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 import { bookingFlowHref, bookingFlowPromoExtra } from "@/lib/booking/bookingFlow";
+import { getBookingQueryFromUrl, locationPatchFromUrlParam, serviceFromUrlParam } from "@/lib/booking/bookingUrl";
 import { clearLockedBookingFromStorage } from "@/lib/booking/lockedBooking";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import { consumeWidgetDraftForHydration } from "@/lib/booking/bookingWidgetDraft";
@@ -250,6 +251,49 @@ function parseStoredStep1(raw: string): BookingStep1State | null {
   );
 }
 
+function bookingStep1FromUrl(base: BookingStep1State): BookingStep1State {
+  const q = getBookingQueryFromUrl();
+  const service = parseServiceId(serviceFromUrlParam(q.service));
+  const locationPatch = locationPatchFromUrlParam(q.location);
+  const rawExtras = q.extras
+    ?.split(",")
+    .map((x) => x.trim())
+    .filter((x) => BOOKING_EXTRA_ID_SET.has(x));
+  const bedrooms = q.bedrooms ? clampInt(Number(q.bedrooms), 1, 10, base.rooms) : base.rooms;
+  const bathrooms = q.bathrooms ? clampInt(Number(q.bathrooms), 1, 10, base.bathrooms) : base.bathrooms;
+  const extraRooms = q.extraRooms ? clampInt(Number(q.extraRooms), 0, 10, base.extraRooms) : base.extraRooms;
+
+  const hasPatch = Boolean(service || locationPatch || rawExtras?.length || q.bedrooms || q.bathrooms || q.extraRooms);
+  if (!hasPatch) return base;
+
+  const serviceAreaName =
+    typeof locationPatch?.serviceAreaName === "string" && locationPatch.serviceAreaName.trim()
+      ? locationPatch.serviceAreaName.trim()
+      : base.serviceAreaName;
+  const location =
+    typeof locationPatch?.location === "string" && locationPatch.location.trim()
+      ? locationPatch.location.trim()
+      : serviceAreaName || base.location;
+
+  return syncStep1ServiceFields(
+    normalizeStep1ForService({
+      ...base,
+      ...(service ? { service } : {}),
+      rooms: bedrooms,
+      bathrooms,
+      extraRooms,
+      ...(rawExtras?.length ? { extras: [...new Set([...base.extras, ...rawExtras])] } : {}),
+      serviceAreaName,
+      serviceAreaLocationId:
+        "serviceAreaLocationId" in (locationPatch ?? {}) ? (locationPatch?.serviceAreaLocationId ?? null) : base.serviceAreaLocationId,
+      serviceAreaCityId:
+        "serviceAreaCityId" in (locationPatch ?? {}) ? (locationPatch?.serviceAreaCityId ?? null) : base.serviceAreaCityId,
+      location,
+      ...(location ? { allowLocationTextFallback: true } : {}),
+    }),
+  );
+}
+
 /** Read persisted step-1 snapshot (e.g. for Step 2 summary + pricing). SSR-safe: returns null. */
 export function loadBookingStep1FromStorage(): BookingStep1State | null {
   if (typeof window === "undefined") return null;
@@ -344,17 +388,13 @@ function useBookingStep1Store(urlPromo: string | null): UseBookingStep1Return {
     queueMicrotask(() => {
       try {
         const widgetState = consumeWidgetDraftForHydration();
-        if (widgetState) {
-          setState(widgetState);
-          localStorage.setItem(BOOKING_STEP1_KEY, JSON.stringify(widgetState));
-          window.dispatchEvent(new Event("booking-storage-sync"));
-        } else {
-          const raw = localStorage.getItem(BOOKING_STEP1_KEY);
-          if (raw) {
-            const parsed = parseStoredStep1(raw);
-            if (parsed) setState(parsed);
-          }
-        }
+        const raw = localStorage.getItem(BOOKING_STEP1_KEY);
+        const storedState = raw ? parseStoredStep1(raw) : null;
+        const base = widgetState ?? storedState ?? initialState;
+        const next = bookingStep1FromUrl(base);
+        setState(next);
+        localStorage.setItem(BOOKING_STEP1_KEY, JSON.stringify(next));
+        window.dispatchEvent(new Event("booking-storage-sync"));
       } catch {
         /* ignore corrupt storage */
       } finally {

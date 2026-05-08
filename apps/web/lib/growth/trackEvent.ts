@@ -1,85 +1,24 @@
 "use client";
 
+import { captureAcquisitionFirstTouchIfNeeded, getAcquisitionPayloadFields } from "@/lib/analytics/acquisitionContext";
+import { tagReplay } from "@/lib/analytics/sessionReplay";
+import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
+import { ANALYTICS_EVENTS, type AnalyticsClientEventName } from "@/lib/analytics/userEventRegistry";
+
 declare global {
   interface Window {
     gtag?: (...args: unknown[]) => void;
   }
 }
 
-export type GrowthEventType =
-  | "page_view"
-  | "start_booking"
-  | "view_price"
-  | "select_time"
-  | "complete_booking"
-  | "cleaners_loaded"
-  | "times_loaded"
-  | "price_calculated"
-  | "booking_started"
-  | "booking_completed"
-  /** Upsell funnel: extras / bundles (payload.action, bundleId, extraId, step) */
-  | "booking_upsell_interaction"
-  /** Marketing homepage — payload: service, extrasCount, total */
-  | "homepage_continue_booking"
-  /** Marketing homepage — payload: cta, placement */
-  | "homepage_cta_click"
-  /** Marketing homepage — payload: source, service, title? */
-  | "homepage_service_select"
-  /** Marketing homepage — catalog ready; payload: loadTimeMs */
-  | "pricing_loaded"
-  /** Marketing homepage — leave without starting booking handoff; payload: step, service, extrasCount */
-  | "homepage_abandon"
-  /** Marketing homepage — scroll depth milestone; payload: depth (0–100) */
-  | "homepage_scroll"
-  /** Booking flow — total changed after slot/time selection; payload: from, to, reason */
-  | "price_updated"
-  /** Review link opened (marketing SMS/email/deep link); payload: booking_id */
-  | "review_prompt_clicked"
-  /** Customer opened Paystack / redirect checkout; payload: step, service */
-  | "payment_initiated"
-  /** Payment succeeded (client beacon on success page); payload: reference?, booking_id? */
-  | "payment_completed"
-  /** Blog — payload: slug, depth (25|50|75|100) */
-  | "blog_scroll"
-  /** Blog booking/marketing CTA; payload: slug, placement, href?, optional TOC bridge: last_engaged_heading_*, engagement_*, heading_* */
-  | "blog_cta_click"
-  /** Blog dwell time signal; payload: slug, seconds */
-  | "blog_time_on_page"
-  /** Blog TOC jump; payload: slug, heading, heading_depth, toc_target_id */
-  | "blog_toc_click"
-  /** After a TOC click: scroll completion + dwell proxy; payload: slug, heading_id, heading_label, heading_depth, max_scroll_after_click_pct, time_after_click_ms, … */
-  | "blog_toc_section_engagement"
-  /** Location hub scroll milestone; payload: depth (25|50|75|100), page_slug, suburb, … */
-  | "seo_location_scroll"
-  /** Hub booking / pricing CTA; payload: cta_location, cta_label, cta_kind, page_slug, suburb, … */
-  | "seo_cta_click"
-  /** Services hub card or location hub service tile; payload: click_type (learn_more|book|tile), service_name, … */
-  | "seo_service_card_click"
-  /** FAQ accordion / details opened; payload: question, surface, page_slug, … */
-  | "seo_faq_expand"
-  /** Pricing band interaction (e.g. Get exact price); payload: interaction, surface, … */
-  | "seo_pricing_interaction";
+export type GrowthEventType = AnalyticsClientEventName;
 
-const SESSION_KEY = "shalean_growth_session_id";
 const RETARGETING_KEY = "shalean_retargeting_pending";
-
-function getSessionId(): string {
-  if (typeof window === "undefined") return "server";
-  try {
-    const existing = window.localStorage.getItem(SESSION_KEY);
-    if (existing) return existing;
-    const created = `sess_${crypto.randomUUID()}`;
-    window.localStorage.setItem(SESSION_KEY, created);
-    return created;
-  } catch {
-    return `sess_ephemeral_${Date.now()}`;
-  }
-}
 
 export type AnalyticsDevice = "mobile" | "desktop";
 
 export function getGrowthSessionId(): string {
-  return getSessionId();
+  return getAnalyticsSessionId();
 }
 
 export function getAnalyticsDevice(): AnalyticsDevice {
@@ -98,7 +37,7 @@ export function getAnalyticsDevice(): AnalyticsDevice {
  */
 export function withHomepageContext(payload: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    sessionId: getSessionId(),
+    sessionId: getAnalyticsSessionId(),
     device: getAnalyticsDevice(),
     traffic_source: "homepage",
     page_source: "homepage",
@@ -117,15 +56,15 @@ function forwardToGa4(eventType: GrowthEventType, payload: Record<string, unknow
   const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
   if (!measurementId || typeof window.gtag !== "function") return;
   const name =
-    eventType === "seo_location_scroll"
+    eventType === ANALYTICS_EVENTS.SEO_LOCATION_SCROLL
       ? "seo_scroll_depth"
-      : eventType === "seo_cta_click"
+      : eventType === ANALYTICS_EVENTS.SEO_CTA_CLICK
         ? "seo_cta_click"
-        : eventType === "seo_service_card_click"
+        : eventType === ANALYTICS_EVENTS.SEO_SERVICE_CARD_CLICK
           ? "seo_service_click"
-          : eventType === "seo_faq_expand"
+          : eventType === ANALYTICS_EVENTS.SEO_FAQ_EXPAND
             ? "seo_faq_expand"
-            : eventType === "seo_pricing_interaction"
+            : eventType === ANALYTICS_EVENTS.SEO_PRICING_INTERACTION
               ? "seo_pricing_click"
               : eventType;
   try {
@@ -140,14 +79,23 @@ function forwardToGa4(eventType: GrowthEventType, payload: Record<string, unknow
   }
 }
 
+function syncReplayProviders(sessionId: string): void {
+  tagReplay("analytics_session_id", sessionId.slice(0, 255));
+}
+
 export function trackGrowthEvent(
   eventType: GrowthEventType,
   payload: Record<string, unknown> = {},
 ): void {
   if (typeof window === "undefined") return;
+  captureAcquisitionFirstTouchIfNeeded();
+  const sid = getAnalyticsSessionId();
+  syncReplayProviders(sid);
   const enriched = {
+    ...getAcquisitionPayloadFields(),
     ...payload,
-    session_id: getSessionId(),
+    session_id: sid,
+    analytics_session_id: sid,
     device: getAnalyticsDevice(),
     pathname: window.location.pathname,
     referrer: document.referrer || null,
@@ -160,11 +108,11 @@ export function trackGrowthEvent(
   });
 
   if (
-    eventType === "seo_location_scroll" ||
-    eventType === "seo_cta_click" ||
-    eventType === "seo_service_card_click" ||
-    eventType === "seo_faq_expand" ||
-    eventType === "seo_pricing_interaction"
+    eventType === ANALYTICS_EVENTS.SEO_LOCATION_SCROLL ||
+    eventType === ANALYTICS_EVENTS.SEO_CTA_CLICK ||
+    eventType === ANALYTICS_EVENTS.SEO_SERVICE_CARD_CLICK ||
+    eventType === ANALYTICS_EVENTS.SEO_FAQ_EXPAND ||
+    eventType === ANALYTICS_EVENTS.SEO_PRICING_INTERACTION
   ) {
     forwardToGa4(eventType, enriched);
   }

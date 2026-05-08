@@ -81,7 +81,7 @@ export default function BookingSummary({
       className={
         embedded
           ? "static z-auto min-w-0 self-stretch"
-          : "sticky top-24 z-10 min-w-0 self-start lg:static lg:self-stretch"
+          : "sticky top-[5.5rem] z-10 min-w-0 self-start lg:static lg:self-stretch"
       }
     >
       <BookingSummaryCard

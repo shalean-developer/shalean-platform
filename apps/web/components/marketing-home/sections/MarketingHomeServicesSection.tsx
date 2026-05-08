@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { ArrowUpRight, Clock3, Sprout, Tag, UserCheck } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { marketingPrimaryCtaClassName, marketingPrimaryCtaIconClassName } from "@/lib/marketing/marketingHomeCtaClasses";
@@ -78,9 +78,9 @@ export function MarketingHomeServicesSection() {
             <p className="max-w-xl text-base leading-relaxed text-slate-600 lg:max-w-none lg:pt-1">
               From everyday home cleaning to specialized care for carpets, sofas, and workspaces, our team makes every
               corner shine. Choose the service that fits your space and let us do the rest.{" "}
-              <Link href="/cleaning-prices-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/cleaning-prices-cape-town" className={linkInParagraphClassName}>
                 Cleaning prices in Cape Town
-              </Link>{" "}
+              </SafeInternalLink>{" "}
               —compare bands by service and home size before you book.
             </p>
           </div>
@@ -113,24 +113,24 @@ export function MarketingHomeServicesSection() {
               className="flex flex-wrap justify-center gap-2 sm:gap-3"
               aria-label="Bookable Cape Town service guides"
             >
-              <Link href={p["standard-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
+              <SafeInternalLink href={p["standard-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
                 Home Cleaning
-              </Link>
-              <Link href={p["deep-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
+              </SafeInternalLink>
+              <SafeInternalLink href={p["deep-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
                 Deep Cleaning
-              </Link>
-              <Link href={p["office-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
+              </SafeInternalLink>
+              <SafeInternalLink href={p["office-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
                 Office Cleaning
-              </Link>
-              <Link href={p["carpet-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
+              </SafeInternalLink>
+              <SafeInternalLink href={p["carpet-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
                 Sofa &amp; Carpet Care
-              </Link>
-              <Link href={p["window-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
+              </SafeInternalLink>
+              <SafeInternalLink href={p["window-cleaning-cape-town"].path} className={FRESHNESS_SERVICE_LINK_CLASS}>
                 Window Cleaning
-              </Link>
-              <Link href="/services" className={FRESHNESS_SERVICE_VIEW_ALL_CLASS}>
+              </SafeInternalLink>
+              <SafeInternalLink href="/services" className={FRESHNESS_SERVICE_VIEW_ALL_CLASS}>
                 View All Services
-              </Link>
+              </SafeInternalLink>
             </nav>
           </div>
         </div>
@@ -152,54 +152,54 @@ export function MarketingHomeServicesSection() {
               </p>
               <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600">
                 Explore{" "}
-                <Link href="/services" className={linkInParagraphClassName}>
+                <SafeInternalLink href="/services" className={linkInParagraphClassName}>
                   all cleaning services
-                </Link>
+                </SafeInternalLink>
                 , compare{" "}
-                <Link href={p["standard-cleaning-cape-town"].path} className={linkInParagraphClassName}>
+                <SafeInternalLink href={p["standard-cleaning-cape-town"].path} className={linkInParagraphClassName}>
                   home cleaning
-                </Link>{" "}
+                </SafeInternalLink>{" "}
                 with{" "}
-                <Link href={p["deep-cleaning-cape-town"].path} className={linkInParagraphClassName}>
+                <SafeInternalLink href={p["deep-cleaning-cape-town"].path} className={linkInParagraphClassName}>
                   deep cleaning
-                </Link>
+                </SafeInternalLink>
                 , or read tips on the{" "}
-                <Link href="/blog" className={linkInParagraphClassName}>
+                <SafeInternalLink href="/blog" className={linkInParagraphClassName}>
                   Shalean blog
-                </Link>
+                </SafeInternalLink>
                 .
               </p>
               <nav
                 className="mt-5 flex flex-wrap gap-x-3 gap-y-2 text-sm text-slate-600"
                 aria-label="Top Cape Town cleaning services"
               >
-                <Link href="/services" className={linkInNavClassName}>
+                <SafeInternalLink href="/services" className={linkInNavClassName}>
                   All cleaning services
-                </Link>
+                </SafeInternalLink>
                 <span className="text-slate-300" aria-hidden>
                   ·
                 </span>
-                <Link href={p["standard-cleaning-cape-town"].path} className={linkInNavClassName}>
+                <SafeInternalLink href={p["standard-cleaning-cape-town"].path} className={linkInNavClassName}>
                   Home cleaning
-                </Link>
+                </SafeInternalLink>
                 <span className="text-slate-300" aria-hidden>
                   ·
                 </span>
-                <Link href={p["deep-cleaning-cape-town"].path} className={linkInNavClassName}>
+                <SafeInternalLink href={p["deep-cleaning-cape-town"].path} className={linkInNavClassName}>
                   Deep cleaning
-                </Link>
+                </SafeInternalLink>
                 <span className="text-slate-300" aria-hidden>
                   ·
                 </span>
-                <Link href={p["airbnb-cleaning-cape-town"].path} className={linkInNavClassName}>
+                <SafeInternalLink href={p["airbnb-cleaning-cape-town"].path} className={linkInNavClassName}>
                   Airbnb cleaning
-                </Link>
+                </SafeInternalLink>
                 <span className="text-slate-300" aria-hidden>
                   ·
                 </span>
-                <Link href={p["move-out-cleaning-cape-town"].path} className={linkInNavClassName}>
+                <SafeInternalLink href={p["move-out-cleaning-cape-town"].path} className={linkInNavClassName}>
                   Move-out cleaning
-                </Link>
+                </SafeInternalLink>
               </nav>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <GrowthCtaLink href={bookHref} source="marketing_why_choose_book" className={marketingPrimaryCtaClassName}>

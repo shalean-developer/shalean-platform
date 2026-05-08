@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { BlogFeaturedHeroCard } from "@/components/blog/BlogFeaturedHeroCard";
 import { BlogGridWithQuoteCta } from "@/components/blog/BlogGridWithQuoteCta";
@@ -197,12 +197,12 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
                 <article className="flex h-full flex-col rounded-2xl border border-zinc-200/90 bg-zinc-50/40 p-6 shadow-sm ring-1 ring-zinc-950/[0.03] transition hover:border-blue-200/80 hover:bg-white hover:shadow-md">
                   <h3 className="text-lg font-semibold text-zinc-900">{card.title}</h3>
                   <p className="mt-3 flex-1 text-sm leading-relaxed text-zinc-600">{card.body}</p>
-                  <Link
+                  <SafeInternalLink
                     href={card.href}
                     className="mt-5 inline-flex text-sm font-semibold text-blue-700 underline-offset-4 hover:underline"
                   >
                     {card.cta} →
-                  </Link>
+                  </SafeInternalLink>
                 </article>
               </li>
             ))}
@@ -257,9 +257,9 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
                       <br />
                     </>
                   ) : null}
-                  <Link href="/blog" className="font-normal text-blue-700 underline-offset-2 hover:underline">
+                  <SafeInternalLink href="/blog" className="font-normal text-blue-700 underline-offset-2 hover:underline">
                     Clear filter
-                  </Link>
+                  </SafeInternalLink>
                 </p>
               ) : null}
             </div>
@@ -272,9 +272,9 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           ) : visible.length === 0 ? (
             <p className="mt-12 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/80 px-6 py-12 text-center text-zinc-600">
               No articles match this filter yet.{" "}
-              <Link href="/blog" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <SafeInternalLink href="/blog" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 View all articles
-              </Link>
+              </SafeInternalLink>
               .
             </p>
           ) : (
@@ -299,12 +299,12 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           <ul className="mt-8 flex flex-wrap gap-2">
             {BLOG_INDEX_LOCATION_HUBS.map((hub) => (
               <li key={hub.slug}>
-                <Link
+                <SafeInternalLink
                   href={`/locations/${hub.slug}`}
                   className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-900"
                 >
                   {hub.name}
-                </Link>
+                </SafeInternalLink>
               </li>
             ))}
           </ul>
@@ -326,18 +326,18 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
             whether you need standard upkeep, deep cleaning, move-out, or Airbnb turnover.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link
+            <SafeInternalLink
               href="/booking"
               className="inline-flex min-h-[48px] min-w-[200px] items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               Get instant quote
-            </Link>
-            <Link
+            </SafeInternalLink>
+            <SafeInternalLink
               href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
               className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-zinc-600 px-6 py-3 text-sm font-semibold text-white transition hover:border-zinc-400 hover:bg-white/5"
             >
               See Cape Town prices
-            </Link>
+            </SafeInternalLink>
           </div>
         </section>
       </main>

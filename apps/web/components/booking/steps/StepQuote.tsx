@@ -1,14 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo } from "react";
+import { startTransition, useCallback, useEffect, useMemo } from "react";
 import BookingLayout from "@/components/booking/BookingLayout";
 import { bookingCopy } from "@/lib/booking/copy";
 import { clearBookingPricePreviewFromStorage } from "@/lib/booking/bookingPricePreview";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
-import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import {
   type BookingServiceTypeKey,
   bookingServiceIdFromType,
@@ -17,10 +16,16 @@ import {
   normalizeStep1ForService,
 } from "@/components/booking/serviceCategories";
 import { SubServicesSelector } from "@/components/booking/SubServicesSelector";
-import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import {
+  ANALYTICS_EVENTS,
+  BOOKING_FUNNEL_ROW,
+  trackBookingAnalyticsEvent,
+  trackBookingFunnelEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
 import { extrasLineItemsForService } from "@/lib/pricing/extrasConfig";
 import { bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
-import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
+import { getBookingExperimentAssignments } from "@/lib/booking/bookingExperiments";
+import { croCtaLabel, croCtaShort, croPriceDisplay } from "@/lib/booking/bookingCroVariants";
 
 export function StepQuote() {
   const router = useRouter();
@@ -28,10 +33,12 @@ export function StepQuote() {
   const booking = useBookingStep1();
   const { state, setState, hydrated } = booking;
   const copy = bookingCopy.quote;
-  const { tier } = useBookingVipTier();
   const { canonicalTotalZar, canonicalDurationHours, catalog } = useBookingPrice();
+  const experiments = useMemo(() => getBookingExperimentAssignments(), []);
 
   const estimateZar = canonicalTotalZar;
+  const quoteCta = croCtaLabel(experiments);
+  const priceDisplay = croPriceDisplay(experiments, estimateZar, canonicalDurationHours, "Total");
 
   const selectedExtras = useMemo(() => {
     if (!catalog) return [];
@@ -41,6 +48,11 @@ export function StepQuote() {
   useEffect(() => {
     clearBookingPricePreviewFromStorage();
   }, []);
+
+  useEffect(() => {
+    router.prefetch(bookingHref("details"));
+    router.prefetch(bookingHref("when"));
+  }, [bookingHref, router]);
 
   /** Default funnel on quote when nothing chosen yet (e.g. deep-linked without step 1). */
   useEffect(() => {
@@ -82,6 +94,13 @@ export function StepQuote() {
   const selectService = useCallback(
     (primary: BookingServiceTypeKey) => {
       const group = primary === "standard_cleaning" || primary === "airbnb_cleaning" ? "regular" : "specialised";
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED, state, {
+        service_type: primary,
+        service_group: group,
+        selected_extras: state.extras,
+        estimated_price: estimateZar,
+        estimated_hours: canonicalDurationHours,
+      });
       setState((p) =>
         normalizeStep1ForService({
           ...p,
@@ -93,7 +112,7 @@ export function StepQuote() {
         }),
       );
     },
-    [setState],
+    [canonicalDurationHours, estimateZar, setState, state],
   );
 
   const canContinue = Boolean(state.service && state.service_type);
@@ -105,38 +124,50 @@ export function StepQuote() {
       summaryState={state}
       stickyMobileBar={{
         totalZar: estimateZar ?? 0,
-        amountDisplayOverride: estimateZar == null ? "—" : null,
-        totalCaption: "From",
-        mobileHoursLine:
-          canonicalDurationHours != null ? formatBookingHoursCompact(canonicalDurationHours) : null,
-        ctaShort: "Continue →",
+        amountDisplayOverride: priceDisplay.amountDisplayOverride,
+        totalCaption: priceDisplay.totalCaption,
+        mobileHoursLine: priceDisplay.mobileHoursLine,
+        ctaShort: croCtaShort(experiments),
         openSummarySheetOnAmountTap: true,
       }}
       footerInsightBanner={{ variant: "quote" }}
       canContinue={canContinue}
       onContinue={() => {
-        trackBookingFunnelEvent("quote", "next", { route_step: "quote" });
+        trackBookingFunnelEvent("quote", BOOKING_FUNNEL_ROW.NEXT, { route_step: "quote" });
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_CTA_CLICKED, state, {
+          cta_id: "quote_continue",
+          cta_label: quoteCta,
+          experiment_cta_copy: experiments.cta_copy,
+          experiment_pricing_display: experiments.pricing_display,
+          cta_destination_step: "details",
+          step: "quote",
+          selected_extras: state.extras,
+          estimated_price: estimateZar,
+          estimated_hours: canonicalDurationHours,
+        });
         const welcomePromo = promoParam == null ? bookingMarketingPromoExtra("SAVE10") : undefined;
-        router.push(bookingHref("details", welcomePromo));
+        startTransition(() => {
+          router.push(bookingHref("details", welcomePromo));
+        });
       }}
-      continueLabel={copy.cta}
+      continueLabel={quoteCta}
     >
-      <div className="mx-auto w-full max-w-[576px] space-y-4 pb-4 lg:space-y-8 lg:pb-6">
+      <div className="mx-auto w-full max-w-[576px] space-y-3 pb-4 lg:space-y-8 lg:pb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
             {copy.title}
           </h1>
           {estimateZar == null ? (
-            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Choose a cleaning type to continue.</p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 sm:mt-3">Choose a cleaning type to continue.</p>
           ) : null}
           <p
-            className={`text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 ${estimateZar == null ? "mt-2" : "mt-3"}`}
+            className={`text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 ${estimateZar == null ? "mt-2" : "mt-2 sm:mt-3"}`}
           >
             {copy.reassurance}
           </p>
         </div>
 
-        <section className="space-y-3" aria-labelledby="sub-services-heading">
+        <section className="space-y-2.5 sm:space-y-3" aria-labelledby="sub-services-heading">
           <h2 id="sub-services-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             {copy.serviceSectionTitle}
           </h2>

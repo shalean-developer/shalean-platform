@@ -1216,7 +1216,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town) or [Airbnb cleaning in Green Point](/blog/airbnb-cleaning-green-point-cape-town).`,
+      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town) or [Airbnb cleaning in Green Point](/blog/cleaning-services-green-point-cape-town).`,
     },
     {
       type: "paragraph",
@@ -1367,7 +1367,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), [Airbnb cleaning in Green Point](/blog/airbnb-cleaning-green-point-cape-town), or [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town).`,
+      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), [Airbnb cleaning in Green Point](/blog/cleaning-services-green-point-cape-town), or [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town).`,
     },
     {
       type: "paragraph",
@@ -1518,7 +1518,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town), [Airbnb cleaning in Green Point](/blog/airbnb-cleaning-green-point-cape-town), or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town), [Airbnb cleaning in Green Point](/blog/cleaning-services-green-point-cape-town), or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
     },
     {
       type: "paragraph",

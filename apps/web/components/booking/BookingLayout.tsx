@@ -8,7 +8,7 @@ import BookingContainer from "@/components/layout/BookingContainer";
 import { BookingHeader } from "@/components/booking/BookingHeader";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import BookingSummary from "./BookingSummary";
-import { StickyPriceBar, type StickyPlanPriceBreakdown } from "@/components/booking/StickyPriceBar";
+import type { StickyPlanPriceBreakdown } from "@/components/booking/StickyPriceBar";
 import { MobileBottomBar } from "@/components/booking/MobileBottomBar";
 import { BookingFooterInsightBanner, readFooterInsightDismissed } from "@/components/booking/BookingFooterInsightBanner";
 import { bookingCopy } from "@/lib/booking/copy";
@@ -21,6 +21,8 @@ type BookingLayoutProps = {
   summaryState?: BookingStep1State;
   /** When set, replaces default `BookingSummary` (desktop + mobile). */
   summaryOverride?: ReactNode;
+  /** Optional mobile bottom-sheet summary when desktop summary uses a custom rail. */
+  mobileSummaryOverride?: ReactNode;
   /** Step 2: never show locked slot totals in the sidebar — estimate from live selections only. */
   summaryIgnoreLockedBooking?: boolean;
   /** Step 4: hide sidebar totals until a slot is locked — show “select a time” instead. */
@@ -69,6 +71,8 @@ type BookingLayoutProps = {
     mobileHoursLine?: string | null;
     /** Mobile sticky bar: omit currency (e.g. payment step). */
     hideMobilePrice?: boolean;
+    /** Mobile sticky bar: trust / reassurance below CTA row. */
+    trustBelowCta?: ReactNode;
   };
   /**
    * When `stickyMobileBar` is set and this is `false`, the wide desktop footer row is hidden
@@ -93,6 +97,7 @@ export default function BookingLayout({
   children,
   summaryState,
   summaryOverride,
+  mobileSummaryOverride,
   summaryIgnoreLockedBooking = false,
   suppressEstimateUntilLocked = false,
   scheduleDateHint = null,
@@ -120,14 +125,20 @@ export default function BookingLayout({
   const { step, handleBack } = useBookingFlow();
   /** Start true so SSR + first client paint match; sync from sessionStorage after mount only. */
   const [footerInsightDismissed, setFooterInsightDismissed] = useState(true);
+  const footerInsightVariant = footerInsightBanner?.variant ?? null;
 
   useEffect(() => {
-    if (!footerInsightBanner) {
-      setFooterInsightDismissed(true);
-      return;
-    }
-    setFooterInsightDismissed(readFooterInsightDismissed(footerInsightBanner.variant));
-  }, [footerInsightBanner?.variant]);
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setFooterInsightDismissed(
+        footerInsightVariant ? readFooterInsightDismissed(footerInsightVariant) : true,
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [footerInsightVariant]);
   const onFooterBack = useCallback(() => {
     if (step === "entry") {
       router.push("/");
@@ -153,8 +164,9 @@ export default function BookingLayout({
     [onFooterBack, step, continueVariant, mobileEntryFooter],
   );
 
-  const showSummary = summaryOverride != null || summaryState != null;
+  const showSummary = summaryOverride != null || summaryState != null || mobileSummaryOverride != null;
   const sheetFromPrice = Boolean(stickyMobileBar?.openSummarySheetOnAmountTap && showSummary);
+  const showInlineMobileSummary = showSummary && !summaryDesktopOnly && !sheetFromPrice;
   const [summarySheetOpen, setSummarySheetOpen] = useState(false);
 
   useEffect(() => {
@@ -173,7 +185,8 @@ export default function BookingLayout({
 
   const hideMobilePricingFootnotes = Boolean(footerInsightBanner && !footerInsightDismissed);
 
-  const renderSummary = (embedded?: boolean) => {
+  const renderSummary = (embedded?: boolean, mobileSheet?: boolean) => {
+    if (mobileSheet && mobileSummaryOverride) return mobileSummaryOverride;
     if (summaryOverride) return summaryOverride;
     if (!summaryState) return null;
     return (
@@ -210,10 +223,10 @@ export default function BookingLayout({
           .filter(Boolean)
           .join(" ")}
       >
-        <div className="mx-auto max-w-7xl px-4 lg:px-6">
-          {progressSlot ? <div className="mb-2 max-w-lg lg:max-w-none">{progressSlot}</div> : null}
-          {showSummary && !summaryDesktopOnly ? (
-            <div className="mb-8 lg:hidden">
+        <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-8">
+          {progressSlot ? <div className="mb-3 max-w-lg lg:max-w-none">{progressSlot}</div> : null}
+          {showInlineMobileSummary ? (
+            <div className="mb-4 lg:hidden">
               {renderSummary()}
             </div>
           ) : null}
@@ -222,16 +235,16 @@ export default function BookingLayout({
             className={
               showSummary
                 ? summaryColumnFirst
-                  ? "grid grid-cols-1 gap-8 lg:grid-cols-[380px_1fr]"
-                  : "grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]"
-                : "grid grid-cols-1 gap-8"
+                  ? "grid grid-cols-1 gap-5 lg:grid-cols-[minmax(280px,380px)_1fr] lg:gap-10"
+                  : "grid grid-cols-1 gap-5 lg:grid-cols-[1fr_minmax(280px,380px)] lg:gap-10"
+                : "grid grid-cols-1 gap-5 lg:gap-10"
             }
           >
             {showSummary && summaryColumnFirst ? (
               <aside
                 className={[
                   "sticky order-first hidden h-fit min-w-0 self-start lg:order-none lg:block",
-                  "top-24",
+                  "top-[5.5rem]",
                 ].join(" ")}
               >
                 {renderSummary()}
@@ -246,7 +259,7 @@ export default function BookingLayout({
               <aside
                 className={[
                   "sticky hidden h-fit min-w-0 self-start lg:block",
-                  "top-24",
+                  "top-[5.5rem]",
                 ].join(" ")}
               >
                 {renderSummary()}
@@ -335,6 +348,8 @@ export default function BookingLayout({
                   stickyMobileBar.openSummarySheetOnAmountTap ? () => setSummarySheetOpen(true) : undefined
                 }
                 hideMobilePrice={stickyMobileBar.hideMobilePrice}
+                ctaVariant={continueVariant}
+                trustBelowCta={stickyMobileBar.trustBelowCta}
               />
             </div>
           ) : null}
@@ -407,7 +422,7 @@ export default function BookingLayout({
                             : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
                         ].join(" ")}
                       >
-                        {continueLoading ? "Redirecting…" : continueLabel}
+                        {continueLabel}
                       </button>
                     </div>
                   </div>
@@ -442,7 +457,7 @@ export default function BookingLayout({
                       : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
                   ].join(" ")}
                 >
-                  {continueLoading ? "Redirecting…" : continueLabel}
+                  {continueLabel}
                 </button>
               </div>
             </div>
@@ -471,7 +486,7 @@ export default function BookingLayout({
                     ? "min-h-14 rounded-xl px-4 text-base"
                     : mobileEntryFooter
                       ? cn(
-                          "h-10 rounded-lg text-sm",
+                          "min-h-[44px] rounded-lg text-sm",
                           footerEntryLead ? "" : "px-4",
                         )
                       : "h-12 rounded-xl text-[15px]",
@@ -495,11 +510,7 @@ export default function BookingLayout({
                       : "cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
                 ].join(" ")}
               >
-                {continueLoading
-                  ? continueVariant === "pay"
-                    ? "Redirecting..."
-                    : "Redirecting to Paystack…"
-                  : continueLabel}
+                {continueLabel}
                 {!continueLoading && showContinueArrow ? " →" : ""}
               </button>
             </div>
@@ -522,10 +533,10 @@ export default function BookingLayout({
             role="dialog"
             aria-modal="true"
             aria-label="Booking summary"
-            className="absolute inset-x-0 bottom-0 max-h-[min(80vh,560px)] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-950"
+            className="absolute inset-x-0 bottom-0 max-h-[min(80vh,560px)] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-950 sm:px-4"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" aria-hidden />
-            {renderSummary(true)}
+            {renderSummary(true, true)}
           </div>
         </div>
       ) : null}

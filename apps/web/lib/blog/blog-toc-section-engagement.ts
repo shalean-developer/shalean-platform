@@ -1,5 +1,6 @@
 import { BLOG_TOC_ACTIVE_EVENT } from "@/lib/blog/blog-toc-active-event";
 import { inferHeadingIntentType } from "@/lib/blog/infer-heading-intent-type";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 type Pending = {
@@ -68,7 +69,7 @@ function flush(reason: "leave" | "superseded"): void {
   pending = null;
   const time_after_click_ms = Math.round(performance.now() - p.startedAt);
   const max_scroll_after_click_pct = Math.round(p.maxScrollPct);
-  trackGrowthEvent("blog_toc_section_engagement", {
+  trackGrowthEvent(ANALYTICS_EVENTS.BLOG_TOC_SECTION_ENGAGEMENT, {
     slug: p.slug,
     heading_id: p.heading_id,
     heading_label: p.heading_label,

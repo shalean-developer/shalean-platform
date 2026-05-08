@@ -1,120 +1,81 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
-import { BookingSectionCard } from "@/components/booking/checkout/BookingSectionCard";
-import { CustomerDetailsStep } from "@/components/booking/steps/CustomerDetailsStep";
-import { Button } from "@/components/ui/button";
-import { validateCustomerDetails } from "@/lib/booking/customerDetailsValidation";
-import { submitBooking } from "@/lib/booking/submitBooking";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { ExistingBookingPaymentPanel } from "@/components/booking/payment/ExistingBookingPaymentPanel";
+import { PaymentBlockedMessage } from "@/components/booking/payment/PaymentBlockedMessage";
+import {
+  ANALYTICS_EVENTS,
+  trackBookingAnalyticsEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
+import type { BookingPaymentPagePayload } from "@/lib/booking/bookingPaymentTypes";
+import { checkoutSegmentPath } from "@/lib/booking/bookingCheckoutGuards";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
-import { validateCheckoutStoreForPayment } from "@/lib/booking/reconcileBookingState";
-import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
+import { withBookingQuery } from "@/lib/booking/bookingUrl";
+import {
+  bookingAnalyticsStateFromSummary,
+  unifiedPaymentModeFromSearchParams,
+} from "@/lib/booking/useUnifiedPaymentFlow";
+import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 
-export function BookingPaymentPage() {
+function funnelHandoffAnalyticsStateFromStore() {
+  const s = useBookingCheckoutStore.getState();
+  const sid = parseBookingServiceId(s.service);
+  return {
+    service: s.service,
+    service_type: sid,
+    extras: s.extras,
+    serviceAreaName: s.serviceAreaName,
+  };
+}
+
+type Props = {
+  serverPayload: BookingPaymentPagePayload;
+};
+
+export function BookingPaymentPage({ serverPayload }: Props) {
   const router = useRouter();
-  const { data: catalog, loading: catalogLoading } = usePricingCatalog();
-  const snapshot = catalog?.snapshot ?? null;
+  const searchParams = useSearchParams();
 
-  const customerName = useBookingCheckoutStore((s) => s.customerName);
-  const customerEmail = useBookingCheckoutStore((s) => s.customerEmail);
-  const customerPhone = useBookingCheckoutStore((s) => s.customerPhone);
-  const patch = useBookingCheckoutStore((s) => s.patch);
+  const paymentStartedKeyRef = useRef<string | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (serverPayload.status !== "ready") return;
+    const unifiedMode = unifiedPaymentModeFromSearchParams(searchParams);
+    const key = `ready:${serverPayload.summary.id}:${unifiedMode}`;
+    if (paymentStartedKeyRef.current === key) return;
+    paymentStartedKeyRef.current = key;
 
-  const pricingLoading = catalogLoading || !snapshot;
+    trackBookingAnalyticsEvent(
+      ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED,
+      bookingAnalyticsStateFromSummary(serverPayload.summary),
+      {
+        payment_mode: unifiedMode,
+        payment_provider: "paystack",
+        booking_id: serverPayload.summary.id,
+      },
+    );
+  }, [serverPayload, searchParams]);
 
-  const pay = useCallback(async () => {
-    setError(null);
-    const s = useBookingCheckoutStore.getState();
-    try {
-      validateCheckoutStoreForPayment(s);
-      console.log("[BOOKING STATE VALIDATED]", { step: "payment", valid: true });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Incomplete booking";
-      setError(msg);
-      router.push("/booking/details");
-      return;
-    }
-    const v = validateCustomerDetails({
-      customerName: s.customerName,
-      customerEmail: s.customerEmail,
-      customerPhone: s.customerPhone,
-    });
-    if (!v.ok) {
-      setError(v.error);
-      return;
-    }
-    setBusy(true);
-    const r = await submitBooking({
-      service: s.service,
-      bedrooms: s.bedrooms,
-      bathrooms: s.bathrooms,
-      extraRooms: s.extraRooms,
-      extras: s.extras,
-      date: s.date,
-      time: s.time,
-      location: s.location,
-      locationSlug: s.locationSlug,
-      serviceAreaLocationId: s.serviceAreaLocationId,
-      serviceAreaCityId: s.serviceAreaCityId,
-      serviceAreaName: s.serviceAreaName,
-      cleanerId: s.cleanerId,
-      customerName: s.customerName,
-      customerEmail: s.customerEmail,
-      customerPhone: s.customerPhone,
-    });
-    setBusy(false);
-    if (r.success) {
-      router.push(`/payment/${r.bookingId}`);
-      return;
-    }
-    setError(r.error);
-  }, [router]);
+  if (serverPayload.status === "blocked") {
+    return <PaymentBlockedMessage reason={serverPayload.reason} />;
+  }
+
+  const unifiedMode = unifiedPaymentModeFromSearchParams(searchParams);
+  const attributionSource = searchParams.get("source");
+  const analyticsState = unifiedMode === "funnel" ? funnelHandoffAnalyticsStateFromStore() : null;
+  const onBack =
+    unifiedMode === "funnel"
+      ? () => router.push(withBookingQuery(checkoutSegmentPath("cleaner"), searchParams))
+      : () => router.push("/dashboard/bookings");
 
   return (
-    <div className="space-y-6 lg:space-y-8">
-      <BookingSectionCard eyebrow="Your details">
-        <CustomerDetailsStep
-          customerName={customerName}
-          customerEmail={customerEmail}
-          customerPhone={customerPhone}
-          onChange={(p) => patch(p)}
-        />
-      </BookingSectionCard>
-
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-
-      <div className="hidden border-t border-gray-100 pt-6 dark:border-zinc-800 lg:block">
-        <Button
-          type="button"
-          size="xl"
-          className="w-full rounded-xl font-semibold shadow-sm transition-all duration-200"
-          disabled={busy || pricingLoading}
-          onClick={() => void pay()}
-        >
-          {busy ? "Creating booking…" : "Pay & confirm"}
-        </Button>
-        <p className="mt-3 text-center text-xs text-gray-500 dark:text-zinc-400">Secure checkout on the next screen.</p>
-      </div>
-
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-100 bg-white/95 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:hidden">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <Button
-            type="button"
-            size="xl"
-            className="w-full rounded-xl font-semibold shadow-sm transition-all duration-200"
-            disabled={busy || pricingLoading}
-            onClick={() => void pay()}
-          >
-            {busy ? "…" : "Pay & confirm"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="h-24 lg:hidden" aria-hidden />
-    </div>
+    <ExistingBookingPaymentPanel
+      summary={serverPayload.summary}
+      paymentMode={unifiedMode}
+      attributionSource={attributionSource}
+      analyticsState={analyticsState}
+      onBack={onBack}
+    />
   );
 }

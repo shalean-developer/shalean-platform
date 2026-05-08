@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MobileBottomBar } from "@/components/booking/MobileBottomBar";
 import { PriceSummaryCard } from "@/components/booking/PriceSummaryCard";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   BookingCheckoutHeader,
   bookingCheckoutHeaderStepFromSegment,
@@ -22,8 +21,8 @@ import {
 import { formatCheckoutWhenLabel } from "@/components/booking/summary/formatCheckoutWhenLabel";
 import type { PriceSummaryCardProps } from "@/components/booking/PriceSummaryCard";
 import { checkoutSidebarPriceDisplay } from "@/lib/booking/checkoutSidebarPricing";
-import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
-import { bookingEntryPatchFromSearchParams, withBookingQuery } from "@/lib/booking/bookingUrl";
+import { isBookingPaymentUuid } from "@/lib/booking/bookingPaymentUuid";
+import { bookingEntryPatchFromSearchParams, buildPostIntakePaymentUrl, withBookingQuery } from "@/lib/booking/bookingUrl";
 import { reconcileCheckoutPersistedSlice, validateCheckoutStoreForPayment } from "@/lib/booking/reconcileBookingState";
 import {
   BOOKING_CHECKOUT_SEGMENTS,
@@ -36,17 +35,26 @@ import {
   scheduleStepComplete,
   type BookingCheckoutSegment,
 } from "@/lib/booking/bookingCheckoutGuards";
+import { validateCustomerDetails } from "@/lib/booking/customerDetailsValidation";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
+import { submitBooking } from "@/lib/booking/submitBooking";
 import { todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
 import { cn } from "@/lib/utils";
+import { bookingCopy } from "@/lib/booking/copy";
+
+const detailsStepCopy = bookingCopy.details;
+const detailsContinueLabel = detailsStepCopy.cta;
+const scheduleCheckoutCopy = bookingCopy.checkoutSchedule;
+const checkoutCleanerCopy = bookingCopy.checkoutCleaner;
+const checkoutPaymentCopy = bookingCopy.checkoutPayment;
 
 const SEGMENT_TITLES: Record<BookingCheckoutSegment, string> = {
   details: "Your home & service",
   schedule: "When should we come?",
-  cleaner: "Preferred cleaner",
-  payment: "Review & pay",
+  cleaner: checkoutCleanerCopy.title,
+  payment: checkoutPaymentCopy.title,
 };
 
 const TOTAL = BOOKING_CHECKOUT_SEGMENTS.length;
@@ -55,6 +63,8 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [cleanerContinueBusy, setCleanerContinueBusy] = useState(false);
+  const [cleanerContinueError, setCleanerContinueError] = useState<string | null>(null);
   const { data: catalog, loading: catalogLoading } = usePricingCatalog();
   const snapshot = catalog?.snapshot ?? null;
 
@@ -74,8 +84,6 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const customerPhone = useBookingCheckoutStore((s) => s.customerPhone);
   const patch = useBookingCheckoutStore((s) => s.patch);
 
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const openSummarySheet = useCallback(() => setSummaryOpen(true), []);
   const hydratedFromUrlRef = useRef(false);
 
   const segment: BookingCheckoutSegment = useMemo(() => {
@@ -85,6 +93,11 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   }, [pathname]);
 
   const stepIndex = BOOKING_SEGMENT_INDEX[segment];
+
+  const skipFunnelPaymentGuards = useMemo(
+    () => segment === "payment" && isBookingPaymentUuid(searchParams.get("bookingId")?.trim() ?? ""),
+    [segment, searchParams],
+  );
 
   useEffect(() => {
     const unsub = useBookingCheckoutStore.persist.onFinishHydration(() => {
@@ -105,6 +118,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (segment !== "payment") return;
+    if (skipFunnelPaymentGuards) return;
     if (catalogLoading || !catalog?.services?.length) return;
     try {
       validateCheckoutStoreForPayment(useBookingCheckoutStore.getState());
@@ -112,7 +126,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
     } catch {
       router.replace(withBookingQuery(checkoutSegmentPath("details"), searchParams));
     }
-  }, [segment, catalogLoading, catalog?.services?.length, router, searchParams]);
+  }, [segment, skipFunnelPaymentGuards, catalogLoading, catalog?.services?.length, router, searchParams]);
 
   useEffect(() => {
     if (!catalog?.services?.length) return;
@@ -163,17 +177,30 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   );
 
   useEffect(() => {
+    if (skipFunnelPaymentGuards) return;
     if (stepIndex > maxIdx) {
       const target = BOOKING_CHECKOUT_SEGMENTS[maxIdx];
       if (target && checkoutSegmentPath(target) !== pathname) {
         router.replace(withBookingQuery(checkoutSegmentPath(target), searchParams));
       }
     }
-  }, [stepIndex, maxIdx, pathname, router, searchParams]);
+  }, [skipFunnelPaymentGuards, stepIndex, maxIdx, pathname, router, searchParams]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [segment]);
+
+  useEffect(() => {
+    if (segment !== "cleaner") {
+      setCleanerContinueError(null);
+      setCleanerContinueBusy(false);
+    }
+  }, [segment]);
+
+  const customerOk = useMemo(() => {
+    const v = validateCustomerDetails({ customerName, customerEmail, customerPhone });
+    return v.ok;
+  }, [customerName, customerEmail, customerPhone]);
 
   const sid = parseBookingServiceId(service);
   const serviceValid = useMemo(() => {
@@ -243,16 +270,69 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const continueDisabled = useMemo(() => {
     if (segment === "details") return !serviceValid || !detailsHome || !propertyValid;
     if (segment === "schedule") return !scheduleComplete;
+    if (segment === "cleaner") return !customerOk;
     return false;
-  }, [segment, serviceValid, detailsHome, propertyValid, scheduleComplete]);
+  }, [segment, serviceValid, detailsHome, propertyValid, scheduleComplete, customerOk]);
 
   const nextSeg = nextCheckoutSegment(segment);
   const prevSeg = prevCheckoutSegment(segment);
 
   const goNext = useCallback(() => {
-    if (continueDisabled || !nextSeg) return;
-    router.push(withBookingQuery(checkoutSegmentPath(nextSeg), searchParams));
-  }, [continueDisabled, nextSeg, router, searchParams]);
+    if (continueDisabled || cleanerContinueBusy || !nextSeg) return;
+
+    if (segment !== "cleaner") {
+      router.push(withBookingQuery(checkoutSegmentPath(nextSeg), searchParams));
+      return;
+    }
+
+    const s = useBookingCheckoutStore.getState();
+    try {
+      validateCheckoutStoreForPayment(s);
+    } catch {
+      setCleanerContinueError("Complete schedule and address first.");
+      router.push(withBookingQuery(checkoutSegmentPath("details"), searchParams));
+      return;
+    }
+
+    const cv = validateCustomerDetails({
+      customerName: s.customerName,
+      customerEmail: s.customerEmail,
+      customerPhone: s.customerPhone,
+    });
+    if (!cv.ok) {
+      setCleanerContinueError(cv.error);
+      return;
+    }
+
+    setCleanerContinueError(null);
+    setCleanerContinueBusy(true);
+    void (async () => {
+      const r = await submitBooking({
+        service: s.service,
+        bedrooms: s.bedrooms,
+        bathrooms: s.bathrooms,
+        extraRooms: s.extraRooms,
+        extras: s.extras,
+        date: s.date,
+        time: s.time,
+        location: s.location,
+        locationSlug: s.locationSlug,
+        serviceAreaLocationId: s.serviceAreaLocationId,
+        serviceAreaCityId: s.serviceAreaCityId,
+        serviceAreaName: s.serviceAreaName,
+        cleanerId: s.cleanerId,
+        customerName: s.customerName,
+        customerEmail: s.customerEmail,
+        customerPhone: s.customerPhone,
+      });
+      setCleanerContinueBusy(false);
+      if (r.success) {
+        router.push(buildPostIntakePaymentUrl(new URLSearchParams(searchParams.toString()), r.bookingId));
+        return;
+      }
+      setCleanerContinueError(r.error);
+    })();
+  }, [segment, continueDisabled, cleanerContinueBusy, nextSeg, router, searchParams]);
 
   const goBack = useCallback(() => {
     if (!prevSeg) return;
@@ -269,6 +349,11 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const showStepNav = segment !== "payment";
 
   const sharedSummaryProps = useMemo((): Omit<PriceSummaryCardProps, "layoutMode" | "onMobileDockOpen"> => {
+    const sidebarTrustLine =
+      segment === "schedule" || segment === "cleaner" ? scheduleCheckoutCopy.summaryTrust : undefined;
+    const highlightWhenRow = segment === "schedule" || segment === "cleaner";
+    const scheduleDesktopSidebar = segment === "schedule" || segment === "cleaner";
+    const paymentDesktopSidebar = segment === "payment";
     return {
       whereLabel,
       whatLabel,
@@ -291,8 +376,13 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
       customerName,
       customerEmail,
       customerPhone,
+      highlightWhenRow,
+      sidebarTrustLine,
+      scheduleDesktopSidebar,
+      paymentDesktopSidebar,
     };
   }, [
+    segment,
     whereLabel,
     whatLabel,
     whenLabel,
@@ -318,33 +408,76 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
 
   const hideContinueOnDetailsPick = segment === "details" && !detailsHome;
 
+  const isScheduleOrCleaner = segment === "schedule" || segment === "cleaner";
+
+  const continueCtaLabel =
+    segment === "schedule"
+      ? scheduleCheckoutCopy.continueToCleaner
+      : segment === "cleaner"
+        ? cleanerContinueBusy
+          ? checkoutPaymentCopy.creating
+          : scheduleCheckoutCopy.continueToPayment
+        : segment === "details"
+          ? detailsContinueLabel
+          : "Continue";
+
   const desktopFooter =
     showStepNav && (prevSeg || nextSeg) ? (
-      <div className="flex gap-4 border-t border-gray-100 pt-6 dark:border-zinc-800">
-        <Button
-          type="button"
-          variant="outline"
-          size="xl"
-          className={cn(
-            "rounded-xl border-gray-200 font-semibold transition-all duration-200 hover:bg-gray-50 dark:border-zinc-600 dark:hover:bg-zinc-800/80",
-            hideContinueOnDetailsPick ? "w-full" : "flex-1",
-          )}
-          disabled={!prevSeg}
-          onClick={goBack}
-        >
-          Back
-        </Button>
-        {nextSeg && !hideContinueOnDetailsPick ? (
-          <Button
-            type="button"
-            size="xl"
-            className="flex-1 rounded-xl font-semibold shadow-sm transition-all duration-200"
-            disabled={continueDisabled}
-            onClick={goNext}
-          >
-            Continue
-          </Button>
-        ) : null}
+      <div
+        className={cn("hidden flex-row gap-4 border-t border-gray-100 pt-6 dark:border-zinc-800 lg:flex")}
+      >
+        {isScheduleOrCleaner ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="xl"
+              className="h-12 flex-1 rounded-xl border-gray-200 font-semibold text-zinc-700 transition-all duration-200 hover:bg-gray-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
+              disabled={!prevSeg}
+              onClick={goBack}
+            >
+              Back
+            </Button>
+            {nextSeg && !hideContinueOnDetailsPick ? (
+              <Button
+                type="button"
+                size="xl"
+                className="h-12 min-w-0 flex-1 rounded-xl font-semibold shadow-md shadow-blue-600/20 transition-all duration-200 hover:bg-blue-600/95 hover:shadow-lg hover:shadow-blue-600/25 active:scale-[0.99] disabled:opacity-60 disabled:active:scale-100 dark:hover:bg-blue-500/95"
+                disabled={continueDisabled || (segment === "cleaner" && cleanerContinueBusy)}
+                onClick={() => void goNext()}
+              >
+                {continueCtaLabel}
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="xl"
+              className={cn(
+                "rounded-xl border-gray-200 font-semibold transition-all duration-200 hover:bg-gray-50 dark:border-zinc-600 dark:hover:bg-zinc-800/80",
+                hideContinueOnDetailsPick ? "w-full" : "flex-1",
+              )}
+              disabled={!prevSeg}
+              onClick={goBack}
+            >
+              Back
+            </Button>
+            {nextSeg && !hideContinueOnDetailsPick ? (
+              <Button
+                type="button"
+                size="xl"
+                className="flex-1 rounded-xl font-semibold shadow-sm transition-all duration-200 disabled:opacity-60"
+                disabled={continueDisabled}
+                onClick={() => void goNext()}
+              >
+                {continueCtaLabel}
+              </Button>
+            ) : null}
+          </>
+        )}
       </div>
     ) : null;
 
@@ -356,6 +489,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         stepTotal={TOTAL}
         showTopProgress={false}
         summary={summaryCard}
+        hideDesktopSummary={segment === "details" || skipFunnelPaymentGuards}
         desktopFooter={desktopFooter}
         main={
           <AnimatePresence mode="wait">
@@ -365,57 +499,70 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className={cn("space-y-4 lg:space-y-8", showStepNav ? "pb-28 lg:pb-0" : "pb-6 lg:pb-0")}
+              className={cn(
+                "space-y-4 lg:space-y-8",
+                segment === "payment"
+                  ? "pb-4 max-lg:pb-[11.5rem] lg:pb-0"
+                  : showStepNav
+                    ? segment === "cleaner"
+                      ? "pb-4 max-lg:pb-[10rem] lg:pb-0"
+                      : "pb-4 max-lg:pb-5 lg:pb-0"
+                    : "pb-5 max-lg:pb-6 lg:pb-0",
+              )}
             >
-              <StepHeader title={SEGMENT_TITLES[segment]} />
+              {segment === "cleaner" ? (
+                <div className="mb-4 lg:mb-5">
+                  <StepHeader
+                    title={checkoutCleanerCopy.title}
+                    subtitle={checkoutCleanerCopy.subtitle}
+                    subtitleSecondary={checkoutCleanerCopy.subtitleSecondary}
+                    badge={checkoutCleanerCopy.badge}
+                    badgeAlwaysVisible
+                  />
+                </div>
+              ) : segment === "payment" ? (
+                <div className="mb-4 lg:mb-5">
+                  <StepHeader title={checkoutPaymentCopy.title} subtitle={checkoutPaymentCopy.stepSubtitle} />
+                </div>
+              ) : segment !== "schedule" ? (
+                <div className="hidden lg:block">
+                  <StepHeader
+                    {...(segment === "details"
+                      ? {
+                          title: detailsStepCopy.title,
+                          subtitle: detailsStepCopy.stepSubtitle,
+                          badge: detailsStepCopy.priceShownBadge,
+                        }
+                      : { title: SEGMENT_TITLES[segment] })}
+                  />
+                </div>
+              ) : null}
+              {segment === "cleaner" && cleanerContinueError ? (
+                <p className="text-sm text-red-600 dark:text-red-400">{cleanerContinueError}</p>
+              ) : null}
               {children}
             </motion.div>
           </AnimatePresence>
         }
       />
 
-      {showStepNav ? (
-        <>
-          <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/95 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95 lg:hidden">
-            <MobileBottomBar
-              variant="flat"
-              omitCta
-              checkoutDock={{
-                onBack: goBack,
-                backDisabled: !prevSeg,
-                onContinue: goNext,
-                continueDisabled: continueDisabled,
-                hideContinue: hideContinueOnDetailsPick,
-                continueLabel: "Continue",
-              }}
-              estimatedHoursLabel={formatBookingHoursCompact(sidebarPricing.hours)}
-              totalDisplay={
-                pricingLoading ? "…" : `R ${Math.round(sidebarPricing.totalZar).toLocaleString("en-ZA")}`
-              }
-              totalZar={sidebarPricing.totalZar}
-              onAmountClick={openSummarySheet}
-            />
-          </div>
-          <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-            <DialogContent
-              hideClose
-              className="fixed inset-x-0 bottom-0 left-0 top-auto max-h-[85vh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-2xl border-gray-100 p-5 dark:border-zinc-800 sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2"
-            >
-              <DialogHeader className="text-left">
-                <DialogTitle className="text-base font-semibold">Your quote</DialogTitle>
-              </DialogHeader>
-              {summaryCard}
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4 h-12 w-full rounded-xl border-gray-200 font-semibold dark:border-zinc-600"
-                onClick={() => setSummaryOpen(false)}
-              >
-                Close
-              </Button>
-            </DialogContent>
-          </Dialog>
-        </>
+      {segment === "cleaner" && showStepNav ? (
+        <div className="fixed inset-x-0 bottom-0 z-50 lg:hidden">
+          <MobileBottomBar
+            totalDisplay=""
+            omitCta
+            variant="elevated"
+            checkoutDockHideCenter
+            checkoutDock={{
+              onBack: goBack,
+              backDisabled: !prevSeg,
+              onContinue: () => void goNext(),
+              continueDisabled: continueDisabled || cleanerContinueBusy,
+              continueLabel: continueCtaLabel,
+              hideContinue: hideContinueOnDetailsPick || !nextSeg,
+            }}
+          />
+        </div>
       ) : null}
     </>
   );

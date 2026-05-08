@@ -115,7 +115,7 @@ export function StickyPriceBar({
       disabled={disabled || loading}
       className={cn(
         "shrink-0 font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-        variant === "flat" && "h-10 rounded-lg px-4 text-sm",
+        variant === "flat" && "min-h-[44px] rounded-lg px-4 text-sm",
         variant === "elevated" && "rounded-xl px-5 py-3 text-sm font-semibold tracking-tight",
         variant === "flat" &&
           (disabled || loading
@@ -138,7 +138,7 @@ export function StickyPriceBar({
           <button
             type="button"
             onClick={onAmountClick}
-            className="min-w-0 flex-1 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="flex min-h-[44px] min-w-0 flex-1 items-center py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             aria-label="View booking summary"
           >
             {priceBlock}

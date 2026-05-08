@@ -1,3 +1,4 @@
+import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { bookingMatchesRecurringCleanerPendingPayment } from "@/lib/cleaner/cleanerBookingAccess";
 
@@ -92,36 +93,38 @@ export function deriveBookingOperationalPhase(
   row: PhaseRow,
   opts?: DeriveBookingOperationalPhaseOpts,
 ): BookingOperationalPhase {
-  const st = norm(row.status);
+  const stRaw = norm(row.status);
+  const stCanon = canonicalDbBookingStatus(row.status);
   const crs = norm(row.cleaner_response_status);
   const dst = norm(row.dispatch_status);
   const hasEnRouteAt = Boolean(String(row.en_route_at ?? "").trim());
 
-  if (st === "cancelled") return "cancelled";
-  if (st === "failed") return "failed";
+  if (stRaw === "cancelled") return "cancelled";
+  if (stRaw === "failed") return "failed";
 
-  if (dst === "expired" && (st === "pending" || st === "offered" || st === "pending_assignment")) {
+  if (dst === "expired" && (stRaw === "pending" || stRaw === "offered" || stRaw === "pending_assignment")) {
     return "expired";
   }
 
   if (isAuthoritativeBookingCompleted(row)) {
-    maybeLogDerivedCompletedPhase(row, opts, st, crs);
+    maybeLogDerivedCompletedPhase(row, opts, stRaw, crs);
     return "completed";
   }
 
-  if (st === "pending_payment") {
+  if (stRaw === "pending_payment") {
     if (bookingMatchesRecurringCleanerPendingPayment(row as Record<string, unknown>)) return "pending_payment_recurring";
     return "pending_payment";
   }
 
-  if (st === "pending" || st === "offered" || st === "pending_assignment") return "pending";
+  if (stRaw === "pending" || stRaw === "offered" || stRaw === "pending_assignment") return "pending";
 
   /** Must run after completion checks — never treat `cleaner_response_status` alone as completed. */
-  if (st === "in_progress") {
+  if (stRaw === "in_progress") {
     return "active";
   }
 
-  const assignable = st === "assigned" || st === "confirmed" || st === "offered";
+  /** Legacy `confirmed` rows collapse to assigned via {@link canonicalDbBookingStatus}. */
+  const assignable = stCanon === "assigned";
 
   if (assignable && crs === CLEANER_RESPONSE.STARTED) return "active";
   if (assignable && (crs === CLEANER_RESPONSE.ON_MY_WAY || hasEnRouteAt)) return "travelling";
@@ -131,6 +134,6 @@ export function deriveBookingOperationalPhase(
 
   if (assignable) return "assigned";
 
-  if (!st) return "unknown";
+  if (!stRaw) return "unknown";
   return "unknown";
 }

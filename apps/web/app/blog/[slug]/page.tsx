@@ -10,6 +10,7 @@ import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { HighConversionBlogTemplate } from "@/components/blog/HighConversionBlogTemplate";
 import { ProgrammaticBlogTemplate } from "@/components/blog/ProgrammaticBlogTemplate";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImages";
 import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
@@ -711,7 +712,7 @@ async function BlogPostPageImpl(props: Props) {
       return (
         <MarketingLayout>
           <main className="bg-white text-zinc-900">
-            <GrowthTracking event="page_view" payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
+            <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
             {dbPost.dbStatus === "draft" || dbPost.dbStatus === "scheduled" ? (
@@ -778,7 +779,7 @@ async function BlogPostPageImpl(props: Props) {
     return (
       <MarketingLayout>
         <main className="bg-white text-zinc-900">
-          <GrowthTracking event="page_view" payload={{ page_type: "blog_high_conversion", slug: hc.slug }} />
+          <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_high_conversion", slug: hc.slug }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
           <BlogPostLayout
@@ -819,7 +820,7 @@ async function BlogPostPageImpl(props: Props) {
     return (
       <MarketingLayout>
         <main className="bg-white text-zinc-900">
-          <GrowthTracking event="page_view" payload={{ page_type: "blog_airbnb_host_guide", slug: hostGuide.slug }} />
+          <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_airbnb_host_guide", slug: hostGuide.slug }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
           <BlogPostLayout
@@ -870,7 +871,7 @@ async function BlogPostPageImpl(props: Props) {
   return (
     <MarketingLayout>
       <main className="bg-white text-zinc-900">
-        <GrowthTracking event="page_view" payload={{ page_type: "blog_programmatic", slug: prog.slug }} />
+        <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_programmatic", slug: prog.slug }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
         <BlogPostLayout

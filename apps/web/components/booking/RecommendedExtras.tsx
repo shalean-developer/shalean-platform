@@ -7,6 +7,7 @@ import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { getSmartExtras } from "@/lib/ai/bookingAssistant";
 import type { BookingContext, PastBookingHint } from "@/lib/ai/bookingAssistant";
 import type { VipTier } from "@/lib/pricing/vipTier";
+import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -24,11 +25,24 @@ export function RecommendedExtras({ state, setState, blockedExtras, userTier, pa
       service: state.service ?? "",
       rooms: state.rooms,
       bathrooms: state.bathrooms,
+      extraRooms: state.extraRooms,
+      serviceAreaName: state.serviceAreaName,
+      propertyType: state.propertyType,
       extras: state.extras,
       userTier,
       pastBookings: pastHints,
     }),
-    [state.service, state.rooms, state.bathrooms, state.extras, userTier, pastHints],
+    [
+      state.service,
+      state.rooms,
+      state.bathrooms,
+      state.extraRooms,
+      state.serviceAreaName,
+      state.propertyType,
+      state.extras,
+      userTier,
+      pastHints,
+    ],
   );
 
   const suggestions = useMemo(() => {
@@ -39,10 +53,18 @@ export function RecommendedExtras({ state, setState, blockedExtras, userTier, pa
   if (suggestions.length === 0) return null;
 
   function toggle(id: string) {
+    const turningOn = !state.extras.includes(id);
     setState((prev) => ({
       ...prev,
       extras: prev.extras.includes(id) ? prev.extras.filter((x) => x !== id) : [...prev.extras, id],
     }));
+    if (turningOn) {
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_ADDON_SELECTED, state, {
+        addon_id: id,
+        selected_extras: [...state.extras, id],
+        source_component: "recommended_extras",
+      });
+    }
   }
 
   return (

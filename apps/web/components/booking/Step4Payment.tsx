@@ -7,15 +7,17 @@ import {
   startTransition,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { BookingSectionCard } from "@/components/booking/checkout/BookingSectionCard";
+import { PaymentCheckoutReview } from "@/components/booking/checkout/PaymentCheckoutReview";
+import { PaymentMethodDisplay } from "@/components/booking/checkout/PaymentMethodDisplay";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
+import { computeCheckoutTotalZar } from "@/lib/booking/checkoutTotal";
 import { readGuestUserFromStorage, writeGuestUserToStorage } from "@/lib/booking/guestUserStorage";
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
@@ -23,14 +25,12 @@ import {
   BOOKING_PROMO_QUERY,
   sanitizeBookingPromoParam,
 } from "@/lib/booking/bookingFlow";
-import { useBookingFlow } from "@/components/booking/BookingFlowContext";
 import { bookingCopy } from "@/lib/booking/copy";
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import {
   computeBundledExtrasTotalZarSnapshot,
   extrasLineItemsFromSnapshot,
 } from "@/lib/pricing/extrasConfig";
-import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getStoredReferral } from "@/lib/referrals/client";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
@@ -38,6 +38,7 @@ import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import { useAuth } from "@/lib/auth/useAuth";
 import { getBookingSummaryServiceLabel } from "./serviceCategories";
 import { normalizeVipTier, vipTierDisplayName } from "@/lib/pricing/vipTier";
+import { TrustReinforcementCard } from "@/components/booking/payment/TrustReinforcementCard";
 
 export type AuthMode = "guest" | "login" | "register";
 
@@ -60,8 +61,6 @@ export type Step4Totals = {
   subscriptionFrequency: "weekly" | "biweekly" | "monthly" | null;
 };
 
-const TIP_PRESETS = [20, 50, 100] as const;
-
 function formatZar(n: number): string {
   return n.toLocaleString("en-ZA");
 }
@@ -82,19 +81,10 @@ export type Step4PaymentHandle = {
 type Step4PaymentProps = {
   locked: LockedBooking;
   cleanerName: string | null;
-  /** When `register=1` in URL — open Create account tab (e.g. after guest checkout). */
-  preferRegisterTab?: boolean;
-  authOverride?: {
-    id: string;
-    accessToken: string;
-    email?: string;
-    name?: string;
-    phone?: string;
-  } | null;
   onTotalsChange: (totals: Step4Totals) => void;
-  /** When true, promo/tip render in `promoTipPortalEl` (desktop checkout sidebar) instead of the main column accordion. */
+  /** When true, promo UI renders in `promoTipPortalEl` (desktop checkout sidebar) instead of the main column accordion. */
   checkoutPromoInSidebar?: boolean;
-  /** Mount element for promo/tip when `checkoutPromoInSidebar` — set by parent when desktop sidebar host is ready. */
+  /** Mount element for promo when `checkoutPromoInSidebar` — set by parent when desktop sidebar host is ready. */
   promoTipPortalEl?: HTMLDivElement | null;
 };
 
@@ -102,8 +92,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   {
     locked,
     cleanerName,
-    preferRegisterTab,
-    authOverride,
     onTotalsChange,
     checkoutPromoInSidebar = false,
     promoTipPortalEl = null,
@@ -111,12 +99,8 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   ref,
 ) {
   const searchParams = useSearchParams();
-  const { bookingHref } = useBookingFlow();
   const urlPromoAppliedRef = useRef(false);
   const { catalog, canonicalTotalZar } = useBookingPrice();
-  const [tip, setTip] = useState(0);
-  const [customMode, setCustomMode] = useState(false);
-  const [customTipDraft, setCustomTipDraft] = useState("");
 
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoInput, setPromoInput] = useState("");
@@ -155,45 +139,11 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     return null;
   }, [locked.cleaningFrequency, locked.finalPrice]);
 
-  const [authMode, setAuthMode] = useState<AuthMode>(preferRegisterTab ? "register" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
   const [sessionUser, setSessionUser] = useState<{ id: string; accessToken: string } | null>(null);
-  const [editingLoggedInDetails, setEditingLoggedInDetails] = useState(false);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authInfo, setAuthInfo] = useState<string | null>(null);
   const { user } = useAuth();
-
-  const [isLg, setIsLg] = useState(false);
-  const [mobileFullQuote, setMobileFullQuote] = useState(false);
-  useLayoutEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const sync = () => setIsLg(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  useEffect(() => {
-    if (isLg) setMobileFullQuote(false);
-  }, [isLg]);
-  const showCheckoutSummaryFull = isLg || mobileFullQuote;
-
-  useEffect(() => {
-    if (!authOverride) return;
-    setSessionUser({ id: authOverride.id, accessToken: authOverride.accessToken });
-    if (authOverride.email?.trim()) setEmail(authOverride.email.trim());
-    if (authOverride.name?.trim()) setName(authOverride.name.trim());
-    if (authOverride.phone?.trim()) setPhone(authOverride.phone.trim());
-  }, [authOverride]);
-
-  useEffect(() => {
-    if (!preferRegisterTab) return;
-    startTransition(() => setAuthMode("register"));
-  }, [preferRegisterTab]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
@@ -206,7 +156,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
         if (sess?.user) {
           void linkBookingsToUserAfterAuth(sess.access_token, sess.user);
           startTransition(() => {
-            setAuthMode("login");
             setSessionUser({ id: sess.user.id, accessToken: sess.access_token });
             const em = sess.user.email?.trim() ?? "";
             if (em) setEmail(em);
@@ -238,11 +187,9 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       if (event === "SIGNED_IN" && sess?.user) {
         void linkBookingsToUserAfterAuth(sess.access_token, sess.user);
-        setAuthMode("login");
         setSessionUser({ id: sess.user.id, accessToken: sess.access_token });
         const em = sess.user.email?.trim() ?? "";
         if (em) setEmail(em);
-        setAuthError(null);
       }
       if (event === "SIGNED_OUT") {
         setSessionUser(null);
@@ -286,8 +233,8 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   const discountZar = (promoApplied?.discountZar ?? 0) + (referralDiscount?.discountZar ?? 0) + (recurringDiscount?.amount ?? 0);
 
   const totalZar = useMemo(
-    () => computeCheckoutTotalZar(locked.finalPrice, tip, discountZar),
-    [locked.finalPrice, tip, discountZar],
+    () => computeCheckoutTotalZar(locked.finalPrice, 0, discountZar),
+    [locked.finalPrice, discountZar],
   );
 
   const checkoutDiscountLines = useMemo(() => {
@@ -362,7 +309,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
 
     onTotalsChange({
       totalZar,
-      tipZar: tip,
+      tipZar: 0,
       discountZar,
       promoCode: promoApplied?.code ?? null,
       email: email.trim(),
@@ -384,7 +331,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     });
   }, [
     totalZar,
-    tip,
     discountZar,
     promoApplied,
     email,
@@ -404,131 +350,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
       writeGuestUserToStorage({ name: name.trim(), email: email.trim(), phone: phone.trim() });
     }
     if (emailValid) writeUserEmailToStorage(email.trim());
-  }
-
-  function selectAuthMode(mode: AuthMode) {
-    setAuthError(null);
-    setAuthInfo(null);
-    if (mode === "guest") {
-      setSessionUser(null);
-    }
-    if (mode === "login") {
-      void (async () => {
-        const supabase = getSupabaseBrowser();
-        if (!supabase) return;
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.user) {
-          setSessionUser({ id: data.session.user.id, accessToken: data.session.access_token });
-        }
-      })();
-    }
-    setAuthMode(mode);
-  }
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    const supabase = getSupabaseBrowser();
-    if (!supabase) {
-      setAuthError("Sign-in is not available. Continue as guest or check configuration.");
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError(null);
-    setAuthInfo(null);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: loginPassword,
-    });
-    setAuthBusy(false);
-    if (error) {
-      setAuthError(error.message);
-      return;
-    }
-    if (data.session?.user) {
-      void linkBookingsToUserAfterAuth(data.session.access_token, data.session.user);
-      setSessionUser({ id: data.session.user.id, accessToken: data.session.access_token });
-      setAuthMode("login");
-      const meta = data.session.user.user_metadata as Record<string, unknown> | undefined;
-      const full =
-        (typeof meta?.full_name === "string" && meta.full_name) ||
-        (typeof meta?.name === "string" && meta.name) ||
-        "";
-      if (typeof full === "string" && full.trim()) setName(full.trim());
-      const ph = typeof meta?.phone === "string" ? meta.phone.trim() : "";
-      if (ph) setPhone(ph);
-      setLoginPassword("");
-      setAuthInfo("Signed in. Your details are filled below.");
-    }
-  }
-
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
-    const supabase = getSupabaseBrowser();
-    if (!supabase) {
-      setAuthError("Account creation is not available. Continue as guest or check configuration.");
-      return;
-    }
-    if (registerPassword.length < 6) {
-      setAuthError("Password must be at least 6 characters.");
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError(null);
-    setAuthInfo(null);
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password: registerPassword,
-      options: {
-        data: {
-          full_name: name.trim(),
-          phone: phone.trim(),
-        },
-      },
-    });
-    setAuthBusy(false);
-    if (error) {
-      setAuthError(error.message);
-      return;
-    }
-    if (data.session?.user) {
-      void linkBookingsToUserAfterAuth(data.session.access_token, data.session.user);
-      setSessionUser({ id: data.session.user.id, accessToken: data.session.access_token });
-      setRegisterPassword("");
-      setAuthInfo("Account created. You can pay below.");
-      return;
-    }
-    setAuthInfo(
-      "Check your email to confirm your account, then return here to sign in — or continue as guest.",
-    );
-  }
-
-  async function handleForgotPassword() {
-    const supabase = getSupabaseBrowser();
-    if (!supabase) {
-      setAuthError("Password reset is not available.");
-      return;
-    }
-    if (!emailValid) {
-      setAuthError("Enter your email first.");
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError(null);
-    const envOrigin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const origin =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : envOrigin || SITE_ORIGIN;
-    const redirectTo = origin ? `${origin}${bookingHref("checkout")}` : undefined;
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo,
-    });
-    setAuthBusy(false);
-    if (error) {
-      setAuthError(error.message);
-      return;
-    }
-    setAuthInfo("If an account exists for this email, you will receive a reset link.");
   }
 
   function applyPromo() {
@@ -557,23 +378,8 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     setPromoInput("");
   }
 
-  function selectPreset(amount: number) {
-    setCustomMode(false);
-    setCustomTipDraft("");
-    setTip(amount);
-  }
-
-  function startCustom() {
-    setCustomMode(true);
-    setCustomTipDraft(tip > 0 ? String(tip) : "");
-  }
-
-  function commitCustomTip() {
-    const n = Math.round(Number.parseFloat(customTipDraft) || 0);
-    const clamped = Math.min(MAX_TIP_ZAR, Math.max(0, n));
-    setTip(clamped);
-    setCustomTipDraft(String(clamped));
-  }
+  const payCopy = bookingCopy.checkoutPayment;
+  const checkoutMicro = bookingCopy.checkout;
 
   const serviceName =
     locked.service === null
@@ -595,7 +401,17 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     [extrasRetailRows],
   );
 
-  const checkoutMicro = bookingCopy.checkout;
+  const extrasLine = useMemo(() => {
+    if (!locked.extras.length) return payCopy.extrasNone;
+    if (!catalog) return payCopy.extrasSelected(locked.extras.length);
+    const rows = extrasLineItemsFromSnapshot(catalog, locked.extras, locked.service);
+    if (locked.extras.length <= 3 && rows.length > 0) {
+      const joined = rows.map((r) => r.name).filter(Boolean).join(", ");
+      return joined || payCopy.extrasSelected(locked.extras.length);
+    }
+    return payCopy.extrasSelected(locked.extras.length);
+  }, [catalog, locked.extras, locked.service]);
+
   const visitTotalZar = locked.finalPrice;
   const extrasTotalZar = Math.max(0, extrasBundledZar);
   const showExtrasRetailBreakdown =
@@ -604,9 +420,10 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     ? Math.max(0, extrasRetailSumZar - extrasTotalZar)
     : 0;
   const serviceSubtotalZar = Math.max(0, visitTotalZar - extrasTotalZar);
-  const anchorPrice = canonicalTotalZar != null && Number.isFinite(canonicalTotalZar) && canonicalTotalZar > 0
-    ? canonicalTotalZar
-    : null;
+  const anchorPrice =
+    canonicalTotalZar != null && Number.isFinite(canonicalTotalZar) && canonicalTotalZar > 0
+      ? canonicalTotalZar
+      : null;
   const pricingDeltaZar = anchorPrice != null ? Math.round(anchorPrice - visitTotalZar) : null;
   const pricingDeltaPercent =
     anchorPrice != null ? Math.round(((anchorPrice - visitTotalZar) / anchorPrice) * 100) : null;
@@ -626,183 +443,76 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     timeComparisonSame ||
     extrasBundleSavingsDisplayZar > 0;
 
-  const supabaseConfigured = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  const cleanerDisplay =
+    cleanerName?.trim() && cleanerName.trim() !== "Auto-assigned cleaner"
+      ? `${payCopy.cleanerSelectedShort}: ${cleanerName.trim()}`
+      : payCopy.cleanerBestAvailable;
 
   const inputClass =
     "h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-primary";
 
-  /** Promo + tip controls — promo row above tip presets (sidebar + accordion). */
-  const promoTipFields = (
-    <>
-      <div className="space-y-2">
-        {recurringDiscount ? (
-          <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
-            Discount (subscription) applied.
-          </div>
-        ) : null}
-        {referralDiscount ? (
-          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
-            Referral code {referralDiscount.code}: R {formatZar(referralDiscount.discountZar)} off your payment.
-          </div>
-        ) : null}
-        {promoApplied ? (
-          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
-            <p className="font-medium">{promoApplied.code} applied</p>
-            <button type="button" onClick={clearPromo} className="mt-1 text-[11px] font-semibold underline">
-              Remove
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={promoInput}
-                onChange={(e) => {
-                  setPromoInput(e.target.value);
-                  setPromoError(null);
-                }}
-                placeholder="Promo code"
-                className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950"
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                onClick={applyPromo}
-                className="h-9 shrink-0 rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
-              >
-                Apply
-              </button>
-            </div>
-            {promoError ? (
-              <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-                {promoError}
-              </p>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2">
-          {TIP_PRESETS.map((amount) => {
-            const active = !customMode && tip === amount;
-            return (
-              <button
-                key={amount}
-                type="button"
-                onClick={() => selectPreset(amount)}
-                className={[
-                  "rounded-full border px-3 py-1 text-sm transition",
-                  active
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
-                    : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
-                ].join(" ")}
-              >
-                R{amount}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={startCustom}
-            className={[
-              "rounded-full border px-3 py-1 text-sm transition",
-              customMode
-                ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100"
-                : "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950",
-            ].join(" ")}
-          >
-            Custom
+  const promoFields = (
+    <div className="space-y-2">
+      {recurringDiscount ? (
+        <div className="rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-100">
+          Discount (subscription) applied.
+        </div>
+      ) : null}
+      {referralDiscount ? (
+        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+          Referral code {referralDiscount.code}: R {formatZar(referralDiscount.discountZar)} off your payment.
+        </div>
+      ) : null}
+      {promoApplied ? (
+        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+          <p className="font-medium">{promoApplied.code} applied</p>
+          <button type="button" onClick={clearPromo} className="mt-1 text-[11px] font-semibold underline">
+            Remove
           </button>
         </div>
-        {customMode ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-9 items-center overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-              <span className="pl-2 text-xs text-zinc-500">R</span>
-              <input
-                type="number"
-                min={0}
-                max={MAX_TIP_ZAR}
-                step={1}
-                value={customTipDraft}
-                onChange={(e) => setCustomTipDraft(e.target.value)}
-                onBlur={commitCustomTip}
-                className="h-full w-20 bg-transparent px-1 text-sm outline-none dark:text-zinc-100"
-                aria-label="Custom tip amount"
-              />
-            </div>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={promoInput}
+              onChange={(e) => {
+                setPromoInput(e.target.value);
+                setPromoError(null);
+              }}
+              placeholder="Promo code"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-1 dark:border-zinc-700 dark:bg-zinc-950"
+              autoComplete="off"
+            />
             <button
               type="button"
-              onClick={commitCustomTip}
-              className="h-9 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+              onClick={applyPromo}
+              className="h-9 shrink-0 rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
             >
-              Set
+              Apply
             </button>
           </div>
-        ) : null}
-      </div>
-    </>
+          {promoError ? (
+            <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+              {promoError}
+            </p>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 
-  return (
-    <div className="mx-auto w-full max-w-[576px] space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:p-6">
-      {showCheckoutSummaryFull ? (
-        <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
-          <h2 className="sr-only">Booking summary</h2>
-          <dl className="space-y-2.5 text-sm">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhat}</dt>
-              <dd className="min-w-0 font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</dd>
-            </div>
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhere}</dt>
-              <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{locked.location || "Address on file"}</dd>
-            </div>
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">{checkoutMicro.summaryWhen}</dt>
-              <dd className="min-w-0 text-zinc-800 dark:text-zinc-100">{formatLockedAppointmentLabel(locked)}</dd>
-            </div>
-          </dl>
-        </section>
-      ) : (
-        <div className="rounded-xl border border-zinc-200/80 p-3 dark:border-zinc-700 lg:hidden">
-          <h2 className="sr-only">Booking summary</h2>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{serviceName}</p>
-          <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-400">{locked.location || "Address on file"}</p>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{formatLockedAppointmentLabel(locked)}</p>
-          <p className="mt-2 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-            Visit total · R {formatZar(visitTotalZar)}
-          </p>
-          <button
-            type="button"
-            className="mt-2 text-sm font-medium text-primary underline-offset-2 hover:underline"
-            onClick={() => setMobileFullQuote(true)}
-          >
-            View full quote
-          </button>
-        </div>
-      )}
-
-      {showCheckoutSummaryFull ? (
-      <section className="rounded-xl border border-zinc-200/80 p-4 dark:border-zinc-700">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Price breakdown</h2>
-        {!isLg && mobileFullQuote ? (
-          <button
-            type="button"
-            className="mb-2 mt-1 text-sm font-medium text-primary lg:hidden"
-            onClick={() => setMobileFullQuote(false)}
-          >
-            Hide full quote
-          </button>
-        ) : null}
-        <p className="mt-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-          Your visit total is the final price for this booking.
-        </p>
-
-        <div className="mt-4 space-y-0 rounded-lg border border-zinc-200/80 bg-zinc-50/70 text-sm dark:border-zinc-700 dark:bg-zinc-900/40">
+  const detailedPricing = (
+    <details className="group rounded-xl border border-zinc-200/70 bg-zinc-50/40 dark:border-zinc-700/80 dark:bg-zinc-900/25">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-blue-700 dark:text-blue-400 [&::-webkit-details-marker]:hidden">
+        <span>View detailed pricing</span>
+        <ChevronDown
+          className="h-4 w-4 shrink-0 text-zinc-500 transition-transform group-open:rotate-180 dark:text-zinc-400"
+          aria-hidden
+        />
+      </summary>
+      <div className="space-y-3 border-t border-zinc-100 px-3 pb-3 pt-3 text-sm dark:border-zinc-800/80">
+        <div className="space-y-0 rounded-lg border border-zinc-200/80 bg-white/80 text-sm dark:border-zinc-700 dark:bg-zinc-950/40">
           <div className="flex items-start justify-between gap-3 px-3 py-3 text-zinc-700 dark:text-zinc-300">
             <span className="min-w-0">
               <span className="font-medium text-zinc-800 dark:text-zinc-200">Cleaning service</span>
@@ -814,7 +524,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
               R {formatZar(serviceSubtotalZar)}
             </span>
           </div>
-          <div className="flex items-center justify-between border-t border-zinc-200/80 px-3 py-3 text-zinc-700 dark:text-zinc-300 dark:border-zinc-700/80">
+          <div className="flex items-center justify-between border-t border-zinc-200/80 px-3 py-3 text-zinc-700 dark:border-zinc-700/80 dark:text-zinc-300">
             <span className="font-medium text-zinc-800 dark:text-zinc-200">Extras</span>
             <span className="tabular-nums font-medium text-zinc-800 dark:text-zinc-200">
               R {formatZar(extrasTotalZar)}
@@ -823,14 +533,14 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
           <div className="border-t border-zinc-300/80 dark:border-zinc-600/80" role="separator" />
           <div className="flex items-center justify-between px-3 py-3">
             <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Visit total</span>
-            <span className="text-lg font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-xl">
+            <span className="text-base font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
               R {formatZar(visitTotalZar)}
             </span>
           </div>
         </div>
 
         {showSavingsSection ? (
-          <div className="mt-4 space-y-1.5 rounded-lg border border-emerald-200/60 bg-emerald-50/40 px-3 py-3 text-[11px] leading-snug text-emerald-950 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-100">
+          <div className="space-y-1.5 rounded-lg border border-emerald-200/60 bg-emerald-50/40 px-3 py-3 text-[11px] leading-snug text-emerald-950 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-100">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200/90">
               Savings and benefits
             </p>
@@ -842,8 +552,8 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
             ) : null}
             {timeComparisonSaved && pricingDeltaZar != null && pricingDeltaPercent != null ? (
               <p>
-                You saved R {formatZar(Math.abs(pricingDeltaZar))} compared with our usual reference time for this job
-                ({Math.abs(pricingDeltaPercent)}%). Already reflected in your visit total.
+                You saved R {formatZar(Math.abs(pricingDeltaZar))} compared with our usual reference time for this job (
+                {Math.abs(pricingDeltaPercent)}%). Already reflected in your visit total.
               </p>
             ) : null}
             {timeComparisonHigher ? (
@@ -863,64 +573,90 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
           </div>
         ) : null}
 
-        <p className="mt-3 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-          {checkoutMicro.pricingRoundingNote}
-        </p>
+        <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">{checkoutMicro.pricingRoundingNote}</p>
 
-        {tip > 0 || checkoutDiscountLines.length > 0 ? (
-          <div className="mt-4 space-y-2 border-t border-zinc-200/80 pt-3 dark:border-zinc-700">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Payment adjustments
-            </h3>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Your visit total stays as above; these items change only what you pay today.
-            </p>
-            {tip > 0 ? (
-              <div className="flex items-center justify-between text-sm text-zinc-700 dark:text-zinc-300">
-                <span>Tip added</span>
-                <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
-                  R {formatZar(tip)}
+        {checkoutDiscountLines.length > 0 ? (
+          <div className="space-y-2 border-t border-zinc-200/80 pt-3 dark:border-zinc-700">
+            <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Applied at payment</p>
+            {checkoutDiscountLines.map((row) => (
+              <div
+                key={row.key}
+                className="flex items-center justify-between text-sm text-zinc-700 dark:text-zinc-300"
+              >
+                <span>{row.label}</span>
+                <span className="tabular-nums font-medium text-emerald-800 dark:text-emerald-300">
+                  R {formatZar(row.amount)} off
                 </span>
               </div>
-            ) : null}
-            {checkoutDiscountLines.length > 0 ? (
-              <>
-                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Promotions applied at payment</p>
-                {checkoutDiscountLines.map((row) => (
-                  <div
-                    key={row.key}
-                    className="flex items-center justify-between text-sm text-zinc-700 dark:text-zinc-300"
-                  >
-                    <span>{row.label}</span>
-                    <span className="tabular-nums font-medium text-emerald-800 dark:text-emerald-300">
-                      R {formatZar(row.amount)} off
-                    </span>
-                  </div>
-                ))}
-              </>
-            ) : null}
+            ))}
           </div>
         ) : null}
 
-        <div className="mt-4 rounded-xl border border-primary/25 bg-primary/[0.07] px-4 py-4 dark:border-primary/35 dark:bg-primary/[0.12]">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Total to pay
-            </span>
-            <span className="text-2xl font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl">
-              R {formatZar(totalZar)}
-            </span>
-          </div>
-          <p className="mt-2 text-xs leading-snug text-zinc-600 dark:text-zinc-400">
-            {tip > 0 || discountZar > 0
-              ? "Includes your locked visit plus tip, with promotions applied as shown."
-              : "Same as your visit total · Price locked for this time"}
-          </p>
+        <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-3 dark:border-primary/30 dark:bg-primary/[0.1]">
+          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+            Total to pay
+          </span>
+          <span className="text-lg font-bold tabular-nums text-primary">R {formatZar(totalZar)}</span>
         </div>
-        <p className="mt-3 rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 text-xs font-medium leading-snug text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
+        <p className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2 text-xs font-medium leading-snug text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
           {checkoutMicro.extrasGuarantee}
         </p>
-      </section>
+      </div>
+    </details>
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-[576px] space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 sm:space-y-4 sm:p-5">
+      <div className="rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2 dark:border-emerald-800/50 dark:bg-emerald-950/25">
+        <p className="text-[13px] font-semibold leading-snug text-emerald-900 dark:text-emerald-100">Almost there</p>
+        <p className="mt-0.5 text-[12px] leading-snug text-emerald-800/90 dark:text-emerald-200/85">
+          Complete secure payment to confirm your booking.
+        </p>
+      </div>
+
+      <PaymentCheckoutReview
+        whatLabel={serviceName}
+        summaryHours={locked.finalHours}
+        scheduleLine={formatLockedAppointmentLabel(locked)}
+        whereLabel={locked.location?.trim() || "Address on file"}
+        cleanerLabel={cleanerDisplay}
+        extrasLine={extrasLine}
+        summaryTotalZar={totalZar}
+        loading={false}
+      />
+
+      <TrustReinforcementCard />
+
+      <BookingSectionCard className="p-4 sm:p-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {payCopy.paymentMethodTitle}
+        </p>
+        <PaymentMethodDisplay footerTrust={false} />
+      </BookingSectionCard>
+
+      {detailedPricing}
+
+      {checkoutPromoInSidebar && promoTipPortalEl
+        ? createPortal(
+            <div className="space-y-3 text-sm text-zinc-900 dark:text-zinc-100">
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">Promo code (optional)</p>
+              {promoFields}
+            </div>,
+            promoTipPortalEl,
+          )
+        : null}
+
+      {!checkoutPromoInSidebar ? (
+        <details className="group overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50 [&::-webkit-details-marker]:hidden">
+            <span>Promo code (optional)</span>
+            <ChevronDown
+              className="h-4 w-4 shrink-0 text-zinc-500 transition-transform group-open:rotate-180 dark:text-zinc-400"
+              aria-hidden
+            />
+          </summary>
+          <div className="border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">{promoFields}</div>
+        </details>
       ) : null}
 
       <Dialog open={contactDialogOpen} onOpenChange={handleContactDialogOpenChange}>
@@ -930,7 +666,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
             <DialogDescription>
               {sessionUser
                 ? "Signed in. Confirm your details before payment."
-                : "You’ll be asked to log in or sign up after you continue, if you’re not already signed in."}
+                : "Enter the details we’ll use for your booking confirmation."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -942,20 +678,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                setContactDialogError(null);
-              }}
-              onBlur={persistGuest}
-              className={inputClass}
-            />
-            <input
-              type="tel"
-              required
-              autoComplete="tel"
-              inputMode="tel"
-              placeholder="Phone number"
-              value={phone}
-              onChange={(e) => {
-                setPhone(e.target.value);
                 setContactDialogError(null);
               }}
               onBlur={persistGuest}
@@ -975,12 +697,23 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
               onBlur={persistGuest}
               className={inputClass}
             />
+            <input
+              type="tel"
+              required
+              autoComplete="tel"
+              inputMode="tel"
+              placeholder="Phone number"
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                setContactDialogError(null);
+              }}
+              onBlur={persistGuest}
+              className={inputClass}
+            />
           </div>
           {cleanerName ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Cleaner: {cleanerName}</p>
-          ) : null}
-          {!supabaseConfigured ? (
-            <p className="text-xs text-amber-800 dark:text-amber-400/90">Sign-in is currently unavailable.</p>
           ) : null}
           {contactDialogError ? (
             <p className="text-xs text-red-600 dark:text-red-400" role="alert">
@@ -992,48 +725,11 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
               Cancel
             </Button>
             <Button type="button" onClick={submitContactDialog}>
-              Continue to secure payment
+              Pay & confirm booking
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {checkoutPromoInSidebar && promoTipPortalEl
-        ? createPortal(
-            <div className="space-y-4 text-sm text-zinc-900 dark:text-zinc-100">
-              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">Add promo or tip (optional)</p>
-              {promoTipFields}
-            </div>,
-            promoTipPortalEl,
-          )
-        : null}
-
-      {!checkoutPromoInSidebar ? (
-        <section
-          aria-labelledby="optional-heading"
-          className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-700 dark:bg-zinc-950/60"
-        >
-          <button
-            type="button"
-            id="optional-heading"
-            onClick={() => setPromoOpen((o) => !o)}
-            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50"
-            aria-expanded={promoOpen}
-          >
-            <span>Add promo or tip (optional)</span>
-            <ChevronDown
-              className={[
-                "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
-                promoOpen ? "rotate-180" : "",
-              ].join(" ")}
-              aria-hidden
-            />
-          </button>
-          {promoOpen ? (
-            <div className="space-y-4 border-t border-zinc-200/80 px-4 pb-4 pt-3 dark:border-zinc-800">{promoTipFields}</div>
-          ) : null}
-        </section>
-      ) : null}
     </div>
   );
 });

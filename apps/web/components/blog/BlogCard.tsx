@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { BlogIndexCardPost } from "@/lib/blog/blog-index-hub";
 
 function isRemoteSrc(src: string) {
@@ -23,7 +23,7 @@ export function BlogCard({ post, priority }: { post: BlogIndexCardPost; priority
       className="group flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_2px_16px_-4px_rgba(15,23,42,0.06)] ring-1 ring-zinc-950/[0.03] transition hover:border-zinc-300 hover:shadow-[0_8px_28px_-6px_rgba(15,23,42,0.12)]"
       aria-labelledby={titleId}
     >
-      <Link
+      <SafeInternalLink
         href={`/blog/${post.slug}`}
         className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-zinc-100"
         aria-label={post.title}
@@ -37,7 +37,7 @@ export function BlogCard({ post, priority }: { post: BlogIndexCardPost; priority
           loading={priority ? "eager" : "lazy"}
           unoptimized={remote}
         />
-      </Link>
+      </SafeInternalLink>
       <div className="flex min-h-0 flex-1 flex-col p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-800">
@@ -51,20 +51,20 @@ export function BlogCard({ post, priority }: { post: BlogIndexCardPost; priority
           id={titleId}
           className="mt-2 text-lg font-semibold leading-snug tracking-tight text-zinc-900 sm:text-xl"
         >
-          <Link
+          <SafeInternalLink
             href={`/blog/${post.slug}`}
             className="text-blue-700 transition hover:text-blue-800 hover:underline"
           >
             {post.title}
-          </Link>
+          </SafeInternalLink>
         </h3>
         <p className="mt-3 line-clamp-3 flex-1 text-sm leading-relaxed text-zinc-600">{post.displayExcerpt}</p>
-        <Link
+        <SafeInternalLink
           href={`/blog/${post.slug}`}
           className="mt-4 inline-flex text-sm font-semibold text-blue-600 transition hover:text-blue-700"
         >
           Read article →
-        </Link>
+        </SafeInternalLink>
       </div>
     </article>
   );

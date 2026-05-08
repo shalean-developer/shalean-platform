@@ -129,8 +129,12 @@ export default function AdminOperationsPage() {
             <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Legacy user_events funnel</h2>
               <p className="mt-1 text-xs text-zinc-500">
-                Counts <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">user_events</code> types
-                (booking_started, quote_viewed, …). No synthetic fill — zeros if those events were never emitted.
+                Counts <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">user_events</code> canonical types (
+                <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">booking_started</code>,{" "}
+                <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">booking_service_selected</code>,{" "}
+                <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">booking_time_selected</code>
+                /assistant <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">slot_selected</code>, …). No synthetic
+                fill — zeros if those events were never emitted.
               </p>
               <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
                 <FunnelStep label="Started" value={data.funnel.started} pct={100} />

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { HubBlogCard } from "@/lib/blog/get-all-posts";
 import { ArrowUpRight } from "lucide-react";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
@@ -27,23 +27,23 @@ export function LocationHubBlogSection({ locationName, locationSlug, cards }: Pr
             </p>
             <p className="mt-2 text-sm text-zinc-600">
               Hub:{" "}
-              <Link href={`/locations/${locationSlug}`} className={`font-semibold ${linkEmphasisClassName}`}>
+              <SafeInternalLink href={`/locations/${locationSlug}`} className={`font-semibold ${linkEmphasisClassName}`}>
                 Cleaning services in {locationName}
-              </Link>
+              </SafeInternalLink>
               {" · "}
-              <Link href="/cleaning-services-cape-town" className={`font-semibold ${linkEmphasisClassName}`}>
+              <SafeInternalLink href="/cleaning-services-cape-town" className={`font-semibold ${linkEmphasisClassName}`}>
                 Cape Town overview
-              </Link>
+              </SafeInternalLink>
             </p>
           </div>
-          <Link href="/blog" className={`text-sm font-semibold ${linkEmphasisClassName}`}>
+          <SafeInternalLink href="/blog" className={`text-sm font-semibold ${linkEmphasisClassName}`}>
             View all articles
-          </Link>
+          </SafeInternalLink>
         </div>
         <ul className="mt-8 grid gap-4 sm:grid-cols-2">
           {cards.map((post) => (
             <li key={post.slug}>
-              <Link
+              <SafeInternalLink
                 href={`/blog/${post.slug}`}
                 className="group flex h-full flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-emerald-200 hover:shadow-md"
               >
@@ -53,7 +53,7 @@ export function LocationHubBlogSection({ locationName, locationSlug, cards }: Pr
                 </div>
                 <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-zinc-600">{post.excerpt}</p>
                 <span className="mt-4 text-sm font-medium text-emerald-700">Read guide</span>
-              </Link>
+              </SafeInternalLink>
             </li>
           ))}
         </ul>

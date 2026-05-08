@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { BadgeCheck, Calendar, Clock, Mail, MapPin, Sparkles, UserRound } from "lucide-react";
+import { Calendar, Clock, MapPin, Sparkles, UserRound } from "lucide-react";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
-import { formatLockedAppointmentLabel } from "@/lib/booking/lockedBooking";
+import { formatLockedAppointmentLabel, formatScheduleReassuranceLine } from "@/lib/booking/lockedBooking";
+import { buildGoogleCalendarTemplateUrl } from "@/lib/booking/googleCalendarTemplateUrl";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
@@ -20,9 +21,12 @@ import type {
   PaystackVerifyPostSuccess,
 } from "@/lib/booking/paystackVerifyResponse";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { clearStoredReferral } from "@/lib/referrals/client";
 import { CheckoutNoticeBanner } from "@/components/booking/CheckoutNoticeBanner";
+import { PostBookingTipPrompt } from "@/components/booking/payment/PostBookingTipPrompt";
+import { BookingConfirmationHero } from "@/components/booking/BookingConfirmationHero";
 import {
   CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_WHATSAPP_URL,
@@ -176,7 +180,7 @@ function SuccessContent() {
           clearStoredReferral("customer");
 
           if (isBookingPersisted(okData)) {
-            trackGrowthEvent("complete_booking", {
+            trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
               reference: okData.reference ?? null,
               booking_id: okData.bookingId ?? null,
               assignment_type: okData.assignmentType ?? null,
@@ -185,9 +189,19 @@ function SuccessContent() {
               assigned_cleaner_id: okData.assignedCleanerId ?? null,
               selected_cleaner_id: okData.selectedCleanerId ?? null,
             });
-            trackGrowthEvent("booking_completed", {
+            const completedSnap = isSnapshot(okData.bookingSnapshot)
+              ? (okData.bookingSnapshot as BookingSnapshotV1)
+              : null;
+            const completedLocked = completedSnap?.locked;
+            trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, completedLocked, {
               reference: okData.reference ?? null,
               booking_id: okData.bookingId ?? null,
+              service_type: completedLocked?.service_type ?? completedLocked?.service ?? completedSnap?.flat?.service ?? null,
+              selected_extras: completedLocked?.extras ?? completedSnap?.flat?.extras ?? [],
+              estimated_price: completedSnap?.total_zar ?? completedLocked?.finalPrice ?? null,
+              estimated_hours: completedLocked?.finalHours ?? null,
+              cleaner_mode: okData.selectedCleanerId || completedSnap?.cleaner_id ? "manual" : "auto",
+              cleaner_id: okData.selectedCleanerId ?? completedSnap?.cleaner_id ?? null,
               assignment_type: okData.assignmentType ?? null,
               fallback_reason: okData.fallbackReason ?? null,
               attempted_cleaner_id: okData.attemptedCleanerId ?? null,
@@ -200,21 +214,21 @@ function SuccessContent() {
               if (typeof sessionStorage !== "undefined" && k) {
                 if (!sessionStorage.getItem(k)) {
                   sessionStorage.setItem(k, "1");
-                  trackGrowthEvent("payment_completed", {
+                  trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
                     reference: okData.reference ?? null,
                     booking_id: okData.bookingId ?? null,
                     booking_saved: true,
                   });
                 }
               } else {
-                trackGrowthEvent("payment_completed", {
+                trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
                   reference: okData.reference ?? null,
                   booking_id: okData.bookingId ?? null,
                   booking_saved: true,
                 });
               }
             } catch {
-              trackGrowthEvent("payment_completed", {
+              trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
                 reference: okData.reference ?? null,
                 booking_id: okData.bookingId ?? null,
                 booking_saved: true,
@@ -230,7 +244,7 @@ function SuccessContent() {
             if (typeof sessionStorage !== "undefined" && k) {
               if (!sessionStorage.getItem(k)) {
                 sessionStorage.setItem(k, "1");
-                trackGrowthEvent("payment_completed", {
+                trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
                   reference: okData.reference ?? null,
                   booking_id: null,
                   persist_pending: true,
@@ -238,7 +252,7 @@ function SuccessContent() {
                 });
               }
             } else {
-              trackGrowthEvent("payment_completed", {
+              trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
                 reference: okData.reference ?? null,
                 booking_id: null,
                 persist_pending: true,
@@ -246,7 +260,7 @@ function SuccessContent() {
               });
             }
           } catch {
-            trackGrowthEvent("payment_completed", {
+            trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
               reference: okData.reference ?? null,
               booking_id: null,
               persist_pending: true,
@@ -601,6 +615,25 @@ function SuccessContent() {
     locked && locked.date && locked.time
       ? formatLockedAppointmentLabel(locked as LockedBooking)
       : "—";
+  const scheduleLine =
+    locked?.date && locked?.time ? formatScheduleReassuranceLine(locked.date, locked.time) : null;
+  const googleCalendarUrl =
+    locked?.date && locked?.time
+      ? buildGoogleCalendarTemplateUrl({
+          dateYmd: locked.date,
+          timeHm: locked.time,
+          durationHours:
+            typeof locked.finalHours === "number" && Number.isFinite(locked.finalHours) && locked.finalHours > 0
+              ? locked.finalHours
+              : 2,
+          title: `Shalean · ${serviceLabel}`,
+          details: statusData.reference ? `Reference: ${statusData.reference}` : undefined,
+          location: typeof locked.location === "string" && locked.location.trim() ? locked.location.trim() : undefined,
+        })
+      : null;
+  const showSmsConfirmation = Boolean(snap?.customer?.phone?.trim());
+  const persistedBookingId = statusData.bookingId?.trim() ?? "";
+
   const totalZarFromSnap = typeof snap?.total_zar === "number" ? snap.total_zar : null;
   const totalPaidZar =
     totalZarFromSnap ??
@@ -727,32 +760,16 @@ function SuccessContent() {
           </p>
         ) : null}
 
-        <header className="relative overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/50 px-6 pb-8 pt-10 text-center shadow-sm dark:border-emerald-900/35 dark:from-emerald-950/45 dark:via-zinc-950 dark:to-zinc-900/90">
-          <div
-            className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/15 blur-2xl dark:bg-emerald-400/10"
-            aria-hidden
+        {persistedBookingId && statusData.reference ? (
+          <BookingConfirmationHero
+            reference={statusData.reference}
+            bookingId={persistedBookingId}
+            hasSession={hasSession}
+            scheduleLine={scheduleLine}
+            showSmsConfirmation={showSmsConfirmation}
+            googleCalendarUrl={googleCalendarUrl}
           />
-          <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-700/25 ring-4 ring-emerald-500/15 dark:bg-emerald-500 dark:ring-emerald-400/10">
-            <BadgeCheck className="h-9 w-9" strokeWidth={2.25} aria-hidden />
-          </div>
-          <h1 className="relative mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Booking confirmed
-          </h1>
-          <p className="relative mx-auto mt-3 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Thanks for choosing Shalean. We&apos;ve emailed your receipt
-            {statusData.customerEmail ? (
-              <>
-                {" "}
-                to <span className="font-medium text-zinc-800 dark:text-zinc-200">{statusData.customerEmail}</span>
-              </>
-            ) : null}
-            .
-          </p>
-          <div className="relative mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-white/90 px-4 py-2 text-xs font-medium text-emerald-900 shadow-sm dark:border-emerald-800/60 dark:bg-zinc-900/80 dark:text-emerald-100/90">
-            <Mail className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
-            Receipt in your inbox
-          </div>
-        </header>
+        ) : null}
 
         <section
           className="rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 sm:p-6"
@@ -855,16 +872,9 @@ function SuccessContent() {
               </span>
             </div>
           </div>
-
-          {statusData.reference ? (
-            <div className="mt-5 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/50">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Booking reference</p>
-              <p className="mt-1 break-all font-mono text-xs leading-relaxed text-zinc-700 dark:text-zinc-200">
-                {statusData.reference}
-              </p>
-            </div>
-          ) : null}
         </section>
+
+        <PostBookingTipPrompt bookingId={statusData.bookingId} />
 
         <section
           className="rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/40 sm:p-6"
@@ -919,18 +929,10 @@ function SuccessContent() {
           <button
             type="button"
             onClick={() => handleBookAgain()}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 sm:w-auto sm:min-w-[200px]"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 sm:w-auto sm:min-w-[200px]"
           >
             Book this again
           </button>
-          {hasSession ? (
-            <Link
-              href="/dashboard/bookings"
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 sm:w-auto sm:min-w-[160px]"
-            >
-              My bookings
-            </Link>
-          ) : null}
           <Link
             href="/"
             className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-primary/25 bg-primary/10 px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/15 sm:w-auto sm:min-w-[140px]"

@@ -5,6 +5,7 @@ import { getLocation, LOCATIONS } from "@/lib/locations";
 import { CAPE_TOWN_SEO_SERVICE_SLUGS } from "@/lib/seo/capeTownSeoPages";
 import { resolveHubFromCleaningServicesCapeTownBlogSlug } from "@/lib/blog/seo/cleaning-services-blog-hub";
 import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
+import { normalizeBlogHref } from "@/lib/blog/validBlogRoutes";
 
 export type InjectInternalLinksContext = {
   location: string;
@@ -32,7 +33,8 @@ function countPathMatches(urls: readonly string[], p: string): number {
 function normPath(u: string): string {
   try {
     const path = u.startsWith("http") ? new URL(u).pathname : u.split("?")[0] ?? u;
-    return path.replace(/\/+$/, "") || "/";
+    const trimmed = path.replace(/\/+$/, "") || "/";
+    return trimmed.startsWith("/blog") ? normalizeBlogHref(trimmed).split(/[?#]/)[0] ?? trimmed : trimmed;
   } catch {
     return u;
   }

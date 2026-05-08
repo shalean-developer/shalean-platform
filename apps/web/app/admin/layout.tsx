@@ -23,6 +23,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
       { label: "Payouts", href: "/admin/payouts" },
       { label: "Pricing", href: "/admin/pricing" },
       { label: "Analytics", href: "/admin/analytics" },
+      { label: "Funnel intelligence", href: "/admin/funnel-intelligence" },
     ],
   },
   {
@@ -46,6 +47,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
       { label: "Blog", href: "/admin/blog" },
       { label: "Conversion", href: "/admin/conversion" },
       { label: "SEO insights", href: "/admin/seo-insights" },
+      { label: "SEO attribution", href: "/admin/seo-attribution" },
       { label: "Referrals", href: "/admin/referrals" },
     ],
   },

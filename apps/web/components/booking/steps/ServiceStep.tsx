@@ -30,8 +30,8 @@ export function ServiceStep({ value, onChange, services, loading }: ServiceStepP
         >
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex w-full max-w-[5.5rem] flex-col items-center">
-              <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
-              <div className="mt-2 h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="hidden h-14 w-14 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
+              <div className="mt-0 h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
             </div>
           ))}
         </div>

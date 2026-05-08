@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { resolveHubFromCleaningServicesCapeTownBlogSlug } from "@/lib/blog/seo/cleaning-services-blog-hub";
@@ -31,12 +31,12 @@ export function BlogLocationBookCta({ trackingSlug }: Props) {
         Trusted, vetted cleaners across Cape Town — same-day slots when capacity allows.
       </p>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Link
+        <SafeInternalLink
           href={hub.href}
           className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-emerald-300 bg-white px-8 text-sm font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50"
         >
           View cleaning services in {hub.placeName}
-        </Link>
+        </SafeInternalLink>
         <GrowthCtaLink
           href="/booking"
           source={`blog_${trackingSlug}_location_hub_book`}
@@ -48,9 +48,9 @@ export function BlogLocationBookCta({ trackingSlug }: Props) {
       </div>
       <p className="mt-5 max-w-xl text-sm leading-relaxed text-zinc-600">
         For city-wide booking scope and what&apos;s included on maintenance visits, see our guide to{" "}
-        <Link href={STANDARD_CLEANING_CT} className="font-semibold text-emerald-800 underline-offset-2 hover:underline">
+        <SafeInternalLink href={STANDARD_CLEANING_CT} className="font-semibold text-emerald-800 underline-offset-2 hover:underline">
           cleaning services in Cape Town
-        </Link>
+        </SafeInternalLink>
         .
       </p>
     </section>

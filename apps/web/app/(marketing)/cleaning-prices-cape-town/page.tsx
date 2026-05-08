@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CleaningPricesCapeTownPage } from "@/components/marketing-pricing/CleaningPricesCapeTownPage";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { getHomePageData } from "@/lib/home/data";
@@ -45,7 +46,7 @@ export default async function CleaningPricesCapeTownRoutePage() {
   return (
     <div className="bg-white text-zinc-900">
       <GrowthTracking
-        event="page_view"
+        event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{
           page_type: "cleaning_prices_cape_town",
           content_group: "marketing_pricing",

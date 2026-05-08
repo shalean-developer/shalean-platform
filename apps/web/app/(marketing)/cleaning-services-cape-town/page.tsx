@@ -11,6 +11,7 @@ import { ServicesGrid } from "@/components/locations/cape-town-cleaning-services
 import { TrustBar } from "@/components/locations/cape-town-cleaning-services/TrustBar";
 import { WhyChooseUs } from "@/components/locations/cape-town-cleaning-services/WhyChooseUs";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
@@ -48,7 +49,7 @@ export default function CleaningServicesCapeTownPage() {
   return (
     <MarketingLayout>
       <GrowthTracking
-        event="page_view"
+        event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{
           page_type: "cleaning_services_cape_town",
           content_group: "marketing_city_hub",

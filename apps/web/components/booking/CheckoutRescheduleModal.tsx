@@ -18,7 +18,7 @@ import {
   slotStrategyBadge,
   type SlotPickInput,
 } from "@/lib/pricing/slotRevenueStrategy";
-import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import { BOOKING_FUNNEL_ROW, trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
 import { bookingExtrasClientLimitMessage, bookingExtrasOverClientLimit } from "@/lib/booking/bookingExtrasLimits";
 
@@ -324,7 +324,7 @@ export function CheckoutRescheduleModal({
         }
         if (attempt < 3) await sleep(400 * (attempt + 1));
       }
-      trackBookingFunnelEvent("datetime", "error", {
+      trackBookingFunnelEvent("datetime", BOOKING_FUNNEL_ROW.ERROR, {
         message: lastErr,
         action: "lock_slot_checkout_modal",
         time,

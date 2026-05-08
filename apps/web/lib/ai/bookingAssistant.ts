@@ -11,6 +11,9 @@ export type BookingContext = {
   service: string;
   rooms: number;
   bathrooms: number;
+  extraRooms?: number;
+  serviceAreaName?: string;
+  propertyType?: string | null;
   extras: string[];
   userTier?: string;
   /** Most recent first — optional `time` / `extras` from past bookings */
@@ -128,6 +131,19 @@ export function getSmartExtras(context: BookingContext, snapshot: PricingRatesSn
   const price = (id: string) => snapshot.extras[id]?.price ?? 0;
   const svc = parseBookingServiceId(context.service);
   if (!svc) return [];
+  const suburb = (context.serviceAreaName ?? "").trim().toLowerCase();
+  const airbnbArea =
+    suburb.includes("sea point") ||
+    suburb.includes("green point") ||
+    suburb.includes("camps bay") ||
+    suburb.includes("bantry bay") ||
+    suburb.includes("waterfront");
+  const familyHomeArea =
+    suburb.includes("constantia") ||
+    suburb.includes("newlands") ||
+    suburb.includes("durbanville") ||
+    suburb.includes("claremont") ||
+    suburb.includes("rondebosch");
 
   const push = (id: string, label: string, reason: string) => {
     if (has(id)) return;
@@ -136,6 +152,16 @@ export function getSmartExtras(context: BookingContext, snapshot: PricingRatesSn
   };
 
   if (svc && ["deep", "move", "carpet"].includes(svc)) {
+    if (svc === "move") {
+      push("inside-oven", "Inside oven", "Move-out inspections often check oven glass and racks.");
+      push("inside-cabinets", "Inside cabinets", "Handover cleans are stronger when cupboards are included.");
+      push("interior-walls", "Interior walls", "Spot-clean visible scuffs before agent photos.");
+      push("inside-fridge", "Inside fridge", "Useful when leaving an appliance-ready kitchen.");
+    }
+    if (svc === "deep") {
+      push("inside-oven", "Inside oven", "Most deep cleans benefit from tackling kitchen build-up.");
+      push("interior-walls", "Interior walls", "Great for family homes and high-touch passages.");
+    }
     push("mattress-cleaning", "Mattress cleaning", "Refresh beds after a big clean or move.");
     push("carpet-cleaning", "Carpet cleaning", "Lift traffic marks in carpeted areas.");
     push("balcony-cleaning", "Balcony cleaning", "Outdoor living space ready for handover.");
@@ -148,9 +174,14 @@ export function getSmartExtras(context: BookingContext, snapshot: PricingRatesSn
       );
     }
     push("inside-fridge", "Inside fridge", "Popular add-on — fresh and ready for guests.");
-    if (context.service === "airbnb") {
+    if (svc === "airbnb" || airbnbArea) {
+      push("laundry", "Laundry", "Most Airbnb-style turnovers add laundry for guest-ready linen.");
       push("ironing", "Ironing", "Great for Airbnb turnovers — crisp linens in photos.");
       push("interior-windows", "Interior windows", "Brightens listing photos between guests.");
+    }
+    if (familyHomeArea || context.propertyType === "house" || (context.extraRooms ?? 0) > 0) {
+      push("inside-cabinets", "Inside cabinets", "Popular with larger homes and family kitchens.");
+      push("interior-walls", "Interior walls", "Handles high-touch marks in busy homes.");
     }
   }
 

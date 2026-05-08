@@ -12,6 +12,8 @@ type StepperInputProps = {
   min: number;
   max: number;
   onChange: (value: number) => void;
+  /** Compact segmented control (rooms row — blueprint). */
+  variant?: "card" | "segmented";
 };
 
 export function StepperInput({
@@ -22,6 +24,7 @@ export function StepperInput({
   min,
   max,
   onChange,
+  variant = "card",
 }: StepperInputProps) {
   const subline = description ?? hint;
   const [bump, setBump] = useState(false);
@@ -42,6 +45,36 @@ export function StepperInput({
 
   const btnBase =
     "flex shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white font-medium leading-none text-zinc-700 transition-[transform,opacity,background-color,border-color] duration-150 ease-out enabled:hover:border-zinc-300 enabled:hover:bg-zinc-50 enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:enabled:hover:border-zinc-600 dark:enabled:hover:bg-zinc-900";
+
+  const segBtn =
+    "flex flex-1 items-center justify-center text-lg font-semibold text-blue-600 transition-colors enabled:active:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-35 dark:text-blue-400 dark:enabled:active:bg-blue-950/50";
+
+  if (variant === "segmented") {
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-center text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {label}
+        </span>
+        <div className="flex h-12 items-stretch overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-sm ring-1 ring-zinc-200/40 dark:border-zinc-700 dark:bg-zinc-950 dark:ring-zinc-700/50">
+          <button type="button" onClick={dec} disabled={value <= min} aria-label={`Decrease ${label}`} className={segBtn}>
+            −
+          </button>
+          <span
+            className={cn(
+              "flex min-w-[2.25rem] flex-[1.15] select-none items-center justify-center border-x border-zinc-200/90 text-base font-bold tabular-nums text-zinc-900 transition-transform duration-200 ease-out dark:border-zinc-700 dark:text-zinc-50",
+              bump && "scale-105",
+            )}
+            aria-live="polite"
+          >
+            {value}
+          </span>
+          <button type="button" onClick={inc} disabled={value >= max} aria-label={`Increase ${label}`} className={segBtn}>
+            +
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

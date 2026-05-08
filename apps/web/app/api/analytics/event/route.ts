@@ -1,58 +1,41 @@
 import { NextResponse } from "next/server";
+import { validateEventSpecificPayload } from "@/lib/analytics/eventPayloadSchemas";
+import { analyticsEventIngestSchema } from "@/lib/analytics/growthPayloadSchema";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-/** Must stay in sync with `public.user_events` check constraint and client `GrowthEventType`. */
-const ALLOWED = new Set([
-  "page_view",
-  "start_booking",
-  "view_price",
-  "select_time",
-  "complete_booking",
-  "cleaners_loaded",
-  "times_loaded",
-  "price_calculated",
-  "booking_started",
-  "booking_completed",
-  "booking_upsell_interaction",
-  "homepage_continue_booking",
-  "homepage_cta_click",
-  "homepage_service_select",
-  "pricing_loaded",
-  "homepage_abandon",
-  "homepage_scroll",
-  "price_updated",
-  "review_prompt_clicked",
-  "payment_initiated",
-  "payment_completed",
-  "blog_scroll",
-  "blog_cta_click",
-  "blog_time_on_page",
-  "blog_toc_click",
-  "blog_toc_section_engagement",
-  "seo_location_scroll",
-  "seo_cta_click",
-  "seo_service_card_click",
-  "seo_faq_expand",
-  "seo_pricing_interaction",
-]);
-
 export async function POST(request: Request) {
-  let body: { event_type?: unknown; payload?: unknown };
+  let body: unknown;
   try {
-    body = (await request.json()) as { event_type?: unknown; payload?: unknown };
+    body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const eventType = typeof body.event_type === "string" ? body.event_type.trim() : "";
-  if (!ALLOWED.has(eventType)) {
-    return NextResponse.json({ error: "Invalid event_type." }, { status: 400 });
+  const parsed = analyticsEventIngestSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((i) => i.message).join("; ") || "Invalid body";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
+  const eventType = parsed.data.event_type;
   const payload =
-    body.payload && typeof body.payload === "object" ? (body.payload as Record<string, unknown>) : {};
+    parsed.data.payload && typeof parsed.data.payload === "object"
+      ? (parsed.data.payload as Record<string, unknown>)
+      : {};
+
+  const strict = validateEventSpecificPayload(eventType, payload);
+  if (!strict.ok) {
+    return NextResponse.json({ error: strict.message }, { status: 400 });
+  }
+
+  const sessionHint =
+    typeof payload.analytics_session_id === "string" && payload.analytics_session_id.trim()
+      ? payload.analytics_session_id.trim()
+      : typeof payload.session_id === "string" && payload.session_id.trim()
+        ? payload.session_id.trim()
+        : null;
 
   const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -68,7 +51,11 @@ export async function POST(request: Request) {
     user_id: null,
     booking_id: bookingIdFromPayload,
     event_type: eventType,
-    payload: { ...payload, ingest_source: "growth_engine" },
+    payload: {
+      ...payload,
+      ingest_source: "growth_engine",
+      ...(sessionHint ? { analytics_session_id: sessionHint } : {}),
+    },
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

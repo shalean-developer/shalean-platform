@@ -16,6 +16,7 @@ export const BOOKING_ALLOWED_PARAMS = [
   "bedrooms",
   "bathrooms",
   "extraRooms",
+  "extras",
   "promo",
   "source",
   "location",
@@ -119,6 +120,30 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
 }
 
 /** Maps allowed URL params into a {@link useBookingCheckoutStore} patch (service + location normalized). */
+/**
+ * After flow-intake creates a `pending_payment` booking, land on canonical checkout pay with attribution preserved.
+ * Uses `mode=funnel` for intake handoff (back navigates to cleaner). Legacy `pay_entry=funnel` is still accepted when resolving payment mode.
+ */
+export function buildPostIntakePaymentUrl(searchParams: URLSearchParams, bookingId: string): string {
+  const base = copyAllowedBookingParams(searchParams);
+  base.set("bookingId", bookingId);
+  base.set("mode", "funnel");
+  const qs = base.toString();
+  return qs ? `/booking/payment?${qs}` : `/booking/payment?bookingId=${encodeURIComponent(bookingId)}&mode=funnel`;
+}
+
+/** Server redirect when `/booking/payment` is opened without a booking id (booking-first checkout). */
+export function buildBookingCleanerRedirectHref(sp: Record<string, string | string[] | undefined>): string {
+  const merged = new URLSearchParams();
+  for (const key of BOOKING_ALLOWED_PARAMS) {
+    const raw = sp[key];
+    const v = Array.isArray(raw) ? raw[0] : raw;
+    if (v != null && v !== "") merged.set(key, v);
+  }
+  const qs = merged.toString();
+  return qs ? `/booking/cleaner?${qs}` : "/booking/cleaner";
+}
+
 export function bookingEntryPatchFromSearchParams(
   sp: URLSearchParams,
 ): Partial<BookingCheckoutState> {

@@ -28,5 +28,17 @@ jobs:
         run: npm ci
       - name: Critical tests (payments + referrals)
         run: npm run test:critical
+      - name: Blog route governance
+        run: npm run validate:blog-routes && npm run audit:internal-links
       - name: Typecheck
         run: npx tsc --noEmit
+      - name: Blog SEO governance report
+        run: npm run report:blog-seo-governance
+      - name: Canonical purity report
+        run: npm run report:canonical-purity
+      - name: Live SEO validation (optional)
+        if: ${{ vars.AUDIT_BASE_URL != '' }}
+        env:
+          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL }}
+          LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED }}
+        run: npm run validate:live-seo

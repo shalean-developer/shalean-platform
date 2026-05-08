@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo } from "react";
 import type { User } from "@supabase/supabase-js";
-import { ProgressBar } from "@/components/booking/ProgressBar";
+import { BOOKING_MAIN_FLOW_PROGRESS_LABELS, ProgressBar } from "@/components/booking/ProgressBar";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -193,7 +193,11 @@ export function BookingHeader({ hideMobileBackLink = false }: BookingHeaderProps
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-2 sm:px-4">
-          <ProgressBar currentStep={currentStepNumber} className="mx-auto w-full max-w-[576px]" />
+          <ProgressBar
+            currentStep={currentStepNumber}
+            className="mx-auto w-full max-w-[576px]"
+            stepLabels={BOOKING_MAIN_FLOW_PROGRESS_LABELS}
+          />
         </div>
 
         <div className="flex w-[160px] shrink-0 items-center justify-end">{authSlot}</div>

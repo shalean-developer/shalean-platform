@@ -1,6 +1,7 @@
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { hubSlugFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import type { BlogTocEntry } from "@/lib/blog/extract-blog-toc";
+import { programmaticBlogCleanupRedirects } from "@/lib/seo/programmaticBlogCleanupRedirects";
 import { BLOG_POST_SLUGS } from "./posts";
 
 export type ProgrammaticGuideVariant =
@@ -42,7 +43,7 @@ export const PROGRAMMATIC_LOCATION_NEARBY: Record<string, string[]> = {
 const PROGRAMMATIC_PUBLISHED_AT = "2026-04-01T09:00:00+02:00";
 const PROGRAMMATIC_DATE_MODIFIED = "2026-04-28T09:00:00+02:00";
 
-export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = [
+const PROGRAMMATIC_POSTS_RAW: ProgrammaticPost[] = [
   // CLAREMONT
   {
     slug: "deep-cleaning-claremont-cape-town",
@@ -1002,6 +1003,68 @@ export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = [
   },
 ];
 
+function normalizeRedirectPath(path: string): string {
+  const p = path.trim().split(/[?#]/)[0] ?? "";
+  if (!p || p === "/") return "/";
+  return p.replace(/\/+$/, "") || "/";
+}
+
+function blogSlugFromResolvedPath(path: string): string | null {
+  const n = normalizeRedirectPath(path);
+  if (!n.startsWith("/blog/")) return null;
+  const slug = n.slice("/blog/".length);
+  return slug.length > 0 ? slug : null;
+}
+
+const PROGRAMMATIC_REDIRECT_MAP: ReadonlyMap<string, string> = new Map(
+  programmaticBlogCleanupRedirects.map((r) => {
+    const src = normalizeRedirectPath(r.source);
+    const rawDest = r.destination.split(/[?#]/)[0] ?? r.destination;
+    const dest = rawDest.startsWith("/") ? normalizeRedirectPath(rawDest) : rawDest;
+    return [src, dest] as const;
+  }),
+);
+
+function resolveProgrammaticRedirectChain(path: string, maxHops = 16): string {
+  let current = normalizeRedirectPath(path.split(/[?#]/)[0] ?? path);
+  const visited = new Set<string>();
+  for (let i = 0; i < maxHops; i++) {
+    if (visited.has(current)) return current;
+    visited.add(current);
+    const next = PROGRAMMATIC_REDIRECT_MAP.get(current);
+    if (!next) return current;
+    current = next.startsWith("/") ? normalizeRedirectPath(next.split(/[?#]/)[0] ?? next) : next;
+  }
+  return current;
+}
+
+/**
+ * Collapse redirect-alias programmatic rows onto canonical `/blog/*` targets so static pools
+ * no longer double-count REDIRECT_ALIAS ownership in governance reports.
+ */
+function finalizeProgrammaticPostsForCanonicalPools(raw: ProgrammaticPost[]): ProgrammaticPost[] {
+  const map = new Map<string, ProgrammaticPost>();
+  for (const p of raw) {
+    const s = p.slug.trim().toLowerCase();
+    const resolved = resolveProgrammaticRedirectChain(`/blog/${s}`);
+    if (!resolved.startsWith("/blog")) continue;
+    const canon = blogSlugFromResolvedPath(resolved) ?? s;
+    const next = { ...p, slug: canon };
+    const existing = map.get(canon);
+    if (!existing) {
+      map.set(canon, next);
+      continue;
+    }
+    const rank = (x: ProgrammaticPost) =>
+      x.service === "local-guide" ? 4 : x.description.length > 160 ? 3 : x.primaryKeyword.length > 35 ? 2 : 1;
+    map.set(canon, rank(next) >= rank(existing) ? next : existing);
+  }
+  return [...map.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+/** Programmatic spine after redirect-alias canonicalization (unique slug → one row per canonical URL). */
+export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = finalizeProgrammaticPostsForCanonicalPools(PROGRAMMATIC_POSTS_RAW);
+
 const SLUG_SET = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
 
 for (const s of BLOG_POST_SLUGS) {
@@ -1020,6 +1083,9 @@ export function programmaticBlogHrefIfExists(slug: string): string | null {
 }
 
 function editorialClusterLinkLabel(slug: string, areaName: string): string {
+  if (slug.startsWith("cleaning-services-") && slug.endsWith("-cape-town")) {
+    return `Cleaning services in ${areaName}`;
+  }
   if (slug.includes("home-cleaning-frequency")) return `Home cleaning frequency in ${areaName}`;
   if (slug.includes("deep-cleaning-checklist")) return `Deep cleaning checklist in ${areaName}`;
   if (slug.includes("move-out-cleaning-cost")) return `Move-out cleaning cost in ${areaName}`;
@@ -1051,12 +1117,11 @@ export function getEditorialClusterBlogLinksForHub(
   const guides = getHubEditorialGuideLinks(hubSlug, areaName);
   const base = hubAreaKebabFromHubSlug(hubSlug);
   const slugs = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
-  const extras = [
-    `deep-cleaning-${base}-cape-town`,
-    `move-out-cleaning-${base}-cape-town`,
-    `standard-cleaning-${base}-cape-town`,
-  ].filter((s) => slugs.has(s));
-  const extraLinks = extras.map((s) => ({ href: `/blog/${s}`, label: editorialClusterLinkLabel(s, areaName) }));
+  const hubCanon = `cleaning-services-${base}-cape-town`;
+  const extraLinks: { href: string; label: string }[] = [];
+  if (slugs.has(hubCanon)) {
+    extraLinks.push({ href: `/blog/${hubCanon}`, label: editorialClusterLinkLabel(hubCanon, areaName) });
+  }
   return [...guides, ...extraLinks];
 }
 
@@ -1183,7 +1248,7 @@ const EDITORIAL_SERVICE_AREA_BLOG_SLUG: Partial<
     Constantia: "home-cleaning-constantia-cape-town",
   },
   "move-out": {
-    Rondebosch: "move-out-cleaning-rondebosch-cape-town",
+    Rondebosch: "cleaning-services-rondebosch-cape-town",
   },
 };
 
@@ -1200,10 +1265,19 @@ export function getAreaProgrammaticBlogLinksForCapeTownService(
       return { href: `/blog/${editorialSlug}`, label: `${phrase} in ${loc}` };
     }
     const post = PROGRAMMATIC_POSTS.find((p) => p.service === svc && p.location === loc);
-    if (!post) {
-      throw new Error(`Missing programmatic post for service "${svc}" in ${loc}`);
+    if (post) {
+      return { href: `/blog/${post.slug}`, label: `${phrase} in ${loc}` };
     }
-    return { href: `/blog/${post.slug}`, label: `${phrase} in ${loc}` };
+    const hubKey = hubSlugFromPlaceName(loc);
+    if (hubKey) {
+      const base = hubAreaKebabFromHubSlug(hubKey);
+      const hubCanon = `cleaning-services-${base}-cape-town`;
+      const hubHit = PROGRAMMATIC_POSTS.find((p) => p.slug === hubCanon);
+      if (hubHit) {
+        return { href: `/blog/${hubCanon}`, label: `${phrase} in ${loc}` };
+      }
+    }
+    throw new Error(`Missing programmatic post for service "${svc}" in ${loc}`);
   });
 }
 

@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const SERVICES_HUB = "/services";
@@ -54,9 +55,9 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Compare every{" "}
-            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Cape Town cleaning service
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             tier from one hub—then keep turnovers on this page so guest-ready scope does not drift into residential assumptions.
           </p>
         </div>
@@ -86,13 +87,13 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             Turnovers live or die on sequencing. In Cape Town, parking, estate rules, and coastal dust all steal minutes—so
             we stage work the same way experienced hosts do: clear handover, predictable arrival, then a reset that matches
             your listing photos. Dense Seaboard corridors—see{" "}
-            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Sea Point cleaning services
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             and{" "}
-            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Green Point cleaning services
-            </Link>
+            </SafeInternalLink>
             —often need lift and parking notes baked into the brief before mops touch tile.
           </p>
           <ol className="mt-8 list-decimal space-y-5 pl-6 text-base leading-relaxed text-zinc-700 marker:font-semibold marker:text-blue-700">
@@ -121,9 +122,9 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </ol>
           <p className="mt-6 text-base leading-relaxed text-zinc-600">
             Need a deeper baseline before peak season? Pair turnovers with{" "}
-            <Link href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               deep cleaning in Cape Town
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             —ideal when ovens, grout, or balconies need honest dwell time beyond a standard changeover—so reviews stay strong
             after busy months.
           </p>
@@ -152,16 +153,16 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Holiday home resets and portfolio-wide standards sit alongside turnovers on our{" "}
-            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               professional cleaning services hub
-            </Link>
+            </SafeInternalLink>
             —book the tier that matches guest promises, not guesswork.
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Pair recurring turnovers with an occasional{" "}
-            <Link href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               deep cleaning service for Cape Town homes
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             when grout, ovens, or neglected corners start sneaking into reviews—steady cadence beats panic resets.
           </p>
         </div>
@@ -179,13 +180,13 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Coastal pockets such as{" "}
-            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Sea Point
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             and{" "}
-            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Green Point
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             often stack humid bathrooms with salty balconies; Southern Suburb lets lean on mudrooms and multi-bath resets.
             Property managers can brief once per building template—individual hosts can dial bedrooms and baths per stay.
           </p>
@@ -219,9 +220,9 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </ul>
           <p className="mt-6 text-base leading-relaxed text-zinc-600">
             For a printable-style walkthrough, open our{" "}
-            <Link href="/blog/airbnb-cleaning-checklist-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Airbnb cleaning checklist for hosts in Cape Town
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             on the blog—then return here to lock scope in booking.
           </p>
           <div className={ctaRowClass}>
@@ -276,9 +277,9 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Read{" "}
-            <Link href="/blog/airbnb-cleaning-cost-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href="/blog/airbnb-cleaning-cost-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               how Airbnb cleaning cost works in Cape Town
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             for a longer breakdown—then come back for a locked total.
           </p>
           <div className={ctaRowClass}>
@@ -332,21 +333,21 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           <p className="mt-3 text-base leading-relaxed text-zinc-600">
             Hosts and property managers repeat bookings where access notes match reality and turnovers mirror listing shots—near
             the Promenade (
-            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Sea Point hub
-            </Link>
+            </SafeInternalLink>
             ), the stadium corridor (
-            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Green Point hub
-            </Link>
+            </SafeInternalLink>
             ), school-run suburbs, or the City Bowl edge in{" "}
-            <Link href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Gardens
-            </Link>
+            </SafeInternalLink>
             . Pair local hubs with our{" "}
-            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               full Cape Town services directory
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             when you layer deep or standard visits beside turnovers.
           </p>
         </div>
@@ -367,17 +368,17 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             <p className="mt-2 text-sm leading-relaxed text-zinc-600">
               Turnover crews route across the Seaboard and City Bowl edges every week—start from suburb-specific guides when
               your listing sits in{" "}
-              <Link href={AIRBNB_SEA_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <SafeInternalLink href={AIRBNB_SEA_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 Sea Point
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href={AIRBNB_GREEN_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <SafeInternalLink href={AIRBNB_GREEN_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 Green Point
-              </Link>
+              </SafeInternalLink>
               , or the{" "}
-              <Link href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <SafeInternalLink href={HUB_GARDENS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 Gardens
-              </Link>{" "}
+              </SafeInternalLink>{" "}
               corridor (broader hub page for City Bowl-adjacent hosting).
             </p>
           </div>
@@ -395,20 +396,20 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
               { href: HUB_DURBANVILLE_LOC, label: "Durbanville cleaning services" },
             ].map((item) => (
               <li key={item.href}>
-                <Link
+                <SafeInternalLink
                   href={item.href}
                   className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 transition hover:border-blue-400 hover:bg-blue-50"
                 >
                   {item.label}
-                </Link>
+                </SafeInternalLink>
               </li>
             ))}
           </ul>
           <p className="mt-6 text-base leading-relaxed text-zinc-600">
             Browse every suburb hub from our main{" "}
-            <Link href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Cape Town locations directory
-            </Link>
+            </SafeInternalLink>
             —each hub links back to this service guide so hosts keep scope consistent.
           </p>
         </div>
@@ -470,9 +471,9 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </div>
           <p className="mt-8 text-base leading-relaxed text-zinc-600">
             First-time setup? Walk through{" "}
-            <Link href="/blog/prepare-airbnb-for-cleaning" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href="/blog/prepare-airbnb-for-cleaning" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               how to prepare your Airbnb for cleaning between guests
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             so access, supplies, and inventory photos stay aligned.
           </p>
         </div>
@@ -501,34 +502,34 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             >
               Leave a Google review
             </a>
-            <Link
+            <SafeInternalLink
               href={HOME}
               className="inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-5 text-sm font-semibold text-blue-800 transition hover:bg-blue-50"
             >
               Shalean homepage
-            </Link>
+            </SafeInternalLink>
           </div>
           <p className="mt-6 text-sm leading-relaxed text-zinc-600">
             Explore{" "}
-            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               all Cape Town cleaning services
-            </Link>
+            </SafeInternalLink>
             , compare{" "}
-            <Link href={STANDARD} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={STANDARD} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               standard home cleaning in Cape Town
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             or{" "}
-            <Link href={MOVE_OUT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={MOVE_OUT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               move-out cleaning
-            </Link>
+            </SafeInternalLink>
             , and browse suburb hubs via{" "}
-            <Link href={CAPE_TOWN_OVERVIEW_LOCATIONS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={CAPE_TOWN_OVERVIEW_LOCATIONS} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Cape Town locations overview
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             and the{" "}
-            <Link href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               full locations directory
-            </Link>
+            </SafeInternalLink>
             .
           </p>
         </div>
@@ -541,37 +542,37 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Turnovers share DNA with residential cleans—but calendars and guest optics differ. Start from our{" "}
-            <Link href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Cape Town cleaning services overview
-            </Link>
+            </SafeInternalLink>
             , then layer{" "}
-            <Link href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               deep cleaning for Cape Town properties
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             when kitchens, grout, or ovens need honest dwell time beyond a standard turnover. Hosting on the Atlantic Seaboard?
             Cross-check{" "}
-            <Link href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Sea Point cleaning services
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             and{" "}
-            <Link href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Green Point cleaning services
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             for parking and building norms before you sync calendars.
           </p>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Ready to route inventory damage or linen swaps without losing the slot? Keep booking notes updated on{" "}
-            <Link href={airbnbPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={airbnbPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               this Airbnb service page
-            </Link>
+            </SafeInternalLink>
             , revisit the{" "}
-            <Link href={HOME} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={HOME} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Shalean home page
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             for brand context, and jump to{" "}
-            <Link href={BOOKING} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <SafeInternalLink href={BOOKING} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               instant pricing in Cape Town
-            </Link>{" "}
+            </SafeInternalLink>{" "}
             when you are happy with scope.
           </p>
           <div className={ctaRowClass}>

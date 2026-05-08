@@ -13,6 +13,8 @@ export type UiCleaner = {
   isPremium: boolean;
   /** Optional client-forwarded delta vs baseline; null when unknown (no pricing per cleaner). */
   priceDelta: number | null;
+  reviewCount: number;
+  recentReviews: { rating: number; quote: string }[];
   /** Rank 1 with a strong score lead over #2 — for “most customers” microcopy only. */
   showStrongDefaultBias: boolean;
 };
@@ -21,6 +23,9 @@ type CleanerForScore = {
   rating: number;
   jobs_completed: number;
   reliabilityScore?: number | null;
+  distance_km?: number | null;
+  repeatCustomer?: boolean | null;
+  serviceSpecializationScore?: number | null;
 };
 
 /** Pure client-side ranking — does not affect API eligibility or dispatch. */
@@ -34,7 +39,15 @@ export function scoreCleaner(c: CleanerForScore): number {
       ? Math.min(Math.max(c.reliabilityScore, 0), 1)
       : 0;
   const reliabilityScore = rel * 20;
-  return ratingScore + experienceScore + reliabilityScore;
+  const distance =
+    typeof c.distance_km === "number" && Number.isFinite(c.distance_km) ? Math.max(0, c.distance_km) : null;
+  const proximityScore = distance == null ? 0 : Math.max(0, 8 - Math.min(distance, 12) * 0.65);
+  const repeatScore = c.repeatCustomer ? 7 : 0;
+  const specialization =
+    typeof c.serviceSpecializationScore === "number" && Number.isFinite(c.serviceSpecializationScore)
+      ? Math.min(Math.max(c.serviceSpecializationScore, 0), 1) * 8
+      : 0;
+  return ratingScore + experienceScore + reliabilityScore + proximityScore + repeatScore + specialization;
 }
 
 export function computeIsPremium(
@@ -52,10 +65,18 @@ function buildOrderedBadges(args: {
   rating: number;
   completedJobs: number;
   reliabilityScore?: number | null;
+  distanceKm?: number | null;
+  repeatCustomer?: boolean | null;
+  serviceSpecializationScore?: number | null;
 }): string[] {
   const badges: string[] = [];
   if (args.rank === 1) badges.push("Recommended");
   if (args.isPremium) badges.push(bookingCopy.cleaner.premiumBadge);
+  if (args.repeatCustomer) badges.push("Repeat match");
+  if (typeof args.distanceKm === "number" && args.distanceKm <= 5) badges.push("Nearby");
+  if (typeof args.serviceSpecializationScore === "number" && args.serviceSpecializationScore >= 0.75) {
+    badges.push("Specialist");
+  }
   if (args.completedJobs >= 100) badges.push("Most booked");
   if (typeof args.reliabilityScore === "number" && args.reliabilityScore >= 0.85) {
     badges.push("Reliable");
@@ -77,12 +98,21 @@ export function buildUiCleaners(pool: readonly LiveCleaner[]): UiCleaner[] {
     const relRaw = (c as { reliability_score?: unknown }).reliability_score;
     const reliabilityScore =
       typeof relRaw === "number" && Number.isFinite(relRaw) ? Math.min(Math.max(relRaw, 0), 1) : undefined;
+    const distanceKm =
+      typeof c.distance_km === "number" && Number.isFinite(c.distance_km) ? Math.max(0, c.distance_km) : undefined;
+    const repeatCustomer = (c as { repeat_customer?: unknown }).repeat_customer === true;
+    const specRaw = (c as { service_specialization_score?: unknown }).service_specialization_score;
+    const serviceSpecializationScore =
+      typeof specRaw === "number" && Number.isFinite(specRaw) ? Math.min(Math.max(specRaw, 0), 1) : undefined;
     const score = scoreCleaner({
       rating,
       jobs_completed: completedJobs,
       reliabilityScore: reliabilityScore ?? undefined,
+      distance_km: distanceKm,
+      repeatCustomer,
+      serviceSpecializationScore,
     });
-    return { c, rating, completedJobs, score, reliabilityScore };
+    return { c, rating, completedJobs, score, reliabilityScore, distanceKm, repeatCustomer, serviceSpecializationScore };
   });
   scored.sort((a, b) => b.score - a.score);
   const secondScore = scored.length >= 2 ? scored[1]!.score : null;
@@ -102,6 +132,9 @@ export function buildUiCleaners(pool: readonly LiveCleaner[]): UiCleaner[] {
       rating: row.rating,
       completedJobs: row.completedJobs,
       reliabilityScore: row.reliabilityScore,
+      distanceKm: row.distanceKm,
+      repeatCustomer: row.repeatCustomer,
+      serviceSpecializationScore: row.serviceSpecializationScore,
     });
     const badges = pickBadgesWithCap(ordered, 2);
     return {
@@ -115,6 +148,11 @@ export function buildUiCleaners(pool: readonly LiveCleaner[]): UiCleaner[] {
       rank,
       isPremium,
       priceDelta,
+      reviewCount:
+        typeof row.c.review_count === "number" && Number.isFinite(row.c.review_count)
+          ? Math.max(0, Math.round(row.c.review_count))
+          : 0,
+      recentReviews: Array.isArray(row.c.recent_reviews) ? row.c.recent_reviews.slice(0, 2) : [],
       showStrongDefaultBias,
     };
   });

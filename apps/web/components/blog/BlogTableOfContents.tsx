@@ -3,6 +3,7 @@
 import type { BlogTocEntry } from "@/lib/blog/extract-blog-toc";
 import { BLOG_TOC_ACTIVE_EVENT } from "@/lib/blog/blog-toc-active-event";
 import { recordTocSectionEngagementFromTocClick } from "@/lib/blog/blog-toc-section-engagement";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { cn } from "@/lib/utils";
 import { useLayoutEffect, useEffect, useState, useRef } from "react";
@@ -54,7 +55,7 @@ function BlogTocList({ items, trackingSlug }: ItemsProps) {
             <a
               href={`#${item.id}`}
               onClick={() => {
-                trackGrowthEvent("blog_toc_click", {
+                trackGrowthEvent(ANALYTICS_EVENTS.BLOG_TOC_CLICK, {
                   slug: trackingSlug,
                   heading: item.label,
                   heading_depth: item.level,

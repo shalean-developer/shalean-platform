@@ -43,7 +43,7 @@ function ExtraGridItem({ id, label, selected, onToggle }: ExtraGridItemProps) {
     >
       <div
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-full border border-blue-500 text-blue-600 transition-all sm:h-14 sm:w-14 dark:border-blue-500 dark:text-blue-400",
+          "hidden h-11 w-11 items-center justify-center rounded-full border border-blue-500 text-blue-600 transition-all sm:flex sm:h-14 sm:w-14 dark:border-blue-500 dark:text-blue-400",
           selected
             ? "border-blue-600 bg-blue-50 shadow-sm dark:border-blue-500 dark:bg-blue-950/50"
             : "bg-white group-hover:bg-blue-50/90 dark:bg-zinc-900 dark:group-hover:bg-blue-950/35",
@@ -66,8 +66,8 @@ export function ExtrasStep({ value, onChange, extras, loading }: ExtrasStepProps
       <div className="grid grid-cols-4 gap-2 sm:gap-3 md:gap-4">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="flex flex-col items-center" aria-hidden>
-            <div className="h-11 w-11 animate-pulse rounded-full border border-zinc-200 bg-zinc-100 sm:h-14 sm:w-14 dark:border-zinc-700 dark:bg-zinc-800" />
-            <div className="mt-1.5 h-3 w-14 animate-pulse rounded bg-zinc-200 sm:mt-2 sm:h-3.5 sm:w-20 dark:bg-zinc-700" />
+            <div className="hidden h-11 w-11 animate-pulse rounded-full border border-zinc-200 bg-zinc-100 sm:block sm:h-14 sm:w-14 dark:border-zinc-700 dark:bg-zinc-800" />
+            <div className="mt-0 h-3 w-14 animate-pulse rounded bg-zinc-200 sm:mt-1.5 sm:h-3.5 sm:w-20 sm:mt-2 dark:bg-zinc-700" />
           </div>
         ))}
       </div>

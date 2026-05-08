@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AboutPageView } from "@/components/about/AboutPageView";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -45,7 +46,7 @@ export default function AboutPage() {
   return (
     <div className="bg-white text-zinc-900">
       <GrowthTracking
-        event="page_view"
+        event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "about", content_group: "marketing_about", primary_kw: "Shalean cleaning Cape Town" }}
       />
       <MarketingHomeHeader bookingHref={bookingHref} />

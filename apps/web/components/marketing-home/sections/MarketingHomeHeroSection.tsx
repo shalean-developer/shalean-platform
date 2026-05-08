@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { ArrowUpRight, Star } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
@@ -104,39 +104,39 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
             </div>
 
             <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Popular pages">
-              <Link href="/services" className={cn(linkInNavClassName, "text-sm")}>
+              <SafeInternalLink href="/services" className={cn(linkInNavClassName, "text-sm")}>
                 All services
-              </Link>
+              </SafeInternalLink>
               <span className="text-slate-300" aria-hidden>
                 ·
               </span>
-              <Link href={p["standard-cleaning-cape-town"].path} className={cn(linkInNavClassName, "text-sm")}>
+              <SafeInternalLink href={p["standard-cleaning-cape-town"].path} className={cn(linkInNavClassName, "text-sm")}>
                 Home cleaning
-              </Link>
+              </SafeInternalLink>
               <span className="text-slate-300" aria-hidden>
                 ·
               </span>
-              <Link href={p["deep-cleaning-cape-town"].path} className={cn(linkInNavClassName, "text-sm")}>
+              <SafeInternalLink href={p["deep-cleaning-cape-town"].path} className={cn(linkInNavClassName, "text-sm")}>
                 Deep cleaning
-              </Link>
+              </SafeInternalLink>
               <span className="text-slate-300" aria-hidden>
                 ·
               </span>
-              <Link href="/locations/claremont-cleaning-services" className={cn(linkInNavClassName, "text-sm")}>
+              <SafeInternalLink href="/locations/claremont-cleaning-services" className={cn(linkInNavClassName, "text-sm")}>
                 Claremont
-              </Link>
+              </SafeInternalLink>
               <span className="text-slate-300" aria-hidden>
                 ·
               </span>
-              <Link href="/locations/sea-point-cleaning-services" className={cn(linkInNavClassName, "text-sm")}>
+              <SafeInternalLink href="/locations/sea-point-cleaning-services" className={cn(linkInNavClassName, "text-sm")}>
                 Sea Point
-              </Link>
+              </SafeInternalLink>
               <span className="text-slate-300" aria-hidden>
                 ·
               </span>
-              <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
+              <SafeInternalLink href="/blog" className={cn(linkInNavClassName, "text-sm")}>
                 Blog
-              </Link>
+              </SafeInternalLink>
             </nav>
           </div>
         </div>

@@ -9,7 +9,11 @@ import {
 } from "@/lib/booking/bookingFlow";
 import { clearLockedBookingFromStorage, type LockedBooking } from "@/lib/booking/lockedBooking";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
-import { bookingRouteToFunnelStep, trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import {
+  BOOKING_FUNNEL_ROW,
+  bookingRouteToFunnelStep,
+  trackBookingFunnelEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
 import { useLockedBooking } from "@/components/booking/useLockedBooking";
 
 export type BookingFlowContextValue = {
@@ -54,7 +58,7 @@ export function BookingFlowProvider({
   );
 
   const handleBack = useCallback(() => {
-    trackBookingFunnelEvent(bookingRouteToFunnelStep(step), "back", { route_step: step });
+    trackBookingFunnelEvent(bookingRouteToFunnelStep(step), BOOKING_FUNNEL_ROW.BACK, { route_step: step });
     if (step === "quote") goTo("entry");
     else if (step === "details") goTo("quote");
     else if (step === "when") {

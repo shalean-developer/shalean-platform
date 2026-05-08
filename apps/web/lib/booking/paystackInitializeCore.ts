@@ -761,10 +761,15 @@ export async function processPaystackInitializeBody(
     paystackMetadata.shalean_booking_id = bookingIdForMetadata;
   }
 
+  const PASSTHROUGH_META_KEYS = new Set(["analytics_session_id", "payment_mode", "attribution_source"]);
   for (const [k, v] of Object.entries(extraMetadata)) {
     if (k === "booking_json") continue;
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-      paystackMetadata[`client_${k}`] = String(v);
+    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") continue;
+    const str = String(v);
+    if (PASSTHROUGH_META_KEYS.has(k)) {
+      paystackMetadata[k] = str;
+    } else {
+      paystackMetadata[`client_${k}`] = str;
     }
   }
 

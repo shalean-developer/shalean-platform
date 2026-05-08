@@ -957,17 +957,22 @@ export async function sendAbandonedCheckoutReminderEmail(params: {
   firstName: string;
   checkoutUrl: string;
   serviceLabel: string;
+  whatsappUrl?: string | null;
 }): Promise<{ sent: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
   const name = params.firstName.trim() || "there";
+  const whatsappBlock = params.whatsappUrl?.trim()
+    ? `<p style="margin-top:14px;"><a href="${escapeAttr(params.whatsappUrl.trim())}" style="color:#047857;font-weight:600;text-decoration:none;">Continue over WhatsApp</a></p>`
+    : "";
   const html = `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <p>Hi ${escapeHtml(name)},</p>
   <p>Your <strong>${escapeHtml(params.serviceLabel)}</strong> booking is still waiting for payment. Complete checkout in one step — your slot is held briefly.</p>
   <p><a href="${escapeAttr(params.checkoutUrl)}" style="display:inline-block;margin-top:12px;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">Continue to payment</a></p>
+  ${whatsappBlock}
   <p style="font-size:12px;color:#6b7280;">If you already paid, you can ignore this email.</p>
 </div>`;
   try {
@@ -981,6 +986,84 @@ export async function sendAbandonedCheckoutReminderEmail(params: {
     return { sent: true };
   } catch (err) {
     return { sent: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Sent from exit-intent capture when a user asks to save their quote. */
+export async function sendSavedQuoteRecoveryEmail(params: {
+  customerEmail: string;
+  firstName?: string | null;
+  continueUrl: string;
+  serviceLabel: string;
+  quoteLabel?: string | null;
+  whatsappUrl?: string | null;
+}): Promise<{ sent: boolean; error?: string }> {
+  const resend = getResend();
+  const to = normalizeEmail(params.customerEmail.trim());
+  if (!to) return { sent: false, error: "Invalid email" };
+  if (!resend) return { sent: false, error: "Email not configured" };
+
+  const from = getDefaultFromAddress();
+  const name =
+    (params.firstName?.trim() || to.split("@")[0]?.replace(/[.+_]/g, " ").trim() || "there").slice(0, 120);
+  const quoteLine = params.quoteLabel?.trim()
+    ? `<p style="margin:12px 0 0;color:#374151;"><strong>Saved quote:</strong> ${escapeHtml(params.quoteLabel.trim())}</p>`
+    : "";
+  const whatsappBlock = params.whatsappUrl?.trim()
+    ? `<p style="margin-top:14px;"><a href="${escapeAttr(params.whatsappUrl.trim())}" style="color:#047857;font-weight:600;text-decoration:none;">Continue over WhatsApp</a></p>`
+    : "";
+
+  const html = `
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+  <p>Hi ${escapeHtml(name)},</p>
+  <h1 style="font-size:22px;margin:0 0 12px;">Your cleaning quote is saved</h1>
+  <p style="color:#374151;">Pick up where you left off whenever you're ready.</p>
+  ${quoteLine}
+  <p style="margin:24px 0 10px;"><a href="${escapeAttr(params.continueUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Continue your booking</a></p>
+  ${whatsappBlock}
+  <p style="font-size:12px;color:#6b7280;">No payment has been taken. Prices and available times can change until you confirm.</p>
+</div>`;
+
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject: `Your Shalean quote is saved — ${params.serviceLabel}`,
+      html,
+    });
+    if (error) {
+      await writeNotificationLog({
+        booking_id: null,
+        channel: "email",
+        template_key: "booking_recovery_saved_quote",
+        recipient: to,
+        status: "failed",
+        error: error.message,
+        provider: "resend",
+        role: "customer",
+        event_type: "booking_recovery_saved",
+        payload: { service_label: params.serviceLabel },
+      });
+      return { sent: false, error: error.message };
+    }
+    await writeNotificationLog({
+      booking_id: null,
+      channel: "email",
+      template_key: "booking_recovery_saved_quote",
+      recipient: to,
+      status: "sent",
+      error: null,
+      provider: "resend",
+      role: "customer",
+      event_type: "booking_recovery_saved",
+      payload: { service_label: params.serviceLabel },
+    });
+    return { sent: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await reportOperationalIssue("error", "sendSavedQuoteRecoveryEmail", msg, { to });
+    return { sent: false, error: msg };
   }
 }
 

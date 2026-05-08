@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { getBlogAboveFoldServiceLink } from "@/lib/seo/internalLinks";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 
@@ -10,9 +10,9 @@ export function BlogIntroServiceLink({ slug }: Props) {
   return (
     <p className="mt-4 text-base leading-relaxed text-zinc-700">
       Start here:{" "}
-      <Link href={href} className={`font-semibold ${linkEmphasisClassName}`}>
+      <SafeInternalLink href={href} className={`font-semibold ${linkEmphasisClassName}`}>
         {anchor}
-      </Link>{" "}
+      </SafeInternalLink>{" "}
       — scope and totals lock online before we dispatch.
     </p>
   );

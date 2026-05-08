@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { cityNameFromSlug, locationNameForCity, SERVICE_LOCATIONS } from "@/lib/growth/locations";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
@@ -109,7 +110,7 @@ export default async function CityLocationCleaningPage({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
-      <GrowthTracking event="page_view" payload={{ page_type: "seo_city_location", city, location }} />
+      <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "seo_city_location", city, location }} />
 
       <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">

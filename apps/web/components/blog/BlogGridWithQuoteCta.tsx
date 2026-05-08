@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { BlogIndexCardPost } from "@/lib/blog/blog-index-hub";
 import { BlogCard } from "@/components/blog/BlogCard";
 
@@ -39,12 +39,12 @@ export function BlogGridWithQuoteCta({ posts, eagerFirstRow = 3 }: Props) {
             Lock bedrooms, bathrooms, and add-ons online—see your total before you pay, with cleaners matched across Cape Town.
           </p>
         </div>
-        <Link
+        <SafeInternalLink
           href="/booking"
           className="inline-flex shrink-0 items-center justify-center rounded-full bg-blue-600 px-7 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
         >
           Get instant quote
-        </Link>
+        </SafeInternalLink>
       </aside>
 
       {rest.length > 0 ? (

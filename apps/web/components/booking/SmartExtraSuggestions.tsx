@@ -8,6 +8,7 @@ import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { getSmartExtras } from "@/lib/ai/bookingAssistant";
 import type { BookingContext, PastBookingHint } from "@/lib/ai/bookingAssistant";
 import { trackAssistantEvent } from "@/lib/booking/trackAssistantEvent";
+import { ANALYTICS_EVENTS } from "@/lib/booking/bookingFlowAnalytics";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { bookingExtrasTier } from "@/lib/pricing/extrasConfig";
 import type { VipTier } from "@/lib/pricing/vipTier";
@@ -48,9 +49,9 @@ export function SmartExtraSuggestions({ state, setState, blockedExtras, userTier
       ...prev,
       extras: prev.extras.includes(id) ? prev.extras : [...prev.extras, id],
     }));
-    trackAssistantEvent("recommendation_clicked", { surface: "step1_extras", extra_id: id });
-    trackAssistantEvent("extra_added", { extra_id: id, source: "assistant", price_zar: price });
-    trackGrowthEvent("booking_upsell_interaction", {
+    trackAssistantEvent(ANALYTICS_EVENTS.RECOMMENDATION_CLICKED, { surface: "step1_extras", extra_id: id });
+    trackAssistantEvent(ANALYTICS_EVENTS.EXTRA_ADDED, { extra_id: id, source: "assistant", price_zar: price });
+    trackGrowthEvent(ANALYTICS_EVENTS.BOOKING_UPSELL_INTERACTION, {
       action: "add_extra",
       extraId: id,
       service: state.service ?? "",

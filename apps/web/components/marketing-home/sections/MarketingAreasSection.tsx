@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { ArrowUpRight } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { HomeLocation } from "@/lib/home/data";
@@ -83,56 +83,56 @@ export function MarketingAreasSection({ locations }: Props) {
             </p>
             <p>
               Browse all{" "}
-              <Link href="/services" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/services" className={linkInParagraphClassName}>
                 cleaning services
-              </Link>
+              </SafeInternalLink>
               , read the{" "}
-              <Link href="/blog" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog" className={linkInParagraphClassName}>
                 blog
-              </Link>
+              </SafeInternalLink>
               , or open the{" "}
-              <Link href="/cleaning-services-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/cleaning-services-cape-town" className={linkInParagraphClassName}>
                 Cape Town cleaning overview
-              </Link>
+              </SafeInternalLink>
               .
             </p>
             <p>
               We also cover specific areas like{" "}
-              <Link href="/blog/cleaning-services-claremont-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/cleaning-services-claremont-cape-town" className={linkInParagraphClassName}>
                 cleaning services in Claremont
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/deep-cleaning-gardens-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/deep-cleaning-gardens-cape-town" className={linkInParagraphClassName}>
                 Gardens cleaning services
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/move-out-cleaning-rondebosch-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/move-out-cleaning-rondebosch-cape-town" className={linkInParagraphClassName}>
                 Rondebosch cleaning services
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/regular-home-cleaning-wynberg-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/regular-home-cleaning-wynberg-cape-town" className={linkInParagraphClassName}>
                 Wynberg cleaning services
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/affordable-cleaning-observatory-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/affordable-cleaning-observatory-cape-town" className={linkInParagraphClassName}>
                 Observatory cleaning services
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/home-cleaning-plumstead-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/home-cleaning-plumstead-cape-town" className={linkInParagraphClassName}>
                 Plumstead cleaning services
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/home-cleaning-constantia-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/home-cleaning-constantia-cape-town" className={linkInParagraphClassName}>
                 Constantia cleaning services
-              </Link>
+              </SafeInternalLink>
               ,{" "}
-              <Link href="/blog/luxury-home-cleaning-camps-bay-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/luxury-home-cleaning-camps-bay-cape-town" className={linkInParagraphClassName}>
                 Camps Bay cleaning services
-              </Link>
+              </SafeInternalLink>
               , and{" "}
-              <Link href="/blog/airbnb-cleaning-green-point-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/blog/cleaning-services-green-point-cape-town" className={linkInParagraphClassName}>
                 Green Point cleaning services
-              </Link>
+              </SafeInternalLink>
               .
             </p>
           </div>
@@ -144,19 +144,19 @@ export function MarketingAreasSection({ locations }: Props) {
             {popularRowLinks.map((hub, index) => (
               <span key={hub.key}>
                 {index > 0 ? ", " : null}
-                <Link
+                <SafeInternalLink
                   href={hub.href}
                   className={`font-medium ${linkInParagraphClassName}`}
                   title={`Cleaning services in ${hub.name}`}
                 >
                   {hub.name}
-                </Link>
+                </SafeInternalLink>
               </span>
             ))}
           </nav>
-          <Link href="/locations" className={`mt-3 inline-block text-sm font-semibold ${linkEmphasisClassName}`}>
+          <SafeInternalLink href="/locations" className={`mt-3 inline-block text-sm font-semibold ${linkEmphasisClassName}`}>
             View all locations
-          </Link>
+          </SafeInternalLink>
         </div>
 
         <ul
@@ -165,23 +165,23 @@ export function MarketingAreasSection({ locations }: Props) {
         >
           {allHubs.map((hub) => (
             <li key={hub.key} className="min-w-0">
-              <Link href={hub.href} className={chipClass}>
+              <SafeInternalLink href={hub.href} className={chipClass}>
                 Cleaning services in {hub.name}
-              </Link>
+              </SafeInternalLink>
             </li>
           ))}
         </ul>
 
         <p className="mt-6 flex flex-wrap gap-x-3 gap-y-2 text-sm text-slate-600 lg:mt-5">
-          <Link href="/locations" className={`font-semibold ${linkInParagraphClassName}`}>
+          <SafeInternalLink href="/locations" className={`font-semibold ${linkInParagraphClassName}`}>
             View all locations
-          </Link>
+          </SafeInternalLink>
           <span className="text-slate-300" aria-hidden>
             ·
           </span>
-          <Link href="/cleaning-services-cape-town" className={`font-semibold ${linkInParagraphClassName}`}>
+          <SafeInternalLink href="/cleaning-services-cape-town" className={`font-semibold ${linkInParagraphClassName}`}>
             Cape Town cleaning overview
-          </Link>
+          </SafeInternalLink>
         </p>
 
         <div className="mt-10 flex flex-wrap items-center gap-2.5 md:gap-3">

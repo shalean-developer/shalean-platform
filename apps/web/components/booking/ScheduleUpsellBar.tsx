@@ -5,6 +5,7 @@ import { patchPersistedBookingStep1 } from "@/components/booking/useBookingStep1
 import { useBookingPrice } from "@/components/booking/BookingPriceContext";
 import { bookingExtrasTier, bundleSavingsZar } from "@/lib/pricing/extrasConfig";
 import { bundleFullySelected, getPrimaryBundleForContext } from "@/lib/pricing/upsellEngine";
+import { ANALYTICS_EVENTS } from "@/lib/booking/bookingFlowAnalytics";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 type Props = {
@@ -35,7 +36,7 @@ export function ScheduleUpsellBar({ state }: Props) {
             ...p,
             extras: [...new Set([...p.extras, ...bundle.items])],
           }));
-          trackGrowthEvent("booking_upsell_interaction", {
+          trackGrowthEvent(ANALYTICS_EVENTS.BOOKING_UPSELL_INTERACTION, {
             action: "add_bundle",
             bundleId: bundle.id,
             service: state.service ?? "",

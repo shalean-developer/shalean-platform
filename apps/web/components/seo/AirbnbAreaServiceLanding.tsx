@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import type { AirbnbAreaLandingBlock } from "@/lib/seo/airbnbAreaLandingPages";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { buildSeoBookingHref, recommendedSeoExtras } from "@/lib/booking/seoBookingPrefill";
+import { CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
 
 const AIRBNB_HUB = CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"];
 
@@ -17,6 +20,12 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
   const localBusinessId = `${SITE_ORIGIN}/#localbusiness`;
   const serviceNodeId = `${pageUrl}#service`;
   const hubHref = `/locations/${block.locationHubSlug}`;
+  const bookingHref = buildSeoBookingHref("details", {
+    service: "airbnb",
+    locationSlug: block.key,
+    extras: recommendedSeoExtras("airbnb"),
+    source: `seo_airbnb_area_${block.key}`,
+  });
   const sameAs = getBrandSameAsForJsonLd();
 
   const localBusinessNode: Record<string, unknown> = {
@@ -67,7 +76,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
 
   return (
     <main className="bg-white text-zinc-900">
-      <GrowthTracking event="page_view" payload={{ page_type: "seo_airbnb_area", area: block.key }} />
+      <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "seo_airbnb_area", area: block.key }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
 
       <div className="mx-auto max-w-7xl px-4 pt-8">
@@ -90,7 +99,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
           <p className="mt-4 text-lg leading-relaxed text-zinc-600">{block.description}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <GrowthCtaLink
-              href="/booking"
+              href={bookingHref}
               source={`seo_airbnb_area_${block.key}_hero`}
               className="inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
@@ -131,7 +140,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
             ))}
           </div>
           <GrowthCtaLink
-            href="/booking"
+            href={bookingHref}
             source={`seo_airbnb_area_${block.key}_pricing`}
             className="mt-8 inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
@@ -156,7 +165,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
           </ul>
           <p className="mt-6 text-base leading-relaxed text-zinc-600">
             Want the printable-style walkthrough? Read our{" "}
-            <Link href="/blog/airbnb-cleaning-checklist-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+            <Link href={CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
               Airbnb cleaning checklist for Cape Town hosts
             </Link>
             .
@@ -183,7 +192,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
           </p>
           <div className="not-prose flex flex-wrap gap-3 pt-4">
             <GrowthCtaLink
-              href="/booking"
+              href={bookingHref}
               source={`seo_airbnb_area_${block.key}_footer`}
               className="inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >

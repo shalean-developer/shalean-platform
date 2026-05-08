@@ -1,0 +1,27 @@
+Service,Suburb,Search Intent,Canonical URL,Priority,Search Volume,Competition,Existing Page?,Page Type,CTA Source
+Deep Cleaning,Sea Point,commercial,/deep-cleaning/sea-point,P0,TBD,Medium,Partial (locations + service hub),service-location,seo_deep_cleaning_sea_point
+Deep Cleaning,Green Point,commercial,/deep-cleaning/green-point,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_green_point
+Deep Cleaning,Claremont,commercial,/deep-cleaning/claremont,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_claremont
+Deep Cleaning,Century City,commercial,/deep-cleaning/century-city,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_century_city
+Deep Cleaning,Camps Bay,commercial,/deep-cleaning/camps-bay,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_camps_bay
+Move-out Cleaning,Sea Point,commercial,/move-out-cleaning/sea-point,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_sea_point
+Move-out Cleaning,Green Point,commercial,/move-out-cleaning/green-point,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_green_point
+Move-out Cleaning,Claremont,commercial,/move-out-cleaning/claremont,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_claremont
+Move-out Cleaning,Century City,commercial,/move-out-cleaning/century-city,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_century_city
+Move-out Cleaning,Camps Bay,commercial,/move-out-cleaning/camps-bay,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_camps_bay
+Airbnb Cleaning,Sea Point,commercial,/services/airbnb-cleaning-sea-point,P0,TBD,Medium,Yes (editorial landing — migrate to /airbnb-cleaning/sea-point later),service-location,seo_airbnb_area_sea_point
+Airbnb Cleaning,Green Point,commercial,/services/airbnb-cleaning-green-point,P0,TBD,Medium,Yes (editorial — migrate later),service-location,seo_airbnb_area_green_point
+Airbnb Cleaning,Claremont,commercial,/services/airbnb-cleaning-claremont,P0,TBD,Medium,Yes (editorial — migrate later),service-location,seo_airbnb_area_claremont
+Airbnb Cleaning,Century City,commercial,/airbnb-cleaning/century-city,P0,TBD,Medium,No,service-location,seo_airbnb_cleaning_century_city
+Airbnb Cleaning,Camps Bay,commercial,/airbnb-cleaning/camps-bay,P0,TBD,Medium,No,service-location,seo_airbnb_cleaning_camps_bay
+Same-day Cleaning,Sea Point,commercial,/same-day-cleaning/sea-point,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_sea_point
+Same-day Cleaning,Green Point,commercial,/same-day-cleaning/green-point,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_green_point
+Same-day Cleaning,Claremont,commercial,/same-day-cleaning/claremont,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_claremont
+Same-day Cleaning,Century City,commercial,/same-day-cleaning/century-city,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_century_city
+Same-day Cleaning,Camps Bay,commercial,/same-day-cleaning/camps-bay,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_camps_bay
+Office Cleaning,Sea Point,commercial,/office-cleaning/sea-point,P1,TBD,Medium,Partial (service hub only),service-location,seo_office_cleaning_sea_point
+Office Cleaning,Green Point,commercial,/office-cleaning/green-point,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_green_point
+Office Cleaning,Claremont,commercial,/office-cleaning/claremont,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_claremont
+Office Cleaning,Century City,commercial,/office-cleaning/century-city,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_century_city
+Office Cleaning,Camps Bay,commercial,/office-cleaning/camps-bay,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_camps_bay
+Same-day Cleaning,Cape Town (metro),commercial,/same-day-cleaning/cape-town,P0,TBD,High,Partial (city hub),service-location,seo_same_day_cleaning_cape_town_metro

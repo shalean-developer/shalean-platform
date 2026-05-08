@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { BlogServiceLinkKind } from "@/lib/blog/getBlogServiceType";
 import { getBlogIntentServicePair, getPricingBlogLink, getRelevantBlogLocationLinks } from "@/lib/seo/internalLinks";
@@ -46,9 +46,9 @@ export function BlogServiceLinks({ trackingSlug, service = "standard", dense = f
       <ul className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-zinc-800">
         {rows.map((item) => (
           <li key={item.href + item.label}>
-            <Link href={item.href} className={linkInNavClassName}>
+            <SafeInternalLink href={item.href} className={linkInNavClassName}>
               {item.label}
-            </Link>
+            </SafeInternalLink>
           </li>
         ))}
       </ul>

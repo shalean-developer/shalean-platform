@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { BlogIndexCardPost } from "@/lib/blog/blog-index-hub";
 
 function isRemoteSrc(src: string) {
@@ -23,7 +23,7 @@ export function BlogFeaturedHeroCard({ post }: { post: BlogIndexCardPost }) {
       aria-labelledby={titleId}
     >
       <div className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-stretch">
-        <Link
+        <SafeInternalLink
           href={`/blog/${post.slug}`}
           className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-100 lg:aspect-auto lg:min-h-[280px] xl:min-h-[320px]"
           aria-label={post.title}
@@ -37,7 +37,7 @@ export function BlogFeaturedHeroCard({ post }: { post: BlogIndexCardPost }) {
             priority
             unoptimized={remote}
           />
-        </Link>
+        </SafeInternalLink>
 
         <div className="flex flex-col justify-center gap-4 px-6 py-8 sm:px-10 sm:py-10 lg:py-12">
           <div className="flex flex-wrap items-center gap-2">
@@ -54,29 +54,29 @@ export function BlogFeaturedHeroCard({ post }: { post: BlogIndexCardPost }) {
 
           <div>
             <h2 id={titleId} className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl sm:leading-tight">
-              <Link
+              <SafeInternalLink
                 href={`/blog/${post.slug}`}
                 className="text-zinc-900 transition hover:text-blue-700 hover:underline hover:decoration-blue-600/30"
               >
                 {post.title}
-              </Link>
+              </SafeInternalLink>
             </h2>
             <p className="mt-4 text-base leading-relaxed text-zinc-600 sm:text-[1.05rem]">{post.displayExcerpt}</p>
           </div>
 
           <div className="flex flex-wrap gap-3 pt-1">
-            <Link
+            <SafeInternalLink
               href={`/blog/${post.slug}`}
               className="inline-flex items-center justify-center rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
               Read full guide
-            </Link>
-            <Link
+            </SafeInternalLink>
+            <SafeInternalLink
               href="/booking"
               className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-6 py-2.5 text-sm font-semibold text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50"
             >
               Get instant quote
-            </Link>
+            </SafeInternalLink>
           </div>
         </div>
       </div>

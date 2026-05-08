@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { analyzeDispatchExperimentFromOffers } from "@/lib/admin/experimentSummaryFromOffers";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { isAdmin } from "@/lib/auth/admin";
 import { getDemandSupplySnapshot } from "@/lib/pricing/demandSupplySurge";
 import { computeReviewPromptConversionRate } from "@/lib/reviews/reviewFunnelMetrics";
@@ -132,10 +133,15 @@ export async function GET(request: Request) {
   ).length;
   const assignmentSuccessRate = pct(assignedToday, dispatchAttemptedToday);
 
-  const funnelStarted = events.filter((e) => String(e.event_type ?? "") === "booking_started").length;
-  const funnelPrice = events.filter((e) => String(e.event_type ?? "") === "quote_viewed").length;
-  const funnelTime = events.filter((e) => String(e.event_type ?? "") === "slot_selected").length;
-  const funnelPaid = events.filter((e) => String(e.event_type ?? "") === "payment_completed").length;
+  const funnelStarted = events.filter((e) => String(e.event_type ?? "") === ANALYTICS_EVENTS.BOOKING_STARTED).length;
+  /** Quote engagement proxy: explicit service selection on the quote step (canonical taxonomy). */
+  const funnelPrice = events.filter((e) => String(e.event_type ?? "") === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED).length;
+  /** Schedule selection: prefer canonical booking time signal; assistant flows may still emit `slot_selected`. */
+  const funnelTime = events.filter((e) => {
+    const t = String(e.event_type ?? "");
+    return t === ANALYTICS_EVENTS.BOOKING_TIME_SELECTED || t === ANALYTICS_EVENTS.SLOT_SELECTED;
+  }).length;
+  const funnelPaid = events.filter((e) => String(e.event_type ?? "") === ANALYTICS_EVENTS.PAYMENT_COMPLETED).length;
   const paidBookingsCount = bookings.filter((b) => safeRevenue(b) > 0).length;
   /** Raw `user_events` counts only — no synthetic ratios. */
   const started = funnelStarted;

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClusterPeerPost } from "@/lib/blog/seo/blog-cluster-collision";
 import { fetchPublishedClusterPeersUnified } from "@/lib/blog/seo/fetch-cluster-peer-posts";
 import { intentLabelForClusterGuideSlug } from "@/lib/blog/cluster-guide-intent-labels";
+import { getCanonicalBlogSlug } from "@/lib/blog/validBlogRoutes";
 import { resolveSemanticClusterKey, semanticClusterKeyToCollisionTagSlug } from "@/lib/seo/blogGovernance";
 
 export type ClusterRelatedGuideItem = {
@@ -23,7 +24,9 @@ function normalizeOverrideSlugs(raw: string[] | null | undefined, cap: number): 
   const seen = new Set<string>();
   const out: string[] = [];
   for (const s of raw) {
-    const t = String(s).trim().toLowerCase();
+    const trimmed = String(s).trim().toLowerCase();
+    if (!trimmed || !SLUG_RE.test(trimmed)) continue;
+    const t = getCanonicalBlogSlug(trimmed);
     if (!t || !SLUG_RE.test(t) || seen.has(t)) continue;
     seen.add(t);
     out.push(t);
@@ -86,7 +89,7 @@ export function mergeClusterRelatedGuides(args: {
     if (!row) continue;
     seen.add(k);
     out.push({
-      slug: row.slug,
+      slug: getCanonicalBlogSlug(row.slug),
       title: row.title,
       intentLabel: intentLabelForClusterGuideSlug(row.slug),
     });
@@ -98,7 +101,7 @@ export function mergeClusterRelatedGuides(args: {
     if (!k || k === ex || seen.has(k)) continue;
     seen.add(k);
     out.push({
-      slug: p.slug,
+      slug: getCanonicalBlogSlug(p.slug),
       title: p.title,
       intentLabel: intentLabelForClusterGuideSlug(p.slug),
     });

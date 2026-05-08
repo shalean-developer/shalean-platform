@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { generateBookingTimeSlots } from "@/lib/booking/bookingTimeSlots";
 
@@ -10,7 +10,15 @@ export type TimeSlotModel = {
   isPast: boolean;
 };
 
-const INITIAL_VISIBLE = 5;
+/** First N bookable slots shown before “see more” (checkout). */
+const SLOT_PREVIEW_COUNT = 5;
+const MID_AFTERNOON_MINUTES = 17 * 60;
+
+/** Below `lg`: horizontal scroll strip (like date chips); `lg+`: grid. */
+const checkoutSlotStripBase =
+  "gap-2 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-lg:flex max-lg:flex-nowrap max-lg:snap-x max-lg:snap-mandatory max-lg:overflow-x-auto max-lg:scroll-smooth";
+
+const checkoutSlotChipWrap = "max-lg:w-[4.75rem] max-lg:shrink-0 max-lg:snap-center lg:min-w-0 lg:w-auto";
 
 function slotToMinutes(s: string): number {
   const [h, m] = s.split(":").map(Number);
@@ -56,17 +64,27 @@ type ScheduleTimeSlotsProps = {
   onChange: (time: string | null) => void;
   /** Per `HH:mm` — false = treated unavailable (hidden). */
   availability?: Record<string, boolean>;
+  variant?: "default" | "checkout";
+  bandLabels?: { morning: string; midday: string; evening: string };
+  seeMoreTimeSlotsLabel?: string;
+  seeFewerTimeSlotsLabel?: string;
 };
 
-export function ScheduleTimeSlots({ dateYmd, value, onChange, availability }: ScheduleTimeSlotsProps) {
+export function ScheduleTimeSlots({
+  dateYmd,
+  value,
+  onChange,
+  availability,
+  variant = "default",
+  bandLabels = { morning: "Morning", midday: "Midday", evening: "Evening" },
+  seeMoreTimeSlotsLabel = "See more time slots",
+  seeFewerTimeSlotsLabel = "See fewer time slots",
+}: ScheduleTimeSlotsProps) {
   const middayRef = useRef<HTMLDivElement>(null);
+  const eveningRef = useRef<HTMLDivElement>(null);
   const [morningMore, setMorningMore] = useState(false);
   const [middayMore, setMiddayMore] = useState(false);
-
-  useEffect(() => {
-    setMorningMore(false);
-    setMiddayMore(false);
-  }, [dateYmd]);
+  const [eveningMore, setEveningMore] = useState(false);
 
   const models = useMemo(
     () => buildScheduleSlotModels(dateYmd, availability, new Date()),
@@ -76,27 +94,46 @@ export function ScheduleTimeSlots({ dateYmd, value, onChange, availability }: Sc
   const visibleTimes = useMemo(() => filterRenderableScheduleSlots(models), [models]);
 
   const morning = useMemo(() => visibleTimes.filter((t) => slotToMinutes(t) < 12 * 60), [visibleTimes]);
-  const midday = useMemo(() => visibleTimes.filter((t) => slotToMinutes(t) >= 12 * 60), [visibleTimes]);
-
-  const morningShown = morningMore ? morning : morning.slice(0, INITIAL_VISIBLE);
-  const middayShown = middayMore ? midday : midday.slice(0, INITIAL_VISIBLE);
+  const midday = useMemo(
+    () =>
+      visibleTimes.filter((t) => {
+        const m = slotToMinutes(t);
+        return m >= 12 * 60 && m < MID_AFTERNOON_MINUTES;
+      }),
+    [visibleTimes],
+  );
+  const evening = useMemo(() => visibleTimes.filter((t) => slotToMinutes(t) >= MID_AFTERNOON_MINUTES), [visibleTimes]);
 
   const scrollToMidday = useCallback(() => {
     middayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const scrollToEvening = useCallback(() => {
+    eveningRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const checkout = variant === "checkout";
+  const gridClassDefaultVariant =
+    "grid grid-cols-2 gap-2 transition-all duration-200 sm:grid-cols-3 sm:gap-3";
+
+  const bandTitleClass = checkout
+    ? "text-[11px] font-bold uppercase tracking-[0.06em] text-zinc-500 dark:text-zinc-400"
+    : "text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300";
+
   const slotBtn = (slot: string) => {
     const isSelected = value === slot;
     return (
       <button
-        key={slot}
         type="button"
         onClick={() => onChange(slot)}
         className={cn(
-          "min-h-[44px] rounded-xl border py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:py-3 dark:focus-visible:ring-blue-400/35",
+          "w-full rounded-xl border-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/45 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-400/35 dark:focus-visible:ring-offset-zinc-950",
+          checkout ? "min-h-[50px] px-1 py-2.5 sm:min-h-[52px]" : "min-h-[48px] py-2.5 sm:min-h-[52px] sm:py-3",
           isSelected
-            ? "border-blue-600 bg-blue-50 text-blue-900 dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-100"
-            : "border-gray-200 bg-white text-zinc-900 hover:border-gray-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500",
+            ? checkout
+              ? "z-[1] scale-[1.02] border-blue-600 bg-white text-blue-700 shadow-md shadow-blue-600/15 ring-2 ring-blue-600/35 dark:border-blue-500 dark:bg-zinc-950 dark:text-blue-300 dark:ring-blue-500/40"
+              : "border-blue-600 bg-blue-50 text-blue-950 shadow-sm ring-2 ring-blue-600/25 dark:border-blue-500 dark:bg-blue-950/55 dark:text-blue-50 dark:ring-blue-400/30"
+            : "border-zinc-200/90 bg-white text-zinc-900 hover:border-zinc-300 hover:bg-zinc-50 active:scale-[0.99] dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500",
         )}
       >
         {slot}
@@ -104,50 +141,184 @@ export function ScheduleTimeSlots({ dateYmd, value, onChange, availability }: Sc
     );
   };
 
-  return (
-    <div className="space-y-5">
-      <div>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300">Morning</p>
-          {morning.length > 0 && midday.length > 0 ? (
+  const jumpClass =
+    "text-[11px] font-semibold uppercase tracking-wide text-blue-600 underline-offset-2 transition-colors hover:text-blue-700 hover:underline dark:text-blue-400";
+
+  const renderBandSlots = (
+    band: string[],
+    expanded: boolean,
+    setExpanded: (next: boolean) => void,
+    defaultMoreButtonClass: string,
+  ) => {
+    const overflow = band.length > SLOT_PREVIEW_COUNT;
+    const previewSlots = band.slice(0, SLOT_PREVIEW_COUNT);
+
+    if (!checkout) {
+      const shown = expanded ? band : previewSlots;
+      return (
+        <>
+          <div className={gridClassDefaultVariant}>
+            {shown.map((t) => (
+              <Fragment key={t}>{slotBtn(t)}</Fragment>
+            ))}
+          </div>
+          {overflow ? (
             <button
               type="button"
-              onClick={scrollToMidday}
-              className="text-xs font-semibold uppercase tracking-wide text-blue-600 underline-offset-2 transition-colors hover:text-blue-700 hover:underline dark:text-blue-400"
+              className={cn(
+                "mt-2 text-sm font-semibold transition-colors hover:text-blue-900 dark:hover:text-blue-200",
+                defaultMoreButtonClass,
+              )}
+              onClick={() => setExpanded(!expanded)}
             >
-              Midday →
+              {expanded ? "Less" : "More"}
             </button>
           ) : null}
-        </div>
-        <div className="grid grid-cols-2 gap-2 transition-all duration-200 sm:grid-cols-3 sm:gap-3">
-          {morningShown.map((t) => slotBtn(t))}
-        </div>
-        {morning.length > INITIAL_VISIBLE ? (
-          <button
-            type="button"
-            className="mt-2 text-sm font-semibold text-blue-800 transition-colors hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
-            onClick={() => setMorningMore((v) => !v)}
-          >
-            {morningMore ? "Less" : "More"}
-          </button>
-        ) : null}
-      </div>
+        </>
+      );
+    }
 
-      <div ref={middayRef} className="scroll-mt-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Midday</p>
-        <div className="grid grid-cols-2 gap-2 transition-all duration-200 sm:grid-cols-3 sm:gap-3">
-          {middayShown.map((t) => slotBtn(t))}
+    if (!overflow) {
+      return (
+        <div
+          className={cn(
+            checkoutSlotStripBase,
+            "lg:grid lg:grid-cols-5 lg:gap-2.5 lg:overflow-visible lg:pb-0",
+          )}
+        >
+          {band.map((t) => (
+            <div key={t} className={checkoutSlotChipWrap}>
+              {slotBtn(t)}
+            </div>
+          ))}
         </div>
-        {midday.length > INITIAL_VISIBLE ? (
+      );
+    }
+
+    if (!expanded) {
+      return (
+        <div
+          className={cn(
+            checkoutSlotStripBase,
+            "lg:grid lg:grid-cols-6 lg:items-stretch lg:gap-2.5 lg:overflow-visible lg:pb-0",
+          )}
+        >
+          {previewSlots.map((t) => (
+            <div key={t} className={checkoutSlotChipWrap}>
+              {slotBtn(t)}
+            </div>
+          ))}
           <button
             type="button"
-            className="mt-2 text-sm font-semibold text-zinc-700 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
-            onClick={() => setMiddayMore((v) => !v)}
+            onClick={() => setExpanded(true)}
+            className={cn(
+              "flex items-center text-left text-sm font-semibold text-blue-600 underline-offset-2 hover:underline dark:text-blue-400",
+              "max-lg:snap-center max-lg:max-w-[9.5rem] max-lg:shrink-0 max-lg:self-center max-lg:py-2 max-lg:pr-1",
+              "lg:flex lg:items-center lg:justify-start lg:py-0",
+            )}
           >
-            {middayMore ? "Less" : "More"}
+            {seeMoreTimeSlotsLabel}
           </button>
-        ) : null}
-      </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div
+          className={cn(
+            checkoutSlotStripBase,
+            "lg:grid lg:grid-cols-5 lg:gap-2.5 lg:overflow-visible lg:pb-0",
+          )}
+        >
+          {band.map((t) => (
+            <div key={t} className={checkoutSlotChipWrap}>
+              {slotBtn(t)}
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="mt-2 text-sm font-semibold text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+          onClick={() => setExpanded(false)}
+        >
+          {seeFewerTimeSlotsLabel}
+        </button>
+      </>
+    );
+  };
+
+  return (
+    <div className={checkout ? "space-y-4" : "space-y-5"}>
+      {morning.length > 0 ? (
+        <div>
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p
+              className={
+                checkout
+                  ? bandTitleClass
+                  : "text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300"
+              }
+            >
+              {bandLabels.morning}
+            </p>
+            {midday.length > 0 ? (
+              <button type="button" onClick={scrollToMidday} className={jumpClass}>
+                {bandLabels.midday} →
+              </button>
+            ) : evening.length > 0 ? (
+              <button type="button" onClick={scrollToEvening} className={jumpClass}>
+                {bandLabels.evening} →
+              </button>
+            ) : null}
+          </div>
+          {renderBandSlots(
+            morning,
+            morningMore,
+            setMorningMore,
+            "text-blue-800 dark:text-blue-300",
+          )}
+        </div>
+      ) : null}
+
+      {midday.length > 0 ? (
+        <div ref={middayRef} className="scroll-mt-4">
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p
+              className={
+                checkout
+                  ? bandTitleClass
+                  : "text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400"
+              }
+            >
+              {bandLabels.midday}
+            </p>
+            {evening.length > 0 ? (
+              <button type="button" onClick={scrollToEvening} className={jumpClass}>
+                {bandLabels.evening} →
+              </button>
+            ) : null}
+          </div>
+          {renderBandSlots(
+            midday,
+            middayMore,
+            setMiddayMore,
+            "text-zinc-700 dark:text-zinc-300",
+          )}
+        </div>
+      ) : null}
+
+      {evening.length > 0 ? (
+        <div ref={eveningRef} className="scroll-mt-4">
+          <p className={cn("mb-2", bandTitleClass)}>{bandLabels.evening}</p>
+          {renderBandSlots(
+            evening,
+            eveningMore,
+            setEveningMore,
+            "text-zinc-700 dark:text-zinc-300",
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

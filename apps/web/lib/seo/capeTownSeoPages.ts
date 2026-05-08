@@ -295,7 +295,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Green Point",
-        blogPath: "/blog/airbnb-cleaning-green-point-cape-town",
+        blogPath: "/blog/cleaning-services-green-point-cape-town",
         linkAnchorText: "cleaning services in Green Point",
       },
       {
@@ -626,7 +626,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingPath: "/booking",
     neighbourhoodBlogGuide: {
       areaName: "Green Point",
-      blogPath: "/blog/airbnb-cleaning-green-point-cape-town",
+      blogPath: "/blog/cleaning-services-green-point-cape-town",
       linkAnchorText: "cleaning services in Green Point",
     },
     introSectionHeading: "Built for Airbnb hosts, property managers & short-term rental owners",
@@ -1106,7 +1106,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Support if something is missed before check-ins or inspections.",
     ],
     relatedBlogGuide: {
-      href: "/blog/airbnb-cleaning-green-point-cape-town",
+      href: "/blog/cleaning-services-green-point-cape-town",
       linkAnchorText: "cleaning services in Green Point",
     },
   },

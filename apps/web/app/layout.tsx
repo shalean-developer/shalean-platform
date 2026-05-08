@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
+import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvider";
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { ReferralCapture } from "@/components/referrals/ReferralCapture";
 import { metadataBaseUrl } from "@/lib/site/canonical";
@@ -45,6 +46,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <SessionReplayProvider />
         <GlobalTopNav />
         {children}
         <Suspense fallback={null}>

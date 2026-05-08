@@ -1,4 +1,5 @@
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { FadeInSection } from "@/components/home/FadeInSection";
 import { HomeMobileStickyCta } from "@/components/home/HomeMobileStickyCta";
 import { HomeWhatsAppFloat } from "@/components/home/HomeWhatsAppFloat";
@@ -18,7 +19,7 @@ import { WhyChooseUsSection } from "@/components/home/sections/WhyChooseUsSectio
 export function HomePage() {
   return (
     <>
-      <GrowthTracking event="page_view" payload={{ page_type: "home" }} />
+      <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "home" }} />
       <main className="min-h-screen bg-white pb-24 text-zinc-900">
         <FadeInSection>
           <HeroSection />

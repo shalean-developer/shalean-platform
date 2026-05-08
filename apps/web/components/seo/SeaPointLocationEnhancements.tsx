@@ -137,7 +137,7 @@ export function SeaPointLocationEnhancements({ ctx, quoteHref = "/booking/detail
               Get instant quote
             </SeoHubGrowthCtaLink>
             <SeoHubGrowthCtaLink
-              href="/booking"
+              href={quoteHref}
               source="seo_loc_sea-point-cleaning-services_premium_table_book"
               ctx={ctx}
               ctaLocation="sea_point_pricing_table"
@@ -307,7 +307,7 @@ export function SeaPointLocationEnhancements({ ctx, quoteHref = "/booking/detail
               Get instant quote
             </SeoHubGrowthCtaLink>
             <SeoHubGrowthCtaLink
-              href="/booking"
+              href={quoteHref}
               source="seo_loc_sea-point-cleaning-services_premium_book"
               ctx={ctx}
               ctaLocation="sea_point_premium_block"

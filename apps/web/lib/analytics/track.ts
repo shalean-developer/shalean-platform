@@ -47,6 +47,7 @@
 "use client";
 
 import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 export type SeoLocationAnalyticsBase = {
@@ -71,7 +72,7 @@ export function trackSeoLocationScroll(
   depth: SeoScrollDepth,
   ctx: SeoLocationAnalyticsBase & { hub_tier?: string; seo_priority?: number | string },
 ): void {
-  trackGrowthEvent("seo_location_scroll", {
+  trackGrowthEvent(ANALYTICS_EVENTS.SEO_LOCATION_SCROLL, {
     depth,
     page_slug: ctx.page_slug,
     suburb: ctx.suburb,
@@ -91,7 +92,7 @@ export function trackSeoCtaClick(
     href: string;
   },
 ): void {
-  trackGrowthEvent("seo_cta_click", {
+  trackGrowthEvent(ANALYTICS_EVENTS.SEO_CTA_CLICK, {
     page_slug: ctx.page_slug,
     suburb: ctx.suburb,
     region: ctx.region,
@@ -112,7 +113,7 @@ export function trackSeoServiceCardClick(payload: {
   page_slug?: string;
   suburb?: string;
 }): void {
-  trackGrowthEvent("seo_service_card_click", payload);
+  trackGrowthEvent(ANALYTICS_EVENTS.SEO_SERVICE_CARD_CLICK, payload);
 }
 
 export function trackSeoFaqExpand(payload: {
@@ -121,7 +122,7 @@ export function trackSeoFaqExpand(payload: {
   page_slug?: string;
   suburb?: string;
 }): void {
-  trackGrowthEvent("seo_faq_expand", payload);
+  trackGrowthEvent(ANALYTICS_EVENTS.SEO_FAQ_EXPAND, payload);
 }
 
 export function trackSeoPricingInteraction(payload: {
@@ -130,5 +131,5 @@ export function trackSeoPricingInteraction(payload: {
   href: string;
   label?: string;
 }): void {
-  trackGrowthEvent("seo_pricing_interaction", payload);
+  trackGrowthEvent(ANALYTICS_EVENTS.SEO_PRICING_INTERACTION, payload);
 }

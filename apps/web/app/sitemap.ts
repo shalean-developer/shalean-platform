@@ -3,6 +3,10 @@ import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
 import { getPublishedBlogSlugs } from "@/lib/blog/get-post-by-slug";
 import { getAllHighConversionBlogPosts } from "@/lib/blog/highConversionPosts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import {
+  getCanonicalBlogSlug,
+  isRedirectAliasBlogSlug,
+} from "@/lib/blog/validBlogRoutes";
 import { shouldExcludeBlogSlugFromSitemap } from "@/lib/seo/programmaticBlogCleanupRedirects";
 import { AIRBNB_AREA_LANDING_PATHS } from "@/lib/seo/airbnbAreaLandingPages";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
@@ -76,13 +80,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const dbSlugs = await getPublishedBlogSlugs();
 
   const blogSlugSet = new Set<string>();
-  for (const s of dbSlugs) blogSlugSet.add(s);
-  for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(post.slug);
-  for (const post of getAllHighConversionBlogPosts()) blogSlugSet.add(post.slug);
-  for (const post of AIRBNB_HOST_GUIDE_POSTS) blogSlugSet.add(post.slug);
+  for (const s of dbSlugs) {
+    if (isRedirectAliasBlogSlug(s)) continue;
+    blogSlugSet.add(getCanonicalBlogSlug(s));
+  }
+  for (const post of ROUTED_PROGRAMMATIC_POSTS) blogSlugSet.add(getCanonicalBlogSlug(post.slug));
+  for (const post of getAllHighConversionBlogPosts()) blogSlugSet.add(getCanonicalBlogSlug(post.slug));
+  for (const post of AIRBNB_HOST_GUIDE_POSTS) blogSlugSet.add(getCanonicalBlogSlug(post.slug));
 
   for (const slug of blogSlugSet) {
     if (shouldExcludeBlogSlugFromSitemap(slug)) continue;
+    if (isRedirectAliasBlogSlug(slug)) continue;
     push(`${SITE_ORIGIN}/blog/${slug}`, 0.7);
   }
 

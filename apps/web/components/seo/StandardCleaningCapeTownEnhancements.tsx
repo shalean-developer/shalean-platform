@@ -82,7 +82,7 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
               Get instant quote
             </GrowthCtaLink>
             <GrowthCtaLink
-              href="/booking"
+              href={bookingPath}
               source="seo_ct_standard-cleaning-cape-town_after_table_book"
               className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-blue-200 bg-white px-6 text-base font-semibold text-blue-800 transition hover:bg-blue-50 sm:flex-none"
             >
@@ -131,7 +131,7 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
               Get instant quote
             </GrowthCtaLink>
             <GrowthCtaLink
-              href="/booking"
+              href={bookingPath}
               source="seo_ct_standard-cleaning-cape-town_mid_book"
               className="inline-flex min-h-12 items-center rounded-xl border border-blue-200 bg-white px-8 text-base font-semibold text-blue-800 transition hover:bg-blue-50"
             >

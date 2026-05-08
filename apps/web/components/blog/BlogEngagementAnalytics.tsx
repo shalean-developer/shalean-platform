@@ -6,6 +6,7 @@ import {
   getCurrentTocEngagementSnapshot,
   updateTocSectionEngagementScrollPct,
 } from "@/lib/blog/blog-toc-section-engagement";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 type Props = {
@@ -36,7 +37,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
       for (const m of [25, 50, 75, 100] as const) {
         if (pct >= m && !milestones.current.has(m)) {
           milestones.current.add(m);
-          trackGrowthEvent("blog_scroll", { slug, depth: m });
+          trackGrowthEvent(ANALYTICS_EVENTS.BLOG_SCROLL, { slug, depth: m });
         }
       }
     };
@@ -46,7 +47,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
       for (const s of [30, 90, 180] as const) {
         if (elapsedSec >= s && !dwellSent.current.has(s)) {
           dwellSent.current.add(s);
-          trackGrowthEvent("blog_time_on_page", { slug, seconds: s, milestone: true });
+          trackGrowthEvent(ANALYTICS_EVENTS.BLOG_TIME_ON_PAGE, { slug, seconds: s, milestone: true });
         }
       }
     };
@@ -58,7 +59,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
       const seconds = Math.round((performance.now() - startedAt.current) / 1000);
       if (seconds < 5) return;
       leaveSent.current = true;
-      trackGrowthEvent("blog_time_on_page", { slug, seconds, leave: true });
+      trackGrowthEvent(ANALYTICS_EVENTS.BLOG_TIME_ON_PAGE, { slug, seconds, leave: true });
     };
 
     const onClick = (e: MouseEvent) => {
@@ -77,7 +78,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
         a.dataset.blogTrackCta === "1"
       ) {
         const engagement = getCurrentTocEngagementSnapshot(slug);
-        trackGrowthEvent("blog_cta_click", {
+        trackGrowthEvent(ANALYTICS_EVENTS.BLOG_CTA_CLICK, {
           slug,
           placement,
           href,

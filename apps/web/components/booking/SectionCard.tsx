@@ -11,9 +11,9 @@ export function SectionCard({ id, title, description, descriptionDesktopOnly, ch
   return (
     <section
       id={id}
-      className="w-full max-w-none scroll-mt-24 rounded-2xl border border-zinc-200/80 bg-white px-3 py-5 shadow-sm shadow-zinc-900/5 transition-shadow duration-200 hover:shadow-md hover:shadow-zinc-900/5 sm:p-6 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20"
+      className="w-full max-w-none scroll-mt-24 rounded-xl border border-zinc-200/80 bg-white px-4 py-5 shadow-sm shadow-zinc-900/[0.04] transition-shadow duration-200 hover:shadow-md hover:shadow-zinc-900/[0.06] sm:p-6 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20"
     >
-      <div className="mb-4">
+      <div className="mb-3 sm:mb-4">
         <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           {title}
         </h2>

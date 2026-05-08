@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import {
   getLocalGuideEditorialCrossLinks,
   hubAreaKebabFromHubSlug,
@@ -86,7 +86,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
         {hubHref ? (
           <p>
             Start from the{" "}
-            <Link href={hubHref}>cleaning services in {loc}</Link> hub for suburb FAQs, illustration pricing, and booking
+            <SafeInternalLink href={hubHref}>cleaning services in {loc}</SafeInternalLink> hub for suburb FAQs, illustration pricing, and booking
             CTAs—this article expands on long-tail searches only.
           </p>
         ) : null}
@@ -118,12 +118,12 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
             {editorialCrossLinks.relatedBlogs.map((b, i) => (
               <span key={b.href}>
                 {i > 0 ? (i === editorialCrossLinks.relatedBlogs.length - 1 ? " and " : ", ") : null}
-                <Link href={b.href}>{b.label}</Link>
+                <SafeInternalLink href={b.href}>{b.label}</SafeInternalLink>
               </span>
             ))}
             . Compare scope on our{" "}
-            <Link href={editorialCrossLinks.serviceHref}>{editorialCrossLinks.serviceLabel}</Link>, then use the{" "}
-            <Link href={editorialCrossLinks.hubHref}>{loc} cleaning services hub</Link> for illustration pricing and FAQs.
+            <SafeInternalLink href={editorialCrossLinks.serviceHref}>{editorialCrossLinks.serviceLabel}</SafeInternalLink>, then use the{" "}
+            <SafeInternalLink href={editorialCrossLinks.hubHref}>{loc} cleaning services hub</SafeInternalLink> for illustration pricing and FAQs.
           </p>
         ) : null}
 
@@ -141,16 +141,16 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
             <h2 id={LOCAL_GUIDE_DOC_ANCHOR_IDS.picking}>Picking the right service tier</h2>
             <ul>
               <li>
-                <Link href={standard}>Standard cleaning</Link> for repeatable upkeep between busy weeks.
+                <SafeInternalLink href={standard}>Standard cleaning</SafeInternalLink> for repeatable upkeep between busy weeks.
               </li>
               <li>
-                <Link href={deep}>Deep cleaning</Link> when kitchens, bathrooms, or detail zones need more dwell time.
+                <SafeInternalLink href={deep}>Deep cleaning</SafeInternalLink> when kitchens, bathrooms, or detail zones need more dwell time.
               </li>
               <li>
-                <Link href={airbnb}>Airbnb cleaning</Link> for guest-ready turnovers on a clock.
+                <SafeInternalLink href={airbnb}>Airbnb cleaning</SafeInternalLink> for guest-ready turnovers on a clock.
               </li>
               <li>
-                <Link href={moveOut}>Move-out cleaning</Link> when inspections or deposits are in play.
+                <SafeInternalLink href={moveOut}>Move-out cleaning</SafeInternalLink> when inspections or deposits are in play.
               </li>
             </ul>
           </>
@@ -186,9 +186,9 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
         <p>
           Bookmark{" "}
           {hubHref ? (
-            <Link href={hubHref}>cleaning services in {loc}</Link>
+            <SafeInternalLink href={hubHref}>cleaning services in {loc}</SafeInternalLink>
           ) : (
-            <Link href="/cleaning-services-cape-town">Cape Town cleaning hubs</Link>
+            <SafeInternalLink href="/cleaning-services-cape-town">Cape Town cleaning hubs</SafeInternalLink>
           )}{" "}
           for the shortest path from search → quote → booking.
         </p>
@@ -199,12 +199,12 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
               {nearbyHubPieces.map((item, i) => (
                 <span key={item.href}>
                   {i > 0 ? (i === nearbyHubPieces.length - 1 ? ", and " : ", ") : null}
-                  <Link href={item.href}>cleaning services in {item.name}</Link>
+                  <SafeInternalLink href={item.href}>cleaning services in {item.name}</SafeInternalLink>
                 </span>
               ))}
             </>
           ) : (
-            <Link href="/cleaning-services-cape-town">Cape Town overview</Link>
+            <SafeInternalLink href="/cleaning-services-cape-town">Cape Town overview</SafeInternalLink>
           )}
           .
         </p>
@@ -282,13 +282,13 @@ function LocalGuidePricingDeepDive({
         Keep reading:{" "}
         {moveOutCostHref ? (
           <>
-            <Link href={moveOutCostHref}>Move-out cleaning cost in {loc}</Link>
+            <SafeInternalLink href={moveOutCostHref}>Move-out cleaning cost in {loc}</SafeInternalLink>
             {" · "}
           </>
         ) : null}
-        <Link href={deepPath}>Deep cleaning service guide (Cape Town)</Link>
+        <SafeInternalLink href={deepPath}>Deep cleaning service guide (Cape Town)</SafeInternalLink>
         {" · "}
-        <Link href={hubHref}>{loc} cleaning hub</Link>
+        <SafeInternalLink href={hubHref}>{loc} cleaning hub</SafeInternalLink>
       </p>
     </>
   );

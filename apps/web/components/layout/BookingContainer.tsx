@@ -14,9 +14,9 @@ export default function BookingContainer({ children, className }: Props) {
   return (
     <div className="w-full max-w-none transition-all duration-300">
       <div
-        className={["mx-auto w-full max-w-[576px] px-4 py-6 md:px-6", className ?? ""].filter(Boolean).join(" ")}
+        className={["mx-auto w-full max-w-[600px] px-4 py-5 md:px-6 md:py-6", className ?? ""].filter(Boolean).join(" ")}
       >
-        <div className="w-full max-w-none space-y-6">{children}</div>
+        <div className="w-full max-w-none space-y-5 md:space-y-6">{children}</div>
       </div>
     </div>
   );

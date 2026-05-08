@@ -1,3 +1,4 @@
+import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import {
   deriveBookingOperationalPhase,
   isAuthoritativeBookingCompleted,
@@ -397,7 +398,7 @@ function computeDisplayBadge(row: Record<string, unknown>, ui: CleanerJobUiState
     if (ui.phase === "on_my_way") return "Accepted";
     if (ui.phase === "start" || row.en_route_at) return "En route";
     if (ui.phase === "complete") return "In progress";
-    return st === "confirmed" ? "Confirmed" : "Assigned";
+    return "Assigned";
   }
   return "Open";
 }
@@ -414,6 +415,7 @@ function displayToneFrom(row: Record<string, unknown>, operationalPhase: Booking
 
 function adminTimelineFromRow(row: Record<string, unknown>): DescribeBookingOperationalStateResult["adminTimeline"] {
   const st = String(row.status ?? "").trim().toLowerCase();
+  const stCanon = canonicalDbBookingStatus(st);
   const payoutPs = String(row.payout_status ?? "").trim().toLowerCase();
   const paidDone = Boolean(String(row.payment_completed_at ?? "").trim());
   const authCompleted = isAuthoritativeBookingCompleted(row);
@@ -421,7 +423,7 @@ function adminTimelineFromRow(row: Record<string, unknown>): DescribeBookingOper
   const assignedDone =
     Boolean(String(row.cleaner_id ?? "").trim()) ||
     (row.is_team_job === true && Boolean(String(row.team_id ?? "").trim())) ||
-    (["assigned", "confirmed", "in_progress", "completed"].includes(st) && Boolean(String(row.assigned_at ?? "").trim()));
+    (["assigned", "in_progress", "completed"].includes(stCanon) && Boolean(String(row.assigned_at ?? "").trim()));
   const crs = String(row.cleaner_response_status ?? "").trim().toLowerCase();
   const acceptedDone =
     crs === "accepted" ||

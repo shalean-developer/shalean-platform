@@ -13,12 +13,35 @@ export const programmaticBlogCleanupRedirects = [
   },
   {
     source: "/blog/move-out-cleaning-checklist-cape-town-renters",
-    destination: "/blog/move-out-cleaning-guide",
+    destination: "/blog/move-out-cleaning-checklist-cape-town",
     permanent: true,
   },
   {
     source: "/blog/airbnb-cleaning-vs-regular-home-cleaning-cape-town",
-    destination: "/blog/airbnb-cleaning-checklist",
+    destination: "/blog/airbnb-cleaning-checklist-cape-town",
+    permanent: true,
+  },
+  /** Legacy slug string used across TSX — router serves HC article under this pathname instead. */
+  {
+    source: "/blog/deep-vs-standard-cleaning-cape-town",
+    destination: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+    permanent: true,
+  },
+  /** Generic checklist URLs (no suburb) — never shipped as posts; send to commercial intent pages. */
+  {
+    source: "/blog/deep-cleaning-checklist-cape-town",
+    destination: "/services/deep-cleaning-cape-town",
+    permanent: true,
+  },
+  {
+    source: "/blog/standard-cleaning-checklist-cape-town",
+    destination: "/services/standard-cleaning-cape-town",
+    permanent: true,
+  },
+  /** Legacy editorial slug — not in TS router unless published in CMS; pricing hub is always live. */
+  {
+    source: "/blog/cleaning-cost-cape-town",
+    destination: "/cleaning-prices-cape-town",
     permanent: true,
   },
   {

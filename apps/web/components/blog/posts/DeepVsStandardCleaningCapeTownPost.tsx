@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const standard = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
@@ -14,13 +14,13 @@ export function DeepVsStandardCleaningCapeTownPost() {
         and saves stress when kitchens, bathrooms, or guest changeovers actually need more time. This guide walks through
         how each service behaves in real Western Cape homes—so you can book confidently and get results that match what
         you pictured. When you are ready to book, compare live scope on our{" "}
-        <Link href={standard}>standard cleaning services in Cape Town</Link> and{" "}
-        <Link href={deep}>deep cleaning services in Cape Town</Link> service pages.
+        <SafeInternalLink href={standard}>standard cleaning services in Cape Town</SafeInternalLink> and{" "}
+        <SafeInternalLink href={deep}>deep cleaning services in Cape Town</SafeInternalLink> service pages.
       </p>
 
       <h2>What standard cleaning covers in Cape Town homes</h2>
       <p>
-        <Link href={standard}>Standard cleaning in Cape Town</Link> is built around repeatable upkeep: floors that see
+        <SafeInternalLink href={standard}>Standard cleaning in Cape Town</SafeInternalLink> is built around repeatable upkeep: floors that see
         daily traffic, kitchens that collect grease between proper degreases, bathrooms that need reliable sanitisation,
         and dust on surfaces guests actually notice. It is the tier most customers use weekly, every two weeks, or
         monthly when the goal is to keep a home &quot;livable&quot; rather than to strip years of build-up from grout,
@@ -38,13 +38,13 @@ export function DeepVsStandardCleaningCapeTownPost() {
       <p>
         Standard visits are not the right tool for post-renovation dust, neglected ovens, or bathrooms where limescale has
         hardened over many months. Those jobs need either add-ons selected during booking or a move to{" "}
-        <Link href={deep}>deep cleaning in Cape Town</Link> so the team can bring enough dwell time for detail work
+        <SafeInternalLink href={deep}>deep cleaning in Cape Town</SafeInternalLink> so the team can bring enough dwell time for detail work
         without rushing the basics.
       </p>
 
       <h2>When deep cleaning makes sense in Cape Town</h2>
       <p>
-        <Link href={deep}>Deep cleaning in Cape Town</Link> is the reset button: extra attention on appliance fronts,
+        <SafeInternalLink href={deep}>Deep cleaning in Cape Town</SafeInternalLink> is the reset button: extra attention on appliance fronts,
         bathroom fixtures, corners, and the areas that change how a space feels when you walk in. Coastal humidity,
         winter rain tracked indoors, and older plumbing layouts common in Claremont, Wynberg, and Rondebosch homes all
         contribute to build-up that a weekly wipe will not fully reverse.
@@ -57,7 +57,7 @@ export function DeepVsStandardCleaningCapeTownPost() {
         <li>Before listing a property for sale or photos, when presentation detail directly affects first impressions.</li>
         <li>
           Ahead of rental handovers—pair this guide with our{" "}
-          <Link href="/blog/move-out-cleaning-guide">move-out cleaning guide for Cape Town rentals</Link> when timing and
+          <SafeInternalLink href="/blog/move-out-cleaning-guide">move-out cleaning guide for Cape Town rentals</SafeInternalLink> when timing and
           inspection photos have to line up.
         </li>
       </ul>
@@ -72,7 +72,7 @@ export function DeepVsStandardCleaningCapeTownPost() {
       <h2>How Airbnb turnover cleaning fits the picture</h2>
       <p>
         Short-stay hosts operate on a different clock: check-out, cleaning, check-in—sometimes within hours.{" "}
-        <Link href={airbnb}>Airbnb cleaning in Cape Town</Link> is tuned for turnover realities: sand near beaches,
+        <SafeInternalLink href={airbnb}>Airbnb cleaning in Cape Town</SafeInternalLink> is tuned for turnover realities: sand near beaches,
         coffee rings on dining tables, bathrooms that must read hotel-fresh, and staging that shows up in listing
         photos. It is not identical to standard residential cleaning because the success metric is the next guest review,
         not just &quot;good enough until next week.&quot;
@@ -87,8 +87,8 @@ export function DeepVsStandardCleaningCapeTownPost() {
 
       <h2>Practical booking tips for Cape Town customers</h2>
       <p>
-        Whether you land on <Link href={standard}>standard home cleaning in Cape Town</Link>,{" "}
-        <Link href={deep}>professional deep cleaning</Link>, or <Link href={airbnb}>Airbnb turnover support</Link>, the
+        Whether you land on <SafeInternalLink href={standard}>standard home cleaning in Cape Town</SafeInternalLink>,{" "}
+        <SafeInternalLink href={deep}>professional deep cleaning</SafeInternalLink>, or <SafeInternalLink href={airbnb}>Airbnb turnover support</SafeInternalLink>, the
         same principles apply: pin your exact entrance, mention estate or complex rules, and flag parking constraints
         early. Cape Town&apos;s hills, school zones, and narrow side streets make access notes surprisingly
         high-impact—they reduce delays and protect the time you paid for on the checklist.
@@ -111,11 +111,11 @@ export function DeepVsStandardCleaningCapeTownPost() {
       </p>
       <p>
         That alignment also protects your budget:{" "}
-        <Link href={standard}>standard cleaning services in Cape Town</Link> stay economical when they are allowed to do
+        <SafeInternalLink href={standard}>standard cleaning services in Cape Town</SafeInternalLink> stay economical when they are allowed to do
         what they do best—fast, consistent maintenance—while{" "}
-        <Link href={deep}>deep cleaning services</Link> earn their place when detail work is the whole point of the
+        <SafeInternalLink href={deep}>deep cleaning services</SafeInternalLink> earn their place when detail work is the whole point of the
         day. Hosts add another variable: guest expectations set by photos and reviews, which is why{" "}
-        <Link href={airbnb}>Airbnb cleaning in Cape Town</Link> deserves its own playbook even when the physical tasks
+        <SafeInternalLink href={airbnb}>Airbnb cleaning in Cape Town</SafeInternalLink> deserves its own playbook even when the physical tasks
         overlap with residential work.
       </p>
 
@@ -145,7 +145,7 @@ export function DeepVsStandardCleaningCapeTownPost() {
       <p>
         Not necessarily. Airbnb turnover cleaning optimises for guest changeovers. If you also live in the property,
         keep a separate rhythm for the spaces you use daily, and use the{" "}
-        <Link href={airbnb}>Airbnb cleaning Cape Town</Link> guide when the priority is the next guest&apos;s experience.
+        <SafeInternalLink href={airbnb}>Airbnb cleaning Cape Town</SafeInternalLink> guide when the priority is the next guest&apos;s experience.
       </p>
 
       <h3>How far ahead should I book in peak Cape Town season?</h3>

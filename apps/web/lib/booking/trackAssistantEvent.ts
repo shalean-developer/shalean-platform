@@ -1,19 +1,19 @@
 "use client";
 
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+
+export type AssistantAnalyticsEventType =
+  | typeof ANALYTICS_EVENTS.SLOT_SELECTED
+  | typeof ANALYTICS_EVENTS.EXTRA_ADDED
+  | typeof ANALYTICS_EVENTS.RECOMMENDATION_CLICKED
+  | typeof ANALYTICS_EVENTS.TIMES_LOADED
+  | typeof ANALYTICS_EVENTS.PRICE_CALCULATED;
 
 /**
  * Fire-and-forget analytics for the booking assistant (requires signed-in user).
  */
-export function trackAssistantEvent(
-  eventType:
-    | "slot_selected"
-    | "extra_added"
-    | "recommendation_clicked"
-    | "times_loaded"
-    | "price_calculated",
-  payload: Record<string, unknown>,
-): void {
+export function trackAssistantEvent(eventType: AssistantAnalyticsEventType, payload: Record<string, unknown>): void {
   const sb = getSupabaseBrowser();
   if (!sb) return;
 

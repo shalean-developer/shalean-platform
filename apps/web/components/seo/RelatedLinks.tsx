@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { nearbyProgrammaticLocations, PROGRAMMATIC_LOCATIONS } from "@/lib/seo/locations";
 import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
@@ -103,9 +103,9 @@ export function RelatedLinks({
           <ul className="mt-3 space-y-2">
             {services.map((row) => (
               <li key={row.slug}>
-                <Link href={CAPE_TOWN_SERVICE_SEO[row.slug].path} className={cn(linkInNavClassName, "text-sm font-medium")}>
+                <SafeInternalLink href={CAPE_TOWN_SERVICE_SEO[row.slug].path} className={cn(linkInNavClassName, "text-sm font-medium")}>
                   {row.label}
-                </Link>
+                </SafeInternalLink>
               </li>
             ))}
           </ul>
@@ -115,9 +115,9 @@ export function RelatedLinks({
           <ul className="mt-3 space-y-2">
             {locations.map((row) => (
               <li key={row.slug}>
-                <Link href={row.href} className={cn(linkInNavClassName, "text-sm font-medium")}>
+                <SafeInternalLink href={row.href} className={cn(linkInNavClassName, "text-sm font-medium")}>
                   {row.label}
-                </Link>
+                </SafeInternalLink>
               </li>
             ))}
           </ul>

@@ -37,7 +37,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li>Keep your invoice for deposit conversations—especially across Cape Town rental agencies with strict timelines.</li>
 </ul>
 
-<p>Still deciding between a lighter reset and full handover detail? Compare scopes on our <a href="/services/move-out-cleaning-cape-town">move-out cleaning Cape Town</a> page, read <a href="/blog/cleaning-cost-cape-town">how cleaning pricing works in Cape Town</a>, or see <a href="/blog/deep-vs-standard-cleaning-cape-town">deep vs standard cleaning</a> if you are unsure which tier fits before keys go back.</p>
+<p>Still deciding between a lighter reset and full handover detail? Compare scopes on our <a href="/services/move-out-cleaning-cape-town">move-out cleaning Cape Town</a> page, read <a href="/cleaning-prices-cape-town">how cleaning pricing works in Cape Town</a>, or see <a href="/blog/deep-cleaning-vs-regular-cleaning-cape-town">deep vs standard cleaning</a> if you are unsure which tier fits before keys go back.</p>
 <p>Mid-lease, many rentals stay calmer with <a href="/services/standard-cleaning-cape-town">standard cleaning services in Cape Town</a> on a rhythm so move-out day is less overwhelming.</p>
 `.trim(),
 
@@ -110,7 +110,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li><strong>Deep cleaning:</strong> more detailed and thorough</li>
 <li><strong>Move-out cleaning:</strong> includes everything needed for inspection-ready results</li>
 </ul>
-<p>Learn more about <a href="/services/deep-cleaning-cape-town">deep cleaning services in Cape Town</a> vs regular cleaning in our <a href="/blog/deep-vs-standard-cleaning-cape-town">deep vs standard cleaning guide</a>, or jump straight to the right service page from that comparison.</p>
+<p>Learn more about <a href="/services/deep-cleaning-cape-town">deep cleaning services in Cape Town</a> vs regular cleaning in our <a href="/blog/deep-cleaning-vs-regular-cleaning-cape-town">deep vs standard cleaning guide</a>, or jump straight to the right service page from that comparison.</p>
 <h3>3. Condition of the property</h3>
 <p>A well-maintained home costs less to clean than one with:</p>
 <ul>
@@ -145,7 +145,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li>Linen changes</li>
 <li>Bathroom and kitchen sanitization</li>
 </ul>
-<p>Learn more about <a href="/services/airbnb-cleaning-cape-town">Airbnb cleaning services in Cape Town</a> if you manage a rental property, or use our <a href="/blog/airbnb-cleaning-checklist">Airbnb cleaning checklist for Cape Town hosts</a> when you want a room-by-room turnover run sheet.</p>
+<p>Learn more about <a href="/services/airbnb-cleaning-cape-town">Airbnb cleaning services in Cape Town</a> if you manage a rental property, or use our <a href="/blog/airbnb-cleaning-checklist-cape-town">Airbnb cleaning checklist for Cape Town hosts</a> when you want a room-by-room turnover run sheet.</p>
 
 <h2>Cleaning costs across Cape Town</h2>
 <p>Prices are generally similar across areas like <a href="/locations/claremont-cleaning-services">Claremont</a>, <a href="/locations/wynberg-cleaning-services">Wynberg</a>, and <a href="/locations/rondebosch-cleaning-services">Rondebosch</a>. However, availability and travel distance may slightly affect pricing and scheduling.</p>
@@ -181,7 +181,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <p>Airbnb cleaning—often called <strong>Airbnb turnover cleaning</strong>—is the reset you perform between check-out and check-in so the next guest walks into a space that matches your listing photos and your brand promise.</p>
 <p>It usually includes kitchens and bathrooms to a high standard, floors that read clean in wide shots, dusting on surfaces guests touch first, and finishing touches that signal care: straight cushions, aligned decor, bins emptied, and consumables where guests expect them.</p>
 <p>It differs from <a href="/services/standard-cleaning-cape-town">standard home cleaning in Cape Town</a> because the goal is not only &quot;maintained this week,&quot; but <strong>guest-ready now</strong>—often on a clock.</p>
-<p>It also differs from <a href="/services/deep-cleaning-cape-town">deep cleaning services in Cape Town</a> in cadence: deep work targets build-up and detail zones you might schedule seasonally or before peak season, while turnover work prioritises presentation, hygiene, and speed. For a side-by-side comparison of tiers, read our guide on <a href="/blog/deep-vs-standard-cleaning-cape-town">deep cleaning vs standard cleaning</a>.</p>
+<p>It also differs from <a href="/services/deep-cleaning-cape-town">deep cleaning services in Cape Town</a> in cadence: deep work targets build-up and detail zones you might schedule seasonally or before peak season, while turnover work prioritises presentation, hygiene, and speed. For a side-by-side comparison of tiers, read our guide on <a href="/blog/deep-cleaning-vs-regular-cleaning-cape-town">deep cleaning vs standard cleaning</a>.</p>
 <p>In Cape Town, <strong>short-term rental cleaning</strong> often has to contend with coastal dust, wind-blown debris on balconies, and tight handover windows—especially when guests are arriving the same afternoon. Summer holidays and long weekends add extra pressure on same-day slots across the CBD, Sea Point, and the Southern Suburbs.</p>
 
 <h2>Complete Airbnb cleaning checklist</h2>

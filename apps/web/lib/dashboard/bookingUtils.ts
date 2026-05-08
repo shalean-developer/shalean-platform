@@ -1,4 +1,5 @@
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import type { BookingRow, CleanerEmbed, DashboardBooking, NormalizedBookingStatus } from "@/lib/dashboard/types";
 import {
@@ -11,19 +12,26 @@ import {
 export type { NormalizedBookingStatus } from "@/lib/dashboard/types";
 
 export function normalizeStatus(s: string | null | undefined): NormalizedBookingStatus {
-  const v = (s ?? "pending").toLowerCase();
+  const raw = (s ?? "pending").toLowerCase();
+  const v = canonicalDbBookingStatus(raw) || raw;
+  if (
+    raw === "pending_payment" ||
+    raw === "payment_mismatch" ||
+    raw === "payment_reconciliation_required"
+  ) {
+    return raw as NormalizedBookingStatus;
+  }
   if (
     v === "pending" ||
     v === "pending_assignment" ||
     v === "offered" ||
-    v === "confirmed" ||
     v === "assigned" ||
     v === "in_progress" ||
     v === "completed" ||
     v === "cancelled" ||
     v === "failed"
   ) {
-    return v;
+    return v as NormalizedBookingStatus;
   }
   return "pending";
 }

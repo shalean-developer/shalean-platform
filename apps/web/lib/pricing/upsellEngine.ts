@@ -8,10 +8,14 @@ import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
 export type UpsellContextInput = Pick<
   BookingStep1State,
-  "service" | "rooms" | "extraRooms" | "extras"
->;
+  "service" | "rooms" | "bathrooms" | "extraRooms" | "extras" | "serviceAreaName" | "propertyType"
+> & {
+  pastBookings?: { extras?: string[] }[];
+};
 
 const HEAVY_SERVICES = new Set<string>(["deep", "move", "carpet"]);
+const AIRBNB_AREAS = ["sea point", "green point", "camps bay", "bantry bay", "waterfront", "de waterkant"];
+const FAMILY_HOME_AREAS = ["constantia", "newlands", "durbanville", "claremont", "rondebosch"];
 
 /**
  * Contextual add-on ids (engine keys) for light-touch recommendations.
@@ -25,13 +29,25 @@ export function getRecommendedExtraIds(input: UpsellContextInput, snapshot: Pric
   };
 
   if (HEAVY_SERVICES.has(svc)) {
+    if (svc === "move") {
+      push("inside-oven");
+      push("inside-cabinets");
+      push("interior-walls");
+      push("inside-fridge");
+    }
+    if (svc === "deep") {
+      push("inside-oven");
+      push("interior-walls");
+      push("inside-cabinets");
+    }
     push("mattress-cleaning");
     push("carpet-cleaning");
     push("balcony-cleaning");
-    return [...new Set(out)];
   }
 
   if (svc === "airbnb") {
+    push("inside-fridge");
+    push("laundry");
     push("ironing");
     push("interior-windows");
     push("inside-oven");
@@ -49,6 +65,22 @@ export function getRecommendedExtraIds(input: UpsellContextInput, snapshot: Pric
   }
   if (input.extraRooms > 0) {
     push("inside-cabinets");
+  }
+  if ((input.bathrooms ?? 0) >= 2) {
+    push("interior-walls");
+  }
+  const suburb = input.serviceAreaName.trim().toLowerCase();
+  if (AIRBNB_AREAS.some((area) => suburb.includes(area))) {
+    push("laundry");
+    push("inside-fridge");
+    push("interior-windows");
+  }
+  if (FAMILY_HOME_AREAS.some((area) => suburb.includes(area)) || input.propertyType === "house") {
+    push("inside-cabinets");
+    push("interior-walls");
+  }
+  for (const id of input.pastBookings?.flatMap((booking) => booking.extras ?? []) ?? []) {
+    push(id);
   }
   if (svc === "move") {
     push("interior-windows");
@@ -70,6 +102,7 @@ export function getPrimaryBundleForContext(
 
   if (HEAVY_SERVICES.has(s)) {
     return (
+      list.find((b) => b.id === "move_out_package" && s === "move") ??
       list.find((b) => b.id === "deep_refresh_bundle") ?? list.find((b) => b.id === "outdoor_bundle") ?? null
     );
   }

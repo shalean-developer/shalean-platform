@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 
 export function GrowthCtaLink({
@@ -30,7 +31,7 @@ export function GrowthCtaLink({
         : {})}
       onClick={() => {
         beforeNavigate?.();
-        trackGrowthEvent("start_booking", { source });
+        trackGrowthEvent(ANALYTICS_EVENTS.START_BOOKING, { source });
       }}
     >
       {children}

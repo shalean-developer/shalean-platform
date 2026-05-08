@@ -1,10 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { Briefcase, Building2, ChevronDown, Home, Info, MapPin, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import BookingLayout from "@/components/booking/BookingLayout";
-import { trackBookingFunnelEvent } from "@/lib/booking/bookingFlowAnalytics";
+import {
+  ANALYTICS_EVENTS,
+  BOOKING_FUNNEL_ROW,
+  trackBookingAnalyticsEvent,
+  trackBookingFunnelEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
 import { bookingCopy } from "@/lib/booking/copy";
 import { bookingServiceIdFromType } from "@/components/booking/serviceCategories";
 import { useBookingFlow } from "@/components/booking/BookingFlowContext";
@@ -58,8 +63,12 @@ export function StepEntry() {
   const addressHelpRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setEntryContinueGate(true);
+    queueMicrotask(() => setEntryContinueGate(true));
   }, []);
+
+  useEffect(() => {
+    router.prefetch(bookingHref("quote"));
+  }, [bookingHref, router]);
 
   useEffect(() => {
     if (!addressHelpOpen) return;
@@ -78,7 +87,7 @@ export function StepEntry() {
   }, [addressHelpOpen]);
 
   useEffect(() => {
-    setStreetDraft(state.location);
+    queueMicrotask(() => setStreetDraft(state.location));
   }, [state.location]);
 
   const onServiceAreasLoaded = useCallback((count: number, error: string | null) => {
@@ -126,7 +135,14 @@ export function StepEntry() {
 
   const goQuote = useCallback(() => {
     if (!canContinue) return;
-    trackBookingFunnelEvent("entry", "next", { route_step: "entry" });
+    trackBookingFunnelEvent("entry", BOOKING_FUNNEL_ROW.NEXT, { route_step: "entry" });
+    trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_CTA_CLICKED, state, {
+      cta_id: "entry_continue",
+      cta_label: copy.cta,
+      cta_destination_step: "quote",
+      step: "entry",
+      selected_extras: state.extras,
+    });
     commitStreet(streetDraft);
     setState((p) => ({
       ...p,
@@ -138,8 +154,10 @@ export function StepEntry() {
       /** Always align with entry → quote default; do not keep a stale `service` from storage. */
       service: bookingServiceIdFromType("standard_cleaning"),
     }));
-    router.push(bookingHref("quote"));
-  }, [canContinue, commitStreet, streetDraft, router, setState, bookingHref]);
+    startTransition(() => {
+      router.push(bookingHref("quote"));
+    });
+  }, [bookingHref, canContinue, commitStreet, copy.cta, router, setState, state, streetDraft]);
 
   const suburbMissing = suburbBlurred && !state.serviceAreaLocationId;
 

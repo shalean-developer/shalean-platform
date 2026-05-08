@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { ReactNode } from "react";
 import { BlogArticleEndCta } from "@/components/blog/BlogArticleConversionBlocks";
 import { BlogLocationBookCta } from "@/components/blog/BlogLocationBookCta";
@@ -125,15 +125,15 @@ export function BlogPostLayout({
           main={
             <article data-blog-article-root className="space-y-8">
               <nav className="text-sm text-zinc-500" aria-label="Breadcrumb">
-                <Link href="/" className={cn(linkInNavClassName, "text-sm")}>
+                <SafeInternalLink href="/" className={cn(linkInNavClassName, "text-sm")}>
                   Home
-                </Link>
+                </SafeInternalLink>
                 <span className="mx-2 text-zinc-400" aria-hidden>
                   /
                 </span>
-                <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
+                <SafeInternalLink href="/blog" className={cn(linkInNavClassName, "text-sm")} linkContext="blog layout crumb">
                   Blog
-                </Link>
+                </SafeInternalLink>
                 <span className="mx-2 text-zinc-400" aria-hidden>
                   /
                 </span>
@@ -163,12 +163,13 @@ export function BlogPostLayout({
                     <>
                       {" "}
                       ·{" "}
-                      <Link
+                      <SafeInternalLink
                         href={`/blog/category/${categorySlug}`}
                         className="text-blue-700 underline-offset-4 hover:underline"
+                        linkContext="blog layout category"
                       >
                         {categoryName}
-                      </Link>
+                      </SafeInternalLink>
                     </>
                   ) : categoryName ? (
                     <>
@@ -210,12 +211,13 @@ export function BlogPostLayout({
                   <ul className="mt-4 space-y-2">
                     {supplementalInternalLinks.map((l) => (
                       <li key={l.href + l.label}>
-                        <Link
+                        <SafeInternalLink
                           href={l.href}
                           className="text-base font-medium text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline"
+                          linkContext="blog supplemental internal"
                         >
                           {l.label}
-                        </Link>
+                        </SafeInternalLink>
                       </li>
                     ))}
                   </ul>
@@ -243,18 +245,18 @@ export function BlogPostLayout({
 
               <footer className="not-prose border-t border-zinc-200/90 pt-10 text-center">
                 <p className="text-sm text-zinc-500">
-                  <Link href="/blog" className={cn(linkInNavClassName, "text-sm")}>
+                  <SafeInternalLink href="/blog" className={cn(linkInNavClassName, "text-sm")} linkContext="blog footer">
                     ← Back to all articles
-                  </Link>
+                  </SafeInternalLink>
                 </p>
                 <p className="mt-6 text-sm text-zinc-500">
-                  <Link href="/cleaning-services-cape-town" className={linkInNavClassName}>
+                  <SafeInternalLink href="/cleaning-services-cape-town" className={linkInNavClassName}>
                     Cape Town service areas
-                  </Link>
+                  </SafeInternalLink>
                   {" · "}
-                  <Link href="/booking" className={linkInNavClassName}>
+                  <SafeInternalLink href="/booking" className={linkInNavClassName}>
                     Book cleaning
-                  </Link>
+                  </SafeInternalLink>
                 </p>
               </footer>
             </article>

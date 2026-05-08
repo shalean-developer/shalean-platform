@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { BookingStep1State } from "./BookingStep1";
 import { getMaxRoomsForService } from "./serviceCategories";
 import { StepperInput } from "./StepperInput";
+import { cn } from "@/lib/utils";
 
 const EXTRA_ROOMS_MAX = 10;
 
@@ -11,6 +12,8 @@ type HomeDetailsProps = {
   setState: Dispatch<SetStateAction<BookingStep1State>>;
   /** Hide the address field when location was captured on an earlier step. */
   omitLocation?: boolean;
+  /** Blueprint-style horizontal +/- row (rooms / baths / extras). */
+  stepperVariant?: "card" | "segmented";
 };
 
 export function HomeDetails({
@@ -18,10 +21,13 @@ export function HomeDetails({
   maxRooms,
   setState,
   omitLocation = false,
+  stepperVariant = "card",
 }: HomeDetailsProps) {
+  const seg = stepperVariant === "segmented";
+
   return (
-    <div className="w-full max-w-none space-y-4">
-      {omitLocation && state.serviceAreaName.trim() ? (
+    <div className={cn("w-full max-w-none", seg ? "space-y-3" : "space-y-4")}>
+      {omitLocation && state.serviceAreaName.trim() && !seg ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           <span className="font-medium text-zinc-800 dark:text-zinc-200">Service area:</span>{" "}
           {state.serviceAreaName.trim()}
@@ -49,17 +55,25 @@ export function HomeDetails({
         </div>
       ) : null}
 
-      <div className="grid w-full max-w-none min-w-0 grid-cols-3 items-stretch gap-2 sm:gap-4 md:gap-6 lg:gap-8">
+      <div
+        className={cn(
+          "grid w-full max-w-none min-w-0 grid-cols-3 items-stretch",
+          seg ? "gap-2 sm:gap-3" : "gap-2 sm:gap-4 md:gap-6 lg:gap-8",
+        )}
+      >
         <StepperInput
-          label="Bedrooms"
+          label={seg ? "Beds" : "Bedrooms"}
           description={
-            state.service === "quick"
-              ? "Bedrooms, living areas — Quick Clean caps main rooms at 5."
-              : "Bedrooms, living areas"
+            seg
+              ? undefined
+              : state.service === "quick"
+                ? "Bedrooms, living areas — Quick Clean caps main rooms at 5."
+                : "Bedrooms, living areas"
           }
           value={state.rooms}
           min={1}
           max={maxRooms}
+          variant={stepperVariant}
           onChange={(rooms) =>
             setState((p) => ({
               ...p,
@@ -68,19 +82,21 @@ export function HomeDetails({
           }
         />
         <StepperInput
-          label="Bathrooms"
-          description="Bathrooms & toilets"
+          label={seg ? "Baths" : "Bathrooms"}
+          description={seg ? undefined : "Bathrooms & toilets"}
           value={state.bathrooms}
           min={1}
           max={10}
+          variant={stepperVariant}
           onChange={(bathrooms) => setState((p) => ({ ...p, bathrooms }))}
         />
         <StepperInput
-          label="Extra"
-          description="Offices, garages, etc."
+          label={seg ? "Extra rooms" : "Extra"}
+          description={seg ? undefined : "Offices, garages, etc."}
           value={state.extraRooms}
           min={0}
           max={EXTRA_ROOMS_MAX}
+          variant={stepperVariant}
           onChange={(extraRooms) =>
             setState((p) => ({ ...p, extraRooms }))
           }

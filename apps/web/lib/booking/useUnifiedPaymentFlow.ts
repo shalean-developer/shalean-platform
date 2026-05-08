@@ -2,19 +2,39 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { PaymentPage } from "@/components/payment/PaymentPage";
 import type { BookingPaymentSummary } from "@/lib/payments/bookingPaymentSummary";
-import { clampTipZar } from "@/lib/payments/bookingPaymentSummary";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
+import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
+import {
+  ANALYTICS_EVENTS,
+  trackBookingAnalyticsEvent,
+  type BookingAnalyticsState,
+} from "@/lib/booking/bookingFlowAnalytics";
+import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { initializePayment } from "@/lib/payments/paystack";
 
 type PaystackTransaction = { reference?: string };
 
-type PaymentCheckoutClientProps = {
-  summary: BookingPaymentSummary;
+export type UnifiedPaymentMode = "funnel" | "existing_booking";
+
+/** Supports legacy URLs that used `pay_entry=funnel` with `mode=existing`. */
+export function unifiedPaymentModeFromSearchParams(sp: URLSearchParams): UnifiedPaymentMode {
+  if (sp.get("mode") === "funnel" || sp.get("pay_entry") === "funnel") return "funnel";
+  return "existing_booking";
+}
+
+export type UnifiedPaystackMetadataContext = {
+  paymentMode: UnifiedPaymentMode;
+  /** Marketing / URL `source` and similar — stored as string in Paystack metadata. */
+  attributionSource: string | null;
 };
 
-function buildInlinePaystackMetadata(summary: BookingPaymentSummary, email: string, tip: number): Record<string, string> {
+export function buildInlinePaystackMetadata(
+  summary: BookingPaymentSummary,
+  email: string,
+  tip: number,
+  ctx: UnifiedPaystackMetadataContext,
+): Record<string, string> {
   const totalZar = summary.priceZar + tip;
   const visitTotalZar = summary.priceZar;
   const subtotalZar = Math.max(0, summary.bookingCoreZar + summary.serviceFeeZar);
@@ -32,7 +52,9 @@ function buildInlinePaystackMetadata(summary: BookingPaymentSummary, email: stri
     line_items: [{ id: "booking_total", name: "Booking total", amount_zar: visitTotalZar }],
     pricing_version_id: null as string | null,
   };
-  const extrasSlugs = summary.extras.map((x) => (typeof x.slug === "string" ? x.slug : x.name ?? "")).filter((s) => s.length > 0);
+  const extrasSlugs = summary.extras
+    .map((x) => (typeof x.slug === "string" ? x.slug : x.name ?? ""))
+    .filter((s) => s.length > 0);
   const bookingCtx = {
     service: summary.service,
     date: summary.dateYmd,
@@ -42,6 +64,8 @@ function buildInlinePaystackMetadata(summary: BookingPaymentSummary, email: stri
     rooms: summary.bedrooms,
     bathrooms: summary.bathrooms,
   };
+  const sessionId = getAnalyticsSessionId();
+  const analyticsSessionId = sessionId === "server" ? "" : sessionId;
   return {
     shalean_booking_id: summary.id,
     booking_id: summary.id,
@@ -71,20 +95,48 @@ function buildInlinePaystackMetadata(summary: BookingPaymentSummary, email: stri
     referral_checkout_fingerprint: "",
     price_snapshot: JSON.stringify(priceSnapshot),
     booking: JSON.stringify(bookingCtx),
+    payment_mode: ctx.paymentMode,
+    attribution_source: ctx.attributionSource?.trim() ?? "",
+    analytics_session_id: analyticsSessionId,
   };
 }
 
-export function PaymentCheckoutClient({ summary }: PaymentCheckoutClientProps) {
+export function bookingAnalyticsStateFromSummary(summary: BookingPaymentSummary): BookingAnalyticsState {
+  const extras = summary.extras
+    .map((x) => (typeof x.slug === "string" ? x.slug : x.name))
+    .filter((x): x is string => Boolean(x && String(x).trim()));
+  return {
+    service: summary.service,
+    service_type: summary.service,
+    finalPrice: summary.priceZar,
+    finalHours: summary.hours,
+    extras,
+  };
+}
+
+type UseUnifiedPaymentFlowOptions = {
+  summary: BookingPaymentSummary;
+  paymentMode: UnifiedPaymentMode;
+  attributionSource: string | null;
+  /** Override derived state for analytics (e.g. cleaner id from funnel store). */
+  analyticsState?: BookingAnalyticsState | null;
+};
+
+export function useUnifiedPaymentFlow({
+  summary,
+  paymentMode,
+  attributionSource,
+  analyticsState,
+}: UseUnifiedPaymentFlowOptions) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tipZar, setTipZar] = useState(0);
-  const [coverOn, setCoverOn] = useState(true);
-  const [walletOn, setWalletOn] = useState(false);
+
+  const stateForEvents = analyticsState ?? bookingAnalyticsStateFromSummary(summary);
 
   const verifyAndFinish = useCallback(
-    async (reference: string, _tipAtCharge: number) => {
+    async (reference: string) => {
       const ref = reference.trim();
       if (!ref) {
         setError("Missing payment reference. Try again or contact support.");
@@ -104,8 +156,8 @@ export function PaymentCheckoutClient({ summary }: PaymentCheckoutClientProps) {
         setError(errText);
         return;
       }
-      const state = json.state;
-      if (state === "payment_mismatch" || state === "payment_reconciliation_required") {
+      const st = json.state;
+      if (st === "payment_mismatch" || st === "payment_reconciliation_required") {
         setError(
           typeof json.upsertError === "string" && json.upsertError.trim()
             ? json.upsertError.trim()
@@ -121,7 +173,7 @@ export function PaymentCheckoutClient({ summary }: PaymentCheckoutClientProps) {
         );
         return;
       }
-      router.push(`/payment/success?reference=${encodeURIComponent(ref)}`);
+      router.push(`/booking/success?reference=${encodeURIComponent(ref)}`);
     },
     [router],
   );
@@ -134,15 +186,29 @@ export function PaymentCheckoutClient({ summary }: PaymentCheckoutClientProps) {
       setError("This booking has no customer email. Contact support.");
       return;
     }
-    const tip = clampTipZar(tipZar);
-    const amount = Math.max(100, Math.round((summary.priceZar + tip) * 100));
+    const tip = 0;
+    const amount = Math.max(100, Math.round(summary.priceZar * 100));
     const paystackRef = `pay_${crypto.randomUUID()}`;
-    const metadata = buildInlinePaystackMetadata(summary, email, tip);
+    const metadata = buildInlinePaystackMetadata(summary, email, tip, {
+      paymentMode,
+      attributionSource,
+    });
     if (typeof metadata.price_snapshot !== "string" || !metadata.price_snapshot.trim()) {
       setError("Invalid checkout preview. Refresh and try again.");
       return;
     }
-    console.log("[PAYSTACK INIT METADATA]", metadata);
+    trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, stateForEvents, {
+      payment_provider: "paystack",
+      payment_mode: paymentMode,
+      paystack_flow: "inline",
+      booking_id: summary.id,
+    });
+    trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_INITIATED, {
+      step: "booking_payment",
+      booking_id: summary.id,
+      payment_mode: paymentMode,
+      total_zar: summary.priceZar,
+    });
     setBusy(true);
     try {
       initializePayment({
@@ -156,7 +222,7 @@ export function PaymentCheckoutClient({ summary }: PaymentCheckoutClientProps) {
               ? transaction.reference.trim()
               : paystackRef;
           try {
-            await verifyAndFinish(ref, tip);
+            await verifyAndFinish(ref);
           } finally {
             setBusy(false);
           }
@@ -170,26 +236,15 @@ export function PaymentCheckoutClient({ summary }: PaymentCheckoutClientProps) {
       setBusy(false);
       setError(e instanceof Error ? e.message : "Could not start checkout.");
     }
-  }, [summary, tipZar, verifyAndFinish]);
+  }, [summary, paymentMode, attributionSource, stateForEvents, verifyAndFinish]);
 
-  const totalZar = summary.priceZar + clampTipZar(tipZar);
-  const payDisabled = totalZar <= 0 || !summary.email?.trim();
+  const payDisabled = summary.priceZar <= 0 || !summary.email?.trim();
 
-  return (
-    <PaymentPage
-      summary={summary}
-      tipZar={clampTipZar(tipZar)}
-      onTipZarChange={(n) => setTipZar(clampTipZar(n))}
-      coverOn={coverOn}
-      onCoverChange={setCoverOn}
-      walletOn={walletOn}
-      onWalletChange={setWalletOn}
-      busy={busy}
-      error={error}
-      message={message}
-      onPay={handlePay}
-      onBack={() => router.push("/dashboard/bookings")}
-      payDisabled={payDisabled}
-    />
-  );
+  return {
+    busy,
+    error,
+    message,
+    handlePay,
+    payDisabled,
+  };
 }

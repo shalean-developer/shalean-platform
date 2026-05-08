@@ -1,13 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { blogFaqHeadingDomId, defaultBlogBlockAnchorId } from "@/lib/blog/blog-block-anchors";
 import { coerceBlogImageSrcForNext } from "@/lib/blogImageMap";
 import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
 import { injectMarkdownAutoLinks } from "@/lib/blog/seo/auto-link-keywords";
 import { injectRichTextHeadingAnchors } from "@/lib/blog/inject-rich-text-heading-anchors";
 import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
+import { sanitizeEditorialHtml, sanitizeEditorialMarkdown } from "@/lib/blog/editorialSanitize";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,7 +70,9 @@ function ParagraphWithOptionalInlineLinks({
   const linkClass =
     "font-medium text-blue-600 underline-offset-4 hover:text-blue-700 hover:underline";
   const parts: React.ReactNode[] = [];
-  const body = autoLinkSlug ? injectMarkdownAutoLinks(text) : text;
+  const body = autoLinkSlug
+    ? injectMarkdownAutoLinks(sanitizeEditorialMarkdown(text))
+    : sanitizeEditorialMarkdown(text);
   const re = /\[([^\]]+)\]\(([^)]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
@@ -79,9 +82,9 @@ function ParagraphWithOptionalInlineLinks({
       parts.push(body.slice(last, m.index));
     }
     parts.push(
-      <Link key={`${k++}-${m.index}`} href={m[2]} className={linkClass}>
+      <SafeInternalLink key={`${k++}-${m.index}`} href={m[2]} className={linkClass} linkContext="blog paragraph markdown">
         {m[1]}
-      </Link>,
+      </SafeInternalLink>,
     );
     last = m.index + m[0].length;
   }
@@ -300,7 +303,9 @@ function Block({
           ) : null}
           <div className="mt-5">
             <Button asChild size="lg" variant={block.variant === "secondary" ? "secondary" : "default"}>
-              <Link href={block.link}>{safeBlockText(block.button_text)}</Link>
+              <SafeInternalLink href={block.link} linkContext="blog cta block">
+                {safeBlockText(block.button_text)}
+              </SafeInternalLink>
             </Button>
           </div>
         </aside>
@@ -360,7 +365,7 @@ function Block({
     }
 
     case "rich_text": {
-      const safe = sanitizeBlogRichHtml(block.html);
+      const safe = sanitizeEditorialHtml(sanitizeBlogRichHtml(block.html));
       const scope = block.id?.trim() || defaultBlogBlockAnchorId(block, gi);
       const { html: richHtml } = injectRichTextHeadingAnchors(safe, scope);
       return (
@@ -506,12 +511,13 @@ function Block({
           <ul className="space-y-2">
             {links.map((l) => (
               <li key={String(l.url) + safeBlockText(l.label)}>
-                <Link
-                  href={l.url}
+                <SafeInternalLink
+                  href={String(l.url)}
                   className="text-base font-medium text-blue-600 underline-offset-4 hover:text-blue-700 hover:underline"
+                  linkContext="blog internal_links block"
                 >
                   {safeBlockText(l.label)}
-                </Link>
+                </SafeInternalLink>
               </li>
             ))}
           </ul>

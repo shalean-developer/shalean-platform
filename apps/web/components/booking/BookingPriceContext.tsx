@@ -1,10 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { BookingStep1State } from "@/components/booking/useBookingStep1";
 import { useBookingStep1 } from "@/components/booking/useBookingStep1";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
-import { bookingPricingFingerprint } from "@/lib/booking/bookingPricingFingerprint";
 import {
   enrichAvailabilitySlotsWithPricing,
   type PricedAvailabilitySlot,
@@ -36,39 +34,118 @@ export type BookingPriceContextValue = {
 
 const BookingPriceContext = createContext<BookingPriceContextValue | null>(null);
 
-function buildCanon(state: BookingStep1State, tier: VipTier, snapshot: PricingRatesSnapshot | null) {
-  if (!snapshot || (!state.service && !state.service_type)) return null;
+type PricingCatalogPayload = {
+  snapshot: PricingRatesSnapshot;
+  orderedExtraSlugs: string[];
+};
+
+let pricingCatalogCache: PricingCatalogPayload | null = null;
+let pricingCatalogPromise: Promise<PricingCatalogPayload | null> | null = null;
+const canonicalPriceCache = new Map<string, NonNullable<ReturnType<typeof buildCanon>>>();
+const MAX_CANONICAL_PRICE_CACHE = 80;
+
+function loadPricingCatalog(): Promise<PricingCatalogPayload | null> {
+  if (pricingCatalogCache) return Promise.resolve(pricingCatalogCache);
+  if (pricingCatalogPromise) return pricingCatalogPromise;
+  pricingCatalogPromise = fetch("/api/pricing/catalog")
+    .then((r) => r.json())
+    .then((j: { ok?: boolean; snapshot?: PricingRatesSnapshot; orderedExtraSlugs?: string[] }) => {
+      if (j?.ok !== true || !j.snapshot) return null;
+      pricingCatalogCache = {
+        snapshot: j.snapshot,
+        orderedExtraSlugs: Array.isArray(j.orderedExtraSlugs) ? j.orderedExtraSlugs : [],
+      };
+      return pricingCatalogCache;
+    })
+    .catch(() => null)
+    .finally(() => {
+      pricingCatalogPromise = null;
+    });
+  return pricingCatalogPromise;
+}
+
+function buildCanon(
+  input: {
+    service: string | null;
+    serviceType: string | null;
+    rooms: number;
+    bathrooms: number;
+    extraRooms: number;
+    extras: string[];
+  },
+  tier: VipTier,
+  snapshot: PricingRatesSnapshot | null,
+) {
+  if (!snapshot || (!input.service && !input.serviceType)) return null;
   return calculateBookingPrice(
     {
-      serviceType: state.service_type ?? state.service,
-      bedrooms: state.rooms,
-      bathrooms: state.bathrooms,
-      extraRooms: state.extraRooms,
-      extras: state.extras,
+      serviceType: input.serviceType ?? input.service,
+      bedrooms: input.rooms,
+      bathrooms: input.bathrooms,
+      extraRooms: input.extraRooms,
+      extras: input.extras,
       vipTier: tier,
     },
     snapshot,
   );
 }
 
+function cachedBuildCanon(
+  fingerprint: string,
+  input: Parameters<typeof buildCanon>[0],
+  tier: VipTier,
+  snapshot: PricingRatesSnapshot | null,
+) {
+  if (!snapshot || (!input.service && !input.serviceType)) return null;
+  const key = `${snapshot.codeVersion}|${fingerprint}`;
+  const hit = canonicalPriceCache.get(key);
+  if (hit) return hit;
+  const next = buildCanon(input, tier, snapshot);
+  if (!next) return null;
+  if (canonicalPriceCache.size >= MAX_CANONICAL_PRICE_CACHE) {
+    const first = canonicalPriceCache.keys().next().value;
+    if (first !== undefined) canonicalPriceCache.delete(first);
+  }
+  canonicalPriceCache.set(key, next);
+  return next;
+}
+
 export function BookingPriceProvider({ children }: { children: ReactNode }) {
   const { state } = useBookingStep1();
   const { tier } = useBookingVipTier();
-  const [catalog, setCatalog] = useState<PricingRatesSnapshot | null>(null);
-  const [orderedExtraSlugs, setOrderedExtraSlugs] = useState<string[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const service = state.service;
+  const serviceType = state.service_type;
+  const rooms = state.rooms;
+  const bathrooms = state.bathrooms;
+  const extraRooms = state.extraRooms;
+  const extras = state.extras;
+  const cleaningFrequency = state.cleaningFrequency;
+  const [catalog, setCatalog] = useState<PricingRatesSnapshot | null>(() => pricingCatalogCache?.snapshot ?? null);
+  const [orderedExtraSlugs, setOrderedExtraSlugs] = useState<string[]>(() => pricingCatalogCache?.orderedExtraSlugs ?? []);
+  const [catalogLoading, setCatalogLoading] = useState(() => pricingCatalogCache == null);
 
   useEffect(() => {
     let cancelled = false;
-    setCatalogLoading(true);
-    void fetch("/api/pricing/catalog")
-      .then((r) => r.json())
-      .then((j: { ok?: boolean; snapshot?: PricingRatesSnapshot; orderedExtraSlugs?: string[] }) => {
-        if (cancelled || j?.ok !== true || !j.snapshot) return;
-        setCatalog(j.snapshot);
-        setOrderedExtraSlugs(Array.isArray(j.orderedExtraSlugs) ? j.orderedExtraSlugs : []);
+    if (pricingCatalogCache) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setCatalog(pricingCatalogCache!.snapshot);
+        setOrderedExtraSlugs(pricingCatalogCache!.orderedExtraSlugs);
+        setCatalogLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    queueMicrotask(() => {
+      if (!cancelled) setCatalogLoading(true);
+    });
+    void loadPricingCatalog()
+      .then((payload) => {
+        if (cancelled || !payload) return;
+        setCatalog(payload.snapshot);
+        setOrderedExtraSlugs(payload.orderedExtraSlugs);
       })
-      .catch(() => {})
       .finally(() => {
         if (!cancelled) setCatalogLoading(false);
       });
@@ -77,23 +154,35 @@ export function BookingPriceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const extrasKey = state.extras.join("\u0001");
+  const extrasKey = extras.join("\u0001");
+  const fingerprint = [
+    service ?? "",
+    serviceType ?? "",
+    rooms,
+    bathrooms,
+    extraRooms,
+    extrasKey,
+    cleaningFrequency,
+    tier,
+  ].join("|");
 
-  const fingerprint = useMemo(
-    () => bookingPricingFingerprint(state, tier),
-    [
-      state.service,
-      state.service_type,
-      state.rooms,
-      state.bathrooms,
-      state.extraRooms,
-      extrasKey,
-      state.cleaningFrequency,
-      tier,
-    ],
+  const canon = useMemo(
+    () =>
+      cachedBuildCanon(
+        fingerprint,
+        {
+          service,
+          serviceType,
+          rooms,
+          bathrooms,
+          extraRooms,
+          extras,
+        },
+        tier,
+        catalog,
+      ),
+    [fingerprint, catalog, tier, service, serviceType, rooms, bathrooms, extraRooms, extras],
   );
-
-  const canon = useMemo(() => buildCanon(state, tier, catalog), [fingerprint, tier, catalog]);
 
   const priceRawSlots = useCallback(
     (raw: RawAvailabilitySlot[]): PricedAvailabilitySlot[] => {

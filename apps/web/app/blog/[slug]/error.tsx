@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 
 /**
  * Catches uncaught errors under `/blog/[slug]` (runtime bugs outside guarded paths).
@@ -27,12 +27,12 @@ export default function BlogArticleError({
         >
           Try again
         </button>
-        <Link
+        <SafeInternalLink
           href="/blog"
           className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-6 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
         >
           All articles
-        </Link>
+        </SafeInternalLink>
       </div>
       {process.env.NODE_ENV === "development" ? (
         <pre className="mt-8 overflow-auto rounded-lg bg-zinc-100 p-4 text-left text-xs text-red-800">{error.message}</pre>

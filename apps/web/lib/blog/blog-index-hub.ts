@@ -1,5 +1,9 @@
 import type { BlogIndexPost } from "@/lib/blog/get-all-posts";
 import { CAPE_TOWN_HUB_BLOG_SLUGS, DEFAULT_LIST_HERO } from "@/lib/blog/get-all-posts";
+import {
+  CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF,
+  CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF,
+} from "@/lib/blog/canonicalEditorialBlogLinks";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
@@ -60,13 +64,13 @@ export const BLOG_START_HERE_CARDS: {
   {
     title: "Move-out handover",
     body: "Checklists and scope tips for renters—from Wynberg to Sea Point inventory cleans.",
-    href: "/blog/move-out-cleaning-guide",
+    href: CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF,
     cta: "Move-out guides",
   },
   {
     title: "Airbnb hosting",
     body: "Turnovers, guest-ready polish, and when deep cleaning beats a quick tidy.",
-    href: "/blog/airbnb-cleaning-checklist",
+    href: CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF,
     cta: "Airbnb articles",
   },
   {
@@ -96,6 +100,7 @@ const TOPIC_OVERRIDES: Partial<Record<string, BlogTopicFilterId[]>> = {
   "cleaning-cost-cape-town": ["pricing"],
   "move-out-cleaning-guide": ["move-out"],
   "deep-vs-standard-cleaning-cape-town": ["deep-cleaning", "pricing"],
+  "deep-cleaning-vs-regular-cleaning-cape-town": ["deep-cleaning", "pricing"],
 };
 
 const LIST_IMAGE_POOL: { src: string; alt: string }[] = [
@@ -157,6 +162,8 @@ const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
   "move-out-cleaning-guide":
     "Protect your deposit: move-out scope aligned with inspections—kitchens, wet rooms, and final walk-throughs for Cape Town rentals.",
   "deep-vs-standard-cleaning-cape-town":
+    "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
+  "deep-cleaning-vs-regular-cleaning-cape-town":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
 };
 

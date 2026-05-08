@@ -23,6 +23,7 @@ import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleane
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaServer";
+import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -254,8 +255,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const updates: Record<string, unknown> = {};
 
   if (body.status != null) {
-    let status = String(body.status).trim().toLowerCase();
-    if (status === "confirmed") status = "assigned";
+    let status = canonicalDbBookingStatus(String(body.status).trim());
     const allowed = new Set(["pending", "assigned", "in_progress", "completed", "cancelled", "failed"]);
     if (!allowed.has(status)) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     updates.status = status;

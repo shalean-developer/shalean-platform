@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { HighConversionBlogArticle } from "@/lib/blog/highConversionBlogArticle";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
@@ -48,25 +48,25 @@ function MandatoryInternalLinks({ article }: { article: HighConversionBlogArticl
     <div className={articleStack}>
       <p>
         When you are ready to move from reading to booking, start with our Cape Town service guides:{" "}
-        <Link href={standardPath} className={linkInParagraphClassName}>
+        <SafeInternalLink href={standardPath} className={linkInParagraphClassName}>
           {standardLabel}
-        </Link>
+        </SafeInternalLink>
         ,{" "}
-        <Link href={deepPath} className={linkInParagraphClassName}>
+        <SafeInternalLink href={deepPath} className={linkInParagraphClassName}>
           {deepLabel}
-        </Link>
+        </SafeInternalLink>
         {extra ? (
           <>
             ,{" "}
-            <Link href={extra.href} className={linkInParagraphClassName}>
+            <SafeInternalLink href={extra.href} className={linkInParagraphClassName}>
               {extra.label}
-            </Link>
+            </SafeInternalLink>
           </>
         ) : null}
         , and suburb context for{" "}
-        <Link href={article.primaryLocation.href} className={linkInParagraphClassName}>
+        <SafeInternalLink href={article.primaryLocation.href} className={linkInParagraphClassName}>
           {article.primaryLocation.label}
-        </Link>
+        </SafeInternalLink>
         —each opens a page you can follow to checkout with a clear total.
       </p>
     </div>
@@ -81,24 +81,24 @@ function RelatedServicesSection() {
       </h2>
       <ul className="mt-4 space-y-2 text-base">
         <li>
-          <Link href={standardPath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
+          <SafeInternalLink href={standardPath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
             Home cleaning (standard) — Cape Town
-          </Link>
+          </SafeInternalLink>
         </li>
         <li>
-          <Link href={deepPath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
+          <SafeInternalLink href={deepPath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
             Deep cleaning — Cape Town
-          </Link>
+          </SafeInternalLink>
         </li>
         <li>
-          <Link href={moveOutPath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
+          <SafeInternalLink href={moveOutPath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
             Move-out cleaning — Cape Town
-          </Link>
+          </SafeInternalLink>
         </li>
         <li>
-          <Link href={officePath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
+          <SafeInternalLink href={officePath} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
             Office cleaning — Cape Town
-          </Link>
+          </SafeInternalLink>
         </li>
       </ul>
     </section>

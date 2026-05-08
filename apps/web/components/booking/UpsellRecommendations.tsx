@@ -15,6 +15,7 @@ import {
   getPrimaryBundleForContext,
   getRecommendedExtraIds,
 } from "@/lib/pricing/upsellEngine";
+import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { cn } from "@/lib/utils";
 
@@ -22,22 +23,27 @@ type Props = {
   state: BookingStep1State;
   blockedExtras: Set<string>;
   setState: Dispatch<SetStateAction<BookingStep1State>>;
+  pastHints?: { extras?: string[] }[];
   /** Shown as “From R …” footnote when set */
   estimateZar?: number | null;
 };
 
-export function UpsellRecommendations({ state, blockedExtras, setState, estimateZar }: Props) {
+export function UpsellRecommendations({ state, blockedExtras, setState, pastHints = [], estimateZar }: Props) {
   const { catalog } = useBookingPrice();
+  const recommendationContext = useMemo(
+    () => ({ ...state, pastBookings: pastHints }),
+    [state, pastHints],
+  );
 
   const recommended = useMemo(() => {
     if (!catalog) return [];
-    return getRecommendedExtraIds(state, catalog).filter(
+    return getRecommendedExtraIds(recommendationContext, catalog).filter(
       (id) =>
         !blockedExtras.has(id) &&
         state.service != null &&
         isExtraAllowedForService(id, state.service, catalog),
     );
-  }, [catalog, state.service, state.rooms, state.extraRooms, state.extras, blockedExtras]);
+  }, [catalog, recommendationContext, blockedExtras, state.service]);
 
   const primaryBundle = useMemo(() => {
     if (!catalog) return null;
@@ -60,7 +66,15 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
       ...p,
       extras: p.extras.includes(id) ? p.extras : [...p.extras, id],
     }));
-    trackGrowthEvent("booking_upsell_interaction", {
+    if (!state.extras.includes(id)) {
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_ADDON_SELECTED, state, {
+        addon_id: id,
+        selected_extras: [...state.extras, id],
+        source_component: "upsell_recommendations",
+        recommendation_context: "service_property_suburb_history",
+      });
+    }
+    trackGrowthEvent(ANALYTICS_EVENTS.BOOKING_UPSELL_INTERACTION, {
       action: "add_extra",
       extraId: id,
       service: state.service ?? "",
@@ -86,13 +100,21 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
       const merged = [...new Set([...p.extras, ...b.items])];
       return { ...p, extras: merged };
     });
-    trackGrowthEvent("booking_upsell_interaction", {
+    trackGrowthEvent(ANALYTICS_EVENTS.BOOKING_UPSELL_INTERACTION, {
       action: wasActive ? "remove_bundle" : "add_bundle",
       bundleId,
       service: state.service ?? "",
       type: bookingExtrasTier(state.service),
       step: "details",
     });
+    if (!wasActive) {
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_ADDON_SELECTED, state, {
+        bundle_id: bundleId,
+        selected_extras: [...new Set([...state.extras, ...b.items])],
+        source_component: "upsell_bundle",
+        recommendation_context: "smart_bundle",
+      });
+    }
   }
 
   return (
@@ -106,7 +128,7 @@ export function UpsellRecommendations({ state, blockedExtras, setState, estimate
         </p>
         <h3 className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Complete your clean</h3>
         <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-          Smart picks for homes like yours. Bundles include instant savings at checkout.
+          Dynamic picks based on service type, home size, suburb, and your booking history.
         </p>
       </div>
 

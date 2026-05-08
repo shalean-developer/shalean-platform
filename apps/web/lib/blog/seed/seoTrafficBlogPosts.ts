@@ -63,7 +63,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
   {
     category: "high_intent",
     title: "Cleaning prices Cape Town: what you actually pay (and why quotes differ)",
-    slug: "cleaning-prices-cape-town-guide",
+    slug: "pricing-guide-house-cleaning-cape-town",
     h1: "Cleaning prices Cape Town: how quotes are built before you book",
     excerpt:
       "Understand cleaning prices Cape Town homeowners see online—bedrooms, bathrooms, access, and checklist depth—so your cost of cleaning service matches real scrub time, not guesswork.",
@@ -885,7 +885,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
   {
     category: "comparison",
     title: "Airbnb cleaning vs regular home cleaning in Cape Town",
-    slug: "airbnb-cleaning-vs-regular-home-cleaning-cape-town",
+    slug: "airbnb-host-vs-regular-cleaning-cape-town",
     h1: "Airbnb cleaning vs regular home cleaning in Cape Town",
     excerpt:
       "Host-focused comparison: turnover windows, checkout standards, and pricing differences—plus how cleaning prices Cape Town shift when guests—not housemates—judge the outcome.",
@@ -1129,7 +1129,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
   {
     category: "problem_solution",
     title: "Move-out cleaning checklist for Cape Town renters (deposit-safe)",
-    slug: "move-out-cleaning-checklist-cape-town-renters",
+    slug: "move-out-cleaning-checklist-tenants-cape-town",
     h1: "Move-out cleaning checklist for Cape Town renters who want deposits back",
     excerpt:
       "Room-by-room priorities for end-of-lease cleaning in Cape Town—oven glass, bathrooms, cupboards—and how cleaning prices Cape Town align when agents photograph everything.",
@@ -1552,7 +1552,7 @@ function insertBeforeFirstFaq(blocks: BlogContentBlock[], extra: BlogContentBloc
 
 /** Extra H2 sections inserted before FAQ so drafts exceed publish minimum word count without fluff. */
 const LONG_TAIL_BLOCKS_BY_SLUG: Record<string, BlogContentBlock[]> = {
-  "cleaning-prices-cape-town-guide": [
+  "pricing-guide-house-cleaning-cape-town": [
     {
       type: "section",
       title: "Neighbourhood snapshots: why identical flats still quote differently",
@@ -1635,7 +1635,7 @@ const LONG_TAIL_BLOCKS_BY_SLUG: Record<string, BlogContentBlock[]> = {
         "If two quotes diverge after you normalise tiers, ask both vendors which assumptions differ—parking buffers, product dwell for ovens, or stair haul coefficients—before assuming malice. Anchor negotiations to hub-informed access notes so Cape Town-specific friction stops inflaming emotions.",
     },
   ],
-  "airbnb-cleaning-vs-regular-home-cleaning-cape-town": [
+  "airbnb-host-vs-regular-cleaning-cape-town": [
     {
       type: "section",
       title: "Operational discipline hosts underestimate",
@@ -1710,7 +1710,7 @@ const LONG_TAIL_BLOCKS_BY_SLUG: Record<string, BlogContentBlock[]> = {
         "Forward confirmation emails to partners early—SMS threads lose attachments agents demand later. Load shedding schedules belong in notes too; dark stairwells turn rushed exits into safety incidents nobody priced. Save coordinator names from confirmations—continuity accelerates the next panic booking when calendars collide again.",
     },
   ],
-  "move-out-cleaning-checklist-cape-town-renters": [
+  "move-out-cleaning-checklist-tenants-cape-town": [
     {
       type: "section",
       title: "Evidence routines agents respect",

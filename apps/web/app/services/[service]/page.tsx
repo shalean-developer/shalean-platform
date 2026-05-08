@@ -9,7 +9,7 @@ import {
   getCapeTownServiceSeo,
 } from "@/lib/seo/capeTownSeoPages";
 
-type Props = { params: Promise<{ service: string }> };
+type Props = { params: Promise<{ service: string }>; searchParams?: Promise<{ location?: string }> };
 
 export function generateStaticParams() {
   return CAPE_TOWN_SEO_SERVICE_SLUGS.map((service) => ({ service }));
@@ -23,15 +23,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return buildCapeTownServiceMetadata(capeTownSeo);
 }
 
-export default async function ServicePage({ params }: Props) {
+export default async function ServicePage({ params, searchParams }: Props) {
   const { service: slug } = await params;
   if (!slug.endsWith("-cape-town")) notFound();
   const capeTownSeo = getCapeTownServiceSeo(slug);
   if (!capeTownSeo) notFound();
+  const sp = await searchParams;
+  const location = typeof sp?.location === "string" ? sp.location : null;
   const trustStats = await getPublicReviewBannerStats();
   return (
     <MarketingLayout>
-      <SeoCapeTownServicePage slug={capeTownSeo.slug} trustStats={trustStats} />
+      <SeoCapeTownServicePage slug={capeTownSeo.slug} trustStats={trustStats} initialLocationSlug={location} />
     </MarketingLayout>
   );
 }

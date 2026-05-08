@@ -3,6 +3,7 @@ import type { BlogPostSlug } from "@/lib/blog/posts";
 import { BLOG_POSTS, LEGACY_EDITORIAL_SLUGS } from "@/lib/blog/posts";
 import { BLOG_CONTENT_JSON_SCHEMA_VERSION } from "@/lib/blog/content-json";
 import { FALLBACK_EDITORIAL_HTML } from "@/lib/blog/seed/fallbackEditorialHtml";
+import { sanitizeEditorialHtml } from "@/lib/blog/editorialSanitize";
 
 function buildContentJson(slug: BlogPostSlug, html: string): BlogContentJson {
   const meta = BLOG_POSTS[slug];
@@ -134,7 +135,7 @@ function secondaryFromMeta(slug: BlogPostSlug): string[] {
 export const FALLBACK_EDITORIAL_MIGRATE_SEEDS: FallbackEditorialMigrateSeed[] = LEGACY_EDITORIAL_SLUGS.map(
   (slug) => {
     const meta = BLOG_POSTS[slug];
-    const html = FALLBACK_EDITORIAL_HTML[slug];
+    const html = sanitizeEditorialHtml(FALLBACK_EDITORIAL_HTML[slug]);
     if (!html) throw new Error(`Missing FALLBACK_EDITORIAL_HTML for ${slug}`);
     return {
       slug,

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { ServiceCard } from "@/components/services/ServiceCard";
@@ -171,7 +172,7 @@ export default function ServicesHubPage() {
 
       <main className="bg-white pb-28 text-zinc-900 md:pb-0">
         <GrowthTracking
-          event="page_view"
+          event={ANALYTICS_EVENTS.PAGE_VIEW}
           payload={{
             page_type: "services_hub",
             page_slug: "services",

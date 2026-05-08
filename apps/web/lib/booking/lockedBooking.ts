@@ -274,6 +274,21 @@ export function formatLockedAppointmentLabel(locked: LockedBooking): string {
   return `${dayPart} · ${locked.time}`;
 }
 
+/** Confirmation reassurance line, e.g. `Sun, 12 May at 09:00` (local interpretation of `YYYY-MM-DD` + `HH:mm`). */
+export function formatScheduleReassuranceLine(dateYmd: string, timeHm: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return null;
+  const t = timeHm.trim().slice(0, 5);
+  if (!/^\d{2}:\d{2}$/.test(t)) return null;
+  const [y, m, d] = dateYmd.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const dayPart = date.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return `${dayPart} at ${t}`;
+}
+
 /**
  * Persists a slot decision: `finalPrice` must come from `POST /api/booking/lock` (server `quoteCheckoutZar`) via `lockedQuote`.
  */
@@ -377,6 +392,22 @@ export function mergeCleanerIdIntoLockedBooking(cleanerId: string): void {
     if (!parsed) return;
     if (parsed.cleaner_id === id) return;
     const next = { ...parsed, cleaner_id: id } as LockedBooking;
+    const serialized = JSON.stringify(next);
+    localStorage.setItem(BOOKING_LOCKED_KEY, serialized);
+    setSnapshotCache(serialized, next);
+    window.dispatchEvent(new Event(BOOKING_LOCKED_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearCleanerIdFromLockedBooking(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(BOOKING_LOCKED_KEY);
+    const parsed = parseLockedBooking(raw);
+    if (!parsed || !parsed.cleaner_id) return;
+    const next = { ...parsed, cleaner_id: null } as LockedBooking;
     const serialized = JSON.stringify(next);
     localStorage.setItem(BOOKING_LOCKED_KEY, serialized);
     setSnapshotCache(serialized, next);
