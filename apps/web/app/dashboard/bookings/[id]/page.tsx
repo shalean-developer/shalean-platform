@@ -21,8 +21,11 @@ import { CustomerBookingStatusBadge } from "@/components/dashboard/customer-book
 import {
   canCustomerModifyDashboardBooking,
   customerBookingDetailTimelineConfirmedDone,
-  describeDashboardBookingOperational,
 } from "@/lib/dashboard/dashboardBookingOperational";
+import {
+  customerBookingDetailHeaderDataAttributes,
+  customerBookingDetailOperationalPhase,
+} from "@/lib/dashboard/customerBookingDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -47,7 +50,7 @@ function formatZarLine(zar: number): string {
 }
 
 function timelineForBooking(b: DashboardBooking): TimelineStep[] {
-  const phase = describeDashboardBookingOperational(b).operationalPhase;
+  const phase = customerBookingDetailOperationalPhase(b);
   if (phase === "cancelled") {
     return [
       { label: "Booked", done: true },
@@ -235,7 +238,10 @@ export default function BookingDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card className="rounded-2xl border-zinc-200/80 shadow-md dark:border-zinc-800">
-            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pb-2">
+            <CardHeader
+              className="flex flex-row flex-wrap items-start justify-between gap-3 pb-2"
+              {...customerBookingDetailHeaderDataAttributes(booking)}
+            >
               <div>
                 <CardTitle className="text-xl">{booking.serviceName}</CardTitle>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Ref {booking.paystackReference}</p>

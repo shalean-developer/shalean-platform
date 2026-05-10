@@ -10,7 +10,7 @@ import {
   resolveInternalBookingIdFromPaystackReference,
   assertDecoupledPaystackMetadataAllowsFinalize,
 } from "@/lib/booking/paystackBookingIdLookup";
-import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
+import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
 import { metrics } from "@/lib/metrics/counters";
 import {
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
     throw e;
   }
 
-  const result = await finalizePaystackChargeSuccess({
+  const finalizeOp = await finalizePaidBooking({
     source: "webhook",
     paystackReference: reference,
     amountCents: amount,
@@ -233,6 +233,7 @@ export async function POST(request: Request) {
         : null,
     paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
   });
+  const result = upsertResultFromFinalizePaidBookingOp(finalizeOp);
 
   if (result.error) {
     await reportOperationalIssue("critical", "paystack/webhook", `charge.success: booking upsert failed: ${result.error}`, {

@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import {
-  adminEditBookingDetails,
   type AdminEditBookingDetailsBody,
   type AdminEditBookingDetailsResult,
+  isAdminEditBookingDetailsNotesOnlyBody,
 } from "@/lib/booking/adminEditBookingDetails";
+import { adminRepriceBooking, adminUpdateBookingNotes } from "@/lib/booking/bookingOperations";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -83,12 +84,22 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const idempotencyHeader = request.headers.get("idempotency-key")?.trim() ?? "";
 
-  const result = await adminEditBookingDetails(admin, {
-    bookingId,
-    body,
-    adminUserId,
-    idempotencyKey: idempotencyHeader || null,
-  });
+  const notesOnly = isAdminEditBookingDetailsNotesOnlyBody(body);
+  const result = notesOnly
+    ? await adminUpdateBookingNotes({
+        admin,
+        bookingId,
+        body,
+        adminUserId,
+        idempotencyKey: idempotencyHeader || null,
+      })
+    : await adminRepriceBooking({
+        admin,
+        bookingId,
+        body,
+        adminUserId,
+        idempotencyKey: idempotencyHeader || null,
+      });
 
   return jsonFromEditResult(result);
 }

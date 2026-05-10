@@ -1,8 +1,29 @@
 import { NextResponse } from "next/server";
+import {
+  cleanerAcceptBooking,
+  cleanerRejectBooking,
+  type BookingOperationResult,
+} from "@/lib/booking/bookingOperations";
 import { cleanerHasBookingAccess } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
-import { runCleanerBookingLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+/** Status + JSON body returned to the client (matches the cleaner lifecycle HTTP bundle shape). */
+type RespondLifecycleHttpResult = { status: number; json: Record<string, unknown> };
+
+function gatewayLifecycleOpToResult(
+  op: BookingOperationResult<Record<string, unknown>>,
+): RespondLifecycleHttpResult {
+  if (op.ok) {
+    return { status: 200, json: (op.data ?? { ok: true }) as Record<string, unknown> };
+  }
+  const st = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const json =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : ({ error: op.message, code: op.code } as Record<string, unknown>);
+  return { status: st, json };
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,11 +89,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not your job." }, { status: 403 });
   }
 
-  const out = await runCleanerBookingLifecycleAction({
-    admin,
-    cleanerId: session.cleanerId,
-    bookingId,
-    action,
-  });
+  const out: RespondLifecycleHttpResult =
+    action === "reject"
+      ? gatewayLifecycleOpToResult(
+          await cleanerRejectBooking({
+            admin,
+            cleanerId: session.cleanerId,
+            bookingId,
+          }),
+        )
+      : gatewayLifecycleOpToResult(
+          await cleanerAcceptBooking({
+            admin,
+            cleanerId: session.cleanerId,
+            bookingId,
+          }),
+        );
   return NextResponse.json(out.json, { status: out.status });
 }

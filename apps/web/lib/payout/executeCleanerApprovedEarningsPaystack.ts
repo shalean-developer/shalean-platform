@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
+import { measurePhase15aLedgerClaimShadowEligibility } from "@/lib/payout/phase15aLedgerClaimShadowEligibility";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 
 type PaystackJson = {
@@ -63,6 +64,12 @@ export async function executeCleanerApprovedEarningsPaystack(
   if (!ensured.ok) {
     return { ok: false, error: ensured.error, status: 400 };
   }
+
+  /**
+   * Phase 15A measurement only. Do not enforce here until Phase 15B/15C sign-off.
+   * Awaited so claim RPC order is unchanged after observation.
+   */
+  await measurePhase15aLedgerClaimShadowEligibility(admin, cid);
 
   const { data: disbIdRaw, error: claimErr } = await admin.rpc("claim_cleaner_earnings_for_paystack", {
     p_cleaner_id: cid,

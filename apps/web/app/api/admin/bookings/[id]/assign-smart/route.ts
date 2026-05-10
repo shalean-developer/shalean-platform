@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { EXTREME_SLA_AUTO_ESCALATE_MINUTES, runAdminAssignSmart } from "@/lib/admin/runAdminAssignSmart";
+import { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart";
+import { adminSmartAssignBooking } from "@/lib/booking/bookingOperations";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -63,7 +64,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       ? ({ confirm: true as const, slaBreachMinutes: esc.slaBreachMinutes } as const)
       : null;
 
-  const result = await runAdminAssignSmart(admin, {
+  const op = await adminSmartAssignBooking({
+    admin,
     bookingId,
     force: body.force === true,
     slaBreachMinutes:
@@ -75,23 +77,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     autoEscalateExtremeSla: autoEscalate,
   });
 
-  if (result.ok) {
+  if (op.ok) {
+    const data = op.data;
+    if (!data) {
+      return NextResponse.json({ error: "Smart assign did not return a result." }, { status: 500 });
+    }
     return NextResponse.json({
       ok: true,
-      cleanerId: result.cleanerId,
-      offerId: result.offerId,
-      expiresAt: result.expiresAt,
-      attempts: result.attempts,
+      cleanerId: data.cleanerId,
+      offerId: data.offerId,
+      expiresAt: data.expiresAt,
+      attempts: data.attempts,
     });
   }
 
-  return NextResponse.json(
-    {
-      ok: false,
-      error: result.error,
-      attempts: result.attempts,
-      escalated: Boolean(result.escalated),
-    },
-    { status: 422 },
-  );
+  const status = typeof op.httpStatus === "number" ? op.httpStatus : 422;
+  const payload =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as { ok: false; error: string; attempts: number; escalated: boolean })
+      : { ok: false as const, error: op.message, attempts: 0, escalated: false };
+
+  return NextResponse.json(payload, { status });
 }

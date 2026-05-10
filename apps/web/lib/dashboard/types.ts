@@ -1,4 +1,5 @@
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import type { CanonicalBookingLifecycleSurface } from "@/lib/booking/bookingLifecycleContract";
 import type { StoredPriceLine } from "@/lib/dashboard/storedPriceBreakdown";
 
 export type NormalizedBookingStatus =
@@ -48,6 +49,17 @@ export type BookingRow = {
   en_route_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  /** Canonical lifecycle surface; set by customer bookings list/detail loaders only. */
+  canonicalLifecycle?: CanonicalBookingLifecycleSurface;
+  payment_completed_at?: string | null;
+  is_recurring_generated?: boolean | null;
+  billing_type?: string | null;
+  is_team_job?: boolean | null;
+  team_id?: string | null;
+  payout_status?: string | null;
+  payout_paid_at?: string | null;
+  admin_recurring_unpaid_completion_override_at?: string | null;
+  admin_recurring_unpaid_completion_override_by?: string | null;
   duration_minutes?: number | null;
   cleaners?: CleanerEmbed;
   /** Locked checkout total (ZAR); authoritative when set. */

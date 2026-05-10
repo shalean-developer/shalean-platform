@@ -256,13 +256,22 @@ export async function GET(request: Request) {
   const recurringIdFilter = /^[0-9a-f-]{36}$/i.test(recurringIdRaw) ? recurringIdRaw : null;
   /** Drill-down from `/admin/recurring` — ignore ops/date quick filters so future visits are not hidden. */
   const recurringListScope = Boolean(recurringIdFilter);
+  /** SLA breach queue only needs pending dispatch rows — avoid scanning 4k bookings + heavy metrics (prevents client timeouts / "Failed to fetch"). */
+  const slaFast = filter === "sla" && !recurringListScope;
 
   const bookingSelect =
     "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, billing_type, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect);
 
-  if (filter === "follow-up" && !recurringListScope) {
+  if (slaFast) {
+    bookingQuery = bookingQuery
+      .eq("status", "pending")
+      .is("cleaner_id", null)
+      .in("dispatch_status", ["searching", "offered"])
+      .order("created_at", { ascending: false })
+      .limit(800);
+  } else if (filter === "follow-up" && !recurringListScope) {
     bookingQuery = bookingQuery
       .eq("payment_needs_follow_up", true)
       .order("payment_conversion_seconds", { ascending: false, nullsFirst: false })
@@ -308,7 +317,8 @@ export async function GET(request: Request) {
   }
   topSpendQuery = topSpendQuery.limit(TOP_CUSTOMERS_AGG_ROW_CAP);
 
-  const [{ data: rawRows, error: selErr }, topSpendRes] = await Promise.all([bookingQuery, topSpendQuery]);
+  const topSpendExec = slaFast ? Promise.resolve({ data: [] as Row[], error: null }) : topSpendQuery;
+  const [{ data: rawRows, error: selErr }, topSpendRes] = await Promise.all([bookingQuery, topSpendExec]);
 
   if (selErr) {
     await reportOperationalIssue("error", "api/admin/bookings", selErr.message);
@@ -373,12 +383,14 @@ export async function GET(request: Request) {
   const repeatCustomerPercent =
     distinctCustomers > 0 ? Math.round((repeatCustomerCount / distinctCustomers) * 1000) / 10 : 0;
 
-  const { data: failedJobs } = await admin
-    .from("failed_jobs")
-    .select("id, type, created_at, attempts, payload")
-    .eq("type", "booking_insert")
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const { data: failedJobs } = slaFast
+    ? { data: [] as { id: string; type: string; created_at: string; attempts: number; payload: unknown }[] }
+    : await admin
+        .from("failed_jobs")
+        .select("id, type, created_at, attempts, payload")
+        .eq("type", "booking_insert")
+        .order("created_at", { ascending: false })
+        .limit(50);
 
   const missingUserIdCount = rows.filter((r) => r.user_id == null).length;
 
@@ -406,19 +418,25 @@ export async function GET(request: Request) {
   const topCustomersAggTruncated =
     !topSpendRes.error && (topSpendRes.data?.length ?? 0) >= TOP_CUSTOMERS_AGG_ROW_CAP;
 
-  const { data: profileRows } = await admin.from("user_profiles").select("tier");
-  const demandSupply = await getDemandSupplySnapshotByCity(admin, cityId || null);
-  const { data: cityRows } = await admin.from("cities").select("id, name, is_active").order("name", { ascending: true });
+  const profileRows = slaFast ? [] : (await admin.from("user_profiles").select("tier")).data;
+  const demandSupply = slaFast
+    ? { demand: 0, supply: 0, multiplier: 1 }
+    : await getDemandSupplySnapshotByCity(admin, cityId || null);
+  const cityRows = slaFast
+    ? []
+    : (await admin.from("cities").select("id, name, is_active").order("name", { ascending: true })).data;
   const vipDistribution = { regular: 0, silver: 0, gold: 0, platinum: 0 };
-  for (const p of profileRows ?? []) {
-    const t = typeof p === "object" && p && "tier" in p ? String((p as { tier?: string }).tier ?? "regular") : "regular";
-    if (t === "silver") vipDistribution.silver++;
-    else if (t === "gold") vipDistribution.gold++;
-    else if (t === "platinum") vipDistribution.platinum++;
-    else vipDistribution.regular++;
+  if (!slaFast) {
+    for (const p of profileRows ?? []) {
+      const t = typeof p === "object" && p && "tier" in p ? String((p as { tier?: string }).tier ?? "regular") : "regular";
+      if (t === "silver") vipDistribution.silver++;
+      else if (t === "gold") vipDistribution.gold++;
+      else if (t === "platinum") vipDistribution.platinum++;
+      else vipDistribution.regular++;
+    }
   }
 
-  const paymentLinkChannelStats = aggregatePaymentLinkDeliveryStats(rows);
+  const paymentLinkChannelStats = slaFast ? aggregatePaymentLinkDeliveryStats([]) : aggregatePaymentLinkDeliveryStats(rows);
 
   const profileUserIds = [...new Set(filtered.map((r) => r.user_id).filter(Boolean))] as string[];
   const profileById = new Map<string, { billing_type: string; schedule_type: string }>();

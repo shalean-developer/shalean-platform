@@ -7,7 +7,9 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
+import { buildBookingEvent } from "@/lib/booking/bookingEvents";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { isBookingCompletedRouterEnabled, routeBookingNotificationEvent } from "@/lib/notifications/notificationRouter";
 import {
   fetchBookingDisplayEarningsCents,
   hasPersistedDisplayEarningsBasis,
@@ -110,7 +112,27 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       continue;
     }
 
-    void notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
+    if (isBookingCompletedRouterEnabled()) {
+      const event = buildBookingEvent({
+        type: "booking.completed",
+        bookingId: id,
+        actor: "cron",
+        externalRef: id,
+        metadata: { source: "cron_auto_complete_past_date" },
+      });
+      void routeBookingNotificationEvent(event, { admin }).then((nav) => {
+        if (!nav.ok) {
+          void reportOperationalIssue(
+            "warn",
+            "cron/booking-lifecycle/routeBookingNotificationEvent(completed)",
+            nav.message,
+            { bookingId: id, code: nav.code },
+          );
+        }
+      });
+    } else {
+      void notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
+    }
 
     try {
       const learn = await recordAssignmentOutcomeAndLearn(admin, id);

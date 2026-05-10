@@ -41,6 +41,16 @@ export type AdminEditBookingDetailsResult =
   | { ok: false; status: number; error: string; collect_additional_cents?: number }
   | { ok: false; status: 409; conflict: true; message: string };
 
+/** True when the edit-details body updates admin notes only (no bedrooms/bathrooms/extras). */
+export function isAdminEditBookingDetailsNotesOnlyBody(body: AdminEditBookingDetailsBody): boolean {
+  const wantsRooms = body.bedrooms !== undefined;
+  const wantsBaths = body.bathrooms !== undefined;
+  const wantsExtras = body.extras !== undefined;
+  const wantsPrice = wantsRooms || wantsBaths || wantsExtras;
+  const wantsNotes = body.notes !== undefined;
+  return wantsNotes && !wantsPrice;
+}
+
 const DEDUPE_SCOPE = "admin_edit_booking_details";
 const CONFLICT_MESSAGE = "Booking was updated by someone else. Reload.";
 
@@ -102,7 +112,7 @@ function resolveEffectivePaidCents(b: Record<string, unknown>): number {
   return 0;
 }
 
-function mergeSnapshotAdminNotes(snap: unknown, adminNotes: string | undefined): unknown {
+export function mergeSnapshotAdminNotes(snap: unknown, adminNotes: string | undefined): unknown {
   if (adminNotes === undefined) return snap;
   const base =
     snap && typeof snap === "object" && !Array.isArray(snap)
@@ -532,22 +542,33 @@ export async function previewAdminEditBookingDetails(
   };
 }
 
-export async function adminEditBookingDetails(
+type AdminEditDetailsPreambleOk = {
+  bookingId: string;
+  dedupeKey: string | null;
+  clientUpdatedAt: string;
+  wantsRooms: boolean;
+  wantsBaths: boolean;
+  wantsExtras: boolean;
+  wantsPrice: boolean;
+  wantsNotes: boolean;
+};
+
+async function beginAdminEditDetailsMutation(
   admin: SupabaseClient,
-  params: { bookingId: string; body: AdminEditBookingDetailsBody; adminUserId: string; idempotencyKey?: string | null },
-): Promise<AdminEditBookingDetailsResult> {
+  params: { bookingId: string; body: AdminEditBookingDetailsBody; idempotencyKey?: string | null },
+): Promise<{ ok: false; result: AdminEditBookingDetailsResult } | ({ ok: true } & AdminEditDetailsPreambleOk)> {
   const bookingId = params.bookingId.trim();
   const dedupeKey = (params.idempotencyKey ?? params.body.idempotency_key ?? "").trim().slice(0, 256) || null;
 
   const gate = await assertAdminBookingEditDetailsAllowed(admin, bookingId);
   if (!gate.ok) {
-    return { ok: false, status: gate.status, error: gate.error };
+    return { ok: false, result: { ok: false, status: gate.status, error: gate.error } };
   }
 
   const idem = await tryBeginIdempotency(admin, dedupeKey, bookingId);
-  if (idem.kind === "cached") return idem.payload;
+  if (idem.kind === "cached") return { ok: false, result: idem.payload };
   if (idem.kind === "in_flight") {
-    return { ok: false, status: 409, error: "Already processing" };
+    return { ok: false, result: { ok: false, status: 409, error: "Already processing" } };
   }
 
   const clientUpdatedAt = typeof params.body.client_updated_at === "string" ? params.body.client_updated_at.trim() : "";
@@ -557,7 +578,7 @@ export async function adminEditBookingDetails(
       status: 400,
       error: "client_updated_at is required (optimistic lock).",
     });
-    return { ok: false, status: 400, error: "client_updated_at is required (optimistic lock)." };
+    return { ok: false, result: { ok: false, status: 400, error: "client_updated_at is required (optimistic lock)." } };
   }
 
   const wantsRooms = params.body.bedrooms !== undefined;
@@ -568,8 +589,74 @@ export async function adminEditBookingDetails(
 
   if (!wantsPrice && !wantsNotes) {
     await failIdempotency(admin, dedupeKey, { ok: false, status: 400, error: "No changes provided." });
-    return { ok: false, status: 400, error: "No changes provided." };
+    return { ok: false, result: { ok: false, status: 400, error: "No changes provided." } };
   }
+
+  return {
+    ok: true,
+    bookingId,
+    dedupeKey,
+    clientUpdatedAt,
+    wantsRooms,
+    wantsBaths,
+    wantsExtras,
+    wantsPrice,
+    wantsNotes,
+  };
+}
+
+async function executeNotesOnlyAdminEditBookingDetails(
+  admin: SupabaseClient,
+  pre: AdminEditDetailsPreambleOk,
+  notes: string,
+): Promise<AdminEditBookingDetailsResult> {
+  const { bookingId, dedupeKey, clientUpdatedAt } = pre;
+
+  const { data: row, error: selErr } = await admin
+    .from("bookings")
+    .select("id, booking_snapshot, total_price, updated_at")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (selErr || !row) {
+    await failIdempotency(admin, dedupeKey, {
+      ok: false,
+      status: 404,
+      error: selErr?.message ?? "Booking not found.",
+    });
+    return { ok: false, status: 404, error: selErr?.message ?? "Booking not found." };
+  }
+
+  const b = row as Record<string, unknown>;
+
+  const mergedSnap = mergeSnapshotAdminNotes(b.booking_snapshot, notes);
+  const { data: updatedNote, error: upErr } = await admin
+    .from("bookings")
+    .update({ booking_snapshot: mergedSnap })
+    .eq("id", bookingId)
+    .eq("updated_at", clientUpdatedAt)
+    .select("id, total_price, updated_at");
+  if (upErr) {
+    await failIdempotency(admin, dedupeKey, { ok: false, status: 500, error: upErr.message });
+    return { ok: false, status: 500, error: upErr.message };
+  }
+  if (!updatedNote?.length) {
+    await failIdempotency(admin, dedupeKey, { ok: false, status: 409, error: CONFLICT_MESSAGE, conflict: true });
+    return { ok: false, status: 409, conflict: true, message: CONFLICT_MESSAGE };
+  }
+  const tp = Number(b.total_price);
+  const cents = Number.isFinite(tp) ? Math.round(tp * 100) : 0;
+  const success: AdminEditBookingDetailsResult = { ok: true, new_total: cents, updated: true };
+  await finishIdempotency(admin, dedupeKey, { ok: true, new_total: cents, payment_mismatch: false });
+  return success;
+}
+
+async function executeRepricingAdminEditBookingDetails(
+  admin: SupabaseClient,
+  params: { bookingId: string; body: AdminEditBookingDetailsBody; adminUserId: string; idempotencyKey?: string | null },
+  pre: AdminEditDetailsPreambleOk,
+): Promise<AdminEditBookingDetailsResult> {
+  const { bookingId, dedupeKey, clientUpdatedAt, wantsRooms, wantsBaths, wantsExtras, wantsPrice, wantsNotes } = pre;
 
   const { data: row, error: selErr } = await admin
     .from("bookings")
@@ -597,29 +684,6 @@ export async function adminEditBookingDetails(
       error: "Only notes can be edited while the job is in progress.",
     });
     return { ok: false, status: 422, error: "Only notes can be edited while the job is in progress." };
-  }
-
-  if (wantsNotes && !wantsPrice) {
-    const mergedSnap = mergeSnapshotAdminNotes(b.booking_snapshot, params.body.notes);
-    const { data: updatedNote, error: upErr } = await admin
-      .from("bookings")
-      .update({ booking_snapshot: mergedSnap })
-      .eq("id", bookingId)
-      .eq("updated_at", clientUpdatedAt)
-      .select("id, total_price, updated_at");
-    if (upErr) {
-      await failIdempotency(admin, dedupeKey, { ok: false, status: 500, error: upErr.message });
-      return { ok: false, status: 500, error: upErr.message };
-    }
-    if (!updatedNote?.length) {
-      await failIdempotency(admin, dedupeKey, { ok: false, status: 409, error: CONFLICT_MESSAGE, conflict: true });
-      return { ok: false, status: 409, conflict: true, message: CONFLICT_MESSAGE };
-    }
-    const tp = Number(b.total_price);
-    const cents = Number.isFinite(tp) ? Math.round(tp * 100) : 0;
-    const success: AdminEditBookingDetailsResult = { ok: true, new_total: cents, updated: true };
-    await finishIdempotency(admin, dedupeKey, { ok: true, new_total: cents, payment_mismatch: false });
-    return success;
   }
 
   const { data: oldLineRowsRaw } = await admin.from("booking_line_items").select("*").eq("booking_id", bookingId);
@@ -895,4 +959,66 @@ export async function adminEditBookingDetails(
   });
 
   return success;
+}
+
+/**
+ * Admin edit-details: notes-only path (snapshot `admin_notes`). Used by {@link adminUpdateBookingNotes}.
+ * Does not reprice, mutate line items, reset earnings, persist payouts, insert booking_changes, or claim dispatch dedupe.
+ */
+export async function adminEditBookingDetailsNotesOnly(
+  admin: SupabaseClient,
+  params: { bookingId: string; body: AdminEditBookingDetailsBody; adminUserId: string; idempotencyKey?: string | null },
+): Promise<AdminEditBookingDetailsResult> {
+  const pre = await beginAdminEditDetailsMutation(admin, params);
+  if (!pre.ok) return pre.result;
+  if (!pre.wantsNotes) {
+    await failIdempotency(admin, pre.dedupeKey, { ok: false, status: 400, error: "No changes provided." });
+    return { ok: false, status: 400, error: "No changes provided." };
+  }
+  if (pre.wantsPrice) {
+    await failIdempotency(admin, pre.dedupeKey, {
+      ok: false,
+      status: 400,
+      error: "Pricing fields require the full edit-details handler.",
+    });
+    return { ok: false, status: 400, error: "Pricing fields require the full edit-details handler." };
+  }
+  const notes = typeof params.body.notes === "string" ? params.body.notes : "";
+  return executeNotesOnlyAdminEditBookingDetails(admin, pre, notes);
+}
+
+/**
+ * Admin edit-details: repricing path (bedrooms/bathrooms/extras, optional notes in snapshot). Used by {@link adminRepriceBooking}.
+ */
+export async function adminEditBookingDetailsRepricingOnly(
+  admin: SupabaseClient,
+  params: { bookingId: string; body: AdminEditBookingDetailsBody; adminUserId: string; idempotencyKey?: string | null },
+): Promise<AdminEditBookingDetailsResult> {
+  const pre = await beginAdminEditDetailsMutation(admin, params);
+  if (!pre.ok) return pre.result;
+  if (!pre.wantsPrice) {
+    await failIdempotency(admin, pre.dedupeKey, {
+      ok: false,
+      status: 400,
+      error: "Repricing requires bedrooms, bathrooms, and/or extras.",
+    });
+    return { ok: false, status: 400, error: "Repricing requires bedrooms, bathrooms, and/or extras." };
+  }
+  return executeRepricingAdminEditBookingDetails(admin, params, pre);
+}
+
+/** Full edit-details: notes-only or repricing (used when routing does not split handlers). */
+export async function adminEditBookingDetails(
+  admin: SupabaseClient,
+  params: { bookingId: string; body: AdminEditBookingDetailsBody; adminUserId: string; idempotencyKey?: string | null },
+): Promise<AdminEditBookingDetailsResult> {
+  const pre = await beginAdminEditDetailsMutation(admin, params);
+  if (!pre.ok) return pre.result;
+
+  if (!pre.wantsPrice && pre.wantsNotes) {
+    const notes = typeof params.body.notes === "string" ? params.body.notes : "";
+    return executeNotesOnlyAdminEditBookingDetails(admin, pre, notes);
+  }
+
+  return executeRepricingAdminEditBookingDetails(admin, params, pre);
 }

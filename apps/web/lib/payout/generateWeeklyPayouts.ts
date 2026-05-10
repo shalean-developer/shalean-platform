@@ -6,6 +6,12 @@ import {
 } from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
+import {
+  BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY,
+  bookingPayableForWeeklyBatch,
+  type BookingRowForWeeklyBatchEligibility,
+} from "@/lib/payout/bookingPayableForWeeklyBatch";
+import { bookingUsesAccrualPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { completionDayYmd, getPreviousWeekDateBoundsUtc, isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
 
@@ -17,15 +23,32 @@ export type GenerateWeeklyPayoutsResult = {
   skippedCleaners: number;
 };
 
-type BookingPayoutRow = {
+type BookingPayoutRow = BookingRowForWeeklyBatchEligibility & {
   id: string;
   cleaner_id: string;
-  cleaner_payout_cents: number | null;
-  cleaner_bonus_cents: number | null;
-  is_test?: boolean | null;
-  completed_at?: string | null;
-  date?: string | null;
 };
+
+async function loadMonthlyInvoiceStatusMap(
+  admin: SupabaseClient,
+  invoiceIds: string[],
+): Promise<Map<string, string> | null> {
+  const uniq = [...new Set(invoiceIds.map((id) => String(id).trim()).filter(Boolean))];
+  const map = new Map<string, string>();
+  if (!uniq.length) return map;
+
+  const { data, error } = await admin.from("monthly_invoices").select("id, status").in("id", uniq);
+  if (error) {
+    await reportOperationalIssue("error", "generateWeeklyPayouts", `monthly_invoices lookup failed: ${error.message}`, {
+      invoice_count: uniq.length,
+    });
+    return null;
+  }
+  for (const row of data ?? []) {
+    const r = row as { id?: string; status?: string | null };
+    if (typeof r.id === "string") map.set(r.id, String(r.status ?? ""));
+  }
+  return map;
+}
 
 async function ensureNoMissingCompletedPayouts(
   admin: SupabaseClient,
@@ -119,6 +142,9 @@ async function ensureNoMissingCompletedPayouts(
 /**
  * Aggregates **completed**, non-test jobs with stored cleaner payout + bonus and no `payout_id`,
  * for the **previous UTC Mon–Sun** week (by completion day). Does not recalculate cents.
+ *
+ * Phase 12: each booking must satisfy {@link bookingPayableForWeeklyBatch} (invoice-settled accrual vs prepaid
+ * customer-settled) before linking into a weekly batch.
  */
 export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<GenerateWeeklyPayoutsResult> {
   const asOf = new Date();
@@ -148,7 +174,7 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
 
     const { data: rawBookings, error: bErr } = await admin
       .from("bookings")
-      .select("id, cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test, completed_at, date")
+      .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
       .eq("cleaner_id", cleanerId)
       .eq("status", "completed")
       .eq("is_test", false)
@@ -182,8 +208,37 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
       if (uiFriday != null && uiFriday !== batchPayFridayJhb) batchCutoffUiVsBatchFridayMismatches += 1;
     }
 
+    const accrualInvoiceIds: string[] = [];
+    for (const b of candidateBookings) {
+      const br = b as BookingRowForWeeklyBatchEligibility;
+      if (bookingUsesAccrualPayoutCap(br)) {
+        const invId = String(br.monthly_invoice_id ?? "").trim();
+        if (invId) accrualInvoiceIds.push(invId);
+      }
+    }
+    const invoiceMap = await loadMonthlyInvoiceStatusMap(admin, accrualInvoiceIds);
+    if (invoiceMap === null) {
+      skippedCleaners += 1;
+      continue;
+    }
+
+    const payableCandidates: BookingPayoutRow[] = [];
+    for (const b of candidateBookings) {
+      const br = b as BookingRowForWeeklyBatchEligibility;
+      const gate = bookingPayableForWeeklyBatch(br, invoiceMap);
+      if (!gate.payable) {
+        metrics.increment("cleaner.weekly_batch_booking_excluded_phase12", {
+          reason: gate.reason,
+          bookingId: br.id ?? null,
+          cleanerId,
+        });
+        continue;
+      }
+      payableCandidates.push(b as BookingPayoutRow);
+    }
+
     const bookings: BookingPayoutRow[] = [];
-    for (const booking of candidateBookings) {
+    for (const booking of payableCandidates) {
       const payoutCents = Number(booking.cleaner_payout_cents);
       if (!Number.isFinite(payoutCents) || payoutCents <= 0) {
         await reportOperationalIssue("warn", "generateWeeklyPayouts", "completed booking missing payout; attempting backfill", {
@@ -213,7 +268,7 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
 
         const { data: refreshed, error: refreshErr } = await admin
           .from("bookings")
-          .select("id, cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test, completed_at, date")
+          .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
           .eq("id", booking.id)
           .maybeSingle();
         if (refreshErr || !refreshed) {
@@ -224,6 +279,15 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
           continue;
         }
         const refreshedBooking = refreshed as BookingPayoutRow;
+        const gateAfter = bookingPayableForWeeklyBatch(refreshedBooking, invoiceMap);
+        if (!gateAfter.payable) {
+          metrics.increment("cleaner.weekly_batch_booking_excluded_phase12", {
+            reason: `${gateAfter.reason}_after_backfill`,
+            bookingId: booking.id,
+            cleanerId,
+          });
+          continue;
+        }
         if (Number(refreshedBooking.cleaner_payout_cents) > 0) bookings.push(refreshedBooking);
         continue;
       }

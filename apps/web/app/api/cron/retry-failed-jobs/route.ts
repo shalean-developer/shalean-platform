@@ -4,8 +4,9 @@ import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { formatFailedJobPayloadPreview } from "@/lib/booking/failedJobPayloadPreview";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
-import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
+import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { retryLifecycleJobsForBooking } from "@/lib/booking/bookingLifecycleJobs";
 import { emitSqlExpiredOfferTimeoutMetrics } from "@/lib/dispatch/offerTimeoutMetric";
@@ -230,9 +231,9 @@ export async function POST(request: Request) {
         typeof payload.customerEmail === "string" ? normalizeEmail(payload.customerEmail) : "";
       const metaFlat = normalizePaystackMetadata(payload.paystackMetadata ?? null);
 
-      let result: Awaited<ReturnType<typeof finalizePaystackChargeSuccess>>;
+      let result: UpsertBookingFromPaystackResult;
       try {
-        result = await finalizePaystackChargeSuccess({
+        const finalizeOp = await finalizePaidBooking({
           source: "retry",
           paystackReference: payload.paystackReference,
           amountCents: payload.amountCents,
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
           paystackCustomerCode: null,
           paidAtIso: null,
         });
+        result = upsertResultFromFinalizePaidBookingOp(finalizeOp);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await reportOperationalIssue("error", "cron/retry-failed-jobs", `finalize threw: ${msg}`, {

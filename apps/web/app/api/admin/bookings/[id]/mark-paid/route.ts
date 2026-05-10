@@ -1,10 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import {
-  adminMarkBookingPaid,
-  adminRecordBookingDeposit,
-  type AdminMarkPaidMethod,
-} from "@/lib/booking/adminMarkBookingPaid";
+import { adminMarkBookingPaidOperation } from "@/lib/booking/bookingOperations";
+import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -72,51 +69,50 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const settlementMode = String(body.settlement_mode ?? "full").trim().toLowerCase();
-  if (settlementMode === "deposit") {
-    const depositCents =
-      body.deposit_cents != null && Number.isFinite(Number(body.deposit_cents))
-        ? Math.round(Number(body.deposit_cents))
-        : NaN;
-    const reason = typeof body.reason === "string" ? body.reason : "";
-    const dep = await adminRecordBookingDeposit(admin, {
-      bookingId,
-      depositCents,
-      method,
-      reference: reference ?? null,
-      reason,
-      adminUserId,
-    });
-    if (!dep.ok) {
-      return NextResponse.json({ ok: false, error: dep.error }, { status: dep.httpStatus });
-    }
+  const depositCents =
+    body.deposit_cents != null && Number.isFinite(Number(body.deposit_cents))
+      ? Math.round(Number(body.deposit_cents))
+      : NaN;
+  const depositReason = typeof body.reason === "string" ? body.reason : "";
+
+  const op = await adminMarkBookingPaidOperation({
+    admin,
+    bookingId,
+    adminUserId,
+    method,
+    reference: reference ?? null,
+    amountCentsOverride: amountCentsOverride != null && amountCentsOverride > 0 ? Math.round(amountCentsOverride) : null,
+    settlementMode: settlementMode === "deposit" ? "deposit" : "full",
+    depositCents,
+    depositReason,
+  });
+
+  if (!op.ok) {
+    return NextResponse.json({ ok: false, error: op.message }, { status: op.httpStatus ?? 500 });
+  }
+
+  const data = op.data;
+  if (!data) {
+    return NextResponse.json({ ok: false, error: "Unexpected mark-paid result." }, { status: 500 });
+  }
+
+  if (data.variant === "deposit_recorded") {
     return NextResponse.json({
       ok: true,
       deposit_recorded: true,
-      deposit_paid_cents: dep.deposit_paid_cents,
+      deposit_paid_cents: data.deposit_paid_cents,
     });
   }
 
-  const result = await adminMarkBookingPaid(admin, {
-    bookingId,
-    method,
-    reference,
-    amountCentsOverride: amountCentsOverride != null && amountCentsOverride > 0 ? Math.round(amountCentsOverride) : null,
-    adminUserId,
-  });
-
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error }, { status: result.httpStatus });
+  if (data.variant === "full_skipped") {
+    return NextResponse.json({ ok: true, skipped: true, reason: data.reason });
   }
 
-  if ("skipped" in result && result.skipped) {
-    return NextResponse.json({ ok: true, skipped: true, reason: result.reason });
-  }
-
-  if ("marked_paid" in result && result.marked_paid && "settlement" in result) {
+  if (data.variant === "full_settled") {
     return NextResponse.json({
       ok: true,
       marked_paid: true,
-      settlement: result.settlement,
+      settlement: data.settlement,
     });
   }
 

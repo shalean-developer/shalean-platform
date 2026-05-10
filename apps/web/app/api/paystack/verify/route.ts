@@ -1,28 +1,17 @@
 import { NextResponse } from "next/server";
-import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import { resolvePaystackUserId } from "@/lib/booking/resolvePaystackUserId";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
-import {
-  bookingIdForPaystackReference,
-  findBookingIdStatusForPaystackReference,
-  PaystackDecoupledMetadataError,
-  resolveInternalBookingIdFromPaystackReference,
-  assertDecoupledPaystackMetadataAllowsFinalize,
-} from "@/lib/booking/paystackBookingIdLookup";
-import { finalizePaystackChargeSuccess } from "@/lib/booking/finalizePaystackChargeSuccess";
+import { findBookingIdStatusForPaystackReference, PaystackDecoupledMetadataError } from "@/lib/booking/paystackBookingIdLookup";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { metrics } from "@/lib/metrics/counters";
 import {
-  expectedCheckoutZarFromVerify,
-  pricingVersionIdFromLocked,
-  recordPaystackPricingMismatch,
-} from "@/lib/metrics/pricingMismatch";
-import { sendCustomerBookingPaymentProcessingEmail } from "@/lib/email/sendBookingEmail";
+  runPaystackVerifyFinalizePipeline,
+  type PaystackChargeVerifyTx,
+} from "@/lib/booking/runPaystackVerifyFinalizePipeline";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -44,7 +33,7 @@ function paystackChargeUpsertState(r: UpsertBookingFromPaystackResult): string {
 /** Replay-safe: idempotency inside {@link notifyBookingEvent} prevents duplicate sends. */
 async function notifyPaymentConfirmedForAlreadyFinalizedBooking(params: {
   supabase: SupabaseClient;
-  tx: PaystackVerifyData;
+  tx: PaystackChargeVerifyTx;
   ref: string;
   bookingId: string;
   amountCents: number;
@@ -91,21 +80,10 @@ async function notifyPaymentConfirmedForAlreadyFinalizedBooking(params: {
   }
 }
 
-type PaystackVerifyData = {
-  status?: string;
-  reference?: string;
-  amount?: number;
-  currency?: string;
-  paid_at?: string;
-  customer?: { email?: string; customer_code?: string };
-  authorization?: { authorization_code?: string };
-  metadata?: Record<string, unknown>;
-};
-
 type PaystackVerifyJson = {
   status?: boolean;
   message?: string;
-  data?: PaystackVerifyData;
+  data?: PaystackChargeVerifyTx;
 };
 
 async function fetchPaystackVerify(reference: string, secret: string): Promise<PaystackVerifyJson> {
@@ -113,175 +91,6 @@ async function fetchPaystackVerify(reference: string, secret: string): Promise<P
     headers: { Authorization: `Bearer ${secret}` },
   });
   return (await res.json()) as PaystackVerifyJson;
-}
-
-type PaystackVerifySuccessPipelineResult = {
-  result: Awaited<ReturnType<typeof finalizePaystackChargeSuccess>>;
-  metadata: Record<string, string | undefined>;
-  snapshot: BookingSnapshotV1 | null;
-  email: string;
-  ref: string;
-  amount: number;
-  currency: string;
-  assignmentType: string | null;
-  fallbackReason: string | null;
-  attemptedCleanerId: string | null;
-  assignedCleanerId: string | null;
-  selectedCleanerId: string | null;
-};
-
-/**
- * Paystack `success` only: normalize metadata, parse snapshot, call {@link finalizePaystackChargeSuccess}
- * (which runs `upsertBookingFromPaystack`), enqueue recovery, send processing email if needed.
- */
-async function runPaystackVerifySuccessPipeline(
-  tx: PaystackVerifyData,
-  referenceInput: string,
-): Promise<PaystackVerifySuccessPipelineResult> {
-  const amount = typeof tx.amount === "number" ? tx.amount : 0;
-  const currency = typeof tx.currency === "string" ? tx.currency : "ZAR";
-  const authorizationCode =
-    tx && typeof tx === "object" && tx.authorization && typeof tx.authorization === "object"
-      ? String((tx.authorization as { authorization_code?: string }).authorization_code ?? "")
-      : "";
-  const customerCode =
-    tx && typeof tx === "object" && tx.customer && typeof tx.customer === "object"
-      ? String((tx.customer as { customer_code?: string }).customer_code ?? "")
-      : "";
-  const metadata = normalizePaystackMetadata(tx.metadata);
-  notifyBookingDebug("paystack_verify_metadata", {
-    reference: tx.reference ?? referenceInput,
-    metadataKeys: Object.keys(metadata ?? {}),
-  });
-  const { snapshot } = parseBookingSnapshot(metadata, { amountCents: amount });
-
-  const ref = tx.reference ?? referenceInput;
-  assertDecoupledPaystackMetadataAllowsFinalize(ref, metadata);
-
-  const expectedZar = expectedCheckoutZarFromVerify(snapshot, metadata);
-  let bookingIdForTrace = resolveInternalBookingIdFromPaystackReference(ref, metadata);
-  if (!bookingIdForTrace) {
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      bookingIdForTrace = await bookingIdForPaystackReference(admin, ref);
-      if (bookingIdForTrace) {
-        metrics.increment("checkout.paystack_booking_id_db_fallback", {
-          bookingId: bookingIdForTrace,
-          reference: ref,
-        });
-      }
-    }
-  }
-  if (expectedZar != null) {
-    recordPaystackPricingMismatch({
-      expectedZar,
-      amountCents: amount,
-      bookingId: bookingIdForTrace,
-      pricingVersionId: pricingVersionIdFromLocked(snapshot?.locked),
-      reference: ref,
-    });
-  }
-
-  const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
-  const emailRaw =
-    emailFromCustomer ||
-    (typeof metadata.customer_email === "string" ? metadata.customer_email : "") ||
-    "";
-  const email = emailRaw ? normalizeEmail(emailRaw) : "";
-
-  if (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_METADATA === "1") {
-    console.log("[VERIFY → UPSERT TRIGGERED]", { reference: ref, metadata: tx.metadata });
-  }
-
-  const result = await finalizePaystackChargeSuccess({
-    source: "verify",
-    paystackReference: ref,
-    amountCents: amount,
-    currency,
-    customerEmail: email,
-    snapshot,
-    paystackMetadata: metadata,
-    paystackAuthorizationCode: authorizationCode || null,
-    paystackCustomerCode: customerCode || null,
-    paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-  });
-
-  const adm = getSupabaseAdmin();
-  let assignmentType: string | null = null;
-  let fallbackReason: string | null = null;
-  let attemptedCleanerId: string | null = null;
-  let assignedCleanerId: string | null = null;
-  let selectedCleanerId: string | null = null;
-  if (result.bookingId && adm) {
-    const { data: ar } = await adm
-      .from("bookings")
-      .select("assignment_type, fallback_reason, cleaner_id, selected_cleaner_id, attempted_cleaner_id")
-      .eq("id", result.bookingId)
-      .maybeSingle();
-    if (ar && typeof ar === "object") {
-      assignmentType = String((ar as { assignment_type?: string | null }).assignment_type ?? "").trim() || null;
-      fallbackReason = String((ar as { fallback_reason?: string | null }).fallback_reason ?? "").trim() || null;
-      attemptedCleanerId =
-        String((ar as { attempted_cleaner_id?: string | null }).attempted_cleaner_id ?? "").trim() || null;
-      assignedCleanerId = String((ar as { cleaner_id?: string | null }).cleaner_id ?? "").trim() || null;
-      selectedCleanerId = String((ar as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim() || null;
-    }
-  }
-
-  if (result.error) {
-    await reportOperationalIssue("critical", "paystack/verify", `payment verified success but booking upsert failed: ${result.error}`, {
-      reference: ref,
-    });
-  }
-
-  if (result.bookingId && !result.error) {
-    await logSystemEvent({
-      level: "info",
-      source: "paystack/verify",
-      message: "paystack.booking.created",
-      context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
-    });
-  }
-
-  await enqueuePaystackRecoveryFailedJobs({
-    reference: ref,
-    result,
-    basePayload: {
-      paystackReference: ref,
-      amountCents: amount,
-      currency,
-      customerEmail: email,
-      snapshot,
-      paystackMetadata: metadata,
-    },
-  });
-
-  if (email && !result.bookingId) {
-    const cust = await sendCustomerBookingPaymentProcessingEmail({
-      customerEmail: email,
-      paymentReference: ref,
-    });
-    if (!cust.sent && cust.error) {
-      await reportOperationalIssue("error", "paystack/verify", `processing ack email not sent: ${cust.error}`, {
-        reference: ref,
-      });
-    }
-  }
-
-  return {
-    result,
-    metadata,
-    snapshot,
-    email,
-    ref,
-    amount,
-    currency,
-    assignmentType,
-    fallbackReason,
-    attemptedCleanerId,
-    assignedCleanerId,
-    selectedCleanerId,
-  };
 }
 
 /**
@@ -372,7 +181,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const pipeline = await runPaystackVerifySuccessPipeline(tx, reference);
+    const pipeline = await runPaystackVerifyFinalizePipeline(tx, reference, "paystack/verify");
     const { result } = pipeline;
     const bookingInDatabase = result.bookingInDatabase ?? Boolean(result.bookingId);
     const chargeState = paystackChargeUpsertState(result);
@@ -572,9 +381,9 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     }
   }
 
-  let pipeline: Awaited<ReturnType<typeof runPaystackVerifySuccessPipeline>>;
+  let pipeline: Awaited<ReturnType<typeof runPaystackVerifyFinalizePipeline>>;
   try {
-    pipeline = await runPaystackVerifySuccessPipeline(tx, reference);
+    pipeline = await runPaystackVerifyFinalizePipeline(tx, reference, "paystack/verify");
   } catch (err) {
     if (err instanceof PaystackDecoupledMetadataError) {
       await reportOperationalIssue("error", "paystack/verify", err.message, { reference: ref });

@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
-import { listTeamAssignCandidatesForBooking, performAdminAssignTeam } from "@/lib/admin/performAdminAssignTeam";
+import { listTeamAssignCandidatesForBooking } from "@/lib/admin/performAdminAssignTeam";
+import { adminAssignTeamToBooking } from "@/lib/booking/bookingOperations";
 import { isAdmin } from "@/lib/auth/admin";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -99,7 +100,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await performAdminAssignTeam({
+  const op = await adminAssignTeamToBooking({
     admin,
     bookingId,
     teamId,
@@ -107,17 +108,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     adminEmail: auth.email,
   });
 
-  if (!result.ok) {
-    const locked = result.httpStatus === 409;
+  if (!op.ok) {
+    const httpStatus = op.httpStatus ?? 500;
+    const locked = httpStatus === 409;
     return NextResponse.json(
-      { error: result.error, ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT } : {}) },
-      { status: result.httpStatus },
+      { error: op.message, ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT } : {}) },
+      { status: httpStatus },
     );
+  }
+
+  const assigned = op.data;
+  if (!assigned || !assigned.ok) {
+    return NextResponse.json({ error: "Assignment failed." }, { status: 500 });
   }
 
   return NextResponse.json({
     ok: true,
-    teamId: result.teamId,
-    oldTeamId: result.oldTeamId,
+    teamId: assigned.teamId,
+    oldTeamId: assigned.oldTeamId,
   });
 }

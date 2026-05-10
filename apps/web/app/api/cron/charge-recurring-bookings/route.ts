@@ -7,7 +7,7 @@ import {
 } from "@/lib/recurring/autoChargeRetryPolicy";
 import { chargePaystackAuthorization } from "@/lib/recurring/chargePaystackAuthorization";
 import { runRecurringPaymentLinkFallback } from "@/lib/recurring/recurringPaymentLinkFallback";
-import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
         message: "auto_charge_missing_authorization_fallback",
         context: { booking_id: row.id, recurring_id: row.recurring_id, fallback_ok: okFb },
       });
-      await refreshRecurringPaymentStateForBooking(admin, row.id);
+      await refreshRecurringBookingPaymentState({ admin, bookingId: row.id });
       continue;
     }
 
@@ -230,7 +230,7 @@ export async function POST(request: Request) {
         message: "auto_charge_success",
         context: { booking_id: row.id, reference: charge.reference },
       });
-      await refreshRecurringPaymentStateForBooking(admin, row.id);
+      await refreshRecurringBookingPaymentState({ admin, bookingId: row.id });
       continue;
     }
 
@@ -277,7 +277,7 @@ export async function POST(request: Request) {
 
       const okFb = await runRecurringPaymentLinkFallback(admin, row.id);
       if (okFb) fallback++;
-      await refreshRecurringPaymentStateForBooking(admin, row.id);
+      await refreshRecurringBookingPaymentState({ admin, bookingId: row.id });
       continue;
     }
 
@@ -307,7 +307,7 @@ export async function POST(request: Request) {
         terminal: false,
       },
     });
-    await refreshRecurringPaymentStateForBooking(admin, row.id);
+    await refreshRecurringBookingPaymentState({ admin, bookingId: row.id });
   }
 
   await logSystemEvent({

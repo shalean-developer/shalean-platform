@@ -1,16 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const authState = vi.hoisted(() => ({
+  userEmail: "user@example.com",
+}));
+
+const { adminAssignTeamToBookingMock, getSupabaseAdminMock } = vi.hoisted(() => ({
+  adminAssignTeamToBookingMock: vi.fn(),
+  getSupabaseAdminMock: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  getSupabaseAdmin: () => getSupabaseAdminMock(),
+}));
+
+vi.mock("@/lib/booking/bookingOperations", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/booking/bookingOperations")>();
+  return {
+    ...mod,
+    adminAssignTeamToBooking: (...args: Parameters<typeof mod.adminAssignTeamToBooking>) =>
+      adminAssignTeamToBookingMock(...args),
+  };
+});
+
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
     auth: {
       getUser: vi.fn(async () => ({
-        data: { user: { id: "00000000-0000-4000-8000-000000000099", email: "user@example.com" } },
+        data: {
+          user: { id: "00000000-0000-4000-8000-000000000099", email: authState.userEmail },
+        },
         error: null,
       })),
     },
   })),
 }));
 
+import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
 import { GET, POST } from "../route";
 
 describe("POST /api/admin/bookings/[id]/assign-team", () => {
@@ -18,6 +43,9 @@ describe("POST /api/admin/bookings/[id]/assign-team", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
     process.env.ADMIN_EMAIL = "ops@example.com";
+    authState.userEmail = "user@example.com";
+    getSupabaseAdminMock.mockReset();
+    adminAssignTeamToBookingMock.mockReset();
   });
 
   it("returns 401 without authorization", async () => {
@@ -46,6 +74,85 @@ describe("POST /api/admin/bookings/[id]/assign-team", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("calls adminAssignTeamToBooking and returns unchanged success JSON", async () => {
+    authState.userEmail = "ops@example.com";
+    const bookingId = "00000000-0000-4000-8000-000000000002";
+    const teamId = "00000000-0000-4000-8000-0000000000aa";
+    const adminStub = { tag: "admin-client" };
+    getSupabaseAdminMock.mockReturnValue(adminStub as never);
+
+    adminAssignTeamToBookingMock.mockResolvedValue({
+      ok: true,
+      bookingId,
+      data: { ok: true, teamId, oldTeamId: "00000000-0000-4000-8000-0000000000bb" },
+      event: {
+        type: "booking.assigned",
+        bookingId,
+        actor: "admin",
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        idempotencyKey: "k",
+      },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer fake-jwt",
+        },
+        body: JSON.stringify({ teamId }),
+      }),
+      { params: Promise.resolve({ id: bookingId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(adminAssignTeamToBookingMock).toHaveBeenCalledTimes(1);
+    expect(adminAssignTeamToBookingMock).toHaveBeenCalledWith({
+      admin: adminStub,
+      bookingId,
+      teamId,
+      adminUserId: "00000000-0000-4000-8000-000000000099",
+      adminEmail: "ops@example.com",
+    });
+    const json = (await res.json()) as { ok: boolean; teamId: string; oldTeamId: string | null };
+    expect(json).toEqual({
+      ok: true,
+      teamId,
+      oldTeamId: "00000000-0000-4000-8000-0000000000bb",
+    });
+  });
+
+  it("maps bookingOperations failure to same JSON shape and status as before (performAdminAssignTeam errors)", async () => {
+    authState.userEmail = "ops@example.com";
+    getSupabaseAdminMock.mockReturnValue({} as never);
+    adminAssignTeamToBookingMock.mockResolvedValue({
+      ok: false,
+      bookingId: "00000000-0000-4000-8000-000000000002",
+      code: "admin_assign_team_http_409",
+      message: "Roster locked.",
+      httpStatus: 409,
+      cause: { ok: false, httpStatus: 409, error: "Roster locked." },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer fake-jwt",
+        },
+        body: JSON.stringify({ teamId: "00000000-0000-4000-8000-0000000000aa" }),
+      }),
+      { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000002" }) },
+    );
+
+    expect(res.status).toBe(409);
+    const json = (await res.json()) as { error: string; hint?: string };
+    expect(json.error).toBe("Roster locked.");
+    expect(json.hint).toBe(BOOKING_ROSTER_LOCKED_HINT);
+  });
 });
 
 describe("GET /api/admin/bookings/[id]/assign-team", () => {
@@ -53,6 +160,7 @@ describe("GET /api/admin/bookings/[id]/assign-team", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
     process.env.ADMIN_EMAIL = "ops@example.com";
+    authState.userEmail = "user@example.com";
   });
 
   it("returns 401 without authorization", async () => {

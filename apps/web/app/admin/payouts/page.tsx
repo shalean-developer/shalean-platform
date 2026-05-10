@@ -346,7 +346,7 @@ export default function AdminPayoutsPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
-      <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/80">
+      <div className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/80">
         <button
           type="button"
           onClick={() => setHubTab("invoice")}
@@ -395,6 +395,12 @@ export default function AdminPayoutsPage() {
         >
           Cleaner earnings
         </button>
+        <Link
+          href="/admin/payouts/phase15a-diagnostics"
+          className="ml-auto inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 underline-offset-4 hover:underline dark:text-zinc-200"
+        >
+          Phase 15A diagnostics
+        </Link>
       </div>
 
       {hubTab === "invoice" ? <AdminInvoiceEligiblePayouts /> : null}

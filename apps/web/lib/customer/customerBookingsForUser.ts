@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { attachCanonicalCustomerBookingLifecycle } from "@/lib/customer/attachCanonicalCustomerBookingLifecycle";
 import { CUSTOMER_BOOKING_SELECT } from "@/lib/dashboard/customerBookingSelect";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { normalizeCustomerBookingRow } from "@/lib/dashboard/normalizeCustomerBookingRow";
@@ -22,7 +23,9 @@ export async function loadCustomerBookingRowsForUser(
     return { ok: false, error: "Could not load bookings.", status: 500 };
   }
 
-  const rows = ((data ?? []) as unknown as BookingRow[]).map((r) => normalizeCustomerBookingRow(r));
+  const rows = ((data ?? []) as unknown as BookingRow[])
+    .map((r) => normalizeCustomerBookingRow(r))
+    .map((r) => attachCanonicalCustomerBookingLifecycle(r));
   return { ok: true, bookings: rows };
 }
 
@@ -49,7 +52,7 @@ export async function loadCustomerBookingRowForUser(
   if (!data) {
     return { ok: false, error: "Not found.", status: 404 };
   }
-  const row = normalizeCustomerBookingRow(data as unknown as BookingRow);
+  const row = attachCanonicalCustomerBookingLifecycle(normalizeCustomerBookingRow(data as unknown as BookingRow));
   const st = String(row.status ?? "").toLowerCase();
   if (st === "pending_payment" || st === "payment_expired") {
     return { ok: false, error: "Not found.", status: 404 };

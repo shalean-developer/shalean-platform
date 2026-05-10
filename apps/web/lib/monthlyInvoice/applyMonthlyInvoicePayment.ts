@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -16,6 +17,10 @@ export type ApplyMonthlyInvoicePaymentResult =
  * Applies Paystack `charge.success` to `monthly_invoices`: idempotent per charge `reference`,
  * accumulates `amount_paid_cents`, `partially_paid` until settled, then `paid` + booking settlement +
  * `payout_status = eligible` + `payout_frozen_cents` (immutable cleaner earnings basis from display / cleaner_payout).
+ * After each settled booking row, {@link refreshRecurringBookingPaymentState} runs so `payment_state` matches the per-booking recurring projection (invoice settlement vs operational truth).
+ *
+ * Side-effect order for one `charge.success`: insert dedup row → invoice + booking rows (sequential updates) → `payment_state` refresh per booking.
+ * A single large DB transaction is intentionally not used here (Phase 10C): map replay via dedup, partial-loop failure modes, and compensating repair before wrapping.
  */
 export async function applyMonthlyInvoicePayment(
   admin: SupabaseClient,
@@ -163,6 +168,7 @@ export async function applyMonthlyInvoicePayment(
         });
         return { ok: false, error: u.message };
       }
+      await refreshRecurringBookingPaymentState({ admin, bookingId: b.id });
     }
 
     await logSystemEvent({

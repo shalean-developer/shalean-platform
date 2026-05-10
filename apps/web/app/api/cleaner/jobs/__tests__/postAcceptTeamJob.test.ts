@@ -47,9 +47,7 @@ function adminForTeamAccept() {
           }),
           update: () => ({
             eq: () => ({
-              in: () => ({
-                select: () => Promise.resolve({ data: [{ id: "b1" }], error: null }),
-              }),
+              select: () => Promise.resolve({ data: [{ id: "b1" }], error: null }),
             }),
           }),
         };
@@ -116,9 +114,7 @@ function adminForConfirmedSoloAccept() {
           }),
           update: () => ({
             eq: () => ({
-              in: () => ({
-                select: () => Promise.resolve({ data: [{ id: "b2" }], error: null }),
-              }),
+              select: () => Promise.resolve({ data: [{ id: "b2" }], error: null }),
             }),
           }),
         };

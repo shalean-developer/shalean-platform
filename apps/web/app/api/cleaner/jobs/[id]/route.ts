@@ -7,8 +7,19 @@ import {
   cleanerPendingPaymentBannerForRow,
   recurringPendingPaymentVisibilityReason,
 } from "@/lib/cleaner/cleanerBookingAccess";
+import {
+  cleanerAcceptBooking,
+  cleanerRejectBooking,
+  markBookingCompleted,
+  markBookingStarted,
+  markCleanerOnTheWay,
+} from "@/lib/booking/bookingOperations";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
-import { runCleanerBookingLifecycleAction, type CleanerLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
+import {
+  runCleanerBookingLifecycleAction,
+  type CleanerLifecycleAction,
+  type CleanerLifecycleResult,
+} from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -33,6 +44,76 @@ import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCl
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function cleanerAcceptOpToLifecycleResult(
+  op: Awaited<ReturnType<typeof cleanerAcceptBooking>>,
+): CleanerLifecycleResult {
+  if (op.ok) {
+    return { status: 200, json: (op.data ?? { ok: true }) as Record<string, unknown> };
+  }
+  const st = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const json =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : ({ error: op.message, code: op.code } as Record<string, unknown>);
+  return { status: st, json };
+}
+
+function markCleanerOnTheWayOpToLifecycleResult(
+  op: Awaited<ReturnType<typeof markCleanerOnTheWay>>,
+): CleanerLifecycleResult {
+  if (op.ok) {
+    return { status: 200, json: (op.data ?? { ok: true }) as Record<string, unknown> };
+  }
+  const st = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const json =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : ({ error: op.message, code: op.code } as Record<string, unknown>);
+  return { status: st, json };
+}
+
+function markBookingStartedOpToLifecycleResult(
+  op: Awaited<ReturnType<typeof markBookingStarted>>,
+): CleanerLifecycleResult {
+  if (op.ok) {
+    return { status: 200, json: (op.data ?? { ok: true }) as Record<string, unknown> };
+  }
+  const st = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const json =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : ({ error: op.message, code: op.code } as Record<string, unknown>);
+  return { status: st, json };
+}
+
+function cleanerRejectBookingOpToLifecycleResult(
+  op: Awaited<ReturnType<typeof cleanerRejectBooking>>,
+): CleanerLifecycleResult {
+  if (op.ok) {
+    return { status: 200, json: (op.data ?? { ok: true }) as Record<string, unknown> };
+  }
+  const st = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const json =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : ({ error: op.message, code: op.code } as Record<string, unknown>);
+  return { status: st, json };
+}
+
+function markBookingCompletedOpToLifecycleResult(
+  op: Awaited<ReturnType<typeof markBookingCompleted>>,
+): CleanerLifecycleResult {
+  if (op.ok) {
+    return { status: 200, json: (op.data ?? { ok: true }) as Record<string, unknown> };
+  }
+  const st = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const json =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : ({ error: op.message, code: op.code } as Record<string, unknown>);
+  return { status: st, json };
+}
 
 const BOOKING_DETAIL_SELECT =
   "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
@@ -334,12 +415,53 @@ export async function POST(
     return NextResponse.json({ error: claimErr.message ?? "Could not claim idempotency key." }, { status: 500 });
   }
 
-  const out = await runCleanerBookingLifecycleAction({
-    admin,
-    cleanerId: session.cleanerId,
-    bookingId,
-    action,
-  });
+  const out: CleanerLifecycleResult =
+    action === "accept"
+      ? cleanerAcceptOpToLifecycleResult(
+          await cleanerAcceptBooking({
+            admin,
+            cleanerId: session.cleanerId,
+            bookingId,
+          }),
+        )
+      : action === "en_route"
+        ? markCleanerOnTheWayOpToLifecycleResult(
+            await markCleanerOnTheWay({
+              admin,
+              cleanerId: session.cleanerId,
+              bookingId,
+            }),
+          )
+        : action === "start"
+          ? markBookingStartedOpToLifecycleResult(
+              await markBookingStarted({
+                admin,
+                cleanerId: session.cleanerId,
+                bookingId,
+              }),
+            )
+          : action === "reject"
+            ? cleanerRejectBookingOpToLifecycleResult(
+                await cleanerRejectBooking({
+                  admin,
+                  cleanerId: session.cleanerId,
+                  bookingId,
+                }),
+              )
+            : action === "complete"
+              ? markBookingCompletedOpToLifecycleResult(
+                  await markBookingCompleted({
+                    admin,
+                    cleanerId: session.cleanerId,
+                    bookingId,
+                  }),
+                )
+              : await runCleanerBookingLifecycleAction({
+                  admin,
+                  cleanerId: session.cleanerId,
+                  bookingId,
+                  action,
+                });
 
   if (out.status !== 200) {
     await admin.from("cleaner_job_lifecycle_idempotency").delete().eq("idempotency_key", idempotency_key);

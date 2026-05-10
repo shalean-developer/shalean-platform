@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { markBookingStarted } from "@/lib/booking/bookingOperations";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
-import { runCleanerBookingLifecycleAction } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -19,11 +19,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
   }
 
-  const out = await runCleanerBookingLifecycleAction({
+  const op = await markBookingStarted({
     admin,
     cleanerId: session.cleanerId,
     bookingId: id.trim(),
-    action: "start",
   });
-  return NextResponse.json(out.json, { status: out.status });
+  if (op.ok) {
+    return NextResponse.json(op.data ?? { ok: true }, { status: 200 });
+  }
+  const status = typeof op.httpStatus === "number" ? op.httpStatus : 400;
+  const payload =
+    op.cause && typeof op.cause === "object" && !Array.isArray(op.cause)
+      ? (op.cause as Record<string, unknown>)
+      : { error: op.message, code: op.code };
+  return NextResponse.json(payload, { status });
 }

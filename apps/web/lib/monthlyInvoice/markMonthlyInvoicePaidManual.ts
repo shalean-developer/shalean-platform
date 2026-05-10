@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -138,6 +139,7 @@ export async function markMonthlyInvoicePaidManual(
       });
       return { ok: false, error: u.message };
     }
+    await refreshRecurringBookingPaymentState({ admin, bookingId: b.id });
   }
 
   await logSystemEvent({

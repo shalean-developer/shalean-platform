@@ -16,11 +16,11 @@ export function dashboardBookingToOperationalRecord(b: DashboardBooking): Record
   };
 }
 
-/** Customer dashboard surfaces use admin operational derivation so lifecycle phase matches internal truth. */
+/** Customer dashboard: same operational phase/payment truth as admin/cleaner; capabilities use customer viewer (no cleaner field actions). */
 export function describeDashboardBookingOperational(b: DashboardBooking) {
   return describeBookingOperationalState({
     row: dashboardBookingToOperationalRecord(b),
-    viewer: "admin",
+    viewer: "customer",
   });
 }
 

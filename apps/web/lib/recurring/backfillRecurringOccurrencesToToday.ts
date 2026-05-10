@@ -5,9 +5,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { compareYmd, lastDayYmdOfInvoiceMonth, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
-import { insertMonthlyRecurringOccurrenceBooking } from "@/lib/recurring/insertMonthlyRecurringOccurrenceBooking";
-import { insertRecurringOccurrenceBooking } from "@/lib/recurring/insertRecurringOccurrenceBooking";
-import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import {
+  generateMonthlyRecurringOccurrenceBooking,
+  generateRecurringOccurrenceBooking,
+  refreshRecurringBookingPaymentState,
+} from "@/lib/booking/bookingOperations";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
@@ -204,7 +206,8 @@ export async function backfillRecurringOccurrencesToToday(
     }
 
     const ins = useMonthlyInvoicePath
-      ? await insertMonthlyRecurringOccurrenceBooking(admin, {
+      ? await generateMonthlyRecurringOccurrenceBooking({
+          admin,
           recurring: {
             id: r.id,
             customer_id: r.customer_id,
@@ -216,7 +219,8 @@ export async function backfillRecurringOccurrencesToToday(
           customerName: customerName,
           customerPhone: customerPhone,
         })
-      : await insertRecurringOccurrenceBooking(admin, {
+      : await generateRecurringOccurrenceBooking({
+          admin,
           recurring: {
             id: r.id,
             customer_id: r.customer_id,
@@ -230,37 +234,39 @@ export async function backfillRecurringOccurrencesToToday(
         });
 
     if (ins.ok) {
+      const { bookingId, data } = ins;
+      const paystackReference = data.paystackReference;
       generated++;
       if (!useMonthlyInvoicePath) {
         const smartAt = await computeInitialRecurringChargeAttemptAt(admin, {
-          bookingId: ins.bookingId,
+          bookingId,
           customerEmail: email,
           customerPhone: customerPhone,
         });
         if (smartAt) {
-          await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", ins.bookingId);
+          await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", bookingId);
         }
       }
-      await refreshRecurringPaymentStateForBooking(admin, ins.bookingId);
+      await refreshRecurringBookingPaymentState({ admin, bookingId });
       await logSystemEvent({
         level: "info",
         source: "admin/recurring/backfill",
         message: useMonthlyInvoicePath ? "monthly_invoice_recurring_booking_generated" : "recurring_booking_generated",
         context: {
           recurring_id: r.id,
-          booking_id: ins.bookingId,
+          booking_id: bookingId,
           occurrence_date: d,
-          paystack_reference: ins.paystackReference,
+          paystack_reference: paystackReference,
           monthly_invoice: useMonthlyInvoicePath,
           billing_type: billingType,
           schedule_type: scheduleType,
         },
       });
-    } else if (ins.error === "duplicate_occurrence") {
+    } else if (ins.code === "duplicate_occurrence") {
       skippedDuplicate++;
     } else {
       skippedOther++;
-      if (failures.length < 30) failures.push({ date: d, error: ins.error });
+      if (failures.length < 30) failures.push({ date: d, error: ins.message });
     }
   }
 

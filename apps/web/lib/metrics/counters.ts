@@ -117,6 +117,11 @@ export const metrics = {
    *   (`shadow_mismatch`, hard missing, bucket map, `delta_all_cents` all clear); fields: `use_ledger_totals`.
    * - `cleaner.earnings_cutoff_edge_case` — weekly payout batch scan: completions within ±5m of Thu 23:59:59.999 SAST
    *   cutoff; fields: `count`, `period_start`, `period_end`, `source` (= `generateWeeklyPayouts`).
+   * - `cleaner.weekly_batch_booking_excluded_phase12` — weekly batch: booking skipped by
+   *   `bookingPayableForWeeklyBatch`; fields: `reason`, `bookingId`, `cleanerId`.
+   * - `cleaner.phase15a_shadow_ledger_claim_mismatch` — Phase 15A measurement before claim RPC: approved
+   *   unassigned `cleaner_earnings` whose booking fails `bookingPayableForWeeklyBatch` (or booking row missing);
+   *   fields: `reason`, `booking_id`, `cleaner_id`, `cleaner_earning_id` (no enforcement; see shadow helper).
    * - `cleaner.earnings_payout_request_clicked` — client opened “Request payout” info (fields optional).
    * - `flush_cycle_metrics` logs (lifecycle telemetry): `flush_items_attempted`, `flush_items_succeeded`,
    *   `flush_items_failed`, `flush_items_deferred` — derive success rate and starvation vs timeout.

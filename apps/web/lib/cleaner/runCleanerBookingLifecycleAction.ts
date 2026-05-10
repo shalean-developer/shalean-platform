@@ -27,6 +27,7 @@ import {
   recurringPendingPaymentProgressionBlockedMessage,
 } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
+import { isBookingCompletedRouterEnabled } from "@/lib/notifications/notificationRouter";
 
 export type CleanerLifecycleAction = "accept" | "reject" | "en_route" | "start" | "complete";
 
@@ -1396,7 +1397,9 @@ export async function runCleanerBookingLifecycleAction(params: {
       },
     });
 
-    void notifyBookingEvent({ type: "completed", supabase: admin, bookingId });
+    if (!isBookingCompletedRouterEnabled()) {
+      void notifyBookingEvent({ type: "completed", supabase: admin, bookingId });
+    }
 
     const { data: cj } = await admin.from("cleaners").select("jobs_completed").eq("id", cleanerId).maybeSingle();
     const prev = cj && typeof cj === "object" ? Number((cj as { jobs_completed?: number }).jobs_completed ?? 0) : 0;

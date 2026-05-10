@@ -62,14 +62,32 @@ export default function AdminSlaBreachesPage() {
       return;
     }
 
-    const res = await fetch("/api/admin/bookings?filter=sla", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const json = (await res.json()) as {
+    let res: Response;
+    try {
+      res = await fetch("/api/admin/bookings?filter=sla", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      const msg = e instanceof TypeError && e.message === "Failed to fetch" ? "Network error — check the dev server is running." : "Could not reach server.";
+      setError(msg);
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    let json: {
       bookings?: SlaBreachRow[];
       metrics?: { slaBreachMinutes?: number };
       error?: string;
     };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      setError(res.ok ? "Invalid response from server." : "Could not load SLA breaches.");
+      setRows([]);
+      setLoading(false);
+      return;
+    }
 
     if (!res.ok) {
       setError(json.error ?? "Could not load SLA breaches.");
@@ -96,10 +114,14 @@ export default function AdminSlaBreachesPage() {
     setSlaThresholdMinutes(typeof th === "number" && th > 0 ? th : 10);
     setLoading(false);
 
-    const cr = await fetch("/api/admin/cleaners", { headers: { Authorization: `Bearer ${token}` } });
-    if (cr.ok) {
-      const cj = (await cr.json()) as { cleaners?: CleanerOption[] };
-      setCleaners(cj.cleaners ?? []);
+    try {
+      const cr = await fetch("/api/admin/cleaners", { headers: { Authorization: `Bearer ${token}` } });
+      if (cr.ok) {
+        const cj = (await cr.json()) as { cleaners?: CleanerOption[] };
+        setCleaners(cj.cleaners ?? []);
+      }
+    } catch {
+      /* cleaners list is optional for SLA table */
     }
   }, []);
 

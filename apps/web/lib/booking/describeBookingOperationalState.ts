@@ -22,7 +22,7 @@ import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssign
 import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
-export type OperationalViewer = "admin" | "cleaner";
+export type OperationalViewer = "admin" | "customer" | "cleaner";
 
 export type LifecycleCapabilities = {
   accept: boolean;
@@ -45,6 +45,8 @@ export type CleanerMobilePhase = "pending" | "assigned" | "en_route" | "in_progr
 
 export type OperationalVisibilityMode =
   | "admin_full"
+  /** Customer apps: list/detail visibility is RBAC + row ownership, not cleaner unpaid-list rules. */
+  | "customer_dashboard"
   | "cleaner_jobs_list_visible"
   | "cleaner_jobs_list_hidden_unpaid_one_shot"
   | "cleaner_recurring_unpaid_visible";
@@ -243,6 +245,7 @@ function phaseRowFromRecord(row: Record<string, unknown>): PhaseRow {
 
 function visibilityModeFor(viewer: OperationalViewer, row: Record<string, unknown>): OperationalVisibilityMode {
   if (viewer === "admin") return "admin_full";
+  if (viewer === "customer") return "customer_dashboard";
   const st = String(row.status ?? "").trim().toLowerCase();
   if (st === "pending_payment") {
     return bookingMatchesRecurringCleanerPendingPayment(row)
@@ -456,8 +459,8 @@ function progressionBlockedReasonFor(
 }
 
 /**
- * Single authoritative operational interpretation for a `bookings` row (admin + cleaner).
- * All lifecycle chips, coarse mobile phases, and capability gating should read from here.
+ * Single authoritative operational interpretation for a `bookings` row (admin, customer, cleaner).
+ * `operationalPhase` / payment / recurring / payout strings are identical across viewers; capabilities and visibility differ.
  */
 export function describeBookingOperationalState(
   input: DescribeBookingOperationalStateInput,
@@ -470,7 +473,8 @@ export function describeBookingOperationalState(
   const cleanerJobUi = computeCleanerJobUiStateRecord(row, nowMs);
   const cleanerLifecycleCapabilities = lifecycleCapabilitiesForCleaner(row, cleanerJobUi);
   const adminLifecycleCaps = lifecycleCapabilitiesForAdmin(row);
-  const lifecycleCapabilities = viewer === "admin" ? adminLifecycleCaps : cleanerLifecycleCapabilities;
+  const lifecycleCapabilities =
+    viewer === "admin" ? adminLifecycleCaps : viewer === "customer" ? NO_CAPS : cleanerLifecycleCapabilities;
 
   const visibilityMode = visibilityModeFor(viewer, row);
   const paymentState = paymentStateFromRow(row);

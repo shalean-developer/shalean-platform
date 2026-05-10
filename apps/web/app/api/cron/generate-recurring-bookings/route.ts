@@ -7,9 +7,11 @@ import {
 } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate, occurrenceDatesInclusive, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { computeInitialRecurringChargeAttemptAt } from "@/lib/recurring/computeInitialChargeAttemptAt";
-import { insertRecurringOccurrenceBooking } from "@/lib/recurring/insertRecurringOccurrenceBooking";
-import { insertMonthlyRecurringOccurrenceBooking } from "@/lib/recurring/insertMonthlyRecurringOccurrenceBooking";
-import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import {
+  generateMonthlyRecurringOccurrenceBooking,
+  generateRecurringOccurrenceBooking,
+  refreshRecurringBookingPaymentState,
+} from "@/lib/booking/bookingOperations";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -213,7 +215,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    /** Monthly consolidated billing: deferred charge via `monthly_invoices` (see `insertMonthlyRecurringOccurrenceBooking`). */
+    /** Monthly consolidated billing: deferred charge via `monthly_invoices` (see `generateMonthlyRecurringOccurrenceBooking`). */
     const useMonthlyInvoicePath = billingType === "monthly";
 
     const datesAll = occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
@@ -224,7 +226,8 @@ export async function POST(request: Request) {
       if (r.skip_next_occurrence_date && d === r.skip_next_occurrence_date) continue;
 
       const ins = useMonthlyInvoicePath
-        ? await insertMonthlyRecurringOccurrenceBooking(admin, {
+        ? await generateMonthlyRecurringOccurrenceBooking({
+            admin,
             recurring: {
               id: r.id,
               customer_id: r.customer_id,
@@ -236,7 +239,8 @@ export async function POST(request: Request) {
             customerName: customerName,
             customerPhone: customerPhone,
           })
-        : await insertRecurringOccurrenceBooking(admin, {
+        : await generateRecurringOccurrenceBooking({
+            admin,
             recurring: {
               id: r.id,
               customer_id: r.customer_id,
@@ -250,42 +254,44 @@ export async function POST(request: Request) {
           });
 
       if (ins.ok) {
+        const newBookingId = ins.bookingId;
+        const newPaystackReference = ins.data.paystackReference;
         generated++;
         if (useMonthlyInvoicePath) {
           console.log("[generate] created booking for monthly customer", {
             planId: r.id,
             date: d,
-            bookingId: ins.bookingId,
+            bookingId: newBookingId,
           });
         } else {
-          console.log("[generate] generated booking", { planId: r.id, date: d, bookingId: ins.bookingId });
+          console.log("[generate] generated booking", { planId: r.id, date: d, bookingId: newBookingId });
         }
         if (!useMonthlyInvoicePath) {
           const smartAt = await computeInitialRecurringChargeAttemptAt(admin, {
-            bookingId: ins.bookingId,
+            bookingId: newBookingId,
             customerEmail: email,
             customerPhone: customerPhone,
           });
           if (smartAt) {
-            await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", ins.bookingId);
+            await admin.from("bookings").update({ recurring_next_charge_attempt_at: smartAt }).eq("id", newBookingId);
           }
         }
-        await refreshRecurringPaymentStateForBooking(admin, ins.bookingId);
+        await refreshRecurringBookingPaymentState({ admin, bookingId: newBookingId });
         await logSystemEvent({
           level: "info",
           source: "cron/generate-recurring-bookings",
           message: useMonthlyInvoicePath ? "monthly_invoice_recurring_booking_generated" : "recurring_booking_generated",
           context: {
             recurring_id: r.id,
-            booking_id: ins.bookingId,
+            booking_id: newBookingId,
             occurrence_date: d,
-            paystack_reference: ins.paystackReference,
+            paystack_reference: newPaystackReference,
             monthly_invoice: useMonthlyInvoicePath,
             billing_type: billingType,
             schedule_type: scheduleType,
           },
         });
-      } else if (ins.error === "duplicate_occurrence") {
+      } else if (ins.code === "duplicate_occurrence") {
         skipped++;
         console.log("[generate] skipped recurring duplicate", { planId: r.id, date: d });
       } else {
@@ -293,7 +299,7 @@ export async function POST(request: Request) {
           level: "warn",
           source: "cron/generate-recurring-bookings",
           message: "recurring_booking_generate_failed",
-          context: { recurring_id: r.id, occurrence_date: d, error: ins.error },
+          context: { recurring_id: r.id, occurrence_date: d, error: ins.message },
         });
         skipped++;
       }

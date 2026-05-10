@@ -18,6 +18,10 @@ describe("describeBookingOperationalState", () => {
     });
     const cleaner = describeBookingOperationalState({ row: r, viewer: "cleaner" });
     const admin = describeBookingOperationalState({ row: r, viewer: "admin" });
+    const customer = describeBookingOperationalState({ row: r, viewer: "customer" });
+    expect(customer.displayBadge).toBe(admin.displayBadge);
+    expect(customer.operationalPhase).toBe(admin.operationalPhase);
+    expect(customer.visibilityMode).toBe("customer_dashboard");
     expect(cleaner.displayBadge).toBe("Awaiting payment confirmation");
     expect(admin.displayBadge).toBe(cleaner.displayBadge);
     expect(cleaner.cleanerLifecycleCapabilities.complete).toBe(false);
