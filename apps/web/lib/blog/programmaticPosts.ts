@@ -1115,14 +1115,7 @@ export function getEditorialClusterBlogLinksForHub(
   areaName: string,
 ): { href: string; label: string }[] {
   const guides = getHubEditorialGuideLinks(hubSlug, areaName);
-  const base = hubAreaKebabFromHubSlug(hubSlug);
-  const slugs = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
-  const hubCanon = `cleaning-services-${base}-cape-town`;
-  const extraLinks: { href: string; label: string }[] = [];
-  if (slugs.has(hubCanon)) {
-    extraLinks.push({ href: `/blog/${hubCanon}`, label: editorialClusterLinkLabel(hubCanon, areaName) });
-  }
-  return [...guides, ...extraLinks];
+  return [...guides, { href: `/locations/${hubSlug}`, label: `Cleaning services in ${areaName}` }];
 }
 
 export type LocalGuideEditorialCrossLinks = {
@@ -1237,22 +1230,7 @@ const AREA_HUB_LINK_LABEL_PHRASE: Record<ProgrammaticServiceForAreaHub, string> 
 };
 
 /** Editorial `blog_posts` rows that supersede thin PROGRAMMATIC_POSTS URLs for a given service × area. */
-const EDITORIAL_SERVICE_AREA_BLOG_SLUG: Partial<
-  Record<ProgrammaticServiceForAreaHub, Partial<Record<(typeof AREA_BLOG_HUB_LOCATIONS)[number], string>>>
-> = {
-  deep: {
-    Gardens: "deep-cleaning-gardens-cape-town",
-  },
-  standard: {
-    Wynberg: "regular-home-cleaning-wynberg-cape-town",
-    Constantia: "home-cleaning-constantia-cape-town",
-  },
-  "move-out": {
-    Rondebosch: "cleaning-services-rondebosch-cape-town",
-  },
-};
-
-/** Internal links from Cape Town service SEO pages to matching programmatic /blog/* area posts. */
+/** Internal links from Cape Town service SEO pages: programmatic guides when present, else suburb hubs. */
 export function getAreaProgrammaticBlogLinksForCapeTownService(
   slug: CapeTownSeoServiceSlug,
 ): { href: string; label: string }[] | null {
@@ -1260,24 +1238,15 @@ export function getAreaProgrammaticBlogLinksForCapeTownService(
   if (!svc) return null;
   const phrase = AREA_HUB_LINK_LABEL_PHRASE[svc];
   return AREA_BLOG_HUB_LOCATIONS.map((loc) => {
-    const editorialSlug = EDITORIAL_SERVICE_AREA_BLOG_SLUG[svc]?.[loc];
-    if (editorialSlug) {
-      return { href: `/blog/${editorialSlug}`, label: `${phrase} in ${loc}` };
-    }
     const post = PROGRAMMATIC_POSTS.find((p) => p.service === svc && p.location === loc);
     if (post) {
       return { href: `/blog/${post.slug}`, label: `${phrase} in ${loc}` };
     }
     const hubKey = hubSlugFromPlaceName(loc);
-    if (hubKey) {
-      const base = hubAreaKebabFromHubSlug(hubKey);
-      const hubCanon = `cleaning-services-${base}-cape-town`;
-      const hubHit = PROGRAMMATIC_POSTS.find((p) => p.slug === hubCanon);
-      if (hubHit) {
-        return { href: `/blog/${hubCanon}`, label: `${phrase} in ${loc}` };
-      }
+    if (!hubKey) {
+      throw new Error(`Missing location hub for service "${svc}" in ${loc}`);
     }
-    throw new Error(`Missing programmatic post for service "${svc}" in ${loc}`);
+    return { href: `/locations/${hubKey}`, label: `${phrase} in ${loc}` };
   });
 }
 

@@ -120,12 +120,15 @@ export async function getAllPublishedPosts(): Promise<BlogIndexPost[]> {
 /** @deprecated Use DEFAULT_BLOG_FEATURED_IMAGE from `@/lib/blogImageMap` — kept for index “variety” checks. */
 export const DEFAULT_LIST_HERO = DEFAULT_BLOG_FEATURED_IMAGE;
 
-/** Cape Town hub “guides” strip — pricing + service guides linked from location hubs. */
+/**
+ * Cape Town hub “guides” strip — slugs that should exist as published `blog_posts` (or HC / host-guide mirrors).
+ * Prefer live router keys over legacy short slugs so `.in("slug", …)` matches production rows.
+ */
 export const CAPE_TOWN_HUB_BLOG_SLUGS = [
-  "cleaning-cost-cape-town",
-  "deep-vs-standard-cleaning-cape-town",
-  "move-out-cleaning-guide",
-  "airbnb-cleaning-checklist",
+  "how-much-does-cleaning-cost-cape-town-2026",
+  "deep-cleaning-vs-regular-cleaning-cape-town",
+  "move-out-cleaning-checklist-cape-town",
+  "airbnb-cleaning-checklist-cape-town",
 ] as const;
 
 export type HubBlogCard = { slug: string; title: string; excerpt: string };

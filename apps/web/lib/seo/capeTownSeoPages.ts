@@ -289,28 +289,28 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingLabel: "deep cleaning",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/blog/cleaning-services-claremont-cape-town",
+      blogPath: "/locations/claremont-cleaning-services",
       linkAnchorText: "cleaning services in Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Green Point",
-        blogPath: "/blog/cleaning-services-green-point-cape-town",
+        blogPath: "/locations/green-point-cleaning-services",
         linkAnchorText: "cleaning services in Green Point",
       },
       {
         areaName: "Gardens",
-        blogPath: "/blog/deep-cleaning-gardens-cape-town",
+        blogPath: "/locations/gardens-cleaning-services",
         linkAnchorText: "cleaning services in Gardens",
       },
       {
         areaName: "Camps Bay",
-        blogPath: "/blog/luxury-home-cleaning-camps-bay-cape-town",
+        blogPath: "/locations/camps-bay-cleaning-services",
         linkAnchorText: "cleaning services in Camps Bay",
       },
       {
         areaName: "Constantia",
-        blogPath: "/blog/home-cleaning-constantia-cape-town",
+        blogPath: "/locations/constantia-cleaning-services",
         linkAnchorText: "cleaning services in Constantia",
       },
     ],
@@ -383,33 +383,33 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     includedSectionHeading: "What's included in our cleaning service",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/blog/cleaning-services-claremont-cape-town",
+      blogPath: "/locations/claremont-cleaning-services",
       linkAnchorText: "cleaning services in Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Camps Bay",
-        blogPath: "/blog/luxury-home-cleaning-camps-bay-cape-town",
+        blogPath: "/locations/camps-bay-cleaning-services",
         linkAnchorText: "cleaning services in Camps Bay",
       },
       {
         areaName: "Wynberg",
-        blogPath: "/blog/regular-home-cleaning-wynberg-cape-town",
+        blogPath: "/locations/wynberg-cleaning-services",
         linkAnchorText: "cleaning services in Wynberg",
       },
       {
         areaName: "Observatory",
-        blogPath: "/blog/affordable-cleaning-observatory-cape-town",
+        blogPath: "/locations/observatory-cleaning-services",
         linkAnchorText: "cleaning services in Observatory",
       },
       {
         areaName: "Plumstead",
-        blogPath: "/blog/home-cleaning-plumstead-cape-town",
+        blogPath: "/locations/plumstead-cleaning-services",
         linkAnchorText: "cleaning services in Plumstead",
       },
       {
         areaName: "Constantia",
-        blogPath: "/blog/home-cleaning-constantia-cape-town",
+        blogPath: "/locations/constantia-cleaning-services",
         linkAnchorText: "cleaning services in Constantia",
       },
     ],
@@ -480,13 +480,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingLabel: "move-out cleaning",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/blog/cleaning-services-claremont-cape-town",
+      blogPath: "/locations/claremont-cleaning-services",
       linkAnchorText: "cleaning services in Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Rondebosch",
-        blogPath: "/blog/move-out-cleaning-rondebosch-cape-town",
+        blogPath: "/locations/rondebosch-cleaning-services",
         linkAnchorText: "cleaning services in Rondebosch",
       },
     ],
@@ -626,7 +626,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingPath: "/booking",
     neighbourhoodBlogGuide: {
       areaName: "Green Point",
-      blogPath: "/blog/cleaning-services-green-point-cape-town",
+      blogPath: "/locations/green-point-cleaning-services",
       linkAnchorText: "cleaning services in Green Point",
     },
     introSectionHeading: "Built for Airbnb hosts, property managers & short-term rental owners",
@@ -859,7 +859,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     rankingServiceReinforcementParagraph:
       "From regular home cleaning to detailed move out cleaning, our services are designed for Claremont residents, students, and property managers.",
     relatedBlogGuide: {
-      href: "/blog/cleaning-services-claremont-cape-town",
+      href: "/locations/claremont-cleaning-services",
       linkAnchorText: "cleaning services in Claremont",
     },
     intro: [
@@ -890,7 +890,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/blog/regular-home-cleaning-wynberg-cape-town",
+      href: "/locations/wynberg-cleaning-services",
       linkAnchorText: "cleaning services in Wynberg",
     },
     intro: [
@@ -921,7 +921,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/blog/move-out-cleaning-rondebosch-cape-town",
+      href: "/locations/rondebosch-cleaning-services",
       linkAnchorText: "cleaning services in Rondebosch",
     },
     intro: [
@@ -976,7 +976,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/blog/affordable-cleaning-observatory-cape-town",
+      href: "/locations/observatory-cleaning-services",
       linkAnchorText: "cleaning services in Observatory",
     },
     intro: [
@@ -1106,7 +1106,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Support if something is missed before check-ins or inspections.",
     ],
     relatedBlogGuide: {
-      href: "/blog/cleaning-services-green-point-cape-town",
+      href: "/locations/green-point-cleaning-services",
       linkAnchorText: "cleaning services in Green Point",
     },
   },
@@ -1147,7 +1147,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/blog/deep-cleaning-gardens-cape-town",
+      href: "/locations/gardens-cleaning-services",
       linkAnchorText: "cleaning services in Gardens",
     },
     intro: [
@@ -1178,7 +1178,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/blog/home-cleaning-plumstead-cape-town",
+      href: "/locations/plumstead-cleaning-services",
       linkAnchorText: "cleaning services in Plumstead",
     },
     intro: [
@@ -1281,7 +1281,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/blog/luxury-home-cleaning-camps-bay-cape-town",
+      href: "/locations/camps-bay-cleaning-services",
       linkAnchorText: "cleaning services in Camps Bay",
     },
     intro: [
@@ -1384,7 +1384,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: false,
     relatedBlogGuide: {
-      href: "/blog/home-cleaning-constantia-cape-town",
+      href: "/locations/constantia-cleaning-services",
       linkAnchorText: "cleaning services in Constantia",
     },
     intro: [

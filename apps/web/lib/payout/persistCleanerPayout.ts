@@ -26,6 +26,7 @@ import {
   buildTeamJobMemberPayoutInsertRows,
   fetchActiveTeamMemberIdsAtAppointment,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   assertHybridPayoutWithinFinancialCap,
@@ -203,7 +204,7 @@ async function resolveTeamCleanerCountForCanonical(
   return Math.max(1, n);
 }
 
-type PersistBookingRowForEarnings = {
+export type PersistBookingRowForEarnings = {
   is_team_job?: boolean | null;
   team_id?: string | null;
   team_member_count_snapshot?: number | null;
@@ -490,6 +491,13 @@ async function persistCleanerPayoutIfUnsetCore(
   }
 
   const isTeamJob = r.is_team_job === true;
+
+  if (!isTeamJob) {
+    const ensured = await ensureBookingLineItemsForEarningsIfMissing(admin, bookingId, { isTeamJob: false });
+    if (!ensured.ok) {
+      return { ok: false, error: ensured.error };
+    }
+  }
 
   const payoutIdForLock = String(r.payout_id ?? "").trim();
   if (payoutIdForLock) {
@@ -829,7 +837,7 @@ async function persistCleanerPayoutIfUnsetCore(
       earnings_tenure_months_at_assignment: earnings.earnings_tenure_months_at_assignment ?? null,
     })
     .eq("id", bookingId)
-    .not("is_team_job", "eq", true);
+    .or("is_team_job.eq.false,is_team_job.is.null");
   soloUp = forceDisplay
     ? soloUp
     : recomputeZeroDisplay

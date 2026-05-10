@@ -75,7 +75,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     );
   }
 
-  await resetBookingCleanerLineEarnings(admin, bookingId);
+  const rst = await resetBookingCleanerLineEarnings(admin, bookingId);
+  if (!rst.ok) {
+    return NextResponse.json({ error: rst.error, code: "earnings_reset_failed" }, { status: 500 });
+  }
   await logAdminEarningsAction(admin, { bookingId, action: "reset", adminUserId });
 
   const { data: rowAfter, error: afterErr } = await admin

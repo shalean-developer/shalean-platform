@@ -39,7 +39,12 @@ import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackRea
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { metrics } from "@/lib/metrics/counters";
-import { pickUserSelectedCleanerId } from "@/lib/booking/userSelectedCleanerFromSnapshot";
+import {
+  mergePickedCleanerWithPersistedBookingSelection,
+  normalizeUuidCandidate,
+  paystackFinalizeClearsSelectedCleanerId,
+  pickUserSelectedCleanerId,
+} from "@/lib/booking/userSelectedCleanerFromSnapshot";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
@@ -133,7 +138,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     return { ok: false, skipped: true, bookingId: null, error: "Supabase not configured" };
   }
 
-  const existingSelect = "id, status, is_recurring_generated, price_snapshot" as const;
+  const existingSelect = "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id" as const;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -242,7 +247,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   }
   console.log("[SNAPSHOT PARSED]", priceSnapshotFromMeta);
 
-  let priceSnapshot =
+  const priceSnapshot =
     priceSnapshotFromMeta ??
     (existing && typeof existing === "object" && "price_snapshot" in existing
       ? checkoutPriceSnapshotFromLegacyPriceSnapshotV1((existing as { price_snapshot?: unknown }).price_snapshot)
@@ -321,18 +326,50 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     };
   }
 
-  const pickedCleanerUuid = pickUserSelectedCleanerId(lockedRow, input.snapshot);
+  const existingPersistedSelectedCleanerId =
+    existingPendingPaymentId != null &&
+    existing &&
+    typeof existing === "object" &&
+    "selected_cleaner_id" in existing
+      ? (existing as { selected_cleaner_id?: string | null }).selected_cleaner_id
+      : undefined;
+
+  const pickedCleanerUuid = mergePickedCleanerWithPersistedBookingSelection(
+    pickUserSelectedCleanerId(lockedRow, input.snapshot),
+    existingPersistedSelectedCleanerId,
+  );
   const checkoutResolution = await resolveCheckoutCleanerSelection(supabase, {
     pickedCleanerUuid,
     locked: lockedRow,
   });
-  let userConfirmedCleanerId: string | null =
+  const userConfirmedCleanerId: string | null =
     checkoutResolution.kind === "honor" ? checkoutResolution.cleanerId : null;
   const selectionInvalidatedCleaner = checkoutResolution.kind === "fallback";
   const checkoutFallbackReason =
     checkoutResolution.kind === "fallback" ? checkoutResolution.reason : null;
   const checkoutIntentRow =
     checkoutResolution.kind === "fallback" ? { attempted_cleaner_id: checkoutResolution.attemptedId } : {};
+
+  const postPayAssignmentClear: Record<string, unknown> =
+    userConfirmedCleanerId != null
+      ? {}
+      : paystackFinalizeClearsSelectedCleanerId({
+            userConfirmedCleanerId,
+            checkoutResolutionKind: checkoutResolution.kind,
+          })
+        ? { cleaner_id: null as string | null, selected_cleaner_id: null as string | null }
+        : { cleaner_id: null as string | null };
+
+  const hadPersistedPreferredCleaner = Boolean(normalizeUuidCandidate(existingPersistedSelectedCleanerId));
+  const paystackFallbackPreservePreferredPatch: Record<string, unknown> =
+    checkoutResolution.kind === "fallback" && hadPersistedPreferredCleaner
+      ? {
+          status: "pending_assignment" as const,
+          dispatch_status: "searching" as const,
+          cleaner_response_status: CLEANER_RESPONSE.NONE,
+          cleaner_id: null as string | null,
+        }
+      : {};
 
   const price_breakdown: Record<string, unknown> = {
     subtotalZar: priceSnapshot.subtotal_zar,
@@ -502,10 +539,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     /**
      * `bookings_assigned_requires_status` forbids `status = pending` with stale `cleaner_id` /
      * `selected_cleaner_id` from the pre-pay row. UPDATE must clear them unless this finalize
-     * sets user-selected checkout fields via {@link userSelectedCheckoutRow}.
+     * sets user-selected checkout fields via {@link userSelectedCheckoutRow}, preserves preferred
+     * cleaner on `fallback`, or clears both only on true `no_pick`.
      */
-    ...(userConfirmedCleanerId == null ? { cleaner_id: null, selected_cleaner_id: null } : {}),
+    ...postPayAssignmentClear,
     ...checkoutIntentRow,
+    ...paystackFallbackPreservePreferredPatch,
     ...userSelectedCheckoutRow,
     ...(tenureShareLine != null ? { cleaner_share_percentage: tenureShareLine } : {}),
   };

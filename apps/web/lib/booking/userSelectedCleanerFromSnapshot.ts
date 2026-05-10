@@ -23,3 +23,27 @@ export function pickUserSelectedCleanerId(
   if (fromLocked) return fromLocked;
   return normalizeUuidCandidate(snapshot?.cleaner_id ?? undefined);
 }
+
+/**
+ * Merge Paystack/checkout snapshot pick with a `pending_payment` row that already stored
+ * `bookings.selected_cleaner_id` (e.g. flow intake) when the snapshot lock omits `cleaner_id`.
+ */
+export function mergePickedCleanerWithPersistedBookingSelection(
+  pickedFromSnapshot: string | null,
+  existingBookingSelectedCleanerId: string | null | undefined,
+): string | null {
+  if (pickedFromSnapshot) return pickedFromSnapshot;
+  return normalizeUuidCandidate(existingBookingSelectedCleanerId);
+}
+
+/**
+ * Whether Paystack finalize should explicitly set `selected_cleaner_id` to null on the paid row.
+ * On checkout resolution `fallback`, we keep the column so ops can still see the customer intent
+ * (and `attempted_cleaner_id` records the failed pick trace).
+ */
+export function paystackFinalizeClearsSelectedCleanerId(input: {
+  userConfirmedCleanerId: string | null;
+  checkoutResolutionKind: "no_pick" | "honor" | "fallback";
+}): boolean {
+  return input.userConfirmedCleanerId == null && input.checkoutResolutionKind !== "fallback";
+}

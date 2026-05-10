@@ -10,7 +10,7 @@ const V = BLOG_CONTENT_JSON_SCHEMA_VERSION;
 
 /** Shared cross-hub paragraph — natural internal linking loop (Blog → Hub → Booking). */
 const HUB_MESH =
-  "Neighbourhood hubs spell out what cleaners expect on the ground—compare [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), [Sea Point](/blog/cleaning-services-sea-point-cape-town), [Green Point](/blog/cleaning-services-green-point-cape-town), [Gardens](/blog/cleaning-services-gardens-cape-town), [Rondebosch](/blog/cleaning-services-rondebosch-cape-town), [Wynberg](/blog/cleaning-services-wynberg-cape-town), and [Durbanville](/blog/cleaning-services-durbanville-cape-town), then lock scope in [booking](/booking).";
+  "Neighbourhood hubs spell out what cleaners expect on the ground—compare [cleaning services in Claremont](/locations/claremont-cleaning-services), [Sea Point](/locations/sea-point-cleaning-services), [Green Point](/locations/green-point-cleaning-services), [Gardens](/locations/gardens-cleaning-services), [Rondebosch](/locations/rondebosch-cleaning-services), [Wynberg](/locations/wynberg-cleaning-services), and [Durbanville](/locations/durbanville-cleaning-services), then lock scope in [booking](/booking).";
 
 function img(url: string, alt: string): BlogContentBlock {
   return {
@@ -228,8 +228,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Explore services & hubs", [
           { label: "Standard cleaning Cape Town", url: SERVICE_STANDARD },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Sea Point", url: "/blog/cleaning-services-sea-point-cape-town" },
-          { label: "Cleaning services in Durbanville", url: "/blog/cleaning-services-durbanville-cape-town" },
+          { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
+          { label: "Cleaning services in Durbanville", url: "/locations/durbanville-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/deep-cleaning-cape-town-kitchen.webp", "Deep cleaning kitchen Cape Town professional service"),
@@ -403,8 +403,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Related hubs & booking", [
           { label: "Move-out cleaning Cape Town", url: SERVICE_MOVE },
           { label: "Airbnb cleaning Cape Town", url: SERVICE_AIRBNB },
-          { label: "Cleaning services in Wynberg", url: "/blog/cleaning-services-wynberg-cape-town" },
-          { label: "Cleaning services in Rondebosch", url: "/blog/cleaning-services-rondebosch-cape-town" },
+          { label: "Cleaning services in Wynberg", url: "/locations/wynberg-cleaning-services" },
+          { label: "Cleaning services in Rondebosch", url: "/locations/rondebosch-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/blog/deep-vs-standard-cleaning-cape-town.webp", "Choosing cleaning tier Cape Town deep vs standard"),
@@ -529,8 +529,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Services & suburb hubs", [
           { label: "Standard cleaning Cape Town", url: SERVICE_STANDARD },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Green Point", url: "/blog/cleaning-services-green-point-cape-town" },
-          { label: "Cleaning services in Gardens", url: "/blog/cleaning-services-gardens-cape-town" },
+          { label: "Cleaning services in Green Point", url: "/locations/green-point-cleaning-services" },
+          { label: "Cleaning services in Gardens", url: "/locations/gardens-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/bright-living-room-after-cleaning-cape-town.webp", "Bright living room after home cleaning Cape Town"),
@@ -653,8 +653,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Deep dives & hubs", [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Move-out cleaning Cape Town", url: SERVICE_MOVE },
-          { label: "Cleaning services in Claremont", url: "/blog/cleaning-services-claremont-cape-town" },
-          { label: "Cleaning services in Sea Point", url: "/blog/cleaning-services-sea-point-cape-town" },
+          { label: "Cleaning services in Claremont", url: "/locations/claremont-cleaning-services" },
+          { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/standard-cleaning-cape-town-kitchen.webp", "Standard cleaning scope Cape Town kitchen maintenance quote"),
@@ -867,8 +867,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Services & Cape Town suburbs", [
           { label: "Standard cleaning Cape Town", url: SERVICE_STANDARD },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Green Point", url: "/blog/cleaning-services-green-point-cape-town" },
-          { label: "Cleaning services in Durbanville", url: "/blog/cleaning-services-durbanville-cape-town" },
+          { label: "Cleaning services in Green Point", url: "/locations/green-point-cleaning-services" },
+          { label: "Cleaning services in Durbanville", url: "/locations/durbanville-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         {
@@ -997,8 +997,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Hosting links & hubs", [
           { label: "Airbnb cleaning Cape Town", url: SERVICE_AIRBNB },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Sea Point", url: "/blog/cleaning-services-sea-point-cape-town" },
-          { label: "Cleaning services in Green Point", url: "/blog/cleaning-services-green-point-cape-town" },
+          { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
+          { label: "Cleaning services in Green Point", url: "/locations/green-point-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/move-out-cleaning-cape-town-handover.webp", "Rental handover cleaning Cape Town comparison context"),
@@ -1117,8 +1117,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Fast booking anchors", [
           { label: "Standard cleaning Cape Town", url: SERVICE_STANDARD },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Gardens", url: "/blog/cleaning-services-gardens-cape-town" },
-          { label: "Cleaning services in Wynberg", url: "/blog/cleaning-services-wynberg-cape-town" },
+          { label: "Cleaning services in Gardens", url: "/locations/gardens-cleaning-services" },
+          { label: "Cleaning services in Wynberg", url: "/locations/wynberg-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/bathroom-kitchen-deep-clean-cape-town.webp", "Bathroom kitchen fast clean Cape Town"),
@@ -1289,8 +1289,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Move-out anchors & hubs", [
           { label: "Move-out cleaning Cape Town", url: SERVICE_MOVE },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Rondebosch", url: "/blog/cleaning-services-rondebosch-cape-town" },
-          { label: "Cleaning services in Durbanville", url: "/blog/cleaning-services-durbanville-cape-town" },
+          { label: "Cleaning services in Rondebosch", url: "/locations/rondebosch-cleaning-services" },
+          { label: "Cleaning services in Durbanville", url: "/locations/durbanville-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/house-deep-cleaning-cape-town.webp", "End of lease deep clean Cape Town house"),
@@ -1416,8 +1416,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Continue reading & booking", [
           { label: "Standard cleaning Cape Town", url: SERVICE_STANDARD },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Claremont", url: "/blog/cleaning-services-claremont-cape-town" },
-          { label: "Cleaning services in Rondebosch", url: "/blog/cleaning-services-rondebosch-cape-town" },
+          { label: "Cleaning services in Claremont", url: "/locations/claremont-cleaning-services" },
+          { label: "Cleaning services in Rondebosch", url: "/locations/rondebosch-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/cape-town-house-cleaning-kitchen.webp", "Kitchen prepared for Cape Town house cleaning visit"),
@@ -1533,8 +1533,8 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
         links("Cadence resources & suburbs", [
           { label: "Standard cleaning Cape Town", url: SERVICE_STANDARD },
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
-          { label: "Cleaning services in Sea Point", url: "/blog/cleaning-services-sea-point-cape-town" },
-          { label: "Cleaning services in Wynberg", url: "/blog/cleaning-services-wynberg-cape-town" },
+          { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
+          { label: "Cleaning services in Wynberg", url: "/locations/wynberg-cleaning-services" },
           { label: "Get instant quote", url: "/booking" },
         ]),
         img("/images/marketing/cleaning-team-bright-space-cape-town.webp", "Home cleaning frequency Cape Town family routine"),

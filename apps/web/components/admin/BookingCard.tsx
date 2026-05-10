@@ -23,6 +23,10 @@ import {
   adminBookingPaymentPrimaryLabel,
 } from "@/lib/admin/adminBookingListPaymentDisplay";
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
+import {
+  adminBookingDispatchAttemptId,
+  adminBookingSelectedAtCheckoutId,
+} from "@/lib/admin/adminBookingAssignmentLabels";
 import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
 import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
@@ -117,6 +121,8 @@ export function BookingCard({
   const rosterTip = rosterTooltipNames(roster);
   const missingLead = roster.length > 0 && !lead;
   const shortTeam = Boolean(r.is_team_job) && roster.length >= 1 && roster.length < 2;
+  const checkoutSelectedId = adminBookingSelectedAtCheckoutId(r);
+  const dispatchAttemptId = adminBookingDispatchAttemptId(r);
   const teamServiceBooking = isTeamService({
     service: r.service,
     service_slug: r.service_slug ?? null,
@@ -329,17 +335,22 @@ export function BookingCard({
               </div>
             ) : null}
 
-            {r.attempted_cleaner_id?.trim() && r.attempted_cleaner_id.trim() !== (r.cleaner_id ?? "").trim() ? (
-              <p className="text-[10px] leading-snug text-zinc-600 dark:text-zinc-400" title={r.attempted_cleaner_id}>
-                Selected at checkout:{" "}
-                {cleanerDisplayName(r.attempted_cleaner_id.trim(), sortedCleaners) ??
-                  `ID ${r.attempted_cleaner_id.slice(0, 8)}…`}
+            {checkoutSelectedId ? (
+              <p className="text-[10px] leading-snug text-zinc-600 dark:text-zinc-400" title={checkoutSelectedId}>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Selected at checkout:</span>{" "}
+                {cleanerDisplayName(checkoutSelectedId, sortedCleaners) ?? `ID ${checkoutSelectedId.slice(0, 8)}…`}
+              </p>
+            ) : null}
+            {dispatchAttemptId ? (
+              <p className="text-[10px] leading-snug text-zinc-600 dark:text-zinc-400" title={dispatchAttemptId}>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Dispatch attempt:</span>{" "}
+                {cleanerDisplayName(dispatchAttemptId, sortedCleaners) ?? `ID ${dispatchAttemptId.slice(0, 8)}…`}
               </p>
             ) : null}
 
             <div>
               <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-                {teamServiceBooking ? "Cleaner (solo field)" : "Cleaner"}
+                {teamServiceBooking ? "Cleaner (solo field)" : "Assigned cleaner"}
               </label>
               {teamServiceBooking ? (
                 <p className="mb-1.5 max-w-[280px] text-[10px] leading-snug text-zinc-600 dark:text-zinc-400">

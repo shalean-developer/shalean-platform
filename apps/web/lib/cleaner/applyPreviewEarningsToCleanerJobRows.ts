@@ -37,25 +37,26 @@ export async function applyPreviewEarningsToCleanerJobRows(
         displayEarningsIsEstimate: false,
         earnings_estimated: false,
         earnings_is_estimate: false,
+        earnings_basis_pending: false,
       });
       continue;
     }
 
     if (used >= maxPreviews) {
-      out.push(j);
+      out.push({ ...j, earnings_basis_pending: true });
       continue;
     }
 
     const id = String(j.id ?? "").trim();
     if (!id) {
-      out.push(j);
+      out.push({ ...j, earnings_basis_pending: true });
       continue;
     }
 
     used += 1;
     const previewCents = await previewDisplayEarningsCentsForCleanerJob(admin, { bookingId: id, cleanerId });
     if (previewCents == null) {
-      out.push(j);
+      out.push({ ...j, earnings_basis_pending: true });
       continue;
     }
 
@@ -67,6 +68,7 @@ export async function applyPreviewEarningsToCleanerJobRows(
       displayEarningsIsEstimate: true,
       earnings_estimated: true,
       earnings_is_estimate: true,
+      earnings_basis_pending: false,
     });
   }
 

@@ -59,7 +59,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li>After building work or heavy DIY, when fine dust settles on skirting, shelves, and inside cupboards you open daily.</li>
 <li>Between long gaps without professional help, when bathrooms and kitchens show fixed stains or dull fixtures.</li>
 <li>Before listing a property for sale or photos, when presentation detail directly affects first impressions.</li>
-<li>Ahead of rental handovers—pair this guide with our <a href="/blog/move-out-cleaning-guide">move-out cleaning guide for Cape Town rentals</a> when timing and inspection photos have to line up.</li>
+<li>Ahead of rental handovers—pair this guide with our <a href="/blog/move-out-cleaning-checklist-cape-town">move-out cleaning guide for Cape Town rentals</a> when timing and inspection photos have to line up.</li>
 </ul>
 <h3>How to avoid over-buying deep cleans</h3>
 <p>If you maintain a steady standard cadence, you may only need deep cleaning seasonally or before high-stakes events. Be honest in booking notes about pets, floor types, and problem spots so your quote reflects the visit length you truly need—Cape Town traffic and access quirks already squeeze arrival windows; accurate scope keeps quality high on the day.</p>

@@ -437,7 +437,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, initialLocationSlug =
               <p>
                 Running a listing in Green Point? Read{" "}
                 <SafeInternalLink
-                  href="/blog/cleaning-services-green-point-cape-town"
+                  href={LOCATION_SEO_PAGES["green-point-cleaning-services"].path}
                   className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                 >
                   Airbnb cleaning in Green Point

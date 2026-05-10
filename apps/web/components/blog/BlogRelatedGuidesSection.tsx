@@ -20,8 +20,8 @@ export function BlogRelatedGuidesSection({ post }: { post: BlogPostMeta }) {
 
       <ul className="mt-4 list-inside list-disc space-y-2 text-sm font-medium text-zinc-800">
         {related.map((r) => (
-          <li key={r.hrefSlug}>
-            <SafeInternalLink href={`/blog/${r.hrefSlug}`} className={linkInNavClassName} linkContext="related guides">
+          <li key={r.href}>
+            <SafeInternalLink href={r.href} className={linkInNavClassName} linkContext="related guides">
               {r.title}
             </SafeInternalLink>
           </li>

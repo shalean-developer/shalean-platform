@@ -31,6 +31,7 @@ import {
   parseAdminBookingPriceSnapshot,
   type AdminPriceSnapshotCardView,
 } from "@/lib/booking/priceSnapshotAdminDisplay";
+import { adminBookingDispatchAttemptId } from "@/lib/admin/adminBookingAssignmentLabels";
 import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
 import {
   describeBookingOperationalState,
@@ -72,6 +73,8 @@ type BookingDetails = {
   cleaner_id: string | null;
   /** Customer checkout pick; assignment finalizes in `cleaner_id` after accept. */
   selected_cleaner_id?: string | null;
+  /** Dispatch / offer attempt trace (not the checkout column). */
+  attempted_cleaner_id?: string | null;
   assignment_type?: string | null;
   fallback_reason?: string | null;
   team_id?: string | null;
@@ -1460,6 +1463,7 @@ export default function BookingDetailsView({
   });
   const selectedCleanerIdRaw = String(fullBooking.selected_cleaner_id ?? "").trim();
   const hasSelectedCleanerUuid = /^[0-9a-f-]{36}$/i.test(selectedCleanerIdRaw);
+  const dispatchAttemptCleanerId = adminBookingDispatchAttemptId(fullBooking);
   const dispatchSt = (fullBooking.dispatch_status ?? "").toLowerCase();
   const needsDispatchManualAttention =
     !isAssigned &&
@@ -2827,12 +2831,20 @@ export default function BookingDetailsView({
                 {assignmentSummaryLine ? (
                   <p className="text-xs text-zinc-600 dark:text-zinc-400">{assignmentSummaryLine}</p>
                 ) : null}
+                {dispatchAttemptCleanerId ? (
+                  <div className="mt-2 rounded-md border border-zinc-200 bg-white/80 px-2 py-1.5 dark:border-zinc-600 dark:bg-zinc-900/40">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Dispatch attempt
+                    </p>
+                    <p className="mt-0.5 font-mono text-[11px] text-zinc-700 dark:text-zinc-300">{dispatchAttemptCleanerId}</p>
+                  </div>
+                ) : null}
               </div>
             ) : selectedCleaner || hasSelectedCleanerUuid ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-sky-200 bg-sky-50/90 p-3 dark:border-sky-900/60 dark:bg-sky-950/40">
                   <p className="text-xs font-semibold uppercase tracking-wide text-sky-900 dark:text-sky-200">
-                    Customer&apos;s choice (pending acceptance)
+                    Selected at checkout (pending acceptance)
                   </p>
                   {selectedCleaner ? (
                     <>
@@ -2870,6 +2882,14 @@ export default function BookingDetailsView({
                     </p>
                   )}
                 </div>
+                {dispatchAttemptCleanerId ? (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                      Dispatch attempt
+                    </p>
+                    <p className="mt-1 font-mono text-[11px] text-zinc-700 dark:text-zinc-300">{dispatchAttemptCleanerId}</p>
+                  </div>
+                ) : null}
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30">
                   <p className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
                     <TriangleAlert size={14} />
@@ -2893,7 +2913,7 @@ export default function BookingDetailsView({
             {fullBooking.cleaner_id && selectedCleaner ? (
               <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-                  Customer originally requested
+                  Selected at checkout
                 </p>
                 <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
                   {selectedCleaner.full_name ?? selectedCleaner.id}

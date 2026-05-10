@@ -34,13 +34,13 @@ async function runProxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  /** Thin “best cleaners in {area}” clones → canonical neighbourhood hub (`cleaning-services-{area}-cape-town`). */
+  /** Thin “best cleaners in {area}” clones → canonical suburb hub (`/locations/{area}-cleaning-services`). */
   const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
   if (bestCleaningBlog) {
     const area = bestCleaningBlog[1] ?? "";
     if (area) {
       const url = request.nextUrl.clone();
-      url.pathname = `/blog/cleaning-services-${area}-cape-town`;
+      url.pathname = `/locations/${area}-cleaning-services`;
       url.search = "";
       return NextResponse.redirect(url, 308);
     }

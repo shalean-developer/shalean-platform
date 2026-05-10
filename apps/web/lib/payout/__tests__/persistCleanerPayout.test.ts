@@ -8,8 +8,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: () => mockState.admin,
 }));
 
+vi.mock("@/lib/booking/ensureBookingLineItemsForEarnings", () => ({
+  /** Not a `vi.fn` so `vi.restoreAllMocks()` in tests cannot strip the implementation. */
+  ensureBookingLineItemsForEarningsIfMissing: async () => ({ ok: true as const }),
+}));
+
 class QueryBuilder {
-  private filters: Array<{ kind: "eq" | "is" | "not_is"; column: string; value: unknown }> = [];
+  private filters: Array<{ kind: "eq" | "is" | "not_is" | "or_raw"; column: string; value: unknown }> = [];
   private op: "select" | "update" | "insert" | "delete" = "select";
   private patch: Row = {};
   private insertRows: Row[] = [];
@@ -56,6 +61,12 @@ class QueryBuilder {
 
   not(column: string, op: string, value: unknown) {
     if (op === "is") this.filters.push({ kind: "not_is", column, value });
+    return this;
+  }
+
+  /** PostgREST-style OR; tests only implement `is_team_job.eq.false,is_team_job.is.null` semantics. */
+  or(expr: string) {
+    this.filters.push({ kind: "or_raw", column: "__or__", value: expr });
     return this;
   }
 
@@ -115,6 +126,11 @@ class QueryBuilder {
 
   private matches(row: Row): boolean {
     for (const f of this.filters) {
+      if (f.kind === "or_raw" && typeof f.value === "string" && f.value.includes("is_team_job")) {
+        const v = row.is_team_job;
+        if (!(v === false || v == null)) return false;
+        continue;
+      }
       const value = row[f.column];
       if (f.kind === "eq" && value !== f.value) return false;
       if (f.kind === "is") {

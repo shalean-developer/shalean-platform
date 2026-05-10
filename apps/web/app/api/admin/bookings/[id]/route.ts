@@ -13,17 +13,26 @@ import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleS
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import {
+  adminBookingBeforeAssignmentPatchSelectList,
+  bookingRequiresPersistedEarningsBeforeCleanerNotify,
+  revertAdminBookingAssignmentToBeforeRow,
+} from "@/lib/payout/adminBookingAssignmentEarningsGate";
+import {
+  bookingPaymentRecomputeBlockedByRefund,
+  bookingsPersistSelectListForPersist,
   fetchBookingDisplayEarningsCents,
   hasPersistedDisplayEarningsBasis,
   resolvePersistCleanerIdForBooking,
+  type BookingPaidSignalRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
-import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { persistCleanerPayoutIfUnset, resolvePersistEarningsComputation, type PersistBookingRowForEarnings } from "@/lib/payout/persistCleanerPayout";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaServer";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
+import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,9 +89,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       ? String((booking as { selected_cleaner_id: string }).selected_cleaner_id).trim()
       : "";
   const selectedCleanerId = /^[0-9a-f-]{36}$/i.test(selectedRaw) ? selectedRaw : null;
-  /** Join row for checkout pick when it is not the same as the assigned cleaner (or no assign yet). */
-  const fetchSelectedCleanerRow =
-    selectedCleanerId != null && (cleanerId == null || selectedCleanerId !== cleanerId);
+  /** Join row for checkout pick (`selected_cleaner_id`) whenever set — list card labels selection separately from assignment. */
+  const fetchSelectedCleanerRow = selectedCleanerId != null;
 
   const cleanerPromise = cleanerId
     ? admin
@@ -255,7 +263,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const updates: Record<string, unknown> = {};
 
   if (body.status != null) {
-    let status = canonicalDbBookingStatus(String(body.status).trim());
+    const status = canonicalDbBookingStatus(String(body.status).trim());
     const allowed = new Set(["pending", "assigned", "in_progress", "completed", "cancelled", "failed"]);
     if (!allowed.has(status)) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     updates.status = status;
@@ -366,13 +374,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "No valid fields provided." }, { status: 400 });
   }
 
-  const { data: before } = await admin
-    .from("bookings")
-    .select(
-      "user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  let assignmentRevertedForEarnings = false;
+
+  const { data: before } = await admin.from("bookings").select(adminBookingBeforeAssignmentPatchSelectList()).eq("id", id).maybeSingle();
   const beforeRow = before as {
     cleaner_id?: string | null;
     status?: string | null;
@@ -428,11 +432,48 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (
     updates.status === "completed" &&
     before &&
-    bookingIsRecurringPendingPayment(before as Record<string, unknown>)
+    bookingIsRecurringPendingPayment(before as unknown as Record<string, unknown>)
   ) {
     (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_at = new Date().toISOString();
     (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_by =
       (typeof user.email === "string" && user.email.trim()) || user.id;
+  }
+
+  if (cleanerWasChanged && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
+    if (bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never)) {
+      const li = await ensureBookingLineItemsForEarningsIfMissing(admin, id, {
+        isTeamJob: (before as { is_team_job?: boolean | null }).is_team_job,
+      });
+      if (!li.ok) {
+        return NextResponse.json(
+          { error: `Cannot assign cleaner: ${li.error}`, code: "booking_line_items_ensure_failed" },
+          { status: 422 },
+        );
+      }
+      const { data: gateFinancial, error: gfErr } = await admin
+        .from("bookings")
+        .select(bookingsPersistSelectListForPersist())
+        .eq("id", id)
+        .maybeSingle();
+      if (!gfErr && gateFinancial) {
+        const merged = { ...(gateFinancial as unknown as Record<string, unknown>), cleaner_id: newCleaner };
+        const earned = await resolvePersistEarningsComputation({
+          admin,
+          bookingId: id,
+          expectedCleanerId: newCleaner,
+          r: merged as PersistBookingRowForEarnings,
+        });
+        if (!earned.ok) {
+          return NextResponse.json(
+            {
+              error: `Cannot assign cleaner: earnings cannot be computed (${earned.error}).`,
+              code: "earnings_basis_uncomputable",
+            },
+            { status: 422 },
+          );
+        }
+      }
+    }
   }
 
   const { error } = await admin.from("bookings").update(updates).eq("id", id);
@@ -441,7 +482,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (
     updates.status === "completed" &&
     before &&
-    bookingIsRecurringPendingPayment(before as Record<string, unknown>)
+    bookingIsRecurringPendingPayment(before as unknown as Record<string, unknown>)
   ) {
     await logSystemEvent({
       level: "warn",
@@ -458,10 +499,195 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   if (cleanerWasChanged) {
-    await resetBookingCleanerLineEarnings(admin, id);
+    const rst = await resetBookingCleanerLineEarnings(admin, id);
+    if (!rst.ok) {
+      void reportOperationalIssue("error", "admin_bookings_patch", `resetBookingCleanerLineEarnings: ${rst.error}`, {
+        bookingId: id,
+      });
+      return NextResponse.json(
+        { error: "Could not reset earnings for reassignment.", code: "earnings_reset_failed" },
+        { status: 500 },
+      );
+    }
   }
 
-  if (newCleaner && cleanerWasChanged) {
+  let earningsRecompute: {
+    ok: boolean;
+    code?: string;
+    message?: string;
+  } | null = null;
+
+  if (cleanerWasChanged && newCleaner) {
+    const { data: earnRefetch, error: earnRefetchErr } = await admin
+      .from("bookings")
+      .select(
+        "cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, refunded_at, refund_status, display_earnings_cents, status",
+      )
+      .eq("id", id)
+      .maybeSingle();
+
+    if (earnRefetchErr || !earnRefetch) {
+      earningsRecompute = {
+        ok: false,
+        code: "refetch_failed",
+        message: earnRefetchErr?.message ?? "Could not load booking for earnings recompute.",
+      };
+      void reportOperationalIssue("error", "admin_bookings_patch", "reassignment earnings refetch failed", {
+        bookingId: id,
+        error: earnRefetchErr?.message ?? "null_row",
+      });
+    } else if (bookingPaymentRecomputeBlockedByRefund(earnRefetch as BookingPaidSignalRow)) {
+      earningsRecompute = {
+        ok: false,
+        code: "refund_or_reversal_blocked",
+        message: "Earnings were not recomputed — booking is flagged for refund or reversal.",
+      };
+      void logSystemEvent({
+        level: "warn",
+        source: "admin_booking_reassignment",
+        message: "earnings_recompute_skipped_refund",
+        context: { booking_id: id },
+      });
+    } else {
+      const st = String((earnRefetch as { status?: string | null }).status ?? "").toLowerCase();
+      if (st === "cancelled" || st === "failed") {
+        earningsRecompute = {
+          ok: false,
+          code: "terminal_booking_status",
+          message: `Earnings were not recomputed for status=${st}.`,
+        };
+      } else {
+        const persistCleanerId = resolvePersistCleanerIdForBooking(
+          earnRefetch as {
+            cleaner_id?: string | null;
+            payout_owner_cleaner_id?: string | null;
+            is_team_job?: boolean | null;
+          },
+        );
+        if (!persistCleanerId) {
+          earningsRecompute = {
+            ok: false,
+            code: "no_persist_cleaner_id",
+            message:
+              (earnRefetch as { is_team_job?: boolean | null }).is_team_job === true
+                ? "Team job: set payout owner or roster before earnings can be persisted for this assignment."
+                : "Could not resolve cleaner id for earnings persist.",
+          };
+          void reportOperationalIssue("warn", "admin_bookings_patch", "reassignment earnings skipped_no_persist_id", {
+            bookingId: id,
+            is_team_job: (earnRefetch as { is_team_job?: boolean | null }).is_team_job ?? null,
+          });
+        } else {
+          try {
+            const payout = await persistCleanerPayoutIfUnset({
+              admin,
+              bookingId: id,
+              cleanerId: persistCleanerId,
+              forceDisplayRecompute: true,
+            });
+            const displayAfter = await fetchBookingDisplayEarningsCents(admin, id);
+            if (hasPersistedDisplayEarningsBasis(displayAfter)) {
+              earningsRecompute = { ok: true };
+            } else if (payout.ok === false) {
+              earningsRecompute = {
+                ok: false,
+                code: payout.code ?? "payout_persist_failed",
+                message: payout.error ?? "Earnings persist failed.",
+              };
+              void reportOperationalIssue("error", "admin_bookings_patch", "reassignment earnings persist_failed", {
+                bookingId: id,
+                cleanerId: persistCleanerId,
+                code: payout.code ?? null,
+              });
+            } else if (payout.ok === true && "skipped" in payout && payout.skipped) {
+              earningsRecompute = {
+                ok: false,
+                code: String(payout.skipReason ?? "persist_skipped"),
+                message: `Earnings persist skipped: ${String(payout.skipReason ?? "unknown")}.`,
+              };
+              void reportOperationalIssue("warn", "admin_bookings_patch", "reassignment earnings persist_skipped", {
+                bookingId: id,
+                cleanerId: persistCleanerId,
+                skipReason: payout.skipReason,
+              });
+            } else {
+              earningsRecompute = {
+                ok: false,
+                code: "display_basis_missing",
+                message: "Earnings persist did not leave a display earnings basis on the booking.",
+              };
+              void reportOperationalIssue("error", "admin_bookings_patch", "reassignment earnings display_still_null", {
+                bookingId: id,
+                cleanerId: persistCleanerId,
+              });
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            earningsRecompute = { ok: false, code: "persist_threw", message: msg };
+            void reportOperationalIssue("error", "admin_bookings_patch", `reassignment earnings persist_threw: ${msg}`, {
+              bookingId: id,
+              cleanerId: persistCleanerId,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  const earningsRevertDenyCodes = new Set(["refetch_failed", "refund_or_reversal_blocked", "terminal_booking_status"]);
+  if (
+    cleanerWasChanged &&
+    newCleaner &&
+    before &&
+    bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never) &&
+    earningsRecompute &&
+    earningsRecompute.ok === false &&
+    (!earningsRecompute.code || !earningsRevertDenyCodes.has(earningsRecompute.code))
+  ) {
+    const rev = await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never);
+    assignmentRevertedForEarnings = true;
+    if (!rev.ok) {
+      void reportOperationalIssue("critical", "admin_bookings_patch", `earnings failed and assignment revert failed: ${rev.error}`, {
+        bookingId: id,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: earningsRecompute.message ?? "Earnings could not be persisted after assignment.",
+          code: earningsRecompute.code ?? "earnings_persist_failed",
+          earnings_recompute: earningsRecompute,
+          assignment_revert_failed: true,
+        },
+        { status: 500 },
+      );
+    }
+    if (beforeRow) {
+      const bd = typeof beforeRow.date === "string" ? beforeRow.date.trim() : "";
+      const bt = normalizeTimeHm(String(beforeRow.time ?? ""));
+      if (/^\d{4}-\d{2}-\d{2}$/.test(bd) && /^\d{2}:\d{2}$/.test(bt)) {
+        invalidateCleanerAvailabilityCache(bd, bt);
+      }
+    }
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          earningsRecompute.message ??
+          "Assignment was rolled back because a persisted earnings basis could not be created for this paid booking.",
+        code: earningsRecompute.code ?? "earnings_persist_failed",
+        earnings_recompute: earningsRecompute,
+        assignment_reverted: true,
+      },
+      { status: 422 },
+    );
+  }
+
+  const needsAssignedNotify =
+    Boolean(newCleaner && cleanerWasChanged && !assignmentRevertedForEarnings) &&
+    (earningsRecompute?.ok === true ||
+      !before ||
+      !bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never));
+  if (needsAssignedNotify && newCleaner) {
     await notifyCleanerAssignedBooking(admin, id, newCleaner);
   }
 
@@ -665,7 +891,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    ...(earningsRecompute != null ? { earnings_recompute: earningsRecompute } : {}),
+  });
 }
 
 /**

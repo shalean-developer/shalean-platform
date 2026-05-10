@@ -1,6 +1,9 @@
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import { CANONICAL_DEEP_VS_STANDARD_BLOG_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
+import {
+  CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF,
+  CANONICAL_DEEP_VS_STANDARD_BLOG_HREF,
+} from "@/lib/blog/canonicalEditorialBlogLinks";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
 
 const standard = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
@@ -136,7 +139,10 @@ export function CleaningCostCapeTownPost() {
       <p>
         Learn more about{" "}
         <SafeInternalLink href={airbnb}>Airbnb cleaning services in Cape Town</SafeInternalLink> if you manage a rental property, or use our{" "}
-        <SafeInternalLink href="/blog/airbnb-cleaning-checklist">Airbnb cleaning checklist for Cape Town hosts</SafeInternalLink> when you want a
+        <SafeInternalLink href={CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF}>
+          Airbnb cleaning checklist for Cape Town hosts
+        </SafeInternalLink>{" "}
+        when you want a
         room-by-room turnover run sheet.
       </p>
 

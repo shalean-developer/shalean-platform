@@ -1,4 +1,5 @@
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
+import { CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 
 const standard = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
@@ -57,7 +58,10 @@ export function DeepVsStandardCleaningCapeTownPost() {
         <li>Before listing a property for sale or photos, when presentation detail directly affects first impressions.</li>
         <li>
           Ahead of rental handovers—pair this guide with our{" "}
-          <SafeInternalLink href="/blog/move-out-cleaning-guide">move-out cleaning guide for Cape Town rentals</SafeInternalLink> when timing and
+          <SafeInternalLink href={CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF}>
+            move-out cleaning guide for Cape Town rentals
+          </SafeInternalLink>{" "}
+          when timing and
           inspection photos have to line up.
         </li>
       </ul>

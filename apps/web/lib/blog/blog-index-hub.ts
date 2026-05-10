@@ -17,12 +17,11 @@ export type BlogIndexCardPost = BlogIndexPost & {
 };
 
 /** Preferred hero article when published; otherwise newest post is featured. */
-export const BLOG_FEATURED_SLUG_PREFERENCE = "how-much-does-cleaning-cost-cape-town";
+export const BLOG_FEATURED_SLUG_PREFERENCE = "how-much-does-cleaning-cost-cape-town-2026";
 
 /** Curated “most popular” strip (filled from merge list; padded by recency). */
 export const BLOG_MOST_POPULAR_SLUGS: string[] = [
-  "how-much-does-cleaning-cost-cape-town",
-  ...CAPE_TOWN_HUB_BLOG_SLUGS,
+  ...new Set<string>(["how-much-does-cleaning-cost-cape-town-2026", ...CAPE_TOWN_HUB_BLOG_SLUGS]),
 ];
 
 /** Re-export for blog index (same seven priority suburbs as the footer). */
@@ -99,7 +98,10 @@ const TOPIC_OVERRIDES: Partial<Record<string, BlogTopicFilterId[]>> = {
   "airbnb-cleaning-mistakes-hosts-make": ["airbnb"],
   "cleaning-cost-cape-town": ["pricing"],
   "move-out-cleaning-guide": ["move-out"],
+  "move-out-cleaning-checklist-cape-town": ["move-out"],
   "deep-vs-standard-cleaning-cape-town": ["deep-cleaning", "pricing"],
+  "deep-cleaning-vs-regular-cleaning-cape-town": ["deep-cleaning", "pricing"],
+  "how-much-does-cleaning-cost-cape-town-2026": ["pricing"],
   "deep-cleaning-vs-regular-cleaning-cape-town": ["deep-cleaning", "pricing"],
 };
 
@@ -161,10 +163,14 @@ const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
     "Benchmark cost of cleaning service bands in Cape Town and learn what moves your online quote in real time.",
   "move-out-cleaning-guide":
     "Protect your deposit: move-out scope aligned with inspections—kitchens, wet rooms, and final walk-throughs for Cape Town rentals.",
+  "move-out-cleaning-checklist-cape-town":
+    "Protect your deposit: move-out scope aligned with inspections—kitchens, wet rooms, and final walk-throughs for Cape Town rentals.",
   "deep-vs-standard-cleaning-cape-town":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
   "deep-cleaning-vs-regular-cleaning-cape-town":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
+  "how-much-does-cleaning-cost-cape-town-2026":
+    "Skip guesswork: learn what drives Cape Town cleaning totals—rooms, tier, and add-ons—so your quote matches real time on site.",
 };
 
 function simpleHash(input: string): number {

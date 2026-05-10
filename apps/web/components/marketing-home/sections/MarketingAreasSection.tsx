@@ -98,39 +98,39 @@ export function MarketingAreasSection({ locations }: Props) {
             </p>
             <p>
               We also cover specific areas like{" "}
-              <SafeInternalLink href="/blog/cleaning-services-claremont-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/claremont-cleaning-services" className={linkInParagraphClassName}>
                 cleaning services in Claremont
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/deep-cleaning-gardens-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/gardens-cleaning-services" className={linkInParagraphClassName}>
                 Gardens cleaning services
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/move-out-cleaning-rondebosch-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/rondebosch-cleaning-services" className={linkInParagraphClassName}>
                 Rondebosch cleaning services
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/regular-home-cleaning-wynberg-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/wynberg-cleaning-services" className={linkInParagraphClassName}>
                 Wynberg cleaning services
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/affordable-cleaning-observatory-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/observatory-cleaning-services" className={linkInParagraphClassName}>
                 Observatory cleaning services
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/home-cleaning-plumstead-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/plumstead-cleaning-services" className={linkInParagraphClassName}>
                 Plumstead cleaning services
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/home-cleaning-constantia-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/constantia-cleaning-services" className={linkInParagraphClassName}>
                 Constantia cleaning services
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href="/blog/luxury-home-cleaning-camps-bay-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/camps-bay-cleaning-services" className={linkInParagraphClassName}>
                 Camps Bay cleaning services
               </SafeInternalLink>
               , and{" "}
-              <SafeInternalLink href="/blog/cleaning-services-green-point-cape-town" className={linkInParagraphClassName}>
+              <SafeInternalLink href="/locations/green-point-cleaning-services" className={linkInParagraphClassName}>
                 Green Point cleaning services
               </SafeInternalLink>
               .

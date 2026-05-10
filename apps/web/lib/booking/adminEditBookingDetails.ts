@@ -887,7 +887,22 @@ async function executeRepricingAdminEditBookingDetails(
     });
   }
 
-  await resetBookingCleanerLineEarnings(admin, bookingId);
+  const resetEarn = await resetBookingCleanerLineEarnings(admin, bookingId);
+  if (!resetEarn.ok) {
+    void reportOperationalIssue("error", "adminEditBookingDetails", `resetBookingCleanerLineEarnings: ${resetEarn.error}`, {
+      bookingId,
+    });
+    await failIdempotency(admin, dedupeKey, {
+      ok: false,
+      status: 500,
+      error: "Could not reset booking earnings for repricing.",
+    });
+    return {
+      ok: false,
+      status: 500,
+      error: "Could not reset booking earnings for repricing.",
+    };
+  }
 
   const cleanerId = resolvePersistCleanerIdForBooking(
     postRow as { cleaner_id?: string | null; payout_owner_cleaner_id?: string | null; is_team_job?: boolean | null },

@@ -95,7 +95,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [cleaning services in Green Point](/blog/cleaning-services-green-point-cape-town) or [cleaning services in Rondebosch](/blog/cleaning-services-rondebosch-cape-town).`,
+      content: `You may also be interested in nearby areas like [cleaning services in Green Point](/locations/green-point-cleaning-services) or [cleaning services in Rondebosch](/locations/rondebosch-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -1075,7 +1075,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [cleaning services in Sea Point](/blog/cleaning-services-sea-point-cape-town) or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+      content: `You may also be interested in nearby areas like [cleaning services in Sea Point](/locations/sea-point-cleaning-services) or [cleaning services in Claremont](/locations/claremont-cleaning-services).`,
     },
     {
       type: "heading",
@@ -1216,7 +1216,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town) or [Airbnb cleaning in Green Point](/blog/cleaning-services-green-point-cape-town).`,
+      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/locations/claremont-cleaning-services) or [Airbnb cleaning in Green Point](/locations/green-point-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -1367,7 +1367,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), [Airbnb cleaning in Green Point](/blog/cleaning-services-green-point-cape-town), or [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town).`,
+      content: `You may also be interested in nearby areas like [cleaning services in Claremont](/locations/claremont-cleaning-services), [Airbnb cleaning in Green Point](/locations/green-point-cleaning-services), or [move-out cleaning in Rondebosch](/locations/rondebosch-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -1518,7 +1518,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town), [Airbnb cleaning in Green Point](/blog/cleaning-services-green-point-cape-town), or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/locations/gardens-cleaning-services), [Airbnb cleaning in Green Point](/locations/green-point-cleaning-services), or [cleaning services in Claremont](/locations/claremont-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -1677,7 +1677,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town), [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), or [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town).`,
+      content: `You may also be interested in nearby areas like [deep cleaning in Gardens](/locations/gardens-cleaning-services), [cleaning services in Claremont](/locations/claremont-cleaning-services), or [move-out cleaning in Rondebosch](/locations/rondebosch-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -1820,7 +1820,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [move-out cleaning in Rondebosch](/blog/move-out-cleaning-rondebosch-cape-town) or [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town).`,
+      content: `You may also be interested in nearby areas like [move-out cleaning in Rondebosch](/locations/rondebosch-cleaning-services) or [cleaning services in Claremont](/locations/claremont-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -1971,7 +1971,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [regular cleaning in Wynberg](/blog/regular-home-cleaning-wynberg-cape-town), [cleaning services in Claremont](/blog/cleaning-services-claremont-cape-town), or [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town).`,
+      content: `You may also be interested in nearby areas like [regular cleaning in Wynberg](/locations/wynberg-cleaning-services), [cleaning services in Claremont](/locations/claremont-cleaning-services), or [deep cleaning in Gardens](/locations/gardens-cleaning-services).`,
     },
     {
       type: "paragraph",
@@ -2118,7 +2118,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `You may also be interested in nearby areas like [home cleaning in Plumstead](/blog/home-cleaning-plumstead-cape-town), [regular cleaning in Wynberg](/blog/regular-home-cleaning-wynberg-cape-town), or [deep cleaning in Gardens](/blog/deep-cleaning-gardens-cape-town).`,
+      content: `You may also be interested in nearby areas like [home cleaning in Plumstead](/locations/plumstead-cleaning-services), [regular cleaning in Wynberg](/locations/wynberg-cleaning-services), or [deep cleaning in Gardens](/locations/gardens-cleaning-services).`,
     },
     {
       type: "paragraph",

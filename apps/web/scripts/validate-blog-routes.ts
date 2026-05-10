@@ -14,6 +14,8 @@ import {
 } from "../lib/blog/validBlogRoutes";
 import { LOCATION_HUB_STRUCTURED_PAGES } from "../lib/blog/seed/locationHubStructuredContent";
 import { programmaticBlogCleanupRedirects } from "../lib/seo/programmaticBlogCleanupRedirects";
+import { CAPE_TOWN_LOCATIONS } from "../lib/seo/capeTownLocations";
+import { CAPE_TOWN_SERVICE_SEO } from "../lib/seo/capeTownSeoPages";
 
 const DEFINED_SLUGS = new Set<string>([
   ...PROGRAMMATIC_POSTS.map((p) => p.slug),
@@ -21,6 +23,10 @@ const DEFINED_SLUGS = new Set<string>([
   ...HIGH_CONVERSION_POSTS.map((p) => p.slug),
   ...LOCATION_HUB_STRUCTURED_PAGES.map((h) => h.slug),
 ]);
+
+const ALLOWED_LOCATION_PATHS = new Set(CAPE_TOWN_LOCATIONS.map((l) => `/locations/${l.slug}`));
+const ALLOWED_SERVICE_PATHS = new Set(Object.values(CAPE_TOWN_SERVICE_SEO).map((b) => b.path));
+const ALLOWED_STATIC_COMMERCIAL_PATHS = new Set<string>(["/cleaning-prices-cape-town"]);
 
 function assertBlogTerminalOk(path: string, ctx: string): void {
   const n = normalizeBlogPathname(path);
@@ -32,6 +38,20 @@ function assertBlogTerminalOk(path: string, ctx: string): void {
       `${ctx}: redirect terminal /blog/${slug} has no in-repo article definition — publish in CMS with this slug or add to PROGRAMMATIC/AIRBNB/HC pools.`,
     );
   }
+}
+
+function assertRedirectTerminalOk(finalPath: string, ctx: string): void {
+  const n = normalizeBlogPathname(finalPath.split(/[?#]/)[0] ?? finalPath);
+  if (n.startsWith("/blog/")) {
+    assertBlogTerminalOk(n, ctx);
+    return;
+  }
+  if (ALLOWED_LOCATION_PATHS.has(n)) return;
+  if (ALLOWED_SERVICE_PATHS.has(n)) return;
+  if (ALLOWED_STATIC_COMMERCIAL_PATHS.has(n)) return;
+  throw new Error(
+    `${ctx}: redirect terminal ${n} is not a validated /locations hub, Cape Town service path, or pricing hub`,
+  );
 }
 
 function main(): void {
@@ -77,7 +97,7 @@ function main(): void {
 
     const finalPath = resolveBlogRedirectChain(src);
     try {
-      assertBlogTerminalOk(finalPath, `Rule ${src}→…`);
+      assertRedirectTerminalOk(finalPath, `Rule ${src}→…`);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
     }
