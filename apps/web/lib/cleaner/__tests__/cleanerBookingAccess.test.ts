@@ -20,6 +20,10 @@ describe("appendRosterBookingIdsToOrFilter", () => {
 });
 
 describe("bookingsVisibilityOrFilter", () => {
+  it("does not branch on selected_cleaner_id (pending user-selected jobs surface via /api/cleaner/offers)", () => {
+    expect(bookingsVisibilityOrFilter("cleaner-a", [])).not.toMatch(/selected_cleaner/i);
+  });
+
   it("uses cleaner_id and payout_owner when no teams", () => {
     expect(bookingsVisibilityOrFilter("cleaner-a", [])).toBe(
       "cleaner_id.eq.cleaner-a,payout_owner_cleaner_id.eq.cleaner-a",

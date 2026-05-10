@@ -13,6 +13,22 @@ export type CheckoutCleanerResolution =
   | { kind: "honor"; cleanerId: string }
   | { kind: "fallback"; attemptedId: string; reason: BookingFallbackReason };
 
+/**
+ * After successful payment, this is the cleaner who should receive the checkout dispatch offer.
+ * `honor` uses pre-pay eligibility; `fallback` still targets the customer's pick so they can accept/decline in-app.
+ */
+export function checkoutPaidDispatchOfferCleanerId(input: {
+  checkoutResolution: CheckoutCleanerResolution;
+  userConfirmedCleanerId: string | null;
+  normalizedPickedCleaner: string | null;
+}): string | null {
+  if (input.userConfirmedCleanerId) return input.userConfirmedCleanerId;
+  if (input.checkoutResolution.kind === "fallback" && input.normalizedPickedCleaner) {
+    return input.normalizedPickedCleaner;
+  }
+  return null;
+}
+
 /** Default TTL (seconds) for checkout dispatch offers (selected cleaner, post-payment offer only). */
 export const DISPATCH_CHECKOUT_OFFER_TTL_DEFAULT_SECONDS = 3600;
 

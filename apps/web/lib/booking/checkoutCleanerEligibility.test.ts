@@ -2,8 +2,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   checkoutDispatchOfferTtlSeconds,
   checkoutDurationMinutesFromLocked,
+  checkoutPaidDispatchOfferCleanerId,
   DISPATCH_CHECKOUT_OFFER_TTL_DEFAULT_SECONDS,
 } from "@/lib/booking/checkoutCleanerEligibility";
+import { FALLBACK_REASON_CLEANER_OFFLINE } from "@/lib/booking/fallbackReason";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 
 function baseLocked(over: Partial<LockedBooking>): LockedBooking {
@@ -52,6 +54,40 @@ describe("checkoutDispatchOfferTtlSeconds", () => {
   it("uses default for non-numeric env", () => {
     vi.stubEnv("DISPATCH_CHECKOUT_OFFER_TTL_SECONDS", "nope");
     expect(checkoutDispatchOfferTtlSeconds()).toBe(3600);
+  });
+});
+
+describe("checkoutPaidDispatchOfferCleanerId", () => {
+  const cid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+
+  it("uses honor confirmation", () => {
+    expect(
+      checkoutPaidDispatchOfferCleanerId({
+        checkoutResolution: { kind: "honor", cleanerId: cid },
+        userConfirmedCleanerId: cid,
+        normalizedPickedCleaner: cid,
+      }),
+    ).toBe(cid);
+  });
+
+  it("targets customer pick on eligibility fallback (Phase 1 offer visibility)", () => {
+    expect(
+      checkoutPaidDispatchOfferCleanerId({
+        checkoutResolution: { kind: "fallback", attemptedId: cid, reason: FALLBACK_REASON_CLEANER_OFFLINE },
+        userConfirmedCleanerId: null,
+        normalizedPickedCleaner: cid,
+      }),
+    ).toBe(cid);
+  });
+
+  it("returns null when no pick", () => {
+    expect(
+      checkoutPaidDispatchOfferCleanerId({
+        checkoutResolution: { kind: "no_pick" },
+        userConfirmedCleanerId: null,
+        normalizedPickedCleaner: null,
+      }),
+    ).toBeNull();
   });
 });
 

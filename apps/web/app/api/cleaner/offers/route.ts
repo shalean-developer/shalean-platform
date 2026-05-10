@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   const session = await resolveCleanerIdFromRequest(request, admin);
   if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
   const cleanerId = session.cleanerId;
+  const nowIso = new Date().toISOString();
 
   const { data: offersRaw, error } = await admin
     .from("dispatch_offers")
@@ -21,12 +22,14 @@ export async function GET(request: Request) {
     )
     .eq("cleaner_id", cleanerId)
     .eq("status", "pending")
+    .gt("expires_at", nowIso)
     .order("created_at", { ascending: false })
     .limit(40);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const nowMs = Date.now();
+  /** DB already filters `expires_at > now`; keep a light client-side guard for clock skew. */
   const offers = (offersRaw ?? [])
     .filter((o) => {
       const raw = (o as { dispatch_visible_at?: string | null }).dispatch_visible_at;
