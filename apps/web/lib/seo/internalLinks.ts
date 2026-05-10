@@ -21,8 +21,8 @@ export type SeoInternalLink = { href: string; anchor: string };
 
 /**
  * Primary commercial pricing authority (tiers, quote path) — use for most internal “see prices / compare costs” links.
- * Long-form **blog** pricing education lives at `/blog/how-much-does-cleaning-cost-cape-town-2026` (HC pool); legacy
- * `/blog/how-much-does-cleaning-cost-cape-town` 301s there. Do not resurrect cleaning-prices-cape-town-guide.
+ * Long-form **blog** pricing education lives at `/blog/how-much-does-cleaning-cost-cape-town-2026` (HC pool); an older
+ * slug without the `-2026` suffix is redirect-only (see programmaticBlogCleanupRedirects). Do not resurrect cleaning-prices-cape-town-guide.
  *
  * Intent: do not sprinkle this href across every post — follow `PRICING_HUB_LINKING_GOVERNANCE` in
  * `lib/seo/blogGovernance.ts` (same folder as this module).
