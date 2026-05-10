@@ -10,6 +10,13 @@ import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment"
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 
+/** Paid checkout “chosen cleaner” rows use `pending_assignment`; legacy paths may use `pending` or `offered`. */
+const REDISPATCH_ELIGIBLE_BOOKING_STATUSES = ["pending", "pending_assignment", "offered"] as const;
+
+function isRedispatchEligibleBookingStatus(st: string): boolean {
+  return (REDISPATCH_ELIGIBLE_BOOKING_STATUSES as readonly string[]).includes(st);
+}
+
 /**
  * When a cleaner declines (or last parallel offer closes) and the booking is still unassigned,
  * return dispatch to searching and run smart assign excluding the rejecting cleaner.
@@ -42,7 +49,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
 
     if (bErr || !b) return;
     const st = String((b as { status?: string }).status ?? "").toLowerCase();
-    if (st !== "pending") return;
+    if (!isRedispatchEligibleBookingStatus(st)) return;
     if ((b as { cleaner_id?: string | null }).cleaner_id) return;
 
     const at = String((b as { assignment_type?: string | null }).assignment_type ?? "").toLowerCase();
@@ -58,7 +65,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
         .from("bookings")
         .update({ dispatch_status: "failed" })
         .eq("id", params.bookingId)
-        .eq("status", "pending")
+        .in("status", [...REDISPATCH_ELIGIBLE_BOOKING_STATUSES])
         .is("cleaner_id", null);
       if (failErr) {
         await reportOperationalIssue("warn", "redispatchAfterOfferReject", `mark failed: ${failErr.message}`, {
@@ -95,7 +102,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
       .from("bookings")
       .update({ dispatch_status: "searching", dispatch_attempt_count: nextAttempts })
       .eq("id", params.bookingId)
-      .eq("status", "pending")
+      .in("status", [...REDISPATCH_ELIGIBLE_BOOKING_STATUSES])
       .is("cleaner_id", null)
       .eq("assignment_type", "user_selected")
       .eq("dispatch_attempt_count", expected)

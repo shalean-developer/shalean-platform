@@ -13,11 +13,25 @@ export type CheckoutCleanerResolution =
   | { kind: "honor"; cleanerId: string }
   | { kind: "fallback"; attemptedId: string; reason: BookingFallbackReason };
 
-/** TTL (seconds) for checkout dispatch offers (user-selected cleaner). Env: `DISPATCH_CHECKOUT_OFFER_TTL_SECONDS` (60–86400). */
+/** Default TTL (seconds) for checkout dispatch offers (selected cleaner, post-payment offer only). */
+export const DISPATCH_CHECKOUT_OFFER_TTL_DEFAULT_SECONDS = 3600;
+
+const CHECKOUT_OFFER_TTL_MIN = 60;
+const CHECKOUT_OFFER_TTL_MAX = 24 * 60 * 60;
+
+/**
+ * TTL (seconds) for checkout dispatch offers (user-selected cleaner).
+ * Env: `DISPATCH_CHECKOUT_OFFER_TTL_SECONDS` — unset uses {@link DISPATCH_CHECKOUT_OFFER_TTL_DEFAULT_SECONDS};
+ * invalid non-numeric uses default; out-of-range numeric values clamp to 60–86400.
+ */
 export function checkoutDispatchOfferTtlSeconds(): number {
-  const raw = Number(process.env.DISPATCH_CHECKOUT_OFFER_TTL_SECONDS);
-  if (Number.isFinite(raw) && raw >= 60 && raw <= 24 * 60 * 60) return Math.round(raw);
-  return 2 * 60 * 60;
+  const rawStr = String(process.env.DISPATCH_CHECKOUT_OFFER_TTL_SECONDS ?? "").trim();
+  if (!rawStr) return DISPATCH_CHECKOUT_OFFER_TTL_DEFAULT_SECONDS;
+  const raw = Number(rawStr);
+  if (!Number.isFinite(raw)) return DISPATCH_CHECKOUT_OFFER_TTL_DEFAULT_SECONDS;
+  if (raw < CHECKOUT_OFFER_TTL_MIN) return CHECKOUT_OFFER_TTL_MIN;
+  if (raw > CHECKOUT_OFFER_TTL_MAX) return CHECKOUT_OFFER_TTL_MAX;
+  return Math.floor(raw);
 }
 
 export function checkoutDurationMinutesFromLocked(locked: LockedBooking | null): number {
