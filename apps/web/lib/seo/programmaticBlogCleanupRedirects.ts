@@ -6,7 +6,7 @@
  * - Hub seed slugs in `LOCATION_HUB_STRUCTURED_PAGES` may still exist for CMS import; HTTP requests to retired
  *   commercial editorial URLs redirect to suburb hubs below.
  */
-import { CAPE_TOWN_LOCATIONS, HUB_SUFFIX } from "@/lib/seo/capeTownLocations";
+import { CAPE_TOWN_LOCATIONS, HUB_SUFFIX } from "./capeTownLocations";
 
 /** One-hop `/blog/cleaning-services-{area}-cape-town` → `/locations/{area}-cleaning-services` per catalogue row. */
 function commercialCleaningServicesBlogToLocationRedirects(): {

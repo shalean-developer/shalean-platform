@@ -102,7 +102,6 @@ const TOPIC_OVERRIDES: Partial<Record<string, BlogTopicFilterId[]>> = {
   "deep-vs-standard-cleaning-cape-town": ["deep-cleaning", "pricing"],
   "deep-cleaning-vs-regular-cleaning-cape-town": ["deep-cleaning", "pricing"],
   "how-much-does-cleaning-cost-cape-town-2026": ["pricing"],
-  "deep-cleaning-vs-regular-cleaning-cape-town": ["deep-cleaning", "pricing"],
 };
 
 const LIST_IMAGE_POOL: { src: string; alt: string }[] = [

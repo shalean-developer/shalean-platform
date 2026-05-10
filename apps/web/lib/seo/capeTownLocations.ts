@@ -4,8 +4,8 @@
  * Editorial blocks live in `LOCATION_SEO_PAGES` (`capeTownSeoPages.ts`).
  */
 
-import hubsFile from "@/lib/seo/data/location-hubs.json";
-import type { LocationPricingBandId } from "@/lib/seo/location-pricing";
+import hubsFile from "./data/location-hubs.json";
+import type { LocationPricingBandId } from "./location-pricing";
 
 export const HUB_SUFFIX = "-cleaning-services" as const;
 
