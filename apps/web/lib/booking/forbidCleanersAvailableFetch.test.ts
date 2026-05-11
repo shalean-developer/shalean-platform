@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -8,18 +8,22 @@ const WEB_ROOT = process.cwd();
 const ALLOWLIST_REL_SUFFIXES = ["lib/booking/forbidCleanersAvailableFetch.test.ts"];
 
 function walkTsFiles(dir: string, out: string[]): void {
-  let entries: ReturnType<typeof readdirSync>;
+  // Force string-backed entries so `ent.name` is a string regardless of the
+  // active @types/node default (newer versions return `Dirent<NonSharedBuffer>`
+  // unless `encoding` is provided).
+  let entries: Dirent[];
   try {
-    entries = readdirSync(dir, { withFileTypes: true });
+    entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" }) as Dirent[];
   } catch {
     return;
   }
   for (const ent of entries) {
-    const p = join(dir, ent.name);
+    const name = String(ent.name);
+    const p = join(dir, name);
     if (ent.isDirectory()) {
-      if (ent.name === "node_modules" || ent.name === ".next") continue;
+      if (name === "node_modules" || name === ".next") continue;
       walkTsFiles(p, out);
-    } else if (/\.(tsx|ts)$/.test(ent.name)) {
+    } else if (/\.(tsx|ts)$/.test(name)) {
       out.push(p);
     }
   }

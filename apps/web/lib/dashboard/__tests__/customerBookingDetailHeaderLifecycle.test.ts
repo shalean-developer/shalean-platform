@@ -8,6 +8,7 @@ import {
   customerBookingStatusLabel,
 } from "@/lib/dashboard/customerBookingDisplay";
 import { describeDashboardBookingOperational } from "@/lib/dashboard/dashboardBookingOperational";
+import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
 
 function baseRaw(overrides: Partial<BookingRow> = {}): BookingRow {
@@ -101,6 +102,7 @@ describe("customer booking detail header lifecycle", () => {
       allowedActions: { accept: false, reject: false, travel: false, start: false, complete: false },
       displayBadge: "Completed",
       displayTone: "success",
+      dashboardAlignment: buildDashboardLifecycleAlignmentWire(raw as unknown as Record<string, unknown>),
     };
     const b = dash(raw);
     const attrs = customerBookingDetailHeaderDataAttributes(b);

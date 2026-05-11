@@ -68,7 +68,7 @@ test.describe("POST /api/paystack/webhook idempotent replay", () => {
     const signature = signPaystackWebhookBody(rawBody);
 
     const res1 = await request.post("/api/paystack/webhook", {
-      body: rawBody,
+      data: rawBody,
       headers: {
         "Content-Type": "application/json",
         "x-paystack-signature": signature,
@@ -77,7 +77,7 @@ test.describe("POST /api/paystack/webhook idempotent replay", () => {
     expect(res1.status(), await res1.text()).toBe(200);
 
     const res2 = await request.post("/api/paystack/webhook", {
-      body: rawBody,
+      data: rawBody,
       headers: {
         "Content-Type": "application/json",
         "x-paystack-signature": signature,

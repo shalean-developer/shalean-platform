@@ -25,11 +25,13 @@ const mocks = vi.hoisted(() => {
     bundles: [],
   };
 
-  const insertBookingRowUnified = vi.fn(async () => ({
-    ok: true as const,
-    id: "00000000-0000-4000-8000-000000000099",
-    row: null,
-  }));
+  const insertBookingRowUnified = vi.fn(
+    async (_admin: unknown, _args: unknown) => ({
+      ok: true as const,
+      id: "00000000-0000-4000-8000-000000000099",
+      row: null,
+    }),
+  );
 
   return { fakeSnapshot, insertBookingRowUnified };
 });
@@ -72,7 +74,11 @@ describe("insertWidgetDraftBookingRow", () => {
     expect(r.ok).toBe(true);
     expect(mocks.insertBookingRowUnified).toHaveBeenCalledTimes(1);
     const args = mocks.insertBookingRowUnified.mock.calls[0][1] as {
-      rowBase: { user_id: string | null; customer_email: string | null };
+      rowBase: {
+        user_id: string | null;
+        customer_email: string | null;
+        service_slug: string;
+      };
     };
     expect(args.rowBase.user_id).toBe(uid);
     expect(args.rowBase.customer_email).toBe("auth@example.com");
@@ -84,7 +90,11 @@ describe("insertWidgetDraftBookingRow", () => {
       guestEmail: "guest@example.com",
     });
     const args = mocks.insertBookingRowUnified.mock.calls[0][1] as {
-      rowBase: { user_id: string | null; customer_email: string | null };
+      rowBase: {
+        user_id: string | null;
+        customer_email: string | null;
+        service_slug: string;
+      };
     };
     expect(args.rowBase.user_id).toBeNull();
     expect(args.rowBase.customer_email).toBe("guest@example.com");

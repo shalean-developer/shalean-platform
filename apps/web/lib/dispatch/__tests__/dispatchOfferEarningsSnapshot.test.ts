@@ -4,9 +4,9 @@ const BOOKING_ID = "11111111-1111-4111-8111-111111111111";
 const CLEANER_ID = "22222222-2222-4222-8222-222222222222";
 const OFFER_ID = "33333333-3333-4333-8333-333333333333";
 
-const logSystemEventMock = vi.fn(async () => ({ ok: true }));
+const logSystemEventMock = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
 vi.mock("@/lib/logging/systemLog", () => ({
-  logSystemEvent: (...args: unknown[]) => logSystemEventMock(...(args as [])),
+  logSystemEvent: (...args: unknown[]) => logSystemEventMock(...args),
 }));
 
 import { resolveAndPersistDispatchOfferEarningsSnapshot } from "@/lib/dispatch/dispatchOfferEarningsSnapshot";

@@ -23,7 +23,7 @@ test.describe("POST /api/paystack/webhook signature", () => {
     };
     const rawBody = JSON.stringify(payload);
     const res = await request.post("/api/paystack/webhook", {
-      body: rawBody,
+      data: rawBody,
       headers: {
         "Content-Type": "application/json",
         "x-paystack-signature": "deadbeef_invalid_hmac",
