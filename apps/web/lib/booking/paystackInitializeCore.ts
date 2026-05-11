@@ -75,7 +75,15 @@ import {
   sumLineItemsCents,
 } from "@/lib/booking/priceSnapshotBooking";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  bookingPaystackFinalizeTraceEnabled,
+  bookingPaystackMetadataDebugEnabled,
+} from "@/lib/logging/bookingPaymentDebug";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
+import {
+  buildCanonicalPaystackCheckoutMetadata,
+  PAYSTACK_CHECKOUT_METADATA_CONTRACT_VERSION,
+} from "@/lib/booking/bookingPaystackCheckoutMetadataFlat";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
 
@@ -567,11 +575,13 @@ export async function processPaystackInitializeBody(
     pricing_version_id: locked.pricing_version_id?.trim() ?? null,
     line_items: lineItemsSummary,
   });
-  console.log("[PRICE SNAPSHOT USED]", {
-    phase: "initialize",
-    bookingId: createdPendingBookingId ?? bookingIdFromBody,
-    total: checkoutPriceSnapshotForMetadata.total_zar,
-  });
+  if (bookingPaystackFinalizeTraceEnabled()) {
+    console.log("[PRICE SNAPSHOT USED]", {
+      phase: "initialize",
+      bookingId: createdPendingBookingId ?? bookingIdFromBody,
+      total: checkoutPriceSnapshotForMetadata.total_zar,
+    });
+  }
 
   const cleanerIdRaw = typeof b.cleanerId === "string" ? b.cleanerId.trim() : "";
   const cleanerId = /^[0-9a-f-]{36}$/i.test(cleanerIdRaw) ? cleanerIdRaw : null;
@@ -730,48 +740,26 @@ export async function processPaystackInitializeBody(
       ? (b.metadata as Record<string, unknown>)
       : {};
 
-  const paystackMetadata: Record<string, string> = {
-    booking_json: JSON.stringify(snapshot),
-    locked_at: locked.lockedAt,
-    tip_zar: String(tip),
-    discount_zar: String(discountZar),
-    promo_code: promoCode || "",
-    locked_final_zar: String(visitZar),
-    pay_total_zar: String(totalZar),
-    quote_signature: locked.quoteSignature ?? "",
-    lock_expires_at: locked.lockExpiresAt ?? "",
-    cleaner_id: cleanerId ?? "",
-    cleaner_name: cleanerName ?? "",
-    referral_code: referralCodeInput || "",
-    referral_checkout_applied: referralValidation.valid ? "1" : "0",
-    referral_checkout_code: referralValidation.valid ? referralValidation.normalizedCode : "",
-    referral_checkout_referrer_type: referralValidation.valid ? referralValidation.referrerType : "",
-    referral_checkout_referrer_id: referralValidation.valid ? referralValidation.referrerId : "",
-    referral_checkout_discount_zar: referralValidation.valid ? String(referralValidation.discountZar) : "0",
-    referral_lock_validated_at: referralValidation.valid ? String(referralLockValidatedAtMs) : "",
-    referral_checkout_fingerprint: referralCheckoutFingerprint ?? "",
-    customer_email: customer.email,
-    customer_name: customer.name,
-    customer_phone: customer.phone,
-    customer_user_id: customer.user_id ?? "",
-    customer_type: customer.type,
-  };
   const bookingIdForMetadata = createdPendingBookingId ?? bookingIdFromBody;
-  if (bookingIdForMetadata) {
-    paystackMetadata.shalean_booking_id = bookingIdForMetadata;
-  }
 
-  const PASSTHROUGH_META_KEYS = new Set(["analytics_session_id", "payment_mode", "attribution_source"]);
-  for (const [k, v] of Object.entries(extraMetadata)) {
-    if (k === "booking_json") continue;
-    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") continue;
-    const str = String(v);
-    if (PASSTHROUGH_META_KEYS.has(k)) {
-      paystackMetadata[k] = str;
-    } else {
-      paystackMetadata[`client_${k}`] = str;
+  let rowAssignmentType = "";
+  let rowServiceSlug = "";
+  if (bookingIdFromBody) {
+    const { data: rMeta } = await admin
+      .from("bookings")
+      .select("assignment_type, service_slug")
+      .eq("id", bookingIdFromBody)
+      .maybeSingle();
+    if (rMeta && typeof rMeta === "object") {
+      rowAssignmentType = String((rMeta as { assignment_type?: string | null }).assignment_type ?? "").trim();
+      const rss = (rMeta as { service_slug?: string | null }).service_slug;
+      rowServiceSlug = typeof rss === "string" && rss.trim() ? rss.trim().toLowerCase() : "";
     }
   }
+
+  const assignmentTypeForMeta = cleanerId ? "user_selected" : rowAssignmentType;
+  const serviceSlugForMeta =
+    rowServiceSlug || (locked.service ? adminBookingServiceSlug(String(locked.service)) : "");
 
   const bookingContextForMeta = {
     service: locked.service,
@@ -786,12 +774,76 @@ export async function processPaystackInitializeBody(
 
   /** Paystack persists nested `metadata` objects inconsistently — send string fields only. */
   const priceSnapshotJson = JSON.stringify(checkoutPriceSnapshotForMetadata);
+
+  const extraPaymentMode =
+    typeof extraMetadata.payment_mode === "string" ? String(extraMetadata.payment_mode).trim() : "";
+  const paymentModeResolved = extraPaymentMode || "legacy_lock";
+  const attributionSourceEarly =
+    typeof extraMetadata.attribution_source === "string" ? String(extraMetadata.attribution_source).trim() : "";
+  const analyticsSessionIdEarly =
+    typeof extraMetadata.analytics_session_id === "string" ? String(extraMetadata.analytics_session_id).trim() : "";
+
+  const snapshotVersion =
+    snapshot && typeof snapshot === "object" && snapshot !== null && "v" in snapshot
+      ? String((snapshot as { v?: unknown }).v ?? 1)
+      : "1";
+
+  const canonicalCore = buildCanonicalPaystackCheckoutMetadata({
+    payment_path: "server_initialize",
+    internalBookingId: bookingIdForMetadata,
+    booking_json: JSON.stringify(snapshot),
+    booking_snapshot_version: snapshotVersion,
+    locked_at: locked.lockedAt,
+    quote_signature: locked.quoteSignature ?? "",
+    lock_expires_at: locked.lockExpiresAt ?? "",
+    selected_cleaner_id: cleanerId ?? "",
+    cleaner_name: cleanerName ?? "",
+    assignment_type: assignmentTypeForMeta,
+    service_slug: serviceSlugForMeta,
+    customer_email: customer.email,
+    customer_name: customer.name,
+    customer_phone: customer.phone,
+    customer_user_id: customer.user_id ?? "",
+    customer_type: customer.type,
+    tip_zar: String(tip),
+    discount_zar: String(discountZar),
+    promo_code: promoCode || "",
+    locked_final_zar: String(visitZar),
+    pay_total_zar: String(totalZar),
+    expected_total_zar: String(totalZar),
+    price_snapshot: priceSnapshotJson,
+    booking: JSON.stringify(bookingContextForMeta),
+    payment_mode: paymentModeResolved,
+    attribution_source: attributionSourceEarly,
+    analytics_session_id: analyticsSessionIdEarly,
+  });
+
+  const paystackMetadata: Record<string, string> = {
+    ...canonicalCore,
+    referral_code: referralCodeInput || "",
+    referral_checkout_applied: referralValidation.valid ? "1" : "0",
+    referral_checkout_code: referralValidation.valid ? referralValidation.normalizedCode : "",
+    referral_checkout_referrer_type: referralValidation.valid ? referralValidation.referrerType : "",
+    referral_checkout_referrer_id: referralValidation.valid ? referralValidation.referrerId : "",
+    referral_checkout_discount_zar: referralValidation.valid ? String(referralValidation.discountZar) : "0",
+    referral_lock_validated_at: referralValidation.valid ? String(referralLockValidatedAtMs) : "",
+    referral_checkout_fingerprint: referralCheckoutFingerprint ?? "",
+  };
+
+  const PASSTHROUGH_META_KEYS = new Set(["analytics_session_id", "payment_mode", "attribution_source"]);
+  for (const [k, v] of Object.entries(extraMetadata)) {
+    if (k === "booking_json") continue;
+    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") continue;
+    const str = String(v);
+    if (PASSTHROUGH_META_KEYS.has(k)) {
+      paystackMetadata[k] = str;
+    } else {
+      paystackMetadata[`client_${k}`] = str;
+    }
+  }
+
   const metadataForPaystack: Record<string, string> = {
     ...paystackMetadata,
-    userId: customer.user_id ?? "",
-    price_snapshot: priceSnapshotJson,
-    expected_total_zar: String(totalZar),
-    booking: JSON.stringify(bookingContextForMeta),
   };
 
   if (typeof metadataForPaystack.price_snapshot !== "string" || !metadataForPaystack.price_snapshot.trim()) {
@@ -806,7 +858,9 @@ export async function processPaystackInitializeBody(
     };
   }
 
-  console.log("[PAYSTACK INIT METADATA]", metadataForPaystack);
+  if (bookingPaystackMetadataDebugEnabled()) {
+    console.log("[PAYSTACK INIT METADATA]", metadataForPaystack);
+  }
 
   const appUrl = getPublicAppUrlBase();
   const callbackUrl = `${appUrl}/booking/success`;
@@ -870,7 +924,10 @@ export async function processPaystackInitializeBody(
   logPaymentStructured("payment_initialize", {
     reference,
     amount_cents: amountCents,
-    booking_id: createdPendingBookingId ?? bookingIdFromBody ?? null,
+    booking_id: bookingIdForMetadata ?? null,
+    payment_path: "server_initialize",
+    metadata_contract_v: PAYSTACK_CHECKOUT_METADATA_CONTRACT_VERSION,
+    selected_cleaner_meta_present: Boolean(cleanerId),
   });
 
   return {

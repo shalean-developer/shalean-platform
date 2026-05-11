@@ -21,6 +21,8 @@ export type BookingCheckoutState = {
   serviceAreaCityId: string | null;
   serviceAreaName: string;
   cleanerId: string | null;
+  /** Snapshot of `full_name` when customer picks a cleaner — avoids roster endpoints for labels. */
+  cleanerDisplayName: string | null;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -44,6 +46,7 @@ const initialState: BookingCheckoutState = {
   serviceAreaCityId: null,
   serviceAreaName: "",
   cleanerId: null,
+  cleanerDisplayName: null,
   customerName: "",
   customerEmail: "",
   customerPhone: "",
@@ -71,6 +74,7 @@ function persistedSlice(s: BookingCheckoutStore): BookingCheckoutState {
     serviceAreaCityId: s.serviceAreaCityId,
     serviceAreaName: s.serviceAreaName,
     cleanerId: s.cleanerId,
+    cleanerDisplayName: s.cleanerDisplayName,
     customerName: s.customerName,
     customerEmail: s.customerEmail,
     customerPhone: s.customerPhone,
@@ -108,6 +112,10 @@ export const useBookingCheckoutStore = create<BookingCheckoutStore>()(
           ...current,
           ...p,
           promo: typeof p.promo === "string" ? p.promo : current.promo,
+          cleanerDisplayName:
+            p.cleanerDisplayName !== undefined
+              ? p.cleanerDisplayName
+              : current.cleanerDisplayName,
           detailsFlowPhase: phase,
           patch: current.patch,
           reset: current.reset,

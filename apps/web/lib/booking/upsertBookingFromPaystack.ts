@@ -13,6 +13,10 @@ import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import {
+  bookingPaystackFinalizeTraceEnabled,
+  bookingPaystackMetadataDebugEnabled,
+} from "@/lib/logging/bookingPaymentDebug";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
@@ -36,6 +40,7 @@ import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConvers
 import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
+import { escalateFailedCheckoutDispatchOffer } from "@/lib/booking/checkoutDispatchOfferFailureEscalation";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { metrics } from "@/lib/metrics/counters";
@@ -92,10 +97,6 @@ function boolish(raw: string | undefined): boolean {
   const v = String(raw ?? "").trim().toLowerCase();
   return v === "true" || v === "1" || v === "yes";
 }
-
-const traceUpsertMeta =
-  typeof process !== "undefined" &&
-  (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_METADATA === "1");
 
 /**
  * `metadata.price_snapshot` / `booking` arrive as JSON strings from Paystack;
@@ -232,20 +233,20 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const locked = input.snapshot?.locked;
   const lockedRow = parseLockedBookingFromUnknown(locked ?? null);
   if (!lockedRow) {
-    console.warn("Lock invalid — using snapshot fallback");
+    void reportOperationalIssue("warn", "upsertBookingFromPaystack", "Lock invalid — using snapshot fallback", {
+      paystackReference: input.paystackReference,
+    });
   }
 
-  if (traceUpsertMeta) {
+  if (bookingPaystackMetadataDebugEnabled()) {
     console.log("[UPSERT METADATA RAW]", input.paystackMetadata);
   }
-  console.log("[SNAPSHOT RAW]", input.paystackMetadata);
 
   const priceSnapshotFromMeta = resolveCheckoutPriceSnapshotFromPaystackMetadata(input.paystackMetadata ?? null);
 
-  if (traceUpsertMeta) {
+  if (bookingPaystackMetadataDebugEnabled()) {
     console.log("[UPSERT SNAPSHOT PARSED]", priceSnapshotFromMeta);
   }
-  console.log("[SNAPSHOT PARSED]", priceSnapshotFromMeta);
 
   const priceSnapshot =
     priceSnapshotFromMeta ??
@@ -253,15 +254,23 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? checkoutPriceSnapshotFromLegacyPriceSnapshotV1((existing as { price_snapshot?: unknown }).price_snapshot)
       : null);
   if (!priceSnapshot) {
-    console.error("[MISSING SNAPSHOT]", input.paystackMetadata);
+    const metaKeys = Object.keys(input.paystackMetadata ?? {});
+    logPaymentStructured("payment_finalize", {
+      reference: input.paystackReference,
+      status: "missing_price_snapshot",
+      metadata_key_count: metaKeys.length,
+      source: input.paystackPersistSource ?? null,
+    });
     throw new Error("Missing price snapshot — cannot safely finalize booking");
   }
 
-  console.log("[PRICE SNAPSHOT USED]", {
-    reference: input.paystackReference,
-    total: priceSnapshot.total_zar,
-    source: priceSnapshotFromMeta ? "metadata" : "db_legacy",
-  });
+  if (bookingPaystackFinalizeTraceEnabled()) {
+    console.log("[PRICE SNAPSHOT USED]", {
+      reference: input.paystackReference,
+      total: priceSnapshot.total_zar,
+      source: priceSnapshotFromMeta ? "metadata" : "db_legacy",
+    });
+  }
 
   const MISMATCH_EPS_ZAR = 2;
   const paidZar = input.amountCents / 100;
@@ -334,6 +343,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? (existing as { selected_cleaner_id?: string | null }).selected_cleaner_id
       : undefined;
 
+  /**
+   * Finalize precedence for user-selected cleaner:
+   * **DB `bookings.selected_cleaner_id`** (flow-intake / initialize) wins when the Paystack snapshot
+   * lock omits `cleaner_id`; then snapshot / metadata picks; see {@link mergePickedCleanerWithPersistedBookingSelection}.
+   */
   const pickedCleanerUuid = mergePickedCleanerWithPersistedBookingSelection(
     pickUserSelectedCleanerId(lockedRow, input.snapshot),
     existingPersistedSelectedCleanerId,
@@ -553,13 +567,9 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   let id: string | null = null;
   let inserted: PersistedRow | null = null;
 
-  const traceDbFinalize =
-    typeof process !== "undefined" &&
-    (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_FINALIZE === "1");
-
   try {
   if (existingPendingPaymentId) {
-    if (traceDbFinalize) {
+    if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[SETTING BOOKING POST_PAYMENT]", {
         reference: input.paystackReference,
         pendingFinalizeMatch,
@@ -587,7 +597,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             .maybeSingle();
     const { data: updated, error: updateErr } = await updateBuilder;
 
-    if (traceDbFinalize) {
+    if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[DB UPDATE RESULT]", { data: updated, error: updateErr?.message ?? null });
     }
 
@@ -609,17 +619,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         .maybeSingle();
       const afterSt = String((rowAfter as { status?: string } | null)?.status ?? "");
       if (rowAfter && afterSt && afterSt !== "pending_payment") {
-        console.log("[PAYSTACK UPSERT]", {
-          reference: input.paystackReference,
-          skipped: true,
-          ok: true,
-          paystackPersistSource: input.paystackPersistSource ?? null,
-          race: "conditional_update_noop_already_finalized",
-        });
-        console.log("[PAYMENT FINALIZED]", {
+        logPaymentStructured("payment_finalize", {
           reference: input.paystackReference,
           status: "skipped_race",
+          booking_id: String((rowAfter as { id: string }).id),
           total: priceSnapshot.total_zar,
+          source: input.paystackPersistSource ?? null,
         });
         return {
           ok: true,
@@ -648,7 +653,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         bookingInDatabase: false,
       };
     }
-    if (traceDbFinalize) {
+    if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[SETTING BOOKING POST_PAYMENT]", {
         reference: input.paystackReference,
         status: row.status,
@@ -663,7 +668,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       .select("id, created_at, user_id")
       .maybeSingle();
 
-    if (traceDbFinalize) {
+    if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[DB INSERT RESULT]", { data: ins, error: insertErr?.message ?? null });
     }
 
@@ -676,17 +681,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           .maybeSingle();
         const dupId =
           again && typeof again === "object" && "id" in again ? String((again as { id: string }).id) : null;
-        console.log("[PAYSTACK UPSERT]", {
-          reference: input.paystackReference,
-          skipped: true,
-          ok: true,
-          paystackPersistSource: input.paystackPersistSource ?? null,
-          race: "insert_duplicate_paystack_reference",
-        });
-        console.log("[PAYMENT FINALIZED]", {
+        logPaymentStructured("payment_finalize", {
           reference: input.paystackReference,
           status: "skipped_duplicate",
+          booking_id: dupId,
           total: priceSnapshot.total_zar,
+          source: input.paystackPersistSource ?? null,
         });
         return { ok: true, skipped: true, bookingId: dupId, bookingInDatabase: true };
       }
@@ -709,17 +709,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       .maybeSingle();
     const ghostSt = String((ghost as { status?: string } | null)?.status ?? "");
     if (ghost?.id && ghostSt && ghostSt !== "pending_payment") {
-      console.log("[PAYSTACK UPSERT]", {
-        reference: input.paystackReference,
-        skipped: true,
-        ok: true,
-        paystackPersistSource: input.paystackPersistSource ?? null,
-        race: "peer_persisted_same_reference",
-      });
-      console.log("[PAYMENT FINALIZED]", {
+      logPaymentStructured("payment_finalize", {
         reference: input.paystackReference,
         status: "skipped_peer",
+        booking_id: String((ghost as { id: string }).id),
         total: priceSnapshot.total_zar,
+        source: input.paystackPersistSource ?? null,
       });
       return {
         ok: true,
@@ -731,12 +726,10 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     await reportOperationalIssue("error", "upsertBookingFromPaystack", "no booking id after upsert paths", {
       paystackReference: input.paystackReference,
     });
-    console.log("[PAYSTACK UPSERT]", {
+    logPaymentStructured("payment_finalize", {
       reference: input.paystackReference,
-      skipped: true,
-      ok: false,
-      bookingId: null,
-      paystackPersistSource: input.paystackPersistSource ?? null,
+      status: "upsert_missing_booking_id",
+      source: input.paystackPersistSource ?? null,
     });
     return { ok: false, skipped: true, bookingId: null, error: "Booking not found after payment" };
   }
@@ -749,13 +742,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       : userIdResolved;
 
   if (id) {
-    console.log("[PAYSTACK UPSERT]", {
-      reference: input.paystackReference,
-      skipped: false,
-      ok: true,
-      bookingId: id,
-      paystackPersistSource: input.paystackPersistSource ?? null,
-    });
     const authCode = input.paystackAuthorizationCode?.trim() ?? "";
     if (authCode) {
       const { data: recurringHead } = await supabase
@@ -834,7 +820,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           phase: "offered",
         });
       } else {
-        await reportOperationalIssue("warn", "upsertBookingFromPaystack", "checkout dispatch offer insert failed (no auto-assign)", {
+        await escalateFailedCheckoutDispatchOffer({
+          supabase,
           bookingId: id,
           paystackReference: input.paystackReference,
           cleanerId: dispatchOfferCleanerId,
@@ -1067,7 +1054,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       status: "reconciliation_required",
       error: msg.slice(0, 2000),
     });
-    console.error("[BOOKING FINALIZATION FAILED]", err);
+    await reportOperationalIssue("critical", "upsertBookingFromPaystack", `booking finalization threw: ${msg.slice(0, 500)}`, {
+      paystackReference: input.paystackReference,
+      bookingId: finalizeId ?? existingPendingPaymentId ?? null,
+      errorType: "payment_finalize_throw",
+    });
     if (finalizeId) {
       await supabase.from("bookings").update({ status: "payment_reconciliation_required" }).eq("id", finalizeId);
     } else if (pendingFinalizeMatch === "id" && existingPendingPaymentId) {

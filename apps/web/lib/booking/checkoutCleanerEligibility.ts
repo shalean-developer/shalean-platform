@@ -6,7 +6,12 @@ import {
   type BookingFallbackReason,
 } from "@/lib/booking/fallbackReason";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
+import { resolveBookingServiceSlugFromStoredService } from "@/lib/booking/canonicalSlotEligibilityParams";
 import { isCleanerInAvailablePoolForSlot } from "@/lib/booking/availabilityEngine";
+import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
+import { checkoutDurationMinutesFromLocked } from "@/lib/booking/lockedBookingDurationMinutes";
+
+export { checkoutDurationMinutesFromLocked };
 
 export type CheckoutCleanerResolution =
   | { kind: "no_pick" }
@@ -50,15 +55,6 @@ export function checkoutDispatchOfferTtlSeconds(): number {
   return Math.floor(raw);
 }
 
-export function checkoutDurationMinutesFromLocked(locked: LockedBooking | null): number {
-  if (!locked) return 120;
-  const hours = locked.duration ?? locked.finalHours;
-  if (typeof hours === "number" && Number.isFinite(hours) && hours > 0) {
-    return Math.max(30, Math.round(hours * 60));
-  }
-  return 120;
-}
-
 /**
  * Decide whether checkout can assign the customer’s chosen cleaner, or should auto-dispatch with a traceable reason.
  */
@@ -82,20 +78,12 @@ export async function resolveCheckoutCleanerSelection(
     return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_INVALID_CLEANER_ID };
   }
 
-  const isActive = (row as { is_active?: boolean | null }).is_active !== false;
-  const isAvailFlag = (row as { is_available?: boolean | null }).is_available !== false;
   const status = String((row as { status?: string | null }).status ?? "").toLowerCase();
 
-  if (!isActive) {
-    return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE };
-  }
-  if (status === "offline") {
-    return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_OFFLINE };
-  }
-  if (status === "busy") {
-    return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE };
-  }
-  if (!isAvailFlag) {
+  if (!cleanerAccountEligibleForCustomerBooking(row as { is_active?: boolean | null; is_available?: boolean | null; status?: string | null })) {
+    if (status === "offline") {
+      return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_OFFLINE };
+    }
     return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE };
   }
 
@@ -109,7 +97,7 @@ export async function resolveCheckoutCleanerSelection(
       selectedTime: time,
       durationMinutes,
       locationId: input.locked?.serviceAreaLocationId ?? null,
-      bookingServiceSlug: input.locked?.service ?? null,
+      bookingServiceSlug: resolveBookingServiceSlugFromStoredService(input.locked?.service),
     });
     if (!inPool) {
       return { kind: "fallback", attemptedId: picked, reason: FALLBACK_REASON_CLEANER_NOT_AVAILABLE };

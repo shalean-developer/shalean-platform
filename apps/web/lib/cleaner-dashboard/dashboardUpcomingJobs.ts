@@ -3,6 +3,7 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { groupCleanerScheduleRows, mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import { suburbFromLocationForOffer } from "@/lib/cleaner/cleanerOfferLocationSuburb";
+import { resolveCleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
 
 const SECTION_ORDER = ["overdue", "today", "upcoming", "completed"] as const;
 
@@ -19,6 +20,18 @@ export function cleanerBookingRowToUpcomingJob(r: CleanerBookingRow, now: Date):
     suburb: suburbFromLocationForOffer(r.location),
     href: `/cleaner/jobs/${encodeURIComponent(r.id)}`,
     phaseDisplay: mobilePhaseDisplayForDashboard(r),
+    /**
+     * Reuses the same source-of-truth resolver as the offer card, so the
+     * "Job earning: R___" label is identical from offer → next-job pin →
+     * upcoming list → active-job hero. Returns "unavailable" when the
+     * booking has no persisted earning AND the dashboard route's preview
+     * pass also returned null (already logged as a data-integrity issue).
+     */
+    jobEarning: resolveCleanerJobEarning({
+      cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
+      payout_frozen_cents: r.payout_frozen_cents,
+      display_earnings_cents: r.display_earnings_cents,
+    }),
   };
 }
 

@@ -20,6 +20,9 @@ export function cleanerLifecycleFailureMessage(params: {
   if (code === "payout_exceeds_financial_cap") {
     return "Recorded pay for this job is outside allowed limits for its billing type. Contact support — this is usually a data setup issue.";
   }
+  if (code === "job_earning_unavailable") {
+    return "Job earning is R0,00 for this booking — please contact support to confirm the amount before completing.";
+  }
   if (code === "lifecycle_complete_requires_in_progress") {
     return "Start the job in the app before marking it complete.";
   }

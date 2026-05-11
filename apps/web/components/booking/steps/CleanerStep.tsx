@@ -1,80 +1,103 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import type { AvailableCleanerDto } from "@/app/api/cleaners/available/route";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AvailableCleanerDto } from "@/lib/booking/cleanerMarketingDto";
 import { CheckoutCleanerCard } from "@/components/booking/checkout/CheckoutCleanerCard";
+import { parseBookingServiceId } from "@/components/booking/serviceCategories";
+import { useCleaners, type LiveCleaner } from "@/components/booking/useCleaners";
 import { bookingCopy } from "@/lib/booking/copy";
+import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
+import { checkoutSidebarPriceDisplay } from "@/lib/booking/checkoutSidebarPricing";
+import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
 import { cn } from "@/lib/utils";
 
 const copy = bookingCopy.checkoutCleaner;
 
 type CleanerStepProps = {
   cleanerId: string | null | undefined;
-  onChange: (cleanerId: string | null) => void;
 };
 
-function normalizeCleaner(row: unknown): AvailableCleanerDto | null {
-  if (!row || typeof row !== "object") return null;
-  const r = row as Record<string, unknown>;
-  const id = typeof r.id === "string" ? r.id : "";
-  if (!id) return null;
-  const name = typeof r.name === "string" && r.name.trim() ? r.name.trim() : "Cleaner";
-  const rating = r.rating != null && Number.isFinite(Number(r.rating)) ? Number(r.rating) : 0;
-  const jobs = r.jobs != null && Number.isFinite(Number(r.jobs)) ? Math.max(0, Math.floor(Number(r.jobs))) : 0;
-  const recommendPct =
-    r.recommendPct != null && Number.isFinite(Number(r.recommendPct))
-      ? Math.min(100, Math.max(0, Math.round(Number(r.recommendPct))))
-      : Math.min(100, Math.max(0, Math.round((rating / 5) * 100)));
-  const image = typeof r.image === "string" && r.image.trim() ? r.image.trim() : null;
-  return { id, name, rating, jobs, recommendPct, image };
+/** Deep/move jobs use crew assignment elsewhere — same gate as slot picker prefetch. */
+function isTeamAssignedService(service: string): boolean {
+  const v = service.toLowerCase();
+  return v.includes("deep") || v.includes("move");
 }
 
-export function CleanerStep({ cleanerId, onChange }: CleanerStepProps) {
+function liveCleanerToCheckoutDto(c: LiveCleaner): AvailableCleanerDto {
+  const rating = Number.isFinite(c.rating) ? c.rating : 0;
+  const jobs = Math.max(0, Math.round(Number(c.jobs_completed)));
+  const recommendPct = Math.min(100, Math.max(0, Math.round((rating / 5) * 100)));
+  return {
+    id: c.id,
+    name: (c.full_name ?? "").trim() || "Cleaner",
+    rating,
+    jobs,
+    recommendPct,
+    image: null,
+  };
+}
+
+export function CleanerStep({ cleanerId }: CleanerStepProps) {
+  const patch = useBookingCheckoutStore((s) => s.patch);
+  const service = useBookingCheckoutStore((s) => s.service);
+  const date = useBookingCheckoutStore((s) => s.date);
+  const time = useBookingCheckoutStore((s) => s.time);
+  const serviceAreaLocationId = useBookingCheckoutStore((s) => s.serviceAreaLocationId);
+  const bedrooms = useBookingCheckoutStore((s) => s.bedrooms);
+  const bathrooms = useBookingCheckoutStore((s) => s.bathrooms);
+  const extraRooms = useBookingCheckoutStore((s) => s.extraRooms);
+  const extras = useBookingCheckoutStore((s) => s.extras);
+
+  const { data: catalog, loading: catalogLoading } = usePricingCatalog();
+  const snapshot = catalog?.snapshot ?? null;
+
+  const sid = useMemo(() => parseBookingServiceId(service), [service]);
+  const durationMinutes = useMemo(() => {
+    const { hours } = checkoutSidebarPriceDisplay({
+      snapshot,
+      segment: "cleaner",
+      service: sid,
+      bedrooms,
+      bathrooms,
+      extraRooms,
+      extras,
+      time,
+    });
+    if (!snapshot || !sid || !Number.isFinite(hours) || hours <= 0) return 120;
+    return Math.max(30, Math.round(hours * 60));
+  }, [snapshot, sid, bedrooms, bathrooms, extraRooms, extras, time]);
+
+  const teamService = useMemo(() => isTeamAssignedService(service), [service]);
+  const locationId = typeof serviceAreaLocationId === "string" ? serviceAreaLocationId.trim() : "";
+  const slotReady = Boolean(date && time && locationId);
+
+  const {
+    cleaners: liveCleaners,
+    loading,
+    error: fetchError,
+  } = useCleaners({
+    selectedDate: date,
+    selectedTime: time,
+    durationMinutes,
+    locationId: locationId || null,
+    serviceType: service,
+    enabled: !teamService && slotReady,
+  });
+
+  const cleaners = useMemo(() => liveCleaners.map(liveCleanerToCheckoutDto), [liveCleaners]);
+
   const auto = cleanerId == null || cleanerId === "";
   const [browseOpen, setBrowseOpen] = useState(() => !auto);
-  const [cleaners, setCleaners] = useState<AvailableCleanerDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auto) setBrowseOpen(true);
   }, [auto]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setFetchError(null);
-      try {
-        const res = await fetch("/api/cleaners/available");
-        const json = (await res.json()) as { cleaners?: unknown[]; error?: string };
-        if (!res.ok) {
-          if (!cancelled) setFetchError(typeof json.error === "string" ? json.error : "Could not load cleaners.");
-          return;
-        }
-        const raw = Array.isArray(json.cleaners) ? json.cleaners : [];
-        const next: AvailableCleanerDto[] = [];
-        for (const row of raw) {
-          const c = normalizeCleaner(row);
-          if (c) next.push(c);
-        }
-        if (!cancelled) setCleaners(next);
-      } catch {
-        if (!cancelled) setFetchError("Network error loading cleaners.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const selectAuto = useCallback(() => {
-    onChange(null);
+    patch({ cleanerId: null, cleanerDisplayName: null });
     setBrowseOpen(false);
-  }, [onChange]);
+  }, [patch]);
 
   const toggleBrowse = useCallback(() => {
     setBrowseOpen((o) => !o);
@@ -159,14 +182,29 @@ export function CleanerStep({ cleanerId, onChange }: CleanerStepProps) {
 
         {browseOpen ? (
           <div className="space-y-3 border-t border-zinc-100 px-3 pb-3 pt-3 dark:border-zinc-800 sm:px-4 sm:pb-4">
+            {teamService ? (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                This service uses a crew assignment flow — {copy.bestAvailableTitle.toLowerCase()} is recommended.
+              </p>
+            ) : null}
+            {!teamService && !slotReady ? (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Confirm date, time, and service area on the schedule step to browse cleaners for your slot.
+              </p>
+            ) : null}
             {fetchError ? <p className="text-sm text-red-600 dark:text-red-400">{fetchError}</p> : null}
-            {loading ? (
+            {(loading || catalogLoading) && slotReady && !teamService ? (
               <div className="space-y-2">
                 <div className="h-[4.25rem] animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
                 <div className="h-[4.25rem] animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
               </div>
             ) : null}
-            {!loading && cleaners.length === 0 && !fetchError ? (
+            {!loading &&
+            !catalogLoading &&
+            cleaners.length === 0 &&
+            !fetchError &&
+            slotReady &&
+            !teamService ? (
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 No cleaners to show — {copy.bestAvailableTitle.toLowerCase()} is recommended.
               </p>
@@ -174,7 +212,11 @@ export function CleanerStep({ cleanerId, onChange }: CleanerStepProps) {
             <ul className="space-y-2.5">
               {cleaners.map((c) => (
                 <li key={c.id}>
-                  <CheckoutCleanerCard cleaner={c} selected={cleanerId === c.id} onChoose={() => onChange(c.id)} />
+                  <CheckoutCleanerCard
+                    cleaner={c}
+                    selected={cleanerId === c.id}
+                    onChoose={() => patch({ cleanerId: c.id, cleanerDisplayName: c.name })}
+                  />
                 </li>
               ))}
             </ul>

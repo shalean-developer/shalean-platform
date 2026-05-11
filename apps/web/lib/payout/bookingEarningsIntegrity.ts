@@ -19,7 +19,7 @@ export function bookingsPersistFullFinancialSelectSuffix(): string {
 /** Column list for `persistCleanerPayoutIfUnset` and stuck-zero repair scans. */
 export function bookingsPersistSelectListForPersist(): string {
   return (
-    "id, status, cleaner_id, payout_id, payout_owner_cleaner_id, team_id, team_member_count_snapshot, is_team_job, date, time, billing_type, is_monthly_billing_booking, monthly_invoice_id, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, service, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, display_earnings_cents, payment_status" +
+    "id, status, completed_at, cleaner_id, payout_id, payout_owner_cleaner_id, team_id, team_member_count_snapshot, is_team_job, date, time, billing_type, is_monthly_billing_booking, monthly_invoice_id, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, service, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, display_earnings_cents, payment_status, payment_needs_follow_up, dispatch_status" +
     bookingsPersistFullFinancialSelectSuffix()
   );
 }
@@ -92,6 +92,25 @@ export function hasPersistedDisplayEarningsBasis(value: unknown): boolean {
 
 /** @deprecated Use {@link hasPersistedDisplayEarningsBasis}. Name is misleading: **0** is valid persisted display earnings. */
 export const hasPositiveDisplayEarningsCents = hasPersistedDisplayEarningsBasis;
+
+/**
+ * **Strict** positive check: returns true only when `value` is a finite number > 0.
+ *
+ * Use this at workflow gates where R0 is unsafe — most importantly the
+ * `in_progress → completed` transition for cleaner-self-complete (`runCleanerBookingLifecycleAction`).
+ * R0 reaches the booking when the row had no payment basis at first persist
+ * (e.g. unpaid recurring/monthly invoice, backfilled line items priced at R0):
+ * letting the cleaner complete with zero locks in a no-payout job.
+ *
+ * Difference from {@link hasPersistedDisplayEarningsBasis}: that helper accepts
+ * 0 as a valid persisted basis (used for verify-after-persist data integrity);
+ * this helper requires the amount the cleaner will actually be paid.
+ */
+export function isCompletableDisplayEarningsCents(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0;
+}
 
 export async function fetchBookingDisplayEarningsCents(
   admin: SupabaseClient,

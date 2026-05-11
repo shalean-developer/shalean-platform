@@ -1,3 +1,5 @@
+import type { CleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
+
 /** Row from GET `/api/cleaner/offers` (pending dispatch offers). */
 export type CleanerOfferRow = {
   id: string;
@@ -20,6 +22,14 @@ export type CleanerOfferRow = {
   earnings_estimated?: boolean;
   /** Snake_case mirror of {@link earnings_estimated}. */
   earnings_is_estimate?: boolean;
+  /** Server hit the per-request preview cap before this row could be resolved. */
+  earnings_basis_pending?: boolean;
+  /**
+   * Canonical "Job earning" amount + label for cleaner-facing copy.
+   * `amount_cents == null` → "Job earning unavailable" (data-integrity gap,
+   * also logged server-side via `cleaner_offer_job_earning_unavailable`).
+   */
+  jobEarning?: CleanerJobEarning;
   booking: {
     id: string;
     service: string | null;

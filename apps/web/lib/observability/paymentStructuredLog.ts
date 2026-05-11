@@ -5,7 +5,9 @@ export type PaymentStructuredEvent =
   | "finalize_rejected_no_pending_row"
   | "notification_sent"
   | "notification_skipped"
-  | "lifecycle_failed";
+  | "lifecycle_failed"
+  | "payment_precheck"
+  | "payment_finalize_signal";
 
 /**
  * Single-line JSON for log drains (Datadog / BigQuery / etc.).

@@ -29,6 +29,10 @@ import {
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
+  evaluatePersistCleanerPayoutEligibility,
+  isPayoutEligibilitySkipReason,
+} from "@/lib/payout/bookingPayoutPersistEligibility";
+import {
   assertHybridPayoutWithinFinancialCap,
   bookingFinancialDiagnostics,
 } from "@/lib/payout/bookingPayoutCapCents";
@@ -111,6 +115,63 @@ async function isCleanerAllowedForPersist(
   const cid = String(r.cleaner_id ?? "").trim();
   const owner = String(r.payout_owner_cleaner_id ?? "").trim();
   return cid === exp || owner === exp;
+}
+
+/**
+ * Read-only access predicate for the cleaner-facing earnings preview surface.
+ * Strictly looser than {@link isCleanerAllowedForPersist} (which protects
+ * payout column writes): also accepts cleaners with a non-expired pending
+ * `dispatch_offers` row for the booking, **and** cleaners on the
+ * `booking_cleaners` roster (covers selected-cleaner / partially-assigned
+ * solo flows).
+ *
+ * Why this exists: pre-acceptance, `bookings.cleaner_id` and
+ * `payout_owner_cleaner_id` are NULL for solo dispatch offers — only set
+ * inside `acceptDispatchOffer`. Reusing the persist gate for the preview
+ * path therefore rejected every solo offer, and the cleaner saw "Job
+ * earning unavailable" on every pending offer card. This predicate restores
+ * that read access without granting any write capability.
+ */
+async function isCleanerAllowedForPreview(
+  admin: SupabaseClient,
+  r: {
+    cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
+    team_id?: string | null;
+    is_team_job?: boolean | null;
+  },
+  expectedCleanerId: string,
+  bookingId: string,
+): Promise<boolean> {
+  if (await isCleanerAllowedForPersist(admin, r, expectedCleanerId, bookingId)) return true;
+
+  const bid = String(bookingId ?? "").trim();
+  if (!bid) return false;
+
+  /** Pending offer for this cleaner on this booking → they are being shown the offer card right now. */
+  const nowIso = new Date().toISOString();
+  const { data: openOffer, error: offerErr } = await admin
+    .from("dispatch_offers")
+    .select("id")
+    .eq("booking_id", bid)
+    .eq("cleaner_id", expectedCleanerId)
+    .eq("status", "pending")
+    .gt("expires_at", nowIso)
+    .limit(1)
+    .maybeSingle();
+  if (!offerErr && openOffer) return true;
+
+  /** Roster row (selected-cleaner / pre-assigned solo). booking_cleaners is read-only at preview time. */
+  const { data: rosterRow, error: rosterErr } = await admin
+    .from("booking_cleaners")
+    .select("id")
+    .eq("booking_id", bid)
+    .eq("cleaner_id", expectedCleanerId)
+    .limit(1)
+    .maybeSingle();
+  if (!rosterErr && rosterRow) return true;
+
+  return false;
 }
 
 async function buildFallbackEarnings(params: {
@@ -398,20 +459,46 @@ async function previewTeamMemberAllocatedCents(params: {
 }
 
 /**
- * Read-only cents the viewer should see when `display_earnings_cents` is unset: same path as payout persist
- * (caps + tenure for solo; team jobs: R250 per cleaner when canonical, else legacy pool split).
+ * Stable machine-readable miss codes for the diagnostic preview wrapper.
+ * `cleaner_offers_preview_earnings_unavailable` system_log rows filter on
+ * these — keep stable.
  */
-export async function previewDisplayEarningsCentsForCleanerJob(
+export const PREVIEW_EARNINGS_MISS = {
+  BOOKING_NOT_FOUND: "booking_not_found",
+  CLEANER_NOT_ELIGIBLE: "cleaner_not_eligible_for_preview",
+  COMPUTE_FAILED: "earnings_compute_failed",
+  TEAM_MISSING_TEAM_ID: "team_missing_team_id",
+  TEAM_MEMBER_NOT_ALLOCATED: "team_member_not_allocated",
+} as const;
+
+export type PreviewEarningsMissReason =
+  | (typeof PREVIEW_EARNINGS_MISS)[keyof typeof PREVIEW_EARNINGS_MISS]
+  | (string & {});
+
+export type PreviewDisplayEarningsForCleanerJobDiagnostic =
+  | { ok: true; amountCents: number; source: "persist_engine"; missingReason: null }
+  | { ok: false; amountCents: null; source: null; missingReason: PreviewEarningsMissReason };
+
+/**
+ * Diagnostic variant of {@link previewDisplayEarningsCentsForCleanerJob} that
+ * returns the *reason* the preview did not produce an amount. Callers (the
+ * offers route, the dashboard route, the repair script) emit this directly to
+ * `system_logs` so we can chase data gaps. The plain helper below preserves
+ * the existing `Promise<number | null>` shape for legacy call sites.
+ */
+export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
   admin: SupabaseClient,
   params: { bookingId: string; cleanerId: string },
-): Promise<number | null> {
+): Promise<PreviewDisplayEarningsForCleanerJobDiagnostic> {
   const { bookingId, cleanerId } = params;
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(bookingsPersistSelectListForPersist())
     .eq("id", bookingId)
     .maybeSingle();
-  if (selErr || !row) return null;
+  if (selErr || !row) {
+    return { ok: false, amountCents: null, source: null, missingReason: PREVIEW_EARNINGS_MISS.BOOKING_NOT_FOUND };
+  }
 
   const r = row as PersistBookingRowForEarnings & {
     cleaner_id?: string | null;
@@ -419,18 +506,48 @@ export async function previewDisplayEarningsCentsForCleanerJob(
     team_id?: string | null;
   };
 
-  if (!(await isCleanerAllowedForPersist(admin, r, cleanerId, bookingId))) return null;
+  /**
+   * Pre-acceptance solo dispatch offers have `cleaner_id = NULL` and
+   * `payout_owner_cleaner_id = NULL` — the persist gate would reject them
+   * even though we are explicitly being asked for a cleaner-facing preview.
+   * The preview-only predicate accepts cleaners with an open pending offer
+   * or a `booking_cleaners` roster row, which is exactly the set the offers
+   * route is allowed to surface.
+   */
+  if (!(await isCleanerAllowedForPreview(admin, r, cleanerId, bookingId))) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: PREVIEW_EARNINGS_MISS.CLEANER_NOT_ELIGIBLE,
+    };
+  }
 
   const isTeamJob = r.is_team_job === true;
   const earned = await resolvePersistEarningsComputation({ admin, bookingId, expectedCleanerId: cleanerId, r });
-  if (!earned.ok) return null;
+  if (!earned.ok) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: `${PREVIEW_EARNINGS_MISS.COMPUTE_FAILED}:${earned.error}`,
+    };
+  }
 
   if (!isTeamJob) {
-    return Math.max(0, Math.floor(Number(earned.earnings.display_earnings_cents) || 0));
+    const cents = Math.max(0, Math.floor(Number(earned.earnings.display_earnings_cents) || 0));
+    return { ok: true, amountCents: cents, source: "persist_engine", missingReason: null };
   }
 
   const teamId = String(r.team_id ?? "").trim();
-  if (!teamId) return null;
+  if (!teamId) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: PREVIEW_EARNINGS_MISS.TEAM_MISSING_TEAM_ID,
+    };
+  }
   const allocated = await previewTeamMemberAllocatedCents({
     admin,
     bookingId,
@@ -439,7 +556,31 @@ export async function previewDisplayEarningsCentsForCleanerJob(
     earnings: earned.earnings,
     bookingDateIso: earned.bookingDateIso,
   });
-  return allocated;
+  if (allocated == null) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: PREVIEW_EARNINGS_MISS.TEAM_MEMBER_NOT_ALLOCATED,
+    };
+  }
+  return { ok: true, amountCents: allocated, source: "persist_engine", missingReason: null };
+}
+
+/**
+ * Read-only cents the viewer should see when `display_earnings_cents` is unset: same path as payout persist
+ * (caps + tenure for solo; team jobs: R250 per cleaner when canonical, else legacy pool split).
+ *
+ * @deprecated Prefer {@link previewDisplayEarningsCentsForCleanerJobDiagnostic} so callers can
+ * surface stable miss reasons in `system_logs`. This wrapper now delegates to the diagnostic
+ * variant and discards the reason for backwards compatibility.
+ */
+export async function previewDisplayEarningsCentsForCleanerJob(
+  admin: SupabaseClient,
+  params: { bookingId: string; cleanerId: string },
+): Promise<number | null> {
+  const r = await previewDisplayEarningsCentsForCleanerJobDiagnostic(admin, params);
+  return r.ok ? r.amountCents : null;
 }
 
 async function persistCleanerPayoutIfUnsetCore(
@@ -459,6 +600,9 @@ async function persistCleanerPayoutIfUnsetCore(
 
   const r = row as {
     status?: string | null;
+    completed_at?: string | null;
+    payment_needs_follow_up?: boolean | null;
+    dispatch_status?: string | null;
     payout_id?: string | null;
     cleaner_id?: string | null;
     payout_owner_cleaner_id?: string | null;
@@ -485,6 +629,15 @@ async function persistCleanerPayoutIfUnsetCore(
   refunded_at?: string | null;
   refund_status?: string | null;
   };
+
+  const persistEligibility = evaluatePersistCleanerPayoutEligibility(row as unknown as Record<string, unknown>);
+  if (!persistEligibility.allowed) {
+    void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, {
+      bookingId,
+      cleanerId: expectedCleanerId,
+    });
+    return { ok: true, skipped: true, skipReason: persistEligibility.skipReason };
+  }
 
   if (!(await isCleanerAllowedForPersist(admin, r, expectedCleanerId, bookingId))) {
     return { ok: true, skipped: true, skipReason: "cleaner_not_eligible" };
@@ -1029,11 +1182,23 @@ export async function persistCleanerPayoutIfUnset(
     }
 
     const first = await persistCleanerPayoutIfUnsetCore(params);
+    if (first.ok && first.skipped && isPayoutEligibilitySkipReason(first.skipReason)) {
+      return first;
+    }
     let out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, first);
+    if (out.ok && out.skipped && isPayoutEligibilitySkipReason(out.skipReason)) {
+      return out;
+    }
     if (!out.ok) {
       await new Promise((r) => setTimeout(r, 200));
       const second = await persistCleanerPayoutIfUnsetCore(params);
+      if (second.ok && second.skipped && isPayoutEligibilitySkipReason(second.skipReason)) {
+        return second;
+      }
       out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, second);
+      if (out.ok && out.skipped && isPayoutEligibilitySkipReason(out.skipReason)) {
+        return out;
+      }
     }
     return out;
   } catch (e) {

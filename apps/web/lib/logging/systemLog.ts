@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
+import { redactOperationalContext } from "@/lib/logging/redactOperationalContext";
 
 export type SystemLogLevel = "error" | "warn" | "info";
 
@@ -58,7 +59,7 @@ export async function logSystemEvent(params: {
   try {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      console.warn("[system_logs]", params.level, params.source, params.message, params.context ?? "");
+      console.warn("[system_logs]", params.level, params.source, params.message, redactOperationalContext(params.context) ?? "");
       return;
     }
     const { error } = await supabase.from("system_logs").insert({
@@ -89,10 +90,11 @@ export async function reportOperationalIssue(
   const persistContext =
     isCritical ? { ...context, operationalSeverity: "critical" as const } : context;
 
+  const consoleCtx = redactOperationalContext(context);
   if (level === "warn") {
-    console.warn(`[${source}]`, message, context ?? "");
+    console.warn(`[${source}]`, message, consoleCtx ?? "");
   } else {
-    console.error(`[${source}]`, persistMessage, context ?? "");
+    console.error(`[${source}]`, persistMessage, consoleCtx ?? "");
   }
 
   await logSystemEvent({
@@ -119,7 +121,7 @@ export async function reportOperationalIssue(
       message: persistMessage,
       bookingId,
       cleanerId,
-      extra: ctx,
+      extra: redactOperationalContext(ctx as Record<string, unknown>),
     });
   }
 }

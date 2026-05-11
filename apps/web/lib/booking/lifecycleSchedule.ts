@@ -1,7 +1,9 @@
 /**
  * Compute lifecycle job times from appointment date/time (Africa/Johannesburg wall time as +02:00).
  * reminder_24h: 24h before appointment start
- * review_request: 4h after appointment start
+ * review_request: scheduled 4h after appointment start (inserted at payment). **Delivery** is gated in
+ * `processLifecycleJob` via `evaluateCustomerReviewPromptEligibility` in `customerReviewFollowUpContract.ts`
+ * so email is not sent until the booking is authoritatively completed.
  * rebook_offer: 24h after appointment start
  */
 export function computeLifecycleScheduledIso(params: {

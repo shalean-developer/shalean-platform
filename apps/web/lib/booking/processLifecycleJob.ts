@@ -9,7 +9,8 @@ import {
   sendRebookReminderEmail,
   type LifecycleEmailBookingContext,
 } from "@/lib/email/lifecycleEmails";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 
 export type LifecycleJobRow = {
   id: string;
@@ -84,7 +85,7 @@ export async function processLifecycleJob(
 
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, service, booking_snapshot, location, status")
+    .select("id, service, booking_snapshot, location, status, completed_at, cleaner_id, is_team_job, team_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -112,6 +113,23 @@ export async function processLifecycleJob(
       .update({ status: "cancelled", last_error: null })
       .eq("id", jobId);
     return "skipped";
+  }
+
+  if (row.job_type === "review_request") {
+    const rev = evaluateCustomerReviewPromptEligibility(booking as unknown as Record<string, unknown>);
+    if (!rev.allowed) {
+      await supabase
+        .from("booking_lifecycle_jobs")
+        .update({ status: "cancelled", last_error: rev.skipReason.slice(0, 500) })
+        .eq("id", jobId);
+      void logSystemEvent({
+        level: "info",
+        source: "processLifecycleJob",
+        message: "lifecycle.review_request.skipped",
+        context: { jobId, bookingId, skipReason: rev.skipReason },
+      });
+      return "skipped";
+    }
   }
 
   const snap = booking.booking_snapshot as BookingSnapshotV1 | null;

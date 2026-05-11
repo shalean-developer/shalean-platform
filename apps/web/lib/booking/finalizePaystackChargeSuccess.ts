@@ -7,9 +7,12 @@ import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaysta
 import { resolvePaystackUserId } from "@/lib/booking/resolvePaystackUserId";
 import { recordReferralCheckoutRedemption } from "@/lib/referrals/validateReferral";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
+import { bookingPaystackFinalizeTraceEnabled } from "@/lib/logging/bookingPaymentDebug";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { isInlineDecoupledPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 
 export type PaystackPersistSource = "verify" | "webhook" | "retry";
 
@@ -26,10 +29,6 @@ export type FinalizePaystackChargeSuccessParams = {
   paidAtIso: string | null;
 };
 
-const traceFinalize =
-  typeof process !== "undefined" &&
-  (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_FINALIZE === "1");
-
 /**
  * Single path for Paystack `charge.success` / verify-after-success: upsert booking, redeem referral, notify.
  * Notifications and referral redemption must not throw or block persistence.
@@ -43,14 +42,26 @@ export async function finalizePaystackChargeSuccess(
     snapshotHasCustomerEmail: Boolean(params.snapshot?.customer?.email?.trim()),
   });
 
-  if (traceFinalize) {
+  const metaPath = params.paystackMetadata?.payment_path?.trim();
+  logPaymentStructured("payment_finalize_signal", {
+    reference: params.paystackReference,
+    finalize_source: params.source,
+    payment_path:
+      metaPath ||
+      (isInlineDecoupledPaystackReference(params.paystackReference) ? "inline_checkout" : "legacy_or_unknown"),
+    metadata_contract_v: params.paystackMetadata?.shalean_checkout_meta_v ?? null,
+    booking_snapshot_version: params.paystackMetadata?.booking_snapshot_version ?? null,
+    selected_cleaner_meta_present: Boolean(params.paystackMetadata?.selected_cleaner_id?.trim()),
+  });
+
+  if (bookingPaystackFinalizeTraceEnabled()) {
     console.log("[FINALIZE START]", {
       reference: params.paystackReference,
       amountCents: params.amountCents,
       currency: params.currency,
       source: params.source,
       snapshotLockedAt: params.snapshot?.locked?.lockedAt ?? null,
-      snapshotCustomerEmail: params.snapshot?.customer?.email ?? null,
+      snapshotHasCustomerEmail: Boolean(params.snapshot?.customer?.email?.trim()),
     });
   }
 
@@ -75,8 +86,14 @@ export async function finalizePaystackChargeSuccess(
       bookingId: result.bookingId,
       error: result.error ?? null,
     });
-    if (traceFinalize) {
-      console.log("[UPSERT RESULT]", result);
+    if (bookingPaystackFinalizeTraceEnabled()) {
+      console.log("[UPSERT RESULT]", {
+        ok: result.ok,
+        skipped: result.skipped,
+        bookingId: result.bookingId,
+        error: result.error?.slice(0, 500) ?? null,
+        reason: result.reason ?? null,
+      });
     }
   } catch (e) {
     notifyBookingDebug("finalize_paystack_upsert_throw", {

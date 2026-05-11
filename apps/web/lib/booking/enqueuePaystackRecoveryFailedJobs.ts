@@ -26,7 +26,10 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
   if (!result.bookingId) {
     const ok = await enqueueFailedJob("booking_insert", basePayload);
     if (!ok) {
-      console.error("[CRITICAL BOOKING FAILURE]", { reference, reason: "booking_insert_enqueue_failed" });
+      await reportOperationalIssue("critical", "enqueuePaystackRecoveryFailedJobs", "booking_insert failed_jobs enqueue failed", {
+        reference,
+        errorType: "recovery_booking_insert_enqueue_failed",
+      });
     }
   }
 
@@ -49,7 +52,11 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
   if (result.reason === "finalization_failed" && result.recoveryEnqueue === true) {
     const ok = await enqueueFailedJob("payment_reconciliation", basePayload);
     if (!ok) {
-      console.error("[CRITICAL BOOKING FAILURE]", { reference, reason: "payment_reconciliation_enqueue_failed" });
+      await reportOperationalIssue("critical", "enqueuePaystackRecoveryFailedJobs", "payment_reconciliation failed_jobs enqueue failed", {
+        reference,
+        bookingId: result.bookingId ?? null,
+        errorType: "recovery_payment_reconciliation_enqueue_failed",
+      });
     }
   }
 }

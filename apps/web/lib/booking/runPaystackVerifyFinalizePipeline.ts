@@ -20,6 +20,7 @@ import {
 } from "@/lib/metrics/pricingMismatch";
 import { sendCustomerBookingPaymentProcessingEmail } from "@/lib/email/sendBookingEmail";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { bookingPaystackMetadataDebugEnabled } from "@/lib/logging/bookingPaymentDebug";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
 
@@ -55,6 +56,11 @@ export type PaystackVerifyFinalizePipelineResult = {
 /**
  * Paystack `charge.success` / verify success only: parse metadata, call {@link finalizePaidBooking}
  * (`finalizePaystackChargeSuccess` → `upsertBookingFromPaystack`), enqueue recovery, optional processing email.
+ * Route ownership: `paystackRouteResponsibilityContract.ts`.
+ *
+ * **Persistence precedence:** `upsertBookingFromPaystack` treats the **`bookings` row** (especially
+ * `pending_payment` + `selected_cleaner_id` + stored `price_snapshot`) as authoritative when the
+ * Paystack charge metadata is incomplete; flat metadata supplements booking id resolution and audits.
  *
  * @param opsLogSource e.g. `paystack/verify` or `payments/verify` for structured logs.
  */
@@ -113,8 +119,11 @@ export async function runPaystackVerifyFinalizePipeline(
     emailFromCustomer || (typeof metadata.customer_email === "string" ? metadata.customer_email : "") || "";
   const email = emailRaw ? normalizeEmail(emailRaw) : "";
 
-  if (process.env.NODE_ENV !== "production" || process.env.TRACE_PAYSTACK_METADATA === "1") {
-    console.log("[VERIFY → UPSERT TRIGGERED]", { opsLogSource, reference: ref, metadata: tx.metadata });
+  if (bookingPaystackMetadataDebugEnabled()) {
+    const meta = tx.metadata;
+    const keys =
+      meta && typeof meta === "object" && !Array.isArray(meta) ? Object.keys(meta as object).slice(0, 64) : [];
+    console.log("[VERIFY → UPSERT TRIGGERED]", { opsLogSource, reference: ref, metadata_keys: keys });
   }
 
   const finalizeOp = await finalizePaidBooking({

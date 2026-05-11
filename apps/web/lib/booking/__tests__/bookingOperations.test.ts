@@ -522,6 +522,8 @@ describe("bookingOperations", () => {
     const cl = toCanonicalBookingLifecycleSurface(row, "cleaner");
     expect(a.operationalPhase).toBe(c.operationalPhase);
     expect(c.operationalPhase).toBe(cl.operationalPhase);
+    expect(a.dashboardAlignment).toEqual(c.dashboardAlignment);
+    expect(c.dashboardAlignment).toEqual(cl.dashboardAlignment);
   });
 });
 

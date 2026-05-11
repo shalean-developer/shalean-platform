@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
+import { evaluateCustomerReviewSubmissionEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, user_id, cleaner_id, status")
+    .select("id, user_id, cleaner_id, status, completed_at, is_team_job, team_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -69,8 +70,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not your booking." }, { status: 403 });
   }
 
-  if (String((booking as { status?: string }).status ?? "").toLowerCase() !== "completed") {
-    return NextResponse.json({ error: "You can only review completed bookings." }, { status: 400 });
+  const revOk = evaluateCustomerReviewSubmissionEligibility(booking as unknown as Record<string, unknown>);
+  if (!revOk.allowed) {
+    return NextResponse.json(
+      { error: "You can only review completed bookings.", code: revOk.skipReason },
+      { status: 400 },
+    );
   }
 
   const cleanerId = (booking as { cleaner_id?: string | null }).cleaner_id;

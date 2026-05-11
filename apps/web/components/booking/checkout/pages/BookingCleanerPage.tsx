@@ -14,11 +14,10 @@ export function BookingCleanerPage() {
   const customerEmail = useBookingCheckoutStore((s) => s.customerEmail);
   const customerPhone = useBookingCheckoutStore((s) => s.customerPhone);
   const patch = useBookingCheckoutStore((s) => s.patch);
-
   return (
     <div className="space-y-4 lg:space-y-6">
       <BookingSectionCard className="shadow-md shadow-zinc-900/[0.05] dark:shadow-black/25">
-        <CleanerStep cleanerId={cleanerId} onChange={(id) => patch({ cleanerId: id })} />
+        <CleanerStep cleanerId={cleanerId} />
       </BookingSectionCard>
 
       <BookingSectionCard eyebrow={payCopy.contactEyebrow} className="p-4 sm:p-5">

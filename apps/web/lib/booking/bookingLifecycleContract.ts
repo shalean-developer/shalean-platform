@@ -2,6 +2,20 @@ import type { BookingOperationalPhase } from "@/lib/booking/deriveBookingOperati
 import type { LifecycleCapabilities, OperationalDisplayTone } from "@/lib/booking/describeBookingOperationalState";
 
 /**
+ * Cheap, viewer-independent bundle attached to customer (`canonicalLifecycle.dashboardAlignment`),
+ * cleaner (`dashboardLifecycle`), and admin (`dashboardLifecycle`) payloads — same row ⇒ same values.
+ */
+export type DashboardLifecycleAlignmentWire = {
+  operationalPhase: BookingOperationalPhase;
+  /** Assignment funnel semantics from {@link import("@/lib/dispatch/assignmentLifecycleContract").deriveAssignmentSemanticPhase}. */
+  assignmentSemanticPhase: string;
+  hasEffectiveAssignee: boolean;
+  paymentNeedsFollowUp: boolean;
+  assignmentType: string | null;
+  fallbackReason: string | null;
+};
+
+/**
  * Cross-dashboard lifecycle surface: same operational truth for admin / customer / cleaner UIs.
  * Viewer-specific affordances stay in {@link LifecycleCapabilities} on the full describe result;
  * this contract carries the shared fields only plus coarse assignment/schedule labels.
@@ -32,6 +46,8 @@ export type CanonicalBookingLifecycleSurface = {
   allowedActions: CanonicalBookingLifecycleAllowedActions;
   displayBadge: string;
   displayTone: OperationalDisplayTone;
+  /** Same fields as cleaner/admin `dashboardLifecycle` for cross-surface parity tests and clients. */
+  dashboardAlignment: DashboardLifecycleAlignmentWire;
 };
 
 export function scheduleStateFromBookingRow(row: Record<string, unknown>): CanonicalBookingScheduleState {

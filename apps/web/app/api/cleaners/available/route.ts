@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
+import type { AvailableCleanerDto } from "@/lib/booking/cleanerMarketingDto";
+import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
 import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export type AvailableCleanerDto = {
-  id: string;
-  name: string;
-  /** Average review score 0–5 */
-  rating: number;
-  jobs: number;
-  /** 0–100, derived from rating for display */
-  recommendPct: number;
-  /** Public photo URL when present */
-  image: string | null;
-};
+/**
+ * Marketing / browse roster only — **not** slot-aware; never use for booking
+ * eligibility. Kept module-local because Next.js 16 forbids non-handler
+ * exports from `route.ts` files (see the OmitWithTag type-check error). The
+ * `AvailableCleanerDto` type lives in `@/lib/booking/cleanerMarketingDto`;
+ * import it directly from there.
+ */
+const CLEANERS_AVAILABLE_NOT_SLOT_AWARE =
+  "This endpoint is not slot-aware. Use GET /api/booking/cleaners with date, time, duration, locationId, and service for scheduling.";
 
 export async function GET() {
   const admin = getSupabaseAdmin();
@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data, error } = await admin
     .from("cleaners")
-    .select("id, full_name, rating, jobs_completed")
+    .select("id, full_name, rating, jobs_completed, status, is_active, is_available")
     .eq("is_active", true)
     .eq("is_available", true)
     .order("rating", { ascending: false })
@@ -33,6 +33,11 @@ export async function GET() {
   }
 
   const cleaners: AvailableCleanerDto[] = (Array.isArray(data) ? data : [])
+    .filter((row) =>
+      cleanerAccountEligibleForCustomerBooking(
+        row as { is_active?: boolean | null; is_available?: boolean | null; status?: string | null },
+      ),
+    )
     .map((row) => {
       const r = row as {
         id?: string;
@@ -50,5 +55,13 @@ export async function GET() {
     })
     .filter((c) => c.id.length > 0);
 
-  return NextResponse.json({ cleaners });
+  const res = NextResponse.json({
+    cleaners,
+    /** Machine-readable guardrail for API consumers */
+    notSlotAware: true as const,
+    schedulingEndpoint: "/api/booking/cleaners",
+    warning: CLEANERS_AVAILABLE_NOT_SLOT_AWARE,
+  });
+  res.headers.set("X-Shalean-Cleaners-Available", "not-slot-aware");
+  return res;
 }

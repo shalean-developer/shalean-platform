@@ -112,7 +112,6 @@ export async function verifyCleanerJobRowVisible(
 
   if (error) {
     if (!silent) {
-      console.error("ASSIGNMENT_VERIFY", { ok: false, bookingId, cleanerId, error: error.message });
       await logSystemEvent({
         level: "error",
         source: "booking_assignment_verify",
@@ -124,7 +123,6 @@ export async function verifyCleanerJobRowVisible(
   }
   if (!data || typeof data !== "object" || !("id" in data)) {
     if (!silent) {
-      console.error("Cleaner cannot see assigned job", { bookingId, cleanerId });
       await logSystemEvent({
         level: "error",
         source: "booking_assignment_verify",

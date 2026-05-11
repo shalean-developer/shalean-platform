@@ -45,6 +45,7 @@ export function recurringPendingPaymentVisibilityReason(row: Record<string, unkn
  * Cleaner jobs/dashboard list policy: hide terminal payment failures; hide one-time `pending_payment`;
  * allow recurring / invoice-backed `pending_payment` for assigned/roster/team rows (assignment enforced by queries).
  */
+/** List-only gate after merged queries — documented with {@link explainCleanerJobsListPostFilter}. */
 export function cleanerJobsListRowPostFilter(row: Record<string, unknown>): boolean {
   const st = String(row.status ?? "").trim().toLowerCase();
   if (st === "failed" || st === "payment_expired") return false;

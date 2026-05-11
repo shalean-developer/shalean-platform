@@ -10,6 +10,9 @@ import { buildCleanerOfferAcceptBody } from "@/lib/cleaner/cleanerOfferUxVariant
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import { mapOfferToDashboardCard } from "@/lib/cleaner-dashboard/mapOfferToDashboardCard";
+import { classifyDashboardFanOutSettlements } from "@/lib/cleaner-dashboard/dashboardErrorFanOut";
+import { selectActiveJob } from "@/lib/cleaner-dashboard/selectActiveJob";
+import { computeConfirmedIdle } from "@/lib/cleaner-dashboard/computeConfirmedIdle";
 import {
   buildDashboardUpcomingJobs,
   cleanerBookingRowToUpcomingJob,
@@ -21,6 +24,7 @@ import type { CleanerDashboardTodayBreakdownItem } from "@/lib/cleaner/cleanerDa
 import type { CleanerMeRow } from "@/lib/cleaner/cleanerMobileProfileFromMe";
 import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
 import { cleanerDisplayFirstName } from "@/lib/cleaner/cleanerDisplayFirstName";
+import { deriveCleanerAvailabilityState } from "@/lib/cleaner/cleanerAvailabilityState";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { setCleanerAvailability } from "@/lib/cleaner/setCleanerAvailability";
 import { jobStartMsJohannesburg } from "@/lib/cleaner/jobStartJohannesburgMs";
@@ -84,7 +88,22 @@ export function useCleanerDashboardData() {
   const [cleanerMe, setCleanerMe] = useState<CleanerMeRow | null>(null);
   const [completionPct, setCompletionPct] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  /**
+   * Catastrophic / identity-level error — no cleaner session, /api/cleaner/me
+   * unreachable. The dashboard page falls back to an error-only view ONLY when
+   * this is set, because without identity the rest of the surface has nothing
+   * to render.
+   */
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Recoverable per-fetcher errors. CRITICAL: these MUST NOT collapse the
+   * dashboard back to the error-only view, otherwise a transient /api/cleaner/dashboard
+   * 5xx silently hides a perfectly valid pending offer that already loaded
+   * via /api/cleaner/offers. (Reproduced via end-to-end audit on
+   * cleaner d8a75570-…, offer 8dab7ec1-…).
+   */
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [offersError, setOffersError] = useState<string | null>(null);
   const [actingOfferId, setActingOfferId] = useState<string | null>(null);
   const [actionBanner, setActionBanner] = useState<string | null>(null);
   const [availabilityBusy, setAvailabilityBusy] = useState(false);
@@ -263,22 +282,38 @@ export function useCleanerDashboardData() {
       setCleanerMe(null);
       cleanerMeRef.current = null;
       setCompletionPct(null);
+      setDashboardError(null);
+      setOffersError(null);
       setLoading(false);
       return;
     }
     const seq = ++loadSeq.current;
+
+    // Identity is the only non-recoverable error: without a cleaner row we
+    // cannot render anything meaningful (offers / jobs / earnings all need it).
     try {
-      const cid = await loadMe(headers);
-      if (seq !== loadSeq.current) return;
-      await Promise.all([loadOffers(headers), loadDashboard(headers)]);
-      if (seq !== loadSeq.current) return;
-      setError(null);
+      await loadMe(headers);
     } catch (e) {
       if (seq !== loadSeq.current) return;
-      setError(e instanceof Error ? e.message : "Could not load dashboard.");
-    } finally {
-      if (seq === loadSeq.current) setLoading(false);
+      setError(e instanceof Error ? e.message : "Could not load profile.");
+      setLoading(false);
+      return;
     }
+    if (seq !== loadSeq.current) return;
+    setError(null);
+
+    // Fan out the per-surface fetches independently. A failure on one MUST
+    // NOT collapse the whole page (`setError`) nor reset the other surface's
+    // already-loaded state. This is what previously hid pending offers when
+    // /api/cleaner/dashboard hiccuped.
+    const [offers, dashboard] = await Promise.allSettled([loadOffers(headers), loadDashboard(headers)]);
+    if (seq !== loadSeq.current) return;
+
+    const errs = classifyDashboardFanOutSettlements({ offers, dashboard });
+    setOffersError(errs.offersError);
+    setDashboardError(errs.dashboardError);
+
+    if (seq === loadSeq.current) setLoading(false);
   }, [applyDashboardFromResponse, loadDashboard, loadMe, loadOffers]);
 
   const refetchDashboardOnly = useCallback(async () => {
@@ -286,8 +321,11 @@ export function useCleanerDashboardData() {
     if (!headers) return;
     try {
       await loadDashboard(headers);
-    } catch {
-      /* realtime refresh — avoid clobbering loadSeq used by loadAll */
+      setDashboardError(null);
+    } catch (e) {
+      // Realtime refresh — keep the previously-loaded jobs / earnings on
+      // screen and surface a non-blocking inline strip via dashboardError.
+      setDashboardError(e instanceof Error ? e.message : "Could not refresh dashboard.");
     }
   }, [loadDashboard]);
 
@@ -296,8 +334,12 @@ export function useCleanerDashboardData() {
     if (!headers) return;
     try {
       await loadOffers(headers);
-    } catch {
-      /* ignore */
+      setOffersError(null);
+    } catch (e) {
+      // Don't blank `offerRows`: keep the last good list visible and surface
+      // a non-blocking strip until the next refresh succeeds. Otherwise a
+      // transient 5xx on /api/cleaner/offers would also hide the offer card.
+      setOffersError(e instanceof Error ? e.message : "Could not refresh offers.");
     }
   }, [loadOffers]);
 
@@ -527,9 +569,17 @@ export function useCleanerDashboardData() {
     return { jobsCompleted, rating, completionPct };
   }, [cleanerMe?.jobs_completed, cleanerMe?.rating, completionPct]);
 
+  // `is_available` is the cleaner's manual willingness flag — the dashboard
+  // treats it as the SOLE source of truth for "Paused vs receiving".
+  // Workload (`status === 'busy'` after accept/start) is intentionally NOT
+  // OR-ed in here: we used to treat `status === 'available'` as a fallback,
+  // but that papered over the symmetric bug where `acceptDispatchOffer`
+  // wrote `is_available = false`. With that write removed, manual flag
+  // alone is correct; busy/booked/in-job are surfaced separately by the
+  // workload-aware label below.
   const serverReceivingOffers = useMemo(() => {
     if (!cleanerMe) return false;
-    return cleanerMe.is_available === true || String(cleanerMe.status ?? "").toLowerCase() === "available";
+    return cleanerMe.is_available === true;
   }, [cleanerMe]);
 
   const receivingOffers = receivingOptimistic ?? serverReceivingOffers;
@@ -580,6 +630,21 @@ export function useCleanerDashboardData() {
         d === 1 ? "New job offer received — review below." : `${d} new offers — review below.`,
         "offer",
       );
+      // Haptic ping on supported mobile so the cleaner notices a new offer
+      // even when SMS / browser notifications failed. Gated on tab visibility
+      // so we never buzz a tab that's been backgrounded for hours.
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.vibrate === "function" &&
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible"
+      ) {
+        try {
+          navigator.vibrate([180, 90, 180]);
+        } catch {
+          /* ignore unsupported / blocked vibration */
+        }
+      }
       for (const o of newOffers) {
         const token = String(o.offer_token ?? "").trim();
         addNotification({
@@ -935,9 +1000,79 @@ export function useCleanerDashboardData() {
     return { startsAtMs, mapsQuery, clockOffsetMs: serverClockOffsetMs, showMapsNavigation };
   }, [nextHighlightedJob, jobRows, serverClockOffsetMs]);
 
+  /**
+   * The cleaner's currently-running job (in progress > en route). When this
+   * is non-null the dashboard surfaces it as the primary hero — above the
+   * regular `nextHighlightedJob` pin — because driving / mid-clean is the
+   * most urgent operational state.
+   */
+  const activeJob = useMemo(() => selectActiveJob(upcomingJobs), [upcomingJobs]);
+
+  /**
+   * True when the cleaner has at least one accepted/assigned booking that is
+   * NOT currently active (en route / in progress). Used to surface the
+   * "Online · Booked" workload label without confusing it with "In job".
+   *
+   * Uses raw `jobRows` because `selectActiveJob` only flags the actively
+   * running job — a freshly accepted future booking has phaseDisplay of
+   * "Accepted" / "Scheduled" / etc., which `selectActiveJob` correctly
+   * ignores. We re-scan the same rows here for assignment without overlap
+   * with the active job.
+   */
+  const hasFutureBookedJob = useMemo(() => {
+    if (jobRows.length === 0) return false;
+    return jobRows.some((r) => {
+      const s = String(r.status ?? "").toLowerCase();
+      if (s !== "assigned") return false;
+      // If this row IS the active job (in progress / en route), it's already
+      // expressed as "In job" — don't double-count it as "Booked".
+      if (activeJob && r.id === activeJob.id) return false;
+      return true;
+    });
+  }, [jobRows, activeJob]);
+
+  /**
+   * Single source of truth for the dashboard status pill. Pure function of
+   * (network, manual willingness, roster, workload) — see
+   * `cleanerAvailabilityState.ts` for the matrix.
+   */
+  const availabilityState = useMemo(
+    () =>
+      deriveCleanerAvailabilityState({
+        browserOnline,
+        isAvailable: receivingOffers,
+        rosterIncludesToday,
+        hasActiveJob: activeJob != null,
+        hasFutureBookedJob,
+      }),
+    [browserOnline, receivingOffers, rosterIncludesToday, activeJob, hasFutureBookedJob],
+  );
+
+  /**
+   * True only when we can confidently tell the cleaner there is nothing in
+   * flight. The empty hint flips between "Checking for nearby jobs..."
+   * (not yet confirmed) and "You're online and waiting for offers"
+   * (confirmed) based on this.
+   */
+  const confirmedIdle = useMemo(
+    () =>
+      computeConfirmedIdle({
+        loading,
+        offersError,
+        dashboardError,
+        pendingOffersCount: offerCards.length,
+        hasNextJob: nextHighlightedJob != null,
+        hasActiveJob: activeJob != null,
+        receivingOffers,
+      }),
+    [loading, offersError, dashboardError, offerCards.length, nextHighlightedJob, activeJob, receivingOffers],
+  );
+
   return {
     loading,
     error,
+    dashboardError,
+    offersError,
     actionBanner,
     dismissActionBanner: () => setActionBanner(null),
     notificationToast,
@@ -956,6 +1091,10 @@ export function useCleanerDashboardData() {
     upcomingJobs,
     nextHighlightedJob,
     nextJobPinExtras,
+    activeJob,
+    confirmedIdle,
+    availabilityState,
+    hasFutureBookedJob,
     openJobCount,
     trackedJobCount: jobRows.length,
     earningsSnapshot,

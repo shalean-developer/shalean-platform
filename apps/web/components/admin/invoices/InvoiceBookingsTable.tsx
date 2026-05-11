@@ -2,6 +2,7 @@ import type { MonthlyInvoiceSnapshotV1 } from "@/lib/monthlyInvoice/buildMonthly
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
 
 type BookingRow = Record<string, unknown>;
 
@@ -28,11 +29,13 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
         const fromZar =
           typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar) ? Math.round(b.total_paid_zar * 100) : 0;
         const cents = Math.max(0, Number.isFinite(fromCents) ? Math.round(fromCents) : fromZar);
+        const rawStatus = typeof b.status === "string" ? b.status : null;
         return {
           id: b.id,
           date: b.date,
           service: b.service,
-          status: b.status,
+          statusLabel: rawStatus ?? "—",
+          statusTitle: null as string | null,
           cents,
           cleanerLabel: null as string | null,
         };
@@ -40,11 +43,14 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
     : props.liveBookings.map((b) => {
         const id = String(b.cleaner_id ?? "");
         const cleaner = id ? props.cleanersById[id] : undefined;
+        const rawStatus = (b.status as string | null) ?? null;
+        const statusLabel = describeBookingOperationalState({ row: b, viewer: "admin" }).displayBadge;
         return {
           id: String(b.id ?? ""),
           date: (b.date as string | null) ?? null,
           service: (b.service as string | null) ?? null,
-          status: (b.status as string | null) ?? null,
+          statusLabel,
+          statusTitle: rawStatus ? `DB status=${rawStatus}` : "DB status=—",
           cents: bookingAmountCents(b),
           cleanerLabel: cleaner?.full_name ?? (id ? id.slice(0, 8) + "…" : null),
         };
@@ -85,8 +91,11 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
                   <td className="py-2 pr-4 align-top text-zinc-800 dark:text-zinc-100">{formatDate(r.date)}</td>
                   <td className="py-2 pr-4 align-top text-zinc-700 dark:text-zinc-200">{r.service ?? "—"}</td>
                   <td className="py-2 pr-4 align-top">
-                    <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                      {r.status ?? "—"}
+                    <span
+                      className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
+                      title={r.statusTitle ?? undefined}
+                    >
+                      {r.statusLabel}
                     </span>
                   </td>
                   <td className="py-2 pr-4 align-top font-medium tabular-nums text-zinc-900 dark:text-zinc-50">

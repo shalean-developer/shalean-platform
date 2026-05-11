@@ -8,6 +8,7 @@ import type { CleanerUpcomingJob } from "./types";
 import { Button } from "@/components/ui/button";
 import { directionsHrefFromQuery } from "@/lib/cleaner/directionsHref";
 import { cn } from "@/lib/utils";
+import { JobEarningInline } from "./JobEarningInline";
 
 type NextJobPinProps = {
   job: CleanerUpcomingJob;
@@ -135,6 +136,12 @@ export function NextJobPin({
       <div className="min-h-11">
         <p className="text-lg font-semibold leading-snug text-foreground">{job.timeLine}</p>
         <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{job.suburb}</p>
+      </div>
+      {/* Job earning — same wording / source-of-truth as the offer card so
+          the cleaner sees the actual configured pay for this booking even
+          after acceptance. NOT added to "Today" or completed earnings. */}
+      <div className="mt-3">
+        <JobEarningInline earning={job.jobEarning} />
       </div>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         {mapsHref ? (

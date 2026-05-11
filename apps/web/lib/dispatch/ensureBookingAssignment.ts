@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  listBookingAssignmentConsistencyIssues,
+  type BookingAssignmentAuditRow,
+} from "@/lib/dispatch/assignmentLifecycleContract";
+import {
   type AssignCleanerOptions,
 } from "@/lib/dispatch/assignCleaner";
 import { assignBooking, type AssignBookingResult } from "@/lib/dispatch/assignBooking";
@@ -68,6 +72,41 @@ export async function ensureBookingAssignment(
   const r = await assignBooking(supabase, bookingId, { retryEscalation: retryEsc, smartAssign: mergedSmart });
 
   if (r.ok) {
+    try {
+      const { data: auditRow, error: auditErr } = await supabase
+        .from("bookings")
+        .select(
+          "status, dispatch_status, cleaner_id, team_id, is_team_job, assignment_type, fallback_reason, payment_needs_follow_up",
+        )
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (!auditErr && auditRow) {
+        const { count: pendingOfferCount, error: offerCountErr } = await supabase
+          .from("dispatch_offers")
+          .select("id", { count: "exact", head: true })
+          .eq("booking_id", bookingId)
+          .eq("status", "pending");
+        const issues = listBookingAssignmentConsistencyIssues(auditRow as BookingAssignmentAuditRow, {
+          pendingDispatchOfferCount: offerCountErr ? undefined : (pendingOfferCount ?? 0),
+        });
+        for (const issue of issues) {
+          if (issue.severity === "info") continue;
+          await reportOperationalIssue(
+            issue.severity === "error" ? "error" : "warn",
+            "ensureBookingAssignment_assignment_consistency",
+            `${issue.code}: ${issue.detail}`,
+            { bookingId, source, consistencyCode: issue.code },
+          );
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue("warn", "ensureBookingAssignment_assignment_consistency", `audit threw: ${msg}`, {
+        bookingId,
+        source,
+      });
+    }
+
     try {
       if (r.assignmentKind === "individual") {
         const payout = await persistCleanerPayoutIfUnset({ admin: supabase, bookingId, cleanerId: r.cleanerId });

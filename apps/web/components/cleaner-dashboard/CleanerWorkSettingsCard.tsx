@@ -38,7 +38,7 @@ function lastRequestLabel(status: string): string {
 }
 
 type CleanerWorkSettingsCardProps = {
-  /** Reserved for layout tweaks when nested in {@link CleanerHeroStack}. */
+  /** Reserved for layout tweaks when nested inside another card. */
   embedded?: boolean;
   /** When incremented (e.g. Supabase Realtime), refetches work settings from the API. */
   realtimeRefreshKey?: number;

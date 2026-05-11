@@ -39,7 +39,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  const out = await loadCustomerBookingRowsForUser(admin, userData.user.id);
+  const out = await loadCustomerBookingRowsForUser(admin, userData.user.id, {
+    viewerEmail: typeof userData.user.email === "string" ? userData.user.email : null,
+  });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });
   }

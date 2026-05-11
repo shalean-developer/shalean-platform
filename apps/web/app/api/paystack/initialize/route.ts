@@ -1,3 +1,7 @@
+/**
+ * **Responsibility:** Start checkout — creates/updates `pending_payment` booking state and returns Paystack `authorization_url` / `reference`.
+ * Does **not** finalize paid bookings; see `lib/booking/paystackRouteResponsibilityContract.ts`.
+ */
 import { NextResponse } from "next/server";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 

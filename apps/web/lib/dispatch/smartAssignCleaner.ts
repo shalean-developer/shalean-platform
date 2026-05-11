@@ -505,9 +505,9 @@ export async function findSmartDispatchCandidates(
   let cleanersQuery = supabase
     .from("cleaners")
     .select(
-      "id, full_name, rating, jobs_completed, review_count, status, location_id, city_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema, needs_quality_review",
+      "id, full_name, rating, jobs_completed, review_count, status, is_active, is_available, location_id, city_id, latitude, longitude, home_lat, home_lng, acceptance_rate, acceptance_rate_recent, total_offers, accepted_offers, avg_response_time_ms, tier, priority_score, marketplace_outcome_ema, needs_quality_review",
     )
-    .neq("status", "offline")
+    .eq("is_active", true)
     .eq("is_available", true)
     .in("id", [...eligibleFromUnified]);
 
@@ -527,21 +527,6 @@ export async function findSmartDispatchCandidates(
     return emptyFindSmartDispatchCandidates();
   }
 
-  const { data: conflicts } = await supabase
-    .from("bookings")
-    .select("cleaner_id")
-    .eq("date", dateYmd)
-    .eq("time", timeHm)
-    .in("status", ["assigned", "in_progress"]);
-
-  const taken = new Set(
-    (conflicts ?? [])
-      .map((c) =>
-        c && typeof c === "object" && "cleaner_id" in c ? String((c as { cleaner_id?: string }).cleaner_id ?? "") : "",
-      )
-      .filter(Boolean),
-  );
-
   const baseCleaners = (cleaners as (CleanerRow & {
     city_id?: string | null;
     location_id?: string | null;
@@ -553,7 +538,7 @@ export async function findSmartDispatchCandidates(
     acceptance_rate_recent?: number | null;
     avg_response_time_ms?: number | null;
     tier?: string | null;
-  })[]).filter((c) => c.id && !taken.has(c.id) && !excludeCleanerIds.has(c.id));
+  })[]).filter((c) => c.id && !excludeCleanerIds.has(c.id));
 
   if (baseCleaners.length === 0) return emptyFindSmartDispatchCandidates();
 

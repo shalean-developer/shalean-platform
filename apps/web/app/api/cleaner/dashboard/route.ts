@@ -20,12 +20,13 @@ import {
   applyPreviewEarningsToCleanerJobRows,
   DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
+import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, dispatch_status, service, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id, is_recurring_generated, billing_type, monthly_invoice_id";
+  "id, date, time, location, status, dispatch_status, service, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id";
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
@@ -51,6 +52,7 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     display_earnings_cents: raw.display_earnings_cents as number | null | undefined,
     is_team_job: raw.is_team_job === true,
     team_id: (raw.team_id as string | null | undefined) ?? null,
+    cleaner_id: (raw.cleaner_id as string | null | undefined) ?? undefined,
   };
 }
 
@@ -93,9 +95,11 @@ export async function GET(request: Request) {
         String(rec.status ?? "").trim().toLowerCase() === "pending_payment" && bookingMatchesRecurringCleanerPendingPayment(rec)
           ? ("recurring_pending_payment" as const)
           : null;
-      if (!banner && !visMode) return row;
+      const dashboardLifecycle = buildDashboardLifecycleAlignmentWire(rec);
+      const base = { ...row, dashboardLifecycle };
+      if (!banner && !visMode) return base;
       return {
-        ...row,
+        ...base,
         ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
         ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
       };

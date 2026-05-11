@@ -10,7 +10,9 @@ import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns"
 import {
   fetchBookingDisplayEarningsCents,
   hasPersistedDisplayEarningsBasis,
+  isCompletableDisplayEarningsCents,
 } from "@/lib/payout/bookingEarningsIntegrity";
+import { JOB_EARNING_UNAVAILABLE_ERROR_CODE } from "@/lib/cleaner/cleanerJobEarning";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
@@ -27,6 +29,7 @@ import {
   recurringPendingPaymentProgressionBlockedMessage,
 } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
+import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { isBookingCompletedRouterEnabled } from "@/lib/notifications/notificationRouter";
 
 export type CleanerLifecycleAction = "accept" | "reject" | "en_route" | "start" | "complete";
@@ -1281,6 +1284,64 @@ export async function runCleanerBookingLifecycleAction(params: {
           },
         };
       }
+      /**
+       * Strict positive gate: even when persist succeeded and verify says
+       * `display_earnings_cents` is non-null, R0 means the booking has no
+       * payment basis (e.g. unpaid recurring/monthly invoice, backfill line
+       * items priced at R0). Allowing completion here records a no-payout
+       * job — block with a clear admin/data-integrity error so support can
+       * recompute earnings (`/api/admin/bookings/[id]/reset-earnings?force=true`
+       * or the `repairZeroEarningAssignedBookings` script) before the
+       * cleaner re-tries.
+       */
+      if (!isCompletableDisplayEarningsCents(displayCents)) {
+        const error_id = newPayoutMoneyPathErrorId();
+        await reportOperationalIssue(
+          "error",
+          "cleaner/jobs/complete",
+          "display_earnings_cents resolved to zero — completion blocked",
+          {
+            bookingId,
+            cleanerId,
+            error_id,
+            code: JOB_EARNING_UNAVAILABLE_ERROR_CODE,
+            display_earnings_cents: displayCents,
+          },
+        );
+        void logSystemEvent({
+          level: "warn",
+          source: "cleaner_lifecycle_complete",
+          message: "complete_blocked_zero_earning",
+          context: {
+            booking_id: bookingId,
+            cleaner_id: cleanerId,
+            reason: JOB_EARNING_UNAVAILABLE_ERROR_CODE,
+            display_earnings_cents: displayCents,
+            cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
+            error_id,
+          },
+        });
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 422,
+          reasonCode: JOB_EARNING_UNAVAILABLE_ERROR_CODE,
+        });
+        return {
+          status: 422,
+          json: {
+            error:
+              "Job earning is R0,00 — please contact support to confirm the cleaner amount before completing this job.",
+            code: JOB_EARNING_UNAVAILABLE_ERROR_CODE,
+            error_id,
+          },
+        };
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const error_id = newPayoutMoneyPathErrorId();
@@ -1340,9 +1401,19 @@ export async function runCleanerBookingLifecycleAction(params: {
      * Job detail UI treats `bookings.status === in_progress` as the “complete” CTA; do not also require
      * `cleaner_response_status === started` — legacy / partial rows can be in_progress with a lagging response column.
      */
+    const { patch: completionCoherencePatch } = buildCompletionCoherencePatch({
+      beforeDispatchStatus: bRow.dispatch_status ?? null,
+      fillCompletedAtIfMissing: false,
+      nowIso: now,
+    });
     const { error: uErr } = await admin
       .from("bookings")
-      .update({ status: "completed", completed_at: now, cleaner_response_status: CLEANER_RESPONSE.COMPLETED })
+      .update({
+        status: "completed",
+        completed_at: now,
+        cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+        ...completionCoherencePatch,
+      })
       .eq("id", bookingId);
     if (!uErr) {
       const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });

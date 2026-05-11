@@ -1,3 +1,5 @@
+import type { DashboardLifecycleAlignmentWire } from "@/lib/booking/bookingLifecycleContract";
+
 /**
  * Row shape for GET /api/admin/bookings and the admin bookings list UI.
  */
@@ -71,4 +73,42 @@ export type AdminBookingsListRow = {
   team_member_count_snapshot?: number | null;
   team?: { id: string; name: string | null } | null;
   booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
+  /** From GET /api/admin/bookings — shared lifecycle bundle (customer/cleaner parity). */
+  dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
 };
+
+/**
+ * Narrow union accepted by `AdminBookingsListRow.dispatch_status`.
+ *
+ * Kept aligned with the type literal above. The broader
+ * `BOOKING_DISPATCH_STATUSES` in `assignmentLifecycleContract.ts` covers
+ * additional historical states (`unassigned`, `accepted`, `expired`) that
+ * are NOT part of this admin-list contract — do not widen this set without
+ * also widening `AdminBookingsListRow.dispatch_status`.
+ */
+export const ADMIN_BOOKING_DISPATCH_STATUS_VALUES = [
+  "searching",
+  "offered",
+  "assigned",
+  "failed",
+  "no_cleaner",
+  "unassignable",
+] as const;
+
+export type AdminBookingDispatchStatus =
+  (typeof ADMIN_BOOKING_DISPATCH_STATUS_VALUES)[number];
+
+/**
+ * Coerce a raw `bookings.dispatch_status` value (typed as `string | null` on
+ * the detail GET response) into the narrow `AdminBookingsListRow.dispatch_status`
+ * union. Anything outside the allowed set — including unknown legacy states —
+ * is normalized to `null` so callers stay type-safe without an unsafe cast.
+ */
+export function normalizeAdminBookingDispatchStatus(
+  raw: string | null | undefined,
+): AdminBookingDispatchStatus | null {
+  if (raw == null) return null;
+  return (ADMIN_BOOKING_DISPATCH_STATUS_VALUES as readonly string[]).includes(raw)
+    ? (raw as AdminBookingDispatchStatus)
+    : null;
+}

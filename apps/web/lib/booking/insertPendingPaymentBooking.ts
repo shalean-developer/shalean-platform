@@ -191,7 +191,8 @@ export async function updatePendingPaymentBookingForInit(
       total_paid_zar: params.totalPaidZar,
       customer_name: params.customerName,
       customer_phone: params.customerPhone,
-      user_id: params.userId,
+      /** Guest checkout passes `userId: null` — do not overwrite `user_id` already set by `auto_link_booking_user` on insert. */
+      ...(params.userId != null ? { user_id: params.userId } : {}),
       location_id: params.locationId,
       city_id: params.cityId,
       surge_multiplier: params.surgeMultiplier,

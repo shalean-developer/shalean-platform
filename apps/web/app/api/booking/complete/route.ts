@@ -25,8 +25,9 @@ function metadataToStrings(meta: Record<string, unknown> | undefined): Record<st
 }
 
 /**
- * Verifies a Paystack transaction for display only.
- * Bookings are created by the Paystack webhook (source of truth), not this route.
+ * **Responsibility:** **Display / verification helper only** (POST body → Paystack verify JSON).
+ * Does **not** persist bookings, service completion, or lifecycle; name is legacy. Source of paid booking writes: webhook + `/api/paystack/verify`.
+ * `lib/booking/paystackRouteResponsibilityContract.ts`
  */
 export async function POST(request: Request) {
   const secret = process.env.PAYSTACK_SECRET_KEY;

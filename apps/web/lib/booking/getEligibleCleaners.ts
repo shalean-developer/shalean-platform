@@ -7,6 +7,13 @@ import {
   serviceCapabilityGateFromBookingFields,
 } from "@/lib/booking/serviceCapabilityEligibility";
 import type { AvailableCleaner, CleanerAvailabilityRow } from "@/lib/booking/cleanerPoolTypes";
+import { BOOKING_SLOT_OCCUPYING_STATUSES } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
+import type { OccupyingBookingRow } from "@/lib/booking/cleanerSlotEligibility";
+import {
+  cleanerAccountEligibleForCustomerBooking,
+  cleanerHasOccupyingSlotOverlap,
+  indexOccupyingBookingsByCleanerId,
+} from "@/lib/booking/cleanerSlotEligibility";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 
 export type CleanerLocationPair = { cleaner_id: string; location_id: string };
@@ -42,20 +49,13 @@ export type GetEligibleCleanersParams = {
   preloadedCleaners?: CleanerBase[];
 };
 
-const CONFLICT_STATUSES = new Set([
-  "pending",
-  "pending_payment",
-  "assigned",
-  "in_progress",
-  "confirmed",
-]);
-
 export type CleanerBase = {
   id: string;
   full_name: string | null;
   phone: string | null;
   email: string | null;
   rating: number | null;
+  is_active?: boolean | null;
   is_available: boolean | null;
   jobs_completed: number | null;
   review_count?: number | null;
@@ -75,10 +75,6 @@ function toMinutes(hm: string): number {
   return h * 60 + m;
 }
 
-function isOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
-  return startA < endB && startB < endA;
-}
-
 function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const toRad = (n: number) => (n * Math.PI) / 180;
   const R = 6371;
@@ -89,29 +85,6 @@ function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): nu
     Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   return Number((R * c).toFixed(2));
-}
-
-type BookingRow = {
-  cleaner_id: string | null;
-  status: string | null;
-  date?: string | null;
-  booking_date?: string | null;
-  time?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-};
-
-function bookingWindow(row: BookingRow): { start: number; end: number } | null {
-  const startRaw = row.start_time ?? row.time ?? null;
-  if (!startRaw || !/^\d{2}:\d{2}/.test(startRaw)) return null;
-  const start = toMinutes(startRaw);
-  const endRaw = row.end_time;
-  if (endRaw && /^\d{2}:\d{2}/.test(endRaw)) return { start, end: toMinutes(endRaw) };
-  return { start, end: start + 120 };
-}
-
-function bookingDate(row: BookingRow): string | null {
-  return row.booking_date ?? row.date ?? null;
 }
 
 /** Slot [slotStart, slotEnd] fully inside availability [winStart, winEnd]. */
@@ -174,7 +147,7 @@ export async function getEligibleCleaners(
   let cleaners: CleanerBase[];
   if (params.preloadedCleaners?.length) {
     cleaners = params.preloadedCleaners.filter((c) => {
-      if (c.is_available === false || String(c.status ?? "").toLowerCase() === "offline") return false;
+      if (!cleanerAccountEligibleForCustomerBooking(c)) return false;
       if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) return false;
       if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) return false;
       return true;
@@ -185,13 +158,15 @@ export async function getEligibleCleaners(
     }
   } else {
     const selWithWd =
-      "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
+      "id, full_name, phone, email, rating, is_active, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
     const selBase =
-      "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
+      "id, full_name, phone, email, rating, is_active, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
     const capCols = ", can_do_deep_cleaning, can_do_move_cleaning";
 
-    const run = (columns: string) => {
-      let q = admin.from("cleaners").select(columns).eq("is_available", true).neq("status", "offline");
+    const stripActiveCol = (s: string) => s.replace(", is_active", "");
+    const runWith = async (columns: string, requireActiveEq: boolean) => {
+      let q = admin.from("cleaners").select(columns).eq("is_available", true);
+      if (requireActiveEq) q = q.eq("is_active", true);
       if (params.cleanerIds?.length) q = q.in("id", params.cleanerIds);
       return q;
     };
@@ -199,29 +174,39 @@ export async function getEligibleCleaners(
     let cleanersRaw: CleanerBase[] | null = null;
     let cErr = null as { message?: string } | null;
     {
-      let r = await run(selWithWd + capCols);
+      let requireActive = true;
+      let wd = selWithWd;
+      let base = selBase;
+      let r = await runWith(wd + capCols, requireActive);
+      if (r.error && isUnknownColumnError(r.error, "is_active")) {
+        requireActive = false;
+        wd = stripActiveCol(selWithWd);
+        base = stripActiveCol(selBase);
+        r = await runWith(wd + capCols, false);
+      }
       if (
         r.error &&
         (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
           isUnknownColumnError(r.error, "can_do_move_cleaning"))
       ) {
-        r = await run(selWithWd);
+        r = await runWith(wd, requireActive);
       }
       if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
-        r = await run(selBase + capCols);
+        r = await runWith(base + capCols, requireActive);
         if (
           r.error &&
           (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
             isUnknownColumnError(r.error, "can_do_move_cleaning"))
         ) {
-          r = await run(selBase);
+          r = await runWith(base, requireActive);
         }
       }
       cleanersRaw = (r.data ?? null) as CleanerBase[] | null;
       cErr = r.error;
     }
     if (cErr || !cleanersRaw?.length) return [];
-    cleaners = cleanersRaw;
+    cleaners = (cleanersRaw as CleanerBase[]).filter((c) => cleanerAccountEligibleForCustomerBooking(c));
+    if (!cleaners.length) return [];
   }
 
   if (!cleaners.length) return [];
@@ -243,8 +228,8 @@ export async function getEligibleCleaners(
       : Promise.resolve({ data: null as { cleaner_id: string; location_id: string }[] | null, error: null }),
     admin
       .from("bookings")
-      .select("cleaner_id, status, date, booking_date, time, start_time, end_time")
-      .in("status", [...CONFLICT_STATUSES])
+      .select("id, cleaner_id, selected_cleaner_id, status, date, booking_date, time, start_time, end_time, duration_minutes")
+      .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
       .or(`date.eq.${params.date},booking_date.eq.${params.date}`),
   ]);
 
@@ -273,17 +258,17 @@ export async function getEligibleCleaners(
     locationsByCleaner.set(cid, s);
   }
 
-  const bookingsByCleaner = new Map<string, BookingRow[]>();
-  for (const row of (bookRows ?? []) as BookingRow[]) {
-    if (!row.cleaner_id) continue;
-    const arr = bookingsByCleaner.get(row.cleaner_id) ?? [];
-    arr.push(row);
-    bookingsByCleaner.set(row.cleaner_id, arr);
-  }
+  const occupyingByCleaner = indexOccupyingBookingsByCleanerId((bookRows ?? []) as OccupyingBookingRow[]);
+
+  const trace = process.env.BOOKING_CLEANERS_TRACE === "1";
+  const drop = { weekday: 0, calendar: 0, area: 0, conflict: 0, capability: 0 };
 
   const filtered: CleanerBase[] = [];
   for (const c of cleaners) {
-    if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) continue;
+    if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) {
+      if (trace) drop.weekday++;
+      continue;
+    }
 
     const avail = availabilityByCleaner.get(c.id) ?? [];
     const windows = avail.map((a) => ({
@@ -293,23 +278,50 @@ export async function getEligibleCleaners(
     }));
 
     const calendarOk = jobFitsAvailabilityWindows(windows, slotStart, slotEnd, strict);
-    if (!calendarOk) continue;
+    if (!calendarOk) {
+      if (trace) drop.calendar++;
+      continue;
+    }
 
     const allowed = locationsByCleaner.get(c.id) ?? new Set<string>();
     const fallback = c.location_id ? String(c.location_id) : null;
-    if (!cleanerAreasAllowJob(allowed, fallback, params.locationExpandedIds)) continue;
+    if (!cleanerAreasAllowJob(allowed, fallback, params.locationExpandedIds)) {
+      if (trace) drop.area++;
+      continue;
+    }
 
-    const conflicts = (bookingsByCleaner.get(c.id) ?? []).some((b) => {
-      if (bookingDate(b) !== params.date) return false;
-      const win = bookingWindow(b);
-      if (!win) return false;
-      return isOverlap(slotStart, slotEnd, win.start, win.end);
-    });
-    if (conflicts) continue;
+    if (cleanerHasOccupyingSlotOverlap(occupyingByCleaner, c.id, params.date, slotStart, slotEnd, null)) {
+      if (trace) drop.conflict++;
+      continue;
+    }
 
-    if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) continue;
+    if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) {
+      if (trace) drop.capability++;
+      continue;
+    }
 
     filtered.push(c);
+  }
+
+  if (trace) {
+    console.log(
+      "[BOOKING CLEANERS TRACE]",
+      JSON.stringify({
+        date: params.date,
+        startTime: params.startTime,
+        durationMinutes: params.durationMinutes,
+        locationId: params.locationId,
+        locationExpandedIds: params.locationExpandedIds,
+        bookingServiceSlug: params.serviceType ?? null,
+        strict,
+        poolSize: cleaners.length,
+        availabilityRowsForDate: (availData ?? []).length,
+        cleanerLocationsRowsLoaded: (locRows ?? []).length,
+        occupyingBookingsForDate: (bookRows ?? []).length,
+        dropCounts: drop,
+        finalEligible: filtered.length,
+      }),
+    );
   }
 
   const withDistance: AvailableCleaner[] = filtered.map((c) => {
@@ -326,7 +338,8 @@ export async function getEligibleCleaners(
       phone: c.phone ?? null,
       email: c.email ?? null,
       rating: Number(c.rating ?? 5),
-      is_available: Boolean(c.is_available),
+      is_available: true,
+      slot_eligible: true as const,
       jobs_completed: Number(c.jobs_completed ?? 0),
       review_count: Math.max(0, Math.round(Number(c.review_count ?? 0))),
       recent_reviews: [],

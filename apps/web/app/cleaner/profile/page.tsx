@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CleanerBankSearchCombobox } from "@/components/cleaner-profile/CleanerBankSearchCombobox";
+import { CleanerWorkSettingsCard } from "@/components/cleaner-dashboard/CleanerWorkSettingsCard";
 import { signOut } from "@/lib/auth/authClient";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
@@ -333,6 +334,19 @@ export default function CleanerProfilePage() {
               <p className="text-muted-foreground">{email || "—"}</p>
             </div>
           </Card>
+
+          {/*
+            Work preferences live on Profile (not Home) — see dispatch-console
+            redesign. Work-settings UX (assigned area, working days, request
+            changes, preferred areas) belongs in settings, not in the live
+            operational console at /cleaner/dashboard.
+          */}
+          <section aria-label="Work preferences" className="space-y-2">
+            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Work preferences
+            </h3>
+            <CleanerWorkSettingsCard />
+          </section>
 
           {summary ? (
             <Card className="rounded-2xl border border-border p-4 shadow-sm">

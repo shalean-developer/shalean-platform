@@ -9,7 +9,10 @@ export type AvailableCleaner = {
   phone: string | null;
   email: string | null;
   rating: number;
+  /** Legacy DB flag; customer listing sets true when row passed {@link getEligibleCleaners}. */
   is_available: boolean;
+  /** True when the cleaner passed canonical slot eligibility for the requested window. */
+  slot_eligible?: boolean;
   jobs_completed: number;
   review_count: number;
   recent_reviews: CleanerReviewSnippet[];

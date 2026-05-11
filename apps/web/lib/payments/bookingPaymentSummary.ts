@@ -2,6 +2,33 @@ import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { ExtraLineItem } from "@/lib/pricing/extrasConfig";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function uuidOrNull(raw: unknown): string | null {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s || !UUID_RE.test(s)) return null;
+  return s.toLowerCase();
+}
+
+function serviceSlugFromBookingRow(row: BookingRowPaymentInput): string | null {
+  const col =
+    typeof row.service_slug === "string" && row.service_slug.trim()
+      ? row.service_slug.trim().toLowerCase()
+      : null;
+  if (col) return col;
+  const snap = row.booking_snapshot;
+  if (snap && typeof snap === "object" && !Array.isArray(snap)) {
+    const o = snap as { service_slug?: unknown; locked?: { service?: unknown } };
+    if (typeof o.service_slug === "string" && o.service_slug.trim()) return o.service_slug.trim().toLowerCase();
+    if (typeof o.locked?.service === "string" && o.locked.service.trim()) {
+      return o.locked.service.trim().toLowerCase();
+    }
+  }
+  if (typeof row.service === "string" && row.service.trim()) return row.service.trim().toLowerCase();
+  return null;
+}
+
 export type BookingPaymentSummary = {
   id: string;
   email: string | null;
@@ -35,6 +62,12 @@ export type BookingPaymentSummary = {
   customerPhone: string | null;
   customerUserId: string | null;
   cleanersCount: number;
+  /** DB `selected_cleaner_id` or snapshot `cleaner_id` when UUID-shaped. */
+  selectedCleanerId: string | null;
+  /** DB `assignment_type` when set (e.g. `user_selected`, `pending_assignment`). */
+  assignmentType: string | null;
+  /** DB `service_slug` or normalized service from snapshot / `service` label. */
+  serviceSlug: string | null;
 };
 
 function extrasFromRow(raw: unknown): { slug?: string; name?: string }[] {
@@ -62,6 +95,7 @@ export type BookingRowPaymentInput = {
   id: string;
   customer_email?: string | null;
   service?: string | null;
+  service_slug?: string | null;
   rooms?: number | null;
   bathrooms?: number | null;
   extras?: unknown;
@@ -69,9 +103,12 @@ export type BookingRowPaymentInput = {
   total_paid_zar?: number | null;
   status?: string | null;
   booking_snapshot?: unknown;
+  selected_cleaner_id?: string | null;
+  assignment_type?: string | null;
 };
 
 export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): BookingPaymentSummary {
+  const snapObj = row.booking_snapshot as BookingSnapshotV1 | undefined;
   const locked = lockedFromSnapshot(row.booking_snapshot);
   const roomsRaw = locked?.rooms ?? (typeof row.rooms === "number" ? row.rooms : Number(row.rooms));
   const bedrooms = Number.isFinite(Number(roomsRaw)) ? Math.max(1, Math.round(Number(roomsRaw))) : 1;
@@ -84,7 +121,7 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
       ? locked.extras.map((slug) => ({ slug: String(slug), name: String(slug).replace(/-/g, " ") }))
       : extrasFromRow(row.extras);
 
-  const snap = row.booking_snapshot as BookingSnapshotV1 | undefined;
+  const snap = snapObj;
   const dateYmd =
     typeof locked?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(locked.date)
       ? locked.date
@@ -101,6 +138,10 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
   const hours = hoursRaw != null && Number.isFinite(Number(hoursRaw)) ? Number(hoursRaw) : null;
   const cleanerName =
     typeof snap?.cleaner_name === "string" && snap.cleaner_name.trim() ? snap.cleaner_name.trim() : null;
+  const selectedCleanerId = uuidOrNull(row.selected_cleaner_id) ?? uuidOrNull(snap?.cleaner_id);
+  const assignmentRaw = typeof row.assignment_type === "string" ? row.assignment_type.trim() : "";
+  const assignmentType = assignmentRaw.length > 0 ? assignmentRaw : null;
+  const serviceSlug = serviceSlugFromBookingRow(row);
   const customerName =
     typeof snap?.customer?.name === "string" && snap.customer.name.trim() ? snap.customer.name.trim() : null;
   const customerPhone =
@@ -176,6 +217,9 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
     customerPhone,
     customerUserId,
     cleanersCount,
+    selectedCleanerId,
+    assignmentType,
+    serviceSlug,
   };
 }
 

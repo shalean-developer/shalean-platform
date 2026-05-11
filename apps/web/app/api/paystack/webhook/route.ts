@@ -1,3 +1,8 @@
+/**
+ * **Responsibility:** Paystack **authoritative** server webhook for **charge** events.
+ * `charge.success` → {@link finalizePaidBooking} (checkout persistence). Not used for cleaner **transfer** webhooks (those live under `/api/webhooks/paystack`).
+ * See `lib/booking/paystackRouteResponsibilityContract.ts`.
+ */
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
@@ -6,10 +11,12 @@ import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import {
   bookingIdForPaystackReference,
+  findBookingIdStatusForPaystackReference,
   PaystackDecoupledMetadataError,
   resolveInternalBookingIdFromPaystackReference,
   assertDecoupledPaystackMetadataAllowsFinalize,
 } from "@/lib/booking/paystackBookingIdLookup";
+import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
 import { metrics } from "@/lib/metrics/counters";
@@ -37,7 +44,9 @@ export async function POST(request: Request) {
   const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
 
   if (!signature || hash !== signature) {
-    await reportOperationalIssue("warn", "paystack/webhook", "Invalid or missing Paystack signature");
+    await reportOperationalIssue("warn", "paystack/webhook", "paystack.webhook.signature_invalid", {
+      errorType: "paystack_webhook_signature_invalid",
+    });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -45,7 +54,9 @@ export async function POST(request: Request) {
   try {
     event = JSON.parse(rawBody) as { event?: string; data?: Record<string, unknown> };
   } catch {
-    await reportOperationalIssue("warn", "paystack/webhook", "Invalid JSON body");
+    await reportOperationalIssue("warn", "paystack/webhook", "paystack.webhook.invalid_json", {
+      errorType: "paystack_webhook_invalid_json",
+    });
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -213,6 +224,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
     throw e;
+  }
+
+  if (supabase) {
+    const persistedHead = await findBookingIdStatusForPaystackReference(supabase, reference);
+    if (persistedHead && persistedHead.status !== "pending_payment") {
+      await replayPaymentConfirmedNotifyForPersistedBooking({
+        supabase,
+        bookingId: persistedHead.bookingId,
+        paystackReference: reference,
+        amountCents: amount,
+        metadata:
+          data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+            ? (data.metadata as Record<string, unknown>)
+            : undefined,
+        snapshot,
+        customerEmailHint: email || undefined,
+      });
+      metrics.increment("checkout.paystack_webhook_skipped_finalize_already_persisted", {
+        bookingId: persistedHead.bookingId,
+        reference,
+      });
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/webhook",
+        message: "paystack.webhook.idempotent_skip_finalize",
+        context: { reference, bookingId: persistedHead.bookingId, status: persistedHead.status },
+      });
+      return NextResponse.json({ received: true });
+    }
   }
 
   const finalizeOp = await finalizePaidBooking({

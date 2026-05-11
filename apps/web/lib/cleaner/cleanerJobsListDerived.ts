@@ -108,6 +108,25 @@ export function isPastCleanerJobRow(row: CleanerBookingRow): boolean {
   return isAuthoritativeBookingCompleted(row) || s === "cancelled" || s === "failed";
 }
 
+/**
+ * Active bucket for jobs list/tabs: the cleaner is currently driving to or
+ * executing the job (`en_route` / `in_progress`). Cancelled / completed
+ * rows are explicitly excluded so a row that briefly held an "in_progress"
+ * status before being cancelled never appears under Active.
+ */
+export function isActiveCleanerJobRow(row: CleanerBookingRow): boolean {
+  if (isAuthoritativeBookingCompleted(row)) return false;
+  const s = String(row.status ?? "").toLowerCase().trim();
+  if (s === "cancelled" || s === "failed") return false;
+  return s === "in_progress" || s === "en_route";
+}
+
+/** Cancelled-only bucket for the dedicated Cancelled tab. */
+export function isCancelledCleanerJobRow(row: CleanerBookingRow): boolean {
+  const s = String(row.status ?? "").toLowerCase().trim();
+  return s === "cancelled" || s === "failed";
+}
+
 export type ThisWeekSummary = {
   scheduledCount: number;
   /** Completed jobs whose completion day falls in the ISO week (JHB). */

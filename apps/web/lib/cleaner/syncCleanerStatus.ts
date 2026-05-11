@@ -1,6 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Sets cleaner to busy if they have assigned/in_progress jobs, else available (when not offline). */
+/**
+ * Workload sync. Recomputes `cleaners.status` from live booking rows so the
+ * dashboard / dispatch eligibility filter reflect actual workload after an
+ * accept / start / complete / cancel.
+ *
+ * Invariants:
+ *  - `cleaners.is_available` is the cleaner's manual willingness flag and is
+ *    NEVER written by this function. It is owned exclusively by the manual
+ *    Go online / Go offline toggle (PATCH `/api/cleaner/me`).
+ *  - When the cleaner is manually offline (`status === 'offline'`) we return
+ *    early. Completing the last job MUST NOT silently force them back online;
+ *    they have to opt in via the manual toggle.
+ *  - Result is no-op-aware: if the derived workload status equals the
+ *    current value we skip the UPDATE entirely so we don't churn
+ *    `updated_at` (which downstream realtime subscribers can react to).
+ */
 export async function syncCleanerBusyFromBookings(
   supabase: SupabaseClient,
   cleanerId: string,
@@ -12,6 +27,8 @@ export async function syncCleanerBusyFromBookings(
     .maybeSingle();
 
   const st = row && typeof row === "object" ? String((row as { status?: string }).status ?? "") : "";
+  // Manual offline is a hard guard — preserve it verbatim. Completing a job
+  // when the cleaner went offline mid-shift must NOT bring them back online.
   if (st === "offline") return;
 
   const { data: active } = await supabase
@@ -22,5 +39,8 @@ export async function syncCleanerBusyFromBookings(
     .limit(10);
 
   const busy = (active?.length ?? 0) > 0;
-  await supabase.from("cleaners").update({ status: busy ? "busy" : "available" }).eq("id", cleanerId);
+  const next = busy ? "busy" : "available";
+  if (st === next) return;
+
+  await supabase.from("cleaners").update({ status: next }).eq("id", cleanerId);
 }

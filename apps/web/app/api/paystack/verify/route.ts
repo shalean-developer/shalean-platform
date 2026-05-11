@@ -1,3 +1,7 @@
+/**
+ * **Responsibility:** Browser / delayed-webhook **fallback finalizer** — calls Paystack verify API then {@link runPaystackVerifyFinalizePipeline} (idempotent vs webhook).
+ * See `lib/booking/paystackRouteResponsibilityContract.ts`.
+ */
 import { NextResponse } from "next/server";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
@@ -14,9 +18,7 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
-import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
+import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,56 +30,6 @@ function paystackChargeUpsertState(r: UpsertBookingFromPaystackResult): string {
   if (r.reason === "finalization_failed") return "payment_reconciliation_required";
   if (r.error && !r.bookingId) return "payment_reconciliation_required";
   return "paid";
-}
-
-/** Replay-safe: idempotency inside {@link notifyBookingEvent} prevents duplicate sends. */
-async function notifyPaymentConfirmedForAlreadyFinalizedBooking(params: {
-  supabase: SupabaseClient;
-  tx: PaystackChargeVerifyTx;
-  ref: string;
-  bookingId: string;
-  amountCents: number;
-  snapshot?: BookingSnapshotV1 | null;
-  customerEmail?: string;
-}): Promise<void> {
-  const metadata = normalizePaystackMetadata(params.tx.metadata);
-  const snapshot =
-    params.snapshot !== undefined
-      ? params.snapshot
-      : parseBookingSnapshot(metadata, { amountCents: params.amountCents }).snapshot;
-  let customerEmail = (params.customerEmail ?? "").trim();
-  if (!customerEmail) {
-    const emailFromCustomer = typeof params.tx.customer?.email === "string" ? params.tx.customer.email.trim() : "";
-    const emailRaw =
-      emailFromCustomer ||
-      (typeof metadata.customer_email === "string" ? metadata.customer_email : "") ||
-      "";
-    customerEmail = emailRaw ? normalizeEmail(emailRaw) : "";
-  }
-  notifyBookingDebug("paystack_verify_early_return_notify", {
-    bookingId: params.bookingId,
-    reference: params.ref,
-  });
-  try {
-    await notifyBookingEvent({
-      type: "payment_confirmed",
-      supabase: params.supabase,
-      bookingId: params.bookingId,
-      snapshot,
-      customerEmail,
-      amountCents: params.amountCents,
-      paymentReference: params.ref,
-    });
-  } catch (err) {
-    notifyBookingDebug("paystack_verify_early_return_notify_throw", {
-      bookingId: params.bookingId,
-      message: err instanceof Error ? err.message : String(err),
-    });
-    await reportOperationalIssue("error", "paystack/verify/early_return_notify", String(err), {
-      bookingId: params.bookingId,
-      reference: params.ref,
-    });
-  }
 }
 
 type PaystackVerifyJson = {
@@ -123,6 +75,11 @@ export async function GET(request: Request) {
   const json = await fetchPaystackVerify(reference, secret);
 
   if (!json.status || !json.data) {
+    await reportOperationalIssue("warn", "paystack/verify", "paystack.verify.remote_failed", {
+      reference,
+      errorType: "paystack_verify_remote_failed",
+      paystack_message: String(json.message ?? "").slice(0, 500) || null,
+    });
     return NextResponse.json(
       { ok: false, error: json.message || "Verification failed." },
       { status: 400 },
@@ -154,12 +111,14 @@ export async function GET(request: Request) {
     if (existing && existing.status !== "pending_payment") {
       const amountCentsGet =
         typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
-      await notifyPaymentConfirmedForAlreadyFinalizedBooking({
+      const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
+      await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase: adminGet,
-        tx,
-        ref,
         bookingId: existing.bookingId,
+        paystackReference: ref,
         amountCents: amountCentsGet,
+        metadata: tx.metadata,
+        customerEmailHint: emailFromCustomer || undefined,
       });
       return NextResponse.json({
         ok: true,
@@ -203,7 +162,14 @@ export async function GET(request: Request) {
       skipped: Boolean(result.skipped),
     });
   } catch (err) {
-    console.error("[VERIFY GET FINALIZE FAILED]", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!(err instanceof PaystackDecoupledMetadataError)) {
+      await reportOperationalIssue("error", "paystack/verify", "paystack.verify.finalize_pipeline_failed", {
+        reference: tx.reference ?? reference,
+        errorType: "paystack_verify_finalize_failed",
+        message: msg.slice(0, 500),
+      });
+    }
     if (err instanceof PaystackDecoupledMetadataError) {
       return NextResponse.json(
         {
@@ -294,6 +260,11 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
   const json = await fetchPaystackVerify(reference, secret);
 
   if (!json.status || !json.data) {
+    await reportOperationalIssue("warn", "paystack/verify", "paystack.verify.remote_failed", {
+      reference,
+      errorType: "paystack_verify_remote_failed",
+      paystack_message: String(json.message ?? "").slice(0, 500) || null,
+    });
     return NextResponse.json(
       {
         success: false,
@@ -345,14 +316,15 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         "";
       const emailNorm = emailRaw ? normalizeEmail(emailRaw) : "";
       const userIdShort = resolvePaystackUserId(snapShort, metadataShort);
-      await notifyPaymentConfirmedForAlreadyFinalizedBooking({
+      const emailFromCustomerPost = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
+      await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase: adminPost,
-        tx,
-        ref,
         bookingId: existingPost.bookingId,
+        paystackReference: ref,
         amountCents: txAmount,
+        metadata: tx.metadata,
         snapshot: snapShort,
-        customerEmail: emailNorm,
+        customerEmailHint: emailNorm || emailFromCustomerPost || undefined,
       });
       return NextResponse.json({
         success: true,

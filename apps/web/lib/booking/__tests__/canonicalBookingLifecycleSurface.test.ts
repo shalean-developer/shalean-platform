@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
-import { toCanonicalBookingLifecycleSurface } from "@/lib/booking/readModels/bookingReadModel";
+import {
+  buildDashboardLifecycleAlignmentWire,
+  toCanonicalBookingLifecycleSurface,
+} from "@/lib/booking/readModels/bookingReadModel";
 
 function row(p: Record<string, unknown>): Record<string, unknown> {
   return { id: "00000000-0000-4000-8000-000000000001", date: "2026-06-01", time: "10:00", ...p };
@@ -30,6 +33,10 @@ describe("canonical booking lifecycle surface", () => {
     expect(badges.size).toBe(1);
     expect(tones.size).toBe(1);
     expect(phases.has("accepted")).toBe(true);
+    const alignHashes = new Set(surfaces.map((s) => JSON.stringify(s.dashboardAlignment)));
+    expect(alignHashes.size).toBe(1);
+    expect(surfaces[0]!.dashboardAlignment).toEqual(buildDashboardLifecycleAlignmentWire(r));
+    expect(surfaces[0]!.operationalPhase).toBe(surfaces[0]!.dashboardAlignment.operationalPhase);
   });
 
   it("gives customer viewer no cleaner lifecycle capabilities while admin may mark complete on eligible rows", () => {

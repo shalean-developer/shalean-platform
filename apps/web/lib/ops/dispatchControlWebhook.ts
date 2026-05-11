@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { redactOperationalContext } from "@/lib/logging/redactOperationalContext";
 
 export type DispatchControlAlertInput = {
   /** Stable category for routing (e.g. `charge_failed`, `failed_jobs_backlog`). */
@@ -43,13 +44,17 @@ export async function postDispatchControlAlert(
   }
 
   const timestamp = new Date().toISOString();
+  const safeExtra =
+    input.extra && Object.keys(input.extra).length
+      ? redactOperationalContext(input.extra as Record<string, unknown>)
+      : undefined;
   const body = {
     timestamp,
     error_type: input.errorType,
     message: input.message,
     booking_id: input.bookingId ?? null,
     cleaner_id: input.cleanerId ?? null,
-    ...(input.extra && Object.keys(input.extra).length ? { context: input.extra } : {}),
+    ...(safeExtra && Object.keys(safeExtra).length ? { context: safeExtra } : {}),
   };
 
   const ac = new AbortController();

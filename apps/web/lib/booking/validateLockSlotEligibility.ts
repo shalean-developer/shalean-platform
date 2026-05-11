@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
+import { slotEligibilityCoreFromLockBody } from "@/lib/booking/canonicalSlotEligibilityParams";
 import { countEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
 /**
@@ -41,14 +42,18 @@ export async function validateLockSlotAgainstEligibility(
     };
   }
 
-  const durationMinutes = Math.max(30, Math.round(opts.durationHours * 60));
+  const core = slotEligibilityCoreFromLockBody(body, opts);
+  if (!core) {
+    return { ok: false, status: 400, error: "Invalid slot parameters for eligibility." };
+  }
+
   const serverCount = await countEligibleCleaners(admin, {
-    date,
-    startTime: opts.timeHm,
-    durationMinutes,
-    locationId: loc,
-    locationExpandedIds: [loc],
-    serviceType: opts.catalogServiceId ?? null,
+    date: core.date,
+    startTime: core.startTime,
+    durationMinutes: core.durationMinutes,
+    locationId: core.locationId,
+    locationExpandedIds: core.locationExpandedIds,
+    serviceType: core.bookingServiceSlug,
   });
 
   if (serverCount < 1) {

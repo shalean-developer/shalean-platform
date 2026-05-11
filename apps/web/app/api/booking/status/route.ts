@@ -18,8 +18,9 @@ type VerifyJson = {
 };
 
 /**
- * Payment + booking status for success page polling.
- * Verifies with Paystack; optional DB row (webhook creates it).
+ * **Responsibility:** Success-page **polling / display only**.
+ * Calls Paystack verify (read-only for payment truth) and may **read** `bookings` for snapshot/id — **must not** insert/update booking payment finalization.
+ * Finalization remains webhook + `/api/paystack/verify`. See `lib/booking/paystackRouteResponsibilityContract.ts`.
  */
 export async function GET(request: Request) {
   const secret = process.env.PAYSTACK_SECRET_KEY;

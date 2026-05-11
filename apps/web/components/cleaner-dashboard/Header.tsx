@@ -146,26 +146,23 @@ export function Header({ firstName = "there", notificationPermission = "unsuppor
       : "border border-border bg-muted/40 text-muted-foreground";
 
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Hi, {firstName} <span aria-hidden>👋</span>
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s what matters right now.</p>
-      </div>
+    <div className="flex items-center justify-between gap-3">
+      <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-foreground">
+        Hi, {firstName} <span aria-hidden>👋</span>
+      </h1>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             className={cn(
-              "relative flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
+              "relative flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               ringClass,
             )}
             title={bellTitle}
             aria-label={bellTitle}
           >
-            <BellIcon className="size-5" aria-hidden />
+            <BellIcon className="size-4" aria-hidden />
             {unreadCount > 0 ? (
               <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full px-1">
                 <Badge variant="destructive" className="h-5 min-w-5 justify-center px-1.5 text-[10px] tabular-nums">

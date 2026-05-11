@@ -23,19 +23,14 @@ export async function tryClaimNotificationIdempotency(
 ): Promise<boolean> {
   const reference = String(params.reference ?? "").trim();
   if (!reference) {
-    console.warn("[IDEMPOTENCY KEY] missing reference — claim skipped", {
+    await reportOperationalIssue("warn", "notificationIdempotencyClaim", "notification.idempotency_missing_reference", {
       eventType: params.eventType,
       channel: params.channel,
       bookingId: params.bookingId ?? null,
+      errorType: "notification_idempotency_missing_reference",
     });
     return true;
   }
-
-  console.log("[IDEMPOTENCY KEY]", {
-    reference,
-    eventType: params.eventType,
-    channel: params.channel,
-  });
 
   const bookingId = params.bookingId?.trim() || null;
   const { error } = await supabase.from("notification_idempotency_claims").insert({
@@ -54,7 +49,6 @@ export async function tryClaimNotificationIdempotency(
     });
     return false;
   }
-  console.error("[NOTIFICATION CLAIM ERROR]", error.message, error.code);
   await reportOperationalIssue("warn", "notificationIdempotencyClaim/insert", error.message, {
     reference,
     bookingId,

@@ -42,7 +42,12 @@ import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBook
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
 import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
+import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import {
+  buildCompletionCoherencePatch,
+  validateAdminMonthlyCompletedAssignee,
+} from "@/lib/booking/bookingCompletionIntegrity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -479,9 +484,13 @@ export async function GET(request: Request) {
   }
 
   const withRoster = await attachTeamAndRosterToBookings(admin, enriched);
+  const bookingsPayload = withRoster.map((r) => ({
+    ...r,
+    dashboardLifecycle: buildDashboardLifecycleAlignmentWire(r as Record<string, unknown>),
+  }));
 
   return NextResponse.json({
-    bookings: withRoster,
+    bookings: bookingsPayload,
     metrics: {
       totalBookingsToday,
       revenueTodayZar,
@@ -767,9 +776,112 @@ export async function POST(request: Request) {
       }
     }
 
+    const teamIdRaw = typeof body.team_id === "string" ? body.team_id.trim() : "";
+    const isTeamJobFlag =
+      body.is_team_job === true ||
+      body.is_team_job === "true" ||
+      (typeof body.is_team_job === "string" && body.is_team_job.trim().toLowerCase() === "true");
+
+    let validatedMonthlyTeamId: string | null = null;
+    if (isTeamJobFlag && teamIdRaw && /^[0-9a-f-]{36}$/i.test(teamIdRaw)) {
+      const { data: tRow } = await admin.from("teams").select("id, is_active").eq("id", teamIdRaw).maybeSingle();
+      if (
+        tRow &&
+        typeof (tRow as { id?: unknown }).id === "string" &&
+        (tRow as { is_active?: boolean | null }).is_active !== false
+      ) {
+        validatedMonthlyTeamId = teamIdRaw;
+      }
+    }
+
+    if (adminMarkCompleted) {
+      const assigneeGate = validateAdminMonthlyCompletedAssignee({
+        selectedCleanerId,
+        isTeamJobFlag,
+        validatedTeamId: validatedMonthlyTeamId,
+      });
+      if (!assigneeGate.ok) {
+        return bail(
+          NextResponse.json({ error: assigneeGate.message, code: assigneeGate.code }, { status: 400 }),
+        );
+      }
+      if (
+        !selectedCleanerId &&
+        isTeamJobFlag &&
+        teamIdRaw &&
+        /^[0-9a-f-]{36}$/i.test(teamIdRaw) &&
+        !validatedMonthlyTeamId
+      ) {
+        return bail(
+          NextResponse.json(
+            {
+              error: "team_id must reference an existing active team.",
+              code: "admin_monthly_completed_invalid_team",
+            },
+            { status: 400 },
+          ),
+        );
+      }
+    }
+
+    let monthlyTeamPayoutOwnerId: string | null = null;
+    if (adminMarkCompleted && validatedMonthlyTeamId && !selectedCleanerId) {
+      const { data: mems, error: memErr } = await admin
+        .from("team_members")
+        .select("cleaner_id")
+        .eq("team_id", validatedMonthlyTeamId)
+        .not("cleaner_id", "is", null)
+        .order("cleaner_id", { ascending: true })
+        .limit(1);
+      if (memErr || !mems?.length) {
+        return bail(
+          NextResponse.json(
+            {
+              error: "Team has no roster cleaners; cannot mark completed without a payout owner.",
+              code: "admin_monthly_team_no_members",
+            },
+            { status: 400 },
+          ),
+        );
+      }
+      const cid = String((mems[0] as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
+      if (!cid) {
+        return bail(
+          NextResponse.json(
+            {
+              error: "Team has no roster cleaners; cannot mark completed without a payout owner.",
+              code: "admin_monthly_team_no_members",
+            },
+            { status: 400 },
+          ),
+        );
+      }
+      monthlyTeamPayoutOwnerId = cid;
+    }
+
     const paystackReference = `adm_mi_${crypto.randomUUID()}`;
     const completedAtIso = adminMarkCompleted ? new Date().toISOString() : null;
-    const assignedAtIso = selectedCleanerId ? new Date().toISOString() : null;
+
+    const preliminaryDispatch = adminMarkCompleted
+      ? "assigned"
+      : selectedCleanerId
+        ? "assigned"
+        : "searching";
+
+    const completionCoherencePatch =
+      adminMarkCompleted && completedAtIso
+        ? buildCompletionCoherencePatch({
+            beforeCompletedAt: null,
+            beforeDispatchStatus: preliminaryDispatch,
+            fillCompletedAtIfMissing: true,
+            nowIso: completedAtIso,
+          }).patch
+        : {};
+
+    const assignedAtIso =
+      selectedCleanerId || (adminMarkCompleted && validatedMonthlyTeamId && !selectedCleanerId)
+        ? new Date().toISOString()
+        : null;
 
     let rowStatus: "completed" | "assigned" | "pending" = adminMarkCompleted
       ? "completed"
@@ -793,8 +905,8 @@ export async function POST(request: Request) {
         currency: "ZAR",
         service_slug: serviceSlug,
         status: rowStatus,
-        dispatch_status: selectedCleanerId ? "assigned" : "searching",
-        ...(adminMarkCompleted && completedAtIso ? { completed_at: completedAtIso } : {}),
+        dispatch_status: preliminaryDispatch,
+        ...completionCoherencePatch,
         surge_multiplier: 1,
         surge_reason: null,
         service: getServiceLabel(serviceId),
@@ -817,6 +929,15 @@ export async function POST(request: Request) {
               assignment_type: "user_selected",
               cleaner_id: selectedCleanerId,
               cleaner_response_status: CLEANER_RESPONSE.PENDING,
+              ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
+            }
+          : {}),
+        ...(validatedMonthlyTeamId && !selectedCleanerId && adminMarkCompleted && monthlyTeamPayoutOwnerId
+          ? {
+              is_team_job: true,
+              team_id: validatedMonthlyTeamId,
+              payout_owner_cleaner_id: monthlyTeamPayoutOwnerId,
+              cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
               ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
             }
           : {}),

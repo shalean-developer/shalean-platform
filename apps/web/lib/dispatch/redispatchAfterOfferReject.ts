@@ -131,6 +131,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
     });
 
     if (!r.ok) {
+      await supabase.from("bookings").update({ payment_needs_follow_up: true }).eq("id", params.bookingId);
       await reportOperationalIssue("warn", "redispatchAfterOfferReject", "Re-dispatch did not assign", {
         bookingId: params.bookingId,
         error: r.error,

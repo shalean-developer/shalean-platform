@@ -48,7 +48,7 @@ function matchesBookingsBranchOr(row: Row, expr: string): boolean {
 }
 
 class QueryBuilder {
-  private filters: Array<{ kind: "eq" | "in" | "not_eq"; column: string; value: unknown }> = [];
+  private filters: Array<{ kind: "eq" | "in" | "not_eq" | "gt"; column: string; value: unknown }> = [];
   private single = false;
   private selectedColumns: string[] | null = null;
   private orExpr: string | null = null;
@@ -88,6 +88,11 @@ class QueryBuilder {
     return this;
   }
 
+  gt(column: string, value: unknown) {
+    this.filters.push({ kind: "gt", column, value });
+    return this;
+  }
+
   order() {
     return this;
   }
@@ -124,6 +129,13 @@ class QueryBuilder {
       if (f.kind === "in") {
         const values = Array.isArray(f.value) ? f.value : [];
         if (!values.includes(row[f.column])) return false;
+      }
+      if (f.kind === "gt") {
+        // Lexicographic compare matches Supabase semantics for ISO strings
+        // (the only `.gt` user in this test surface is `expires_at > now`).
+        const a = row[f.column];
+        if (a == null) return false;
+        if (!(String(a) > String(f.value))) return false;
       }
     }
     return true;

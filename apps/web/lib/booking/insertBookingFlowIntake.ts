@@ -47,6 +47,32 @@ export type BookingFlowIntakeInput = {
   customerPhone: string;
 };
 
+/**
+ * Server-side resolver for the picked cleaner's display name. Used to embed `cleaner_name` on the
+ * intake snapshot so the post-intake review/payment page can show the actual pick instead of the
+ * generic "Best available cleaner" copy. Lookup is non-fatal — falls back to a stable
+ * "Selected cleaner" label so the review still distinguishes user-selected vs auto-assign.
+ */
+async function resolveSelectedCleanerName(
+  admin: SupabaseClient,
+  cleanerId: string,
+): Promise<string> {
+  try {
+    const { data } = await admin
+      .from("cleaners")
+      .select("full_name")
+      .eq("id", cleanerId)
+      .maybeSingle();
+    const fn =
+      data && typeof data === "object" && "full_name" in data
+        ? String((data as { full_name?: string | null }).full_name ?? "").trim()
+        : "";
+    return fn || "Selected cleaner";
+  } catch {
+    return "Selected cleaner";
+  }
+}
+
 export async function insertBookingFromFlowIntake(
   admin: SupabaseClient,
   input: BookingFlowIntakeInput,
@@ -179,6 +205,17 @@ export async function insertBookingFromFlowIntake(
       : null;
   const preferred = rawSel && UUID_RE.test(rawSel) ? rawSel : null;
 
+  /**
+   * When the customer pre-picked a cleaner, persist `cleaner_name` + `cleaner_id` on the snapshot
+   * so the post-intake review/payment page (`/booking/payment?bookingId=…`) — which reads
+   * `bookingRowToPaymentSummary` (`snap.cleaner_name`) — can show the picked name instead of the
+   * generic "Best available cleaner" copy. Lookup is non-fatal; cleaner-row missing → stable
+   * "Selected cleaner" label so the review still distinguishes user-selected vs auto-assign.
+   */
+  const preferredCleanerName: string | null = preferred
+    ? await resolveSelectedCleanerName(admin, preferred)
+    : null;
+
   const flat = buildSnapshotFlat(locked);
   const snapBase: BookingSnapshotV1 = {
     v: 1,
@@ -191,6 +228,8 @@ export async function insertBookingFromFlowIntake(
       user_id: null,
       type: "guest",
     },
+    ...(preferred ? { cleaner_id: preferred } : {}),
+    ...(preferredCleanerName ? { cleaner_name: preferredCleanerName } : {}),
   };
   const booking_snapshot = mergeSnapshotWithFlat(snapBase, flat);
 

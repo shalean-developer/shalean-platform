@@ -2,6 +2,12 @@
 
 import { Fragment } from "react";
 import { AdminAssignForm, type CleanerOption } from "@/components/admin/AdminAssignForm";
+import type { AdminBookingsListRow } from "@/lib/admin/adminBookingsListRow";
+import {
+  adminLifecycleDispatchCaption,
+  adminLifecycleRawDiagnosticLine,
+} from "@/lib/admin/adminDashboardLifecycleDisplay";
+import type { DashboardLifecycleAlignmentWire } from "@/lib/booking/bookingLifecycleContract";
 
 export type SlaBreachRow = {
   id: string;
@@ -14,6 +20,11 @@ export type SlaBreachRow = {
   cleaner_id: string | null;
   dispatch_status: string | null;
   status: string | null;
+  /** Present on GET /api/admin/bookings rows — drives caption parity with list cards. */
+  dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
+  payment_needs_follow_up?: boolean | null;
+  is_team_job?: boolean | null;
+  team_id?: string | null;
   slaBreachMinutes: number;
   dispatchLastAction?: string | null;
   lastActionMinutesAgo?: number | null;
@@ -32,15 +43,8 @@ function formatScheduled(date: string | null, time: string | null): string {
   return t ? `${label} · ${t}` : label;
 }
 
-function dispatchShort(ds: string | null): string {
-  const s = String(ds ?? "").toLowerCase();
-  if (s === "searching") return "Searching";
-  if (s === "offered") return "Offered";
-  if (s === "unassignable") return "Unassignable";
-  if (s === "assigned") return "Assigned";
-  if (s === "failed") return "Failed";
-  if (s === "no_cleaner") return "No cleaner";
-  return s ? s : "—";
+function slaRowAsListRow(r: SlaBreachRow): AdminBookingsListRow {
+  return r as unknown as AdminBookingsListRow;
 }
 
 function priorityBadge(mins: number): { label: string; className: string } {
@@ -320,7 +324,12 @@ export function SlaBreachQueueTable({
                     <p className="font-medium text-zinc-900 dark:text-zinc-50">{r.customer_name?.trim() || "—"}</p>
                     <p className="mt-0.5 text-xs leading-snug text-zinc-600 dark:text-zinc-400">{r.location?.trim() || "—"}</p>
                   </td>
-                  <td className="px-3 py-2 align-top text-zinc-700 dark:text-zinc-300">{dispatchShort(r.dispatch_status)}</td>
+                  <td className="px-3 py-2 align-top">
+                    <p className="text-zinc-800 dark:text-zinc-200">{adminLifecycleDispatchCaption(slaRowAsListRow(r))}</p>
+                    <p className="mt-0.5 font-mono text-[10px] leading-snug text-zinc-500 dark:text-zinc-500">
+                      {adminLifecycleRawDiagnosticLine(slaRowAsListRow(r))}
+                    </p>
+                  </td>
                   <td className="max-w-[240px] px-3 py-2 align-top text-xs text-zinc-600 dark:text-zinc-400">
                     {r.dispatchLastAction?.trim() || "—"}
                   </td>

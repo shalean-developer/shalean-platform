@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
 
 const UNASSIGNED_COL = "__unassigned__";
 
@@ -29,6 +30,25 @@ type ScheduleBooking = {
   cleaner_slot_override_reason?: string | null;
   dispatch_status?: string | null;
 };
+
+function scheduleBookingOperationalPrimary(b: ScheduleBooking): string {
+  return describeBookingOperationalState({
+    row: {
+      id: b.id,
+      status: b.status,
+      dispatch_status: b.dispatch_status ?? null,
+      cleaner_id: b.cleaner_id,
+      selected_cleaner_id: b.selected_cleaner_id,
+    },
+    viewer: "admin",
+  }).displayBadge;
+}
+
+function scheduleBookingDbDiagnosticTitle(b: ScheduleBooking): string {
+  const st = b.status ?? "—";
+  const ds = b.dispatch_status ?? "—";
+  return `DB: status=${st} · dispatch_status=${ds}`;
+}
 
 type ScheduleCleaner = { id: string; full_name: string; phone: string | null; is_available: boolean | null };
 
@@ -394,8 +414,11 @@ export default function AdminSchedulePage() {
                               >
                                 {b.customer_name?.trim() || "—"}
                               </Link>
-                              <span className="block text-[10px] text-zinc-600 dark:text-zinc-400">
-                                {b.service ?? "Service"} · {b.status ?? ""}
+                              <span
+                                className="block text-[10px] text-zinc-600 dark:text-zinc-400"
+                                title={scheduleBookingDbDiagnosticTitle(b)}
+                              >
+                                {b.service ?? "Service"} · {scheduleBookingOperationalPrimary(b)}
                               </span>
                               {b.ignore_cleaner_conflict ? (
                                 <span className="mt-0.5 inline-block rounded bg-amber-200/90 px-1 text-[9px] font-semibold uppercase text-amber-950 dark:bg-amber-800 dark:text-amber-50">

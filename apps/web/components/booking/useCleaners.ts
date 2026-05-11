@@ -16,6 +16,8 @@ export type LiveCleaner = {
   recent_reviews: { rating: number; quote: string }[];
   distance_km: number | null;
   is_available: boolean;
+  /** When true, cleaner passed canonical slot eligibility for the requested date/time/duration. */
+  slot_eligible?: boolean;
   /** Optional; forwarded from API when present — client-only display. */
   price_delta_zar?: number | null;
 };
@@ -24,8 +26,11 @@ const cache = new Map<string, LiveCleaner[]>();
 
 function normalizeCleaner(c: LiveCleaner): LiveCleaner {
   const dz = (c as { price_delta_zar?: unknown }).price_delta_zar;
+  const slotRaw = (c as { slot_eligible?: unknown }).slot_eligible;
+  const slot_eligible = slotRaw === true ? true : slotRaw === false ? false : undefined;
   return {
     ...c,
+    ...(slot_eligible !== undefined ? { slot_eligible } : {}),
     review_count:
       typeof c.review_count === "number" && Number.isFinite(c.review_count)
         ? Math.max(0, Math.round(c.review_count))

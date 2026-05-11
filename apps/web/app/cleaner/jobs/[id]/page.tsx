@@ -44,7 +44,14 @@ import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleane
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
 import { deriveMobilePhase, isCleanerAssignmentAccepted } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
-import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
+import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
+import {
+  cleanerJobEarningFromCents,
+  isCleanerJobEarningPositive,
+  JOB_EARNING_BLOCK_COMPLETION_MESSAGE,
+  JOB_EARNING_LABEL,
+  JOB_EARNING_UNAVAILABLE_CONTACT_LABEL,
+} from "@/lib/cleaner/cleanerJobEarning";
 import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
 import {
   clearAllCleanerDashboardSessionCaches,
@@ -688,6 +695,16 @@ export default function CleanerJobDetailPage() {
     displayJob?.displayEarningsIsEstimate === true ||
     displayJob?.earnings_estimated === true ||
     displayJob?.earnings_is_estimate === true;
+  /**
+   * Canonical job-earning shape from the same wire fields used by offer cards
+   * and the dashboard surfaces (`resolveCleanerJobEarning` precedence). R0 is
+   * deliberately treated as "unavailable" by `isCleanerJobEarningPositive` —
+   * the server-side completion gate does the same with
+   * `isCompletableDisplayEarningsCents`, so the disabled-Complete UX matches
+   * exactly what the API would return on attempt.
+   */
+  const jobEarning = useMemo(() => cleanerJobEarningFromCents(earningsCents), [earningsCents]);
+  const jobEarningPositive = isCleanerJobEarningPositive(jobEarning);
 
   const showLifecycleDebugStrip = process.env.NEXT_PUBLIC_CLEANER_JOB_LIFECYCLE_DEBUG === "1";
 
@@ -1254,30 +1271,38 @@ export default function CleanerJobDetailPage() {
 
               {unified.propertyLine ? <p className="text-base font-medium text-foreground">{unified.propertyLine}</p> : null}
 
-              {typeof earningsCents === "number" && Number.isFinite(earningsCents) && earningsCents > 0 ? (
-                <div className={cn(unified.propertyLine ? "mt-1" : "")}>
+              {jobEarningPositive ? (
+                <div
+                  className={cn(unified.propertyLine ? "mt-1" : "")}
+                  data-testid="cleaner-job-detail-earning-positive"
+                >
                   <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                    You earn: {formatCleanerJobEarningsLabel(earningsCents, { estimate: earningsEstimated })}
+                    {JOB_EARNING_LABEL}: {formatZarFromCents(jobEarning.amount_cents ?? 0)}
+                    {earningsEstimated ? " (estimate)" : ""}
                   </p>
                   {earningsEstimated ? (
-                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">Final amount follows roster and payout rules after the job is recorded.</p>
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                      Final amount follows roster and payout rules after the job is recorded.
+                    </p>
                   ) : null}
                 </div>
-              ) : typeof earningsCents === "number" && Number.isFinite(earningsCents) && earningsCents === 0 ? (
-                <p className={cn("text-sm text-muted-foreground", unified.propertyLine || completionSuccess ? "mt-1" : "")}>
-                  You earn: {formatCleanerJobEarningsLabel(0)}
-                </p>
               ) : (
-                <p
+                <div
                   className={cn(
-                    "text-sm text-muted-foreground",
+                    "rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-50",
                     unified.propertyLine || completionSuccess ? "mt-1" : "",
                   )}
+                  role="status"
+                  aria-label={JOB_EARNING_UNAVAILABLE_CONTACT_LABEL}
+                  data-testid="cleaner-job-detail-earning-unavailable"
                 >
-                  {completionSuccess
-                    ? "Processing your earnings… refresh in a moment if the amount still shows as empty."
-                    : "Your pay for this job will show here once the booking has enough payment data to apply payout rules."}
-                </p>
+                  <p className="font-semibold">{JOB_EARNING_UNAVAILABLE_CONTACT_LABEL}</p>
+                  <p className="mt-1 text-xs opacity-90">
+                    {completionSuccess
+                      ? "Processing your earnings… refresh in a moment if the amount still shows as empty."
+                      : "Your pay for this job hasn't been confirmed yet. Support can recompute it before you complete."}
+                  </p>
+                </div>
               )}
 
               {unified.extras.length > 0 ? (
@@ -1398,35 +1423,48 @@ export default function CleanerJobDetailPage() {
                       </Button>
                     ) : null}
                     {jobUi.phase === "complete" ? (
-                      confirmPending === "complete" ? (
-                        <div className="rounded-lg border border-emerald-600/35 bg-background p-3">
-                          <p className="text-sm font-medium text-foreground">Complete this job?</p>
-                          <p className="mt-1 text-xs text-muted-foreground">This records completion and runs payout checks.</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              className="min-h-12 flex-1 bg-emerald-700 text-white hover:bg-emerald-700/90"
-                              disabled={actionBusy != null || lifecycleDisabled}
-                              onClick={() => void runLifecyclePost("complete", { optimistic: true })}
-                            >
-                              {actionBusy === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                              Yes, complete
-                            </Button>
-                            <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setConfirmPending(null)}>
-                              Cancel
-                            </Button>
+                      <>
+                        {!jobEarningPositive ? (
+                          <p
+                            role="status"
+                            data-testid="cleaner-job-detail-complete-blocked-message"
+                            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-950 dark:text-amber-50"
+                          >
+                            {JOB_EARNING_BLOCK_COMPLETION_MESSAGE}
+                          </p>
+                        ) : null}
+                        {confirmPending === "complete" ? (
+                          <div className="rounded-lg border border-emerald-600/35 bg-background p-3">
+                            <p className="text-sm font-medium text-foreground">Complete this job?</p>
+                            <p className="mt-1 text-xs text-muted-foreground">This records completion and runs payout checks.</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                className="min-h-12 flex-1 bg-emerald-700 text-white hover:bg-emerald-700/90"
+                                disabled={actionBusy != null || lifecycleDisabled || !jobEarningPositive}
+                                onClick={() => void runLifecyclePost("complete", { optimistic: true })}
+                              >
+                                {actionBusy === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                                Yes, complete
+                              </Button>
+                              <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setConfirmPending(null)}>
+                                Cancel
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          className="min-h-12 w-full bg-emerald-700 text-white hover:bg-emerald-700/90"
-                          disabled={actionBusy != null || lifecycleDisabled}
-                          onClick={() => setConfirmPending("complete")}
-                        >
-                          Complete job
-                        </Button>
-                      )
+                        ) : (
+                          <Button
+                            type="button"
+                            data-testid="cleaner-job-detail-complete-button"
+                            className="min-h-12 w-full bg-emerald-700 text-white hover:bg-emerald-700/90"
+                            disabled={actionBusy != null || lifecycleDisabled || !jobEarningPositive}
+                            aria-disabled={!jobEarningPositive || actionBusy != null || lifecycleDisabled}
+                            onClick={() => setConfirmPending("complete")}
+                          >
+                            Complete job
+                          </Button>
+                        )}
+                      </>
                     ) : null}
                     {completed ? (
                       <p className="text-sm text-muted-foreground">

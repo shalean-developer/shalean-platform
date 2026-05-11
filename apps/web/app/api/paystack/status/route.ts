@@ -6,8 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Read-only: resolve booking id + lifecycle status from Paystack charge reference (or booking UUID).
- * Does not call Paystack or finalize — use after `/api/payments/verify` or `/api/paystack/verify` has run.
+ * **Responsibility:** Read-only DB lookup by Paystack reference / internal id — **no** Paystack HTTP call and **no** finalize.
+ * Use after payment resolution (e.g. `/api/paystack/verify` or legacy `/api/payments/verify`). `lib/booking/paystackRouteResponsibilityContract.ts`
  */
 export async function GET(request: Request) {
   const admin = getSupabaseAdmin();

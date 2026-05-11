@@ -15,6 +15,13 @@ export type SubmitBookingPayload = {
   serviceAreaCityId?: string | null;
   serviceAreaName?: string | null;
   cleanerId?: string | null;
+  /**
+   * Snapshot of `cleaners.full_name` from the picker. Persisted into local
+   * `BOOKING_CLEANER_KEY` so the funnel `useSelectedCleaner` hook (used by `StepPayment`)
+   * can render the actual selection — falls back to a stable "Selected cleaner" label
+   * if the picker did not capture a display name.
+   */
+  cleanerDisplayName?: string | null;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -72,7 +79,11 @@ export async function submitBooking(
     clearLockedBookingFromStorage();
     const cid = payload.cleanerId != null && String(payload.cleanerId).trim() ? String(payload.cleanerId).trim() : null;
     if (cid) {
-      writeSelectedCleanerToStorage({ id: cid, name: "Selected cleaner" });
+      const displayName =
+        typeof payload.cleanerDisplayName === "string" && payload.cleanerDisplayName.trim()
+          ? payload.cleanerDisplayName.trim()
+          : "Selected cleaner";
+      writeSelectedCleanerToStorage({ id: cid, name: displayName });
     } else {
       clearSelectedCleanerFromStorage();
     }

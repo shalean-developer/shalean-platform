@@ -68,6 +68,12 @@ export function dispatchStateLabel(
 }
 
 export function cleanerSelectEmptyLabel(r: AdminBookingsListRow): string {
+  const dl = r.dashboardLifecycle;
+  if (dl && !dl.hasEffectiveAssignee) {
+    const sem = dl.assignmentSemanticPhase;
+    if (sem === "searching" || sem === "pending_assignment_searching") return "Assigning…";
+    if (sem === "offered" || sem === "pending_assignment_offered") return "Offer sent";
+  }
   const st = (r.status ?? "").toLowerCase();
   const ds = (r.dispatch_status ?? "").toLowerCase();
   if (!r.cleaner_id && (st === "pending" || st === "offered") && ds === "searching") return "Assigning…";

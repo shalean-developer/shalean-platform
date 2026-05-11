@@ -63,6 +63,7 @@ export function useBookings(): {
       }, 400);
     };
 
+    /** Realtime only tracks `user_id` — email-orphan rows (`user_id` null, matched by email merge on fetch) do not subscribe; refetch lists instead. See `lib/booking/dashboardVisibilityContract.ts`. */
     const channel = sb
       .channel(`customer-dashboard-bookings-${userId}`)
       .on(

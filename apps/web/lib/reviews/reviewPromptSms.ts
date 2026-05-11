@@ -9,6 +9,7 @@ import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
+import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
 
 export type ReviewPromptKind = "initial" | "reminder";
@@ -92,7 +93,10 @@ async function deliverReviewPromptSms(params: {
 type BookingRow = {
   id: string;
   status?: string | null;
+  completed_at?: string | null;
   cleaner_id?: string | null;
+  is_team_job?: boolean | null;
+  team_id?: string | null;
   customer_phone?: string | null;
   customer_name?: string | null;
   booking_snapshot?: unknown;
@@ -161,14 +165,15 @@ export async function processReviewSmsPromptQueue(
   if (firstIds.length) {
     const { data: bookings, error: bErr } = await supabase
       .from("bookings")
-      .select("id, status, cleaner_id, customer_phone, customer_name, booking_snapshot")
+      .select("id, status, completed_at, cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
       .in("id", firstIds);
     if (bErr) {
       console.error("[processReviewSmsPromptQueue] bookings", bErr.message);
     } else {
       for (const b of (bookings ?? []) as BookingRow[]) {
         const bid = b.id;
-        if (String(b.status ?? "").toLowerCase() !== "completed" || !b.cleaner_id) {
+        const promptOk = evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>);
+        if (!promptOk.allowed) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
           continue;
@@ -227,14 +232,15 @@ export async function processReviewSmsPromptQueue(
   if (remIds.length) {
     const { data: bookings2, error: b2Err } = await supabase
       .from("bookings")
-      .select("id, status, cleaner_id, customer_phone, customer_name, booking_snapshot")
+      .select("id, status, completed_at, cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
       .in("id", remIds);
     if (b2Err) {
       console.error("[processReviewSmsPromptQueue] bookings2", b2Err.message);
     } else {
       for (const b of (bookings2 ?? []) as BookingRow[]) {
         const bid = b.id;
-        if (String(b.status ?? "").toLowerCase() !== "completed" || !b.cleaner_id) {
+        const promptOk = evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>);
+        if (!promptOk.allowed) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
           continue;

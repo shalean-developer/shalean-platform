@@ -5,6 +5,7 @@ import {
   bookingsPersistFullFinancialSelectSuffix,
   bookingsPersistSelectListForPersist,
   hasPersistedDisplayEarningsBasis,
+  isCompletableDisplayEarningsCents,
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 
@@ -17,6 +18,40 @@ describe("bookingEarningsIntegrity", () => {
     expect(hasPersistedDisplayEarningsBasis(null)).toBe(false);
     expect(hasPersistedDisplayEarningsBasis(undefined)).toBe(false);
     expect(hasPersistedDisplayEarningsBasis(-1)).toBe(false);
+  });
+
+  /**
+   * Strict positive helper for the cleaner-self-complete gate. R0 is unsafe
+   * here because the booking has no payment basis (e.g. unpaid recurring
+   * monthly invoice, backfill line items priced at R0) — letting the cleaner
+   * complete locks in a no-payout job. Differs from
+   * {@link hasPersistedDisplayEarningsBasis} which intentionally accepts 0.
+   */
+  describe("isCompletableDisplayEarningsCents (strict positive completion gate)", () => {
+    it("accepts strictly positive integer cents", () => {
+      expect(isCompletableDisplayEarningsCents(1)).toBe(true);
+      expect(isCompletableDisplayEarningsCents(40000)).toBe(true);
+    });
+
+    it("REJECTS zero (this is the bug fix — R0 backfill bookings)", () => {
+      expect(isCompletableDisplayEarningsCents(0)).toBe(false);
+    });
+
+    it("rejects null and undefined", () => {
+      expect(isCompletableDisplayEarningsCents(null)).toBe(false);
+      expect(isCompletableDisplayEarningsCents(undefined)).toBe(false);
+    });
+
+    it("rejects negative and non-finite values", () => {
+      expect(isCompletableDisplayEarningsCents(-1)).toBe(false);
+      expect(isCompletableDisplayEarningsCents(Number.NaN)).toBe(false);
+      expect(isCompletableDisplayEarningsCents(Number.POSITIVE_INFINITY)).toBe(false);
+    });
+
+    it("accepts numeric strings with positive value (defensive — DB driver coercion)", () => {
+      expect(isCompletableDisplayEarningsCents("40000")).toBe(true);
+      expect(isCompletableDisplayEarningsCents("0")).toBe(false);
+    });
   });
 
   it("resolves team payout owner over cleaner_id", () => {

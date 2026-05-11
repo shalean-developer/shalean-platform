@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
+import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -22,9 +25,13 @@ function offerTimeoutMsForLoadTest(): number {
 
 function futureDateYmd(daysAhead: number): string {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() + daysAhead);
-  return d.toISOString().slice(0, 10);
+  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  dt.setUTCDate(dt.getUTCDate() + daysAhead);
+  return dt.toISOString().slice(0, 10);
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Creates a real `bookings` row (standard service, paid-ish pending) and runs the same
@@ -56,13 +63,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  let body: { index?: number; test?: boolean } = {};
+  type CreateBookingBody = {
+    index?: number;
+    test?: boolean;
+    /** Default `auto`. `user_selected_offer` inserts `pending_assignment` + a single dispatch offer (no smart-assign pool). */
+    dispatchVariant?: string;
+    /** When set (UUID), links `bookings.user_id` for customer dashboard/API visibility. */
+    linkUserId?: string;
+    /** Optional normalized storage on the row (alongside `linkUserId`). */
+    customerEmail?: string | null;
+    /** Required when `dispatchVariant === "user_selected_offer"` — must exist in `cleaners`. */
+    selectedCleanerId?: string;
+  };
+
+  let body: CreateBookingBody = {};
   try {
-    body = (await request.json()) as typeof body;
+    body = (await request.json()) as CreateBookingBody;
   } catch {
     body = {};
   }
   const index = typeof body.index === "number" && Number.isFinite(body.index) ? Math.floor(body.index) : 0;
+  const dispatchVariant =
+    typeof body.dispatchVariant === "string" && body.dispatchVariant.trim().toLowerCase() === "user_selected_offer"
+      ? ("user_selected_offer" as const)
+      : ("auto" as const);
+
+  let linkedUserId: string | null = null;
+  if (typeof body.linkUserId === "string" && UUID_RE.test(body.linkUserId.trim())) {
+    linkedUserId = body.linkUserId.trim().toLowerCase();
+  }
+
+  let linkedCustomerEmail: string | null = null;
+  if (typeof body.customerEmail === "string" && body.customerEmail.trim()) {
+    const em = normalizeEmail(body.customerEmail.trim());
+    linkedCustomerEmail = em.length > 0 ? em : null;
+  }
 
   const admin = getSupabaseAdmin();
   if (!admin) {
@@ -174,21 +209,43 @@ export async function POST(request: Request) {
 
   const paystackReference = `loadtest_${crypto.randomUUID().replace(/-/g, "")}`;
 
+  const selectedRaw =
+    typeof body.selectedCleanerId === "string" ? body.selectedCleanerId.trim().toLowerCase() : "";
+  const selectedCleanerIdForVariant = UUID_RE.test(selectedRaw) ? selectedRaw : null;
+
+  if (dispatchVariant === "user_selected_offer") {
+    if (!selectedCleanerIdForVariant) {
+      return NextResponse.json(
+        { error: "selectedCleanerId (UUID) is required when dispatchVariant is user_selected_offer." },
+        { status: 400 },
+      );
+    }
+    const { data: clRow } = await admin.from("cleaners").select("id").eq("id", selectedCleanerIdForVariant).maybeSingle();
+    if (!clRow || typeof (clRow as { id?: unknown }).id !== "string") {
+      return NextResponse.json({ error: "selectedCleanerId does not match a cleaners row." }, { status: 400 });
+    }
+  }
+
+  const bookingStatus = dispatchVariant === "user_selected_offer" ? "pending_assignment" : "pending";
+  const assignmentType = dispatchVariant === "user_selected_offer" ? "user_selected" : null;
+  const selectedCleanerColumn =
+    dispatchVariant === "user_selected_offer" ? selectedCleanerIdForVariant : null;
+
   const ins = await insertBookingRowUnified(admin, {
     source: "dispatch_load_test",
     rowBase: {
       paystack_reference: paystackReference,
-      customer_email: null,
+      customer_email: linkedCustomerEmail,
       customer_name: "Dispatch load test",
       customer_phone: null,
-      user_id: null,
+      user_id: linkedUserId,
       amount_paid_cents: 1,
       total_paid_cents: 1,
       base_amount_cents: 1,
       extras_amount_cents: 0,
       currency: "ZAR",
       service_slug: "standard",
-      status: "pending",
+      status: bookingStatus,
       dispatch_status: "searching",
       cleaner_response_status: CLEANER_RESPONSE.NONE,
       surge_multiplier: 1,
@@ -201,6 +258,8 @@ export async function POST(request: Request) {
       total_paid_zar: 1,
       service_fee_cents: 0,
       booking_source: "load_test",
+      ...(assignmentType ? { assignment_type: assignmentType } : {}),
+      ...(selectedCleanerColumn ? { selected_cleaner_id: selectedCleanerColumn } : {}),
     },
     rooms: 2,
     bathrooms: 1,
@@ -219,6 +278,34 @@ export async function POST(request: Request) {
   }
 
   const bookingId = ins.id;
+
+  if (dispatchVariant === "user_selected_offer" && selectedCleanerIdForVariant) {
+    const ttlSeconds = resolveDispatchOfferAcceptTtlSeconds();
+    const offerRes = await createDispatchOfferRow({
+      supabase: admin,
+      bookingId,
+      cleanerId: selectedCleanerIdForVariant,
+      rankIndex: 0,
+      ttlSeconds,
+      skipImmediateNotification: true,
+    });
+    if (!offerRes.ok) {
+      return NextResponse.json(
+        { ok: false, bookingId, dispatchVariant, error: offerRes.error },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      bookingId,
+      dispatchVariant: "user_selected_offer",
+      offerId: offerRes.offerId,
+      offerExpiresAtIso: offerRes.expiresAtIso,
+      selectedCleanerId: selectedCleanerIdForVariant,
+      ttlSeconds,
+    });
+  }
+
   const tLabel = `dispatch-${bookingId}`;
   console.time(tLabel);
 
@@ -246,6 +333,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     bookingId,
+    dispatchVariant: "auto",
     assignmentKind: result.assignmentKind,
     cleanerId: result.assignmentKind === "individual" ? result.cleanerId : undefined,
     teamId: result.assignmentKind === "team" ? result.teamId : undefined,

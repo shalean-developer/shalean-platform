@@ -35,8 +35,8 @@ function phaseRowFromListRow(row: AdminBookingListClassifyRow): PhaseRow {
 
 /**
  * Segments admin bookings list into Today / Upcoming / Completed tabs.
- * Uses {@link deriveBookingOperationalPhase} for terminal and authoritative completion, then
- * Johannesburg calendar `date` for active work (same as legacy date bucketing).
+ * Uses {@link deriveBookingOperationalPhase} — matches {@link buildDashboardLifecycleAlignmentWire}.operationalPhase
+ * on list payloads that include `dashboardLifecycle`.
  */
 export function classifyAdminBookingListRow(
   row: AdminBookingListClassifyRow,

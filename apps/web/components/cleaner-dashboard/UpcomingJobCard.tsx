@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CleanerUpcomingJob } from "./types";
+import { JobEarningInline } from "./JobEarningInline";
 
 type UpcomingJobCardProps = {
   job: CleanerUpcomingJob;
@@ -30,6 +31,12 @@ export function UpcomingJobCard({ job }: UpcomingJobCardProps) {
         </span>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{job.suburb}</p>
+      {/* "Job earning: R___" — same source-of-truth and wording as the
+          offer card. Render as a compact inline pill so the list stays
+          dense. Never contributes to "Today" earnings until completion. */}
+      <div className="mt-2">
+        <JobEarningInline earning={job.jobEarning} variant="compact" />
+      </div>
     </Link>
   );
 }

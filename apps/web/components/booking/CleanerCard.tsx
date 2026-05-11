@@ -149,7 +149,14 @@ export function CleanerCard({
                 ? `${cleaner.distance_km.toFixed(1)} km away`
                 : "Distance unavailable"}
             </span>{" "}
-            · {cleaner.is_available ? "Available now" : "Unavailable"}
+            ·{" "}
+            {cleaner.slot_eligible === true
+              ? "Available for this time"
+              : cleaner.slot_eligible === false
+                ? "Unavailable for this time"
+                : cleaner.is_available
+                  ? "Available now"
+                  : "Unavailable"}
           </p>
 
           {isFeatured && recommendHint ? (

@@ -16,6 +16,7 @@ import {
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
   const today = todayYmdJohannesburg();
   const { data: past, error } = await admin
     .from("bookings")
-    .select("id, user_id, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email")
+    .select("id, user_id, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email, dispatch_status")
     .in("status", ["pending", "assigned", "in_progress"])
     .not("date", "is", null)
     .lt("date", today)
@@ -101,9 +102,16 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       continue;
     }
 
+    const dispatchBefore =
+      b && typeof b === "object" ? String((b as { dispatch_status?: string | null }).dispatch_status ?? "").trim() || null : null;
+    const { patch: cronCompletionPatch } = buildCompletionCoherencePatch({
+      beforeDispatchStatus: dispatchBefore,
+      fillCompletedAtIfMissing: false,
+      nowIso: completedAt,
+    });
     const { error: upErr } = await admin
       .from("bookings")
-      .update({ status: "completed", completed_at: completedAt })
+      .update({ status: "completed", completed_at: completedAt, ...cronCompletionPatch })
       .eq("id", id);
     if (upErr) {
       await reportOperationalIssue("error", "cron/booking-lifecycle", `mark completed failed: ${upErr.message}`, {
@@ -136,8 +144,13 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
 
     try {
       const learn = await recordAssignmentOutcomeAndLearn(admin, id);
-      if (!learn.ok && process.env.NODE_ENV !== "production") {
-        console.warn("[booking-lifecycle] marketplace outcome learn skipped", { bookingId: id, ...learn });
+      if (!learn.ok) {
+        void logSystemEvent({
+          level: "info",
+          source: "cron/booking-lifecycle",
+          message: "marketplace_assignment_outcome_learn_skipped",
+          context: { bookingId: id, error: learn.error ?? null },
+        });
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

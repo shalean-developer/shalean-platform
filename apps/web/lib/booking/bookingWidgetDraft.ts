@@ -150,6 +150,31 @@ export function parseWidgetIntakeFromUnknown(raw: unknown): WidgetIntakePayload 
   };
 }
 
+/**
+ * Parses widget draft POST bodies that may include `customer_email` / `email` alongside intake fields.
+ * Those keys are stripped before {@link parseWidgetIntakeFromUnknown} so intake validation stays unchanged.
+ */
+export function parseWidgetDraftCreateBody(raw: unknown): {
+  intake: WidgetIntakePayload | null;
+  guestEmail: string | null;
+} {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { intake: null, guestEmail: null };
+  }
+  const o = raw as Record<string, unknown>;
+  let guestEmail: string | null = null;
+  if (typeof o.customer_email === "string" && o.customer_email.trim()) {
+    guestEmail = o.customer_email.trim();
+  } else if (typeof o.email === "string" && o.email.trim()) {
+    guestEmail = o.email.trim();
+  }
+  const rest: Record<string, unknown> = { ...o };
+  delete rest.customer_email;
+  delete rest.email;
+  const intake = parseWidgetIntakeFromUnknown(rest);
+  return { intake, guestEmail };
+}
+
 function isHomeWidgetServiceKey(s: string): s is HomeWidgetServiceKey {
   return s === "standard" || s === "airbnb" || s === "deep" || s === "move" || s === "carpet";
 }

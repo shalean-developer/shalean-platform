@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { syncBookingDispatchExpiredWhenNoPendingOffers } from "@/lib/dispatch/syncBookingDispatchExpiredWhenNoPendingOffers";
+import { bumpCleanerOfferSentCounter } from "@/lib/dispatch/dispatchOfferCounterRpc";
+import { resolveAndPersistDispatchOfferEarningsSnapshot } from "@/lib/dispatch/dispatchOfferEarningsSnapshot";
 import {
   notifyCleanerDispatchOfferLostRaceSms,
   notifyCleanerOfDispatchOffer,
@@ -20,6 +22,7 @@ import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
 import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
+import { assignmentTruthPatchForOfferAccept } from "@/lib/dispatch/assignmentTruth";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 const POLL_MS = 400;
@@ -78,8 +81,13 @@ export async function createDispatchOfferRow(params: {
     .select("id", { count: "exact", head: true })
     .eq("booking_id", params.bookingId);
 
-  if (priorCountErr && process.env.NODE_ENV !== "production") {
-    console.warn("[createDispatchOfferRow] prior offer count failed", priorCountErr.message);
+  if (priorCountErr) {
+    await logSystemEvent({
+      level: "warn",
+      source: "dispatch_offer_prior_count",
+      message: priorCountErr.message,
+      context: { bookingId: params.bookingId },
+    });
   }
 
   const visibleAtMs = params.dispatchVisibleAtIso ? new Date(params.dispatchVisibleAtIso).getTime() : Date.now();
@@ -128,14 +136,6 @@ export async function createDispatchOfferRow(params: {
 
   if (error || !data?.id) {
     const msg = error?.message ?? "Insert dispatch_offers failed.";
-    if (process.env.NODE_ENV !== "production") {
-      console.error("[createDispatchOfferRow] insert failed", {
-        bookingId: params.bookingId,
-        cleanerId: params.cleanerId,
-        message: msg,
-        details: error,
-      });
-    }
     await logSystemEvent({
       level: "warn",
       source: "dispatch_offer_insert",
@@ -146,25 +146,37 @@ export async function createDispatchOfferRow(params: {
   }
 
   const offerId = String(data.id);
-  const { error: rpcErr } = await params.supabase.rpc("dispatch_cleaner_offer_sent", {
-    p_cleaner_id: params.cleanerId,
+  // Counter bump is best-effort: never block offer creation. The wrapper
+  // classifies missing-column errors (schema gap vs runtime fault) and
+  // chooses the appropriate log level + metric.
+  await bumpCleanerOfferSentCounter({
+    supabase: params.supabase,
+    cleanerId: params.cleanerId,
+    bookingId: params.bookingId,
+    offerId,
   });
-  if (rpcErr) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[createDispatchOfferRow] dispatch_cleaner_offer_sent failed (offer kept)", {
-        bookingId: params.bookingId,
-        cleanerId: params.cleanerId,
-        offerId,
-        message: rpcErr.message,
-      });
-    }
-    await logSystemEvent({
-      level: "warn",
-      source: "dispatch_offer_sent_rpc",
-      message: rpcErr.message,
-      context: { bookingId: params.bookingId, cleanerId: params.cleanerId, offerId },
-    });
-  }
+
+  /**
+   * Compute & persist the per-(booking, cleaner) cleaner earnings snapshot
+   * onto `dispatch_offers`. This is the canonical "earning persisted before
+   * offer is shown" guarantee from the cleaner-offer earnings audit:
+   * /api/cleaner/offers reads `dispatch_offers.display_earnings_cents`
+   * before falling back to the runtime preview helper, so the cleaner sees
+   * a real amount instead of "Job earning unavailable" on every solo offer.
+   *
+   * Best-effort: a missing snapshot still lets the offer go out (the route
+   * falls back to the runtime preview, which now also accepts pending-offer
+   * cleaners as eligible). Errors are logged via system_logs and never
+   * bubble out — dispatch latency must not regress.
+   */
+  void resolveAndPersistDispatchOfferEarningsSnapshot({
+    supabase: params.supabase,
+    bookingId: params.bookingId,
+    cleanerId: params.cleanerId,
+    offerId,
+  }).catch(() => {
+    /** All failure modes are already logged inside the helper. */
+  });
 
   const t0 = Date.now();
   await logSystemEvent({
@@ -241,7 +253,6 @@ export async function createDispatchOfferRow(params: {
       });
     }
   } catch (err) {
-    console.error("[Dispatch Offer SMS Error]", err);
     await logSystemEvent({
       level: "error",
       source: "dispatch_offer_sms_notify",
@@ -418,7 +429,16 @@ export async function acceptDispatchOffer(params: {
     return { ok: false, error: "Not your offer.", failure: "wrong_cleaner" };
   }
   if (String(row.status) !== "pending") {
-    console.log("[OFFER ALREADY HANDLED]", { offerId: params.offerId, status: row.status, phase: "accept" });
+    await logSystemEvent({
+      level: "info",
+      source: "dispatch_offer_accept_idempotent",
+      message: "dispatch.offer.accept_not_pending",
+      context: {
+        offerId: params.offerId,
+        status: row.status,
+        bookingId: typeof row.booking_id === "string" ? row.booking_id : null,
+      },
+    });
     return { ok: false, error: "Offer is no longer pending.", failure: "not_pending" };
   }
   const visRaw = row.dispatch_visible_at;
@@ -447,7 +467,9 @@ export async function acceptDispatchOffer(params: {
 
   const { data: bookingBefore } = await params.supabase
     .from("bookings")
-    .select("status, cleaner_id, date, time, location_id, city_id")
+    .select(
+      "status, cleaner_id, date, time, location_id, city_id, assignment_type, selected_cleaner_id, fallback_reason",
+    )
     .eq("id", bookingId)
     .maybeSingle();
   const bs = bookingBefore as { status?: string; cleaner_id?: string | null } | null;
@@ -478,12 +500,21 @@ export async function acceptDispatchOffer(params: {
     time?: string | null;
     location_id?: string | null;
     city_id?: string | null;
+    assignment_type?: string | null;
+    selected_cleaner_id?: string | null;
+    fallback_reason?: string | null;
   } | null;
   const assignMeta = await marketplaceBookingPatchOnAssign(params.supabase, {
     date: bsMeta?.date ?? null,
     time: bsMeta?.time ?? null,
     location_id: bsMeta?.location_id ?? null,
     city_id: bsMeta?.city_id ?? null,
+  });
+
+  const truthPatch = assignmentTruthPatchForOfferAccept({
+    acceptedCleanerId: params.cleanerId,
+    assignmentTypeBefore: bsMeta?.assignment_type,
+    selectedCleanerId: bsMeta?.selected_cleaner_id,
   });
 
   const { data: updatedRows, error: uBook } = await params.supabase
@@ -497,6 +528,7 @@ export async function acceptDispatchOffer(params: {
       accepted_at: now,
       cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
       ...assignMeta,
+      ...truthPatch,
     })
     .eq("id", bookingId)
     .neq("status", "assigned")
@@ -572,8 +604,18 @@ export async function acceptDispatchOffer(params: {
     });
   }
 
+  // INVARIANT: accepting an offer ONLY updates workload (`cleaners.status` via
+  // `syncCleanerBusyFromBookings`). It MUST NOT touch `cleaners.is_available`,
+  // which is the cleaner's manual willingness flag — that field is owned
+  // exclusively by the manual Go online / Go offline toggle in
+  // `apps/web/app/api/cleaner/me/route.ts` (PATCH). Overloading
+  // `is_available` here was the cause of cleaners showing as Paused / Go
+  // online on the dashboard immediately after acceptance, and silently
+  // removed them from `getEligibleCleaners` for all future non-overlapping
+  // slots until they manually re-toggled. See
+  // `dispatchOfferAcceptPreservesAvailability.test.ts` for the regression
+  // guard.
   await syncCleanerBusyFromBookings(params.supabase, params.cleanerId);
-  await params.supabase.from("cleaners").update({ is_available: false }).eq("id", params.cleanerId);
 
   await logSystemEvent({
     level: "info",
@@ -588,7 +630,6 @@ export async function acceptDispatchOffer(params: {
     },
   });
 
-  console.log("[ASSIGNMENT TRIGGERED]", { bookingId, cleanerId: params.cleanerId, offerId: params.offerId });
   void notifyCleanerAssignedBooking(params.supabase, bookingId, params.cleanerId);
 
   const seg = await loadDispatchMetricSegmentation(params.supabase, bookingId);

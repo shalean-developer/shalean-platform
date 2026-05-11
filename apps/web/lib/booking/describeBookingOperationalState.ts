@@ -229,7 +229,8 @@ export function isLifecycleActionAllowedByCapabilities(
   }
 }
 
-function phaseRowFromRecord(row: Record<string, unknown>): PhaseRow {
+/** Minimal row projection for {@link deriveBookingOperationalPhase} — shared by dashboards + read models. */
+export function phaseRowFromBookingRecord(row: Record<string, unknown>): PhaseRow {
   return {
     status: row.status as string | null | undefined,
     cleaner_response_status: row.cleaner_response_status as string | null | undefined,
@@ -466,7 +467,7 @@ export function describeBookingOperationalState(
   input: DescribeBookingOperationalStateInput,
 ): DescribeBookingOperationalStateResult {
   const { row, viewer, nowMs, telemetryBookingId, clientHints } = input;
-  const phaseRow = phaseRowFromRecord(row);
+  const phaseRow = phaseRowFromBookingRecord(row);
   const operationalPhase = deriveBookingOperationalPhase(phaseRow, {
     telemetryBookingId: telemetryBookingId?.trim() || undefined,
   });

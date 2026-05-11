@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { SelectedExtraRow } from "@/components/booking/BookingSelectedExtrasList";
 import { formatCheckoutDateOnly, formatCheckoutTimeDisplay } from "@/components/booking/summary/formatCheckoutWhenLabel";
 import type { CheckoutSummaryStep } from "@/lib/booking/checkoutSidebarPricing";
+import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
 
 const STEP_TITLES: readonly [string, string, string, string] = [
   "Your home & service",
@@ -68,35 +69,44 @@ export function BookingSelectionProgressDialog({
   customerEmail,
   customerPhone,
 }: BookingSelectionProgressDialogProps) {
-  const [cleanerName, setCleanerName] = useState<string | null>(null);
+  const storedCleanerId = useBookingCheckoutStore((s) => s.cleanerId);
+  const cleanerDisplayName = useBookingCheckoutStore((s) => s.cleanerDisplayName);
+  const [resolvedName, setResolvedName] = useState<string | null>(null);
   const [cleanerLoading, setCleanerLoading] = useState(false);
+
+  const inlineCleanerLabel =
+    cleanerId &&
+    storedCleanerId === cleanerId &&
+    typeof cleanerDisplayName === "string" &&
+    cleanerDisplayName.trim()
+      ? cleanerDisplayName.trim()
+      : null;
 
   useEffect(() => {
     if (!open) return;
     if (!cleanerId) {
-      setCleanerName(null);
+      setResolvedName(null);
+      setCleanerLoading(false);
+      return;
+    }
+    if (inlineCleanerLabel) {
+      setResolvedName(inlineCleanerLabel);
+      setCleanerLoading(false);
       return;
     }
     let cancelled = false;
     (async () => {
       setCleanerLoading(true);
       try {
-        const res = await fetch("/api/cleaners/available");
-        const json = (await res.json()) as { cleaners?: unknown[] };
-        const raw = Array.isArray(json.cleaners) ? json.cleaners : [];
-        let name: string | null = null;
-        for (const row of raw) {
-          if (!row || typeof row !== "object") continue;
-          const r = row as Record<string, unknown>;
-          const id = typeof r.id === "string" ? r.id : "";
-          if (id === cleanerId) {
-            name = typeof r.name === "string" && r.name.trim() ? r.name.trim() : "Selected cleaner";
-            break;
-          }
-        }
-        if (!cancelled) setCleanerName(name);
+        const res = await fetch(`/api/cleaners/lookup?cleanerId=${encodeURIComponent(cleanerId)}`);
+        const json = (await res.json()) as { ok?: boolean; displayName?: string };
+        const name =
+          res.ok && json.ok === true && typeof json.displayName === "string" && json.displayName.trim()
+            ? json.displayName.trim()
+            : "Selected cleaner";
+        if (!cancelled) setResolvedName(name);
       } catch {
-        if (!cancelled) setCleanerName("Selected cleaner");
+        if (!cancelled) setResolvedName("Selected cleaner");
       } finally {
         if (!cancelled) setCleanerLoading(false);
       }
@@ -104,7 +114,7 @@ export function BookingSelectionProgressDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, cleanerId]);
+  }, [open, cleanerId, inlineCleanerLabel]);
 
   const extrasSummary =
     extrasRows.length === 0
@@ -147,11 +157,11 @@ export function BookingSelectionProgressDialog({
               <DetailLine
                 label="Cleaner"
                 value={
-                  cleanerLoading
+                  cleanerLoading && !inlineCleanerLabel
                     ? "Loading…"
                     : !cleanerId || cleanerId === ""
                       ? "Best available (auto-match)"
-                      : cleanerName ?? "Selected cleaner"
+                      : inlineCleanerLabel ?? resolvedName ?? "Selected cleaner"
                 }
               />
             </StepBlock>

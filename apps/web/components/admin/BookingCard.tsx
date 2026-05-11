@@ -8,7 +8,6 @@ import {
   centsToZar,
   cleanerDisplayName,
   cleanerSelectEmptyLabel,
-  dispatchStateLabel,
   formatStartsIn,
   formatTimeShort,
   formatWhen,
@@ -34,6 +33,11 @@ import type { CleanerOption } from "@/lib/admin/assignRanking";
 import { AvatarStack } from "@/components/admin/AvatarStack";
 import { BookingCardStatusBadge } from "@/components/admin/BookingCardStatusBadge";
 import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
+import {
+  adminDispatchNeedsAttention,
+  adminLifecycleDispatchCaption,
+  adminLifecycleRawDiagnosticLine,
+} from "@/lib/admin/adminDashboardLifecycleDisplay";
 
 export type AdminBookingCardProps = {
   row: AdminBookingsListRow;
@@ -301,9 +305,7 @@ export function BookingCard({
       >
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1 space-y-2">
-            {(r.status ?? "").toLowerCase() === "pending" &&
-            !r.cleaner_id &&
-            ["failed", "unassignable", "no_cleaner"].includes((r.dispatch_status ?? "").toLowerCase()) ? (
+            {adminDispatchNeedsAttention(r) ? (
               <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Dispatch needs attention">
                 <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
                   Needs attention
@@ -328,8 +330,13 @@ export function BookingCard({
                   {metricAttemptBucket(Number(r.dispatch_attempt_count ?? 0) || 0)}
                   <span className="mx-1 text-zinc-400">·</span>
                   <span className="font-medium text-zinc-700 dark:text-zinc-300">Fallback:</span>{" "}
-                  <span className="break-words" title={r.fallback_reason ?? undefined}>
-                    {r.fallback_reason?.trim() || "—"}
+                  <span
+                    className="break-words"
+                    title={r.fallback_reason?.trim() || undefined}
+                  >
+                    {r.dashboardLifecycle?.fallbackReason?.trim() ||
+                      r.fallback_reason?.trim() ||
+                      "—"}
                   </span>
                 </p>
               </div>
@@ -381,14 +388,15 @@ export function BookingCard({
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                {dispatchStateLabel(r.dispatch_status, r.status)}
+              <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300" title={adminLifecycleRawDiagnosticLine(r)}>
+                {adminLifecycleDispatchCaption(r)}
                 {typeof r.surge_multiplier === "number" && r.surge_multiplier > 1 ? (
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
                     Surge x{r.surge_multiplier.toFixed(1)}
                   </span>
                 ) : null}
               </p>
+              <p className="mt-0.5 font-mono text-[9px] text-zinc-400 dark:text-zinc-500">{adminLifecycleRawDiagnosticLine(r)}</p>
               {assignSourceLine ? (
                 <p className="mt-0.5 text-[10px] font-semibold leading-snug text-emerald-800 dark:text-emerald-300/90">
                   {assignSourceLine}

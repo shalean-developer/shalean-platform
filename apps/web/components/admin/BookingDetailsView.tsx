@@ -37,6 +37,16 @@ import {
   describeBookingOperationalState,
   operationalDisplayBadgeClassName,
 } from "@/lib/booking/describeBookingOperationalState";
+import type { DashboardLifecycleAlignmentWire } from "@/lib/booking/bookingLifecycleContract";
+import {
+  type AdminBookingsListRow,
+  normalizeAdminBookingDispatchStatus,
+} from "@/lib/admin/adminBookingsListRow";
+import {
+  adminDispatchNeedsAttentionFromLifecycle,
+  adminLifecycleDispatchCaption,
+  adminLifecycleRawDiagnosticLine,
+} from "@/lib/admin/adminDashboardLifecycleDisplay";
 
 type BookingSeed = { id: string };
 
@@ -816,6 +826,7 @@ export default function BookingDetailsView({
   const [earningsPreviewLoading, setEarningsPreviewLoading] = useState(false);
   const [issueResolveBusyId, setIssueResolveBusyId] = useState<string | null>(null);
   const [issueReportNowMs, setIssueReportNowMs] = useState(() => Date.now());
+  const [detailDashboardLifecycle, setDetailDashboardLifecycle] = useState<DashboardLifecycleAlignmentWire | null>(null);
 
   const detailRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bumpDetailRefreshDebounced = useCallback(() => {
@@ -842,6 +853,33 @@ export default function BookingDetailsView({
     opPhase !== "cancelled" &&
     opPhase !== "failed";
 
+  const needsDispatchManualAttention = useMemo(() => {
+    if (!fullBooking) return false;
+    return adminDispatchNeedsAttentionFromLifecycle(detailDashboardLifecycle, {
+      status: fullBooking.status ?? null,
+      dispatch_status: normalizeAdminBookingDispatchStatus(fullBooking.dispatch_status),
+      cleaner_id: fullBooking.cleaner_id ?? null,
+      is_team_job: fullBooking.is_team_job ?? null,
+      team_id: fullBooking.team_id ?? null,
+    });
+  }, [fullBooking, detailDashboardLifecycle]);
+
+  const dispatchLifecycleCaptionDetail = useMemo(() => {
+    if (!fullBooking) return "";
+    return adminLifecycleDispatchCaption({
+      ...(fullBooking as unknown as AdminBookingsListRow),
+      dashboardLifecycle: detailDashboardLifecycle ?? undefined,
+    });
+  }, [fullBooking, detailDashboardLifecycle]);
+
+  const dispatchLifecycleRawDetail = useMemo(() => {
+    if (!fullBooking) return "";
+    return adminLifecycleRawDiagnosticLine({
+      ...(fullBooking as unknown as AdminBookingsListRow),
+      dashboardLifecycle: detailDashboardLifecycle ?? undefined,
+    });
+  }, [fullBooking, detailDashboardLifecycle]);
+
   useEffect(() => {
     if (cleanerIssueReports.length === 0) return;
     const id = window.setInterval(() => setIssueReportNowMs(Date.now()), 60_000);
@@ -856,6 +894,7 @@ export default function BookingDetailsView({
         return;
       }
       setLoading(true);
+      setDetailDashboardLifecycle(null);
       setServiceQa(null);
       setFleetBestUxVariant(null);
       setLedgerCleanerEarnings([]);
@@ -879,6 +918,7 @@ export default function BookingDetailsView({
       const [json, anJson] = await Promise.all([
         res.json() as Promise<{
           booking?: BookingDetails;
+          dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
           cleaner?: Cleaner | null;
           selected_cleaner?: Cleaner | null;
           userProfile?: UserProfile | null;
@@ -910,6 +950,11 @@ export default function BookingDetailsView({
         return;
       }
       setFullBooking(json.booking ?? null);
+      setDetailDashboardLifecycle(
+        json.dashboardLifecycle && typeof json.dashboardLifecycle === "object"
+          ? json.dashboardLifecycle
+          : null,
+      );
       const ce = Array.isArray(json.cleaner_earnings)
         ? json.cleaner_earnings.map((r) => ({
             id: String((r as { id?: string }).id ?? ""),
@@ -1464,18 +1509,6 @@ export default function BookingDetailsView({
   const selectedCleanerIdRaw = String(fullBooking.selected_cleaner_id ?? "").trim();
   const hasSelectedCleanerUuid = /^[0-9a-f-]{36}$/i.test(selectedCleanerIdRaw);
   const dispatchAttemptCleanerId = adminBookingDispatchAttemptId(fullBooking);
-  const dispatchSt = (fullBooking.dispatch_status ?? "").toLowerCase();
-  const needsDispatchManualAttention =
-    !isAssigned &&
-    adminOperational?.operationalPhase === "pending" &&
-    ["failed", "unassignable", "no_cleaner"].includes(dispatchSt);
-
-  const dispatchHoldHeadline =
-    dispatchSt === "no_cleaner"
-      ? "No cleaner available for this slot or area."
-      : dispatchSt === "unassignable"
-        ? "No cleaner accepted offers — automatic dispatch stopped (retry cap or exhausted)."
-        : "Automatic dispatch failed for this booking.";
 
   const markIssueReportResolved = async (reportId: string) => {
     if (!bookingId) return;
@@ -2137,7 +2170,14 @@ export default function BookingDetailsView({
             role="status"
           >
             <p className="font-semibold text-amber-950">Dispatch needs attention</p>
-            <p className="mt-1 text-amber-900/90">{dispatchHoldHeadline}</p>
+            <p className="mt-1 text-sm font-medium leading-snug text-amber-950/95">
+              {dispatchLifecycleCaptionDetail.trim() ||
+                adminOperational?.displayBadge ||
+                "Review dispatch and assignment."}
+            </p>
+            {dispatchLifecycleRawDetail.trim() ? (
+              <p className="mt-2 font-mono text-[10px] leading-snug text-amber-950/70">{dispatchLifecycleRawDetail}</p>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"

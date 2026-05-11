@@ -19,6 +19,7 @@ import {
   type AttentionQueueFilter,
 } from "@/lib/admin/opsSnapshot";
 import { deleteBookingAdmin } from "@/lib/admin/dashboard";
+import { adminNeedsFollowUpQueue } from "@/lib/admin/adminDashboardLifecycleDisplay";
 
 type BookingRow = AdminBookingsListRow;
 
@@ -639,7 +640,7 @@ export default function AdminBookingsPage() {
       if (rowMatchesAttentionFilter(r, "sla", now, slaM)) sla++;
       if (rowMatchesAttentionFilter(r, "unassigned", now, slaM)) unassigned++;
       if (rowMatchesAttentionFilter(r, "starting-soon", now, slaM)) startingSoonWithoutCleaner++;
-      if (Boolean(r.payment_needs_follow_up)) needsFollowUp++;
+      if (adminNeedsFollowUpQueue(r)) needsFollowUp++;
       const f = adminRowFlags(r, today);
       if (f.paymentMissing) failedPayments++;
     }
@@ -658,7 +659,7 @@ export default function AdminBookingsPage() {
       return rows.filter((r) => adminRowFlags(r, today).paymentMissing);
     }
     if (actionFilter === "needs_follow_up") {
-      return rows;
+      return rows.filter((r) => adminNeedsFollowUpQueue(r));
     }
     return rows;
   }, [rows, actionFilter, today, metrics?.slaBreachMinutes]);

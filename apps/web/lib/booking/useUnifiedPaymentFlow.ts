@@ -12,6 +12,11 @@ import {
 } from "@/lib/booking/bookingFlowAnalytics";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { initializePayment } from "@/lib/payments/paystack";
+import {
+  buildCanonicalPaystackCheckoutMetadata,
+  normalizePaystackCleanerUuid,
+  parseLockTimingFromBookingSnapshotJson,
+} from "@/lib/booking/bookingPaystackCheckoutMetadataFlat";
 
 type PaystackTransaction = { reference?: string };
 
@@ -66,39 +71,41 @@ export function buildInlinePaystackMetadata(
   };
   const sessionId = getAnalyticsSessionId();
   const analyticsSessionId = sessionId === "server" ? "" : sessionId;
-  return {
-    shalean_booking_id: summary.id,
-    booking_id: summary.id,
+  const lockTiming = parseLockTimingFromBookingSnapshotJson(summary.bookingSnapshotJson);
+  const selId = normalizePaystackCleanerUuid(summary.selectedCleanerId ?? "");
+  let assignmentStr = summary.assignmentType?.trim() ?? "";
+  if (!assignmentStr && selId) assignmentStr = "user_selected";
+  const serviceSlug = summary.serviceSlug?.trim().toLowerCase() ?? "";
+
+  return buildCanonicalPaystackCheckoutMetadata({
+    payment_path: "inline_checkout",
+    internalBookingId: summary.id,
     booking_json: summary.bookingSnapshotJson ?? "",
+    booking_snapshot_version: lockTiming.snapshotVersion,
+    locked_at: lockTiming.lockedAt,
+    quote_signature: lockTiming.quoteSignature,
+    lock_expires_at: lockTiming.lockExpiresAt,
+    selected_cleaner_id: selId,
+    cleaner_name: summary.cleanerName ?? "",
+    assignment_type: assignmentStr,
+    service_slug: serviceSlug,
     customer_email: email,
     customer_name: summary.customerName ?? "",
     customer_phone: summary.customerPhone ?? "",
     customer_user_id: summary.customerUserId ?? "",
     customer_type: summary.customerUserId ? "login" : "guest",
-    userId: summary.customerUserId ?? "",
     tip_zar: String(tip),
     discount_zar: "0",
     promo_code: "",
     locked_final_zar: String(summary.priceZar),
     pay_total_zar: String(totalZar),
     expected_total_zar: String(totalZar),
-    quote_signature: "",
-    lock_expires_at: "",
-    cleaner_id: "",
-    cleaner_name: summary.cleanerName ?? "",
-    referral_checkout_applied: "0",
-    referral_checkout_code: "",
-    referral_checkout_referrer_type: "",
-    referral_checkout_referrer_id: "",
-    referral_checkout_discount_zar: "0",
-    referral_lock_validated_at: "",
-    referral_checkout_fingerprint: "",
     price_snapshot: JSON.stringify(priceSnapshot),
     booking: JSON.stringify(bookingCtx),
     payment_mode: ctx.paymentMode,
     attribution_source: ctx.attributionSource?.trim() ?? "",
     analytics_session_id: analyticsSessionId,
-  };
+  });
 }
 
 export function bookingAnalyticsStateFromSummary(summary: BookingPaymentSummary): BookingAnalyticsState {
@@ -197,45 +204,71 @@ export function useUnifiedPaymentFlow({
       setError("Invalid checkout preview. Refresh and try again.");
       return;
     }
-    trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, stateForEvents, {
-      payment_provider: "paystack",
-      payment_mode: paymentMode,
-      paystack_flow: "inline",
-      booking_id: summary.id,
-    });
-    trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_INITIATED, {
-      step: "booking_payment",
-      booking_id: summary.id,
-      payment_mode: paymentMode,
-      total_zar: summary.priceZar,
-    });
-    setBusy(true);
-    try {
-      initializePayment({
-        email,
-        amount,
-        reference: paystackRef,
-        metadata,
-        onSuccess: async (transaction: PaystackTransaction) => {
-          const ref =
-            typeof transaction?.reference === "string" && transaction.reference.trim()
-              ? transaction.reference.trim()
-              : paystackRef;
-          try {
-            await verifyAndFinish(ref);
-          } finally {
-            setBusy(false);
-          }
-        },
-        onCancel: () => {
-          setBusy(false);
-          setMessage("Payment cancelled.");
-        },
+
+    void (async () => {
+      try {
+        const preRes = await fetch("/api/bookings/payment-precheck", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId: summary.id,
+            expectedTotalZar: summary.priceZar,
+          }),
+        });
+        const preJson = (await preRes.json()) as { ok?: boolean; error?: string };
+        if (!preRes.ok || preJson.ok !== true) {
+          const msg =
+            typeof preJson.error === "string" && preJson.error.trim()
+              ? preJson.error.trim()
+              : "This checkout is no longer available. Refresh the page or start again.";
+          setError(msg);
+          return;
+        }
+      } catch {
+        setError("Could not verify checkout. Check your connection and try again.");
+        return;
+      }
+
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, stateForEvents, {
+        payment_provider: "paystack",
+        payment_mode: paymentMode,
+        paystack_flow: "inline",
+        booking_id: summary.id,
       });
-    } catch (e) {
-      setBusy(false);
-      setError(e instanceof Error ? e.message : "Could not start checkout.");
-    }
+      trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_INITIATED, {
+        step: "booking_payment",
+        booking_id: summary.id,
+        payment_mode: paymentMode,
+        total_zar: summary.priceZar,
+      });
+      setBusy(true);
+      try {
+        initializePayment({
+          email,
+          amount,
+          reference: paystackRef,
+          metadata,
+          onSuccess: async (transaction: PaystackTransaction) => {
+            const ref =
+              typeof transaction?.reference === "string" && transaction.reference.trim()
+                ? transaction.reference.trim()
+                : paystackRef;
+            try {
+              await verifyAndFinish(ref);
+            } finally {
+              setBusy(false);
+            }
+          },
+          onCancel: () => {
+            setBusy(false);
+            setMessage("Payment cancelled.");
+          },
+        });
+      } catch (e) {
+        setBusy(false);
+        setError(e instanceof Error ? e.message : "Could not start checkout.");
+      }
+    })();
   }, [summary, paymentMode, attributionSource, stateForEvents, verifyAndFinish]);
 
   const payDisabled = summary.priceZar <= 0 || !summary.email?.trim();

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
+import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import type { WidgetIntakePayload } from "@/lib/booking/bookingWidgetDraft";
 import { mapWidgetExtrasToStep1Ids, mapWidgetServiceToBookingServiceId } from "@/lib/booking/bookingWidgetDraft";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
@@ -11,6 +12,12 @@ import {
   calculateHomeWidgetQuoteZar,
   type HomeWidgetQuoteInput,
 } from "@/lib/pricing/calculatePrice";
+import {
+  resolveWidgetDraftBookingOwnership,
+  type WidgetDraftOwnershipInput,
+} from "@/lib/booking/widgetDraftOwnership";
+
+export type { WidgetDraftOwnershipInput };
 
 export async function serverWidgetQuoteFromIntake(
   admin: SupabaseClient,
@@ -37,11 +44,13 @@ export type InsertWidgetBookingResult =
 export async function insertWidgetDraftBookingRow(
   admin: SupabaseClient,
   intake: WidgetIntakePayload,
+  ownership?: WidgetDraftOwnershipInput | null,
 ): Promise<InsertWidgetBookingResult> {
   const snapshot = await buildPricingRatesSnapshotFromDb(admin);
   if (!snapshot) {
     return { ok: false, error: "Pricing catalog unavailable." };
   }
+  const resolved = resolveWidgetDraftBookingOwnership(ownership ?? {});
   const input: HomeWidgetQuoteInput = {
     bedrooms: intake.bedrooms,
     bathrooms: intake.bathrooms,
@@ -51,6 +60,8 @@ export async function insertWidgetDraftBookingRow(
   };
   const totalPaidZar = calculateHomeWidgetQuoteZar(input, snapshot);
   const serviceId = mapWidgetServiceToBookingServiceId(intake.service);
+  /** Same normalization as Paystack pending inserts ({@link insertPendingPaymentBookingRow}). */
+  const serviceSlug = adminBookingServiceSlug(intake.service);
   const paystackReference = `widget_${crypto.randomUUID().replace(/-/g, "")}`;
   const extrasRaw = mapWidgetExtrasToStep1Ids(intake.extras);
 
@@ -58,7 +69,8 @@ export async function insertWidgetDraftBookingRow(
     source: "homepage_widget",
     rowBase: {
       paystack_reference: paystackReference,
-      customer_email: null as string | null,
+      user_id: resolved.user_id,
+      customer_email: resolved.customer_email,
       amount_paid_cents: 0,
       total_paid_cents: 0,
       base_amount_cents: 0,
@@ -68,6 +80,7 @@ export async function insertWidgetDraftBookingRow(
       dispatch_status: "searching",
       cleaner_response_status: CLEANER_RESPONSE.NONE,
       surge_multiplier: 1,
+      service_slug: serviceSlug,
       service: getServiceLabel(serviceId),
       location: intake.location?.trim() || null,
       date: intake.date,

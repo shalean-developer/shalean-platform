@@ -1,3 +1,7 @@
+/**
+ * **Responsibility:** Paystack **transfer** webhooks (`transfer.success` / `transfer.failed`) for payout rails — **not** checkout `charge.success` finalization.
+ * Checkout charges are handled by `/api/paystack/webhook`. `lib/booking/paystackRouteResponsibilityContract.ts`
+ */
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { logSystemEvent } from "@/lib/logging/systemLog";

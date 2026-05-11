@@ -39,6 +39,7 @@ import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificatio
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
 import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
+import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 
 export type NotifyBookingEventInput =
@@ -723,7 +724,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: b } = await supabase
       .from("bookings")
       .select(
-        "id, paystack_reference, customer_email, customer_name, customer_phone, service, date, time, location, booking_snapshot, amount_paid_cents, cleaner_id",
+        "id, paystack_reference, customer_email, customer_name, customer_phone, service, date, time, location, booking_snapshot, amount_paid_cents, cleaner_id, status, completed_at, is_team_job, team_id",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
@@ -770,9 +771,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       });
     }
 
-    const cleanerIdCompleted = String((b as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
     const phoneRawCompleted = String((b as { customer_phone?: string | null }).customer_phone ?? "").trim();
-    if (cleanerIdCompleted && phoneRawCompleted) {
+    const smsEligible =
+      phoneRawCompleted &&
+      evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>).allowed;
+    if (smsEligible) {
       const { data: existingReview } = await supabase
         .from("reviews")
         .select("id")

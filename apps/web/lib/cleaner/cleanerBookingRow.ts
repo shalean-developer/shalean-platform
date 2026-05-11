@@ -1,4 +1,5 @@
 /** Row shape returned by GET `/api/cleaner/jobs` and `/api/cleaner/jobs/[id]`. */
+import type { DashboardLifecycleAlignmentWire } from "@/lib/booking/bookingLifecycleContract";
 import type { TeamRosterMemberWire } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
 /** Slim wire shape from cleaner APIs / `booking_line_items` join. */
@@ -92,4 +93,6 @@ export type CleanerBookingRow = {
   payment_completed_at?: string | null;
   admin_recurring_unpaid_completion_override_at?: string | null;
   admin_recurring_unpaid_completion_override_by?: string | null;
+  /** Same derivation as customer `canonicalLifecycle.dashboardAlignment` / admin list — viewer-independent. */
+  dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
 };

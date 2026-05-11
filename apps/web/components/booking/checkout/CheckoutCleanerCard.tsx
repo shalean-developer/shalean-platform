@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Star } from "lucide-react";
-import type { AvailableCleanerDto } from "@/app/api/cleaners/available/route";
+import type { AvailableCleanerDto } from "@/lib/booking/cleanerMarketingDto";
 import { bookingCopy } from "@/lib/booking/copy";
 import { cn } from "@/lib/utils";
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CleanerJobListCard } from "@/components/cleaner-jobs/CleanerJobListCard";
+import { PendingOffersBanner } from "@/components/cleaner-jobs/PendingOffersBanner";
 import { useCleanerNavBadges } from "@/components/cleaner-dashboard/CleanerNavBadgesContext";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -11,6 +12,8 @@ import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import {
   groupRowsByBookingDateDesc,
+  isActiveCleanerJobRow,
+  isCancelledCleanerJobRow,
   isCompletedCleanerJobRow,
   isOpenCleanerJobRow,
   isPastCleanerJobRow,
@@ -27,7 +30,17 @@ import { cn } from "@/lib/utils";
 import { useCleanerRealtime } from "@/lib/realtime/useCleanerRealtime";
 import { useUser } from "@/hooks/useUser";
 
-type FilterTab = "all" | "upcoming" | "completed";
+type FilterTab = "all" | "active" | "upcoming" | "completed" | "cancelled";
+
+const FILTER_TABS: ReadonlyArray<{ id: FilterTab; label: string }> = [
+  { id: "all", label: "All" },
+  // Active appears before Upcoming because it's the most operational
+  // ("you're in flight") — matches the dispatch-console hierarchy on Home.
+  { id: "active", label: "Active" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "completed", label: "Completed" },
+  { id: "cancelled", label: "Cancelled" },
+];
 
 function openJobCountFromRows(list: CleanerBookingRow[]): number {
   return list.filter((r) => isOpenCleanerJobRow(r)).length;
@@ -43,7 +56,7 @@ function tabClass(active: boolean): string {
 }
 
 export default function CleanerJobsListPage() {
-  const { setOpenJobsCount } = useCleanerNavBadges();
+  const { setOpenJobsCount, setPendingOffersCount } = useCleanerNavBadges();
   const { loading: userLoading } = useUser();
   const [rows, setRows] = useState<CleanerBookingRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -56,6 +69,14 @@ export default function CleanerJobsListPage() {
   const [rtCleanerId, setRtCleanerId] = useState<string | null>(null);
   const [rtTeamIds, setRtTeamIds] = useState<string[]>([]);
   const workspaceFromApiRef = useRef(false);
+  /**
+   * Pending dispatch offers visible to this cleaner. Sourced from `/api/cleaner/offers` so we can
+   * surface a "you have offers waiting" banner here — the Jobs list itself only shows bookings the
+   * cleaner already has access to (assigned / roster / team / payout owner). Without this banner a
+   * selected-cleaner offer (`bookings.status = pending_assignment`, `dispatch_offers.status = pending`)
+   * would silently sit on the dashboard while the Jobs page misleadingly says "No jobs available".
+   */
+  const [pendingOfferCount, setPendingOfferCount] = useState(0);
 
   const now = useMemo(() => new Date(nowTick), [nowTick]);
 
@@ -65,6 +86,13 @@ export default function CleanerJobsListPage() {
     if (loading) return;
     setOpenJobsCount(openCount);
   }, [loading, openCount, setOpenJobsCount]);
+
+  // Keep the Home-tab badge live while the cleaner is on the Jobs page —
+  // /api/cleaner/offers is fetched here for the PendingOffersBanner anyway.
+  useEffect(() => {
+    if (loading) return;
+    setPendingOffersCount(pendingOfferCount);
+  }, [loading, pendingOfferCount, setPendingOffersCount]);
 
   const loadJobs = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -76,6 +104,7 @@ export default function CleanerJobsListPage() {
     if (!headers) {
       setErr("Not signed in.");
       setRows([]);
+      setPendingOfferCount(0);
       workspaceFromApiRef.current = false;
       setRtCleanerId(null);
       setRtTeamIds([]);
@@ -84,8 +113,9 @@ export default function CleanerJobsListPage() {
     }
     const fetchProfile = !workspaceFromApiRef.current;
     const jobsPromise = cleanerAuthenticatedFetch("/api/cleaner/jobs?view=card", { headers });
+    const offersPromise = cleanerAuthenticatedFetch("/api/cleaner/offers", { headers, cache: "no-store" });
     const mePromise = fetchProfile ? cleanerAuthenticatedFetch("/api/cleaner/me", { headers }) : null;
-    const res = await jobsPromise;
+    const [res, offersRes] = await Promise.all([jobsPromise, offersPromise]);
     const meRes = mePromise ? await mePromise : null;
     if (meRes) {
       const m = (await meRes.json().catch(() => ({}))) as { cleaner?: { id?: string }; teamIds?: unknown };
@@ -108,6 +138,14 @@ export default function CleanerJobsListPage() {
     } else {
       setErr(null);
       setRows(Array.isArray(j.jobs) ? j.jobs : []);
+    }
+    /** Soft-fail: if `/api/cleaner/offers` is unavailable (network / 5xx) keep the count at 0 — banner just hides. */
+    try {
+      const offersJson = (await offersRes.json().catch(() => ({}))) as { offers?: unknown };
+      const arr = Array.isArray(offersJson.offers) ? offersJson.offers : [];
+      setPendingOfferCount(offersRes.ok ? arr.length : 0);
+    } catch {
+      setPendingOfferCount(0);
     }
     if (!silent) setLoading(false);
   }, []);
@@ -169,7 +207,11 @@ export default function CleanerJobsListPage() {
   }, [ttlLockEpoch, nowTick]);
 
   const upcomingRaw = useMemo(() => rows.filter((r) => isOpenCleanerJobRow(r)), [rows]);
-  const upcomingSorted = useMemo(() => sortUpcomingJobsAsc(upcomingRaw), [upcomingRaw]);
+  const upcomingForFilter = useMemo(() => {
+    if (filter === "active") return upcomingRaw.filter((r) => isActiveCleanerJobRow(r));
+    return upcomingRaw;
+  }, [filter, upcomingRaw]);
+  const upcomingSorted = useMemo(() => sortUpcomingJobsAsc(upcomingForFilter), [upcomingForFilter]);
 
   useEffect(() => {
     const ms = jobsListAdaptivePollMs(upcomingRaw, nowTick);
@@ -181,13 +223,19 @@ export default function CleanerJobsListPage() {
 
   const pastForFilter = useMemo(() => {
     if (filter === "completed") return pastRaw.filter((r) => isCompletedCleanerJobRow(r));
+    if (filter === "cancelled") return pastRaw.filter((r) => isCancelledCleanerJobRow(r));
     return pastRaw;
   }, [filter, pastRaw]);
 
   const pastGrouped = useMemo(() => groupRowsByBookingDateDesc(pastForFilter), [pastForFilter]);
 
-  const showUpcoming = filter === "all" || filter === "upcoming";
-  const showPast = filter === "all" || filter === "completed";
+  // Active = open jobs the cleaner is currently driving to or executing.
+  // Lives in the upper section of the list because it ranks above Upcoming.
+  const showUpcoming = filter === "all" || filter === "upcoming" || filter === "active";
+  const showPast = filter === "all" || filter === "completed" || filter === "cancelled";
+
+  const upcomingHeading = filter === "active" ? "Active" : "Upcoming";
+  const pastHeading = filter === "completed" ? "Completed" : filter === "cancelled" ? "Cancelled" : "Past jobs";
 
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 bg-background px-4 pt-4">
@@ -213,35 +261,24 @@ export default function CleanerJobsListPage() {
         </div>
       ) : null}
 
+      {!loading ? <PendingOffersBanner pendingOfferCount={pendingOfferCount} /> : null}
+
       {!loading && !err ? (
-        <div className="flex gap-2" role="tablist" aria-label="Job filters">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "all"}
-            className={tabClass(filter === "all")}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "upcoming"}
-            className={tabClass(filter === "upcoming")}
-            onClick={() => setFilter("upcoming")}
-          >
-            Upcoming
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "completed"}
-            className={tabClass(filter === "completed")}
-            onClick={() => setFilter("completed")}
-          >
-            Completed
-          </button>
+        <div className="-mx-4 overflow-x-auto px-4" role="tablist" aria-label="Job filters">
+          <div className="flex min-w-max gap-2 pb-1">
+            {FILTER_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={filter === tab.id}
+                className={tabClass(filter === tab.id)}
+                onClick={() => setFilter(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -251,15 +288,30 @@ export default function CleanerJobsListPage() {
         <p className="text-sm text-destructive">{err}</p>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">No jobs available right now</p>
-          <p className="mt-2">Stay online — we&apos;ll send jobs when available.</p>
+          {pendingOfferCount > 0 ? (
+            <>
+              <p className="font-medium text-foreground">No assigned jobs yet</p>
+              <p className="mt-2">
+                You have {pendingOfferCount === 1 ? "an offer" : `${pendingOfferCount} offers`} waiting — open your{" "}
+                <Link href="/cleaner/dashboard" className="font-semibold text-emerald-700 underline dark:text-emerald-300">
+                  dashboard
+                </Link>{" "}
+                to respond.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-foreground">No jobs available right now</p>
+              <p className="mt-2">Stay online — we&apos;ll send jobs when available.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-8">
           {showUpcoming ? (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
-                Upcoming
+                {upcomingHeading}
               </h2>
               {upcomingSorted.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
@@ -280,7 +332,7 @@ export default function CleanerJobsListPage() {
 
           {showPast ? (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Past jobs</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{pastHeading}</h2>
               {pastForFilter.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No past jobs in this view.</p>
               ) : (

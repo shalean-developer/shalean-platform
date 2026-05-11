@@ -53,6 +53,7 @@ function pickCheckoutPersistedSlice(s: BookingCheckoutState): Partial<BookingChe
     serviceAreaCityId: s.serviceAreaCityId,
     serviceAreaName: s.serviceAreaName,
     cleanerId: s.cleanerId,
+    cleanerDisplayName: s.cleanerDisplayName,
     customerName: s.customerName,
     customerEmail: s.customerEmail,
     customerPhone: s.customerPhone,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAvailableCleaners } from "@/lib/booking/availabilityEngine";
+import { slotEligibilityCoreFromBookingCleanersUrl } from "@/lib/booking/canonicalSlotEligibilityParams";
 import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
-import { parsePricingServiceParams, resolveServiceForPricing } from "@/lib/pricing/pricingEngine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,43 +10,37 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json(supabaseAdminNotConfiguredBody(), { status: 503 });
   const url = new URL(request.url);
-  const selectedDate = url.searchParams.get("date") ?? "";
-  const selectedTime = url.searchParams.get("time") ?? "";
-  const locationId = url.searchParams.get("locationId")?.trim() ?? url.searchParams.get("location_id")?.trim() ?? null;
-  const userLatRaw = url.searchParams.get("lat");
-  const userLngRaw = url.searchParams.get("lng");
-  const durationRaw = Number(url.searchParams.get("duration"));
-  const durationMinutes =
-    Number.isFinite(durationRaw) && durationRaw >= 30 ? Math.round(durationRaw) : 120;
-  const serviceRaw = (url.searchParams.get("serviceType") ?? url.searchParams.get("service") ?? "").trim();
-  let bookingServiceSlug: string | null = null;
-  if (serviceRaw) {
-    const { service, serviceType } = parsePricingServiceParams(serviceRaw);
-    bookingServiceSlug = resolveServiceForPricing({
-      service,
-      serviceType,
-      rooms: 1,
-      bathrooms: 1,
-      extraRooms: 0,
-      extras: [],
-    });
-  }
-  if (!selectedDate || !selectedTime) {
+  const core = slotEligibilityCoreFromBookingCleanersUrl(url);
+  if (!core) {
     return NextResponse.json({ error: "date and time are required." }, { status: 400 });
   }
+  const userLatRaw = url.searchParams.get("lat");
+  const userLngRaw = url.searchParams.get("lng");
   const userLat = userLatRaw ? Number(userLatRaw) : null;
   const userLng = userLngRaw ? Number(userLngRaw) : null;
   try {
     const cleaners = await getAvailableCleaners(admin, {
       userLat: Number.isFinite(userLat) ? userLat : null,
       userLng: Number.isFinite(userLng) ? userLng : null,
-      selectedDate,
-      selectedTime,
-      durationMinutes,
+      selectedDate: core.date,
+      selectedTime: core.startTime,
+      durationMinutes: core.durationMinutes,
       limit: 5,
-      locationId,
-      bookingServiceSlug,
+      locationId: core.locationId || null,
+      locationExpandedIds: core.locationExpandedIds,
+      bookingServiceSlug: core.bookingServiceSlug,
     });
+    if (process.env.BOOKING_CLEANERS_TRACE === "1") {
+      console.log(
+        "[/api/booking/cleaners] returning",
+        JSON.stringify({
+          parsedCore: core,
+          userLatHasValue: Number.isFinite(userLat),
+          userLngHasValue: Number.isFinite(userLng),
+          cleanersReturned: cleaners.length,
+        }),
+      );
+    }
     return NextResponse.json({ cleaners });
   } catch (error) {
     return NextResponse.json(

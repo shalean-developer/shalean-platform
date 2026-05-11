@@ -72,6 +72,9 @@ function createSupabaseForRedispatch(booking: Record<string, unknown>, pendingOf
         return {
           ...fluentBookingSelect(booking),
           update: vi.fn((patch: Record<string, unknown>) => {
+            if ("payment_needs_follow_up" in patch) {
+              return fluentUpdateEqOnly().update();
+            }
             if ("dispatch_status" in patch && patch.dispatch_status === "searching") {
               return bump.update();
             }
@@ -179,5 +182,49 @@ describe("maybeRedispatchPendingBookingIfOffersExhausted", () => {
     });
 
     expect(ensureMock).not.toHaveBeenCalled();
+  });
+
+  it("flags payment_needs_follow_up when auto-assign fails", async () => {
+    ensureMock.mockResolvedValue({
+      ok: false,
+      error: "no_candidate",
+      message: "none",
+    } as never);
+
+    const bookingId = "00000000-0000-4000-8000-000000000004";
+    const payFollowUp = fluentUpdateEqOnly();
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "bookings") {
+          return {
+            ...fluentBookingSelect({
+              id: bookingId,
+              status: "pending_assignment",
+              cleaner_id: null,
+              dispatch_status: "offered",
+              assignment_type: "user_selected",
+              selected_cleaner_id: "00000000-0000-4000-8000-0000000000dd",
+              dispatch_attempt_count: 0,
+            }),
+            update: vi.fn((patch: Record<string, unknown>) => {
+              if ("payment_needs_follow_up" in patch) return payFollowUp.update();
+              return fluentBumpSuccess(bookingId).update();
+            }),
+          };
+        }
+        if (table === "dispatch_offers") {
+          return fluentOfferCount(0);
+        }
+        throw new Error(`unexpected table ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+
+    await maybeRedispatchPendingBookingIfOffersExhausted(supabase, {
+      bookingId,
+      rejectedCleanerId: "00000000-0000-4000-8000-0000000000dd",
+      skipBackoffScheduling: true,
+    });
+
+    expect(payFollowUp.update).toHaveBeenCalled();
   });
 });

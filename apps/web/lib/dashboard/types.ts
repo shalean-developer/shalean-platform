@@ -20,6 +20,9 @@ export type CleanerEmbed = { full_name: string | null; phone: string | null } | 
 
 export type BookingRow = {
   id: string;
+  /** Set on customer bookings API payloads; used for list/detail ownership checks. */
+  user_id?: string | null;
+  customer_email?: string | null;
   service: string | null;
   date: string | null;
   time: string | null;
@@ -33,6 +36,10 @@ export type BookingRow = {
   currency: string | null;
   status: string | null;
   dispatch_status?: string | null;
+  assignment_type?: string | null;
+  fallback_reason?: string | null;
+  payment_needs_follow_up?: boolean | null;
+  selected_cleaner_id?: string | null;
   cleaner_response_status?: string | null;
   /** Monthly billing sub-state when set (e.g. `pending_monthly`). */
   payment_status?: string | null;

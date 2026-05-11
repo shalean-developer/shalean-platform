@@ -1,6 +1,9 @@
 /** Supabase `select` fragment for customer dashboard booking lists (keep in sync with {@link BookingRow}). */
 export const CUSTOMER_BOOKING_SELECT = [
   "id",
+  /** Ownership columns for customer API access checks (same viewer as auth session). */
+  "user_id",
+  "customer_email",
   "service",
   "date",
   "time",
@@ -13,6 +16,10 @@ export const CUSTOMER_BOOKING_SELECT = [
   "currency",
   "status",
   "dispatch_status",
+  "assignment_type",
+  "fallback_reason",
+  "payment_needs_follow_up",
+  "selected_cleaner_id",
   "payment_status",
   "booking_snapshot",
   "created_at",

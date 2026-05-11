@@ -4,6 +4,10 @@ vi.mock("@/lib/booking/failedJobs", () => ({
   enqueueFailedJob: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock("@/lib/logging/systemLog", () => ({
+  reportOperationalIssue: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { enqueueFailedJob } from "@/lib/booking/failedJobs";
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";

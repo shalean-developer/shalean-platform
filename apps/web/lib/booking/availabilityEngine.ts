@@ -5,15 +5,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import type { AvailableCleaner, CleanerAvailabilityRow, CleanerReviewSnippet } from "@/lib/booking/cleanerPoolTypes";
+import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
 import type { CleanerBase } from "@/lib/booking/getEligibleCleaners";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
 export type { AvailableCleaner, CleanerReviewSnippet, CleanerAvailabilityRow } from "@/lib/booking/cleanerPoolTypes";
 
 const CLEANERS_LIST_SELECT_WITH_WEEKDAYS =
-  "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
+  "id, full_name, phone, email, rating, is_active, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status, availability_weekdays";
 const CLEANERS_LIST_SELECT_BASE =
-  "id, full_name, phone, email, rating, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
+  "id, full_name, phone, email, rating, is_active, is_available, jobs_completed, review_count, home_lat, home_lng, latitude, longitude, location_id, status";
 const CLEANERS_CAPABILITY_SUFFIX = ", can_do_deep_cleaning, can_do_move_cleaning";
 
 function sanitizeReviewQuote(raw: string | null | undefined): string {
@@ -62,8 +63,7 @@ async function fetchAvailabilityForDate(admin: SupabaseClient, selectedDate: str
   const res = await admin
     .from("cleaner_availability")
     .select("cleaner_id, date, start_time, end_time, is_available")
-    .eq("date", selectedDate)
-    .eq("is_available", true);
+    .eq("date", selectedDate);
 
   if (res.error) {
     console.error("[availabilityEngine] cleaner_availability query failed:", res.error.message);
@@ -127,24 +127,37 @@ export async function getAvailableCleaners(
   let cleanersRaw: CleanerBase[] | null = null;
   let cErr = null as { message?: string } | null;
   {
-    const run = (cols: string) =>
-      admin.from("cleaners").select(cols).eq("is_available", true).neq("status", "offline");
-    let r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS + CLEANERS_CAPABILITY_SUFFIX);
+    const stripActiveCol = (s: string) => s.replace(", is_active", "");
+    const runWith = async (columns: string, requireActiveEq: boolean) => {
+      let q = admin.from("cleaners").select(columns).eq("is_available", true);
+      if (requireActiveEq) q = q.eq("is_active", true);
+      return q;
+    };
+    let requireActive = true;
+    let wd = CLEANERS_LIST_SELECT_WITH_WEEKDAYS;
+    let base = CLEANERS_LIST_SELECT_BASE;
+    let r = await runWith(wd + CLEANERS_CAPABILITY_SUFFIX, requireActive);
+    if (r.error && isUnknownColumnError(r.error, "is_active")) {
+      requireActive = false;
+      wd = stripActiveCol(CLEANERS_LIST_SELECT_WITH_WEEKDAYS);
+      base = stripActiveCol(CLEANERS_LIST_SELECT_BASE);
+      r = await runWith(wd + CLEANERS_CAPABILITY_SUFFIX, false);
+    }
     if (
       r.error &&
       (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
         isUnknownColumnError(r.error, "can_do_move_cleaning"))
     ) {
-      r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS);
+      r = await runWith(wd, requireActive);
     }
     if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
-      r = await run(CLEANERS_LIST_SELECT_BASE + CLEANERS_CAPABILITY_SUFFIX);
+      r = await runWith(base + CLEANERS_CAPABILITY_SUFFIX, requireActive);
       if (
         r.error &&
         (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
           isUnknownColumnError(r.error, "can_do_move_cleaning"))
       ) {
-        r = await run(CLEANERS_LIST_SELECT_BASE);
+        r = await runWith(base, requireActive);
       }
     }
     cleanersRaw = (r.data ?? null) as unknown as CleanerBase[] | null;
@@ -156,7 +169,10 @@ export async function getAvailableCleaners(
     return [];
   }
 
-  const preloadedCleaners = (cleanersRaw ?? []) as CleanerBase[];
+  const preloadedCleaners = ((cleanersRaw ?? []) as CleanerBase[]).filter((c) =>
+    cleanerAccountEligibleForCustomerBooking(c),
+  );
+  if (!preloadedCleaners.length) return [];
   const ids = preloadedCleaners.map((c) => c.id);
   const preloadedLocs = await fetchCleanerLocationsForIds(admin, ids);
 
@@ -187,6 +203,43 @@ export async function getAvailableCleaners(
   }));
 }
 
+/** Canonical single-cleaner check; avoids loading review snippets and large pools. */
+export async function isCleanerEligibleForBookingSlot(
+  admin: SupabaseClient,
+  args: {
+    cleanerId: string;
+    selectedDate: string;
+    selectedTime: string;
+    durationMinutes?: number;
+    locationId?: string | null;
+    locationExpandedIds?: string[] | null;
+    bookingServiceSlug?: string | null;
+    serviceLabelForCapability?: string | null;
+  },
+): Promise<boolean> {
+  const loc = (args.locationId ?? "").trim();
+  const expanded =
+    args.locationExpandedIds !== undefined
+      ? args.locationExpandedIds
+      : loc
+        ? [loc]
+        : null;
+  const rows = await getEligibleCleaners(admin, {
+    date: args.selectedDate,
+    startTime: args.selectedTime,
+    durationMinutes: args.durationMinutes ?? 120,
+    locationId: loc || "",
+    locationExpandedIds: expanded,
+    userLat: null,
+    userLng: null,
+    limit: 1,
+    cleanerIds: [args.cleanerId],
+    serviceType: args.bookingServiceSlug ?? null,
+    serviceLabelForCapability: args.serviceLabelForCapability ?? null,
+  });
+  return rows.length > 0 && rows[0]!.id === args.cleanerId;
+}
+
 export async function isCleanerInAvailablePoolForSlot(
   admin: SupabaseClient,
   args: {
@@ -200,17 +253,7 @@ export async function isCleanerInAvailablePoolForSlot(
     serviceLabelForCapability?: string | null;
   },
 ): Promise<boolean> {
-  const pool = await getAvailableCleaners(admin, {
-    selectedDate: args.selectedDate,
-    selectedTime: args.selectedTime,
-    durationMinutes: args.durationMinutes ?? 120,
-    limit: 500,
-    locationId: args.locationId,
-    locationExpandedIds: args.locationExpandedIds,
-    bookingServiceSlug: args.bookingServiceSlug ?? null,
-    serviceLabelForCapability: args.serviceLabelForCapability ?? null,
-  });
-  return pool.some((c) => c.id === args.cleanerId);
+  return isCleanerEligibleForBookingSlot(admin, args);
 }
 
 export async function getAvailableTimeSlots(
@@ -239,24 +282,37 @@ export async function getAvailableTimeSlots(
 
     let cleanersRaw: CleanerBase[] | null = null;
     {
-      const run = (cols: string) =>
-        admin.from("cleaners").select(cols).eq("is_available", true).neq("status", "offline");
-      let r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS + CLEANERS_CAPABILITY_SUFFIX);
+      const stripActiveCol = (s: string) => s.replace(", is_active", "");
+      const runWith = async (columns: string, requireActiveEq: boolean) => {
+        let q = admin.from("cleaners").select(columns).eq("is_available", true);
+        if (requireActiveEq) q = q.eq("is_active", true);
+        return q;
+      };
+      let requireActive = true;
+      let wd = CLEANERS_LIST_SELECT_WITH_WEEKDAYS;
+      let base = CLEANERS_LIST_SELECT_BASE;
+      let r = await runWith(wd + CLEANERS_CAPABILITY_SUFFIX, requireActive);
+      if (r.error && isUnknownColumnError(r.error, "is_active")) {
+        requireActive = false;
+        wd = stripActiveCol(CLEANERS_LIST_SELECT_WITH_WEEKDAYS);
+        base = stripActiveCol(CLEANERS_LIST_SELECT_BASE);
+        r = await runWith(wd + CLEANERS_CAPABILITY_SUFFIX, false);
+      }
       if (
         r.error &&
         (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
           isUnknownColumnError(r.error, "can_do_move_cleaning"))
       ) {
-        r = await run(CLEANERS_LIST_SELECT_WITH_WEEKDAYS);
+        r = await runWith(wd, requireActive);
       }
       if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
-        r = await run(CLEANERS_LIST_SELECT_BASE + CLEANERS_CAPABILITY_SUFFIX);
+        r = await runWith(base + CLEANERS_CAPABILITY_SUFFIX, requireActive);
         if (
           r.error &&
           (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
             isUnknownColumnError(r.error, "can_do_move_cleaning"))
         ) {
-          r = await run(CLEANERS_LIST_SELECT_BASE);
+          r = await runWith(base, requireActive);
         }
       }
       cleanersRaw = (r.data ?? null) as unknown as CleanerBase[] | null;

@@ -26,6 +26,7 @@ import {
   type BookingPaidSignalRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset, resolvePersistEarningsComputation, type PersistBookingRowForEarnings } from "@/lib/payout/persistCleanerPayout";
+import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -33,6 +34,7 @@ import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurring
 import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaServer";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
+import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -212,8 +214,19 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     serviceLabel: typeof bSvc.service === "string" ? bSvc.service : null,
   });
 
+  const pendingOfferCount = (dispatchOffers ?? []).filter((o) => {
+    const ost = String((o as { status?: string }).status ?? "").toLowerCase();
+    return ost === "pending";
+  }).length;
+
+  const dashboardLifecycle = buildDashboardLifecycleAlignmentWire(b, {
+    pendingDispatchOfferCount: pendingOfferCount,
+    telemetryBookingId: id,
+  });
+
   return NextResponse.json({
     booking,
+    dashboardLifecycle,
     booking_line_items: booking_line_items ?? [],
     cleaner_earnings: cleaner_earnings ?? [],
     cleaner: cleaner ?? null,
@@ -381,6 +394,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     cleaner_id?: string | null;
     status?: string | null;
     completed_at?: string | null;
+    dispatch_status?: string | null;
     payout_owner_cleaner_id?: string | null;
     is_team_job?: boolean | null;
     date?: string | null;
@@ -392,6 +406,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     beforeRow?.completed_at != null && String(beforeRow.completed_at).trim()
       ? String(beforeRow.completed_at).trim()
       : null;
+  /** When admin completion fails earnings gate, revert must restore prior `dispatch_status` if we normalized it. */
+  let completionDispatchNormalized = false;
   const oldCleaner =
     before && typeof before === "object"
       ? String((before as { cleaner_id?: string | null }).cleaner_id ?? "").trim() || null
@@ -437,6 +453,16 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_at = new Date().toISOString();
     (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_by =
       (typeof user.email === "string" && user.email.trim()) || user.id;
+  }
+
+  if (updates.status === "completed" && beforeRow) {
+    const { patch: completionCoherencePatch, dispatchStatusNormalized } = buildCompletionCoherencePatch({
+      beforeCompletedAt,
+      beforeDispatchStatus: beforeRow.dispatch_status ?? null,
+      fillCompletedAtIfMissing: true,
+    });
+    Object.assign(updates, completionCoherencePatch);
+    completionDispatchNormalized = dispatchStatusNormalized;
   }
 
   if (cleanerWasChanged && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
@@ -696,10 +722,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const needsEarningsIntegrityGate = completedViaPatch && !wasAlreadyCompleted;
 
   async function revertBookingCompletionOnly(adminClient: SupabaseClient): Promise<void> {
-    await adminClient
-      .from("bookings")
-      .update({ status: beforeStatus, completed_at: beforeCompletedAt })
-      .eq("id", id);
+    const patch: Record<string, unknown> = { status: beforeStatus, completed_at: beforeCompletedAt };
+    if (completionDispatchNormalized) {
+      patch.dispatch_status = beforeRow?.dispatch_status ?? null;
+    }
+    await adminClient.from("bookings").update(patch).eq("id", id);
   }
 
   if (completedViaPatch) {
