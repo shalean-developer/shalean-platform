@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { ASSIGNMENT_ACK_TIMEOUT_MINUTES, runAssignmentAckTimeouts } from "@/lib/booking/runAssignmentAckTimeouts";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -27,7 +29,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
-  const { processed, errors } = await runAssignmentAckTimeouts(admin);
+  /* H-15: serialize ack-timeout — duplicate runs would attempt to release the same `assigned`
+   * bookings and trigger duplicate reassignment paths. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.assignmentAckTimeout, leaseSeconds: 300 },
+    () => runAssignmentAckTimeouts(admin),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: lockResult.reason,
+      timeoutMinutes: ASSIGNMENT_ACK_TIMEOUT_MINUTES,
+    });
+  }
+  const { processed, errors } = lockResult.ranIt;
 
   await logSystemEvent({
     level: errors > 0 ? "warn" : "info",

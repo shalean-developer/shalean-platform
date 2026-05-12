@@ -7,7 +7,6 @@ import {
 } from "@/lib/dispatch/dispatchOffers";
 import { resolveDispatchOfferForCleanerReply } from "@/lib/dispatch/resolveDispatchOfferForCleanerReply";
 import { notifyCleanerJobAlreadyTaken } from "@/lib/dispatch/offerNotifications";
-import { reassignBookingAfterDecline } from "@/lib/booking/reassignBookingAfterDecline";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordWhatsAppDeliveryStatuses } from "@/lib/whatsapp/deliveryWebhook";
@@ -209,12 +208,17 @@ export async function POST(request: Request) {
     }
 
     if (wantsDecline) {
+      /**
+       * M-17: redispatch on decline is owned by `rejectDispatchOffer` →
+       * `maybeRedispatchPendingBookingIfOffersExhausted` (CAS-deduplicated). This webhook
+       * MUST NOT call `reassignBookingAfterDecline` / `ensureBookingAssignment` again,
+       * otherwise a single WhatsApp decline triggers two redispatch waves with duplicate
+       * offers and notifications (and Meta retries this webhook on 5xx, which would
+       * compound the duplication).
+       */
       const result = await rejectDispatchOffer({ supabase: admin, offerId, cleanerId });
       if (!result.ok) {
         return NextResponse.json({ received: true });
-      }
-      if (bookingId) {
-        await reassignBookingAfterDecline(admin, bookingId);
       }
       await logSystemEvent({
         level: "info",

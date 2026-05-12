@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { runSendInvoiceReminders } from "@/lib/monthlyInvoice/runSendInvoiceReminders";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -23,7 +25,17 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
 
-  const result = await runSendInvoiceReminders(admin);
+  /* H-15: serialize invoice reminders — duplicate runs could race to log
+   * `invoice_reminder_sent` events twice for the same +3/+7/+14 window. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.sendInvoiceReminders, leaseSeconds: 600 },
+    () => runSendInvoiceReminders(admin),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+  }
+  const result = lockResult.ranIt;
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }

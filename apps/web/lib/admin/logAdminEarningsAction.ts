@@ -3,7 +3,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
-export type AdminEarningsActionKind = "fix" | "reset";
+export type AdminEarningsActionKind =
+  | "fix"
+  | "reset"
+  | "dispute_review"
+  | "dispute_resolve"
+  | "dispute_reject";
 
 /** Best-effort audit row for admin earnings tools (never throws). */
 export async function logAdminEarningsAction(

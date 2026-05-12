@@ -12,6 +12,8 @@ import {
   generateRecurringOccurrenceBooking,
   refreshRecurringBookingPaymentState,
 } from "@/lib/booking/bookingOperations";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -66,6 +68,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
+  /* H-15: serialize recurring generation — duplicate runs would attempt to create the same
+   * occurrence rows in parallel. The booking unique-index dedups inserts, but cursor advancement,
+   * smart-charge attempt scheduling, and downstream side effects must run at most once. */
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.generateRecurringBookings,
+    leaseSeconds: 1200,
+  });
+  if (!lockAcq.ok) {
+    await logCronRun({
+      jobName: "generate-recurring-bookings",
+      status: "success",
+      message: JSON.stringify({ skipped: true, reason: lockAcq.reason }),
+    });
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
   let generated = 0;
   let skipped = 0;
 
@@ -79,7 +97,7 @@ export async function POST(request: Request) {
   const { data: rows, error } = await admin
     .from("recurring_bookings")
     .select(
-      "id, customer_id, price, frequency, days_of_week, start_date, end_date, next_run_date, status, skip_next_occurrence_date, booking_snapshot_template, monthly_pattern, monthly_nth",
+      "id, customer_id, price, frequency, days_of_week, start_date, end_date, next_run_date, status, skip_next_occurrence_date, booking_snapshot_template, monthly_pattern, monthly_nth, preferred_cleaner_id",
     )
     .eq("status", "active")
     .lte("start_date", monthEnd)
@@ -111,6 +129,8 @@ export async function POST(request: Request) {
       booking_snapshot_template: unknown;
       monthly_pattern?: string | null;
       monthly_nth?: number | null;
+      /** M-6: nullable; cron forwards as-is into the insert helpers' resolution chain. */
+      preferred_cleaner_id?: string | null;
     };
 
     const schedule: RecurringScheduleRow = {
@@ -178,13 +198,76 @@ export async function POST(request: Request) {
         return typeof meta?.phone === "string" ? meta.phone.trim() : null;
       })();
 
-    const { data: profileRow } = await admin
+    const { data: profileRow, error: profileErr } = await admin
       .from("user_profiles")
       .select("billing_type, schedule_type")
       .eq("id", r.customer_id)
       .maybeSingle();
-    const billingType = String((profileRow as { billing_type?: string } | null)?.billing_type ?? "per_booking");
-    const scheduleType = String((profileRow as { schedule_type?: string } | null)?.schedule_type ?? "on_demand");
+
+    /*
+     * H-6 / H-4 — never silently default a missing profile to `per_booking`.
+     *
+     * Pre-fix this code path read a missing `user_profiles` row as
+     * `billing_type='per_booking'`, which silently routed monthly users to
+     * the Paystack auto-charge generator path. After H-6 / H-4, every
+     * customer-facing auth user must have a `user_profiles` row (created
+     * server-side at create-from-guest / magic-link link, plus a one-shot
+     * backfill in `20260939_*`). If this row is still missing here, treat
+     * it as a hard data invariant break: do NOT generate occurrences for
+     * this plan in this run, advance `next_run_date` to the safe rolling
+     * cursor, and surface a loud operational warning so ops can repair
+     * the profile rather than letting cents-cost bookings spawn under the
+     * wrong billing rail. We also bail loudly when the SELECT errors —
+     * a transient DB error must not be misread as "no row, default to
+     * per_booking".
+     */
+    if (profileErr) {
+      await reportOperationalIssue(
+        "error",
+        "cron/generate-recurring-bookings",
+        `user_profiles_select_failed: ${profileErr.message}`,
+      );
+      await logSystemEvent({
+        level: "error",
+        source: "cron/generate-recurring-bookings",
+        message: "recurring_skip_profile_select_failed",
+        context: { recurring_id: r.id, customer_id: r.customer_id, error: profileErr.message },
+      });
+      skipped++;
+      continue;
+    }
+    if (!profileRow) {
+      await reportOperationalIssue(
+        "error",
+        "cron/generate-recurring-bookings",
+        `recurring_skip_missing_profile: customer ${r.customer_id} has no user_profiles row`,
+      );
+      await logSystemEvent({
+        level: "error",
+        source: "cron/generate-recurring-bookings",
+        message: "recurring_skip_missing_profile",
+        context: {
+          recurring_id: r.id,
+          customer_id: r.customer_id,
+          remediation:
+            "Create user_profiles row (billing_type, schedule_type) for this auth user, then the next cron run will generate.",
+        },
+      });
+      skipped++;
+      const nextRun = calculateNextRunDate(schedule, today);
+      await admin
+        .from("recurring_bookings")
+        .update({
+          last_generated_at: new Date().toISOString(),
+          next_run_date: nextRun,
+          skip_next_occurrence_date: null,
+        })
+        .eq("id", r.id);
+      continue;
+    }
+
+    const billingType = String((profileRow as { billing_type?: string }).billing_type ?? "per_booking");
+    const scheduleType = String((profileRow as { schedule_type?: string }).schedule_type ?? "on_demand");
 
     /** Explicit supported billing kinds — extend here if new `billing_type` values ship in DB. */
     const shouldGenerateRecurringOccurrences =
@@ -233,6 +316,7 @@ export async function POST(request: Request) {
               customer_id: r.customer_id,
               price: r.price,
               booking_snapshot_template: r.booking_snapshot_template,
+              preferred_cleaner_id: r.preferred_cleaner_id ?? null,
             },
             occurrenceDateYmd: d,
             customerEmail: email,
@@ -246,6 +330,7 @@ export async function POST(request: Request) {
               customer_id: r.customer_id,
               price: r.price,
               booking_snapshot_template: r.booking_snapshot_template,
+              preferred_cleaner_id: r.preferred_cleaner_id ?? null,
             },
             occurrenceDateYmd: d,
             customerEmail: email,
@@ -365,6 +450,8 @@ export async function POST(request: Request) {
       message: `[handler] ${msg}`,
     });
     return NextResponse.json({ error: msg }, { status: 500 });
+  } finally {
+    await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
   }
 }
 

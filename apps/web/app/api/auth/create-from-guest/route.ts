@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
+import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Auth is not configured." }, { status: 503 });
   }
 
-  const { error: createError } = await admin.auth.admin.createUser({
+  const { data: createData, error: createError } = await admin.auth.admin.createUser({
     email: rowEmail,
     email_confirm: true,
     user_metadata: { full_name: name, name },
@@ -88,6 +90,55 @@ export async function POST(req: Request) {
     if (!already) {
       await reportOperationalIssue("error", "create-from-guest", `createUser: ${msg}`);
       return NextResponse.json({ error: msg || "Could not create account." }, { status: 400 });
+    }
+  }
+
+  /*
+   * H-6 / H-4 — auth/profile convergence.
+   *
+   * Auth users created here have historically been left without a
+   * `user_profiles` row until they first signed in (`apps/web/lib/auth/authClient.ts`).
+   * For guest-upgrade users that never reach the in-app sign-in path, this
+   * left them as "orphan" auth users, which the recurring cron silently
+   * defaulted to `per_booking`. We close the gap server-side: as soon as
+   * the auth user is known to exist (whether we just minted them or they
+   * already existed), make sure `user_profiles` has a default row.
+   *
+   * Failure here is logged but not fatal — the magic-link send (and the
+   * customer's recovery flow) is the user-visible path; profile repair is
+   * a background invariant. The one-shot backfill migration handles any
+   * historical rows; this hook prevents new orphans.
+   */
+  let resolvedAuthUserId = createData?.user?.id ?? null;
+  if (!resolvedAuthUserId) {
+    const normalized = normalizeEmail(rowEmail);
+    const { data: list, error: listErr } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 50,
+    });
+    if (!listErr && list?.users) {
+      const match = list.users.find(
+        (u) => typeof u.email === "string" && normalizeEmail(u.email) === normalized,
+      );
+      resolvedAuthUserId = match?.id ?? null;
+    }
+  }
+  if (resolvedAuthUserId) {
+    const ensured = await ensureUserProfileForAuthUser(admin, resolvedAuthUserId);
+    if ("error" in ensured) {
+      await logSystemEvent({
+        level: "warn",
+        source: "create-from-guest",
+        message: "user_profile_repair_failed",
+        context: { auth_user_id: resolvedAuthUserId, error: ensured.error },
+      });
+    } else if (ensured.created) {
+      await logSystemEvent({
+        level: "info",
+        source: "create-from-guest",
+        message: "user_profile_created",
+        context: { auth_user_id: resolvedAuthUserId },
+      });
     }
   }
 

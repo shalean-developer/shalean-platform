@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { addDaysToYmd, johannesburgNineAmIso } from "@/lib/booking/dateYmdAddDays";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -221,6 +223,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
+  /* H-15: serialize lifecycle ticks — duplicate runs would race to mark the same past-date
+   * bookings completed and dispatch duplicate notifications + payout snapshots. */
+  const lockAcq = await acquireCronLock(supabase, {
+    jobName: CRON_LOCK_KEYS.bookingLifecycle,
+    leaseSeconds: 1200,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
+  try {
   const started = new Date().toISOString();
   await logSystemEvent({
     level: "info",
@@ -289,6 +302,9 @@ export async function POST(request: Request) {
     skipped,
     processed: jobs?.length ?? 0,
   });
+  } finally {
+    await releaseCronLock(supabase, lockAcq.jobName, lockAcq.holderId);
+  }
 }
 
 export async function GET(request: Request) {

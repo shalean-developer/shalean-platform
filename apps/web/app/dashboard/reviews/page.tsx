@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
 import { DashboardListSkeleton } from "@/components/dashboard/dashboard-skeletons";
+import { bookingIsReviewSubmissionEligibleAssignee } from "@/lib/reviews/customerReviewFollowUpContract";
 
 function StarsRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
@@ -47,10 +48,22 @@ function DashboardReviewsInner() {
 
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
+  /*
+   * H-8: team-assigned completed bookings clear `cleaner_id` and carry
+   * the lead cleaner in `payout_owner_cleaner_id`. The shared
+   * `bookingIsReviewSubmissionEligibleAssignee` helper keeps this
+   * client-side filter in lockstep with the server's
+   * `evaluateCustomerReviewSubmissionEligibility` so the dropdown never
+   * shows a booking the API would reject (and never hides one it would
+   * accept).
+   */
   const reviewable = useMemo(
     () =>
       bookings.filter(
-        (b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id),
+        (b) =>
+          isDashboardBookingAuthoritativelyCompleted(b) &&
+          bookingIsReviewSubmissionEligibleAssignee(b.raw as unknown as Record<string, unknown>) &&
+          !reviewedIds.has(b.id),
       ),
     [bookings, reviewedIds],
   );

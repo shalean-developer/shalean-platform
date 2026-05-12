@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
+import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -119,7 +120,7 @@ export async function applyMonthlyInvoicePayment(
 
     const { data: bookings, error: bErr } = await admin
       .from("bookings")
-      .select("id, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
+      .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
       .eq("monthly_invoice_id", row.id)
       .neq("status", "cancelled");
 
@@ -131,11 +132,18 @@ export async function applyMonthlyInvoicePayment(
     for (const raw of bookings ?? []) {
       const b = raw as {
         id: string;
+        total_paid_zar: number | null;
         amount_paid_cents: number | null;
         display_earnings_cents: number | null;
         cleaner_payout_cents: number | null;
       };
-      const existingPaidCents = Math.max(0, Math.round(Number(b.amount_paid_cents ?? 0)));
+      // H-1 fix: allocate the booking's own line amount (`total_paid_zar*100`)
+      // when present, falling back to any pre-existing `amount_paid_cents`.
+      // Mirrors `finalizeDueMonthlyInvoices` and `markMonthlyInvoicePaidManual`.
+      const allocatedCents = allocateMonthlyChildPaymentCents({
+        total_paid_zar: b.total_paid_zar,
+        amount_paid_cents: b.amount_paid_cents,
+      });
       const frozen = resolveCleanerFrozenCentsForSettlement({
         display_earnings_cents: b.display_earnings_cents,
         cleaner_payout_cents: b.cleaner_payout_cents,
@@ -154,7 +162,7 @@ export async function applyMonthlyInvoicePayment(
         .from("bookings")
         .update({
           payment_status: "success",
-          amount_paid_cents: existingPaidCents,
+          amount_paid_cents: allocatedCents,
           payout_status: "eligible",
           payout_frozen_cents: frozen,
         })

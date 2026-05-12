@@ -9,6 +9,7 @@ import {
   notifyCleanerOfDispatchOffer,
   notifyCleanerOfferDeclined,
 } from "@/lib/dispatch/offerNotifications";
+import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 import { tryEmitDispatchOfferTimeoutMetric } from "@/lib/dispatch/offerTimeoutMetric";
 import {
   compactDispatchMetricTags,
@@ -17,13 +18,12 @@ import {
 } from "@/lib/dispatch/dispatchMetricContext";
 import { assignCleanerUxVariantForCleaner, sanitizeCleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { learnFromCleanerAcceptance } from "@/lib/ai-autonomy/learningLoop";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
 import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
 import { assignmentTruthPatchForOfferAccept } from "@/lib/dispatch/assignmentTruth";
-import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 const POLL_MS = 400;
 
@@ -398,6 +398,33 @@ export type AcceptDispatchOfferResult =
       machineReason?: AcceptDispatchOfferMachineReason;
     };
 
+/**
+ * M-12: failure codes the atomic RPC may return. Used to defensively narrow
+ * the JSONB result to a known TypeScript union — anything outside this set
+ * is treated as `db` so the API contract never widens silently.
+ */
+const KNOWN_ACCEPT_FAILURES = new Set<AcceptDispatchOfferFailure>([
+  "not_found",
+  "wrong_cleaner",
+  "not_pending",
+  "expired",
+  "not_visible_yet",
+  "booking_taken",
+  "assigned_other",
+  "db",
+]);
+
+const ACCEPT_FAILURE_MESSAGES: Record<AcceptDispatchOfferFailure, string> = {
+  not_found: "Offer not found.",
+  wrong_cleaner: "Not your offer.",
+  not_pending: "Offer is no longer pending.",
+  expired: "Offer expired.",
+  not_visible_yet: "Offer is not visible yet.",
+  booking_taken: "Booking was already assigned.",
+  assigned_other: "Another cleaner was assigned.",
+  db: "Offer accept failed.",
+};
+
 export async function acceptDispatchOffer(params: {
   supabase: SupabaseClient;
   offerId: string;
@@ -455,7 +482,6 @@ export async function acceptDispatchOffer(params: {
   const bookingId = String(row.booking_id ?? "");
   if (!bookingId) return { ok: false, error: "Invalid offer.", failure: "not_found" };
 
-  const now = new Date().toISOString();
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : Date.now();
   const anchorForLatency = row.whatsapp_sent_at
     ? new Date(row.whatsapp_sent_at).getTime()
@@ -468,41 +494,18 @@ export async function acceptDispatchOffer(params: {
   const { data: bookingBefore } = await params.supabase
     .from("bookings")
     .select(
-      "status, cleaner_id, date, time, location_id, city_id, assignment_type, selected_cleaner_id, fallback_reason",
+      "date, time, location_id, city_id, assignment_type, selected_cleaner_id",
     )
     .eq("id", bookingId)
     .maybeSingle();
-  const bs = bookingBefore as { status?: string; cleaner_id?: string | null } | null;
-  if (bs && String(bs.status ?? "").toLowerCase() === "assigned" && String(bs.cleaner_id ?? "") !== params.cleanerId) {
-    await params.supabase
-      .from("dispatch_offers")
-      .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
-      .eq("id", params.offerId)
-      .eq("status", "pending");
-    void notifyCleanerDispatchOfferLostRaceSms({
-      supabase: params.supabase,
-      bookingId,
-      cleanerId: params.cleanerId,
-      offerId: params.offerId,
-    });
-    return {
-      ok: false,
-      error: "Another cleaner was assigned.",
-      failure: "assigned_other",
-      machineReason: "already_taken",
-    };
-  }
 
   const bsMeta = bookingBefore as {
-    status?: string;
-    cleaner_id?: string | null;
     date?: string | null;
     time?: string | null;
     location_id?: string | null;
     city_id?: string | null;
     assignment_type?: string | null;
     selected_cleaner_id?: string | null;
-    fallback_reason?: string | null;
   } | null;
   const assignMeta = await marketplaceBookingPatchOnAssign(params.supabase, {
     date: bsMeta?.date ?? null,
@@ -517,66 +520,80 @@ export async function acceptDispatchOffer(params: {
     selectedCleanerId: bsMeta?.selected_cleaner_id,
   });
 
-  const { data: updatedRows, error: uBook } = await params.supabase
-    .from("bookings")
-    .update({
-      cleaner_id: params.cleanerId,
-      payout_owner_cleaner_id: params.cleanerId,
-      status: "assigned",
-      dispatch_status: "assigned",
-      assigned_at: now,
-      accepted_at: now,
-      cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
-      ...assignMeta,
-      ...truthPatch,
-    })
-    .eq("id", bookingId)
-    .neq("status", "assigned")
-    .in("status", ["pending", "pending_assignment", "offered"])
-    .neq("dispatch_status", "assigned")
-    .select("id");
+  /**
+   * M-12: atomic accept. Replaces the previous multi-step sequence
+   *   (1) bookings UPDATE → (2) dispatch_offers UPDATE → (3) peer expire
+   * with a single transaction inside `accept_dispatch_offer_atomic`. The
+   * RPC locks the offer + booking rows, validates pending / assignability /
+   * expiry / cleaner identity, and applies all writes atomically — closing
+   * the race where a concurrent admin reassignment landing between (1) and
+   * (2) could leave a pending offer behind for a no-longer-assignable
+   * booking.
+   *
+   * The RPC also performs the peer-offer expiry that was previously the
+   * separate `dispatch_expire_peer_offers` RPC. Booking meta computed
+   * above (`assignMeta` + `truthPatch`) is forwarded as JSONB so the
+   * entire assignment write is one atomic statement.
+   *
+   * Failure shape returned by the RPC mirrors `AcceptDispatchOfferResult`
+   * exactly so callers (cleaner offers API, WhatsApp accept handler) keep
+   * their existing branching unchanged.
+   */
+  const { data: rpcRaw, error: rpcUpdateErr } = await params.supabase.rpc(
+    "accept_dispatch_offer_atomic",
+    {
+      p_offer_id: params.offerId,
+      p_cleaner_id: params.cleanerId,
+      p_response_latency_ms: Math.min(2_147_483_647, Math.max(0, Math.round(responseLatencyMs))),
+      p_assign_meta: assignMeta as unknown as Record<string, unknown>,
+      p_truth_patch: truthPatch as unknown as Record<string, unknown>,
+    },
+  );
 
-  if (uBook) {
-    return { ok: false, error: uBook.message, failure: "db" };
+  if (rpcUpdateErr) {
+    return { ok: false, error: rpcUpdateErr.message, failure: "db" };
   }
-  if (!updatedRows?.length) {
-    await params.supabase
-      .from("dispatch_offers")
-      .update({ status: "expired", responded_at: now, response_latency_ms: responseLatencyMs })
-      .eq("id", params.offerId)
-      .eq("status", "pending");
-    void notifyCleanerDispatchOfferLostRaceSms({
-      supabase: params.supabase,
-      bookingId,
-      cleanerId: params.cleanerId,
-      offerId: params.offerId,
+
+  const rpcResult = (rpcRaw ?? {}) as {
+    ok?: boolean;
+    failure?: AcceptDispatchOfferFailure;
+    machine_reason?: AcceptDispatchOfferMachineReason | null;
+    booking_id?: string | null;
+    expired_peers?: number;
+  };
+
+  if (rpcResult.ok !== true) {
+    const failure: AcceptDispatchOfferFailure =
+      rpcResult.failure && KNOWN_ACCEPT_FAILURES.has(rpcResult.failure)
+        ? rpcResult.failure
+        : "db";
+    if (failure === "assigned_other" || failure === "booking_taken") {
+      void notifyCleanerDispatchOfferLostRaceSms({
+        supabase: params.supabase,
+        bookingId,
+        cleanerId: params.cleanerId,
+        offerId: params.offerId,
+      });
+    }
+    await logSystemEvent({
+      level: "info",
+      source: "dispatch_offer_accept_atomic_reject",
+      message: `accept_atomic_${failure}`,
+      context: {
+        offerId: params.offerId,
+        bookingId,
+        cleanerId: params.cleanerId,
+        failure,
+        machineReason: rpcResult.machine_reason ?? null,
+      },
     });
     return {
       ok: false,
-      error: "Booking was already assigned.",
-      failure: "booking_taken",
-      machineReason: "already_taken",
+      error: ACCEPT_FAILURE_MESSAGES[failure] ?? "Offer accept failed.",
+      failure,
+      ...(rpcResult.machine_reason ? { machineReason: rpcResult.machine_reason } : {}),
     };
   }
-
-  const { error: exErr } = await params.supabase.rpc("dispatch_expire_peer_offers", {
-    p_booking_id: bookingId,
-    p_winner_offer_id: params.offerId,
-  });
-  if (exErr) {
-    await logSystemEvent({
-      level: "warn",
-      source: "dispatch_expire_peers",
-      message: exErr.message,
-      context: { bookingId, offerId: params.offerId },
-    });
-  }
-
-  await params.supabase
-    .from("dispatch_offers")
-    .update({ status: "accepted", responded_at: now, response_latency_ms: responseLatencyMs })
-    .eq("id", params.offerId)
-    .eq("status", "pending");
 
   const { error: rpcErr } = await params.supabase.rpc("dispatch_cleaner_offer_accepted", {
     p_cleaner_id: params.cleanerId,
@@ -616,6 +633,16 @@ export async function acceptDispatchOffer(params: {
   // `dispatchOfferAcceptPreservesAvailability.test.ts` for the regression
   // guard.
   await syncCleanerBusyFromBookings(params.supabase, params.cleanerId);
+
+  /**
+   * M-8: assignment-mutation snapshot trigger.
+   * Marketplace flow only writes `cleaner_id` + `payout_owner_cleaner_id` here (offer accept).
+   * Without this call, monthly bookings dispatched through the offer funnel would have no
+   * `display_earnings_cents` basis on the booking row until completion, even though the offer
+   * snapshot is already on `dispatch_offers.display_earnings_cents`.
+   * Idempotent: persistCleanerPayoutIfUnset is a no-op when the basis already exists.
+   */
+  await triggerAssignmentEarningsSnapshotForBooking(params.supabase, bookingId, "acceptDispatchOffer");
 
   await logSystemEvent({
     level: "info",
@@ -680,12 +707,38 @@ export async function acceptDispatchOffer(params: {
     bookingId,
   });
 
+  // M-16: dispatch_metrics is a write-only KPI sink (RLS denies reads from
+  // anon/authenticated; service role only). A failed insert here MUST NEVER
+  // block the accept response — the customer/cleaner has already been
+  // assigned and notified upstream. We escalate any failure to
+  // `reportOperationalIssue` (console.warn + system_logs persist) so the
+  // observability gap that was previously hidden under a silent
+  // `if (!scErr) { ... }` (count-query failure → no metric, no log) becomes
+  // visible. Three independent failure modes, all logged, none rethrown:
+  //   1. The prerequisite `dispatch_offers` count query fails →
+  //      we record the failure and skip the insert (cannot derive
+  //      `offers_sent` without it).
+  //   2. The insert returns a Postgrest error (constraint, FK, RLS surprise) →
+  //      we record `dmErr.message`.
+  //   3. An unexpected exception escapes the count or insert (network drop,
+  //      thrown serializer, etc.) → caught here, recorded, and swallowed.
+  // In every case `acceptDispatchOffer` proceeds to `return { ok: true }`.
   try {
     const { count: sentCount, error: scErr } = await params.supabase
       .from("dispatch_offers")
       .select("id", { count: "exact", head: true })
       .eq("booking_id", bookingId);
-    if (!scErr) {
+    if (scErr) {
+      // Previously silent — `if (!scErr) { ... }` short-circuited with no log.
+      // Now reported so a sustained query-side failure (RLS regression,
+      // schema drift, broken connection pool) shows up on dashboards.
+      await reportOperationalIssue(
+        "warn",
+        "dispatch_metrics_insert",
+        `offers count for dispatch_metrics insert failed: ${scErr.message}`,
+        { bookingId, cleanerId: params.cleanerId, offerId: params.offerId },
+      );
+    } else {
       const { error: dmErr } = await params.supabase.from("dispatch_metrics").insert({
         booking_id: bookingId,
         cleaner_id: params.cleanerId,
@@ -693,21 +746,21 @@ export async function acceptDispatchOffer(params: {
         offers_sent: Math.min(2_147_483_647, Math.max(0, sentCount ?? 0)),
       });
       if (dmErr) {
-        await logSystemEvent({
-          level: "warn",
-          source: "dispatch_metrics_insert",
-          message: dmErr.message,
-          context: { bookingId, cleanerId: params.cleanerId, offerId: params.offerId },
-        });
+        await reportOperationalIssue(
+          "warn",
+          "dispatch_metrics_insert",
+          `dispatch_metrics insert failed: ${dmErr.message}`,
+          { bookingId, cleanerId: params.cleanerId, offerId: params.offerId },
+        );
       }
     }
   } catch (e) {
-    await logSystemEvent({
-      level: "warn",
-      source: "dispatch_metrics_insert",
-      message: e instanceof Error ? e.message : String(e),
-      context: { bookingId, cleanerId: params.cleanerId },
-    });
+    await reportOperationalIssue(
+      "warn",
+      "dispatch_metrics_insert",
+      `dispatch_metrics insert threw: ${e instanceof Error ? e.message : String(e)}`,
+      { bookingId, cleanerId: params.cleanerId, offerId: params.offerId },
+    );
   }
 
   return { ok: true };

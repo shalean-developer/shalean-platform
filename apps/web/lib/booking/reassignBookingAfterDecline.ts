@@ -1,25 +1,30 @@
 import "server-only";
 
 import { pickAvailableCleaner } from "@/lib/booking/pickAvailableCleaner";
-import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceCapabilityGateFromBookingFields } from "@/lib/booking/serviceCapabilityEligibility";
+import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 
 const BOOKING_ROW_SELECT =
   "id, customer_name, customer_phone, location, service, date, time, status, created_at, cleaner_id, dispatch_status";
 
 /**
- * After a dispatch offer is declined on WhatsApp: try to assign another cleaner via the standard dispatch path.
- * Safe when the booking is already assigned or not dispatchable (no-op / no harmful side effects beyond metrics).
+ * NOTE — M-17 removed `reassignBookingAfterDecline(admin, bookingId)` here.
+ *
+ * It used to be the WhatsApp webhook's post-decline hook into `ensureBookingAssignment`
+ * with `source: "whatsapp_offer_decline"`. That made redispatch fire TWICE per decline:
+ * once inside `rejectDispatchOffer` →
+ * `maybeRedispatchPendingBookingIfOffersExhausted` (CAS-deduplicated, excludes the
+ * declining cleaner) and again here (no exclusion list, separate metric counter,
+ * separate notification fan-out).
+ *
+ * Redispatch on offer decline is now centralised in `rejectDispatchOffer`. The
+ * assigned-booking decline path (already-assigned cleaner pulls out via WhatsApp or
+ * ack timeout) still uses {@link tryOnceReassignAfterDecline} below — that's a
+ * different flow (no `dispatch_offers` row to redispatch from), so it stays.
  */
-export async function reassignBookingAfterDecline(admin: SupabaseClient, bookingId: string): Promise<void> {
-  await ensureBookingAssignment(admin, bookingId, {
-    source: "whatsapp_offer_decline",
-    retryEscalation: 1,
-  });
-}
 
 /**
  * One immediate reassignment attempt after a cleaner declines (excludes decliner).
@@ -80,6 +85,9 @@ export async function tryOnceReassignAfterDecline(
       }
       return;
     }
+
+    /** M-8: assignment-mutation snapshot trigger (monthly bookings only). */
+    await triggerAssignmentEarningsSnapshotForBooking(admin, params.bookingId, "tryOnceReassignAfterDecline");
 
     void notifyCleanerAssignedBooking(admin, params.bookingId, cleaner.id);
   } catch (err) {

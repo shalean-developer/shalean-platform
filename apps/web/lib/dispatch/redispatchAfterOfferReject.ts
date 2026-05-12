@@ -18,9 +18,23 @@ function isRedispatchEligibleBookingStatus(st: string): boolean {
 }
 
 /**
- * When a cleaner declines (or last parallel offer closes) and the booking is still unassigned,
- * return dispatch to searching and run smart assign excluding the rejecting cleaner.
- * If the booking was `user_selected`, mark `auto_fallback` so ops/analytics reflect reassignment.
+ * M-17: When a cleaner declines (or last parallel offer closes) and the booking is still
+ * unassigned, return dispatch to searching and run smart assign excluding the rejecting cleaner.
+ * This is the SINGLE canonical post-decline redispatch entry point — decline routes
+ * (cleaner API, public token, WhatsApp webhook) MUST NOT call `ensureBookingAssignment`
+ * separately, otherwise duplicate offers / notifications / metric inflation occur.
+ *
+ * Dedup primitive: an atomic compare-and-swap (CAS) on `bookings.dispatch_attempt_count`
+ * means concurrent decline events (multi-tab decline, retried webhook, decline + cron
+ * expiry colliding) only redispatch once — the loser's `expected` no longer matches.
+ *
+ * If the booking was `user_selected`, mark `auto_fallback` so ops/analytics reflect the
+ * reassignment. Other assignment types (auto_dispatch / auto_fallback) keep their tag.
+ *
+ * Preserved escape hatches for genuine non-response (timeout) recovery:
+ *  - `runDispatchTimeouts` still expires stale offers and enqueues `dispatch_retry_queue`.
+ *  - `processUserSelectedOfferExpiryRedispatch` still calls this helper after lease claim.
+ *  - `enqueueStrandedBookings` still re-injects orphaned bookings into the retry queue.
  */
 export async function maybeRedispatchPendingBookingIfOffersExhausted(
   supabase: SupabaseClient,
@@ -39,6 +53,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
   let didIncrement = false;
   let nextAttempts = 0;
   let waveAssignmentType: string | null = null;
+  let isUserSelected = false;
 
   try {
     const { data: b, error: bErr } = await supabase
@@ -53,9 +68,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
     if ((b as { cleaner_id?: string | null }).cleaner_id) return;
 
     const at = String((b as { assignment_type?: string | null }).assignment_type ?? "").toLowerCase();
-    /** Parallel soft dispatch from the same server request handles declines; this path is checkout “chosen cleaner” only. */
-    if (at !== "user_selected") return;
-
+    isUserSelected = at === "user_selected";
     waveAssignmentType = at;
 
     const attempts = Number((b as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0) || 0;
@@ -98,13 +111,20 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
 
     const expected = attempts;
     nextAttempts = expected + 1;
+    /**
+     * M-17 dedup: CAS on `dispatch_attempt_count`. Two concurrent declines both observe
+     * `attempts=N` and try `WHERE dispatch_attempt_count=N → SET=N+1` — Postgres serialises
+     * the row update, so only one caller's WHERE still matches and gets a row back. The
+     * loser sees `bumped=null` and no-ops. This is the *only* fence against duplicate
+     * redispatch waves, so the filter intentionally does NOT pin assignment_type — it must
+     * dedup auto_dispatch parallel declines as well as user_selected offer expiry.
+     */
     const { data: bumped, error: bumpErr } = await supabase
       .from("bookings")
       .update({ dispatch_status: "searching", dispatch_attempt_count: nextAttempts })
       .eq("id", params.bookingId)
       .in("status", [...REDISPATCH_ELIGIBLE_BOOKING_STATUSES])
       .is("cleaner_id", null)
-      .eq("assignment_type", "user_selected")
       .eq("dispatch_attempt_count", expected)
       .select("id")
       .maybeSingle();
@@ -140,21 +160,28 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
       return;
     }
 
-    const attempted =
-      String((b as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim() ||
-      params.rejectedCleanerId;
-    const { error: patchErr } = await supabase
-      .from("bookings")
-      .update({
-        assignment_type: "auto_fallback",
-        fallback_reason: reassignmentReason,
-        attempted_cleaner_id: attempted,
-      })
-      .eq("id", params.bookingId);
-    if (patchErr) {
-      await reportOperationalIssue("warn", "redispatchAfterOfferReject", `fallback tag update: ${patchErr.message}`, {
-        bookingId: params.bookingId,
-      });
+    /**
+     * Only `user_selected` declines convert to `auto_fallback` — that tag is meaningful only
+     * for the "checkout chose this cleaner, but they declined and we fell back to auto" flow.
+     * `auto_dispatch` bookings stay tagged auto_dispatch through redispatch waves.
+     */
+    if (isUserSelected) {
+      const attempted =
+        String((b as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim() ||
+        params.rejectedCleanerId;
+      const { error: patchErr } = await supabase
+        .from("bookings")
+        .update({
+          assignment_type: "auto_fallback",
+          fallback_reason: reassignmentReason,
+          attempted_cleaner_id: attempted,
+        })
+        .eq("id", params.bookingId);
+      if (patchErr) {
+        await reportOperationalIssue("warn", "redispatchAfterOfferReject", `fallback tag update: ${patchErr.message}`, {
+          bookingId: params.bookingId,
+        });
+      }
     }
   } finally {
     if (didIncrement) {

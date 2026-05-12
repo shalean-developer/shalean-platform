@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
+import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 import { loadCleanerCapabilityColumnsById } from "@/lib/booking/cleanerServiceCapabilityDb";
 import {
   activeRosterHasServiceQualifiedMember,
@@ -304,6 +305,9 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
       adminEmail: adminEmail ?? null,
     },
   });
+
+  /** M-8: assignment-mutation snapshot trigger (monthly team bookings only). */
+  await triggerAssignmentEarningsSnapshotForBooking(admin, bookingId, "performAdminAssignTeam");
 
   return { ok: true, teamId: tid, oldTeamId };
 }

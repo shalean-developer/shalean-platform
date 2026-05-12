@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { assertMonthlyInvoiceFinalizeRunner } from "@/lib/cron/monthlyInvoiceFinalizeRunnerGuard";
 import { finalizeDueMonthlyInvoices } from "@/lib/monthlyInvoice/finalizeDueMonthlyInvoices";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +44,19 @@ export async function POST(request: Request) {
     });
   }
 
-  const result = await finalizeDueMonthlyInvoices();
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+
+  /* H-15: shared lock with charge-monthly-invoices so two schedulers can't double-finalize / double-link. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.monthlyInvoiceFinalize, leaseSeconds: 1200 },
+    () => finalizeDueMonthlyInvoices(),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+  }
+  const result = lockResult.ranIt;
   if (!result.ok) {
     return NextResponse.json({ error: result.reason ?? "finalize_failed" }, { status: 500 });
   }

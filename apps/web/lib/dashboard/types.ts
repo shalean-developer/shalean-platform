@@ -51,6 +51,8 @@ export type BookingRow = {
   created_at: string;
   paystack_reference: string;
   cleaner_id?: string | null;
+  /** Team-lead cleaner UUID; carries the assignee for team jobs where `cleaner_id` is cleared. */
+  payout_owner_cleaner_id?: string | null;
   assigned_at?: string | null;
   accepted_at?: string | null;
   en_route_at?: string | null;

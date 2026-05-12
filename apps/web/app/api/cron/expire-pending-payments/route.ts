@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -27,41 +29,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
-  const nowIso = new Date().toISOString();
+  /* H-15: serialize expiry — duplicate runs would attempt redundant booking-status updates
+   * and emit duplicate `payment_needs_follow_up` signals. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.expirePendingPayments, leaseSeconds: 300 },
+    async () => {
+      const nowIso = new Date().toISOString();
 
-  const { data: rows, error } = await admin
-    .from("bookings")
-    .select("id")
-    .eq("status", "pending_payment")
-    .not("payment_link_expires_at", "is", null)
-    .lt("payment_link_expires_at", nowIso)
-    .limit(MAX_BATCH);
+      const { data: rows, error } = await admin
+        .from("bookings")
+        .select("id")
+        .eq("status", "pending_payment")
+        .not("payment_link_expires_at", "is", null)
+        .lt("payment_link_expires_at", nowIso)
+        .limit(MAX_BATCH);
 
-  if (error) {
-    await reportOperationalIssue("error", "cron/expire-pending-payments", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        await reportOperationalIssue("error", "cron/expire-pending-payments", error.message);
+        return { _error: error.message } as const;
+      }
+
+      let updated = 0;
+      for (const r of rows ?? []) {
+        const id = typeof (r as { id?: unknown }).id === "string" ? String((r as { id: string }).id) : "";
+        if (!id) continue;
+        const { error: upErr } = await admin
+          .from("bookings")
+          .update({ status: "payment_expired", dispatch_status: "unassigned", payment_needs_follow_up: true })
+          .eq("id", id)
+          .eq("status", "pending_payment");
+        if (!upErr) updated++;
+      }
+
+      await logSystemEvent({
+        level: "info",
+        source: "cron/expire-pending-payments",
+        message: "Cron finished",
+        context: { scanned: rows?.length ?? 0, updated, nowIso },
+      });
+
+      return { scanned: rows?.length ?? 0, updated };
+    },
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
   }
-
-  let updated = 0;
-  for (const r of rows ?? []) {
-    const id = typeof (r as { id?: unknown }).id === "string" ? String((r as { id: string }).id) : "";
-    if (!id) continue;
-    const { error: upErr } = await admin
-      .from("bookings")
-      .update({ status: "payment_expired", dispatch_status: "unassigned", payment_needs_follow_up: true })
-      .eq("id", id)
-      .eq("status", "pending_payment");
-    if (!upErr) updated++;
+  if ("_error" in lockResult.ranIt) {
+    return NextResponse.json({ error: lockResult.ranIt._error }, { status: 500 });
   }
-
-  await logSystemEvent({
-    level: "info",
-    source: "cron/expire-pending-payments",
-    message: "Cron finished",
-    context: { scanned: rows?.length ?? 0, updated, nowIso },
-  });
-
-  return NextResponse.json({ ok: true, scanned: rows?.length ?? 0, updated });
+  return NextResponse.json({ ok: true, ...lockResult.ranIt });
 }
 
 export async function GET(request: Request) {

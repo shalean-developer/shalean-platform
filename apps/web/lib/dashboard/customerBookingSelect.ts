@@ -25,6 +25,13 @@ export const CUSTOMER_BOOKING_SELECT = [
   "created_at",
   "paystack_reference",
   "cleaner_id",
+  /*
+   * H-8 — exposes the team-lead cleaner UUID to the customer dashboard so
+   * the "Reviewable bookings" filter can fall back to it when team jobs
+   * have `cleaner_id=null`. Read-only on the client; payout ownership
+   * itself is owned by the dispatch / completion paths.
+   */
+  "payout_owner_cleaner_id",
   "cleaner_response_status",
   "assigned_at",
   "accepted_at",

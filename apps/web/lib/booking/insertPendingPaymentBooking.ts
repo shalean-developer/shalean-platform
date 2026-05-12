@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
+import { customerPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
 import { provisionalPriceSnapshotFromLocked } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
@@ -12,6 +13,16 @@ import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingEx
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
 export { provisionalPriceSnapshotFromLocked };
+
+/**
+ * H-3 — last-resort default for `service_slug` when `locked.service` is
+ * missing/blank. `bookings.service_slug` is `NOT NULL` (verified live), so
+ * omitting it would crash the insert with Postgres 23502 instead of
+ * "silently NULL". Falling back to `'standard'` keeps the row insertable
+ * AND aligns with production usage (110/123 rows are 'standard') and the
+ * `BookingServiceId` enum's entry-level value.
+ */
+const DEFAULT_SERVICE_SLUG = "standard";
 
 /** Removes a stale `pending_payment` row for the same Paystack reference only (never scoped by email). */
 export async function deletePendingPaymentBookingsWithPaystackReference(
@@ -54,8 +65,30 @@ export async function insertPendingPaymentBookingRow(
     locked,
   };
 
+  /*
+   * H-3 — `bookings.service_slug` is NOT NULL (no DB default). Pre-fix this
+   * code only set the column when `locked.service` was truthy and would
+   * otherwise crash the insert with Postgres 23502. Always coerce to a
+   * canonical default so the row is always insertable.
+   */
   const serviceSlug =
-    typeof locked.service === "string" && locked.service.trim() ? adminBookingServiceSlug(locked.service) : null;
+    typeof locked.service === "string" && locked.service.trim()
+      ? adminBookingServiceSlug(locked.service)
+      : DEFAULT_SERVICE_SLUG;
+
+  /*
+   * H-2 — stamp `payment_link_expires_at` at insert so
+   * `/api/cron/expire-pending-payments` (filters
+   * `payment_link_expires_at IS NOT NULL AND < now()`) can sweep abandoned
+   * customer rows. Mirrors what `lib/admin/adminPaystackPostInitialize.ts`
+   * does for admin-created rows but uses the customer-scoped TTL helper
+   * `customerPaymentLinkTtlMs()` so customer/admin TTLs can be tuned
+   * independently. The actual `payment_link` (Paystack auth URL) is
+   * returned to the client by `paystackInitializeCore` and not persisted
+   * for customer rows; the cron correctly fires on TTL alone — it does
+   * NOT require `payment_link IS NOT NULL`.
+   */
+  const paymentLinkExpiresAt = new Date(Date.now() + customerPaymentLinkTtlMs()).toISOString();
 
   const lid =
     typeof params.locationId === "string" && /^[0-9a-f-]{36}$/i.test(params.locationId.trim())
@@ -77,7 +110,7 @@ export async function insertPendingPaymentBookingRow(
       amount_paid_cents: 0,
       currency: "ZAR",
       booking_snapshot: minimalSnapshot,
-      ...(serviceSlug ? { service_slug: serviceSlug } : {}),
+      service_slug: serviceSlug,
       status: "pending_payment",
       dispatch_status: "searching",
       surge_multiplier: 1,
@@ -96,6 +129,7 @@ export async function insertPendingPaymentBookingRow(
       price_breakdown: null,
       total_price: null,
       price_snapshot: provisionalPriceSnapshotFromLocked(locked),
+      payment_link_expires_at: paymentLinkExpiresAt,
     })
     .select("id")
     .maybeSingle();

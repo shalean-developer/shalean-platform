@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin/bookingRosterReplacePayload";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
+import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -241,6 +242,9 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
       recomputeSource: "admin_booking_roster_emergency_put",
     });
   }
+
+  /** M-8: assignment-mutation snapshot trigger (monthly only; idempotent for already-persisted basis). */
+  await triggerAssignmentEarningsSnapshotForBooking(admin, bookingId, "admin_booking_roster_emergency_put");
 
   const cleanerIds = [...new Set(rosterAfter.map((r) => String(r.cleaner_id ?? "")))].filter(Boolean);
   const cleanerNames = new Map<string, string>();

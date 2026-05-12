@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
@@ -79,6 +81,17 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
 
+  /* H-15: serialize Paystack transfer reconciliation — duplicate runs would re-apply
+   * applyTransferSuccess / applyTransferFailed against the same transfer codes. */
+  const lockAcq = await acquireCronLock(supabase, {
+    jobName: CRON_LOCK_KEYS.reconcilePaystackTransfers,
+    leaseSeconds: 900,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
+  try {
   const stuckMinutes = positiveNumberFromEnv("PAYSTACK_TRANSFER_RECONCILE_AFTER_MINUTES", DEFAULT_STUCK_MINUTES, 24 * 60);
   const batchSize = positiveNumberFromEnv("PAYSTACK_TRANSFER_RECONCILE_BATCH_SIZE", DEFAULT_BATCH_SIZE, 100);
   const cutoff = new Date(Date.now() - stuckMinutes * 60 * 1000).toISOString();
@@ -215,6 +228,9 @@ export async function POST(request: Request) {
     earningsTransferCandidates: earningsTransfers.length,
     errors,
   });
+  } finally {
+    await releaseCronLock(supabase, lockAcq.jobName, lockAcq.holderId);
+  }
 }
 
 export async function GET(request: Request) {

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { runDispatchTimeouts } from "@/lib/dispatch/runDispatchTimeouts";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -32,9 +34,14 @@ export async function GET(request: Request) {
     context: { route: ROUTE, timestamp, engine: "runDispatchTimeouts" },
   });
 
-  let stats: Awaited<ReturnType<typeof runDispatchTimeouts>>;
+  let lockResult: Awaited<ReturnType<typeof withCronLock<Awaited<ReturnType<typeof runDispatchTimeouts>>>>>;
   try {
-    stats = await runDispatchTimeouts(admin);
+    /* H-15: shared lock with dispatch-timeouts — same engine, two URLs. */
+    lockResult = await withCronLock(
+      admin,
+      { jobName: CRON_LOCK_KEYS.dispatchTimeouts, leaseSeconds: 600 },
+      () => runDispatchTimeouts(admin),
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await reportOperationalIssue("error", ROUTE, `runDispatchTimeouts threw: ${msg}`, { timestamp });
@@ -46,6 +53,18 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
+
+  if (lockResult.skipped) {
+    await logSystemEvent({
+      level: "info",
+      source: "cron",
+      message: "cron.complete",
+      context: { route: ROUTE, result: { ok: true, skipped: true, reason: lockResult.reason } },
+    });
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason, v2Route: true });
+  }
+
+  const stats = lockResult.ranIt;
 
   await logSystemEvent({
     level: "info",

@@ -46,6 +46,12 @@ export type AssignEligibilityUi = {
   /** Next same-day start (15m grid) that clears calendar + overlap for this cleaner. */
   nextAvailableHm: string | null;
   offline: boolean;
+  /**
+   * M-13/M-14: account-level block (manual "Go offline" / `is_active=false` / blocked
+   * lifecycle status). Optional in the UI type to stay backwards-compatible with cached
+   * responses from before the API surfaced it; treated as `false` when absent.
+   */
+  accountIneligible?: boolean;
   canAssignWithoutForce: boolean;
 };
 
@@ -66,6 +72,10 @@ function slotCheckable(date: string | null | undefined, time: string | null | un
 function slotReason(e: AssignEligibilityUi): string {
   if (e.canAssignWithoutForce) return "OK for this slot";
   if (e.offline) return "Offline";
+  // M-13/M-14: surface the same exclusion reason the canonical pool applies
+  // (manual "Go offline" / inactive account / blocked status) so admins can
+  // tell why a cleaner who looks rostered is hidden from the slot-OK list.
+  if (e.accountIneligible) return "Unavailable (cleaner toggled off)";
   if (!e.weekdayOk) return "Not on admin weekday roster for this day";
   if (e.overlapExplain) {
     return e.nextAvailableHm ? `${e.overlapExplain} · Next: ${e.nextAvailableHm}` : e.overlapExplain;
@@ -165,6 +175,8 @@ export function AdminAssignForm({
               overlapExplain: r.overlapExplain ?? null,
               nextAvailableHm: r.nextAvailableHm ?? null,
               offline: Boolean(r.offline),
+              // M-13/M-14: defaults to `false` when missing (older cached API responses).
+              accountIneligible: Boolean(r.accountIneligible),
               canAssignWithoutForce: Boolean(r.canAssignWithoutForce),
             };
           }

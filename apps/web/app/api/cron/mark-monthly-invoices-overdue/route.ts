@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -24,9 +26,23 @@ export async function POST(request: Request) {
 
   const today = todayJohannesburg();
 
-  const { data: rpcData, error } = await admin.rpc("mark_monthly_invoice_overdue_flags", {
-    p_today: today,
-  });
+  /* H-15: serialize overdue marking — duplicate runs would call the RPC twice and could log
+   * duplicate billing-risk events. RPC itself is idempotent on flags but observability stays cleaner.
+   *
+   * `admin.rpc(...)` returns a `PostgrestFilterBuilder` (thenable but not a strict `Promise<T>`,
+   * missing `catch`/`finally`/`[Symbol.toStringTag]`), and `withCronLock`'s `fn` param is typed
+   * as `() => Promise<T>`. Wrapping with `async` makes the function's return type
+   * `Promise<PostgrestSingleResponse<...>>` so the structural check passes — same pattern used
+   * by every other cron-lock caller (`expire-pending-payments`, `generate-payouts`, etc.). */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.markMonthlyInvoicesOverdue, leaseSeconds: 300 },
+    async () => admin.rpc("mark_monthly_invoice_overdue_flags", { p_today: today }),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason, today });
+  }
+  const { data: rpcData, error } = lockResult.ranIt;
 
   if (error) {
     await reportOperationalIssue("error", "cron/mark-monthly-invoices-overdue", error.message);

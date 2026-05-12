@@ -41,6 +41,7 @@ import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { escalateFailedCheckoutDispatchOffer } from "@/lib/booking/checkoutDispatchOfferFailureEscalation";
+import { dispatchFallbackAfterSelectedCleanerOfferInsertFailure } from "@/lib/booking/checkoutDispatchOfferFailureFallback";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { metrics } from "@/lib/metrics/counters";
@@ -881,6 +882,22 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           paystackReference: input.paystackReference,
           cleanerId: dispatchOfferCleanerId,
           offerError: offerRes.error,
+        });
+        /*
+         * H-7: when the customer-selected dispatch_offers insert fails
+         * post-payment, the row is left in `pending_assignment` with no
+         * pending offer — a paid customer would otherwise wait
+         * indefinitely. Run the standard auto-dispatch ladder so the
+         * booking always has a forward path. Admin escalation already
+         * fired above; this only ADDS a recovery attempt and never
+         * suppresses the audit trail. Isolated to the offer-insert
+         * failure branch — offer-success path is unchanged.
+         */
+        await dispatchFallbackAfterSelectedCleanerOfferInsertFailure({
+          supabase,
+          bookingId: id,
+          paystackReference: input.paystackReference,
+          failedSelectedCleanerId: dispatchOfferCleanerId,
         });
       }
     } else if (!normalizedPickedCleaner) {

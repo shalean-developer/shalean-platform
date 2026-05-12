@@ -319,6 +319,44 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
       .maybeSingle();
 
     if (insErr || !payout || typeof (payout as { id?: string }).id !== "string") {
+      /**
+       * M-18 idempotency: a 23505 unique-violation here means the partial
+       * unique index `cleaner_payouts_unique_active_period_idx`
+       * (supabase/migrations/20260945_m18_cleaner_payouts_unique_period.sql)
+       * already has a non-cancelled row for this `(cleaner_id, period_start,
+       * period_end)`. That can only happen when:
+       *   - the H-15 cron lock failed open and another runner won;
+       *   - the admin manual trigger raced the cron;
+       *   - a retry-after-success replay re-entered this loop.
+       *
+       * In every case the canonical row already exists, the bookings have
+       * already been (or are about to be) linked by the winner, and the
+       * correct behaviour is a silent skip. We do NOT re-link the bookings
+       * here because the winner's booking-link update already runs against
+       * `payout_id IS NULL` and would have claimed the same set.
+       */
+      const errCode = (insErr as { code?: string } | null)?.code ?? "";
+      if (errCode === "23505") {
+        metrics.increment("cleaner.weekly_payout_duplicate_creation_blocked", {
+          cleanerId,
+          period_start: periodStart,
+          period_end: periodEnd,
+          source: "generateWeeklyPayouts",
+        });
+        void logSystemEvent({
+          level: "info",
+          source: "weekly_payout_duplicate_creation_blocked",
+          message:
+            "M-18 unique index suppressed a duplicate weekly cleaner_payouts insert (idempotent skip)",
+          context: {
+            cleanerId,
+            period_start: periodStart,
+            period_end: periodEnd,
+          },
+        });
+        skippedCleaners += 1;
+        continue;
+      }
       await reportOperationalIssue("error", "generateWeeklyPayouts", insErr?.message ?? "insert failed", {
         cleanerId,
       });

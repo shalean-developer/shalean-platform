@@ -55,6 +55,18 @@ function resolveMarkPaidAmountCents(row: {
   return null;
 }
 
+/**
+ * Synthetic **settlement marker** (e.g. `cash_<id>`, `eft_<safe>`, `zoho_<safe>`) used to:
+ *   - tag the `booking.payment_succeeded` admin event with a stable per-settlement key,
+ *     so the canonical event idempotencyKey does not collide with future Paystack webhook
+ *     events for the same booking,
+ *   - populate `settlement.paystack_reference` in the route response (backward-compat field).
+ *
+ * **M-2 (May 2026)**: this value is **NEVER written to `bookings.paystack_reference`** anymore.
+ * The DB column is preserved as set at insert time (real `pay_<uuid>` for Paystack-initialized
+ * rows, `adm_mi_<uuid>` for admin-monthly rows) so a late Paystack webhook can still match
+ * the row by its original reference.
+ */
 function buildExternalPaystackReference(method: AdminMarkPaidMethod, bookingId: string, reference?: string | null): string {
   if (method === "cash") {
     return `cash_${bookingId}`;
@@ -183,7 +195,21 @@ export type AdminMarkBookingPaidResult =
         total_paid_zar: number;
         method: AdminMarkPaidMethod;
         payment_reference_external: string | null;
+        /**
+         * Synthetic **settlement marker** (`cash_<id>`, `eft_<safe>`, `zoho_<safe>`).
+         *
+         * **NOT** the value persisted in `bookings.paystack_reference` — see M-2 below. Field name and
+         * value pattern are preserved for backward compatibility with the admin mark-paid route response,
+         * the canonical `booking.payment_succeeded` event idempotency key, and existing fixtures.
+         */
         paystack_reference: string;
+        /**
+         * The actual `bookings.paystack_reference` value as preserved on the DB row after mark-paid
+         * (M-2). Equal to the original Paystack reference set at booking creation
+         * (`pay_<uuid>` / `adm_mi_<uuid>` / legacy UUID-as-reference). Surfaced for ops/audit
+         * tooling that needs to reconcile off-platform settlements with Paystack metadata.
+         */
+        preserved_paystack_reference: string | null;
       };
     }
   | { ok: false; error: string; httpStatus: number };
@@ -192,6 +218,21 @@ export type AdminMarkBookingPaidResult =
  * Marks a booking paid off-platform (cash / Zoho / EFT), mirroring Paystack success writes plus
  * `recordBookingSideEffects`, checkout-like auto-dispatch, and the same post-payment analytics hooks as
  * {@link upsertBookingFromPaystack}.
+ *
+ * **M-2 (May 2026): paystack_reference preservation.**
+ * Off-platform settlement no longer overwrites `bookings.paystack_reference`. The original Paystack
+ * reference (set when the row was inserted by `processPaystackInitializeBody` /
+ * `insertPendingPaymentBookingRow`, or by the admin monthly path) stays put so a late Paystack
+ * webhook can still find this booking by `paystack_reference` and follow the existing
+ * idempotent skip-finalize path (`upsertBookingFromPaystack` returns `skipped_already_persisted`
+ * when `status !== "pending_payment"`).
+ *
+ * Off-platform traceability is recorded via `payment_method` (cash | zoho | eft | card) and
+ * `payment_reference_external` (Zoho invoice id, EFT memo, etc., from migration 20260849), with
+ * the synthetic marker (`cash_<id>` / `eft_<safe>` / `zoho_<safe>`) only used for the event
+ * idempotencyKey + response field — never for the DB column. Migration 20260850 already
+ * backfilled legacy rows where `paystack_reference` was clobbered with the synthetic prefix
+ * into `payment_method` + `payment_reference_external`.
  */
 export async function adminMarkBookingPaid(
   admin: SupabaseClient,
@@ -234,7 +275,20 @@ export async function adminMarkBookingPaid(
     amount_paid_cents?: number | null;
     cleaner_id?: string | null;
     selected_cleaner_id?: string | null;
+    paystack_reference?: string | null;
   };
+
+  /**
+   * M-2: capture the existing `paystack_reference` BEFORE we touch the row so we can:
+   *   - confirm the patch never overwrites it (asserted by the M-2 regression test),
+   *   - feed the real reference (not the synthetic marker) into post-success side effects
+   *     such as `user_events.payload.paystack_reference` and lifecycle job audit metadata,
+   *     keeping admin mark-paid analytics consistent with Paystack-success rows.
+   */
+  const preservedPaystackReference =
+    typeof b.paystack_reference === "string" && b.paystack_reference.trim()
+      ? b.paystack_reference.trim()
+      : null;
 
   if (b.payment_completed_at != null && String(b.payment_completed_at).trim() !== "") {
     return { ok: true, skipped: true, reason: "already_paid" };
@@ -287,13 +341,17 @@ export async function adminMarkBookingPaid(
   const hadPaymentMismatch = Boolean((b as { payment_mismatch?: boolean | null }).payment_mismatch);
   const quoteCents = resolveMarkPaidAmountCents(b);
 
+  /**
+   * M-2: `paystack_reference` is intentionally **omitted** from this patch so the existing
+   * value (real `pay_<uuid>` / `adm_mi_<uuid>` / legacy UUID) survives off-platform settlement.
+   * Off-platform traceability is captured via `payment_method` + `payment_reference_external`.
+   */
   const patch: Record<string, unknown> = {
     amount_paid_cents: amountCents,
     total_paid_cents: amountCents,
     total_paid_zar: Math.round(amountCents / 100),
     payment_completed_at: paidMoment,
     payment_status: "success",
-    paystack_reference: externalRef,
     paid_at: paidMoment,
     marked_paid_by_admin_id: adminUserId.trim() || null,
     payment_method: method,
@@ -358,7 +416,11 @@ export async function adminMarkBookingPaid(
       userId: userIdForEffects,
       customerEmail: emailStored,
       amountCents,
-      paystackReference: externalRef,
+      // M-2: prefer the preserved real Paystack reference for `user_events` /
+      // `scheduleBookingLifecycleJobs` audit metadata so admin mark-paid rows match the
+      // value still stored on `bookings.paystack_reference`. Fall back to the synthetic
+      // settlement marker only when the row has no preserved reference (very legacy data).
+      paystackReference: preservedPaystackReference ?? externalRef,
       createdAt,
       appointmentDateYmd: b.date ?? locked?.date ?? null,
       appointmentTimeHm: b.time ?? locked?.time ?? null,
@@ -460,7 +522,11 @@ export async function adminMarkBookingPaid(
       total_paid_zar: Math.round(amountCents / 100),
       method,
       payment_reference_external: refExternalTrim,
+      // M-2: synthetic settlement marker (cash_/eft_/zoho_), retained for backward compat
+      // with the canonical event idempotencyKey + admin mark-paid route response. Not the
+      // value on `bookings.paystack_reference` (see `preserved_paystack_reference` below).
       paystack_reference: externalRef,
+      preserved_paystack_reference: preservedPaystackReference,
     },
   };
 }

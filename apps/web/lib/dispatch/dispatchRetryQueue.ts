@@ -135,10 +135,13 @@ const STRANDED_ENQUEUE_CAP = 50;
  * so `processDispatchRetryQueue` can assign. Idempotent via {@link enqueueDispatchRetry}.
  */
 export async function enqueueStrandedBookings(supabase: SupabaseClient): Promise<number> {
+  // H-9: include `pending_assignment` so user-selected post-payment bookings that lost their
+  // offer/retry rows are also re-injected into the retry queue and can reach terminal escalation.
+  // `enqueueDispatchRetry` is per-booking dedup'd, so widening the candidate set is safe.
   const { data: candidates, error } = await supabase
     .from("bookings")
     .select("id, created_at")
-    .eq("status", "pending")
+    .in("status", ["pending", "pending_assignment"])
     .is("cleaner_id", null)
     .not("location_id", "is", null)
     .in("dispatch_status", ["searching", "offered", "failed"])
@@ -283,11 +286,14 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
 
       const terminalDispatchStatus = result.error === "no_candidate" ? "no_cleaner" : "unassignable";
 
+      // H-9: include `pending_assignment` so exhausted retry queues for user-selected
+      // post-payment flows can also reach terminal `dispatch_status='unassignable' | 'no_cleaner'`.
+      // The `cleaner_id IS NULL` guard still prevents stomping on bookings that meanwhile assigned.
       await supabase
         .from("bookings")
         .update({ dispatch_status: terminalDispatchStatus })
         .eq("id", bookingId)
-        .eq("status", "pending")
+        .in("status", ["pending", "pending_assignment"])
         .is("cleaner_id", null);
 
       metrics.increment("dispatch.unassignable", {

@@ -11,6 +11,7 @@ import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoice
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
+import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
 
 export type FinalizeMonthlyInvoicesResult = {
   ok: boolean;
@@ -163,7 +164,10 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
           display_earnings_cents: number | null;
           cleaner_payout_cents: number | null;
         };
-        const lineCents = Math.max(0, Math.round(Number(b.total_paid_zar ?? 0) * 100));
+        const allocatedCents = allocateMonthlyChildPaymentCents({
+          total_paid_zar: b.total_paid_zar,
+          amount_paid_cents: b.amount_paid_cents,
+        });
         const frozen = resolveCleanerFrozenCentsForSettlement({
           display_earnings_cents: b.display_earnings_cents,
           cleaner_payout_cents: b.cleaner_payout_cents,
@@ -176,7 +180,7 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
           .from("bookings")
           .update({
             payment_status: "success",
-            amount_paid_cents: lineCents > 0 ? lineCents : b.amount_paid_cents ?? 0,
+            amount_paid_cents: allocatedCents,
             payout_status: "eligible",
             payout_frozen_cents: frozen,
           })

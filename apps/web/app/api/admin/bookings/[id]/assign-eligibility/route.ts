@@ -115,6 +115,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       overlapExplain: string | null;
       nextAvailableHm: string | null;
       offline: boolean;
+      // M-13/M-14: surfaced so the admin scheduling UI can label a cleaner
+      // who toggled "Go offline" (`is_available=false`), is `is_active=false`,
+      // or is in a blocked lifecycle status (`busy`/`suspended`/...). Mirrors
+      // the same exclusion `getEligibleCleaners` applies at checkout/dispatch.
+      accountIneligible: boolean;
       canAssignWithoutForce: boolean;
     }
   > = {};
@@ -134,6 +139,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       overlapExplain,
       nextAvailableHm: row.nextAvailableStartHm,
       offline: row.offline,
+      accountIneligible: row.accountIneligible,
       canAssignWithoutForce: row.canAssignWithoutForce,
     };
   }

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { formatFailedJobPayloadPreview } from "@/lib/booking/failedJobPayloadPreview";
@@ -87,6 +89,18 @@ export async function POST(request: Request) {
   }
   lastCronRetryFailedJobsStartMs = runNow;
 
+  /* H-15: serialize retry-failed-jobs across runners. The same-instance debounce above only
+   * helps within ONE Node process; two parallel runners (e.g. Vercel cron + Supabase pg_cron)
+   * can still race to retry the same booking_insert / payment_reconciliation rows. */
+  const lockAcq = await acquireCronLock(supabase, {
+    jobName: CRON_LOCK_KEYS.retryFailedJobs,
+    leaseSeconds: 600,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: lockAcq.reason });
+  }
+
+  try {
   const runStartedAtIso = new Date().toISOString();
   await logSystemEvent({
     level: "info",
@@ -470,6 +484,9 @@ export async function POST(request: Request) {
     dailyOpsSummary,
     cleanerQuality,
   });
+  } finally {
+    await releaseCronLock(supabase, lockAcq.jobName, lockAcq.holderId);
+  }
 }
 
 export async function GET(request: Request) {

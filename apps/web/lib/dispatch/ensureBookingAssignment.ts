@@ -29,7 +29,14 @@ export type EnsureAssignmentSource =
   | "dispatch_retry_queue"
   | "subscription_autopay"
   | "customer_reschedule"
-  | "dispatch_offer_expired";
+  | "dispatch_offer_expired"
+  /**
+   * H-7: distinct from `paystack_checkout` so ops can grep `system_logs` and
+   * dispatch metrics for bookings that landed in the post-payment auto-dispatch
+   * fallback because the customer-selected `dispatch_offers` insert failed.
+   * See `lib/booking/checkoutDispatchOfferFailureFallback.ts`.
+   */
+  | "paystack_checkout_offer_failure_fallback";
 
 export type EnsureBookingAssignmentOptions = AssignCleanerOptions & {
   source: EnsureAssignmentSource;

@@ -18,7 +18,7 @@ import {
 } from "@/lib/booking/paystackBookingIdLookup";
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
-import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
+import { routePaystackChargeForMonthlyInvoice } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
 import { metrics } from "@/lib/metrics/counters";
 import {
   expectedCheckoutZarFromVerify,
@@ -138,16 +138,24 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
   if (supabase) {
-    const invPay = await applyMonthlyInvoicePayment(supabase, {
+    /**
+     * M-5: route via the shared `routePaystackChargeForMonthlyInvoice` so this webhook and every
+     * verify route make the **same** monthly-invoice routing decision for the same reference.
+     * Behaviour preserved from pre-M-5:
+     *   - `monthly_settled` → log + `{ received: true }` ack.
+     *   - `monthly_already_processed` → 200 plain-text "Already processed" ack.
+     *   - `monthly_error` (rare) AND `not_monthly` → fall through to booking-finalize pipeline.
+     */
+    const monthlyRouting = await routePaystackChargeForMonthlyInvoice(supabase, {
       reference,
       amountCents: typeof data.amount === "number" ? data.amount : 0,
     });
-    if (invPay.ok && "settled" in invPay) {
+    if (monthlyRouting.kind === "monthly_settled") {
       const partialCtx =
-        invPay.settled === "partial"
+        monthlyRouting.settled === "partial"
           ? {
-              amount_paid_cents: invPay.amount_paid_cents,
-              total_amount_cents: invPay.total_amount_cents,
+              amount_paid_cents: monthlyRouting.amount_paid_cents,
+              total_amount_cents: monthlyRouting.total_amount_cents,
             }
           : {};
       await logSystemEvent({
@@ -156,20 +164,18 @@ export async function POST(request: Request) {
         message: "monthly_invoice.charge.success",
         context: {
           reference,
-          invoiceId: invPay.invoiceId,
-          settled: invPay.settled,
+          invoiceId: monthlyRouting.invoiceId,
+          settled: monthlyRouting.settled,
           ...partialCtx,
         },
       });
       return NextResponse.json({ received: true });
     }
-    if (
-      invPay.ok &&
-      "skipped" in invPay &&
-      invPay.skipped &&
-      (invPay.reason === "already_paid" || invPay.reason === "duplicate_charge")
-    ) {
-      return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    if (monthlyRouting.kind === "monthly_already_processed") {
+      return new Response("Already processed", {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
     }
   }
 

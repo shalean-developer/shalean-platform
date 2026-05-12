@@ -8,6 +8,8 @@ import {
 import { chargePaystackAuthorization } from "@/lib/recurring/chargePaystackAuthorization";
 import { runRecurringPaymentLinkFallback } from "@/lib/recurring/recurringPaymentLinkFallback";
 import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -58,6 +60,23 @@ export async function POST(request: Request) {
       message: "[env] PAYSTACK_SECRET_KEY not configured.",
     });
     return NextResponse.json({ error: "PAYSTACK_SECRET_KEY not configured." }, { status: 503 });
+  }
+
+  /* H-15: serialize Paystack auto-charge — duplicate concurrent runs would compete to claim the
+   * same recurring charge lease (try_claim_recurring_charge), waste API calls, and could double-stamp
+   * payment-link fallback / retry counters. The per-booking lease already prevents real double
+   * charges, but the surrounding orchestration must run at most once. */
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.chargeRecurringBookings,
+    leaseSeconds: 600,
+  });
+  if (!lockAcq.ok) {
+    await logCronRun({
+      jobName: "charge-recurring-bookings",
+      status: "success",
+      message: JSON.stringify({ skipped: true, reason: lockAcq.reason }),
+    });
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
   }
 
   let attempted = 0;
@@ -360,6 +379,8 @@ export async function POST(request: Request) {
       message: `[handler] ${msg}`,
     });
     return NextResponse.json({ error: msg }, { status: 500 });
+  } finally {
+    await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
   }
 }
 

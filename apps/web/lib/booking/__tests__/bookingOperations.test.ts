@@ -565,6 +565,7 @@ describe("adminMarkBookingPaidOperation", () => {
         method: "cash",
         payment_reference_external: null,
         paystack_reference: "cash_b-full",
+        preserved_paystack_reference: "pay_b-full-original",
       },
     });
     const out = await adminMarkBookingPaidOperation({

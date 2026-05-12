@@ -3,6 +3,7 @@ import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekda
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
 import { cleanerAreasAllowJob, jobFitsAvailabilityWindows } from "@/lib/booking/getEligibleCleaners";
+import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
 import {
   cleanerPassesServiceCapabilityGate,
   serviceCapabilityGateFromBookingFields,
@@ -150,6 +151,21 @@ export type AssignEligibilityRow = {
   overlapJobRangeLabel: string | null;
   nextAvailableStartHm: string | null;
   offline: boolean;
+  /**
+   * M-13/M-14: account-level ineligibility — cleaner is `is_active=false`,
+   * `is_available=false` (the manual "Go offline" toggle), or in a blocked
+   * lifecycle status (`busy`, `suspended`, `banned`, `disabled`, `blocked`).
+   *
+   * Reflects the same {@link cleanerAccountEligibleForCustomerBooking} gate
+   * the canonical {@link getEligibleCleaners} pool uses, so admin scheduling
+   * surfaces the SAME exclusions checkout sees. Independent of the strict
+   * availability flag — these are absolute, not strict-mode-toggled.
+   *
+   * `offline` (status==="offline") remains separate because it has its own
+   * UI label and historical force-override semantics; `accountIneligible`
+   * is the broader "should not be in normal eligibility" signal.
+   */
+  accountIneligible: boolean;
   canAssignWithoutForce: boolean;
 };
 
@@ -195,6 +211,7 @@ export async function computeAssignEligibility(
         overlapJobRangeLabel: null,
         nextAvailableStartHm: null,
         offline: false,
+        accountIneligible: false,
         canAssignWithoutForce: false,
       });
     }
@@ -205,6 +222,8 @@ export async function computeAssignEligibility(
   type CleanerAvailRow = {
     id?: string;
     status?: string | null;
+    is_active?: boolean | null;
+    is_available?: boolean | null;
     location_id?: string | null;
     availability_weekdays?: string[] | null;
     can_do_deep_cleaning?: boolean | null;
@@ -212,48 +231,74 @@ export async function computeAssignEligibility(
   };
   let cleaners: CleanerAvailRow[] | null = null;
   {
+    // M-13/M-14: previously this select omitted `is_active` / `is_available`,
+    // so admin scheduling silently treated cleaners with the manual
+    // "Go offline" flag (`is_available=false`) as fully assignable —
+    // diverging from the canonical `getEligibleCleaners` pool which DB-filters
+    // them out. We now load both columns (with column-presence fallbacks for
+    // schemas missing `is_active`) and feed them to
+    // `cleanerAccountEligibleForCustomerBooking` below.
     const cap = ", can_do_deep_cleaning, can_do_move_cleaning";
+    const baseWithActive = "id, status, is_active, is_available, location_id, availability_weekdays";
+    const baseNoActive = "id, status, is_available, location_id, availability_weekdays";
+    const baseWithActiveNoWd = "id, status, is_active, is_available, location_id";
+    const baseNoActiveNoWd = "id, status, is_available, location_id";
     type FetchRow = { data: unknown; error: PostgrestError | null };
-    let r = (await admin
-      .from("cleaners")
-      .select(`id, status, location_id, availability_weekdays${cap}`)
-      .in("id", cleanerIds)) as FetchRow;
+    let r = (await admin.from("cleaners").select(`${baseWithActive}${cap}`).in("id", cleanerIds)) as FetchRow;
+    if (r.error && isUnknownColumnError(r.error, "is_active")) {
+      r = (await admin.from("cleaners").select(`${baseNoActive}${cap}`).in("id", cleanerIds)) as FetchRow;
+    }
     if (
       r.error &&
       (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
         isUnknownColumnError(r.error, "can_do_move_cleaning"))
     ) {
-      r = (await admin.from("cleaners").select("id, status, location_id, availability_weekdays").in("id", cleanerIds)) as FetchRow;
+      r = (await admin.from("cleaners").select(baseWithActive).in("id", cleanerIds)) as FetchRow;
+      if (r.error && isUnknownColumnError(r.error, "is_active")) {
+        r = (await admin.from("cleaners").select(baseNoActive).in("id", cleanerIds)) as FetchRow;
+      }
     }
     if (r.error && isUnknownColumnError(r.error, "availability_weekdays")) {
-      r = (await admin.from("cleaners").select(`id, status, location_id${cap}`).in("id", cleanerIds)) as FetchRow;
+      r = (await admin.from("cleaners").select(`${baseWithActiveNoWd}${cap}`).in("id", cleanerIds)) as FetchRow;
+      if (r.error && isUnknownColumnError(r.error, "is_active")) {
+        r = (await admin.from("cleaners").select(`${baseNoActiveNoWd}${cap}`).in("id", cleanerIds)) as FetchRow;
+      }
       if (
         r.error &&
         (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||
           isUnknownColumnError(r.error, "can_do_move_cleaning"))
       ) {
-        r = (await admin.from("cleaners").select("id, status, location_id").in("id", cleanerIds)) as FetchRow;
+        r = (await admin.from("cleaners").select(baseWithActiveNoWd).in("id", cleanerIds)) as FetchRow;
+        if (r.error && isUnknownColumnError(r.error, "is_active")) {
+          r = (await admin.from("cleaners").select(baseNoActiveNoWd).in("id", cleanerIds)) as FetchRow;
+        }
       }
     }
     cleaners = (r.data ?? null) as CleanerAvailRow[] | null;
   }
 
   const offlineById = new Map<string, boolean>();
+  const accountIneligibleById = new Map<string, boolean>();
   const fallbackLocationById = new Map<string, string | null>();
   const weekdaysById = new Map<string, string[] | null>();
   const capabilityOkById = new Map<string, boolean>();
   for (const c of cleaners ?? []) {
-    const row = c as {
-      id?: string;
-      status?: string | null;
-      location_id?: string | null;
-      availability_weekdays?: string[] | null;
-      can_do_deep_cleaning?: boolean | null;
-      can_do_move_cleaning?: boolean | null;
-    };
+    const row = c as CleanerAvailRow;
     if (row.id) {
       const id = String(row.id);
       offlineById.set(id, String(row.status ?? "").toLowerCase() === "offline");
+      // M-13/M-14: same gate the canonical `getEligibleCleaners` pool applies
+      // (`is_active=false`, `is_available=false`, or blocked status). When a
+      // column is missing from the row (legacy schema fallback), the helper
+      // treats it as "not blocked" — same behavior as `getEligibleCleaners`.
+      accountIneligibleById.set(
+        id,
+        !cleanerAccountEligibleForCustomerBooking({
+          is_active: row.is_active,
+          is_available: row.is_available,
+          status: row.status,
+        }),
+      );
       fallbackLocationById.set(id, row.location_id ? String(row.location_id) : null);
       weekdaysById.set(id, Array.isArray(row.availability_weekdays) ? row.availability_weekdays : null);
       capabilityOkById.set(
@@ -351,11 +396,27 @@ export async function computeAssignEligibility(
     const overlapJobRangeLabel = overlapDetail.overlapJobRangeLabel;
     const overlapBlocked = busyUntilMin != null;
     const offline = offlineById.get(id) ?? false;
+    const accountIneligible = accountIneligibleById.get(id) ?? false;
     const capabilityOk = capabilityOkById.get(id) ?? true;
+    // M-13/M-14: include `accountIneligible` (is_active=false / is_available=false /
+    // blocked lifecycle status) as a hard gate, parallel to `offline`. Without this
+    // a cleaner who toggled "Go offline" still showed `canAssignWithoutForce: true`
+    // in the admin scheduling UI even though `getEligibleCleaners` (the checkout /
+    // dispatch / single-assign canonical pool) excludes them.
     const canAssignWithoutForce =
-      weekdayOk && slotCalendarOk && locationOk && !overlapBlocked && !offline && capabilityOk;
+      weekdayOk &&
+      slotCalendarOk &&
+      locationOk &&
+      !overlapBlocked &&
+      !offline &&
+      !accountIneligible &&
+      capabilityOk;
     let nextAvailableStartHm: string | null = null;
-    if (!offline && !canAssignWithoutForce) {
+    // M-13/M-14: don't suggest a "next available" slot for someone who is
+    // account-ineligible — the suggestion would be misleading because the
+    // cleaner is unavailable for ANY future slot until they re-toggle
+    // `is_available` (and the calendar suggestion engine doesn't know that).
+    if (!offline && !accountIneligible && !canAssignWithoutForce) {
       nextAvailableStartHm = nextAvailableBookingStartHm(startMin, durationMinutes, windows, others);
       const curHm = bookingTimeHm.trim().slice(0, 5);
       if (nextAvailableStartHm === curHm) nextAvailableStartHm = null;
@@ -370,6 +431,7 @@ export async function computeAssignEligibility(
       overlapJobRangeLabel,
       nextAvailableStartHm,
       offline,
+      accountIneligible,
       canAssignWithoutForce,
     });
   }

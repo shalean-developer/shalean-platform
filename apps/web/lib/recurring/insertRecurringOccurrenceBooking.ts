@@ -14,6 +14,10 @@ import {
   findActiveCustomerSlotOccupant,
   recurringPlanOccurrenceRowExists,
 } from "@/lib/recurring/recurringBookingInsertGuards";
+import {
+  recurringOccurrenceCleanerPatch,
+  resolveRecurringPreferredCleanerId,
+} from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -23,6 +27,12 @@ export type RecurringRowForInsert = {
   customer_id: string;
   price: number | string;
   booking_snapshot_template: unknown;
+  /**
+   * **M-6**: customer/admin-editable preferred cleaner. Optional for backwards compatibility —
+   * legacy callers that omit this field still benefit from the snapshot-template fallback chain
+   * inside {@link resolveRecurringPreferredCleanerId}.
+   */
+  preferred_cleaner_id?: string | null;
 };
 
 export function cloneSnapshotTemplate(raw: unknown): BookingSnapshotV1 | null {
@@ -103,6 +113,19 @@ export async function insertRecurringOccurrenceBooking(
       ? adminBookingServiceSlug(String(locked.service))
       : "standard";
 
+  /**
+   * **M-6**: copy the customer's preferred cleaner onto the new occurrence as
+   * `selected_cleaner_id` + `assignment_type='user_selected'`. Resolution order:
+   * recurring column → snapshot.locked.cleaner_id → snapshot.cleaner_id. Missing /
+   * malformed UUIDs are skipped silently — they must never block generation, since the
+   * recurring schedule is the source of customer commitment for the cycle.
+   */
+  const preferredCleanerId = resolveRecurringPreferredCleanerId({
+    recurringPreferredCleanerId: params.recurring.preferred_cleaner_id ?? null,
+    snapshotTemplate: template,
+  });
+  const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId);
+
   const baseRow = {
     paystack_reference: paystackReference,
     customer_email: email,
@@ -135,6 +158,7 @@ export async function insertRecurringOccurrenceBooking(
     is_recurring_generated: true,
     payment_status: "pending" as const,
     recurring_retry_count: 0,
+    ...cleanerPatch,
   };
 
   const insertRow = (slotDuplicateExempt: boolean) =>

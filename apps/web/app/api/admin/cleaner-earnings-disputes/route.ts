@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   let q = admin
     .from("cleaner_earnings_disputes")
     .select(
-      "id, cleaner_id, booking_id, reason, status, admin_response, created_at, resolved_at",
+      "id, cleaner_id, booking_id, reason, status, admin_response, created_at, resolved_at, reviewed_by, reviewed_by_email, reviewed_at, resolved_by, resolved_by_email",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -62,6 +62,11 @@ export async function GET(request: Request) {
       admin_response?: string | null;
       created_at: string;
       resolved_at?: string | null;
+      reviewed_by?: string | null;
+      reviewed_by_email?: string | null;
+      reviewed_at?: string | null;
+      resolved_by?: string | null;
+      resolved_by_email?: string | null;
     };
     return {
       ...r,

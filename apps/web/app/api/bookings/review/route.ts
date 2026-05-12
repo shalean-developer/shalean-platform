@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
-import { evaluateCustomerReviewSubmissionEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
+import {
+  evaluateCustomerReviewSubmissionEligibility,
+  resolveReviewCleanerIdForSubmission,
+} from "@/lib/reviews/customerReviewFollowUpContract";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -58,7 +61,9 @@ export async function POST(request: Request) {
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, user_id, cleaner_id, status, completed_at, is_team_job, team_id")
+    .select(
+      "id, user_id, cleaner_id, payout_owner_cleaner_id, status, completed_at, is_team_job, team_id",
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -78,9 +83,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const cleanerId = (booking as { cleaner_id?: string | null }).cleaner_id;
+  /*
+   * H-8: team-assigned bookings clear `cleaner_id` and carry the lead
+   * cleaner in `payout_owner_cleaner_id`. The shared resolver picks the
+   * single-cleaner id when present and falls back to the team-lead;
+   * eligibility above already rejects rows where neither produces a
+   * valid UUID, so a non-null result is guaranteed here.
+   */
+  const cleanerId = resolveReviewCleanerIdForSubmission(booking as unknown as Record<string, unknown>);
   if (!cleanerId) {
-    return NextResponse.json({ error: "No cleaner on this booking." }, { status: 400 });
+    return NextResponse.json(
+      { error: "No cleaner on this booking.", code: "review_submit_requires_cleaner_id" },
+      { status: 400 },
+    );
   }
 
   const { error: insErr } = await admin.from("reviews").insert({

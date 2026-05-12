@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { assertMonthlyInvoiceFinalizeRunner } from "@/lib/cron/monthlyInvoiceFinalizeRunnerGuard";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { finalizeDueMonthlyInvoices } from "@/lib/monthlyInvoice/finalizeDueMonthlyInvoices";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +64,37 @@ export async function POST(request: Request) {
     });
   }
 
-  const result = await finalizeDueMonthlyInvoices();
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    await logCronRun({
+      jobName: "charge-monthly-invoices",
+      status: "error",
+      message: "[env] Supabase not configured.",
+    });
+    return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+  }
+
+  /* H-15: shared lock with finalize-monthly-invoices so two schedulers can't double-finalize / double-link. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.monthlyInvoiceFinalize, leaseSeconds: 1200 },
+    () => finalizeDueMonthlyInvoices(),
+  );
+  if (lockResult.skipped) {
+    await logCronRun({
+      jobName: "charge-monthly-invoices",
+      status: "success",
+      message: JSON.stringify({ skipped: true, reason: lockResult.reason }),
+    });
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: lockResult.reason,
+      finalized: 0,
+      settlement: "paystack_webhook" as const,
+    });
+  }
+  const result = lockResult.ranIt;
 
   const body = {
     ok: result.ok,

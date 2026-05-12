@@ -20,7 +20,12 @@ export type PaystackVerifyPostSuccess = {
   bookingSnapshot: unknown;
   bookingInDatabase: boolean;
   bookingId: string | null;
-  /** `paid` | `payment_mismatch` | `payment_reconciliation_required` — Paystack success path only. */
+  /**
+   * Booking-flow values: `paid` | `payment_mismatch` | `payment_reconciliation_required`.
+   * **M-5** monthly-invoice routing adds: `monthly_invoice_settled` | `monthly_invoice_partial` |
+   * `monthly_invoice_already_processed`. `state` remains a `string` so success-page handlers
+   * that only treat known booking values still receive a defined-shape response.
+   */
   state?: string;
   /** True when row already existed (idempotent; no duplicate insert). */
   alreadyExists: boolean;
@@ -38,6 +43,12 @@ export type PaystackVerifyPostSuccess = {
   assignedCleanerId?: string | null;
   /** DB `bookings.selected_cleaner_id` (set when user_selected). */
   selectedCleanerId?: string | null;
+  /**
+   * **M-5**: when the verify route routed the charge to `applyMonthlyInvoicePayment` (monthly
+   * invoice reference), this surfaces `monthly_invoices.id` so the success page can link to the
+   * invoice instead of a non-existent booking. `null` for all booking-flow responses.
+   */
+  monthlyInvoiceId?: string | null;
 };
 
 export type PaystackVerifyPostFailure = {

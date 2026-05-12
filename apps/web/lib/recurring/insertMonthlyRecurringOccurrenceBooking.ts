@@ -15,6 +15,10 @@ import {
   findActiveCustomerSlotOccupant,
   recurringPlanOccurrenceRowExists,
 } from "@/lib/recurring/recurringBookingInsertGuards";
+import {
+  recurringOccurrenceCleanerPatch,
+  resolveRecurringPreferredCleanerId,
+} from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -81,6 +85,17 @@ export async function insertMonthlyRecurringOccurrenceBooking(
       ? adminBookingServiceSlug(String(locked.service))
       : "standard";
 
+  /**
+   * **M-6**: copy the customer's preferred cleaner onto the new monthly occurrence. Resolution
+   * order matches the per-booking insert path (recurring column → snapshot.locked.cleaner_id →
+   * snapshot.cleaner_id) so monthly and per-booking plans behave identically wrt cleaner intent.
+   */
+  const preferredCleanerId = resolveRecurringPreferredCleanerId({
+    recurringPreferredCleanerId: params.recurring.preferred_cleaner_id ?? null,
+    snapshotTemplate: template,
+  });
+  const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId);
+
   const baseRow = {
     paystack_reference: paystackReference,
     customer_email: email,
@@ -115,6 +130,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     billing_type: "recurring_invoice" as const,
     payment_status: "pending_monthly" as const,
     recurring_retry_count: 0,
+    ...cleanerPatch,
   };
 
   const insertRow = (slotDuplicateExempt: boolean) =>

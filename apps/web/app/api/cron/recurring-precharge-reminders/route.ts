@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { addDaysYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { sendRecurringVisitPrechargeReminderEmail } from "@/lib/email/subscriptionEmails";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -27,6 +29,17 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
 
+  /* H-15: serialize precharge reminders — duplicate runs would race to send the same email
+   * and stamp `recurring_precharge_notified_at` twice. */
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.recurringPrechargeReminders,
+    leaseSeconds: 600,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
+  try {
   const tomorrow = addDaysYmd(todayJohannesburg(), 1);
   const { data: rows, error } = await admin
     .from("bookings")
@@ -88,6 +101,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ ok: true, scanned: rows?.length ?? 0, sent, tomorrow });
+  } finally {
+    await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
+  }
 }
 
 export async function GET(request: Request) {

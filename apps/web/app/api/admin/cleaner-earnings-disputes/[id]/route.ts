@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logAdminEarningsAction } from "@/lib/admin/logAdminEarningsAction";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -47,11 +48,21 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: existing, error: exErr } = await admin
     .from("cleaner_earnings_disputes")
-    .select("id, cleaner_id, booking_id, status")
+    .select("id, cleaner_id, booking_id, status, reviewed_by, reviewed_by_email, reviewed_at")
     .eq("id", id)
     .maybeSingle();
   if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
-  const row = existing as { id?: string; cleaner_id?: string; booking_id?: string; status?: string } | null;
+  const row = existing as
+    | {
+        id?: string;
+        cleaner_id?: string;
+        booking_id?: string;
+        status?: string;
+        reviewed_by?: string | null;
+        reviewed_by_email?: string | null;
+        reviewed_at?: string | null;
+      }
+    | null;
   if (!row?.id) return NextResponse.json({ error: "Dispute not found." }, { status: 404 });
 
   const cur = String(row.status ?? "").toLowerCase();
@@ -60,19 +71,38 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const now = new Date().toISOString();
-  const resolvedAt = nextStatus === "resolved" || nextStatus === "rejected" ? now : null;
+  const adminUserId = auth.userId.trim();
+  const adminEmail = auth.email.trim();
+  const isUuid = /^[0-9a-f-]{36}$/i.test(adminUserId);
+  const reviewerStamp =
+    isUuid && !row.reviewed_by
+      ? { reviewed_by: adminUserId, reviewed_by_email: adminEmail || null, reviewed_at: now }
+      : null;
+  const isClosing = nextStatus === "resolved" || nextStatus === "rejected";
 
   const patch: Record<string, unknown> = {
     status: nextStatus,
-    resolved_at: resolvedAt,
+    resolved_at: isClosing ? now : null,
   };
-  if (nextStatus === "resolved" || nextStatus === "rejected") {
+  if (isClosing) {
     patch.admin_response = note;
+    patch.resolved_by = isUuid ? adminUserId : null;
+    patch.resolved_by_email = adminEmail || null;
   } else if (note.length > 0) {
     patch.admin_response = note;
   }
+  if (reviewerStamp) {
+    Object.assign(patch, reviewerStamp);
+  }
 
-  const { data: updated, error: upErr } = await admin.from("cleaner_earnings_disputes").update(patch).eq("id", id).select("id, status, admin_response, resolved_at").maybeSingle();
+  const { data: updated, error: upErr } = await admin
+    .from("cleaner_earnings_disputes")
+    .update(patch)
+    .eq("id", id)
+    .select(
+      "id, status, admin_response, resolved_at, reviewed_by, reviewed_by_email, reviewed_at, resolved_by, resolved_by_email",
+    )
+    .maybeSingle();
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
@@ -89,8 +119,26 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       amount_cents: amount,
       reason: adjReason.slice(0, 4000),
       dispute_id: id,
+      created_by: isUuid ? adminUserId : null,
+      created_by_email: adminEmail || null,
     });
     if (adjErr) return NextResponse.json({ error: adjErr.message }, { status: 500 });
+  }
+
+  // H-12: persist a separate audit row in admin_earnings_actions so dispute lifecycle events
+  // share the same audit surface as fix/reset earnings actions. Best-effort; never blocks success.
+  if (typeof row.booking_id === "string" && /^[0-9a-f-]{36}$/i.test(row.booking_id) && isUuid) {
+    const action =
+      nextStatus === "resolved"
+        ? "dispute_resolve"
+        : nextStatus === "rejected"
+          ? "dispute_reject"
+          : "dispute_review";
+    await logAdminEarningsAction(admin, {
+      bookingId: row.booking_id,
+      action,
+      adminUserId,
+    });
   }
 
   return NextResponse.json({ ok: true, dispute: updated });

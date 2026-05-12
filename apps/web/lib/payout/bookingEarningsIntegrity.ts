@@ -5,15 +5,32 @@ import { resolveTotalPaidCents } from "@/lib/payout/calculateCleanerPayout";
 const PAID_LIKE_PAYMENT_STATUS = new Set(["paid", "success", "succeeded"]);
 
 /**
- * Columns used for paid-signal + refund guards. Keep in sync with migrations
- * `20260805_bookings_customer_paid_at.sql` and `20260806_bookings_refund_tracking.sql`.
+ * Financial snapshot columns required by paid-signal + refund guards.
  *
- * **Deploy safety:** `paid_at`, `refunded_at`, and `refund_status` are omitted from SELECT unless
- * `SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS=1` so an app revision never queries missing columns
- * before migrations land.
+ * Source migrations (long-applied in every environment):
+ *   - `20260805_bookings_customer_paid_at.sql`     → `paid_at`
+ *   - `20260806_bookings_refund_tracking.sql`      → `refunded_at`, `refund_status`
+ *
+ * **History (Production Readiness Audit H-11).** This used to be gated by
+ * `SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS=1` as a deploy-safety harness for the
+ * brief window when a new app revision could ship before the migrations landed.
+ * The gate was removed because:
+ *   1. All three columns are now confirmed present in production
+ *      (verified via `information_schema.columns` against `public.bookings`).
+ *   2. With the gate unset (the case in `vercel.json` and any forgotten
+ *      preview/dev env), `bookingPaymentRecomputeBlockedByRefund` silently
+ *      returns `false` for every row because the refund columns were never
+ *      selected — refund-blocking was a dead invariant.
+ *   3. `bookingSignalsPaidForZeroDisplayRecompute` lost the `paid_at` signal,
+ *      degrading stuck-zero recompute heuristics.
+ *
+ * The suffix is now unconditional. If a future migration ever drops one of
+ * these columns, the SELECT will fail loudly — that is intentional: a missing
+ * refund column must surface as a deploy error, not as silently disabled
+ * refund protection.
  */
 export function bookingsPersistFullFinancialSelectSuffix(): string {
-  return process.env.SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS === "1" ? ",paid_at,refunded_at,refund_status" : "";
+  return ",paid_at,refunded_at,refund_status";
 }
 
 /** Column list for `persistCleanerPayoutIfUnset` and stuck-zero repair scans. */

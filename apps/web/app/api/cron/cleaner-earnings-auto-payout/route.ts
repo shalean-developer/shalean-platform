@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { executeAllCleanersApprovedEarningsPaystack } from "@/lib/payout/executeCleanerApprovedEarningsPaystack";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -22,7 +24,16 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
 
-  const batch = await executeAllCleanersApprovedEarningsPaystack(admin, { initiatedBy: "cron/cleaner-earnings-auto-payout" });
+  /* H-15: serialize Paystack disbursement runs — duplicate runs would attempt double transfers. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.cleanerEarningsAutoPayout, leaseSeconds: 1800 },
+    () => executeAllCleanersApprovedEarningsPaystack(admin, { initiatedBy: "cron/cleaner-earnings-auto-payout" }),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+  }
+  const batch = lockResult.ranIt;
 
   const paid = batch.results.filter((r) => r.ok && r.disbursement_id).length;
   const failed = batch.results.filter((r) => !r.ok).length;

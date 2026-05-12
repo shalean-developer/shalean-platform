@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { backfillCompletedMissingDisplayEarnings } from "@/lib/payout/backfillCompletedMissingDisplayEarnings";
 import { repairCompletedStuckZeroDisplayFromSignals } from "@/lib/payout/repairCompletedStuckZeroDisplayFromSignals";
@@ -28,6 +30,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
+  /* H-15: serialize daily integrity sweep — duplicate runs would double-invoke the
+   * backfill / repair helpers that mutate `display_earnings_cents`. */
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.payoutIntegrityDaily,
+    leaseSeconds: 1800,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
+  try {
   const [
     { count: paidMissingPaidAt, error: e1 },
     { count: totalPaidRows, error: e1b },
@@ -163,4 +176,7 @@ export async function POST(request: Request) {
     auto_recovery_completed_missing_display: autoRecovery,
     auto_recovery_stuck_zero_display_from_signals: stuckZeroRepair,
   });
+  } finally {
+    await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
+  }
 }

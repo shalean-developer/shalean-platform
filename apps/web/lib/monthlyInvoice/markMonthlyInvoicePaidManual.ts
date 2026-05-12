@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
+import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
@@ -113,7 +114,10 @@ export async function markMonthlyInvoicePaidManual(
       display_earnings_cents: number | null;
       cleaner_payout_cents: number | null;
     };
-    const lineCents = Math.max(0, Math.round(Number(b.total_paid_zar ?? 0) * 100));
+    const allocatedCents = allocateMonthlyChildPaymentCents({
+      total_paid_zar: b.total_paid_zar,
+      amount_paid_cents: b.amount_paid_cents,
+    });
     const frozen = resolveCleanerFrozenCentsForSettlement({
       display_earnings_cents: b.display_earnings_cents,
       cleaner_payout_cents: b.cleaner_payout_cents,
@@ -125,7 +129,7 @@ export async function markMonthlyInvoicePaidManual(
       .from("bookings")
       .update({
         payment_status: "success",
-        amount_paid_cents: lineCents > 0 ? lineCents : b.amount_paid_cents ?? 0,
+        amount_paid_cents: allocatedCents,
         payout_status: "eligible",
         payout_frozen_cents: frozen,
       })

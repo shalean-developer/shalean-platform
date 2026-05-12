@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { repairMonthlyInvoicePaymentStateDriftProbeE } from "@/lib/monthlyInvoice/repairMonthlyInvoicePaymentStateDriftProbeE";
@@ -27,10 +29,20 @@ export async function POST(request: Request) {
   const repairLimit = Number(url.searchParams.get("repairLimit") ?? "");
   const scanLimit = Number(url.searchParams.get("scanLimit") ?? "");
 
-  const result = await repairMonthlyInvoicePaymentStateDriftProbeE(admin, {
-    repairLimit: Number.isFinite(repairLimit) && repairLimit > 0 ? repairLimit : undefined,
-    scanLimit: Number.isFinite(scanLimit) && scanLimit > 0 ? scanLimit : undefined,
-  });
+  /* H-15: serialize Probe E repair — duplicate runs could double-stamp `payment_state` refreshes. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.repairMonthlyPaymentStateDrift, leaseSeconds: 600 },
+    () =>
+      repairMonthlyInvoicePaymentStateDriftProbeE(admin, {
+        repairLimit: Number.isFinite(repairLimit) && repairLimit > 0 ? repairLimit : undefined,
+        scanLimit: Number.isFinite(scanLimit) && scanLimit > 0 ? scanLimit : undefined,
+      }),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true as const, skipped: true, reason: lockResult.reason });
+  }
+  const result = lockResult.ranIt;
 
   if (!result.ok) {
     await reportOperationalIssue("error", "cron/repair-monthly-payment-state-drift", result.error);

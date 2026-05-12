@@ -8,6 +8,7 @@ import {
   validateMembersToReplaceBookingCleanersRpcRows,
 } from "@/lib/admin/bookingRosterReplacePayload";
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
+import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -169,6 +170,9 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
       recomputeSource: "admin_booking_roster_replace",
     });
   }
+
+  /** M-8: assignment-mutation snapshot trigger (monthly only; idempotent for already-persisted basis). */
+  await triggerAssignmentEarningsSnapshotForBooking(admin, bookingId, "admin_booking_roster_replace");
 
   const { data: rows } = await admin
     .from("booking_cleaners")

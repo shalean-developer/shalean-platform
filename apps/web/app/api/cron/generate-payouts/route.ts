@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -15,6 +17,14 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await generateWeeklyPayouts(admin);
-  return NextResponse.json({ ok: true, ...result });
+  /* H-15: serialize payout generation across runners — duplicate runs would create duplicate weekly payouts. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
+    () => generateWeeklyPayouts(admin),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+  }
+  return NextResponse.json({ ok: true, ...lockResult.ranIt });
 }

@@ -169,20 +169,81 @@ describe("bookingEarningsIntegrity", () => {
     });
   });
 
-  describe("bookingsPersistSelectListForPersist", () => {
+  /**
+   * Production Readiness Audit H-11 — `paid_at`, `refunded_at`, and `refund_status`
+   * must be unconditionally selected so refund-blocking and paid-signal heuristics
+   * cannot silently degrade in environments where an env var was forgotten.
+   */
+  describe("bookingsPersistSelectListForPersist (H-11: financial snapshot is always on)", () => {
     afterEach(() => {
       vi.unstubAllEnvs();
     });
 
-    it("omits optional financial columns by default", () => {
-      expect(bookingsPersistFullFinancialSelectSuffix()).toBe("");
-      expect(bookingsPersistSelectListForPersist()).not.toContain("paid_at");
+    it("always returns the financial suffix regardless of SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS", () => {
+      vi.stubEnv("SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS", "");
+      expect(bookingsPersistFullFinancialSelectSuffix()).toBe(",paid_at,refunded_at,refund_status");
+
+      vi.stubEnv("SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS", "0");
+      expect(bookingsPersistFullFinancialSelectSuffix()).toBe(",paid_at,refunded_at,refund_status");
+
+      vi.stubEnv("SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS", "1");
+      expect(bookingsPersistFullFinancialSelectSuffix()).toBe(",paid_at,refunded_at,refund_status");
     });
 
-    it("appends optional columns when SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS=1", () => {
-      vi.stubEnv("SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS", "1");
-      expect(bookingsPersistSelectListForPersist()).toContain("paid_at");
-      expect(bookingsPersistSelectListForPersist()).toContain("refund_status");
+    it("persist select list includes paid_at, refunded_at, refund_status by default", () => {
+      vi.stubEnv("SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS", "");
+      const list = bookingsPersistSelectListForPersist();
+      expect(list).toContain("paid_at");
+      expect(list).toContain("refunded_at");
+      expect(list).toContain("refund_status");
+    });
+
+    it("env var removal does not silently strip refund signals (H-11 acceptance criterion)", () => {
+      delete (process.env as Record<string, string | undefined>).SHALEAN_BOOKINGS_FINANCIAL_SNAPSHOT_COLS;
+      const list = bookingsPersistSelectListForPersist();
+      expect(list).toContain("refund_status");
+      expect(list).toContain("refunded_at");
+    });
+  });
+
+  /**
+   * H-11 acceptance: refund-blocking is not silently bypassed when the SELECT loads a row
+   * with refund columns populated. With the columns always selected, `bookingPaymentRecomputeBlockedByRefund`
+   * receives the real values and returns the correct decision.
+   */
+  describe("refund-blocking visibility (H-11)", () => {
+    it("blocks recompute when refund_status is a known terminal value", () => {
+      for (const status of ["refunded", "full", "partial", "chargeback", "reversed", "failed_after_success"]) {
+        expect(bookingPaymentRecomputeBlockedByRefund({ refund_status: status })).toBe(true);
+      }
+    });
+
+    it("blocks recompute when refunded_at is set even with empty refund_status", () => {
+      expect(
+        bookingPaymentRecomputeBlockedByRefund({
+          refund_status: null,
+          refunded_at: "2026-04-29T12:00:00Z",
+        }),
+      ).toBe(true);
+    });
+
+    it("does not block recompute when both refund columns are empty (typical paid row)", () => {
+      expect(
+        bookingPaymentRecomputeBlockedByRefund({
+          refund_status: null,
+          refunded_at: null,
+        }),
+      ).toBe(false);
+    });
+
+    it("paid-signal still respects refund block when columns are loaded", () => {
+      expect(
+        bookingSignalsPaidForZeroDisplayRecompute({
+          payment_status: "success",
+          paid_at: "2026-04-29T12:00:00Z",
+          refunded_at: "2026-04-30T12:00:00Z",
+        }),
+      ).toBe(false);
     });
   });
 });

@@ -64,7 +64,7 @@ export async function performAdminAssignToCleaner(
 
   const { data: cleaner, error: cErr } = await admin
     .from("cleaners")
-    .select("id, status, city_id")
+    .select("id, status, city_id, is_available")
     .eq("id", cleanerId)
     .maybeSingle();
 
@@ -99,6 +99,7 @@ export async function performAdminAssignToCleaner(
 
   const prevCleaner = b.cleaner_id;
   const cleanerStatus = String((cleaner as { status?: string | null }).status ?? "").toLowerCase();
+  const cleanerIsAvailable = (cleaner as { is_available?: boolean | null }).is_available;
   const bookingCityId = String(b.city_id ?? "");
   const cleanerCityId = String((cleaner as { city_id?: string | null }).city_id ?? "");
   if (bookingCityId && cleanerCityId && bookingCityId !== cleanerCityId) {
@@ -106,6 +107,22 @@ export async function performAdminAssignToCleaner(
   }
   if (!force && cleanerStatus === "offline") {
     return { ok: false, httpStatus: 400, error: "Cleaner is not available." };
+  }
+  // M-14: explicit defense-in-depth. Even though `getEligibleCleaners` above
+  // already DB-filters `is_available=true` (and would have returned `[]` for
+  // a `is_available=false` cleaner when `!force`), we surface a clearer error
+  // message if the canonical pool was bypassed (no slot info → `!force` block
+  // above is skipped) but the cleaner has explicitly toggled "Go offline".
+  // Force-overridable, parallel to the `status==="offline"` gate above —
+  // preserves intentional admin override behavior while ensuring the
+  // `is_available=false` flag is *always* respected in the non-force path,
+  // independent of the strict-availability flag.
+  if (!force && cleanerIsAvailable === false) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: "Cleaner has toggled themselves unavailable. Pass force=true to override.",
+    };
   }
 
   const dispatchWasUnassignable = String(b.dispatch_status ?? "").toLowerCase() === "unassignable";

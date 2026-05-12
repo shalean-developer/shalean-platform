@@ -63,7 +63,7 @@ export async function backfillRecurringOccurrencesToToday(
   const { data: raw, error: loadErr } = await admin
     .from("recurring_bookings")
     .select(
-      "id, customer_id, price, frequency, days_of_week, start_date, end_date, next_run_date, status, skip_next_occurrence_date, booking_snapshot_template, monthly_pattern, monthly_nth",
+      "id, customer_id, price, frequency, days_of_week, start_date, end_date, next_run_date, status, skip_next_occurrence_date, booking_snapshot_template, monthly_pattern, monthly_nth, preferred_cleaner_id",
     )
     .eq("id", id)
     .maybeSingle();
@@ -85,6 +85,8 @@ export async function backfillRecurringOccurrencesToToday(
     booking_snapshot_template: unknown;
     monthly_pattern?: string | null;
     monthly_nth?: number | null;
+    /** M-6: nullable; backfill forwards as-is into the insert helpers' resolution chain. */
+    preferred_cleaner_id?: string | null;
   };
 
   const st = String(r.status ?? "").toLowerCase();
@@ -213,6 +215,7 @@ export async function backfillRecurringOccurrencesToToday(
             customer_id: r.customer_id,
             price: r.price,
             booking_snapshot_template: r.booking_snapshot_template,
+            preferred_cleaner_id: r.preferred_cleaner_id ?? null,
           },
           occurrenceDateYmd: d,
           customerEmail: email,
@@ -226,6 +229,7 @@ export async function backfillRecurringOccurrencesToToday(
             customer_id: r.customer_id,
             price: r.price,
             booking_snapshot_template: r.booking_snapshot_template,
+            preferred_cleaner_id: r.preferred_cleaner_id ?? null,
           },
           occurrenceDateYmd: d,
           customerEmail: email,

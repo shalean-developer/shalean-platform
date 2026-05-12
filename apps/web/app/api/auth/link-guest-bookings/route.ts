@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { linkUnlinkedBookingsByEmail } from "@/lib/booking/linkBookingsToUserDb";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -35,6 +36,28 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  /*
+   * H-6 / H-4 — repair missing `user_profiles` row before attributing guest
+   * bookings to this auth user. Same rationale as `bookings/link-user/route.ts`;
+   * non-fatal so a transient repair error never blocks booking attribution.
+   */
+  const ensured = await ensureUserProfileForAuthUser(admin, userId);
+  if ("error" in ensured) {
+    await logSystemEvent({
+      level: "warn",
+      source: "link-guest-bookings",
+      message: "user_profile_repair_failed",
+      context: { auth_user_id: userId, error: ensured.error },
+    });
+  } else if (ensured.created) {
+    await logSystemEvent({
+      level: "info",
+      source: "link-guest-bookings",
+      message: "user_profile_created",
+      context: { auth_user_id: userId },
+    });
   }
 
   const { data: updated, error: upErr } = await linkUnlinkedBookingsByEmail(admin, email, userId);

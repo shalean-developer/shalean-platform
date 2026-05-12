@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { linkUnlinkedBookingsByEmail } from "@/lib/booking/linkBookingsToUserDb";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
-import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -52,6 +53,31 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  /*
+   * H-6 / H-4 — make sure the JWT-bearing user has a `user_profiles` row
+   * before we attribute bookings to them. The /auth/callback page hits this
+   * route immediately after magic-link verification, which is the only
+   * server-visible signal that a guest-upgrade user has signed in for the
+   * first time. Failure is logged but non-fatal: linking the booking is
+   * still preferable to a 500.
+   */
+  const ensured = await ensureUserProfileForAuthUser(admin, userData.user.id);
+  if ("error" in ensured) {
+    await logSystemEvent({
+      level: "warn",
+      source: "bookings/link-user",
+      message: "user_profile_repair_failed",
+      context: { auth_user_id: userData.user.id, error: ensured.error },
+    });
+  } else if (ensured.created) {
+    await logSystemEvent({
+      level: "info",
+      source: "bookings/link-user",
+      message: "user_profile_created",
+      context: { auth_user_id: userData.user.id },
+    });
   }
 
   const { data: updated, error: upErr } = await linkUnlinkedBookingsByEmail(

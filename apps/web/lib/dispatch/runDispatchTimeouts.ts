@@ -203,11 +203,14 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
       const totalOffers = offerCount ?? 0;
       if (totalOffers > offerCap) {
         out.offerCapHits++;
+        // H-9: include `pending_assignment` so user-selected post-payment bookings can also escalate
+        // to terminal `dispatch_status='unassignable'` once their offer cap is exhausted. The
+        // `cleaner_id IS NULL` guard still prevents stomping on bookings that meanwhile assigned.
         const { error: capErr } = await supabase
           .from("bookings")
           .update({ dispatch_status: "unassignable" })
           .eq("id", bookingId)
-          .eq("status", "pending")
+          .in("status", ["pending", "pending_assignment"])
           .is("cleaner_id", null);
 
         if (capErr) {

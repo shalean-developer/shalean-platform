@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { assignConversionExperimentVariant } from "@/lib/conversion/assignConversionExperiment";
 import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
@@ -74,6 +76,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
+  /* H-15: serialize payment-link reminders — duplicate runs could race to dispatch the
+   * same reminder window and double-stamp 1h/15m sent timestamps. */
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.paymentLinkReminders,
+    leaseSeconds: 600,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
+  try {
   const now = Date.now();
 
   const { data: candidates, error } = await admin
@@ -295,6 +308,9 @@ export async function POST(request: Request) {
     skipped,
     skippedAdaptiveInstant,
   });
+  } finally {
+    await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
+  }
 }
 
 export async function GET(request: Request) {

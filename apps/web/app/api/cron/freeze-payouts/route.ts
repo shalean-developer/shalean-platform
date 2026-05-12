@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { freezeEligiblePayouts } from "@/lib/payout/runs/freezeEligiblePayouts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -15,6 +17,14 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await freezeEligiblePayouts(admin);
-  return NextResponse.json({ ok: true, ...result });
+  /* H-15: serialize freeze-payouts — duplicate runs could double-snapshot frozen amounts. */
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.freezePayouts, leaseSeconds: 600 },
+    () => freezeEligiblePayouts(admin),
+  );
+  if (lockResult.skipped) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+  }
+  return NextResponse.json({ ok: true, ...lockResult.ranIt });
 }

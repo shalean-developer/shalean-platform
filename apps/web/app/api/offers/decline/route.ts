@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
 import { fetchDispatchOfferRowByToken } from "@/lib/dispatch/offerByToken";
 import { isValidOfferTokenFormat } from "@/lib/dispatch/offerTokenFormat";
@@ -9,6 +8,13 @@ import { serverUnixMs } from "@/lib/time/serverClock";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * M-17: token-based decline endpoint. Same dedup contract as the in-app cleaner decline
+ * route — we DO NOT call `ensureBookingAssignment` again after `rejectDispatchOffer`.
+ * Redispatch is owned by `rejectDispatchOffer` →
+ * `maybeRedispatchPendingBookingIfOffersExhausted`, which uses a `dispatch_attempt_count`
+ * CAS to make redispatch idempotent across decline + cron expiry + retry signals.
+ */
 export async function POST(request: Request) {
   let body: { token?: unknown };
   try {
@@ -41,7 +47,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This offer has expired." }, { status: 410 });
   }
 
-  const bookingId = row.bookingId;
   const r = await rejectDispatchOffer({
     supabase: admin,
     offerId: row.offerId,
@@ -58,13 +63,6 @@ export async function POST(request: Request) {
             ? 410
             : 400;
     return NextResponse.json({ error: r.error, failure: r.failure }, { status });
-  }
-
-  if (bookingId) {
-    await ensureBookingAssignment(admin, bookingId, {
-      source: "offer_decline_redispatch",
-      retryEscalation: 1,
-    });
   }
 
   return NextResponse.json({ ok: true, status: "declined" });

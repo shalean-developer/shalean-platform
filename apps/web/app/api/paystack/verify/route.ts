@@ -1,6 +1,13 @@
 /**
  * **Responsibility:** Browser / delayed-webhook **fallback finalizer** — calls Paystack verify API then {@link runPaystackVerifyFinalizePipeline} (idempotent vs webhook).
  * See `lib/booking/paystackRouteResponsibilityContract.ts`.
+ *
+ * **M-5 (May 2026)**: every successful Paystack verification first runs through
+ * {@link routePaystackChargeForMonthlyInvoice}. Monthly-invoice references settle via
+ * `applyMonthlyInvoicePayment` (H-1 allocation path) and short-circuit; only non-monthly
+ * references continue into `runPaystackVerifyFinalizePipeline` →
+ * `upsertBookingFromPaystack`. The webhook uses the same routing helper, so the two paths
+ * are guaranteed to converge on which engine processes a given reference.
  */
 import { NextResponse } from "next/server";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -15,6 +22,11 @@ import {
   runPaystackVerifyFinalizePipeline,
   type PaystackChargeVerifyTx,
 } from "@/lib/booking/runPaystackVerifyFinalizePipeline";
+import {
+  routePaystackChargeForMonthlyInvoice,
+  shouldShortCircuitForMonthlyInvoice,
+  type PaystackChargeMonthlyRouting,
+} from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
@@ -29,6 +41,21 @@ function paystackChargeUpsertState(r: UpsertBookingFromPaystackResult): string {
   if (r.reason === "amount_mismatch") return "payment_mismatch";
   if (r.reason === "finalization_failed") return "payment_reconciliation_required";
   if (r.error && !r.bookingId) return "payment_reconciliation_required";
+  return "paid";
+}
+
+/**
+ * Maps an M-5 monthly-invoice routing decision to the verify-route `state` string. Keeps the
+ * existing GET / POST `state` field a `string` (no schema change) while making the source of
+ * the short-circuit explicit for the success page.
+ */
+function monthlyInvoiceVerifyState(routing: PaystackChargeMonthlyRouting): string {
+  if (routing.kind === "monthly_settled") {
+    return routing.settled === "full" ? "monthly_invoice_settled" : "monthly_invoice_partial";
+  }
+  if (routing.kind === "monthly_already_processed") {
+    return "monthly_invoice_already_processed";
+  }
   return "paid";
 }
 
@@ -106,6 +133,51 @@ export async function GET(request: Request) {
 
   const ref = tx.reference ?? reference;
   const adminGet = getSupabaseAdmin();
+  /**
+   * M-5: route the charge to `applyMonthlyInvoicePayment` first whenever the reference matches
+   * a monthly invoice row. Falls through to the booking pipeline only on `not_monthly` (and on
+   * `monthly_error`, mirroring the pre-M-5 webhook fall-through so unknown / errored references
+   * preserve existing booking-flow error semantics).
+   */
+  if (adminGet) {
+    const monthlyAmountGet = typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
+    const monthlyRoutingGet = await routePaystackChargeForMonthlyInvoice(adminGet, {
+      reference: ref,
+      amountCents: monthlyAmountGet,
+    });
+    if (shouldShortCircuitForMonthlyInvoice(monthlyRoutingGet)) {
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/verify",
+        message: "monthly_invoice.charge.success",
+        context: {
+          reference: ref,
+          routing_kind: monthlyRoutingGet.kind,
+          ...(monthlyRoutingGet.kind === "monthly_settled"
+            ? { invoiceId: monthlyRoutingGet.invoiceId, settled: monthlyRoutingGet.settled }
+            : { reason: monthlyRoutingGet.reason }),
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        success: true,
+        status: tx.status,
+        reference: ref,
+        amount: tx.amount,
+        currency: tx.currency,
+        customerEmail: tx.customer?.email,
+        paidAt: tx.paid_at,
+        metadata: tx.metadata,
+        bookingId: null,
+        bookingInDatabase: false,
+        state: monthlyInvoiceVerifyState(monthlyRoutingGet),
+        upsertError: null,
+        skipped: monthlyRoutingGet.kind === "monthly_already_processed",
+        monthlyInvoiceId:
+          monthlyRoutingGet.kind === "monthly_settled" ? monthlyRoutingGet.invoiceId : null,
+      });
+    }
+  }
   if (adminGet) {
     const existing = await findBookingIdStatusForPaystackReference(adminGet, ref);
     if (existing && existing.status !== "pending_payment") {
@@ -304,6 +376,67 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
   const txAmount = typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
   const txCurrency = typeof tx.currency === "string" ? tx.currency.toUpperCase() : "ZAR";
   const adminPost = getSupabaseAdmin();
+  /**
+   * M-5: monthly-invoice routing must run BEFORE the booking lookup short-circuit. Otherwise
+   * `findBookingIdStatusForPaystackReference` would never match a monthly invoice (its lookup
+   * targets `bookings.paystack_reference`, not `monthly_invoices.paystack_reference`), and
+   * we'd silently fall into the booking-finalize pipeline.
+   */
+  if (adminPost) {
+    const monthlyRoutingPost = await routePaystackChargeForMonthlyInvoice(adminPost, {
+      reference: ref,
+      amountCents: txAmount,
+    });
+    if (shouldShortCircuitForMonthlyInvoice(monthlyRoutingPost)) {
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/verify",
+        message: "monthly_invoice.charge.success",
+        context: {
+          reference: ref,
+          routing_kind: monthlyRoutingPost.kind,
+          ...(monthlyRoutingPost.kind === "monthly_settled"
+            ? { invoiceId: monthlyRoutingPost.invoiceId, settled: monthlyRoutingPost.settled }
+            : { reason: monthlyRoutingPost.reason }),
+        },
+      });
+      const metadataMonthly = normalizePaystackMetadata(tx.metadata);
+      const { snapshot: snapMonthly } = parseBookingSnapshot(metadataMonthly, { amountCents: txAmount });
+      const emailFromCustomerMonthly = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
+      const emailRawMonthly =
+        emailFromCustomerMonthly ||
+        (typeof metadataMonthly.customer_email === "string" ? metadataMonthly.customer_email : "") ||
+        "";
+      const emailNormMonthly = emailRawMonthly ? normalizeEmail(emailRawMonthly) : "";
+      const userIdMonthly = resolvePaystackUserId(snapMonthly, metadataMonthly);
+      return NextResponse.json({
+        success: true,
+        ok: true,
+        paymentStatus: "success",
+        reference: ref,
+        amountCents: txAmount,
+        currency: txCurrency,
+        customerEmail: emailNormMonthly,
+        customerName: snapMonthly?.customer?.name?.trim() ?? null,
+        userId: userIdMonthly,
+        bookingSnapshot: snapMonthly ?? null,
+        bookingInDatabase: false,
+        bookingId: null,
+        state: monthlyInvoiceVerifyState(monthlyRoutingPost),
+        alreadyExists: monthlyRoutingPost.kind === "monthly_already_processed",
+        skipped: monthlyRoutingPost.kind === "monthly_already_processed",
+        upsertError: null,
+        assignmentType: null,
+        fallbackReason: null,
+        showCleanerSubstitutionNotice: false,
+        attemptedCleanerId: null,
+        assignedCleanerId: null,
+        selectedCleanerId: null,
+        monthlyInvoiceId:
+          monthlyRoutingPost.kind === "monthly_settled" ? monthlyRoutingPost.invoiceId : null,
+      });
+    }
+  }
   if (adminPost) {
     const existingPost = await findBookingIdStatusForPaystackReference(adminPost, ref);
     if (existingPost && existingPost.status !== "pending_payment") {

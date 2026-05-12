@@ -4,6 +4,10 @@ import {
   runPaystackVerifyFinalizePipeline,
   type PaystackChargeVerifyTx,
 } from "@/lib/booking/runPaystackVerifyFinalizePipeline";
+import {
+  routePaystackChargeForMonthlyInvoice,
+  shouldShortCircuitForMonthlyInvoice,
+} from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
 import { bookingPaymentTotalCents, clampTipZar, type BookingRowPaymentInput } from "@/lib/payments/bookingPaymentSummary";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -175,6 +179,45 @@ export async function POST(request: Request) {
     }
     if (Math.abs(amount - expected) > 1) {
       return NextResponse.json({ ok: false, error: "Amount does not match booking total." }, { status: 400 });
+    }
+  }
+
+  /**
+   * M-5: only run monthly-invoice routing for *non-UUID* references. A UUID body reference is, by
+   * definition, a booking primary key; passing it into `applyMonthlyInvoicePayment` would always
+   * return `not_found` (monthly invoices use Paystack-shape references, not booking UUIDs) so the
+   * check is also harmless — but skipping it is cheaper and keeps the booking flow first for the
+   * one shape `/api/payments/verify` is dedicated to.
+   */
+  if (!isUuid) {
+    const monthlyRouting = await routePaystackChargeForMonthlyInvoice(admin, {
+      reference: paystackVerifyRef,
+      amountCents: amount,
+    });
+    if (shouldShortCircuitForMonthlyInvoice(monthlyRouting)) {
+      await logSystemEvent({
+        level: "info",
+        source: "payments/verify",
+        message: "monthly_invoice.charge.success",
+        context: {
+          reference: paystackVerifyRef,
+          routing_kind: monthlyRouting.kind,
+          ...(monthlyRouting.kind === "monthly_settled"
+            ? { invoiceId: monthlyRouting.invoiceId, settled: monthlyRouting.settled }
+            : { reason: monthlyRouting.reason }),
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        bookingId: null,
+        alreadyPaid: monthlyRouting.kind === "monthly_already_processed",
+        monthlyInvoiceId:
+          monthlyRouting.kind === "monthly_settled" ? monthlyRouting.invoiceId : null,
+        monthlyInvoiceState:
+          monthlyRouting.kind === "monthly_settled"
+            ? monthlyRouting.settled
+            : "already_processed",
+      });
     }
   }
 
