@@ -41,6 +41,7 @@ import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
+import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -728,22 +729,20 @@ export async function POST(request: Request) {
     return res;
   };
 
-  const { data: prof, error: profErr } = await admin
-    .from("user_profiles")
-    .select("billing_type, schedule_type")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (profErr) {
-    await reportOperationalIssue("error", "api/admin/bookings POST", profErr.message);
-    return bail(NextResponse.json({ error: profErr.message }, { status: 500 }));
-  }
-  if (!prof) {
-    return bail(NextResponse.json({ error: "Select an existing customer." }, { status: 400 }));
+  // Repair / read profile. An auth user without a `user_profiles` row (e.g.
+  // legacy seed, customer self-signup that bypassed admin create, or split
+  // data) used to short-circuit here with `"Select an existing customer."`,
+  // even when the admin booking customer search correctly listed them. Now we
+  // upsert a default `per_booking` / `on_demand` profile and continue. Existing
+  // profiles are returned untouched.
+  const profResult = await ensureUserProfileForAuthUser(admin, userId);
+  if ("error" in profResult) {
+    await reportOperationalIssue("error", "api/admin/bookings POST", profResult.error);
+    return bail(NextResponse.json({ error: profResult.error }, { status: 500 }));
   }
 
-  const billingType = String((prof as { billing_type?: string }).billing_type ?? "per_booking").toLowerCase();
-  const scheduleType = String((prof as { schedule_type?: string }).schedule_type ?? "on_demand").toLowerCase();
+  const billingType = String(profResult.billing_type ?? "per_booking").toLowerCase();
+  const scheduleType = String(profResult.schedule_type ?? "on_demand").toLowerCase();
 
   const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId);
   if (authErr || !authUser?.user?.email) {

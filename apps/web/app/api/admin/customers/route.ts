@@ -6,6 +6,7 @@ import { findAuthUserIdByEmail } from "@/lib/cleaner/linkCleanerAuth";
 import { customerGeneratedLoginEmailFromAnyPhone } from "@/lib/customer/customerIdentity";
 import { isAdmin } from "@/lib/auth/admin";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
@@ -138,6 +139,9 @@ export async function POST(request: Request) {
     );
   }
   if (uidByPhone) {
+    // Reusing an existing auth user: backfill a default `user_profiles` row
+    // when missing so admin booking create can use this customer immediately.
+    await ensureUserProfileForAuthUser(admin, uidByPhone);
     return NextResponse.json({
       ok: true,
       reused: true,
@@ -147,6 +151,7 @@ export async function POST(request: Request) {
     });
   }
   if (uidByEmail) {
+    await ensureUserProfileForAuthUser(admin, uidByEmail);
     return NextResponse.json({
       ok: true,
       reused: true,
@@ -175,6 +180,9 @@ export async function POST(request: Request) {
     if (msg.toLowerCase().includes("already")) {
       const uid = await findAuthUserIdByEmail(admin, loginEmail);
       if (uid) {
+        // Race: pre-check missed the user (e.g. RPC briefly unavailable);
+        // ensure profile exists before returning success.
+        await ensureUserProfileForAuthUser(admin, uid);
         return NextResponse.json({ ok: true, reused: true, match: "race", user_id: uid, email: loginEmail });
       }
     }

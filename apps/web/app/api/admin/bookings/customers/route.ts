@@ -152,13 +152,16 @@ export async function GET(request: Request) {
     const em = normalizeEmail(q);
     if (FULL_EMAIL.test(em)) {
       const uid = await findAuthUserIdByEmail(admin, em);
-      if (!uid) {
-        return NextResponse.json({ customers: [] });
+      if (uid) {
+        await pushRowFromProfileAndAuth(admin, out, seen, uid, { email: em });
+        return NextResponse.json({ customers: out });
       }
-      await pushRowFromProfileAndAuth(admin, out, seen, uid, { email: em });
-      return NextResponse.json({ customers: out });
+      // Defence in depth: if the RPC + bookings + listUsers pagination chain
+      // fails to resolve a known-good email (e.g. RPC briefly unavailable),
+      // fall through to the substring scan over auth.admin.listUsers so the
+      // admin sees the existing auth user instead of "No matches" — which
+      // would otherwise push them to create a duplicate account.
     }
-    // Partial / invalid email fragment — search auth users by substring.
     const authHits = await listAuthUsersMatchingNeedle(admin, q, { maxPages: 12, maxResults: 20 });
     for (const [, hit] of authHits) {
       await pushRowFromProfileAndAuth(admin, out, seen, hit.id, {
