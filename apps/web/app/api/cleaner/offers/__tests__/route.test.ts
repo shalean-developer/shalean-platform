@@ -310,6 +310,94 @@ describe("GET /api/cleaner/offers", () => {
       expect(integrityWarn).toBe(false);
     });
 
+    /**
+     * Acceptance rule guard — persisted `display_earnings_cents=0` is "missing"; the route
+     * must fall through to the dispatch-offer snapshot or runtime preview and surface a
+     * positive amount. Cleaner card never shows `R 0`.
+     */
+    it("treats stale booking display_earnings_cents=0 as missing and uses offer snapshot (Tier 4)", async () => {
+      nextOffersData = [
+        pendingOfferRow({
+          display_earnings_cents: 42000,
+          earnings_snapshot_source: "canonical",
+        }),
+      ];
+      nextBookingsData = [
+        {
+          id: BOOKING_ID,
+          status: "pending_assignment",
+          cleaner_id: null,
+          display_earnings_cents: 0,
+          cleaner_earnings_total_cents: null,
+          payout_frozen_cents: null,
+        },
+      ];
+
+      const res = await GET(new Request("http://localhost/api/cleaner/offers"));
+      const body = (await res.json()) as {
+        offers: Array<{ jobEarning: { amount_cents: number | null }; earnings_basis_pending?: boolean }>;
+      };
+      expect(body.offers[0]!.jobEarning.amount_cents).toBe(42000);
+      expect(body.offers[0]!.earnings_basis_pending).toBe(false);
+      expect(previewEarningsCentsMock).not.toHaveBeenCalled();
+    });
+
+    it("treats persisted 0 as missing and falls through to runtime preview when no offer snapshot", async () => {
+      nextOffersData = [pendingOfferRow({ display_earnings_cents: null })];
+      nextBookingsData = [
+        {
+          id: BOOKING_ID,
+          status: "pending_assignment",
+          cleaner_id: null,
+          display_earnings_cents: 0,
+          cleaner_earnings_total_cents: null,
+          payout_frozen_cents: null,
+        },
+      ];
+      previewEarningsCentsMock.mockImplementation(async () => ({
+        ok: true,
+        amountCents: 60000,
+        source: "persist_engine",
+        missingReason: null,
+      }));
+
+      const res = await GET(new Request("http://localhost/api/cleaner/offers"));
+      const body = (await res.json()) as {
+        offers: Array<{ jobEarning: { amount_cents: number | null }; earnings_basis_pending?: boolean }>;
+      };
+      expect(previewEarningsCentsMock).toHaveBeenCalledTimes(1);
+      expect(body.offers[0]!.jobEarning.amount_cents).toBe(60000);
+      expect(body.offers[0]!.earnings_basis_pending).toBe(false);
+    });
+
+    it("preview returning 0 sets earnings_basis_pending=true; never wires R0", async () => {
+      nextOffersData = [pendingOfferRow({ display_earnings_cents: null })];
+      nextBookingsData = [
+        {
+          id: BOOKING_ID,
+          status: "pending_assignment",
+          cleaner_id: null,
+          display_earnings_cents: 0,
+        },
+      ];
+      previewEarningsCentsMock.mockImplementation(async () => ({
+        ok: true,
+        amountCents: 0,
+        source: "persist_engine",
+        missingReason: null,
+      }));
+
+      const res = await GET(new Request("http://localhost/api/cleaner/offers"));
+      const body = (await res.json()) as {
+        offers: Array<{
+          jobEarning: { amount_cents: number | null };
+          earnings_basis_pending?: boolean;
+        }>;
+      };
+      expect(body.offers[0]!.jobEarning.amount_cents).toBeNull();
+      expect(body.offers[0]!.earnings_basis_pending).toBe(true);
+    });
+
     it("renders unavailable + logs a data-integrity warning when no source-of-truth resolves", async () => {
       nextOffersData = [pendingOfferRow()];
       nextBookingsData = [

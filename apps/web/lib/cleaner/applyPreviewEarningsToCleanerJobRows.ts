@@ -14,9 +14,25 @@ function resolvedEarningsCentsFromWireRow(rec: Record<string, unknown>): number 
 }
 
 /**
- * For each job-like row: if {@link resolveCleanerEarningsCents} is non-null, normalizes camel/snake
- * earnings fields and marks **not** estimated. Otherwise runs {@link previewDisplayEarningsCentsForCleanerJob}
- * up to `maxPreviews` times and attaches preview cents with estimate flags.
+ * Acceptance rule: any booking visible to a cleaner must show a positive earning amount.
+ * Persisted `0` (stale row, pre-payment basis) is treated as **missing** so we fall through
+ * to the runtime preview. Only when persisted **and** preview both come back null/0 do we
+ * mark `earnings_basis_pending: true` ("Job earning unavailable" — truly invalid data).
+ */
+function isPositiveCents(n: number | null | undefined): n is number {
+  return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+
+/**
+ * For each job-like row:
+ *   1. If a persisted source resolves to **positive** cents (`resolveCleanerEarningsCents` >0),
+ *      normalize camel/snake earnings fields and mark **not** estimated.
+ *   2. Else (null or 0), run {@link previewDisplayEarningsCentsForCleanerJob} (up to `maxPreviews`):
+ *      - preview returns positive → attach as estimate; never R0.
+ *      - preview returns null / 0 → `earnings_basis_pending: true` and clear any stale wire `0`.
+ *
+ * Cleaner UI must never display `R 0`: a `0` here is always paired with `earnings_basis_pending: true`
+ * so the card renders the "Job earning unavailable" copy instead.
  */
 export async function applyPreviewEarningsToCleanerJobRows(
   admin: SupabaseClient,
@@ -28,7 +44,7 @@ export async function applyPreviewEarningsToCleanerJobRows(
 
   for (const j of params.rows) {
     const resolved = resolvedEarningsCentsFromWireRow(j);
-    if (resolved != null) {
+    if (isPositiveCents(resolved)) {
       out.push({
         ...j,
         displayEarningsCents: resolved,
@@ -42,21 +58,29 @@ export async function applyPreviewEarningsToCleanerJobRows(
       continue;
     }
 
+    /** Reset any stale `0` so downstream UI cannot render `R 0`. */
+    const clearedZero = {
+      ...j,
+      displayEarningsCents: null as number | null,
+      earnings_cents: null as number | null,
+      display_earnings_cents: null as number | null,
+    };
+
     if (used >= maxPreviews) {
-      out.push({ ...j, earnings_basis_pending: true });
+      out.push({ ...clearedZero, earnings_basis_pending: true });
       continue;
     }
 
     const id = String(j.id ?? "").trim();
     if (!id) {
-      out.push({ ...j, earnings_basis_pending: true });
+      out.push({ ...clearedZero, earnings_basis_pending: true });
       continue;
     }
 
     used += 1;
     const previewCents = await previewDisplayEarningsCentsForCleanerJob(admin, { bookingId: id, cleanerId });
-    if (previewCents == null) {
-      out.push({ ...j, earnings_basis_pending: true });
+    if (!isPositiveCents(previewCents)) {
+      out.push({ ...clearedZero, earnings_basis_pending: true });
       continue;
     }
 

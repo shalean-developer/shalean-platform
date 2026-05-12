@@ -19,7 +19,10 @@ vi.mock("@/lib/observability/recordSystemMetric", () => ({
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { parseCheckoutPriceSnapshotV1FromMeta } from "@/lib/booking/priceSnapshotBooking";
-import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
+import {
+  detectMonthlyManagedRowForPaystackFinalize,
+  upsertBookingFromPaystack,
+} from "@/lib/booking/upsertBookingFromPaystack";
 
 const getSupabaseAdminMock = vi.mocked(getSupabaseAdmin);
 
@@ -119,5 +122,125 @@ describe("upsertBookingFromPaystack", () => {
     expect(result.skipped).toBe(true);
     expect(result.ok).toBe(true);
     expect(result.bookingId).toBe("00000000-0000-4000-8000-000000000001");
+  });
+});
+
+/**
+ * Fixes the prepaid-payout regression: `bookingPayableForWeeklyBatch` requires
+ * `payment_status='success'` for non-monthly Paystack rows. Monthly-managed rows must
+ * keep their own lifecycle (`pending_monthly` → `success` via `applyMonthlyInvoicePayment`).
+ */
+describe("detectMonthlyManagedRowForPaystackFinalize (Paystack finalize payment_status guard)", () => {
+  function fakeAdmin(billingType: string | null) {
+    return {
+      from: (table: string) => {
+        if (table !== "user_profiles") throw new Error(`unexpected table ${table}`);
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: billingType == null ? null : { billing_type: billingType },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      },
+    } as unknown as ReturnType<typeof getSupabaseAdmin>;
+  }
+
+  it("non-monthly per-booking row: returns false (Paystack finalize will write payment_status='success')", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin("per_booking"),
+      {
+        id: "b1",
+        status: "pending_payment",
+        billing_type: "per_booking",
+        is_monthly_billing_booking: false,
+        monthly_invoice_id: null,
+        payment_status: null,
+      },
+      "user-1",
+    );
+    expect(result).toBe(false);
+  });
+
+  it("existing row flagged is_monthly_billing_booking=true: returns true (no overwrite)", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin("monthly"),
+      {
+        id: "b2",
+        status: "pending_payment",
+        is_monthly_billing_booking: true,
+        billing_type: null,
+        monthly_invoice_id: null,
+        payment_status: null,
+      },
+      "user-2",
+    );
+    expect(result).toBe(true);
+  });
+
+  it("existing row with billing_type='recurring_invoice': returns true", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin(null),
+      {
+        id: "b3",
+        billing_type: "recurring_invoice",
+        is_monthly_billing_booking: null,
+        monthly_invoice_id: null,
+        payment_status: null,
+      },
+      null,
+    );
+    expect(result).toBe(true);
+  });
+
+  it("existing row with monthly_invoice_id linked: returns true", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin(null),
+      {
+        id: "b4",
+        billing_type: null,
+        is_monthly_billing_booking: null,
+        monthly_invoice_id: "00000000-0000-4000-8000-00000000aaaa",
+        payment_status: null,
+      },
+      null,
+    );
+    expect(result).toBe(true);
+  });
+
+  it("existing row with payment_status='pending_monthly': returns true (do not overwrite monthly state)", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin(null),
+      {
+        id: "b5",
+        billing_type: null,
+        is_monthly_billing_booking: null,
+        monthly_invoice_id: null,
+        payment_status: "pending_monthly",
+      },
+      null,
+    );
+    expect(result).toBe(true);
+  });
+
+  it("no existing row but resolved customer is monthly: returns true (defensive guard for new-insert path)", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin("monthly"),
+      null,
+      "user-monthly",
+    );
+    expect(result).toBe(true);
+  });
+
+  it("no existing row and resolved customer is per_booking: returns false", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin("per_booking"),
+      null,
+      "user-pb",
+    );
+    expect(result).toBe(false);
   });
 });

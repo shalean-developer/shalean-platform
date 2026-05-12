@@ -1221,6 +1221,26 @@ export async function POST(request: Request) {
     );
   }
 
+  /**
+   * Paystack per-booking creates a `pending_payment` row with `amount_paid_cents=0` and
+   * `payment_completed_at=null`. Forcing `status='completed'` here would (a) break the
+   * `bookings_paid_*` invariants once `payment_status='success'` is later written, and (b)
+   * cause the Paystack webhook / verify to skip-finalize because `upsertBookingFromPaystack`
+   * filters `status='pending_payment'`. Off-platform mark-paid uses {@link adminMarkBookingPaid}.
+   */
+  if (adminMarkCompleted) {
+    return bail(
+      NextResponse.json(
+        {
+          error:
+            "Cannot mark a Paystack payment-link booking as completed before payment is confirmed. Use the Mark Paid action after payment, or create the booking without admin_mark_completed.",
+          code: "admin_mark_completed_unsafe_for_payment_link",
+        },
+        { status: 400 },
+      ),
+    );
+  }
+
   if (selectedCleanerId && !ignoreCleanerSlotConflict) {
     const lateConflictPaystack = await findCleanerSlotConflict(admin, {
       cleanerId: selectedCleanerId,

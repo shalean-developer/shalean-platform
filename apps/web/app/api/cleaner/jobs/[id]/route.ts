@@ -179,18 +179,30 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     .maybeSingle();
   const cleaner_has_issue_report = Boolean(issueHit && typeof (issueHit as { id?: string }).id === "string");
 
-  let displayEarningsCents = resolveCleanerEarningsCents({
+  /**
+   * Acceptance rule: cleaner card must show a positive amount immediately.
+   * `0` from persisted (stale snapshot or pre-payment basis) is treated as **missing**
+   * — fall through to the runtime preview. Only positive preview is rendered; preview `0`
+   * surfaces as `displayEarningsCents = null` so the UI shows "Job earning unavailable"
+   * (truly invalid pricing/payment data) instead of `R 0`.
+   */
+  const persistedDisplayEarningsCents = resolveCleanerEarningsCents({
     cleaner_earnings_total_cents: record.cleaner_earnings_total_cents,
     payout_frozen_cents: record.payout_frozen_cents,
     display_earnings_cents: record.display_earnings_cents,
   });
+  const persistedIsPositive =
+    typeof persistedDisplayEarningsCents === "number" &&
+    Number.isFinite(persistedDisplayEarningsCents) &&
+    persistedDisplayEarningsCents > 0;
+  let displayEarningsCents: number | null = persistedIsPositive ? persistedDisplayEarningsCents : null;
   let displayEarningsIsEstimate = false;
-  if (displayEarningsCents == null) {
+  if (!persistedIsPositive) {
     const previewCents = await previewDisplayEarningsCentsForCleanerJob(admin, {
       bookingId,
       cleanerId: session.cleanerId,
     });
-    if (previewCents != null) {
+    if (typeof previewCents === "number" && Number.isFinite(previewCents) && previewCents > 0) {
       displayEarningsCents = previewCents;
       displayEarningsIsEstimate = true;
     }

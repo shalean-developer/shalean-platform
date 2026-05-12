@@ -124,6 +124,16 @@ export async function GET(request: Request) {
     return null;
   }
 
+  /**
+   * Acceptance rule: a cleaner-visible offer must show a positive earning. Persisted `0`
+   * (legacy / pre-payment basis) is treated as **missing** so we fall through to the
+   * dispatch-offer snapshot (Tier 4) and finally the runtime preview (Tier 5). Only
+   * strictly positive values are rendered; `0` becomes `earnings_basis_pending: true`
+   * ("Job earning unavailable") so the UI never displays `R 0`.
+   */
+  const isPositive = (n: number | null | undefined): n is number =>
+    typeof n === "number" && Number.isFinite(n) && n > 0;
+
   let previewsUsed = 0;
   const offersOut: Array<Record<string, unknown>> = [];
   for (const o of offersActive) {
@@ -140,8 +150,8 @@ export async function GET(request: Request) {
             display_earnings_cents: optionalCentsFromDb(booking.display_earnings_cents),
           });
 
-    let resolvedCents: number | null = persisted;
-    let resolvedSource: string | null = persisted != null && booking != null ? classifyPersistedSource(booking) : null;
+    let resolvedCents: number | null = isPositive(persisted) ? persisted : null;
+    let resolvedSource: string | null = resolvedCents != null && booking != null ? classifyPersistedSource(booking) : null;
     let earningsBasisPending = false;
     let runtimeFallbackUsed = false;
     let unavailableReason: string | null = null;
@@ -152,7 +162,7 @@ export async function GET(request: Request) {
      */
     if (resolvedCents == null) {
       const snapshotCents = optionalCentsFromDb((o as { display_earnings_cents?: unknown }).display_earnings_cents);
-      if (snapshotCents != null) {
+      if (isPositive(snapshotCents)) {
         resolvedCents = snapshotCents;
         resolvedSource = "dispatch_offers.display_earnings_cents";
       }
@@ -168,9 +178,11 @@ export async function GET(request: Request) {
         runtimeFallbackUsed = true;
         try {
           const diag = await previewDisplayEarningsCentsForCleanerJobDiagnostic(admin, { bookingId, cleanerId });
-          if (diag.ok) {
+          if (diag.ok && isPositive(diag.amountCents)) {
             resolvedCents = diag.amountCents;
             resolvedSource = "runtime_preview";
+          } else if (diag.ok) {
+            unavailableReason = "preview_returned_zero";
           } else {
             unavailableReason = diag.missingReason;
           }
@@ -189,6 +201,12 @@ export async function GET(request: Request) {
       }
     } else if (resolvedCents == null && booking == null) {
       unavailableReason = "booking_row_missing";
+    }
+
+    /** Final gate: only positive amounts render; clear any stale `0` from upstream payloads. */
+    if (!isPositive(resolvedCents)) {
+      resolvedCents = null;
+      earningsBasisPending = true;
     }
 
     const jobEarning: CleanerJobEarning = cleanerJobEarningFromCents(resolvedCents);

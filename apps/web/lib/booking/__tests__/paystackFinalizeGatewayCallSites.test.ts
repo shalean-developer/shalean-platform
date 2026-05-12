@@ -53,4 +53,17 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).toContain("finalizePaystackChargeSuccess");
     expect(src).not.toContain("notifyBookingEvent");
   });
+
+  /**
+   * Fix 1 — `bookingPayableForWeeklyBatch` (prepaid path) requires `payment_status='success'`.
+   * `upsertBookingFromPaystack` must write it for non-monthly Paystack rows; monthly rows
+   * keep their own lifecycle (`pending_monthly` → `success` via `applyMonthlyInvoicePayment`).
+   */
+  it("upsertBookingFromPaystack writes payment_status='success' guarded by monthly detection", () => {
+    const src = readFileSync(join(root, "lib/booking/upsertBookingFromPaystack.ts"), "utf8");
+    expect(src).toContain("detectMonthlyManagedRowForPaystackFinalize");
+    expect(src).toContain("paystackFinalizePaymentStatus");
+    expect(src).toMatch(/payment_status:\s*"success"/);
+    expect(src).toMatch(/billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status/);
+  });
 });

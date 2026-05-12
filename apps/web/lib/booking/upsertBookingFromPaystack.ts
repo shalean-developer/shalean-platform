@@ -60,6 +60,45 @@ import {
   resolveInternalBookingIdFromPaystackReference,
 } from "@/lib/booking/paystackBookingIdLookup";
 
+/**
+ * `payment_status='success'` is the single signal `bookingPayableForWeeklyBatch` (prepaid path) keys off.
+ * Monthly-managed rows (recurring/monthly customers) keep their own lifecycle states
+ * (`pending_monthly` → `success` set by `applyMonthlyInvoicePayment`) and must NOT be flipped
+ * to `success` by Paystack one-off finalize.
+ *
+ * Sources of truth, in order:
+ *   1. Already-persisted `bookings` columns (existing row): `is_monthly_billing_booking`,
+ *      `billing_type ∈ {recurring_invoice, monthly_contract}`, `monthly_invoice_id`,
+ *      `payment_status='pending_monthly'`.
+ *   2. Resolved `user_profiles.billing_type='monthly'` (no-existing-row insert path; the DB
+ *      `bookings_after_write_monthly_invoice` trigger respects `success` once set, so we must guard here).
+ */
+export async function detectMonthlyManagedRowForPaystackFinalize(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  existing: Record<string, unknown> | null,
+  userIdResolved: string | null,
+): Promise<boolean> {
+  if (existing && typeof existing === "object") {
+    if ((existing as { is_monthly_billing_booking?: unknown }).is_monthly_billing_booking === true) return true;
+    const bt = String((existing as { billing_type?: unknown }).billing_type ?? "").trim().toLowerCase();
+    if (bt === "recurring_invoice" || bt === "monthly_contract") return true;
+    const mid = (existing as { monthly_invoice_id?: unknown }).monthly_invoice_id;
+    if (mid != null && String(mid).trim() !== "") return true;
+    const ps = String((existing as { payment_status?: unknown }).payment_status ?? "").trim().toLowerCase();
+    if (ps === "pending_monthly") return true;
+  }
+  if (supabase && userIdResolved) {
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("billing_type")
+      .eq("id", userIdResolved)
+      .maybeSingle();
+    const bt = String((data as { billing_type?: string } | null)?.billing_type ?? "").trim().toLowerCase();
+    if (bt === "monthly") return true;
+  }
+  return false;
+}
+
 function buildAutoAssignmentPatch(
   autoAssignmentTag: "auto_dispatch" | "auto_fallback",
   selectionInvalidatedCleaner: boolean,
@@ -139,7 +178,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     return { ok: false, skipped: true, bookingId: null, error: "Supabase not configured" };
   }
 
-  const existingSelect = "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id" as const;
+  const existingSelect =
+    "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status" as const;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -510,6 +550,20 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     bookingTime: locked?.time != null ? String(locked.time) : null,
   });
 
+  /**
+   * Prepaid Paystack path: `bookingPayableForWeeklyBatch` requires `payment_status='success'` for
+   * weekly cleaner payouts. Monthly-managed rows keep their own lifecycle (pending_monthly → success
+   * via `applyMonthlyInvoicePayment`) and must not be overwritten here.
+   */
+  const isMonthlyManagedRow = await detectMonthlyManagedRowForPaystackFinalize(
+    supabase,
+    (existing as Record<string, unknown> | null) ?? null,
+    userIdResolved,
+  );
+  const paystackFinalizePaymentStatus: { payment_status?: "success" } = isMonthlyManagedRow
+    ? {}
+    : { payment_status: "success" };
+
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -544,6 +598,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     price_snapshot: priceSnapshot as unknown as Record<string, unknown>,
     total_price,
     payment_completed_at: paidMoment,
+    ...paystackFinalizePaymentStatus,
     payment_conversion_seconds: paymentConversionSeconds,
     payment_conversion_bucket: paymentConversionBucketFromSeconds(paymentConversionSeconds),
     conversion_channel: paymentAttribution.lastTouch,
