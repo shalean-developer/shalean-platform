@@ -2,12 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
-import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
-import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildBooking";
+import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 
 export type ApplyMonthlyInvoicePaymentResult =
   | { ok: true; skipped: true; reason: "not_found" | "already_paid" | "duplicate_charge" }
@@ -54,6 +51,29 @@ export async function applyMonthlyInvoicePayment(
 
   const st = String(row.status ?? "").toLowerCase();
   if (st === "paid") {
+    const { data: existingBookings, error: existingBookingsErr } = await admin
+      .from("bookings")
+      .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
+      .eq("monthly_invoice_id", row.id)
+      .neq("status", "cancelled");
+
+    if (existingBookingsErr) return { ok: false, error: existingBookingsErr.message };
+
+    const childSettlement = await settleMonthlyInvoiceChildren(admin, {
+      invoiceId: row.id,
+      children: (existingBookings ?? []) as {
+        id: string;
+        total_paid_zar: number | null;
+        amount_paid_cents: number | null;
+        display_earnings_cents: number | null;
+        cleaner_payout_cents: number | null;
+      }[],
+      source: "monthly_invoice/payment",
+      reference: ref,
+    });
+    if (!childSettlement.ok) {
+      return { ok: false, error: childSettlement.error };
+    }
     return { ok: true, skipped: true, reason: "already_paid" };
   }
 
@@ -130,50 +150,20 @@ export async function applyMonthlyInvoicePayment(
       return { ok: false, error: bErr.message };
     }
 
-    for (const raw of bookings ?? []) {
-      const b = raw as {
+    const childSettlement = await settleMonthlyInvoiceChildren(admin, {
+      invoiceId: row.id,
+      children: (bookings ?? []) as {
         id: string;
         total_paid_zar: number | null;
         amount_paid_cents: number | null;
         display_earnings_cents: number | null;
         cleaner_payout_cents: number | null;
-      };
-      // H-1 fix: allocate the booking's own line amount (`total_paid_zar*100`)
-      // when present, falling back to any pre-existing `amount_paid_cents`.
-      // Mirrors `finalizeDueMonthlyInvoices` and `markMonthlyInvoicePaidManual`.
-      const allocatedCents = allocateMonthlyChildPaymentCents({
-        total_paid_zar: b.total_paid_zar,
-        amount_paid_cents: b.amount_paid_cents,
-      });
-      const frozen = resolveCleanerFrozenCentsForSettlement({
-        display_earnings_cents: b.display_earnings_cents,
-        cleaner_payout_cents: b.cleaner_payout_cents,
-      });
-      if (frozen == null) {
-        await admin.from("monthly_invoice_paystack_charge_dedup").delete().eq("charge_reference", ref);
-        await logSystemEvent({
-          level: "error",
-          source: "monthly_invoice/payment",
-          message: "monthly_invoice_booking_missing_cleaner_frozen_basis",
-          context: { invoice_id: row.id, booking_id: b.id, reference: ref },
-        });
-        return { ok: false, error: `booking_missing_cleaner_earnings_basis:${b.id}` };
-      }
-      const settled = await settleMonthlyInvoiceChildBooking(admin, {
-        bookingId: b.id,
-        amountPaidCents: allocatedCents,
-        payoutFrozenCents: frozen,
-      });
-      if (!settled.ok) {
-        await logSystemEvent({
-          level: "error",
-          source: "monthly_invoice/payment",
-          message: "monthly_invoice_booking_settlement_failed",
-          context: { invoice_id: row.id, booking_id: b.id, reference: ref, error: settled.error },
-        });
-        return { ok: false, error: settled.error };
-      }
-      await refreshRecurringBookingPaymentState({ admin, bookingId: b.id });
+      }[],
+      source: "monthly_invoice/payment",
+      reference: ref,
+    });
+    if (!childSettlement.ok) {
+      return { ok: false, error: childSettlement.error };
     }
 
     await logSystemEvent({

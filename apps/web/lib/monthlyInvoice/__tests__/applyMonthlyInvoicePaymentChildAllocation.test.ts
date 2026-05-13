@@ -40,12 +40,14 @@ function buildFakeAdmin(opts: {
     balance_cents: number;
   };
   children: BookingChild[];
+  failingBookingIds?: string[];
 }) {
   const captured: { bookingUpdates: CapturedBookingUpdate[]; invoiceUpdates: Record<string, unknown>[]; dedupInserts: Record<string, unknown>[] } = {
     bookingUpdates: [],
     invoiceUpdates: [],
     dedupInserts: [],
   };
+  const failingBookingIds = new Set(opts.failingBookingIds ?? []);
 
   const admin = {
     from(table: string) {
@@ -90,6 +92,9 @@ function buildFakeAdmin(opts: {
           update: (patch: Record<string, unknown>) => ({
             eq: async (_col: string, val: string) => {
               captured.bookingUpdates.push({ bookingId: val, patch });
+              if (failingBookingIds.has(val)) {
+                return { error: { message: `booking update failed:${val}` } };
+              }
               return { error: null };
             },
           }),
@@ -274,5 +279,86 @@ describe("applyMonthlyInvoicePayment per-child amount_paid_cents allocation (H-1
     expect(captured.bookingUpdates).toHaveLength(1);
     expect(captured.bookingUpdates[0].patch.amount_paid_cents).toBe(0);
     expect(captured.bookingUpdates[0].patch.payment_status).toBe("success");
+  });
+
+  it("returns a clear partial-settlement error when one child fails after the invoice is paid", async () => {
+    const children: BookingChild[] = [
+      {
+        id: "55555555-5555-4000-8000-000000000001",
+        total_paid_zar: 500,
+        amount_paid_cents: 0,
+        display_earnings_cents: 24500,
+        cleaner_payout_cents: 24500,
+      },
+      {
+        id: "55555555-5555-4000-8000-000000000002",
+        total_paid_zar: 600,
+        amount_paid_cents: 0,
+        display_earnings_cents: 24500,
+        cleaner_payout_cents: 24500,
+      },
+    ];
+
+    const { admin, captured } = buildFakeAdmin({
+      invoice: {
+        id: "00000000-0000-4000-8000-000000000050",
+        status: "sent",
+        total_amount_cents: 110000,
+        amount_paid_cents: 0,
+        balance_cents: 110000,
+      },
+      children,
+      failingBookingIds: [children[1].id],
+    });
+
+    const result = await applyMonthlyInvoicePayment(admin as never, {
+      reference: "tx_h1_child_partial_failure",
+      amountCents: 110000,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "monthly_invoice_child_settlement_partial:00000000-0000-4000-8000-000000000050:settled=1:failed=1",
+    });
+    expect(captured.invoiceUpdates.some((u) => u.status === "paid")).toBe(true);
+    expect(captured.bookingUpdates.map((u) => u.bookingId)).toEqual(children.map((c) => c.id));
+  });
+
+  it("on already-paid replay, verifies child settlement idempotently instead of hiding child drift", async () => {
+    const children: BookingChild[] = [
+      {
+        id: "66666666-6666-4000-8000-000000000001",
+        total_paid_zar: 700,
+        amount_paid_cents: 0,
+        display_earnings_cents: 24500,
+        cleaner_payout_cents: 24500,
+      },
+    ];
+
+    const { admin, captured } = buildFakeAdmin({
+      invoice: {
+        id: "00000000-0000-4000-8000-000000000060",
+        status: "paid",
+        total_amount_cents: 70000,
+        amount_paid_cents: 70000,
+        balance_cents: 0,
+      },
+      children,
+    });
+
+    const result = await applyMonthlyInvoicePayment(admin as never, {
+      reference: "tx_h1_replay_paid_invoice",
+      amountCents: 70000,
+    });
+
+    expect(result).toEqual({ ok: true, skipped: true, reason: "already_paid" });
+    expect(captured.dedupInserts).toEqual([]);
+    expect(captured.bookingUpdates).toHaveLength(1);
+    expect(captured.bookingUpdates[0].patch).toMatchObject({
+      payment_status: "success",
+      amount_paid_cents: 70000,
+      payout_status: "eligible",
+      payout_frozen_cents: 24500,
+    });
   });
 });

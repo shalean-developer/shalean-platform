@@ -11,9 +11,7 @@ import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initia
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
-import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
-import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildBooking";
+import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 
 export type FinalizeMonthlyInvoicesResult = {
   ok: boolean;
@@ -168,31 +166,21 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
         .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
         .eq("monthly_invoice_id", f.id)
         .neq("status", "cancelled");
-      for (const raw of lines ?? []) {
-        const b = raw as {
+      const childSettlement = await settleMonthlyInvoiceChildren(admin, {
+        invoiceId: f.id,
+        children: (lines ?? []) as {
           id: string;
           total_paid_zar: number | null;
           amount_paid_cents: number | null;
           display_earnings_cents: number | null;
           cleaner_payout_cents: number | null;
-        };
-        const allocatedCents = allocateMonthlyChildPaymentCents({
-          total_paid_zar: b.total_paid_zar,
-          amount_paid_cents: b.amount_paid_cents,
-        });
-        const frozen = resolveCleanerFrozenCentsForSettlement({
-          display_earnings_cents: b.display_earnings_cents,
-          cleaner_payout_cents: b.cleaner_payout_cents,
-        });
-        if (frozen == null) {
-          errors.push(`${f.id}: booking_missing_cleaner_earnings_basis:${b.id}`);
-          continue;
-        }
-        await settleMonthlyInvoiceChildBooking(admin, {
-          bookingId: b.id,
-          amountPaidCents: allocatedCents,
-          payoutFrozenCents: frozen,
-        });
+        }[],
+        source: "cron/finalize-monthly-invoices",
+        reference: "zero_amount",
+      });
+      if (!childSettlement.ok) {
+        errors.push(`${f.id}: ${childSettlement.error}`);
+        continue;
       }
       finalized++;
       continue;

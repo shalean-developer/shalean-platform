@@ -110,6 +110,8 @@ let captured: {
 
 let invoiceRowsForFinalize: AnyRecord[] = [];
 let invoiceRowsForReminders: AnyRecord[] = [];
+let bookingRowsForFinalize: AnyRecord[] = [];
+let bookingUpdateFailures = new Set<string>();
 let usersById = new Map<string, { id: string; email: string; phone?: string }>();
 
 /**
@@ -199,6 +201,15 @@ function buildAdminClient(): AnyRecord {
     }
     if (ctx.table === "bookings") {
       if (ctx.op === "select" && ctx.selectOpts.head) return { data: null, error: null };
+      if (ctx.op === "select") return { data: bookingRowsForFinalize, error: null };
+      if (ctx.op === "update") {
+        const idPred = ctx.predicates.find(([c]) => c === "id");
+        const bookingId = String(idPred?.[1] ?? "");
+        if (bookingUpdateFailures.has(bookingId)) {
+          return { data: null, error: { message: `booking update failed:${bookingId}` } };
+        }
+        return { data: [{ id: bookingId || "ok" }], error: null };
+      }
       return { data: [], error: null };
     }
     return { data: null, error: null };
@@ -272,6 +283,8 @@ beforeEach(() => {
   captured = { updates: [], inserts: [], rpcCalls: [] };
   invoiceRowsForFinalize = [];
   invoiceRowsForReminders = [];
+  bookingRowsForFinalize = [];
+  bookingUpdateFailures = new Set();
   usersById = new Map();
 
   todayJhbMock.mockReturnValue("2030-04-30");
@@ -540,6 +553,44 @@ describe("finalizeDueMonthlyInvoices — M-9 breaker preserves settlement", () =
     expect(result.errors).toBeUndefined();
     expect(sendMonthlyInvoiceEmailMock).toHaveBeenCalledTimes(2);
     expect(initializePaystackMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("zero-total finalize reports child settlement failures instead of swallowing them", async () => {
+    invoiceRowsForFinalize = [
+      {
+        id: "inv_zero",
+        customer_id: "cust_zero",
+        month: "2030-03",
+        due_date: "2030-04-30",
+        status: "draft",
+        total_amount_cents: 0,
+      },
+    ];
+    bookingRowsForFinalize = [
+      {
+        id: "booking-zero-1",
+        total_paid_zar: 0,
+        amount_paid_cents: 0,
+        display_earnings_cents: 24500,
+        cleaner_payout_cents: 24500,
+      },
+      {
+        id: "booking-zero-2",
+        total_paid_zar: 0,
+        amount_paid_cents: 0,
+        display_earnings_cents: 24500,
+        cleaner_payout_cents: 24500,
+      },
+    ];
+    bookingUpdateFailures = new Set(["booking-zero-2"]);
+
+    const result = await finalizeDueMonthlyInvoices();
+
+    expect(result.ok).toBe(true);
+    expect(result.finalized).toBe(0);
+    expect(result.errors).toEqual([
+      "inv_zero: monthly_invoice_child_settlement_partial:inv_zero:settled=1:failed=1",
+    ]);
   });
 });
 

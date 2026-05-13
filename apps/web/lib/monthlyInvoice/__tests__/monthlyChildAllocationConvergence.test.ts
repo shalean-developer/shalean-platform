@@ -11,6 +11,7 @@ const finalize = path.join(monthlyInvoiceDir, "finalizeDueMonthlyInvoices.ts");
 const manual = path.join(monthlyInvoiceDir, "markMonthlyInvoicePaidManual.ts");
 const helper = path.join(monthlyInvoiceDir, "allocateMonthlyChildPaymentCents.ts");
 const settlementCommand = path.join(monthlyInvoiceDir, "settleMonthlyInvoiceChildBooking.ts");
+const settlementAggregator = path.join(monthlyInvoiceDir, "settleMonthlyInvoiceChildren.ts");
 
 /**
  * Production Readiness Audit H-1.
@@ -28,8 +29,8 @@ describe("monthly child allocation convergence (H-1)", () => {
     expect(src).not.toMatch(/import\s+.*supabase/i);
   });
 
-  it("applyMonthlyInvoicePayment imports and uses allocateMonthlyChildPaymentCents", () => {
-    const src = readFileSync(apply, "utf8");
+  it("the settlement aggregator imports and uses allocateMonthlyChildPaymentCents", () => {
+    const src = readFileSync(settlementAggregator, "utf8");
     expect(src).toContain("allocateMonthlyChildPaymentCents");
     expect(src).toMatch(
       /from\s+["']@\/lib\/monthlyInvoice\/allocateMonthlyChildPaymentCents["']/,
@@ -37,14 +38,14 @@ describe("monthly child allocation convergence (H-1)", () => {
     expect(src).toMatch(/total_paid_zar/);
   });
 
-  it("finalizeDueMonthlyInvoices imports and uses allocateMonthlyChildPaymentCents", () => {
-    const src = readFileSync(finalize, "utf8");
-    expect(src).toContain("allocateMonthlyChildPaymentCents");
-  });
-
-  it("markMonthlyInvoicePaidManual imports and uses allocateMonthlyChildPaymentCents", () => {
-    const src = readFileSync(manual, "utf8");
-    expect(src).toContain("allocateMonthlyChildPaymentCents");
+  it("settlement paths delegate child allocation and settlement to the aggregation helper", () => {
+    for (const p of [apply, finalize, manual]) {
+      const src = readFileSync(p, "utf8");
+      expect(src, `${path.basename(p)} must import settlement aggregator`).toContain("settleMonthlyInvoiceChildren");
+      expect(src, `${path.basename(p)} must not bypass the aggregation helper`).not.toContain(
+        "allocateMonthlyChildPaymentCents",
+      );
+    }
   });
 
   it("no settlement path inlines the legacy ternary `lineCents > 0 ? lineCents : ...`", () => {
@@ -57,19 +58,11 @@ describe("monthly child allocation convergence (H-1)", () => {
     }
   });
 
-  it("settlement paths use the named monthly child settlement command boundary", () => {
-    for (const p of [apply, finalize, manual]) {
-      const src = readFileSync(p, "utf8");
-      expect(src, `${path.basename(p)} must import settlement command`).toContain(
-        "settleMonthlyInvoiceChildBooking",
-      );
-      expect(src, `${path.basename(p)} must pass allocator output to settlement command`).toMatch(
-        /amountPaidCents:\s*allocatedCents/,
-      );
-      expect(src, `${path.basename(p)} must pass frozen payout basis to settlement command`).toMatch(
-        /payoutFrozenCents:\s*frozen/,
-      );
-    }
+  it("the settlement aggregator uses the named monthly child settlement command boundary", () => {
+    const src = readFileSync(settlementAggregator, "utf8");
+    expect(src).toContain("settleMonthlyInvoiceChildBooking");
+    expect(src).toMatch(/amountPaidCents:\s*allocatedCents/);
+    expect(src).toMatch(/payoutFrozenCents:\s*frozen/);
   });
 
   it("only the monthly child settlement command writes payment and payout settlement columns", () => {
@@ -95,8 +88,8 @@ describe("monthly child allocation convergence (H-1)", () => {
     }
   });
 
-  it("applyMonthlyInvoicePayment settles through the command with amount_paid_cents from the allocator", () => {
-    const src = readFileSync(apply, "utf8");
+  it("the settlement aggregator settles through the command with amount_paid_cents from the allocator", () => {
+    const src = readFileSync(settlementAggregator, "utf8");
     const commandCall = src.match(
       /settleMonthlyInvoiceChildBooking\(\s*admin\s*,\s*\{[\s\S]*?amountPaidCents:\s*([^,\n}]+)/,
     );

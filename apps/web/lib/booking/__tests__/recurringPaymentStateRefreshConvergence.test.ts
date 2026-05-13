@@ -44,14 +44,18 @@ describe("recurring payment_state refresh convergence (static guard)", () => {
   });
 
   it("monthly invoice full settlement uses refreshRecurringBookingPaymentState from bookingOperations", () => {
-    const pay = readFileSync(join(cwd, "lib/monthlyInvoice/applyMonthlyInvoicePayment.ts"), "utf8");
-    expect(pay).toContain("refreshRecurringBookingPaymentState");
-    expect(pay).toContain("@/lib/booking/bookingOperations");
-    expect(pay).not.toContain("refreshRecurringPaymentStateForBooking");
-    const manual = readFileSync(join(cwd, "lib/monthlyInvoice/markMonthlyInvoicePaidManual.ts"), "utf8");
-    expect(manual).toContain("refreshRecurringBookingPaymentState");
-    expect(manual).toContain("@/lib/booking/bookingOperations");
-    expect(manual).not.toContain("refreshRecurringPaymentStateForBooking");
+    const helper = readFileSync(join(cwd, "lib/monthlyInvoice/settleMonthlyInvoiceChildren.ts"), "utf8");
+    expect(helper).toContain("refreshRecurringBookingPaymentState");
+    expect(helper).toContain("@/lib/booking/bookingOperations");
+    expect(helper).not.toContain("refreshRecurringPaymentStateForBooking");
+    for (const relativePath of [
+      "lib/monthlyInvoice/applyMonthlyInvoicePayment.ts",
+      "lib/monthlyInvoice/markMonthlyInvoicePaidManual.ts",
+    ]) {
+      const src = readFileSync(join(cwd, relativePath), "utf8");
+      expect(src).toContain("settleMonthlyInvoiceChildren");
+      expect(src).not.toContain("refreshRecurringPaymentStateForBooking");
+    }
   });
 
   it("Probe E monthly payment_state drift repair uses refreshRecurringBookingPaymentState from bookingOperations", () => {
