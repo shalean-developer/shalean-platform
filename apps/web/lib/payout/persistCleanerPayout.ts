@@ -76,6 +76,41 @@ function shouldRecomputeZeroDisplayEarnings(r: {
   return bookingSignalsPaidForZeroDisplayRecompute(r);
 }
 
+function normalizeId(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function resolveTeamPayoutOwnershipInvariant(params: {
+  expectedCleanerId: string;
+  payoutOwnerCleanerId?: string | null;
+  activeCleanerIds: readonly string[];
+  rosterRows: readonly { cleaner_id?: string | null; role?: string | null }[];
+}): { ok: true } | { ok: false; error: string } {
+  const owner = normalizeId(params.payoutOwnerCleanerId);
+  if (!owner) return { ok: false, error: "Team job missing payout_owner_cleaner_id" };
+
+  const expected = normalizeId(params.expectedCleanerId);
+  if (expected !== owner) return { ok: false, error: "Team payout persist cleaner does not match payout owner" };
+
+  const activeIds = new Set(params.activeCleanerIds.map(normalizeId).filter(Boolean));
+  if (!activeIds.has(owner)) return { ok: false, error: "Team payout owner is not an active team member" };
+
+  const rosterIds = new Set(params.rosterRows.map((row) => normalizeId(row.cleaner_id)).filter(Boolean));
+  if (rosterIds.size > 0 && !rosterIds.has(owner)) {
+    return { ok: false, error: "Team payout owner is missing from booking roster" };
+  }
+
+  const leadIds = params.rosterRows
+    .filter((row) => String(row.role ?? "").trim().toLowerCase() === "lead")
+    .map((row) => normalizeId(row.cleaner_id))
+    .filter(Boolean);
+  if (leadIds.length > 0 && !leadIds.includes(owner)) {
+    return { ok: false, error: "Team payout owner does not match booking roster lead" };
+  }
+
+  return { ok: true };
+}
+
 async function isCleanerAllowedForPersist(
   admin: SupabaseClient,
   r: {
@@ -766,6 +801,14 @@ async function persistCleanerPayoutIfUnsetCore(
       .eq("booking_id", bookingId)
       .order("cleaner_id", { ascending: true });
     if (rosterErr) return { ok: false, error: rosterErr.message };
+
+    const ownership = resolveTeamPayoutOwnershipInvariant({
+      expectedCleanerId,
+      payoutOwnerCleanerId: r.payout_owner_cleaner_id,
+      activeCleanerIds: activeIds,
+      rosterRows: rosterRows ?? [],
+    });
+    if (!ownership.ok) return ownership;
 
     const { data: statusRows, error: statusErr } = await admin
       .from("team_job_member_payouts")
