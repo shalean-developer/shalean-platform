@@ -4,6 +4,7 @@
  */
 import type { BookingServiceId, BookingServiceTypeKey } from "@/components/booking/serviceCategories";
 import { bookingServiceIdFromType } from "@/components/booking/serviceCategories";
+import type { CanonicalDurationShadowDiagnostics } from "@/lib/pricing/canonicalDurationShadow";
 import type { VipTier } from "@/lib/pricing/vipTier";
 
 /**
@@ -178,4 +179,6 @@ export type CheckoutQuoteResult = {
   extraRoomsChargeZar: number;
   /** Tariff marker at quote time (`PricingRatesSnapshot.codeVersion`). */
   pricingVersion: number;
+  /** Phase 2D-A: canonical duration policy computed in shadow mode only; `hours` remains legacy runtime truth. */
+  durationDiagnostics?: CanonicalDurationShadowDiagnostics;
 };

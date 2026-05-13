@@ -5,6 +5,10 @@
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import { devWarn } from "@/lib/logging/devWarn";
 import { metrics } from "@/lib/metrics/counters";
+import {
+  buildCanonicalDurationShadowDiagnostics,
+  reportCanonicalDurationShadowMismatch,
+} from "@/lib/pricing/canonicalDurationShadow";
 import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 import type { VipTier } from "@/lib/pricing/vipTier";
@@ -287,6 +291,18 @@ export function quoteCheckoutZarWithSnapshot(
   const j = normalizePricingJobInput(job);
   const subtotal = computeJobSubtotalZarSnapshot(snapshot, j);
   const hours = estimateJobDurationHoursSnapshot(snapshot, j);
+  const durationDiagnostics = buildCanonicalDurationShadowDiagnostics({
+    job: j,
+    legacyHours: hours,
+    reportContext: {
+      source: "quoteCheckoutZarWithSnapshot",
+      pricingVersion: snapshot.codeVersion,
+    },
+  });
+  reportCanonicalDurationShadowMismatch(durationDiagnostics, {
+    source: "quoteCheckoutZarWithSnapshot",
+    pricingVersion: snapshot.codeVersion,
+  });
   const extraRoomsNormalized = j.extraRooms;
   const extraRoomsChargeZar = extraRoomsLineZarSnapshot(snapshot, j);
   const tier = normalizeVipTier(vipTier === null || vipTier === undefined ? undefined : String(vipTier));
@@ -328,6 +344,7 @@ export function quoteCheckoutZarWithSnapshot(
     extraRoomsNormalized,
     extraRoomsChargeZar,
     pricingVersion: snapshot.codeVersion,
+    durationDiagnostics,
   };
 }
 
