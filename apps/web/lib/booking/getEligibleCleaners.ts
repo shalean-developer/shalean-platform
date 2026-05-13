@@ -3,6 +3,10 @@ import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekda
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
 import {
+  buildDailyCleanerWorkloadShadowReport,
+  reportDailyCleanerWorkloadShadow,
+} from "@/lib/booking/cleanerDailyWorkloadShadow";
+import {
   cleanerPassesServiceCapabilityGate,
   serviceCapabilityGateFromBookingFields,
 } from "@/lib/booking/serviceCapabilityEligibility";
@@ -47,6 +51,11 @@ export type GetEligibleCleanersParams = {
   preloadedCleanerLocations?: CleanerLocationPair[];
   /** When set, skips cleaners list query (must match `cleanerIds` filter intent). */
   preloadedCleaners?: CleanerBase[];
+  /**
+   * Public rollout only. When true, removes solo cleaners whose day would exceed 8h
+   * after this requested booking. Default false so admin/dispatch callers remain unchanged.
+   */
+  enforcePublicDailyWorkloadLimit?: boolean;
 };
 
 export type CleanerBase = {
@@ -228,7 +237,9 @@ export async function getEligibleCleaners(
       : Promise.resolve({ data: null as { cleaner_id: string; location_id: string }[] | null, error: null }),
     admin
       .from("bookings")
-      .select("id, cleaner_id, selected_cleaner_id, status, date, booking_date, time, start_time, end_time, duration_minutes")
+      .select(
+        "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, booking_date, time, start_time, end_time, duration_minutes",
+      )
       .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
       .or(`date.eq.${params.date},booking_date.eq.${params.date}`),
   ]);
@@ -261,7 +272,7 @@ export async function getEligibleCleaners(
   const occupyingByCleaner = indexOccupyingBookingsByCleanerId((bookRows ?? []) as OccupyingBookingRow[]);
 
   const trace = process.env.BOOKING_CLEANERS_TRACE === "1";
-  const drop = { weekday: 0, calendar: 0, area: 0, conflict: 0, capability: 0 };
+  const drop = { weekday: 0, calendar: 0, area: 0, conflict: 0, capability: 0, dailyWorkload: 0 };
 
   const filtered: CleanerBase[] = [];
   for (const c of cleaners) {
@@ -303,6 +314,39 @@ export async function getEligibleCleaners(
     filtered.push(c);
   }
 
+  let publicWorkloadFiltered = filtered;
+  if (params.enforcePublicDailyWorkloadLimit === true && filtered.length > 0) {
+    const requestedDurationMinutes = Math.max(30, Math.round(params.durationMinutes));
+    const report = buildDailyCleanerWorkloadShadowReport([
+      ...((bookRows ?? []) as Array<{
+        id?: string | null;
+        cleaner_id?: string | null;
+        payout_owner_cleaner_id?: string | null;
+        team_id?: string | null;
+        is_team_job?: boolean | null;
+        date?: string | null;
+        booking_date?: string | null;
+        status?: string | null;
+        duration_minutes?: number | null;
+      }>),
+      ...filtered.map((c) => ({
+        id: `public-request:${c.id}`,
+        cleaner_id: c.id,
+        date: params.date,
+        duration_minutes: requestedDurationMinutes,
+        is_team_job: false,
+      })),
+    ]);
+    reportDailyCleanerWorkloadShadow(report, { source: "getEligibleCleaners.public" });
+    const overLimitSoloCleanerIds = new Set(
+      report.soloDays
+        .filter((day) => day.dateYmd === params.date && day.riskBand === "over_8h")
+        .map((day) => day.cleanerId),
+    );
+    publicWorkloadFiltered = filtered.filter((c) => !overLimitSoloCleanerIds.has(c.id));
+    drop.dailyWorkload = filtered.length - publicWorkloadFiltered.length;
+  }
+
   if (trace) {
     console.log(
       "[BOOKING CLEANERS TRACE]",
@@ -319,12 +363,12 @@ export async function getEligibleCleaners(
         cleanerLocationsRowsLoaded: (locRows ?? []).length,
         occupyingBookingsForDate: (bookRows ?? []).length,
         dropCounts: drop,
-        finalEligible: filtered.length,
+        finalEligible: publicWorkloadFiltered.length,
       }),
     );
   }
 
-  const withDistance: AvailableCleaner[] = filtered.map((c) => {
+  const withDistance: AvailableCleaner[] = publicWorkloadFiltered.map((c) => {
     const lat = c.latitude ?? c.home_lat ?? null;
     const lng = c.longitude ?? c.home_lng ?? null;
     const canCalc =

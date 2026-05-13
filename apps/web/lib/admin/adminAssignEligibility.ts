@@ -8,6 +8,11 @@ import {
   cleanerPassesServiceCapabilityGate,
   serviceCapabilityGateFromBookingFields,
 } from "@/lib/booking/serviceCapabilityEligibility";
+import {
+  buildDailyCleanerWorkloadShadowReport,
+  type DailyWorkloadWarning,
+  warningFromDailyWorkloadShadowDay,
+} from "@/lib/booking/cleanerDailyWorkloadShadow";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 
 export const DEFAULT_ASSIGN_JOB_DURATION_MIN = 240;
@@ -166,6 +171,7 @@ export type AssignEligibilityRow = {
    * is the broader "should not be in normal eligibility" signal.
    */
   accountIneligible: boolean;
+  workloadWarning: DailyWorkloadWarning | null;
   canAssignWithoutForce: boolean;
 };
 
@@ -212,6 +218,7 @@ export async function computeAssignEligibility(
         nextAvailableStartHm: null,
         offline: false,
         accountIneligible: false,
+        workloadWarning: null,
         canAssignWithoutForce: false,
       });
     }
@@ -356,7 +363,7 @@ export async function computeAssignEligibility(
 
   const { data: dayBookings } = await admin
     .from("bookings")
-    .select("id, cleaner_id, time, duration_minutes, status")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, time, date, booking_date, duration_minutes, status")
     .eq("date", bookingDateYmd)
     .in("cleaner_id", cleanerIds)
     .neq("id", bookingId);
@@ -376,6 +383,32 @@ export async function computeAssignEligibility(
     const cid = String(row.cleaner_id ?? "");
     const list = othersByCleaner.get(cid);
     if (list) list.push({ time: row.time ?? null, duration_minutes: row.duration_minutes });
+  }
+  const workloadReport = buildDailyCleanerWorkloadShadowReport([
+    ...((dayBookings ?? []) as Array<{
+      id?: string | null;
+      cleaner_id?: string | null;
+      payout_owner_cleaner_id?: string | null;
+      team_id?: string | null;
+      is_team_job?: boolean | null;
+      date?: string | null;
+      booking_date?: string | null;
+      status?: string | null;
+      duration_minutes?: number | null;
+    }>),
+    ...cleanerIds.map((id) => ({
+      id: `${bookingId}:candidate:${id}`,
+      cleaner_id: id,
+      date: bookingDateYmd,
+      duration_minutes: durationMinutes,
+      is_team_job: false,
+    })),
+  ]);
+  const workloadWarningByCleaner = new Map<string, DailyWorkloadWarning | null>();
+  for (const day of workloadReport.soloDays) {
+    if (day.dateYmd !== bookingDateYmd) continue;
+    if (!cleanerIds.includes(day.cleanerId)) continue;
+    workloadWarningByCleaner.set(day.cleanerId, warningFromDailyWorkloadShadowDay(day));
   }
 
   for (const id of cleanerIds) {
@@ -432,6 +465,7 @@ export async function computeAssignEligibility(
       nextAvailableStartHm,
       offline,
       accountIneligible,
+      workloadWarning: workloadWarningByCleaner.get(id) ?? null,
       canAssignWithoutForce,
     });
   }

@@ -123,6 +123,11 @@ type MockOpts = {
   otherBookings?: Array<{
     id: string;
     cleaner_id: string;
+    payout_owner_cleaner_id?: string | null;
+    team_id?: string | null;
+    is_team_job?: boolean | null;
+    date?: string | null;
+    booking_date?: string | null;
     time: string | null;
     duration_minutes: number | null;
     status: string;
@@ -227,7 +232,7 @@ function buildEligibilityMock(opts: MockOpts): SupabaseClient {
       select: () => ({
         eq: () => ({
           in: () => ({
-            neq: () => Promise.resolve({ data: otherBookings, error: null }),
+            neq: () => Promise.resolve({ data: otherBookings.map((row) => ({ date, ...row })), error: null }),
           }),
         }),
       }),
@@ -831,6 +836,100 @@ describe("AssignEligibilityRow shape", () => {
     expect(row.accountIneligible).toBe(false);
     expect(row.canAssignWithoutForce).toBe(false);
     expect(row.weekdayOk).toBe(false);
+    expect(row.workloadWarning).toBeNull();
+  });
+});
+
+describe("Phase 2E-C: admin eligibility workload warnings are advisory only", () => {
+  it("adds a near-8h warning without blocking assignment eligibility", async () => {
+    const map = await runEligibilityFor([healthyCleaner(HEALTHY_ID)], {
+      otherBookings: [
+        {
+          id: "existing-long",
+          cleaner_id: HEALTHY_ID,
+          time: "06:00",
+          duration_minutes: 200,
+          status: "assigned",
+        },
+      ],
+    });
+    const row = map.get(HEALTHY_ID)!;
+    expect(row.canAssignWithoutForce).toBe(true);
+    expect(row.workloadWarning).toEqual(
+      expect.objectContaining({
+        code: "daily_workload_near_limit",
+        riskBand: "risky_near_8h",
+        jobKind: "solo",
+        totalScheduledMinutes: 440,
+      }),
+    );
+  });
+
+  it("adds an over-8h warning without blocking assignment eligibility", async () => {
+    const map = await runEligibilityFor([healthyCleaner(HEALTHY_ID)], {
+      otherBookings: [
+        {
+          id: "existing-over",
+          cleaner_id: HEALTHY_ID,
+          time: "00:00",
+          duration_minutes: 300,
+          status: "assigned",
+        },
+      ],
+    });
+    const row = map.get(HEALTHY_ID)!;
+    expect(row.canAssignWithoutForce).toBe(true);
+    expect(row.workloadWarning).toEqual(
+      expect.objectContaining({
+        code: "daily_workload_over_limit",
+        riskBand: "over_8h",
+        totalScheduledMinutes: 540,
+      }),
+    );
+  });
+
+  it("flags fallback duration usage without blocking assignment eligibility", async () => {
+    const map = await runEligibilityFor([healthyCleaner(HEALTHY_ID)], {
+      otherBookings: [
+        {
+          id: "missing-duration",
+          cleaner_id: HEALTHY_ID,
+          time: "06:00",
+          duration_minutes: null,
+          status: "assigned",
+        },
+      ],
+    });
+    const row = map.get(HEALTHY_ID)!;
+    expect(row.canAssignWithoutForce).toBe(true);
+    expect(row.workloadWarning).toEqual(
+      expect.objectContaining({
+        code: "duration_fallback_used",
+        riskBand: "normal",
+        fallbackCount: 1,
+        fallbackBookingIds: ["missing-duration"],
+      }),
+    );
+  });
+
+  it("keeps team workload separate from solo admin assignment warnings", async () => {
+    const map = await runEligibilityFor([healthyCleaner(HEALTHY_ID)], {
+      otherBookings: [
+        {
+          id: "team-existing",
+          cleaner_id: HEALTHY_ID,
+          payout_owner_cleaner_id: HEALTHY_ID,
+          team_id: "team-1",
+          is_team_job: true,
+          time: "00:00",
+          duration_minutes: 360,
+          status: "assigned",
+        },
+      ],
+    });
+    const row = map.get(HEALTHY_ID)!;
+    expect(row.canAssignWithoutForce).toBe(true);
+    expect(row.workloadWarning).toBeNull();
   });
 });
 
@@ -860,6 +959,7 @@ describe("M-13/M-14 test plumbing", () => {
       "nextAvailableStartHm",
       "offline",
       "accountIneligible",
+      "workloadWarning",
       "canAssignWithoutForce",
     ];
     for (const k of keys) expect(row).toHaveProperty(k);

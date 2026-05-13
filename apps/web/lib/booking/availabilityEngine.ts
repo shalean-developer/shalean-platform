@@ -4,6 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
+import { maxCleanerDailyWorkloadEnforcePublic } from "@/lib/booking/availabilityFlags";
 import type { AvailableCleaner, CleanerAvailabilityRow, CleanerReviewSnippet } from "@/lib/booking/cleanerPoolTypes";
 import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
 import type { CleanerBase } from "@/lib/booking/getEligibleCleaners";
@@ -190,6 +191,7 @@ export async function getAvailableCleaners(
     preloadedCleanerLocations: preloadedLocs,
     serviceType: args.bookingServiceSlug ?? null,
     serviceLabelForCapability: args.serviceLabelForCapability ?? null,
+    enforcePublicDailyWorkloadLimit: maxCleanerDailyWorkloadEnforcePublic(),
   });
 
   const sliced = cleaners.slice(0, limit);
@@ -351,6 +353,7 @@ export async function getAvailableTimeSlots(
         preloadedCleanerLocations: preloadedLocs,
         serviceType: args.bookingServiceSlug ?? null,
         serviceLabelForCapability: args.serviceLabelForCapability ?? null,
+        enforcePublicDailyWorkloadLimit: maxCleanerDailyWorkloadEnforcePublic(),
       });
 
       out.push({

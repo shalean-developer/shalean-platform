@@ -49,6 +49,17 @@ export type DailyCleanerWorkloadShadowDay = {
   riskBand: DailyWorkloadRiskBand;
 };
 
+export type DailyWorkloadWarning = {
+  code: "daily_workload_near_limit" | "daily_workload_over_limit" | "duration_fallback_used";
+  riskBand: DailyWorkloadRiskBand;
+  jobKind: DailyWorkloadJobKind;
+  totalScheduledMinutes: number;
+  maxPolicyMinutes: number;
+  riskyPolicyMinutes: number;
+  fallbackCount: number;
+  fallbackBookingIds: string[];
+};
+
 export type DailyCleanerWorkloadShadowReport = {
   days: DailyCleanerWorkloadShadowDay[];
   soloDays: DailyCleanerWorkloadShadowDay[];
@@ -191,6 +202,49 @@ export function buildDailyCleanerWorkloadShadowReport(
     fallbackUsage,
     skippedRows,
   };
+}
+
+export function warningFromDailyWorkloadShadowDay(
+  day: DailyCleanerWorkloadShadowDay | null | undefined,
+): DailyWorkloadWarning | null {
+  if (!day) return null;
+  if (day.riskBand === "over_8h") {
+    return {
+      code: "daily_workload_over_limit",
+      riskBand: day.riskBand,
+      jobKind: day.jobKind,
+      totalScheduledMinutes: day.totalScheduledMinutes,
+      maxPolicyMinutes: day.maxPolicyMinutes,
+      riskyPolicyMinutes: day.riskyPolicyMinutes,
+      fallbackCount: day.fallbackCount,
+      fallbackBookingIds: [...day.fallbackBookingIds],
+    };
+  }
+  if (day.riskBand === "risky_near_8h") {
+    return {
+      code: "daily_workload_near_limit",
+      riskBand: day.riskBand,
+      jobKind: day.jobKind,
+      totalScheduledMinutes: day.totalScheduledMinutes,
+      maxPolicyMinutes: day.maxPolicyMinutes,
+      riskyPolicyMinutes: day.riskyPolicyMinutes,
+      fallbackCount: day.fallbackCount,
+      fallbackBookingIds: [...day.fallbackBookingIds],
+    };
+  }
+  if (day.fallbackCount > 0) {
+    return {
+      code: "duration_fallback_used",
+      riskBand: day.riskBand,
+      jobKind: day.jobKind,
+      totalScheduledMinutes: day.totalScheduledMinutes,
+      maxPolicyMinutes: day.maxPolicyMinutes,
+      riskyPolicyMinutes: day.riskyPolicyMinutes,
+      fallbackCount: day.fallbackCount,
+      fallbackBookingIds: [...day.fallbackBookingIds],
+    };
+  }
+  return null;
 }
 
 export function reportDailyCleanerWorkloadShadow(
