@@ -2,6 +2,7 @@ import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { checkoutDurationMinutesFromLocked } from "@/lib/booking/lockedBookingDurationMinutes";
+import { legacyHoursToDurationMinutes } from "@/lib/pricing/legacyDurationSelection";
 import { parsePricingServiceParams, resolveServiceForPricing } from "@/lib/pricing/pricingEngine";
 
 /**
@@ -53,7 +54,7 @@ export function slotEligibilityCoreFromLockBody(
   const date = typeof body.date === "string" ? body.date.trim() : "";
   if (!loc || !/^[0-9a-f-]{36}$/i.test(loc)) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const durationMinutes = Math.max(30, Math.round(opts.durationHours * 60));
+  const durationMinutes = legacyHoursToDurationMinutes(opts.durationHours);
   const hm = opts.timeHm.trim().slice(0, 5);
   return {
     date,

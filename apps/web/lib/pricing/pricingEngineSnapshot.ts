@@ -9,6 +9,7 @@ import {
   buildCanonicalDurationShadowDiagnostics,
   reportCanonicalDurationShadowMismatch,
 } from "@/lib/pricing/canonicalDurationShadow";
+import { selectLegacyJobDurationHours } from "@/lib/pricing/legacyDurationSelection";
 import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 import type { VipTier } from "@/lib/pricing/vipTier";
@@ -274,11 +275,7 @@ export function normalizeJobSubtotalSplitZar(
 }
 
 export function estimateJobDurationHoursSnapshot(snapshot: PricingRatesSnapshot, job: PricingJobInput): number {
-  const j = normalizePricingJobInput(job);
-  const cfg = tariffFromSnapshot(snapshot, resolveServiceForPricing(j));
-  const d = cfg.duration;
-  const raw = d.base + j.rooms * d.bedroom + j.bathrooms * d.bathroom + j.extraRooms * d.extraRoom;
-  return Math.max(2, Math.round(raw * 10) / 10);
+  return selectLegacyJobDurationHours(snapshot, job);
 }
 
 export function quoteCheckoutZarWithSnapshot(

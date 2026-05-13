@@ -3,6 +3,7 @@ import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import { quoteCheckoutZarWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
+import { legacyHoursToDurationMinutes } from "@/lib/pricing/legacyDurationSelection";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 
 function normalizeTime(t: string): string {
@@ -133,7 +134,7 @@ export async function runBookingLockValidation(body: Record<string, unknown>): P
           cleanersCount: lockedParsed.cleanersCount,
         },
       );
-      durationMinutes = Math.max(30, Math.round(q.hours * 60));
+      durationMinutes = legacyHoursToDurationMinutes(q.hours);
     }
   } else {
     const durationRaw = Number(body.duration_minutes ?? body.durationMinutes ?? 120);

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAvailableTimeSlots } from "@/lib/booking/availabilityEngine";
-import { normalizeVipTier } from "@/lib/pricing/vipTier";
+import { selectLegacyJobDurationMinutes } from "@/lib/pricing/legacyDurationSelection";
 import {
   normalizeExtraRoomsRaw,
   parsePricingServiceParams,
 } from "@/lib/pricing/pricingEngine";
-import { quoteJobDurationHoursWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
 import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import { filterExtrasForSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
 import { resolveServiceForPricing } from "@/lib/pricing/pricingEngine";
@@ -76,7 +75,6 @@ export async function GET(request: Request) {
       const bathrooms = Number.isFinite(bathroomsRaw) ? Math.max(1, Math.round(bathroomsRaw)) : 1;
       const extraRooms = normalizeExtraRoomsRaw(url.searchParams.get("extraRooms"));
       const extras = parseExtrasParam(url.searchParams.get("extras"));
-      const vipTier = normalizeVipTier(url.searchParams.get("vipTier"));
       const { service, serviceType } = parsePricingServiceParams(serviceRaw);
       const snapshot = await buildPricingRatesSnapshotFromDb(admin);
       if (snapshot) {
@@ -86,10 +84,7 @@ export async function GET(request: Request) {
           ...draft,
           extras: filterExtrasForSnapshot(snapshot, extras, resolved),
         };
-        durationMinutes = Math.max(
-          30,
-          Math.round(quoteJobDurationHoursWithSnapshot(snapshot, job, vipTier) * 60),
-        );
+        durationMinutes = selectLegacyJobDurationMinutes(snapshot, job);
       }
     }
   }
