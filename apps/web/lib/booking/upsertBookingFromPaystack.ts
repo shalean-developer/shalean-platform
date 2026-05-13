@@ -43,6 +43,7 @@ import {
 } from "@/lib/booking/checkoutCleanerEligibility";
 import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConversionBucket";
 import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
+import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { escalateFailedCheckoutDispatchOffer } from "@/lib/booking/checkoutDispatchOfferFailureEscalation";
@@ -583,6 +584,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     service_fee_cents: serviceFeeCents,
     currency: input.currency || "ZAR",
     booking_snapshot: bookingSnapshotMerged,
+    ...lockedDurationMinutesPatch(lockedRow),
     ...(serviceSlugForRow ? { service_slug: serviceSlugForRow } : {}),
     status: "pending",
     dispatch_status: "searching",

@@ -8,6 +8,10 @@ import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
+import {
+  lockedDurationMinutesFromBookingSnapshot,
+  lockedDurationMinutesPatch,
+} from "@/lib/booking/durationMinutesIntegrity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
@@ -129,6 +133,7 @@ export async function insertPendingPaymentBookingRow(
       price_breakdown: null,
       total_price: null,
       price_snapshot: provisionalPriceSnapshotFromLocked(locked),
+      ...lockedDurationMinutesPatch(locked),
       payment_link_expires_at: paymentLinkExpiresAt,
     })
     .select("id")
@@ -162,6 +167,7 @@ export async function updatePendingPaymentBookingForInit(
     surgeMultiplier: number;
     surgeReason: string | null;
     extrasSnapshot: unknown[];
+    durationMinutes?: number | null;
     /** Admin "Create anyway" — excluded from partial unique slot index; audit flag. */
     slotDuplicateExempt?: boolean;
     adminForceSlotOverride?: boolean;
@@ -212,11 +218,19 @@ export async function updatePendingPaymentBookingForInit(
     bookingDate: r0?.date ?? null,
     bookingTime: r0?.time ?? null,
   });
+  const durationMinutes =
+    typeof params.durationMinutes === "number" &&
+    Number.isFinite(params.durationMinutes) &&
+    params.durationMinutes >= 30
+      ? Math.round(params.durationMinutes)
+      : lockedDurationMinutesFromBookingSnapshot(params.bookingSnapshot);
+  const durationMinutesPatch = durationMinutes != null ? { duration_minutes: durationMinutes } : {};
 
   const { error } = await admin
     .from("bookings")
     .update({
       booking_snapshot: params.bookingSnapshot,
+      ...durationMinutesPatch,
       price_breakdown: params.priceBreakdown,
       total_price: params.totalPriceZar,
       ...(params.price_snapshot && typeof params.price_snapshot === "object"

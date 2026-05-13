@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 import { BOOKING_SLOT_OCCUPYING_STATUSES } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
+import { reportDurationFallbackTo120 } from "@/lib/booking/durationMinutesIntegrity";
 
 export type { BookingSlotOccupyingStatus } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
 export { BOOKING_SLOT_OCCUPYING_STATUSES } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
@@ -85,7 +86,16 @@ export function existingBookingOccupancyWindow(row: OccupyingBookingRow): { star
   }
   const d = row.duration_minutes;
   const dur =
-    typeof d === "number" && Number.isFinite(d) && d >= 30 ? Math.min(12 * 60, Math.round(d)) : 120;
+    typeof d === "number" && Number.isFinite(d) && d >= 30
+      ? Math.min(12 * 60, Math.round(d))
+      : (() => {
+          reportDurationFallbackTo120({
+            bookingId: row.id ?? null,
+            source: "existingBookingOccupancyWindow",
+            durationMinutes: d ?? null,
+          });
+          return 120;
+        })();
   return { startMin: start, endMin: start + dur };
 }
 

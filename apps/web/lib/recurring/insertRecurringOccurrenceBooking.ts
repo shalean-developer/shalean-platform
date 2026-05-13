@@ -9,6 +9,7 @@ import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { provisionalPriceSnapshotJson } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import {
   findActiveCustomerSlotOccupant,
@@ -135,6 +136,7 @@ export async function insertRecurringOccurrenceBooking(
     amount_paid_cents: 0,
     currency: "ZAR",
     booking_snapshot: snapshot,
+    ...lockedDurationMinutesPatch(locked),
     status: "pending_payment" as const,
     dispatch_status: "searching" as const,
     surge_multiplier: 1,

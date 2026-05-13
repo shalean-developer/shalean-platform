@@ -15,6 +15,7 @@ import type {
 import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
 import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
+import { selectLockedBookingDurationMinutesForPersistence } from "@/lib/booking/durationMinutesIntegrity";
 import {
   deletePendingPaymentBooking,
   deletePendingPaymentBookingsWithPaystackReference,
@@ -686,6 +687,7 @@ export async function processPaystackInitializeBody(
     const upd = await updatePendingPaymentBookingForInit(admin, {
       bookingId: pricingTarget.bookingId,
       bookingSnapshot: bookingSnapshotMerged,
+      durationMinutes: selectLockedBookingDurationMinutesForPersistence(locked),
       priceBreakdown,
       totalPriceZar: checkout.visitTotalZar,
       totalPaidZar: totalZar,

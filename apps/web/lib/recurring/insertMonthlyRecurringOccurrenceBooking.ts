@@ -8,6 +8,7 @@ import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerpri
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import type { RecurringRowForInsert } from "@/lib/recurring/insertRecurringOccurrenceBooking";
 import { cloneSnapshotTemplate } from "@/lib/recurring/insertRecurringOccurrenceBooking";
@@ -105,6 +106,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     amount_paid_cents: 0,
     currency: "ZAR",
     booking_snapshot: snapshot,
+    ...lockedDurationMinutesPatch(locked),
     status: "pending" as const,
     dispatch_status: "searching" as const,
     surge_multiplier: 1,
