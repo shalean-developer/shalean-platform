@@ -23,6 +23,7 @@ import {
   bookingsPersistSelectListForPersist,
   fetchBookingDisplayEarningsCents,
   hasPersistedDisplayEarningsBasis,
+  isCompletableDisplayEarningsCents,
   resolvePersistCleanerIdForBooking,
   type BookingPaidSignalRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
@@ -787,9 +788,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
           }
           if (needsEarningsIntegrityGate) {
             const displayCents = await fetchBookingDisplayEarningsCents(admin, id);
-            if (!hasPersistedDisplayEarningsBasis(displayCents)) {
+            if (!isCompletableDisplayEarningsCents(displayCents)) {
               await revertBookingCompletionOnly(admin);
-              await reportOperationalIssue("error", "admin_booking_completed", "CRITICAL display_earnings missing after persist (reverted completion)", {
+              await reportOperationalIssue("error", "admin_booking_completed", "CRITICAL display_earnings not positive after persist (reverted completion)", {
                 bookingId: id,
                 cleanerId: persistCleanerId,
               });

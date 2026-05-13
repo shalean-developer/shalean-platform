@@ -14,7 +14,7 @@ import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { isBookingCompletedRouterEnabled, routeBookingNotificationEvent } from "@/lib/notifications/notificationRouter";
 import {
   fetchBookingDisplayEarningsCents,
-  hasPersistedDisplayEarningsBasis,
+  isCompletableDisplayEarningsCents,
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -88,8 +88,8 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
         continue;
       }
       const displayCents = await fetchBookingDisplayEarningsCents(admin, id);
-      if (!hasPersistedDisplayEarningsBasis(displayCents)) {
-        await reportOperationalIssue("error", "cron/booking-lifecycle", "CRITICAL display_earnings_cents still missing after persist (pre-complete)", {
+      if (!isCompletableDisplayEarningsCents(displayCents)) {
+        await reportOperationalIssue("error", "cron/booking-lifecycle", "CRITICAL display_earnings_cents not positive after persist (pre-complete)", {
           bookingId: id,
           cleanerId: persistCleanerId,
         });
