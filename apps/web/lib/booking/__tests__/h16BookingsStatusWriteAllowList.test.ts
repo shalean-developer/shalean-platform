@@ -38,10 +38,10 @@ import { describe, expect, it } from "vitest";
  *   - `lib/cleaner/cleanerLifecycleBookingCommands.ts`
  *       Cleaner-side lifecycle command boundary (accept / reject / en_route / start / complete).
  *       Internally calls `buildCompletionCoherencePatch` for completion.
- *   - `lib/booking/assignCleaner.ts#assignCleaner` (+ `buildAssignmentFieldsForPaidBookingRow`)
- *       Paid-booking auto-assignment helper (pending → assigned / pending_assignment).
- *   - `lib/booking/reassignBookingAfterDecline.ts`
- *       Decline-fallback redispatch (pending_assignment → assigned).
+ *   - `lib/booking/assignmentBookingStateCommands.ts`
+ *       Phase-1H command boundary for assignment/reassignment booking-state
+ *       writes. Assignment orchestrators delegate here rather than issuing
+ *       direct `bookings.status` updates inline.
  *   - `lib/dispatch/dispatchOffers.ts#acceptDispatchOffer`
  *       Cleaner accepts a dispatch offer (pending/pending_assignment/offered → assigned).
  *   - `lib/whatsapp/handleCleanerAssignedBookingReply.ts`
@@ -51,12 +51,14 @@ import { describe, expect, it } from "vitest";
  *       `eq("status", "assigned")` to prevent races with concurrent in-app actions.
  *   - `lib/dispatch/escalatePendingAck.ts`
  *       Ack-timeout escalation: when a cleaner does not acknowledge an
- *       assignment within `PENDING_ACK_ESCALATE_MS`, clears the cleaner and
+ *       assignment within `PENDING_ACK_ESCALATE_MS`, delegates the guarded
+ *       clear/fail booking write to `assignmentBookingStateCommands.ts` and
  *       re-dispatches via `ensureBookingAssignment`. Conditional update uses
  *       `eq("cleaner_response_status", "pending")` to avoid races with accept.
  *   - `lib/booking/runAssignmentAckTimeouts.ts`
  *       Stale-assigned release: assigned + assigned_at older than the ack
- *       cutoff → pending_assignment, then `tryOnceReassignAfterDecline`.
+ *       cutoff → pending_assignment via `assignmentBookingStateCommands.ts`,
+ *       then `tryOnceReassignAfterDecline`.
  *
  *   Integrity / invariant helpers:
  *   - `lib/admin/adminBookingPostCreatePipeline.ts#ensureBookingAssignedStatusInvariant`
@@ -157,8 +159,7 @@ const WEB_ROOT = path.resolve(__dirname, "..", "..", "..");
 const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   // Lifecycle helpers (cleaner-side state transitions + paid-booking auto-assign).
   "lib/cleaner/cleanerLifecycleBookingCommands.ts",
-  "lib/booking/assignCleaner.ts",
-  "lib/booking/reassignBookingAfterDecline.ts",
+  "lib/booking/assignmentBookingStateCommands.ts",
   /*
    * `lib/dispatch/dispatchOffers.ts` was removed from this allow-list
    * after M-12: the cleaner-accept path now routes through the atomic
@@ -169,8 +170,6 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
    * (classification: `lifecycle_rpc`).
    */
   "lib/whatsapp/handleCleanerAssignedBookingReply.ts",
-  "lib/dispatch/escalatePendingAck.ts",
-  "lib/booking/runAssignmentAckTimeouts.ts",
 
   // Integrity / invariant helpers.
   "lib/admin/adminBookingPostCreatePipeline.ts",
@@ -208,23 +207,23 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
 
 /**
  * Files where `bookings.status` is mutated *indirectly* through a patch
- * variable whose `status` field comes from a same-file helper or a function
- * call (i.e. the static analyzer in this test cannot trace it without a full
- * TS type checker). They are still subject to manual code review and to the
- * allow-list above; this fallback only suppresses the "stale entry" check so
- * we don't false-flag well-known indirect writers.
+ * variable whose `status` field comes from a same-file helper, function call,
+ * or command-boundary parameter (i.e. the static analyzer in this test cannot
+ * trace it without a full TS type checker). They are still subject to manual
+ * code review and to the allow-list above; this fallback only suppresses the
+ * "stale entry" check so we don't false-flag well-known indirect writers.
  *
  * Each entry MUST point to a file that:
  *   1. is also listed in {@link APPROVED_BOOKINGS_STATUS_WRITERS}, AND
  *   2. issues `from("bookings").update(varName)` whose `varName` is built
- *      via a same-file helper that returns/mutates `status`.
+ *      via a same-file helper that returns/mutates `status`, or accepts a
+ *      command-boundary patch parameter pinned by a convergence test.
  */
 const APPROVED_INDIRECT_STATUS_WRITERS: ReadonlySet<string> = new Set([
+  // Phase-1H assignment command boundary: callers pass status-bearing patches
+  // while this module owns the conditional `bookings.update(...)` guards.
+  "lib/booking/assignmentBookingStateCommands.ts",
   "lib/cleaner/cleanerLifecycleBookingCommands.ts",
-  // `assignCleaner` calls `update(patch)` where `patch` is the return of
-  // `buildAssignmentFieldsForPaidBookingRow(...)` — a same-file helper that
-  // returns `{ status: "assigned" | "pending_assignment" | "pending", ... }`.
-  "lib/booking/assignCleaner.ts",
 ]);
 
 /** Directories scanned for `from("bookings").update(...)` call sites. */

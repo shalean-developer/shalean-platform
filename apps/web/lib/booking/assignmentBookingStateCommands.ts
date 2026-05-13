@@ -71,12 +71,13 @@ export async function failBookingAfterAckEscalationExhausted(params: {
   admin: SupabaseClient;
   bookingId: string;
   patch: Record<string, unknown>;
+  cleanerResponseStatus: string;
 }): Promise<{ error: AssignmentBookingUpdateError | null }> {
   const { error } = await params.admin
     .from("bookings")
     .update(params.patch)
     .eq("id", params.bookingId)
-    .eq("cleaner_response_status", "pending");
+    .eq("cleaner_response_status", params.cleanerResponseStatus);
 
   return { error };
 }
@@ -85,12 +86,13 @@ export async function clearBookingForAckEscalationRedispatch(params: {
   admin: SupabaseClient;
   bookingId: string;
   patch: Record<string, unknown>;
+  cleanerResponseStatus: string;
 }): Promise<{ data: Array<{ id: string }> | null; error: AssignmentBookingUpdateError | null }> {
   const { data, error } = await params.admin
     .from("bookings")
     .update(params.patch)
     .eq("id", params.bookingId)
-    .eq("cleaner_response_status", "pending")
+    .eq("cleaner_response_status", params.cleanerResponseStatus)
     .select("id");
 
   return { data: data as Array<{ id: string }> | null, error };

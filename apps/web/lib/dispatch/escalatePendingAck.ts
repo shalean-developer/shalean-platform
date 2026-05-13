@@ -78,6 +78,7 @@ export async function escalateBookingIfAckTimeout(
     const { error: failErr } = await failBookingAfterAckEscalationExhausted({
       admin,
       bookingId,
+      cleanerResponseStatus: CLEANER_RESPONSE.PENDING,
       patch: {
         cleaner_id: null,
         status: "pending",
@@ -109,6 +110,7 @@ export async function escalateBookingIfAckTimeout(
   const { data: cleared, error: clearErr } = await clearBookingForAckEscalationRedispatch({
     admin,
     bookingId,
+    cleanerResponseStatus: CLEANER_RESPONSE.PENDING,
     patch: {
       cleaner_id: null,
       status: "pending",
