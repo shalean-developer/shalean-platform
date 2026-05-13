@@ -14,3 +14,12 @@ export function useStrictAvailability(): boolean {
 export function maxCleanerDailyWorkloadEnforcePublic(): boolean {
   return process.env.MAX_CLEANER_DAILY_WORKLOAD_ENFORCE_PUBLIC === "true";
 }
+
+/**
+ * Phase 2E-E rollout flag: admin assignment may enforce the future 8h/day solo
+ * workload policy for normal (non-force) assignments. Default OFF; force remains
+ * an explicit admin override and team roster-hour caps are not enforced here.
+ */
+export function maxCleanerDailyWorkloadEnforceAdmin(): boolean {
+  return process.env.MAX_CLEANER_DAILY_WORKLOAD_ENFORCE_ADMIN === "true";
+}

@@ -2,13 +2,27 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
 import { setAdminManualBookingOffered } from "@/lib/admin/adminManualBookingOfferCommand";
+import { maxCleanerDailyWorkloadEnforceAdmin } from "@/lib/booking/availabilityFlags";
+import {
+  buildDailyCleanerWorkloadShadowReport,
+  type DailyWorkloadWarning,
+  warningFromDailyWorkloadShadowDay,
+} from "@/lib/booking/cleanerDailyWorkloadShadow";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 
 export type AdminAssignOneResult =
-  | { ok: true; cleanerId: string; offerId: string; expiresAtIso: string }
-  | { ok: false; httpStatus: number; error: string };
+  | {
+      ok: true;
+      cleanerId: string;
+      offerId: string;
+      expiresAtIso: string;
+      workloadWarning?: DailyWorkloadWarning | null;
+      workloadOverrideCode?: "admin_daily_workload_over_limit_force_override";
+      workloadOverrideReason?: string;
+    }
+  | { ok: false; httpStatus: number; error: string; code?: "admin_daily_workload_over_limit"; workloadWarning?: DailyWorkloadWarning | null };
 
 type BookingRow = {
   id: string;
@@ -23,6 +37,46 @@ type BookingRow = {
   service_slug?: string | null;
   service?: string | null;
 };
+
+async function loadAdminDailyWorkloadWarning(
+  admin: SupabaseClient,
+  params: {
+    bookingId: string;
+    cleanerId: string;
+    dateYmd: string;
+    durationMinutes: number;
+  },
+): Promise<DailyWorkloadWarning | null> {
+  const { data } = await admin
+    .from("bookings")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, date, booking_date, status, duration_minutes")
+    .eq("date", params.dateYmd)
+    .eq("cleaner_id", params.cleanerId)
+    .neq("id", params.bookingId);
+
+  const report = buildDailyCleanerWorkloadShadowReport([
+    ...((data ?? []) as Array<{
+      id?: string | null;
+      cleaner_id?: string | null;
+      payout_owner_cleaner_id?: string | null;
+      team_id?: string | null;
+      is_team_job?: boolean | null;
+      date?: string | null;
+      booking_date?: string | null;
+      status?: string | null;
+      duration_minutes?: number | null;
+    }>),
+    {
+      id: `${params.bookingId}:admin-candidate:${params.cleanerId}`,
+      cleaner_id: params.cleanerId,
+      date: params.dateYmd,
+      duration_minutes: params.durationMinutes,
+      is_team_job: false,
+    },
+  ]);
+  const day = report.soloDays.find((d) => d.cleanerId === params.cleanerId && d.dateYmd === params.dateYmd);
+  return warningFromDailyWorkloadShadowDay(day);
+}
 
 /**
  * Admin dispatch: validate slot + city, then reset booking to pending/offered and create a dispatch offer.
@@ -61,6 +115,7 @@ export async function performAdminAssignToCleaner(
 
   const dateYmd = String(b.date ?? "");
   const timeHm = String(b.time ?? "");
+  const durationMinutes = effectiveJobDurationMinutes(b);
 
   const { data: cleaner, error: cErr } = await admin
     .from("cleaners")
@@ -79,7 +134,7 @@ export async function performAdminAssignToCleaner(
     const eligible = await getEligibleCleaners(admin, {
       date: dateYmd,
       startTime: timeHm.trim().slice(0, 5),
-      durationMinutes: effectiveJobDurationMinutes(b),
+      durationMinutes,
       locationId: locId,
       locationExpandedIds: locId ? [locId] : null,
       cleanerIds: [resolvedCleanerId],
@@ -122,6 +177,30 @@ export async function performAdminAssignToCleaner(
       ok: false,
       httpStatus: 400,
       error: "Cleaner has toggled themselves unavailable. Pass force=true to override.",
+    };
+  }
+
+  const workloadWarning =
+    dateYmd && /^\d{4}-\d{2}-\d{2}$/.test(dateYmd)
+      ? await loadAdminDailyWorkloadWarning(admin, {
+          bookingId,
+          cleanerId: resolvedCleanerId,
+          dateYmd,
+          durationMinutes,
+        })
+      : null;
+  if (
+    maxCleanerDailyWorkloadEnforceAdmin() &&
+    !force &&
+    workloadWarning?.code === "daily_workload_over_limit"
+  ) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      code: "admin_daily_workload_over_limit",
+      workloadWarning,
+      error:
+        "Cleaner would exceed the 8-hour daily workload limit for this date. Use force=true to override.",
     };
   }
 
@@ -172,5 +251,12 @@ export async function performAdminAssignToCleaner(
     cleanerId: resolvedCleanerId,
     offerId: offer.offerId,
     expiresAtIso: offer.expiresAtIso,
+    workloadWarning,
+    ...(force && workloadWarning?.code === "daily_workload_over_limit"
+      ? {
+          workloadOverrideCode: "admin_daily_workload_over_limit_force_override" as const,
+          workloadOverrideReason: "Admin force override allowed assignment above the 8-hour daily workload policy.",
+        }
+      : {}),
   };
 }
