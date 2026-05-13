@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
+import { assignDispatchTeamAndSyncRoster } from "@/lib/booking/teamAssignmentBookingStateCommands";
 import { loadCleanerCapabilityColumnsById } from "@/lib/booking/cleanerServiceCapabilityDb";
 import type { ServiceCapabilityGate } from "@/lib/booking/serviceCapabilityEligibility";
 import {
@@ -492,13 +492,12 @@ async function finalizeBookingTeamAssignment(
   };
 
   let snapshotArg: number | null = rosterSnapshot;
-  let atomic = await assignTeamAndSyncRoster(supabase, {
+  let atomic = await assignDispatchTeamAndSyncRoster({
+    admin: supabase,
     bookingId,
     teamId: selected.id,
     payoutOwnerCleanerId,
     teamMemberCountSnapshot: snapshotArg,
-    variant: "dispatch",
-    source: "dispatch",
     assignedAtIso: nowIso,
   });
 
@@ -514,13 +513,12 @@ async function finalizeBookingTeamAssignment(
       },
     });
     snapshotArg = null;
-    atomic = await assignTeamAndSyncRoster(supabase, {
+    atomic = await assignDispatchTeamAndSyncRoster({
+      admin: supabase,
       bookingId,
       teamId: selected.id,
       payoutOwnerCleanerId,
       teamMemberCountSnapshot: null,
-      variant: "dispatch",
-      source: "dispatch",
       assignedAtIso: nowIso,
     });
   }

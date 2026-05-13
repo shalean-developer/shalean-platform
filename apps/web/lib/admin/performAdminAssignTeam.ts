@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
+import { assignAdminTeamAndSyncRoster } from "@/lib/booking/teamAssignmentBookingStateCommands";
 import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 import { loadCleanerCapabilityColumnsById } from "@/lib/booking/cleanerServiceCapabilityDb";
 import {
@@ -224,13 +224,12 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     };
   }
 
-  const atomic = await assignTeamAndSyncRoster(admin, {
+  const atomic = await assignAdminTeamAndSyncRoster({
+    admin,
     bookingId,
     teamId: tid,
     payoutOwnerCleanerId,
     teamMemberCountSnapshot: rosterCount,
-    variant: "admin",
-    source: "admin",
   });
   if (!atomic.ok) {
     const locked = /finalized|roster locked|cleaner line earnings finalized/i.test(atomic.message);
