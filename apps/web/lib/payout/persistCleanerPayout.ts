@@ -355,18 +355,41 @@ export async function resolvePersistEarningsComputation(params: {
   const bookingDateIso = bookingAppointmentIsoUtc(r.date, r.time) ?? "";
   const serviceId = resolveServiceIdForPersist(r.booking_snapshot ?? null, r.service ?? null);
 
-  let lineItemRows: { id: string; item_type: string; total_price_cents: number }[] = [];
+  let lineItemRows: {
+    id: string;
+    item_type: string;
+    slug: string | null;
+    name: string | null;
+    metadata: Record<string, unknown> | null;
+    earns_cleaner: boolean | null;
+    total_price_cents: number;
+  }[] = [];
   if (!isTeamJob) {
     const { data: li } = await admin
       .from("booking_line_items")
-      .select("id, item_type, total_price_cents")
+      .select("id, item_type, slug, name, metadata, earns_cleaner, total_price_cents")
       .eq("booking_id", bookingId);
     lineItemRows = (li ?? [])
-      .map((x) => x as { id?: string; item_type?: string; total_price_cents?: number })
+      .map(
+        (x) =>
+          x as {
+            id?: string;
+            item_type?: string;
+            slug?: string | null;
+            name?: string | null;
+            metadata?: Record<string, unknown> | null;
+            earns_cleaner?: boolean | null;
+            total_price_cents?: number;
+          },
+      )
       .filter((x) => typeof x.id === "string" && typeof x.item_type === "string")
       .map((x) => ({
         id: String(x.id),
         item_type: String(x.item_type),
+        slug: x.slug ?? null,
+        name: x.name ?? null,
+        metadata: x.metadata ?? null,
+        earns_cleaner: x.earns_cleaner ?? null,
         total_price_cents: Number(x.total_price_cents) || 0,
       }));
   }

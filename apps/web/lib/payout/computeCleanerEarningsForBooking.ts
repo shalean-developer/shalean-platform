@@ -68,7 +68,7 @@ export async function computeCleanerEarningsForBooking(params: {
 
   const { data: lines, error: liErr } = await admin
     .from("booking_line_items")
-    .select("id, item_type, earns_cleaner, total_price_cents")
+    .select("id, item_type, slug, name, metadata, earns_cleaner, total_price_cents")
     .eq("booking_id", bid);
   if (liErr) return { ok: false, error: liErr.message };
   const items = lines ?? [];
@@ -82,11 +82,26 @@ export async function computeCleanerEarningsForBooking(params: {
   if (useCanonicalLines) {
     const target = Math.max(0, Math.floor(Number(canonicalDisplayCents)));
     const lineInputs: EarningsLineItemInput[] = items
-      .map((raw) => raw as { id?: string; item_type?: string; total_price_cents?: number | null })
+      .map(
+        (raw) =>
+          raw as {
+            id?: string;
+            item_type?: string;
+            slug?: string | null;
+            name?: string | null;
+            metadata?: Record<string, unknown> | null;
+            earns_cleaner?: boolean | null;
+            total_price_cents?: number | null;
+          },
+      )
       .filter((li) => typeof li.id === "string" && typeof li.item_type === "string")
       .map((li) => ({
         id: String(li.id),
         item_type: String(li.item_type),
+        slug: li.slug ?? null,
+        name: li.name ?? null,
+        metadata: li.metadata ?? null,
+        earns_cleaner: li.earns_cleaner ?? null,
         total_price_cents: Number(li.total_price_cents) || 0,
       }));
 

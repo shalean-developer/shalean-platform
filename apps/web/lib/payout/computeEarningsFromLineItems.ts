@@ -2,25 +2,33 @@
  * Derives the **service price basis** (eligible subtotal in cents) from `booking_line_items`
  * for the same {@link computeBookingEarnings} path (tenure % + service caps).
  *
- * Eligible line types: base, room, bathroom, extra, and **adjustment** (bundles / refunds).
+ * Phase 2A: eligibility is delegated to the canonical cleaner earnings eligibility resolver.
  */
+
+import { lineItemContributesToCleanerEarnings } from "@/lib/payout/cleanerEarningsEligibility";
 
 export type EarningsLineItemInput = {
   id: string;
   item_type: string;
+  slug?: string | null;
+  name?: string | null;
+  metadata?: Record<string, unknown> | null;
+  earns_cleaner?: boolean | null;
   total_price_cents: number;
 };
 
-const ELIGIBLE = new Set(["base", "room", "bathroom", "extra", "adjustment"]);
-
 export function isEligibleLineItemType(itemType: string): boolean {
-  return ELIGIBLE.has(String(itemType ?? "").toLowerCase());
+  return lineItemContributesToCleanerEarnings({ item_type: itemType });
+}
+
+export function isEligibleLineItem(item: EarningsLineItemInput): boolean {
+  return lineItemContributesToCleanerEarnings(item);
 }
 
 export function sumEligibleLineItemsSubtotalCents(items: readonly EarningsLineItemInput[]): number {
   let s = 0;
   for (const i of items) {
-    if (!isEligibleLineItemType(i.item_type)) continue;
+    if (!isEligibleLineItem(i)) continue;
     const c = Math.round(Number(i.total_price_cents));
     if (!Number.isFinite(c)) continue;
     s += c;
@@ -37,7 +45,7 @@ export function allocateDisplayCentsAcrossLineItems(
   items: readonly EarningsLineItemInput[],
 ): { booking_line_item_id: string; allocated_display_earnings_cents: number }[] {
   const d = Math.max(0, Math.floor(displayCents));
-  const eligible = items.filter((i) => isEligibleLineItemType(i.item_type));
+  const eligible = items.filter(isEligibleLineItem);
   const weights = eligible.map((i) => Math.max(0, Math.round(Number(i.total_price_cents) || 0)));
   const sumW = weights.reduce((a, b) => a + b, 0);
   if (eligible.length === 0 || d === 0) {

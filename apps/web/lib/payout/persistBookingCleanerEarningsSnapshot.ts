@@ -13,13 +13,25 @@ export async function persistBookingCleanerEarningsSnapshot(params: {
   admin: SupabaseClient;
   bookingId: string;
   cleanerId: string;
-  lineRows: readonly { id: string; item_type: string; total_price_cents: number }[];
+  lineRows: readonly {
+    id: string;
+    item_type: string;
+    slug?: string | null;
+    name?: string | null;
+    metadata?: Record<string, unknown> | null;
+    earns_cleaner?: boolean | null;
+    total_price_cents: number;
+  }[];
   earnings: ComputeBookingEarningsOutput;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { admin, bookingId, cleanerId, lineRows, earnings } = params;
   const items: EarningsLineItemInput[] = lineRows.map((r) => ({
     id: r.id,
     item_type: r.item_type,
+    slug: r.slug ?? null,
+    name: r.name ?? null,
+    metadata: r.metadata ?? null,
+    earns_cleaner: r.earns_cleaner ?? null,
     total_price_cents: r.total_price_cents,
   }));
   const eligibleSubtotal = sumEligibleLineItemsSubtotalCents(items);

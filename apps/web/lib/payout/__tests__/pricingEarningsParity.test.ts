@@ -16,10 +16,23 @@ const BOOKING_DATE = "2026-01-20";
 const BOOKING_TIME = "09:00";
 const BOOKING_APPOINTMENT = bookingAppointmentIsoUtc(BOOKING_DATE, BOOKING_TIME)!;
 
-function withIds(items: Array<{ item_type: string; total_price_cents: number }>): EarningsLineItemInput[] {
+function withIds(
+  items: Array<{
+    item_type: string;
+    slug?: string | null;
+    name?: string | null;
+    metadata?: Record<string, unknown> | null;
+    earns_cleaner?: boolean | null;
+    total_price_cents: number;
+  }>,
+): EarningsLineItemInput[] {
   return items.map((item, idx) => ({
     id: `line-${idx + 1}`,
     item_type: item.item_type,
+    slug: item.slug ?? null,
+    name: item.name ?? null,
+    metadata: item.metadata ?? null,
+    earns_cleaner: item.earns_cleaner ?? null,
     total_price_cents: item.total_price_cents,
   }));
 }
@@ -102,7 +115,7 @@ describe("pricing / earnings parity matrix", () => {
     expect(weeklyBasisCents(weeklyRow)).toBe(display.displayEarningsCents);
   });
 
-  it("documents the current checkout adjustment divergence without fixing it", () => {
+  it("excludes generic checkout adjustments from the line-led cleaner earnings basis", () => {
     const lineItems = withIds(
       buildCheckoutVisitLineItems({
         serviceTypeSlug: "standard",
@@ -132,16 +145,16 @@ describe("pricing / earnings parity matrix", () => {
     };
 
     expect(lineItems.find((item) => item.item_type === "adjustment")?.total_price_cents).toBe(5_000);
-    expect(lineSubtotalCents).toBe(50_000);
-    expect(display.displayEarningsCents).toBe(35_000);
+    expect(lineSubtotalCents).toBe(45_000);
+    expect(display.displayEarningsCents).toBe(31_500);
 
-    // Intentional current divergence: line-item display/frozen earnings include adjustment,
-    // while legacy weekly payout columns are still based on base_amount_cents.
+    // Phase 2A: generic adjustments no longer silently inflate display/frozen earnings.
+    // Weekly payout columns are still based on the existing legacy booking payout fields.
     expect(legacy.payoutCents + legacy.bonusCents).toBe(31_500);
     expect(frozen).toBe(display.displayEarningsCents);
     expect(bookingPayableForWeeklyBatch(weeklyRow, new Map())).toEqual({ payable: true });
     expect(weeklyBasisCents(weeklyRow)).toBe(31_500);
-    expect(weeklyBasisCents(weeklyRow)).not.toBe(display.displayEarningsCents);
+    expect(weeklyBasisCents(weeklyRow)).toBe(display.displayEarningsCents);
   });
 
   it("keeps recurring/monthly child earnings aligned after settlement freezes the display basis", () => {

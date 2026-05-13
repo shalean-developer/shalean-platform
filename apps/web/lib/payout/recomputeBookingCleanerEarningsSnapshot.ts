@@ -40,13 +40,31 @@ export async function recomputeBookingCleanerEarningsSnapshot(
   const cleanerId = String(r.cleaner_id ?? "").trim();
   if (!cleanerId) return { ok: false, error: "Missing cleaner_id" };
 
-  const { data: li } = await admin.from("booking_line_items").select("id, item_type, total_price_cents").eq("booking_id", bookingId);
+  const { data: li } = await admin
+    .from("booking_line_items")
+    .select("id, item_type, slug, name, metadata, earns_cleaner, total_price_cents")
+    .eq("booking_id", bookingId);
   const lineItemRows = (li ?? [])
-    .map((x) => x as { id?: string; item_type?: string; total_price_cents?: number })
+    .map(
+      (x) =>
+        x as {
+          id?: string;
+          item_type?: string;
+          slug?: string | null;
+          name?: string | null;
+          metadata?: Record<string, unknown> | null;
+          earns_cleaner?: boolean | null;
+          total_price_cents?: number;
+        },
+    )
     .filter((x) => typeof x.id === "string" && typeof x.item_type === "string")
     .map((x) => ({
       id: String(x.id),
       item_type: String(x.item_type),
+      slug: x.slug ?? null,
+      name: x.name ?? null,
+      metadata: x.metadata ?? null,
+      earns_cleaner: x.earns_cleaner ?? null,
       total_price_cents: Number(x.total_price_cents) || 0,
     }));
 
