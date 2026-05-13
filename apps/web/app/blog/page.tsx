@@ -45,7 +45,7 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
           base: "Home Cleaning Guides",
           place: "Cape Town",
           templateKey: "blog-index|all",
-          brandSuffix: "Shalean Blog",
+          brandSuffix: "Shalean",
           pageIntent: "hub",
           maxLen: BLOG_SERP_TITLE_MAX,
         })
@@ -53,7 +53,7 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
           base: `${blogTopicMetaLabel(topic)} Tips`,
           place: "Cape Town",
           templateKey: `blog-index|topic|${topic}`,
-          brandSuffix: "Shalean Blog",
+          brandSuffix: "Shalean",
           pageIntent: "hub",
           maxLen: BLOG_SERP_TITLE_MAX,
         });
