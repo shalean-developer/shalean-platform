@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isCompletableDisplayEarningsCents } from "@/lib/payout/bookingEarningsIntegrity";
 
 export type SettleMonthlyInvoiceChildBookingParams = {
   bookingId: string;
@@ -16,6 +17,10 @@ export async function settleMonthlyInvoiceChildBooking(
   admin: SupabaseClient,
   params: SettleMonthlyInvoiceChildBookingParams,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isCompletableDisplayEarningsCents(params.payoutFrozenCents)) {
+    return { ok: false, error: `invalid_payout_frozen_cents:${params.bookingId}` };
+  }
+
   const { error } = await admin
     .from("bookings")
     .update({

@@ -64,4 +64,34 @@ describe("settleMonthlyInvoiceChildBooking", () => {
       }),
     ).resolves.toEqual({ ok: false, error: "db failed" });
   });
+
+  it.each([
+    ["zero", 0],
+    ["negative", -1],
+    ["NaN", Number.NaN],
+    ["infinity", Number.POSITIVE_INFINITY],
+  ])("blocks %s payout_frozen_cents before marking the child booking payout eligible", async (_label, payoutFrozenCents) => {
+    let updateCalled = false;
+    const admin = {
+      from() {
+        return {
+          update() {
+            updateCalled = true;
+            return {
+              eq: async () => ({ error: null }),
+            };
+          },
+        };
+      },
+    };
+
+    const result = await settleMonthlyInvoiceChildBooking(admin as never, {
+      bookingId: "booking-unsafe",
+      amountPaidCents: 1000,
+      payoutFrozenCents,
+    });
+
+    expect(result).toEqual({ ok: false, error: "invalid_payout_frozen_cents:booking-unsafe" });
+    expect(updateCalled).toBe(false);
+  });
 });
