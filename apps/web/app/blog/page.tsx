@@ -18,7 +18,6 @@ import {
 } from "@/lib/blog/blog-index-hub";
 import { getAllPublishedPosts } from "@/lib/blog/get-all-posts";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
-import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
@@ -41,22 +40,8 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
   const topic = parseBlogTopicParam(sp.topic);
   const title =
     topic === "all"
-      ? generateCtrTitle({
-          base: "Home Cleaning Guides",
-          place: "Cape Town",
-          templateKey: "blog-index|all",
-          brandSuffix: "Shalean",
-          pageIntent: "hub",
-          maxLen: BLOG_SERP_TITLE_MAX,
-        })
-      : generateCtrTitle({
-          base: `${blogTopicMetaLabel(topic)} Tips`,
-          place: "Cape Town",
-          templateKey: `blog-index|topic|${topic}`,
-          brandSuffix: "Shalean",
-          pageIntent: "hub",
-          maxLen: BLOG_SERP_TITLE_MAX,
-        });
+      ? "Top Home Cleaning Guides & Prices in Cape Town | Book Instantly"
+      : `${blogTopicMetaLabel(topic)} Tips in Cape Town | Shalean`;
   const description =
     topic === "all"
       ? DEFAULT_DESCRIPTION
