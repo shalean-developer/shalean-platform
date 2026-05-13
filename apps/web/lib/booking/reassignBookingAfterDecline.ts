@@ -6,6 +6,7 @@ import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceCapabilityGateFromBookingFields } from "@/lib/booking/serviceCapabilityEligibility";
 import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
+import { reassignPendingAssignmentBookingAfterDecline } from "@/lib/booking/assignmentBookingStateCommands";
 
 const BOOKING_ROW_SELECT =
   "id, customer_name, customer_phone, location, service, date, time, status, created_at, cleaner_id, dispatch_status";
@@ -56,9 +57,11 @@ export async function tryOnceReassignAfterDecline(
     if (!cleaner) return;
 
     const nowIso = new Date().toISOString();
-    const { data, error } = await admin
-      .from("bookings")
-      .update({
+    const { data, error } = await reassignPendingAssignmentBookingAfterDecline({
+      admin,
+      bookingId: params.bookingId,
+      select: BOOKING_ROW_SELECT,
+      patch: {
         cleaner_id: cleaner.id,
         status: "assigned",
         dispatch_status: "assigned",
@@ -68,12 +71,8 @@ export async function tryOnceReassignAfterDecline(
         started_at: null,
         last_declined_by_cleaner_id: null,
         last_declined_at: null,
-      })
-      .eq("id", params.bookingId)
-      .eq("status", "pending_assignment")
-      .is("cleaner_id", null)
-      .select(BOOKING_ROW_SELECT)
-      .maybeSingle();
+      },
+    });
 
     if (error || !data) {
       if (error) {

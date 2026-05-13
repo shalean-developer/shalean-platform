@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { formatDueDateLabel, formatMonthLongYearUtc } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { createNotificationConfigBreaker } from "@/lib/email/notificationConfigBreaker";
 import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 import { daysPastDueJhb } from "@/lib/dashboard/invoiceOverdueEscalation";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
@@ -183,6 +184,18 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
   const nowIso = nowSnapshot.toISOString();
   const escalationWarned = new Set<string>();
 
+  // M-9: per-run breaker for the email channel only. The overdue-reminder
+  // cron is bounded per invoice (3 attempts at days 3/7/14) but unbounded
+  // across invoices in a single run — without this breaker, a broken
+  // RESEND_API_KEY produces N permanent_config ops issues per cron tick.
+  // WhatsApp delivery uses a separate provider and is intentionally NOT
+  // gated by this breaker (different configuration, different failure
+  // mode).
+  const emailBreaker = createNotificationConfigBreaker({
+    source: "cron/send-invoice-reminders",
+    channel: "email",
+  });
+
   for (const inv of eligible) {
     const total = Math.max(0, Math.round(Number(inv.total_amount_cents ?? 0)));
     const paid = Math.max(0, Math.round(Number(inv.amount_paid_cents ?? 0)));
@@ -247,6 +260,18 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
       by_channel.email.skipped += 1;
     } else if (!paymentUrl) {
       by_channel.email.skipped += 1;
+    } else if (emailBreaker.shouldSkipRemainingSends()) {
+      // M-9: an earlier invoice in this same run already proved Resend is
+      // misconfigured. Record per-invoice audit so the admin UI still
+      // shows what happened, but skip the network call to stop the
+      // per-invoice ops-log spam. The next cron tick gets a fresh breaker
+      // and will retry from scratch — that is the recovery path once ops
+      // fix the configuration.
+      emailBreaker.recordSkippedInvoice(inv.id);
+      await appendForChannel("email", "failed", emailBreaker.skipReason() ?? "permanent_config_failure_breaker_open");
+      total_failed += 1;
+      by_channel.email.failed += 1;
+      sentKeys.add(emailKey);
     } else {
       const emailRes = await sendMonthlyInvoiceReminderEmail({
         to: email,
@@ -265,6 +290,11 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
         by_channel.email.sent += 1;
         sentKeys.add(emailKey);
       } else {
+        await emailBreaker.recordSendOutcome({
+          classification: emailRes.classification,
+          errorMessage: emailRes.error,
+          invoiceId: inv.id,
+        });
         await appendForChannel("email", "failed", emailRes.error ?? "email_send_failed");
         total_failed += 1;
         by_channel.email.failed += 1;
@@ -318,6 +348,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
       total_sent,
       total_failed,
       by_channel,
+      email_breaker: emailBreaker.snapshot(),
     },
   });
 

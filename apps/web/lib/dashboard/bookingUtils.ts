@@ -155,7 +155,26 @@ function cleanerFromRow(row: BookingRow): DashboardBooking["cleaner"] {
   const emb = row.cleaners as CleanerEmbed;
   const snap = (row.booking_snapshot ?? null) as BookingSnapshotV1 | null;
   const snapName = snap?.cleaner_name;
-  const name = (emb?.full_name && emb.full_name.trim()) || (typeof snapName === "string" && snapName.trim()) || "";
+  // M-15: surface the lead-cleaner name for H-8 team-assigned bookings
+  // (where `cleaner_id` is null and the canonical embed cannot resolve a
+  // name). Server-enriched via `applyTeamLeadCleanerNamesToRows` so the
+  // dashboard reviews modal/list can show "Reviewing X's clean" without
+  // exposing the rest of the team roster.
+  //
+  // Order:
+  //   1. Embed (canonical for solo bookings — unchanged).
+  //   2. Server-enriched team-lead name (only set for `is_team_job=true`
+  //      rows whose `cleaner_id` is cleared). Wins over the snapshot
+  //      because team handoffs can supersede the customer's pre-checkout
+  //      cleaner pick.
+  //   3. `booking_snapshot.cleaner_name` (legacy / pre-team-handoff fallback).
+  const isTeamJobAssignment = row.is_team_job === true;
+  const teamLead = isTeamJobAssignment ? String(row.payout_owner_cleaner_name ?? "").trim() : "";
+  const name =
+    (emb?.full_name && emb.full_name.trim()) ||
+    teamLead ||
+    (typeof snapName === "string" && snapName.trim()) ||
+    "";
   if (!name) return null;
   const phone = emb?.phone?.trim() || undefined;
   return { name, initials: initials(name), phone };

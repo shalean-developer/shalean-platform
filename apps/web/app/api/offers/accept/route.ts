@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { acceptDispatchOffer } from "@/lib/dispatch/dispatchOffers";
+import { acceptBookingDispatchOffer } from "@/lib/dispatch/dispatchOffers";
 import { fetchDispatchOfferRowByToken } from "@/lib/dispatch/offerByToken";
 import { isValidOfferTokenFormat } from "@/lib/dispatch/offerTokenFormat";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This offer has expired." }, { status: 410 });
   }
 
-  const r = await acceptDispatchOffer({
+  const r = await acceptBookingDispatchOffer({
     supabase: admin,
     offerId: row.offerId,
     cleanerId: row.cleanerId,

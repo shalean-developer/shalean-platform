@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyDispatchEscalationAdmin } from "@/lib/dispatch/dispatchEscalation";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
+import { markDispatchRetryTerminalBookingStatus } from "@/lib/booking/assignmentBookingStateCommands";
 
 /** Minutes after failure before each retry wave (cron-compatible). */
 export const DISPATCH_RETRY_DELAYS_MIN = [2, 5, 10, 15] as const;
@@ -289,12 +290,11 @@ export async function processDispatchRetryQueue(supabase: SupabaseClient): Promi
       // H-9: include `pending_assignment` so exhausted retry queues for user-selected
       // post-payment flows can also reach terminal `dispatch_status='unassignable' | 'no_cleaner'`.
       // The `cleaner_id IS NULL` guard still prevents stomping on bookings that meanwhile assigned.
-      await supabase
-        .from("bookings")
-        .update({ dispatch_status: terminalDispatchStatus })
-        .eq("id", bookingId)
-        .in("status", ["pending", "pending_assignment"])
-        .is("cleaner_id", null);
+      await markDispatchRetryTerminalBookingStatus({
+        admin: supabase,
+        bookingId,
+        terminalDispatchStatus,
+      });
 
       metrics.increment("dispatch.unassignable", {
         bookingId,

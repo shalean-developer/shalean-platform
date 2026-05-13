@@ -1,7 +1,27 @@
 import "server-only";
 
+import {
+  classifyResendSendError,
+  type EmailSendErrorClassification,
+  type ResendLikeError,
+} from "@/lib/email/classifyResendSendError";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+
+/**
+ * Discriminated send result. The `classification` field was added in M-9 so
+ * cron loops can differentiate permanent-config failures (stop the run via
+ * `notificationConfigBreaker`) from transient or per-recipient validation
+ * failures (continue the run, retry on next cron tick). Pre-M-9 callers
+ * that only inspected `sent` and `error` keep working unchanged.
+ */
+export type SendMonthlyInvoiceEmailResult =
+  | { sent: true; classification: "ok" }
+  | { sent: false; error: string; classification: EmailSendErrorClassification };
+
+function classifyMissingResendConfig(): EmailSendErrorClassification {
+  return "permanent_config";
+}
 
 export async function sendMonthlyInvoiceEmail(params: {
   to: string;
@@ -9,13 +29,13 @@ export async function sendMonthlyInvoiceEmail(params: {
   totalZar: number;
   paymentUrl: string;
   dueDateLabel: string;
-}): Promise<{ sent: boolean; error?: string }> {
+}): Promise<SendMonthlyInvoiceEmailResult> {
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", "monthly_invoice/email", "RESEND_API_KEY not set", {
       to: params.to,
     });
-    return { sent: false, error: "RESEND_API_KEY not set" };
+    return { sent: false, error: "RESEND_API_KEY not set", classification: classifyMissingResendConfig() };
   }
 
   const amount = `R ${Math.round(params.totalZar).toLocaleString("en-ZA")}`;
@@ -37,8 +57,14 @@ export async function sendMonthlyInvoiceEmail(params: {
   });
 
   if (error) {
-    await reportOperationalIssue("error", "monthly_invoice/email", error.message, { to: params.to });
-    return { sent: false, error: error.message };
+    const classification = classifyResendSendError(error as ResendLikeError);
+    await reportOperationalIssue(
+      classification === "permanent_config" ? "error" : "warn",
+      "monthly_invoice/email",
+      error.message,
+      { to: params.to, classification },
+    );
+    return { sent: false, error: error.message, classification };
   }
 
   await logSystemEvent({
@@ -48,7 +74,7 @@ export async function sendMonthlyInvoiceEmail(params: {
     context: { to: params.to, month: params.monthLabel },
   });
 
-  return { sent: true };
+  return { sent: true, classification: "ok" };
 }
 
 function escapeHtml(s: string): string {
@@ -69,13 +95,13 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
   balanceZar: number;
   paymentUrl: string;
   dueDateLabel: string;
-}): Promise<{ sent: boolean; error?: string }> {
+}): Promise<SendMonthlyInvoiceEmailResult> {
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", "monthly_invoice/reminder_email", "RESEND_API_KEY not set", {
       to: params.to,
     });
-    return { sent: false, error: "RESEND_API_KEY not set" };
+    return { sent: false, error: "RESEND_API_KEY not set", classification: classifyMissingResendConfig() };
   }
 
   const fmt = (n: number) => `R ${Math.round(n).toLocaleString("en-ZA")}`;
@@ -102,8 +128,14 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
   });
 
   if (error) {
-    await reportOperationalIssue("error", "monthly_invoice/reminder_email", error.message, { to: params.to });
-    return { sent: false, error: error.message };
+    const classification = classifyResendSendError(error as ResendLikeError);
+    await reportOperationalIssue(
+      classification === "permanent_config" ? "error" : "warn",
+      "monthly_invoice/reminder_email",
+      error.message,
+      { to: params.to, classification },
+    );
+    return { sent: false, error: error.message, classification };
   }
 
   await logSystemEvent({
@@ -113,5 +145,5 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
     context: { to: params.to, month: params.monthLabel, daysPastDue: params.daysPastDue },
   });
 
-  return { sent: true };
+  return { sent: true, classification: "ok" };
 }

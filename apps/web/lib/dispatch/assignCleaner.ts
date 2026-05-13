@@ -6,6 +6,7 @@ import {
   smartAssignCleaner,
   type SmartAssignOptions,
 } from "@/lib/dispatch/smartAssignCleaner";
+import { updateBookingAssignmentLocationContext } from "@/lib/booking/assignmentBookingStateCommands";
 
 export type { CleanerRow, AvailabilityRow } from "@/lib/dispatch/types";
 
@@ -60,10 +61,12 @@ export async function assignCleanerToBooking(
   if (!locationId && locationText) {
     const resolved = await resolveLocationContextFromLabel(supabase, locationText);
     if (resolved.locationId) {
-      const { error: locErr } = await supabase
-        .from("bookings")
-        .update({ location_id: resolved.locationId, city_id: resolved.cityId })
-        .eq("id", bookingId);
+      const { error: locErr } = await updateBookingAssignmentLocationContext({
+        admin: supabase,
+        bookingId,
+        locationId: resolved.locationId,
+        cityId: resolved.cityId,
+      });
       if (locErr) {
         await reportOperationalIssue("warn", "assignCleanerToBooking", `location_id update: ${locErr.message}`, {
           bookingId,

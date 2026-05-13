@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
+import { setAdminManualBookingOffered } from "@/lib/admin/adminManualBookingOfferCommand";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
-import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 
 export type AdminAssignOneResult =
   | { ok: true; cleanerId: string; offerId: string; expiresAtIso: string }
@@ -128,21 +128,15 @@ export async function performAdminAssignToCleaner(
   const dispatchWasUnassignable = String(b.dispatch_status ?? "").toLowerCase() === "unassignable";
   const nowIsoForPending = new Date().toISOString();
 
-  const { error: uErr } = await admin
-    .from("bookings")
-    .update({
-      cleaner_id: null,
-      status: "offered",
-      dispatch_status: "offered",
-      assigned_at: null,
-      accepted_at: null,
-      ...BOOKING_PAYOUT_COLUMNS_CLEAR,
-      ...(dispatchWasUnassignable ? { became_pending_at: nowIsoForPending } : {}),
-    })
-    .eq("id", bookingId);
+  const offered = await setAdminManualBookingOffered({
+    admin,
+    bookingId,
+    dispatchWasUnassignable,
+    nowIsoForPending,
+  });
 
-  if (uErr) {
-    return { ok: false, httpStatus: 500, error: uErr.message };
+  if (!offered.ok) {
+    return { ok: false, httpStatus: 500, error: offered.error };
   }
 
   await admin

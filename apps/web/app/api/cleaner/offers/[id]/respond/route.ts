@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
-import { acceptDispatchOffer, rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
+import { acceptBookingDispatchOffer, rejectDispatchOffer } from "@/lib/dispatch/dispatchOffers";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -34,7 +34,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const cleanerId = session.cleanerId;
 
   if (normalizedAction === "accept") {
-    const r = await acceptDispatchOffer({
+    const r = await acceptBookingDispatchOffer({
       supabase: admin,
       offerId,
       cleanerId,

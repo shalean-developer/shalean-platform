@@ -97,7 +97,31 @@ function createMockAdmin(opts: {
         if (bookingsFrom === 2) {
           return countChain(slotCount);
         }
-        throw new Error(`unexpected bookings from() call #${bookingsFrom}`);
+        // M-8: `performAdminAssignTeam` calls
+        // `triggerAssignmentEarningsSnapshotForBooking` after the team
+        // mutation has been persisted (see `performAdminAssignTeam.ts`
+        // line 310). That helper fans out into BOTH:
+        //   1) `triggerPersistCleanerPayoutIfCompleted` — selects
+        //      `status, cleaner_id, payout_owner_cleaner_id, is_team_job`;
+        //      no-ops unless `status === 'completed'`.
+        //   2) `triggerPersistMonthlyAssignedDisplayEarnings` — selects
+        //      `status, cleaner_id, payout_owner_cleaner_id, is_team_job,
+        //      billing_type, is_monthly_billing_booking, monthly_invoice_id`;
+        //      no-ops unless `status` is `assigned` / `in_progress` AND the
+        //      booking is monthly-managed.
+        // The base test booking has `status: "pending"` (and no monthly
+        // markers), so returning the same row makes both triggers fall
+        // straight through to their early-return guard without performing
+        // any additional DB work — preserving M-8 semantics (the trigger
+        // STILL fires) without forcing this unit test to model the entire
+        // earnings-snapshot pipeline.
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: booking, error: null }),
+            }),
+          }),
+        };
       }
       if (table === "teams") {
         teamsFrom += 1;

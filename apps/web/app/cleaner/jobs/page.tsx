@@ -175,6 +175,15 @@ export default function CleanerJobsListPage() {
     workspaceBookingsRealtime: true,
     workspaceTeamIds: rtTeamIds,
     onBookingChange: bumpJobsFromRealtime,
+    // M-10: opt in to `dispatch_offers` events so the pending-offer count
+    // badge above the jobs list updates immediately on new dispatcher
+    // INSERTs (no waiting on the 25s poll tick) and clears immediately when
+    // an accept/decline/expire UPDATE flips the offer out of the
+    // pending-visibility set. Same `bumpJobsFromRealtime` sink — `loadJobs`
+    // refetches both `/api/cleaner/jobs` AND `/api/cleaner/offers`, so the
+    // API is the canonical de-dup point regardless of whether a duplicate
+    // Realtime event came in (debounced upstream into one refetch anyway).
+    onOffersChange: bumpJobsFromRealtime,
   });
 
   useEffect(() => {

@@ -15,6 +15,7 @@ import { useDashboardToast } from "@/components/dashboard/dashboard-toast-contex
 import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
 import { DashboardListSkeleton } from "@/components/dashboard/dashboard-skeletons";
 import { bookingIsReviewSubmissionEligibleAssignee } from "@/lib/reviews/customerReviewFollowUpContract";
+import { chooseReviewModalAutoOpenIntent } from "@/lib/reviews/reviewModalAutoOpenIntent";
 
 function StarsRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
@@ -68,15 +69,44 @@ function DashboardReviewsInner() {
     [bookings, reviewedIds],
   );
 
+  /*
+   * M-11: auto-open the modal when there is a deep-link `?booking=<id>`
+   * (preserves existing lifecycle-email behaviour) **OR** when there is
+   * exactly one reviewable booking (the common single-pending-review
+   * case). Multiple reviewable bookings deliberately do NOT auto-open —
+   * the dropdown stays the explicit choice so we never funnel feedback to
+   * the wrong booking. Decision factored into the pure
+   * {@link chooseReviewModalAutoOpenIntent} helper so the three rules
+   * are exhaustively unit-testable without a React harness.
+   */
   useEffect(() => {
-    if (openedFromQuery || bookingsLoading || loading) return;
-    const b = searchParams.get("booking")?.trim() ?? "";
-    if (!b) return;
-    if (!reviewable.some((x) => x.id === b)) return;
-    setBookingId(b);
+    const intent = chooseReviewModalAutoOpenIntent({
+      queryBookingId: searchParams.get("booking"),
+      reviewableIds: reviewable.map((x) => x.id),
+      alreadyOpened: openedFromQuery,
+      bookingsLoading,
+      reviewsLoading: loading,
+    });
+    if (intent.kind === "none") return;
+    setBookingId(intent.bookingId);
     setOpen(true);
     setOpenedFromQuery(true);
   }, [searchParams, reviewable, bookingsLoading, loading, openedFromQuery]);
+
+  /*
+   * M-15: surface the cleaner being reviewed inside the modal. For solo
+   * bookings this comes from the canonical `cleaners(full_name)` embed;
+   * for H-8 team-assigned bookings the server enricher resolves the lead
+   * name into `payout_owner_cleaner_name` (see
+   * `cleanerFromRow` + `applyTeamLeadCleanerNamesToRows`). Either way
+   * the displayed name is exactly the cleaner the API will write into
+   * `reviews.cleaner_id`.
+   */
+  const selectedCleanerName = useMemo(() => {
+    if (!bookingId) return null;
+    const b = reviewable.find((x) => x.id === bookingId);
+    return b?.cleaner?.name?.trim() || null;
+  }, [bookingId, reviewable]);
 
   async function onSubmit() {
     if (!bookingId) {
@@ -142,6 +172,19 @@ function DashboardReviewsInner() {
                     <p className="font-semibold text-zinc-900 dark:text-zinc-50">{r.serviceName}</p>
                     <p className="text-xs text-zinc-500">{new Date(r.created_at).toLocaleDateString("en-ZA")}</p>
                   </div>
+                  {/* M-15: show the cleaner the rating was saved against so
+                   * customers can recognise / cross-reference past reviews.
+                   * For team jobs this is the lead cleaner the H-8 resolver
+                   * wrote into `reviews.cleaner_id` — same value the modal
+                   * showed at submission time. Skipped silently when the
+                   * cleaner row is missing (legacy data) so the card layout
+                   * doesn't shift. */}
+                  {r.cleanerName ? (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Reviewed{" "}
+                      <span className="font-medium text-zinc-700 dark:text-zinc-300">{r.cleanerName}</span>
+                    </p>
+                  ) : null}
                   <div className="mt-2 flex items-center gap-0.5">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <Star
@@ -175,13 +218,30 @@ function DashboardReviewsInner() {
                   value={bookingId}
                   onChange={(e) => setBookingId(e.target.value)}
                 >
-                  {reviewable.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.serviceName} · {b.date} {b.time}
-                    </option>
-                  ))}
+                  {reviewable.map((b) => {
+                    /* M-15: append cleaner name to each option so customers
+                     * never review the wrong clean by accident, especially
+                     * when multiple completed bookings share a date/service. */
+                    const cleanerSuffix = b.cleaner?.name?.trim()
+                      ? ` · with ${b.cleaner.name.trim()}`
+                      : "";
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {b.serviceName} · {b.date} {b.time}
+                        {cleanerSuffix}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
+              {/* M-15: explicit "you're reviewing" subtitle so the cleaner
+               * name is always visible above the rating widget — not just
+               * inside the dropdown which collapses once chosen. */}
+              {selectedCleanerName ? (
+                <p className="text-xs text-zinc-500" data-testid="rev-selected-cleaner">
+                  You&apos;re reviewing <span className="font-medium text-zinc-700 dark:text-zinc-300">{selectedCleanerName}</span>
+                </p>
+              ) : null}
             </div>
             <div>
               <p className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">Rating</p>

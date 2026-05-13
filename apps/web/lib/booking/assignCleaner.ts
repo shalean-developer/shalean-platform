@@ -3,6 +3,7 @@ import { FALLBACK_REASON_CLEANER_NOT_AVAILABLE } from "@/lib/booking/fallbackRea
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assignPendingBookingCleaner } from "@/lib/booking/assignmentBookingStateCommands";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -366,12 +367,7 @@ export async function assignCleaner(bookingId: string): Promise<AssignCleanerRes
     dispatch_status: patch.dispatch_status,
     assignment_type: patch.assignment_type,
   });
-  const { error: upErr } = await admin
-    .from("bookings")
-    .update(patch)
-    .eq("id", bookingId)
-    .eq("status", "pending")
-    .is("cleaner_id", null);
+  const { error: upErr } = await assignPendingBookingCleaner({ admin, bookingId, patch });
 
   if (upErr) {
     bookingAssignTrace({ step: "assignCleaner_update", bookingId, ok: false, error: upErr.message });

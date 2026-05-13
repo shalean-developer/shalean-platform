@@ -39,6 +39,10 @@ import {
   hasConfiguredPreferences,
   type CleanerPreferenceRowLike,
 } from "@/lib/dispatch/cleanerPreferenceMatch";
+import {
+  markSmartDispatchFailed,
+  markSmartDispatchSearching,
+} from "@/lib/booking/assignmentBookingStateCommands";
 
 export type { SmartDispatchCandidate } from "@/lib/dispatch/types";
 
@@ -1126,7 +1130,7 @@ export async function smartAssignCleaner(
   const maxSoftOffers = options?.maxSoftOffers ?? DEFAULT_MAX_SOFT_OFFERS;
   const maxCandidates = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
   const retryTier = options?.retryTier ?? 0;
-  await supabase.from("bookings").update({ dispatch_status: "searching" }).eq("id", params.bookingId);
+  await markSmartDispatchSearching({ admin: supabase, bookingId: params.bookingId });
 
   let searchExpansion = options?.searchExpansion ?? "none";
 
@@ -1387,7 +1391,7 @@ export async function smartAssignCleaner(
       },
     });
     await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4");
-    await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
+    await markSmartDispatchFailed({ admin: supabase, bookingId: params.bookingId });
     flushDispatchRankingV1MetricRows(rankingV1MetricRows, null);
     return { ok: false, error: "no_candidate" };
   }
@@ -1536,7 +1540,7 @@ export async function smartAssignCleaner(
       },
     });
     await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4_soft_tiered");
-    await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
+    await markSmartDispatchFailed({ admin: supabase, bookingId: params.bookingId });
     return { ok: false, error: "no_candidate" };
   }
 
@@ -1605,6 +1609,6 @@ export async function smartAssignCleaner(
     },
   });
   await enqueueDispatchRetry(supabase, params.bookingId, "no_candidate_v4_soft");
-  await supabase.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
+  await markSmartDispatchFailed({ admin: supabase, bookingId: params.bookingId });
   return { ok: false, error: "no_candidate" };
 }

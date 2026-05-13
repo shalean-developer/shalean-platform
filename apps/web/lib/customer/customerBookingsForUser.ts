@@ -13,6 +13,10 @@ import type { BookingRow } from "@/lib/dashboard/types";
 import { normalizeCustomerBookingRow } from "@/lib/dashboard/normalizeCustomerBookingRow";
 import { metrics } from "@/lib/metrics/counters";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  applyTeamLeadCleanerNamesToRows,
+  extractTeamLeadCleanerIdsForEnrichment,
+} from "@/lib/reviews/teamLeadCleanerNameEnrichment";
 
 export type LoadCustomerBookingsOptions = {
   /** When set, also returns paid bookings with `user_id` null but matching `customer_email` (orphan repair). */
@@ -70,7 +74,54 @@ export async function loadCustomerBookingRowsForUser(
     .slice(0, 100)
     .map((r) => attachCanonicalCustomerBookingLifecycle(r));
 
+  // M-15: enrich team-job rows (cleaner_id null, payout_owner_cleaner_id set)
+  // with the lead cleaner's display name so the dashboard reviews modal/list
+  // can show "Reviewing X's clean". Roster-safe: the IN(...) lookup only
+  // contains lead UUIDs already on the row payload — never `team_members`.
+  // Skipped entirely for solo-cleaner pages (no extra round-trip).
+  await enrichRowsWithTeamLeadCleanerNames(admin, rows, userId);
+
   return { ok: true, bookings: rows };
+}
+
+async function enrichRowsWithTeamLeadCleanerNames(
+  admin: SupabaseClient,
+  rows: BookingRow[],
+  userId: string,
+): Promise<void> {
+  const leadIds = extractTeamLeadCleanerIdsForEnrichment(rows);
+  if (leadIds.length === 0) return;
+  try {
+    const { data, error } = await admin
+      .from("cleaners")
+      .select("id, full_name")
+      .in("id", leadIds);
+    if (error) {
+      // Non-fatal: missing names just fall back to the existing snapshot/null
+      // path in `cleanerFromRow` — the customer dashboard never blanks on
+      // this enrichment (it is purely additive UX).
+      void reportOperationalIssue(
+        "warn",
+        "customer/bookings/team_lead_name_enrichment",
+        error.message,
+        { userId, leadIds: leadIds.length },
+      );
+      return;
+    }
+    const nameById = new Map<string, string>();
+    for (const r of (data ?? []) as Array<{ id: string; full_name: string | null }>) {
+      const n = (r.full_name ?? "").trim();
+      if (n) nameById.set(String(r.id), n);
+    }
+    applyTeamLeadCleanerNamesToRows(rows, nameById);
+  } catch (e) {
+    void reportOperationalIssue(
+      "warn",
+      "customer/bookings/team_lead_name_enrichment",
+      e instanceof Error ? e.message : String(e),
+      { userId, leadIds: leadIds.length },
+    );
+  }
 }
 
 export async function loadCustomerBookingRowForUser(

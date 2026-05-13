@@ -7,6 +7,7 @@ import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateM
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
+import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildBooking";
 
 export type ApplyMonthlyInvoicePaymentResult =
   | { ok: true; skipped: true; reason: "not_found" | "already_paid" | "duplicate_charge" }
@@ -158,23 +159,19 @@ export async function applyMonthlyInvoicePayment(
         });
         return { ok: false, error: `booking_missing_cleaner_earnings_basis:${b.id}` };
       }
-      const { error: u } = await admin
-        .from("bookings")
-        .update({
-          payment_status: "success",
-          amount_paid_cents: allocatedCents,
-          payout_status: "eligible",
-          payout_frozen_cents: frozen,
-        })
-        .eq("id", b.id);
-      if (u) {
+      const settled = await settleMonthlyInvoiceChildBooking(admin, {
+        bookingId: b.id,
+        amountPaidCents: allocatedCents,
+        payoutFrozenCents: frozen,
+      });
+      if (!settled.ok) {
         await logSystemEvent({
           level: "error",
           source: "monthly_invoice/payment",
           message: "monthly_invoice_booking_settlement_failed",
-          context: { invoice_id: row.id, booking_id: b.id, reference: ref, error: u.message },
+          context: { invoice_id: row.id, booking_id: b.id, reference: ref, error: settled.error },
         });
-        return { ok: false, error: u.message };
+        return { ok: false, error: settled.error };
       }
       await refreshRecurringBookingPaymentState({ admin, bookingId: b.id });
     }

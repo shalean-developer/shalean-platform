@@ -53,6 +53,15 @@ export type BookingRow = {
   cleaner_id?: string | null;
   /** Team-lead cleaner UUID; carries the assignee for team jobs where `cleaner_id` is cleared. */
   payout_owner_cleaner_id?: string | null;
+  /**
+   * M-15: lead-cleaner display name for team jobs (filled by the
+   * server-side `applyTeamLeadCleanerNamesToRows` enricher in
+   * `loadCustomerBookingRowsForUser`). Stays `null`/`undefined` for solo
+   * bookings — those resolve names via the `cleaners(full_name)` embed
+   * already in {@link CUSTOMER_BOOKING_SELECT}. Read-only on the client;
+   * never carries roster data, only the lead the dashboard already sees.
+   */
+  payout_owner_cleaner_name?: string | null;
   assigned_at?: string | null;
   accepted_at?: string | null;
   en_route_at?: string | null;

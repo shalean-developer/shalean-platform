@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createNotificationConfigBreaker } from "@/lib/email/notificationConfigBreaker";
 import { buildMonthlyInvoiceSnapshot, wrapSnapshotCurrentV1 } from "@/lib/monthlyInvoice/buildMonthlyInvoiceSnapshot";
 import {
   appendMonthlyInvoiceSnapshotEvent,
@@ -12,6 +13,7 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
 import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
+import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildBooking";
 
 export type FinalizeMonthlyInvoicesResult = {
   ok: boolean;
@@ -59,6 +61,16 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
   const todayYm = today.slice(0, 7);
   const errors: string[] = [];
   let finalized = 0;
+
+  // M-9: per-run circuit breaker. Trips on the FIRST permanent_config send
+  // outcome and short-circuits the email step for every subsequent invoice
+  // in the same run. Settlement (snapshot, status flip, Paystack init) is
+  // never gated by the breaker — it only suppresses the Resend network call
+  // and the per-invoice ops-log spam that used to follow it.
+  const emailBreaker = createNotificationConfigBreaker({
+    source: "cron/finalize-monthly-invoices",
+    channel: "email",
+  });
 
   const { data: draftRows, error } = await admin
     .from("monthly_invoices")
@@ -176,15 +188,11 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
           errors.push(`${f.id}: booking_missing_cleaner_earnings_basis:${b.id}`);
           continue;
         }
-        await admin
-          .from("bookings")
-          .update({
-            payment_status: "success",
-            amount_paid_cents: allocatedCents,
-            payout_status: "eligible",
-            payout_frozen_cents: frozen,
-          })
-          .eq("id", b.id);
+        await settleMonthlyInvoiceChildBooking(admin, {
+          bookingId: b.id,
+          amountPaidCents: allocatedCents,
+          payoutFrozenCents: frozen,
+        });
       }
       finalized++;
       continue;
@@ -254,6 +262,19 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
       continue;
     }
 
+    // M-9: if a previous invoice in this run already proved the Resend
+    // configuration is broken, don't take the dispatch claim or attempt
+    // another network call — settlement above has already promoted the
+    // invoice to `sent` with a usable `payment_link`, so the customer-
+    // visible payable record is intact and a future cron tick (after ops
+    // fix the misconfiguration) can resend via the admin "Resend invoice"
+    // action.
+    if (emailBreaker.shouldSkipRemainingSends()) {
+      emailBreaker.recordSkippedInvoice(f.id);
+      errors.push(`${f.id}: invoice_email_skipped:${emailBreaker.skipReason()}`);
+      continue;
+    }
+
     const { data: claimRows, error: claimErr } = await admin
       .from("monthly_invoices")
       .update({ initial_invoice_email_dispatch_claimed: true })
@@ -283,6 +304,11 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
     });
 
     if (!mail.sent) {
+      await emailBreaker.recordSendOutcome({
+        classification: mail.classification,
+        errorMessage: mail.error,
+        invoiceId: f.id,
+      });
       await admin
         .from("monthly_invoices")
         .update({ initial_invoice_email_dispatch_claimed: false })
@@ -319,7 +345,14 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
     level: "info",
     source: "cron/finalize-monthly-invoices",
     message: "finalize_monthly_invoices_done",
-    context: { today, todayYm, draft_candidates: drafts.length, finalized, error_count: errors.length },
+    context: {
+      today,
+      todayYm,
+      draft_candidates: drafts.length,
+      finalized,
+      error_count: errors.length,
+      email_breaker: emailBreaker.snapshot(),
+    },
   });
 
   return { ok: true, today, finalized, errors: errors.length ? errors : undefined };

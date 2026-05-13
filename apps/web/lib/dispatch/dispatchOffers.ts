@@ -35,6 +35,20 @@ export type CreateDispatchOfferRowResult =
   | { ok: true; offerId: string; expiresAtIso: string }
   | { ok: false; error: string };
 
+/**
+ * Command boundary for the booking-level dispatch offer state.
+ * Phase 1C preserves the existing fire-and-forget update behavior exactly.
+ */
+export async function setBookingDispatchOffered(params: {
+  supabase: SupabaseClient;
+  bookingId: string;
+}): Promise<void> {
+  await params.supabase
+    .from("bookings")
+    .update({ dispatch_status: "offered" })
+    .eq("id", params.bookingId);
+}
+
 export async function createDispatchOfferRow(params: {
   supabase: SupabaseClient;
   bookingId: string;
@@ -261,10 +275,10 @@ export async function createDispatchOfferRow(params: {
     });
   }
 
-  await params.supabase
-    .from("bookings")
-    .update({ dispatch_status: "offered" })
-    .eq("id", params.bookingId);
+  await setBookingDispatchOffered({
+    supabase: params.supabase,
+    bookingId: params.bookingId,
+  });
 
   return { ok: true, offerId, expiresAtIso: expiresAt };
 }
@@ -764,6 +778,19 @@ export async function acceptDispatchOffer(params: {
   }
 
   return { ok: true };
+}
+
+/**
+ * Command boundary for dispatch offer acceptance.
+ * Phase 1C delegates to the existing accept flow unchanged; the
+ * accept_dispatch_offer_atomic RPC remains owned by acceptDispatchOffer.
+ */
+export async function acceptBookingDispatchOffer(params: {
+  supabase: SupabaseClient;
+  offerId: string;
+  cleanerId: string;
+}): Promise<AcceptDispatchOfferResult> {
+  return acceptDispatchOffer(params);
 }
 
 export type RejectDispatchOfferFailure =

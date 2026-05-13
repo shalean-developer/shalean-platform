@@ -13,6 +13,7 @@ import { syncUserPrimaryCityFromBooking } from "@/lib/growth/syncPrimaryCity";
 import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestCleaner";
 import { metrics } from "@/lib/metrics/counters";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { markBookingPaidFromAdminSettlement } from "@/lib/booking/paymentFinalizationBookingCommands";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -373,14 +374,11 @@ export async function adminMarkBookingPaid(
     patch.dispatch_status = hasCleanerRef ? "assigned" : "searching";
   }
 
-  const { data: updatedRows, error: upErr } = await admin
-    .from("bookings")
-    .update(patch)
-    .eq("id", bookingId)
-    .is("payment_completed_at", null)
-    .not("status", "eq", "cancelled")
-    .not("status", "eq", "failed")
-    .select("id");
+  const { data: updatedRows, error: upErr } = await markBookingPaidFromAdminSettlement({
+    admin,
+    bookingId,
+    patch,
+  });
 
   if (upErr) {
     await reportOperationalIssue("error", "adminMarkBookingPaid", upErr.message, { bookingId });

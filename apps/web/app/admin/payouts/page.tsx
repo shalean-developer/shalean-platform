@@ -507,7 +507,8 @@ export default function AdminPayoutsPage() {
           </div>
           {loading ? <p className="p-4 text-sm text-zinc-500">Loading payouts...</p> : null}
           {!loading && payouts.length === 0 ? <p className="p-4 text-sm text-zinc-500">No payout batches yet.</p> : null}
-          <ul className="max-h-[70vh] divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
+          {/* M-22: cap mobile scroll-area at 60vh so the payout list never eats the entire phone viewport. */}
+          <ul className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto sm:max-h-[70vh] dark:divide-zinc-800">
             {payouts.map((p) => (
               <li key={p.id}>
                 <button
@@ -525,7 +526,7 @@ export default function AdminPayoutsPage() {
                         {p.period_start} to {p.period_end} · {p.booking_count} booking(s)
                       </p>
                     </div>
-                    <span className={["rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", statusClass(p.status)].join(" ")}>
+                    <span className={["shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase", statusClass(p.status)].join(" ")}>
                       {p.status}
                     </span>
                   </div>
@@ -548,7 +549,7 @@ export default function AdminPayoutsPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{selected.cleaner_name}</h2>
-                      <span className={["rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", statusClass(selected.status)].join(" ")}>
+                      <span className={["rounded-full px-2 py-0.5 text-[11px] font-bold uppercase", statusClass(selected.status)].join(" ")}>
                         {selected.status}
                       </span>
                     </div>
@@ -562,7 +563,7 @@ export default function AdminPayoutsPage() {
                     ) : null}
                     {selected.payment_status || selected.payment_reference ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                        <span className={["rounded-full px-2 py-0.5 font-bold uppercase", paymentStatusClass(selectedPaymentStatus)].join(" ")}>
+                        <span className={["rounded-full px-2 py-0.5 text-[11px] font-bold uppercase", paymentStatusClass(selectedPaymentStatus)].join(" ")}>
                           {selectedPaymentStatus.replace(/_/g, " ")}
                         </span>
                         <span>{selectedPaymentCopy.description}</span>
@@ -671,7 +672,8 @@ export default function AdminPayoutsPage() {
               ) : null}
 
               {detailLoading ? <p className="p-4 text-sm text-zinc-500">Loading batch details...</p> : null}
-              <div className="overflow-x-auto p-4">
+              {/* M-22: ≥md uses the dense table; <md uses a stacked card list to avoid horizontal scroll on phones (320 / 375 / 390). */}
+              <div className="hidden overflow-x-auto p-4 md:block">
                 <table className="w-full min-w-[820px] text-left text-sm">
                   <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500 dark:border-zinc-700">
                     <tr>
@@ -706,6 +708,48 @@ export default function AdminPayoutsPage() {
                   <p className="py-8 text-center text-sm text-zinc-500">No bookings linked to this payout batch.</p>
                 ) : null}
               </div>
+              <ul
+                className="space-y-2 p-4 md:hidden"
+                aria-label="Payout batch bookings (mobile)"
+                data-testid="payout-bookings-mobile"
+              >
+                {(detail?.bookings ?? []).map((b) => (
+                  <li
+                    key={b.id}
+                    className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/40"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{b.customer_name ?? "Customer"}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          {b.service ?? "Cleaning"} · {b.id.slice(0, 8)}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right text-xs text-zinc-600 dark:text-zinc-400">
+                        <p>{String(b.date ?? "—").slice(0, 10)}</p>
+                        {b.is_test ? (
+                          <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
+                            TEST
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                      <dt className="text-zinc-500">Customer total</dt>
+                      <dd className="text-right tabular-nums text-zinc-900 dark:text-zinc-100">{customerTotalZar(b)}</dd>
+                      <dt className="text-zinc-500">Cleaner payout</dt>
+                      <dd className="text-right tabular-nums text-zinc-900 dark:text-zinc-100">{zarFromCents(b.cleaner_payout_cents)}</dd>
+                      <dt className="text-zinc-500">Bonus</dt>
+                      <dd className="text-right tabular-nums text-zinc-900 dark:text-zinc-100">{zarFromCents(b.cleaner_bonus_cents)}</dd>
+                      <dt className="text-zinc-500">Company</dt>
+                      <dd className="text-right tabular-nums text-zinc-900 dark:text-zinc-100">{zarFromCents(b.company_revenue_cents)}</dd>
+                    </dl>
+                  </li>
+                ))}
+                {!detailLoading && (detail?.bookings.length ?? 0) === 0 ? (
+                  <li className="py-8 text-center text-sm text-zinc-500">No bookings linked to this payout batch.</li>
+                ) : null}
+              </ul>
             </>
           )}
         </section>
@@ -738,8 +782,11 @@ function ToastMessage({ toast, onClose }: { toast: Exclude<Toast, null>; onClose
       : toast.kind === "error"
         ? "bg-rose-600 text-white"
         : "bg-blue-600 text-white";
+  // M-22: lift the toast above the mobile bottom nav (admin layout pins a 52px-tall
+  // bottom nav at `bottom-0` <md). Without `bottom-20` <md the toast collides with
+  // the nav at 320 / 375 / 390 widths and becomes unreadable.
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm">
+    <div className="fixed bottom-20 right-4 z-50 max-w-sm md:bottom-4">
       <div className={["rounded-lg px-4 py-3 text-sm font-medium shadow-lg", tone].join(" ")}>
         {toast.text}
       </div>

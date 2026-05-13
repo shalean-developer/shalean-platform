@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
-import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { persistBookingEarningsSnapshotCommand } from "@/lib/payout/persistBookingEarningsSnapshotCommand";
 
 export type BackfillCompletedMissingDisplayEarningsResult =
   | { ok: true; fixed: number; skipped: number; failed: number }
@@ -40,7 +40,7 @@ export async function backfillCompletedMissingDisplayEarnings(
       continue;
     }
     try {
-      const result = await persistCleanerPayoutIfUnset({ admin, bookingId: rid, cleanerId: persistCleanerId });
+      const result = await persistBookingEarningsSnapshotCommand({ admin, bookingId: rid, cleanerId: persistCleanerId });
       if (!result.ok) failed += 1;
       else if (result.skipped) skipped += 1;
       else fixed += 1;

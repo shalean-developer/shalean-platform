@@ -1338,25 +1338,17 @@ export async function POST(request: Request) {
     typeof paystackResult.bookingId === "string" && paystackResult.bookingId.trim()
       ? paystackResult.bookingId.trim()
       : null;
+  // M-1: this branch is reachable only when adminMarkCompleted is false —
+  // the guard at `admin_mark_completed_unsafe_for_payment_link` (above)
+  // hard-rejects per-booking creates that pass the flag BEFORE we ever
+  // call `processPaystackInitializeBody`. A previously-present completion
+  // shortcut lived here and was statically unreachable; it has been
+  // removed because it would bypass the protected completion path
+  // (off-platform settle via `adminMarkBookingPaid`, or the customer-paid
+  // → Paystack webhook completion funnel) if the upstream guard ever
+  // regressed. Off-platform completion for per-booking Paystack rows
+  // MUST go through `adminMarkBookingPaid`.
   if (createdPaystackBookingId) {
-    if (adminMarkCompleted) {
-      const completedAt = new Date().toISOString();
-      const { error: completeErr } = await admin
-        .from("bookings")
-        .update({
-          status: "completed",
-          completed_at: completedAt,
-          dispatch_status: selectedCleanerId ? "assigned" : "searching",
-        })
-        .eq("id", createdPaystackBookingId)
-        .eq("status", "pending_payment");
-      if (completeErr) {
-        await reportOperationalIssue("error", "api/admin/bookings POST", completeErr.message, {
-          bookingId: createdPaystackBookingId,
-        });
-        return bail(NextResponse.json({ error: "Could not mark booking completed." }, { status: 500 }));
-      }
-    }
     await runAdminBookingPostCreateNormalizationAndEarnings(
       admin,
       createdPaystackBookingId,

@@ -9,6 +9,13 @@ import { compactDispatchMetricTags } from "@/lib/dispatch/dispatchMetricContext"
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
+import {
+  bumpRedispatchAttemptForBooking,
+  markBookingPaymentNeedsFollowUp,
+  markRedispatchMaxAttemptsFailed,
+  scheduleRedispatchRecoveryBackoff,
+  tagUserSelectedRedispatchFallback,
+} from "@/lib/booking/assignmentBookingStateCommands";
 
 /** Paid checkout “chosen cleaner” rows use `pending_assignment`; legacy paths may use `pending` or `offered`. */
 const REDISPATCH_ELIGIBLE_BOOKING_STATUSES = ["pending", "pending_assignment", "offered"] as const;
@@ -74,12 +81,11 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
     const attempts = Number((b as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0) || 0;
     const maxA = maxDispatchAttempts();
     if (attempts >= maxA) {
-      const { error: failErr } = await supabase
-        .from("bookings")
-        .update({ dispatch_status: "failed" })
-        .eq("id", params.bookingId)
-        .in("status", [...REDISPATCH_ELIGIBLE_BOOKING_STATUSES])
-        .is("cleaner_id", null);
+      const { error: failErr } = await markRedispatchMaxAttemptsFailed({
+        admin: supabase,
+        bookingId: params.bookingId,
+        eligibleStatuses: REDISPATCH_ELIGIBLE_BOOKING_STATUSES,
+      });
       if (failErr) {
         await reportOperationalIssue("warn", "redispatchAfterOfferReject", `mark failed: ${failErr.message}`, {
           bookingId: params.bookingId,
@@ -119,15 +125,13 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
      * redispatch waves, so the filter intentionally does NOT pin assignment_type — it must
      * dedup auto_dispatch parallel declines as well as user_selected offer expiry.
      */
-    const { data: bumped, error: bumpErr } = await supabase
-      .from("bookings")
-      .update({ dispatch_status: "searching", dispatch_attempt_count: nextAttempts })
-      .eq("id", params.bookingId)
-      .in("status", [...REDISPATCH_ELIGIBLE_BOOKING_STATUSES])
-      .is("cleaner_id", null)
-      .eq("dispatch_attempt_count", expected)
-      .select("id")
-      .maybeSingle();
+    const { data: bumped, error: bumpErr } = await bumpRedispatchAttemptForBooking({
+      admin: supabase,
+      bookingId: params.bookingId,
+      eligibleStatuses: REDISPATCH_ELIGIBLE_BOOKING_STATUSES,
+      expectedAttempts: expected,
+      nextAttempts,
+    });
 
     if (bumpErr) {
       await reportOperationalIssue("warn", "redispatchAfterOfferReject", `increment attempts: ${bumpErr.message}`, {
@@ -151,7 +155,7 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
     });
 
     if (!r.ok) {
-      await supabase.from("bookings").update({ payment_needs_follow_up: true }).eq("id", params.bookingId);
+      await markBookingPaymentNeedsFollowUp({ admin: supabase, bookingId: params.bookingId });
       await reportOperationalIssue("warn", "redispatchAfterOfferReject", "Re-dispatch did not assign", {
         bookingId: params.bookingId,
         error: r.error,
@@ -169,14 +173,12 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
       const attempted =
         String((b as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim() ||
         params.rejectedCleanerId;
-      const { error: patchErr } = await supabase
-        .from("bookings")
-        .update({
-          assignment_type: "auto_fallback",
-          fallback_reason: reassignmentReason,
-          attempted_cleaner_id: attempted,
-        })
-        .eq("id", params.bookingId);
+      const { error: patchErr } = await tagUserSelectedRedispatchFallback({
+        admin: supabase,
+        bookingId: params.bookingId,
+        reassignmentReason,
+        attemptedCleanerId: attempted,
+      });
       if (patchErr) {
         await reportOperationalIssue("warn", "redispatchAfterOfferReject", `fallback tag update: ${patchErr.message}`, {
           bookingId: params.bookingId,
@@ -189,13 +191,11 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
       const backoffMs = skipBackoff || baseBackoff <= 0 ? 0 : applyDispatchBackoffJitter(baseBackoff);
       const nextRecoveryIso =
         skipBackoff || backoffMs <= 0 ? null : new Date(Date.now() + backoffMs).toISOString();
-      const { error: schedErr } = await supabase
-        .from("bookings")
-        .update({
-          dispatch_next_recovery_at: nextRecoveryIso,
-          dispatch_recovery_lease_until: null,
-        })
-        .eq("id", params.bookingId);
+      const { error: schedErr } = await scheduleRedispatchRecoveryBackoff({
+        admin: supabase,
+        bookingId: params.bookingId,
+        nextRecoveryIso,
+      });
       if (schedErr) {
         await reportOperationalIssue("warn", "redispatchAfterOfferReject", `schedule backoff: ${schedErr.message}`, {
           bookingId: params.bookingId,

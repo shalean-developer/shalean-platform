@@ -298,7 +298,7 @@ describe("H-9: source content guards (lock the widened status filter into both m
   it("runDispatchTimeouts.ts: terminal offer-cap UPDATE uses .in('status',[pending,pending_assignment])", () => {
     const src = readFile("runDispatchTimeouts.ts");
     expect(
-      /\.update\(\{\s*dispatch_status:\s*"unassignable"\s*\}\)[^]*?\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/s.test(src),
+      /\.update\(\{\s*dispatch_status:\s*"unassignable"\s*\}\)[^]*?\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/.test(src),
       "offer-cap escalation must update dispatch_status with widened status filter and cleaner_id null guard",
     ).toBe(true);
 
@@ -311,7 +311,7 @@ describe("H-9: source content guards (lock the widened status filter into both m
   it("dispatchRetryQueue.ts: retry-exhausted terminal UPDATE uses .in('status',[pending,pending_assignment])", () => {
     const src = readFile("dispatchRetryQueue.ts");
     expect(
-      /\.update\(\{\s*dispatch_status:\s*terminalDispatchStatus\s*\}\)[^]*?\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/s.test(src),
+      /\.update\(\{\s*dispatch_status:\s*terminalDispatchStatus\s*\}\)[^]*?\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/.test(src),
       "retry-exhausted escalation must update dispatch_status with widened status filter and cleaner_id null guard",
     ).toBe(true);
 
@@ -325,7 +325,7 @@ describe("H-9: source content guards (lock the widened status filter into both m
     const src = readFile("dispatchRetryQueue.ts");
     // Match `.from("bookings").select("id, created_at").in("status", [...])`
     expect(
-      /\.from\("bookings"\)\s*\.select\("id, created_at"\)\s*\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)/s.test(src),
+      /\.from\("bookings"\)\s*\.select\("id, created_at"\)\s*\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)/.test(src),
       "stranded candidate scan must IN-filter status to include pending_assignment",
     ).toBe(true);
   });
@@ -335,11 +335,11 @@ describe("H-9: source content guards (lock the widened status filter into both m
     // dispatch_offers.status='pending' filters MUST still be exactly that — those refer to the
     // offer row lifecycle, not the booking status, and are correct as-is.
     const offersExpiredSelect =
-      /\.from\("dispatch_offers"\)\s*\.select\("id, booking_id, cleaner_id"\)\s*\.eq\(\s*"status"\s*,\s*"pending"\s*\)/s;
+      /\.from\("dispatch_offers"\)\s*\.select\("id, booking_id, cleaner_id"\)\s*\.eq\(\s*"status"\s*,\s*"pending"\s*\)/;
     expect(offersExpiredSelect.test(src)).toBe(true);
 
     const offerExpireUpdate =
-      /\.update\(\{\s*status:\s*"expired",\s*responded_at:\s*respondedAt\s*\}\)[^]*?\.eq\(\s*"status"\s*,\s*"pending"\s*\)/s;
+      /\.update\(\{\s*status:\s*"expired",\s*responded_at:\s*respondedAt\s*\}\)[^]*?\.eq\(\s*"status"\s*,\s*"pending"\s*\)/;
     expect(offerExpireUpdate.test(src)).toBe(true);
   });
 

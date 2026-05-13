@@ -5,6 +5,7 @@ import { notifyDispatchEscalationAdmin } from "@/lib/dispatch/dispatchEscalation
 import { enqueueDispatchRetry, enqueueStrandedBookings } from "@/lib/dispatch/dispatchRetryQueue";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
+import { markDispatchOfferCapUnassignable } from "@/lib/booking/assignmentBookingStateCommands";
 
 const MAX_EXPIRED_BATCH = 200;
 
@@ -206,12 +207,7 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
         // H-9: include `pending_assignment` so user-selected post-payment bookings can also escalate
         // to terminal `dispatch_status='unassignable'` once their offer cap is exhausted. The
         // `cleaner_id IS NULL` guard still prevents stomping on bookings that meanwhile assigned.
-        const { error: capErr } = await supabase
-          .from("bookings")
-          .update({ dispatch_status: "unassignable" })
-          .eq("id", bookingId)
-          .in("status", ["pending", "pending_assignment"])
-          .is("cleaner_id", null);
+        const { error: capErr } = await markDispatchOfferCapUnassignable({ admin: supabase, bookingId });
 
         if (capErr) {
           out.errors++;

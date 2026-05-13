@@ -1,6 +1,7 @@
 import "server-only";
 
 import { tryOnceReassignAfterDecline } from "@/lib/booking/reassignBookingAfterDecline";
+import { releaseAssignedBookingAfterAckTimeout } from "@/lib/booking/assignmentBookingStateCommands";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -55,20 +56,18 @@ export async function runAssignmentAckTimeouts(admin: SupabaseClient): Promise<{
 
     const prevCleaner = typeof row.cleaner_id === "string" && row.cleaner_id ? row.cleaner_id : "";
 
-    const { data: updated, error: upErr } = await admin
-      .from("bookings")
-      .update({
+    const { data: updated, error: upErr } = await releaseAssignedBookingAfterAckTimeout({
+      admin,
+      bookingId: id,
+      patch: {
         status: "pending_assignment",
         dispatch_status: "unassigned",
         cleaner_id: null,
         assigned_at: null,
         last_declined_by_cleaner_id: null,
         last_declined_at: null,
-      })
-      .eq("id", id)
-      .eq("status", "assigned")
-      .select("id")
-      .maybeSingle();
+      },
+    });
 
     if (upErr || !updated) {
       if (upErr) errors += 1;

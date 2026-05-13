@@ -18,6 +18,11 @@ import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarnin
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { CLEANER_LIFECYCLE_CODE } from "@/lib/cleaner/cleanerLifecycleErrors";
+import {
+  updateAssignableCleanerLifecycleBookingOrFail,
+  updateCleanerLifecycleBookingState,
+  updateRecurringPendingPaymentCleanerLifecycleBooking,
+} from "@/lib/cleaner/cleanerLifecycleBookingCommands";
 import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 import { cleanerResponseAllowsProgression } from "@/lib/cleaner/cleanerResponseProgression";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -70,50 +75,6 @@ function httpStatusForAcceptPatchFailure(code: string): number {
     return 412;
   }
   return 500;
-}
-
-/**
- * Accept-related updates: re-read `status` then update by `id` only (avoids PostgREST 0-row “success” when the row
- * left the assignable set (`offered` / `assigned` / `confirmed`) between the lifecycle read and this write).
- */
-async function updateAssignedBookingOrFail(params: {
-  admin: SupabaseClient;
-  bookingId: string;
-  patch: Record<string, unknown>;
-}): Promise<{ ok: true } | { ok: false; message: string; code: string }> {
-  const { data: cur, error: selErr } = await params.admin
-    .from("bookings")
-    .select("id,status")
-    .eq("id", params.bookingId)
-    .maybeSingle();
-  if (selErr) {
-    return { ok: false, message: selErr.message, code: "accept_persist_failed" };
-  }
-  if (!cur) {
-    return { ok: false, message: "Booking not found.", code: "accept_persist_failed" };
-  }
-  const curSt = String((cur as { status?: string | null }).status ?? "")
-    .trim()
-    .toLowerCase();
-  if (!isAssignableForCleanerLifecycleStatus(curSt)) {
-    return {
-      ok: false,
-      message: "Could not save — this job is no longer in an assignable state. Refresh the page and try again.",
-      code: CLEANER_LIFECYCLE_CODE.BOOKING_STATE_CHANGED,
-    };
-  }
-  const { data, error } = await params.admin.from("bookings").update(params.patch).eq("id", params.bookingId).select("id");
-  if (error) {
-    return { ok: false, message: error.message, code: "accept_persist_failed" };
-  }
-  if (!data?.length) {
-    return {
-      ok: false,
-      message: "Could not save acceptance — the booking changed or was updated elsewhere. Refresh the page and try again.",
-      code: CLEANER_LIFECYCLE_CODE.ACCEPT_UPDATE_NO_ROW,
-    };
-  }
-  return { ok: true };
 }
 
 type BookingLifecycleRow = {
@@ -188,12 +149,11 @@ async function handleRecurringPendingPaymentAccept(params: {
     resp !== CLEANER_RESPONSE.ACCEPTED &&
     (resp === "" || resp === CLEANER_RESPONSE.NONE || resp === CLEANER_RESPONSE.PENDING);
   if (orphanAcceptedAt) {
-    const { data: healRows, error: healErr } = await admin
-      .from("bookings")
-      .update({ cleaner_response_status: CLEANER_RESPONSE.ACCEPTED })
-      .eq("id", bookingId)
-      .eq("status", "pending_payment")
-      .select("id");
+    const { data: healRows, error: healErr } = await updateRecurringPendingPaymentCleanerLifecycleBooking({
+      admin,
+      bookingId,
+      patch: { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED },
+    });
     if (!healErr && healRows?.length) {
       bRow.cleaner_response_status = CLEANER_RESPONSE.ACCEPTED;
       resp = CLEANER_RESPONSE.ACCEPTED;
@@ -204,12 +164,11 @@ async function handleRecurringPendingPaymentAccept(params: {
     const patch: Record<string, unknown> = {};
     if (!acceptedAt) patch.accepted_at = now;
     if (Object.keys(patch).length > 0) {
-      const { data: patchRows, error: pErr } = await admin
-        .from("bookings")
-        .update(patch)
-        .eq("id", bookingId)
-        .eq("status", "pending_payment")
-        .select("id");
+      const { data: patchRows, error: pErr } = await updateRecurringPendingPaymentCleanerLifecycleBooking({
+        admin,
+        bookingId,
+        patch,
+      });
       if (pErr || !patchRows?.length) {
         traceCleanerLifecycle({
           outcome: "blocked",
@@ -294,15 +253,14 @@ async function handleRecurringPendingPaymentAccept(params: {
     };
   }
 
-  const { data: accRows, error: accErr } = await admin
-    .from("bookings")
-    .update({
+  const { data: accRows, error: accErr } = await updateRecurringPendingPaymentCleanerLifecycleBooking({
+    admin,
+    bookingId,
+    patch: {
       cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
       accepted_at: now,
-    })
-    .eq("id", bookingId)
-    .eq("status", "pending_payment")
-    .select("id");
+    },
+  });
 
   if (accErr || !accRows?.length) {
     if (!accErr) {
@@ -356,9 +314,10 @@ async function handleRecurringPendingPaymentReject(params: {
 }): Promise<CleanerLifecycleResult> {
   const { admin, bookingId, cleanerId, bRow } = params;
   const attempts = Number(bRow.assignment_attempts ?? 0);
-  const { data: rejRows, error: uErr } = await admin
-    .from("bookings")
-    .update({
+  const { data: rejRows, error: uErr } = await updateRecurringPendingPaymentCleanerLifecycleBooking({
+    admin,
+    bookingId,
+    patch: {
       cleaner_id: null,
       payout_owner_cleaner_id: null,
       assigned_at: null,
@@ -369,10 +328,8 @@ async function handleRecurringPendingPaymentReject(params: {
       cleaner_response_status: CLEANER_RESPONSE.NONE,
       status: "pending_payment",
       ...BOOKING_PAYOUT_COLUMNS_CLEAR,
-    })
-    .eq("id", bookingId)
-    .eq("status", "pending_payment")
-    .select("id");
+    },
+  });
 
   if (uErr || !rejRows?.length) {
     traceCleanerLifecycle({
@@ -616,7 +573,7 @@ export async function runCleanerBookingLifecycleAction(params: {
       const heal: Record<string, unknown> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
       if (dispatchLower === "offered") heal.dispatch_status = "assigned";
       if (st === "confirmed" || st === "offered") heal.status = "assigned";
-      const healRes = await updateAssignedBookingOrFail({ admin, bookingId, patch: heal });
+      const healRes = await updateAssignableCleanerLifecycleBookingOrFail({ admin, bookingId, patch: heal });
       if (healRes.ok) {
         bRow.cleaner_response_status = CLEANER_RESPONSE.ACCEPTED;
         if (dispatchLower === "offered") bRow.dispatch_status = "assigned";
@@ -637,7 +594,7 @@ export async function runCleanerBookingLifecycleAction(params: {
       if (dispatchLower === "offered") patch.dispatch_status = "assigned";
       if (st === "confirmed" || st === "offered") patch.status = "assigned";
       if (Object.keys(patch).length > 0) {
-        const patchRes = await updateAssignedBookingOrFail({ admin, bookingId, patch });
+        const patchRes = await updateAssignableCleanerLifecycleBookingOrFail({ admin, bookingId, patch });
         if (!patchRes.ok) {
           const stHttp = httpStatusForAcceptPatchFailure(patchRes.code);
           if (
@@ -759,7 +716,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     if (dispatchLower === "offered") {
       acceptPayload.dispatch_status = "assigned";
     }
-    const accRes = await updateAssignedBookingOrFail({ admin, bookingId, patch: acceptPayload });
+    const accRes = await updateAssignableCleanerLifecycleBookingOrFail({ admin, bookingId, patch: acceptPayload });
     if (!accRes.ok) {
       const stHttp = httpStatusForAcceptPatchFailure(accRes.code);
       if (
@@ -821,9 +778,10 @@ export async function runCleanerBookingLifecycleAction(params: {
       };
     }
     const attempts = Number(bRow.assignment_attempts ?? 0);
-    const { error: uErr } = await admin
-      .from("bookings")
-      .update({
+    const { error: uErr } = await updateCleanerLifecycleBookingState({
+      admin,
+      bookingId,
+      patch: {
         cleaner_id: null,
         status: "pending",
         assigned_at: null,
@@ -833,8 +791,8 @@ export async function runCleanerBookingLifecycleAction(params: {
         assignment_attempts: attempts + 1,
         cleaner_response_status: CLEANER_RESPONSE.NONE,
         ...BOOKING_PAYOUT_COLUMNS_CLEAR,
-      })
-      .eq("id", bookingId);
+      },
+    });
 
     if (uErr) {
       traceCleanerLifecycle({
@@ -953,7 +911,7 @@ export async function runCleanerBookingLifecycleAction(params: {
       cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY,
     };
     if (st === "confirmed" || st === "offered") enRoutePatch.status = "assigned";
-    const { error: uErr } = await admin.from("bookings").update(enRoutePatch).eq("id", bookingId);
+    const { error: uErr } = await updateCleanerLifecycleBookingState({ admin, bookingId, patch: enRoutePatch });
     if (uErr) {
       traceCleanerLifecycle({
         outcome: "blocked",
@@ -1062,7 +1020,7 @@ export async function runCleanerBookingLifecycleAction(params: {
         if (!String(bRow.en_route_at ?? "").trim()) {
           healPatch.en_route_at = now;
         }
-        const { error: healErr } = await admin.from("bookings").update(healPatch).eq("id", bookingId);
+        const { error: healErr } = await updateCleanerLifecycleBookingState({ admin, bookingId, patch: healPatch });
         if (healErr) {
           traceCleanerLifecycle({
             outcome: "blocked",
@@ -1131,7 +1089,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     if (implicitEnRoute) {
       startPatch.en_route_at = String(bRow.en_route_at ?? "").trim() || now;
     }
-    const { error: uErr } = await admin.from("bookings").update(startPatch).eq("id", bookingId);
+    const { error: uErr } = await updateCleanerLifecycleBookingState({ admin, bookingId, patch: startPatch });
     if (uErr) {
       traceCleanerLifecycle({
         outcome: "blocked",
@@ -1406,15 +1364,16 @@ export async function runCleanerBookingLifecycleAction(params: {
       fillCompletedAtIfMissing: false,
       nowIso: now,
     });
-    const { error: uErr } = await admin
-      .from("bookings")
-      .update({
+    const { error: uErr } = await updateCleanerLifecycleBookingState({
+      admin,
+      bookingId,
+      patch: {
         status: "completed",
         completed_at: now,
         cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
         ...completionCoherencePatch,
-      })
-      .eq("id", bookingId);
+      },
+    });
     if (!uErr) {
       const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
       if (!led.ok) {

@@ -20,6 +20,11 @@ import {
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
+import {
+  finalizePendingPaymentBookingFromPaystack,
+  insertFinalizedBookingFromPaystack,
+  type PaymentFinalizationPersistedBookingRow,
+} from "@/lib/booking/paymentFinalizationBookingCommands";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
@@ -618,40 +623,33 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     ...(tenureShareLine != null ? { cleaner_share_percentage: tenureShareLine } : {}),
   };
 
-  type PersistedRow = { id: string; created_at?: string; user_id?: string | null };
   let finalizeId: string | null = null;
   let id: string | null = null;
-  let inserted: PersistedRow | null = null;
+  let inserted: PaymentFinalizationPersistedBookingRow | null = null;
 
   try {
-  if (existingPendingPaymentId) {
+  // `existingPendingPaymentId` is only set when `existing` was resolved with an `id`, which
+  // always sets `pendingFinalizeMatch` ("paystack_reference" from ref lookup, or "id" from
+  // internal-id fallback). TS cannot infer that invariant — require both before finalize.
+  if (existingPendingPaymentId && pendingFinalizeMatch) {
+    const finalizeMatch = pendingFinalizeMatch;
     if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[SETTING BOOKING POST_PAYMENT]", {
         reference: input.paystackReference,
-        pendingFinalizeMatch,
+        pendingFinalizeMatch: finalizeMatch,
         status: row.status,
         dispatch_status: row.dispatch_status,
         cleaner_id: row.cleaner_id ?? null,
         selected_cleaner_id: row.selected_cleaner_id ?? null,
       });
     }
-    const updateBuilder =
-      pendingFinalizeMatch === "id"
-        ? supabase
-            .from("bookings")
-            .update(row)
-            .eq("id", existingPendingPaymentId)
-            .eq("status", "pending_payment")
-            .select("id, created_at, user_id")
-            .maybeSingle()
-        : supabase
-            .from("bookings")
-            .update(row)
-            .eq("paystack_reference", input.paystackReference)
-            .eq("status", "pending_payment")
-            .select("id, created_at, user_id")
-            .maybeSingle();
-    const { data: updated, error: updateErr } = await updateBuilder;
+    const { data: updated, error: updateErr } = await finalizePendingPaymentBookingFromPaystack({
+      supabase,
+      row,
+      pendingFinalizeMatch: finalizeMatch,
+      existingPendingPaymentId,
+      paystackReference: input.paystackReference,
+    });
 
     if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[DB UPDATE RESULT]", { data: updated, error: updateErr?.message ?? null });
@@ -664,8 +662,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       });
       return { ok: false, skipped: true, bookingId: null, error: updateErr.message };
     }
-    inserted =
-      updated && typeof updated === "object" && "id" in updated ? (updated as PersistedRow) : null;
+    inserted = updated;
 
     if (!inserted && !updateErr) {
       const { data: rowAfter } = await supabase
@@ -718,11 +715,10 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         selected_cleaner_id: row.selected_cleaner_id ?? null,
       });
     }
-    const { data: ins, error: insertErr } = await supabase
-      .from("bookings")
-      .insert(row)
-      .select("id, created_at, user_id")
-      .maybeSingle();
+    const { data: ins, error: insertErr } = await insertFinalizedBookingFromPaystack({
+      supabase,
+      row,
+    });
 
     if (bookingPaystackFinalizeTraceEnabled()) {
       console.log("[DB INSERT RESULT]", { data: ins, error: insertErr?.message ?? null });
@@ -752,7 +748,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       });
       return { ok: false, skipped: true, bookingId: null, error: insertErr.message };
     }
-    inserted = ins && typeof ins === "object" && "id" in ins ? (ins as PersistedRow) : null;
+    inserted = ins;
   }
 
   id = inserted?.id ?? null;

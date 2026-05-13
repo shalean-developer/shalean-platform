@@ -4,6 +4,17 @@ import { estimatedNotificationCostUsd, NOTIFICATION_COST_CURRENCY } from "@/lib/
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+/**
+ * M-20: canonical UUID textual format. Mirrors the SQL CHECK constraint
+ * `notification_logs_booking_id_uuid_or_null_chk` (migration
+ * `20260947_m20_notification_logs_booking_id_uuid_chk.sql`). Trimmed inputs
+ * that do not match are normalised to NULL by {@link writeNotificationLog}
+ * so the audit row survives even when an upstream caller passes a stale or
+ * malformed identifier.
+ */
+const M20_BOOKING_ID_UUID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export type NotificationLogChannel = "email" | "whatsapp" | "sms";
 export type NotificationLogProvider = "resend" | "twilio" | "meta";
 export type NotificationLogStatus = "sent" | "failed";
@@ -79,8 +90,37 @@ export async function writeNotificationLog(input: NotificationLogWriteInput): Pr
     ),
   ) as Record<string, unknown>;
 
+  /**
+   * M-20: normalise malformed booking_id values to NULL so the audit row
+   * still gets persisted (instead of being lost to a CHECK violation), and
+   * surface a one-shot operational warning so the offending caller can be
+   * fixed. Notification delivery is unaffected: this only protects the
+   * audit field. Defense in depth — the SQL constraint
+   * `notification_logs_booking_id_uuid_or_null_chk` rejects the same shape
+   * at the DB layer regardless of writer.
+   */
+  const trimmedBookingId = input.booking_id?.trim() ? input.booking_id.trim().slice(0, 128) : null;
+  const normalizedBookingId =
+    trimmedBookingId == null
+      ? null
+      : M20_BOOKING_ID_UUID_RE.test(trimmedBookingId)
+        ? trimmedBookingId
+        : null;
+  if (trimmedBookingId != null && normalizedBookingId == null) {
+    void reportOperationalIssue(
+      "warn",
+      "writeNotificationLog",
+      "non_uuid_booking_id_normalized_to_null",
+      {
+        channel: input.channel,
+        template_key,
+        sample: trimmedBookingId.slice(0, 32),
+      },
+    );
+  }
+
   const row = {
-    booking_id: input.booking_id?.trim() ? input.booking_id.trim().slice(0, 128) : null,
+    booking_id: normalizedBookingId,
     channel: input.channel,
     template_key,
     recipient,

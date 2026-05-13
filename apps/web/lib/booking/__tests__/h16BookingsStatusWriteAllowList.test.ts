@@ -35,8 +35,8 @@ import { describe, expect, it } from "vitest";
  *   - `lib/booking/bookingCompletionIntegrity.ts#buildCompletionCoherencePatch`
  *       Atomic patch fragment to merge with `status: "completed"` (heals
  *       `completed_at` + `dispatch_status` funnel drift).
- *   - `lib/cleaner/runCleanerBookingLifecycleAction.ts`
- *       Cleaner-side lifecycle (accept / reject / en_route / start / complete).
+ *   - `lib/cleaner/cleanerLifecycleBookingCommands.ts`
+ *       Cleaner-side lifecycle command boundary (accept / reject / en_route / start / complete).
  *       Internally calls `buildCompletionCoherencePatch` for completion.
  *   - `lib/booking/assignCleaner.ts#assignCleaner` (+ `buildAssignmentFieldsForPaidBookingRow`)
  *       Paid-booking auto-assignment helper (pending → assigned / pending_assignment).
@@ -71,14 +71,28 @@ import { describe, expect, it } from "vitest";
  *   Admin manual safe paths:
  *   - `lib/booking/adminMarkBookingPaid.ts`
  *       Admin manual mark-paid (pending_payment → pending/assigned).
- *   - `lib/admin/performAdminAssignToCleaner.ts`
- *       Admin manual single-cleaner assignment (→ offered).
+ *   - `lib/admin/adminManualBookingOfferCommand.ts#setAdminManualBookingOffered`
+ *       Phase-1D command boundary that holds the only direct
+ *       `bookings.update({ status: "offered", ... })` write for the admin
+ *       manual single-cleaner-offer path. `performAdminAssignToCleaner.ts`
+ *       (the orchestrator) used to inline this write but now delegates to
+ *       this command — keeping the lifecycle bypass surface narrowly bounded
+ *       to one auditable function. The orchestrator itself no longer issues
+ *       any direct `bookings.status` writes.
  *   - `app/api/admin/bookings/[id]/route.ts`
  *       Admin PATCH (validated allowed-set + `buildCompletionCoherencePatch` +
  *       earnings revert path).
- *   - `app/api/admin/bookings/route.ts`
- *       Admin POST monthly with `adminMarkCompleted` flag (uses
- *       `buildCompletionCoherencePatch` for completion fields).
+ *
+ *   Note: `app/api/admin/bookings/route.ts` (POST) is intentionally NOT on
+ *   the direct-write allow-list. The monthly branch sets `status` via
+ *   `insertBookingRowUnified` (an INSERT, not an UPDATE) using a value
+ *   derived from `buildCompletionCoherencePatch`, and the per-booking
+ *   Paystack branch is hard-rejected by the
+ *   `admin_mark_completed_unsafe_for_payment_link` guard before any write.
+ *   M-1 removed a previously-present, statically-unreachable
+ *   `bookings.update({ status: "completed" })` block from the per-booking
+ *   branch; if the guard ever regresses, admin paid-state mutation should
+ *   remain behind the payment finalization command boundary.
  *
  *   Customer-facing safe paths:
  *   - `app/api/dashboard/bookings/[id]/cancel/route.ts`
@@ -142,10 +156,18 @@ const WEB_ROOT = path.resolve(__dirname, "..", "..", "..");
  */
 const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   // Lifecycle helpers (cleaner-side state transitions + paid-booking auto-assign).
-  "lib/cleaner/runCleanerBookingLifecycleAction.ts",
+  "lib/cleaner/cleanerLifecycleBookingCommands.ts",
   "lib/booking/assignCleaner.ts",
   "lib/booking/reassignBookingAfterDecline.ts",
-  "lib/dispatch/dispatchOffers.ts",
+  /*
+   * `lib/dispatch/dispatchOffers.ts` was removed from this allow-list
+   * after M-12: the cleaner-accept path now routes through the atomic
+   * `accept_dispatch_offer_atomic` SQL RPC (see migration
+   * `20260944_m12_accept_dispatch_offer_atomic.sql`) instead of issuing a
+   * direct `bookings.update({ status: ... })`. The RPC itself is
+   * acknowledged in `ALLOWED_SQL_BOOKINGS_STATUS_MUTATIONS` below
+   * (classification: `lifecycle_rpc`).
+   */
   "lib/whatsapp/handleCleanerAssignedBookingReply.ts",
   "lib/dispatch/escalatePendingAck.ts",
   "lib/booking/runAssignmentAckTimeouts.ts",
@@ -156,8 +178,12 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   "lib/booking/adminEditBookingDetails.ts",
 
   // Admin manual safe paths.
-  "lib/booking/adminMarkBookingPaid.ts",
-  "lib/admin/performAdminAssignToCleaner.ts",
+  // Phase-1D command boundary for admin manual cleaner-offer state. The
+  // orchestrator `lib/admin/performAdminAssignToCleaner.ts` (formerly on this
+  // allow-list) no longer issues a direct `bookings.status` write — it
+  // delegates to `setAdminManualBookingOffered`, narrowing the lifecycle
+  // bypass surface to a single auditable command function.
+  "lib/admin/adminManualBookingOfferCommand.ts",
 
   // Customer-facing safe path (auth-gated self-cancel).
   "app/api/dashboard/bookings/[id]/cancel/route.ts",
@@ -171,7 +197,13 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
 
   // Admin HTTP endpoints (validated allowed-set + completion coherence patch).
   "app/api/admin/bookings/[id]/route.ts",
-  "app/api/admin/bookings/route.ts",
+  // M-1: `app/api/admin/bookings/route.ts` was removed from the allow-list
+  // when a dead `bookings.update({ status: "completed" })` block was deleted
+  // from its per-booking Paystack branch. The monthly branch still sets
+  // `status` at INSERT time (not UPDATE) via `buildCompletionCoherencePatch`,
+  // and the per-booking branch is hard-rejected by the
+  // `admin_mark_completed_unsafe_for_payment_link` guard. See
+  // `app/api/admin/bookings/__tests__/adminMarkCompletedPaystackGuard.test.ts`.
 ]);
 
 /**
@@ -188,6 +220,7 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
  *      via a same-file helper that returns/mutates `status`.
  */
 const APPROVED_INDIRECT_STATUS_WRITERS: ReadonlySet<string> = new Set([
+  "lib/cleaner/cleanerLifecycleBookingCommands.ts",
   // `assignCleaner` calls `update(patch)` where `patch` is the return of
   // `buildAssignmentFieldsForPaidBookingRow(...)` — a same-file helper that
   // returns `{ status: "assigned" | "pending_assignment" | "pending", ... }`.
@@ -541,7 +574,7 @@ describe("H-16 bookings.status direct-write allow-list", () => {
         ...offenders.map((o) => `  - ${o}`),
         "",
         "Route the write through an approved helper:",
-        "  - `runCleanerBookingLifecycleAction` (cleaner-side state transitions)",
+        "  - `cleanerLifecycleBookingCommands` (cleaner-side state transitions)",
         "  - `buildCompletionCoherencePatch` (when transitioning to completed)",
         "  - `ensureBookingAssignedStatusInvariant` (paid + cleaner_ref invariant)",
         "  - `assignCleaner` / `buildAssignmentFieldsForPaidBookingRow` (paid auto-assign)",
@@ -715,6 +748,13 @@ describe("H-16 bookings.status direct-write allow-list", () => {
       ["20260883_assign_team_admin_preserve_cleaner_lifecycle.sql", "lifecycle_rpc"],
       ["20260926_assign_team_sync_roster_persist_payout_owner.sql", "lifecycle_rpc"],
       ["20260928_assign_team_lead_cleaner_id.sql", "lifecycle_rpc"],
+      // M-12: `accept_dispatch_offer_atomic` RPC. Single-tx counterpart to
+      // the cleaner-side `acceptDispatchOffer` flow — atomically marks the
+      // winning offer accepted, the losers as `superseded`, and promotes
+      // `bookings.status` to `'assigned'` in one statement. Replaces the
+      // previous direct `dispatchOffers.ts` write (now removed from the
+      // approved file allow-list above).
+      ["20260944_m12_accept_dispatch_offer_atomic.sql", "lifecycle_rpc"],
     ]);
 
     const offenders: string[] = [];

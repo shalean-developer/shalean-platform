@@ -164,6 +164,7 @@ export default function AdminDispatchMetricsPage() {
             <span className="font-mono">{attemptSources.join(", ")}</span>
           </p>
         </div>
+        {/* M-22: bump touch target to ~44px tall on mobile (px-3 py-1.5 ≈ 36px was below WCAG/Apple HIG minimum). */}
         <div className="flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
           {(["24h", "7d"] as const).map((w) => (
             <button
@@ -172,7 +173,7 @@ export default function AdminDispatchMetricsPage() {
               disabled={loading}
               onClick={() => setWindow(w)}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                "min-h-[44px] rounded-md px-3 py-2 text-sm font-medium transition sm:min-h-0 sm:py-1.5",
                 window === w
                   ? "bg-blue-600 text-white"
                   : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800",
@@ -379,58 +380,106 @@ export default function AdminDispatchMetricsPage() {
                 No teams configured.
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                <table className="w-full min-w-[720px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">
-                      <th className="px-4 py-3">Team</th>
-                      <th className="px-4 py-3 text-right">Jobs / capacity</th>
-                      <th className="px-4 py-3 text-right">Roster (active)</th>
-                      <th className="px-4 py-3 text-right">Utilization</th>
-                      <th className="px-4 py-3">Load</th>
-                      <th className="px-4 py-3">Capacity</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.teams.map((row) => (
-                      <tr
-                        key={row.teamId}
-                        className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/80"
-                      >
-                        <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{row.name}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                          {row.jobsToday} / {row.capacityPerDay}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                          {row.activeMembersToday}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                          {row.utilization != null ? pct(row.utilization, 0) : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              utilizationBadgeClass(row.utilizationLabel),
-                            )}
-                          >
-                            {utilizationLabelText(row.utilizationLabel)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.atCapacity ? (
-                            <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
-                              At capacity
-                            </span>
-                          ) : (
-                            <span className="text-xs text-zinc-400">—</span>
-                          )}
-                        </td>
+              <>
+                {/* M-22: ≥md uses the dense table; <md uses a stacked card list to avoid horizontal scroll on phones. */}
+                <div className="hidden overflow-x-auto rounded-xl border border-zinc-200 bg-white md:block dark:border-zinc-800 dark:bg-zinc-900">
+                  <table className="w-full min-w-[720px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">
+                        <th className="px-4 py-3">Team</th>
+                        <th className="px-4 py-3 text-right">Jobs / capacity</th>
+                        <th className="px-4 py-3 text-right">Roster (active)</th>
+                        <th className="px-4 py-3 text-right">Utilization</th>
+                        <th className="px-4 py-3">Load</th>
+                        <th className="px-4 py-3">Capacity</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {data.teams.map((row) => (
+                        <tr
+                          key={row.teamId}
+                          className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/80"
+                        >
+                          <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{row.name}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                            {row.jobsToday} / {row.capacityPerDay}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                            {row.activeMembersToday}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                            {row.utilization != null ? pct(row.utilization, 0) : "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
+                                utilizationBadgeClass(row.utilizationLabel),
+                              )}
+                            >
+                              {utilizationLabelText(row.utilizationLabel)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.atCapacity ? (
+                              <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
+                                At capacity
+                              </span>
+                            ) : (
+                              <span className="text-xs text-zinc-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul
+                  className="space-y-2 md:hidden"
+                  aria-label="Team utilization (mobile)"
+                  data-testid="team-utilization-mobile"
+                >
+                  {data.teams.map((row) => (
+                    <li
+                      key={row.teamId}
+                      className="rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 truncate font-medium text-zinc-900 dark:text-zinc-100">{row.name}</p>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                            utilizationBadgeClass(row.utilizationLabel),
+                          )}
+                        >
+                          {utilizationLabelText(row.utilizationLabel)}
+                        </span>
+                      </div>
+                      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                        <dt className="text-zinc-500">Jobs / capacity</dt>
+                        <dd className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                          {row.jobsToday} / {row.capacityPerDay}
+                        </dd>
+                        <dt className="text-zinc-500">Roster (active)</dt>
+                        <dd className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                          {row.activeMembersToday}
+                        </dd>
+                        <dt className="text-zinc-500">Utilization</dt>
+                        <dd className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                          {row.utilization != null ? pct(row.utilization, 0) : "—"}
+                        </dd>
+                      </dl>
+                      {row.atCapacity ? (
+                        <p className="mt-2">
+                          <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
+                            At capacity
+                          </span>
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </section>
 

@@ -8,6 +8,10 @@ import {
 } from "@/lib/booking/verifyBookingAssignment";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  clearBookingForAckEscalationRedispatch,
+  failBookingAfterAckEscalationExhausted,
+} from "@/lib/booking/assignmentBookingStateCommands";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Wall-clock wait before treating `pending` ack as missed (cron granularity applies). */
@@ -71,9 +75,10 @@ export async function escalateBookingIfAckTimeout(
   const nextAttempts = Math.min(MAX_DISPATCH_ESCALATIONS, Number(row.dispatch_attempts ?? 0) + 1);
 
   if (nextAttempts >= MAX_DISPATCH_ESCALATIONS) {
-    const { error: failErr } = await admin
-      .from("bookings")
-      .update({
+    const { error: failErr } = await failBookingAfterAckEscalationExhausted({
+      admin,
+      bookingId,
+      patch: {
         cleaner_id: null,
         status: "pending",
         dispatch_status: "failed",
@@ -81,9 +86,8 @@ export async function escalateBookingIfAckTimeout(
         cleaner_response_status: CLEANER_RESPONSE.NONE,
         dispatch_attempts: nextAttempts,
         ...BOOKING_PAYOUT_COLUMNS_CLEAR,
-      })
-      .eq("id", bookingId)
-      .eq("cleaner_response_status", CLEANER_RESPONSE.PENDING);
+      },
+    });
 
     if (failErr) {
       return { ok: false, error: failErr.message };
@@ -102,9 +106,10 @@ export async function escalateBookingIfAckTimeout(
     return { ok: true, action: "exhausted_failed" };
   }
 
-  const { data: cleared, error: clearErr } = await admin
-    .from("bookings")
-    .update({
+  const { data: cleared, error: clearErr } = await clearBookingForAckEscalationRedispatch({
+    admin,
+    bookingId,
+    patch: {
       cleaner_id: null,
       status: "pending",
       dispatch_status: "searching",
@@ -112,10 +117,8 @@ export async function escalateBookingIfAckTimeout(
       cleaner_response_status: CLEANER_RESPONSE.NONE,
       dispatch_attempts: nextAttempts,
       ...BOOKING_PAYOUT_COLUMNS_CLEAR,
-    })
-    .eq("id", bookingId)
-    .eq("cleaner_response_status", CLEANER_RESPONSE.PENDING)
-    .select("id");
+    },
+  });
 
   if (clearErr) {
     return { ok: false, error: clearErr.message };

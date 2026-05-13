@@ -6,9 +6,9 @@ import {
   type BookingPaidSignalRow,
   type BookingPersistIdsRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
+import { persistBookingEarningsSnapshotCommand } from "@/lib/payout/persistBookingEarningsSnapshotCommand";
 
 type StuckZeroScanRow = BookingPaidSignalRow & BookingPersistIdsRow;
-import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 export type RepairStuckZeroDisplayFromSignalsResult =
   | { ok: true; scanned: number; matched_signals: number; fixed: number; skipped: number; failed: number }
@@ -55,7 +55,7 @@ export async function repairCompletedStuckZeroDisplayFromSignals(
       continue;
     }
     try {
-      const result = await persistCleanerPayoutIfUnset({ admin, bookingId: rid, cleanerId: persistCleanerId });
+      const result = await persistBookingEarningsSnapshotCommand({ admin, bookingId: rid, cleanerId: persistCleanerId });
       if (!result.ok) failed += 1;
       else if (result.skipped) skipped += 1;
       else fixed += 1;

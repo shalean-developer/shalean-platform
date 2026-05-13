@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { markDispatchExpiredWhenNoPendingOffers } from "@/lib/booking/assignmentBookingStateCommands";
 
 /**
  * When the last pending dispatch offer for a booking is gone (expired/rejected/accepted elsewhere),
@@ -31,5 +32,5 @@ export async function syncBookingDispatchExpiredWhenNoPendingOffers(
   if (st !== "offered" && st !== "pending" && st !== "pending_assignment") return;
   if (ds === "assigned" || ds === "expired") return;
 
-  await supabase.from("bookings").update({ dispatch_status: "expired" }).eq("id", bid);
+  await markDispatchExpiredWhenNoPendingOffers({ admin: supabase, bookingId: bid });
 }

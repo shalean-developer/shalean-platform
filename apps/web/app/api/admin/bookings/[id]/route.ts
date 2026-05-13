@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/admin/requireAdminSession";
 import { invalidateCleanerAvailabilityCache } from "@/lib/admin/cleanerAvailabilityCache";
+import { applyAdminBookingLifecycleStatusOverride } from "@/lib/admin/adminBookingLifecycleStatusOverrideCommand";
 import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
 import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
@@ -502,7 +503,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
-  const { error } = await admin.from("bookings").update(updates).eq("id", id);
+  const { error } =
+    "status" in updates
+      ? await applyAdminBookingLifecycleStatusOverride({ admin, bookingId: id, updates })
+      : await admin.from("bookings").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (

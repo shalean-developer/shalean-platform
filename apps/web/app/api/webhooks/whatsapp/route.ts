@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyMetaWebhookSignature } from "@/lib/dispatch/metaWhatsAppSend";
 import {
-  acceptDispatchOffer,
+  acceptBookingDispatchOffer,
   rejectDispatchOffer,
   type AcceptDispatchOfferResult,
 } from "@/lib/dispatch/dispatchOffers";
@@ -229,7 +229,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
-    const result: AcceptDispatchOfferResult = await acceptDispatchOffer({ supabase: admin, offerId, cleanerId });
+    const result: AcceptDispatchOfferResult = await acceptBookingDispatchOffer({ supabase: admin, offerId, cleanerId });
     if (!result.ok) {
       if (result.failure === "booking_taken" || result.failure === "assigned_other") {
         await notifyCleanerJobAlreadyTaken({ cleanerId, bookingId: bookingId || undefined });
