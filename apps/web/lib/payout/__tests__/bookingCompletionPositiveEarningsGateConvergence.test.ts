@@ -6,12 +6,10 @@ function source(path: string): string {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-function sliceBetween(src: string, startToken: string, endToken: string): string {
-  const start = src.indexOf(startToken);
-  expect(start).toBeGreaterThanOrEqual(0);
-  const end = src.indexOf(endToken, start);
-  expect(end).toBeGreaterThan(start);
-  return src.slice(start, end);
+function requireMatch(src: string, pattern: RegExp, label: string): string {
+  const match = src.match(pattern);
+  expect(match, label).toBeTruthy();
+  return match?.[0] ?? "";
 }
 
 describe("booking completion positive earnings gate convergence", () => {
@@ -24,27 +22,25 @@ describe("booking completion positive earnings gate convergence", () => {
 
   it("uses the same strict helper before admin PATCH completion is allowed to remain completed", () => {
     const src = source("app/api/admin/bookings/[id]/route.ts");
-    const completionGate = sliceBetween(
+    const completionGate = requireMatch(
       src,
-      "if (needsEarningsIntegrityGate) {\n            const displayCents = await fetchBookingDisplayEarningsCents(admin, id);",
-      "} else if (!payout.ok) {",
+      /if\s*\(\s*needsEarningsIntegrityGate\s*\)\s*\{[\s\S]{0,300}?const\s+displayCents\s*=\s*await\s+fetchBookingDisplayEarningsCents\s*\(\s*admin\s*,\s*id\s*\)\s*;[\s\S]{0,300}?if\s*\(\s*!\s*isCompletableDisplayEarningsCents\s*\(\s*displayCents\s*\)\s*\)/,
+      "admin completion gate must fetch displayCents and check it with isCompletableDisplayEarningsCents inside needsEarningsIntegrityGate",
     );
 
     expect(src).toContain("isCompletableDisplayEarningsCents");
-    expect(completionGate).toMatch(/!\s*isCompletableDisplayEarningsCents\s*\(\s*displayCents\s*\)/);
     expect(completionGate).not.toContain("hasPersistedDisplayEarningsBasis(displayCents)");
   });
 
   it("uses the same strict helper before cron auto-completion is allowed", () => {
     const src = source("app/api/cron/booking-lifecycle/route.ts");
-    const completionGate = sliceBetween(
+    const completionGate = requireMatch(
       src,
-      "const displayCents = await fetchBookingDisplayEarningsCents(admin, id);",
-      "} catch (e) {",
+      /const\s+displayCents\s*=\s*await\s+fetchBookingDisplayEarningsCents\s*\(\s*admin\s*,\s*id\s*\)\s*;[\s\S]{0,300}?if\s*\(\s*!\s*isCompletableDisplayEarningsCents\s*\(\s*displayCents\s*\)\s*\)/,
+      "cron completion gate must fetch displayCents and check it with isCompletableDisplayEarningsCents before completion update",
     );
 
     expect(src).toContain("isCompletableDisplayEarningsCents");
-    expect(completionGate).toMatch(/!\s*isCompletableDisplayEarningsCents\s*\(\s*displayCents\s*\)/);
     expect(completionGate).not.toContain("hasPersistedDisplayEarningsBasis(displayCents)");
   });
 });
