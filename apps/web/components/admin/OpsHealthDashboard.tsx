@@ -35,13 +35,29 @@ export type OpsHealthPayload = {
     low: number;
     info: number;
     totalFindings: number;
+    acknowledgedHidden: number;
   };
   summaries: OpsHealthSummary[];
+  acknowledgedSummaries: OpsHealthSummary[];
+  acknowledgements: Array<{
+    key: string;
+    code: string;
+    sampleIds: string[];
+    status: "acknowledged" | "resolved";
+    note?: string;
+    operatorId?: string;
+    operatorEmail?: string;
+    createdAt: string;
+  }>;
   sampleIds: Record<string, string[]>;
 };
 
 type Props = {
   data: OpsHealthPayload;
+  showAcknowledged?: boolean;
+  onToggleAcknowledged?: () => void;
+  onAcknowledge?: (finding: OpsHealthSummary) => void;
+  onResolveAcknowledgement?: (finding: OpsHealthSummary) => void;
 };
 
 const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
@@ -107,7 +123,13 @@ function diagnosticLines(diagnostics?: Record<string, unknown>): string[] {
     .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`);
 }
 
-export function OpsHealthDashboard({ data }: Props) {
+export function OpsHealthDashboard({
+  data,
+  showAcknowledged = false,
+  onToggleAcknowledged,
+  onAcknowledge,
+  onResolveAcknowledgement,
+}: Props) {
   const status = statusCopy[data.status];
   const StatusIcon = data.status === "healthy" ? CheckCircle2 : data.status === "critical" ? ShieldAlert : AlertTriangle;
   const sorted = [...data.summaries].sort(
@@ -133,6 +155,9 @@ export function OpsHealthDashboard({ data }: Props) {
               {data.lastScan.metricsRecorded ? " · metrics recorded" : ""}
               {data.lastScan.degraded ? " · degraded" : ""}
             </p>
+            {data.counts.acknowledgedHidden > 0 ? (
+              <p>{data.counts.acknowledgedHidden.toLocaleString("en-ZA")} acknowledged hidden</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -153,10 +178,23 @@ export function OpsHealthDashboard({ data }: Props) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Scanner Summaries</CardTitle>
-          <CardDescription>
-            Read-only production health scan. Samples are intentionally capped to IDs only.
-          </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Scanner Summaries</CardTitle>
+              <CardDescription>
+                Read-only production health scan. Samples are intentionally capped to IDs only.
+              </CardDescription>
+            </div>
+            {onToggleAcknowledged ? (
+              <button
+                type="button"
+                onClick={onToggleAcknowledged}
+                className="inline-flex min-h-[36px] items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                {showAcknowledged ? "Hide acknowledged" : "Show acknowledged"}
+              </button>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent>
           {sorted.length === 0 ? (
@@ -180,7 +218,14 @@ export function OpsHealthDashboard({ data }: Props) {
                       </div>
                       <p className="mt-2 font-medium">{finding.message}</p>
                     </div>
-                    <p className="shrink-0 text-2xl font-semibold tabular-nums">{finding.count.toLocaleString("en-ZA")}</p>
+                    <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                      <p className="text-2xl font-semibold tabular-nums">{finding.count.toLocaleString("en-ZA")}</p>
+                      {finding.diagnostics?.acknowledged === true ? (
+                        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-black/10">
+                          acknowledged
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   {finding.sampleIds.length > 0 ? (
                     <div className="mt-3">
@@ -208,6 +253,27 @@ export function OpsHealthDashboard({ data }: Props) {
                           </li>
                         ))}
                       </ul>
+                    </div>
+                  ) : null}
+                  {onAcknowledge || onResolveAcknowledgement ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {finding.diagnostics?.acknowledged === true && onResolveAcknowledgement ? (
+                        <button
+                          type="button"
+                          onClick={() => onResolveAcknowledgement(finding)}
+                          className="inline-flex min-h-[32px] items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                          Mark resolved
+                        </button>
+                      ) : onAcknowledge ? (
+                        <button
+                          type="button"
+                          onClick={() => onAcknowledge(finding)}
+                          className="inline-flex min-h-[32px] items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                          Acknowledge
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

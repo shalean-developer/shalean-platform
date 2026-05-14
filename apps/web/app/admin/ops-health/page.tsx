@@ -12,6 +12,7 @@ export default function AdminOpsHealthPage() {
   const [data, setData] = useState<OpsHealthPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAcknowledged, setShowAcknowledged] = useState(false);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -26,7 +27,8 @@ export default function AdminOpsHealthPage() {
     }
 
     try {
-      const res = await fetch("/api/admin/ops-health", {
+      const qs = showAcknowledged ? "?includeAcknowledged=1" : "";
+      const res = await fetch(`/api/admin/ops-health${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = (await res.json().catch(() => ({}))) as Partial<OpsHealthPayload> & { error?: string };
@@ -45,7 +47,7 @@ export default function AdminOpsHealthPage() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [showAcknowledged]);
 
   useEffect(() => {
     void load();
@@ -82,7 +84,49 @@ export default function AdminOpsHealthPage() {
           {error ?? "Could not load ops health."}
         </div>
       ) : data ? (
-        <OpsHealthDashboard data={data} />
+        <OpsHealthDashboard
+          data={data}
+          showAcknowledged={showAcknowledged}
+          onToggleAcknowledged={() => setShowAcknowledged((v) => !v)}
+          onAcknowledge={(finding) => {
+            void (async () => {
+              const sb = getSupabaseBrowser();
+              const token = (await sb?.auth.getSession())?.data.session?.access_token;
+              if (!token) return;
+              const note = window.prompt("Optional acknowledgement note", "")?.trim();
+              await fetch("/api/admin/ops-health", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  code: finding.code,
+                  sampleIds: finding.sampleIds,
+                  status: "acknowledged",
+                  note: note || undefined,
+                }),
+              });
+              await load();
+            })();
+          }}
+          onResolveAcknowledgement={(finding) => {
+            void (async () => {
+              const sb = getSupabaseBrowser();
+              const token = (await sb?.auth.getSession())?.data.session?.access_token;
+              if (!token) return;
+              const note = window.prompt("Optional resolution note", "")?.trim();
+              await fetch("/api/admin/ops-health", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  code: finding.code,
+                  sampleIds: finding.sampleIds,
+                  status: "resolved",
+                  note: note || undefined,
+                }),
+              });
+              await load();
+            })();
+          }}
+        />
       ) : null}
     </main>
   );

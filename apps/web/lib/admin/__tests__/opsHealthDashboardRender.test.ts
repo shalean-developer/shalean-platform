@@ -15,17 +15,20 @@ function payload(overrides: Partial<OpsHealthPayload> = {}): OpsHealthPayload {
       metricsRecorded: false,
       degraded: false,
     },
-    counts: {
-      critical: 0,
-      high: 0,
-      medium: 0,
-      low: 0,
-      info: 0,
-      totalFindings: 0,
-    },
-    summaries: [],
-    sampleIds: {},
-    ...overrides,
+      counts: {
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        info: 0,
+        totalFindings: 0,
+        acknowledgedHidden: 0,
+      },
+      summaries: [],
+      acknowledgedSummaries: [],
+      acknowledgements: [],
+      sampleIds: {},
+      ...overrides,
   };
 }
 
@@ -48,7 +51,7 @@ describe("OpsHealthDashboard", () => {
     const html = render(
       payload({
         status: "critical",
-        counts: { critical: 2, high: 0, medium: 0, low: 0, info: 0, totalFindings: 2 },
+        counts: { critical: 2, high: 0, medium: 0, low: 0, info: 0, totalFindings: 2, acknowledgedHidden: 0 },
         summaries: [
           {
             code: "payment_verified_not_finalized",
@@ -97,7 +100,7 @@ describe("OpsHealthDashboard", () => {
       payload({
         status: "degraded",
         degraded: true,
-        counts: { critical: 0, high: 1, medium: 0, low: 0, info: 0, totalFindings: 1 },
+        counts: { critical: 0, high: 1, medium: 0, low: 0, info: 0, totalFindings: 1, acknowledgedHidden: 0 },
         summaries: [
           {
             code: "scanner_query_failed",
@@ -117,5 +120,29 @@ describe("OpsHealthDashboard", () => {
     expect(html).toContain("scanner_query_failed");
     expect(html).toContain("Diagnostics");
     expect(html).toContain("payment_finalization_jobs: failed_jobs unavailable (PGRST500)");
+  });
+
+  it("renders acknowledgement filtering controls and hidden count", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(OpsHealthDashboard, {
+        data: payload({
+          counts: { critical: 0, high: 0, medium: 0, low: 0, info: 0, totalFindings: 0, acknowledgedHidden: 2 },
+          acknowledgedSummaries: [
+            {
+              code: "payment_verified_not_finalized",
+              severity: "critical",
+              count: 2,
+              message: "Known historical payment incident.",
+              sampleIds: ["job-1", "job-2"],
+              diagnostics: { acknowledged: true },
+            },
+          ],
+        }),
+        onToggleAcknowledged: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("2 acknowledged hidden");
+    expect(html).toContain("Show acknowledged");
   });
 });

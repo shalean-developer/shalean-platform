@@ -23,7 +23,7 @@ vi.mock("@/lib/observability/productionHealthMetrics", () => ({
   recordProductionHealthSummaryMetrics: mocks.recordProductionHealthSummaryMetrics,
 }));
 
-import { GET } from "../route";
+import { GET, POST } from "../route";
 
 function healthySummary(scanLimit = 500) {
   return {
@@ -117,6 +117,8 @@ describe("GET /api/admin/ops-health", () => {
       status: "healthy",
       degraded: false,
       counts: { critical: 0, high: 0, medium: 0, low: 0, totalFindings: 0 },
+      acknowledgedSummaries: [],
+      acknowledgements: [],
       lastScan: { scanLimit: 5000, metricsRecorded: true },
       summaries: [],
       sampleIds: {},
@@ -139,8 +141,10 @@ describe("GET /api/admin/ops-health", () => {
         metricsRecorded: false,
         degraded: false,
       },
-      counts: { critical: 0, high: 0, medium: 0, low: 0, info: 0, totalFindings: 0 },
+      counts: { critical: 0, high: 0, medium: 0, low: 0, info: 0, totalFindings: 0, acknowledgedHidden: 0 },
       summaries: [],
+      acknowledgedSummaries: [],
+      acknowledgements: [],
       sampleIds: {},
     });
   });
@@ -174,7 +178,7 @@ describe("GET /api/admin/ops-health", () => {
       status: "degraded",
       degraded: true,
       lastScan: { scanLimit: 200, degraded: true },
-      counts: { high: 1, totalFindings: 1 },
+      counts: { high: 1, totalFindings: 1, acknowledgedHidden: 0 },
       sampleIds: { scanner_query_failed: ["payment_finalization_jobs"] },
     });
     expect(json.summaries[0]).toMatchObject({
@@ -197,6 +201,50 @@ describe("GET /api/admin/ops-health", () => {
       degraded: false,
       lastScan: { scanLimit: 25, degraded: false },
       summaries: [],
+      acknowledgedSummaries: [],
+    });
+  });
+
+  it("hides acknowledged findings by default and can include them", async () => {
+    mocks.runProductionHealthScan.mockResolvedValue(criticalSummary(200));
+    const ackRow = {
+      created_at: "2026-05-14T11:00:00.000Z",
+      context: {
+        key: "payment_verified_not_finalized:job-1|job-2",
+        code: "payment_verified_not_finalized",
+        sampleIds: ["job-1", "job-2"],
+        status: "acknowledged",
+        operatorEmail: "admin@example.com",
+      },
+    };
+    const admin = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            order: vi.fn(() => ({
+              limit: vi.fn().mockResolvedValue({ data: [ackRow], error: null }),
+            })),
+          })),
+        })),
+      })),
+    };
+    mocks.getSupabaseAdmin.mockReturnValue(admin);
+
+    const hiddenRes = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=200"));
+    const hidden = await hiddenRes.json();
+    expect(hidden).toMatchObject({
+      status: "healthy",
+      counts: { critical: 0, totalFindings: 0, acknowledgedHidden: 2 },
+      summaries: [],
+      acknowledgedSummaries: [{ code: "payment_verified_not_finalized" }],
+    });
+
+    const shownRes = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=200&includeAcknowledged=1"));
+    const shown = await shownRes.json();
+    expect(shown).toMatchObject({
+      status: "critical",
+      counts: { critical: 2, totalFindings: 2, acknowledgedHidden: 2 },
+      summaries: [{ code: "payment_verified_not_finalized", diagnostics: { acknowledged: true } }],
     });
   });
 
@@ -217,6 +265,7 @@ describe("GET /api/admin/ops-health", () => {
       lastScan: { scanLimit: 50, metricsRecorded: true, degraded: true },
       counts: { totalFindings: 0 },
       summaries: [],
+      acknowledgedSummaries: [],
       sampleIds: {},
     });
   });
@@ -237,5 +286,49 @@ describe("GET /api/admin/ops-health", () => {
       error: "Server configuration error.",
       lastScan: { scanLimit: 10 },
     });
+  });
+
+  it("persists acknowledgement actions with admin identity", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const admin = { from: vi.fn(() => ({ insert })) };
+    mocks.getSupabaseAdmin.mockReturnValueOnce(admin);
+
+    const res = await POST(
+      new Request("http://localhost/api/admin/ops-health", {
+        method: "POST",
+        headers: { authorization: "Bearer token", "content-type": "application/json" },
+        body: JSON.stringify({
+          code: "payment_verified_not_finalized",
+          sampleIds: ["job-1", "job-2"],
+          status: "acknowledged",
+          note: "Historical payment incident under review.",
+        }),
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({
+      ok: true,
+      acknowledgement: {
+        key: "payment_verified_not_finalized:job-1|job-2",
+        code: "payment_verified_not_finalized",
+        sampleIds: ["job-1", "job-2"],
+        status: "acknowledged",
+        note: "Historical payment incident under review.",
+        operatorId: "admin-1",
+        operatorEmail: "admin@example.com",
+      },
+    });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "ops_health_acknowledgement",
+        message: "ops_health_finding_acknowledged",
+        context: expect.objectContaining({
+          operatorId: "admin-1",
+          operatorEmail: "admin@example.com",
+        }),
+      }),
+    );
   });
 });

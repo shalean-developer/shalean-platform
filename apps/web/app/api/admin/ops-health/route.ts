@@ -7,6 +7,12 @@ import {
   type ProductionHealthFinding,
   type ProductionHealthSummary,
 } from "@/lib/observability/productionHealthMetrics";
+import {
+  applyOpsHealthAcknowledgements,
+  listOpsHealthAcknowledgements,
+  recordOpsHealthAcknowledgement,
+  type OpsHealthAcknowledgement,
+} from "@/lib/observability/opsHealthAcknowledgements";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -31,8 +37,11 @@ export type AdminOpsHealthResponse = {
   };
   counts: ProductionHealthSummary["totals"] & {
     totalFindings: number;
+    acknowledgedHidden: number;
   };
   summaries: ProductionHealthFinding[];
+  acknowledgedSummaries: ProductionHealthFinding[];
+  acknowledgements: OpsHealthAcknowledgement[];
   sampleIds: Record<string, string[]>;
 };
 
@@ -49,6 +58,11 @@ function shouldRecordMetrics(url: URL): boolean {
   return process.env.OPS_HEALTH_RECORD_METRICS === "true";
 }
 
+function shouldIncludeAcknowledged(url: URL): boolean {
+  const param = url.searchParams.get("includeAcknowledged");
+  return param === "1" || param === "true";
+}
+
 function statusFromSummary(summary: ProductionHealthSummary, degraded: boolean): AdminOpsHealthStatus {
   if (summary.totals.critical > 0) return "critical";
   if (degraded || summary.totals.high > 0 || summary.totals.medium > 0) return "degraded";
@@ -59,9 +73,11 @@ function responseFromSummary(params: {
   summary: ProductionHealthSummary;
   degraded: boolean;
   metricsRecorded: boolean;
+  acknowledgedSummaries?: ProductionHealthFinding[];
+  acknowledgements?: OpsHealthAcknowledgement[];
   error?: string;
 }): AdminOpsHealthResponse {
-  const { summary, degraded, metricsRecorded, error } = params;
+  const { summary, degraded, metricsRecorded, acknowledgedSummaries = [], acknowledgements = [], error } = params;
   const isDegraded = degraded || summary.degraded === true;
   return {
     ok: true,
@@ -78,8 +94,11 @@ function responseFromSummary(params: {
     counts: {
       ...summary.totals,
       totalFindings: summary.findings.reduce((acc, finding) => acc + finding.count, 0),
+      acknowledgedHidden: acknowledgedSummaries.reduce((acc, finding) => acc + finding.count, 0),
     },
     summaries: summary.findings,
+    acknowledgedSummaries,
+    acknowledgements,
     sampleIds: Object.fromEntries(summary.findings.map((finding) => [finding.code, finding.sampleIds])),
   };
 }
@@ -91,6 +110,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const scanLimit = clampScanLimit(url.searchParams.get("scanLimit"));
   const metricsRequested = shouldRecordMetrics(url);
+  const includeAcknowledged = shouldIncludeAcknowledged(url);
 
   const admin = getSupabaseAdmin();
   if (!admin) {
@@ -107,15 +127,21 @@ export async function GET(request: Request) {
   }
 
   try {
-    const summary = await runProductionHealthScan(admin, {
+    const rawSummary = await runProductionHealthScan(admin, {
       scanLimit,
       recordMetrics: metricsRequested,
     });
+    const acknowledgements = await listOpsHealthAcknowledgements(admin);
+    const { visibleSummary, acknowledgedFindings } = applyOpsHealthAcknowledgements(rawSummary, acknowledgements, {
+      includeAcknowledged,
+    });
     return NextResponse.json(
       responseFromSummary({
-        summary,
+        summary: visibleSummary,
         degraded: false,
         metricsRecorded: metricsRequested,
+        acknowledgedSummaries: acknowledgedFindings,
+        acknowledgements,
       }),
     );
   } catch (err) {
@@ -133,4 +159,38 @@ export async function GET(request: Request) {
       { status: 200 },
     );
   }
+}
+
+export async function POST(request: Request) {
+  const auth = await requireAdminSession(request);
+  if (!auth.ok) return auth.response;
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ ok: false, error: "Server configuration error." }, { status: 503 });
+
+  let body: {
+    code?: unknown;
+    sampleIds?: unknown;
+    status?: unknown;
+    note?: unknown;
+  };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const status = body.status === "resolved" ? "resolved" : body.status === "acknowledged" ? "acknowledged" : null;
+  if (!status) return NextResponse.json({ ok: false, error: "Invalid acknowledgement status." }, { status: 400 });
+
+  const result = await recordOpsHealthAcknowledgement(admin, {
+    code: typeof body.code === "string" ? body.code : "",
+    sampleIds: Array.isArray(body.sampleIds) ? body.sampleIds.map(String) : [],
+    status,
+    note: typeof body.note === "string" ? body.note : undefined,
+    operator: auth.user,
+  });
+
+  if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 422 });
+  return NextResponse.json({ ok: true, acknowledgement: result.acknowledgement });
 }
