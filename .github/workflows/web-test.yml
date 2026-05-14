@@ -29,7 +29,7 @@ jobs:
       - name: Critical tests (payments + referrals)
         run: npm run test:critical
       - name: Blog route governance
-        run: npm run validate:blog-routes && npm run audit:internal-links
+        run: npm run validate:blog-routes && npm run audit:internal-links && npm run validate:cms-blog-links
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Blog SEO governance report

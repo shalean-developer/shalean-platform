@@ -100,7 +100,7 @@ export async function getAllPublishedPosts(): Promise<BlogIndexPost[]> {
     .from("blog_posts")
     .select(LIST_SELECT)
     .eq("status", "published")
-    .in("source", ["editorial", "programmatic"])
+    .in("source", ["editorial", "programmatic", "high_conversion"])
     .lte("published_at", nowIso)
     .order("published_at", { ascending: false });
 

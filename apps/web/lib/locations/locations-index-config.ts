@@ -32,22 +32,25 @@ export const LOCATIONS_INDEX_REGION_ORDER: readonly string[] = [
   "Blouberg",
 ];
 
-/** Blog guides — use Claremont hub articles (verified programmatic slugs). */
+/**
+ * Guides from `/locations` — must target **routable** URLs (legacy programmatic `/blog/*-{area}-cape-town`
+ * thin posts are not served when `NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES=false`).
+ */
 export const LOCATIONS_INDEX_BLOG_GUIDES: readonly { href: string; title: string; subtitle: string }[] = [
   {
-    href: "/blog/home-cleaning-frequency-claremont-cape-town",
-    title: "Home cleaning frequency",
-    subtitle: "How often to book for Cape Town homes",
+    href: "/locations/claremont-cleaning-services",
+    title: "Claremont cleaning services",
+    subtitle: "Recurring, deep, and move-out cleans with online quotes",
   },
   {
-    href: "/blog/deep-cleaning-checklist-claremont-cape-town",
-    title: "Deep cleaning checklist",
-    subtitle: "Room-by-room scope before your visit",
+    href: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+    title: "Deep vs standard cleaning",
+    subtitle: "Pick the right tier before you book",
   },
   {
-    href: "/blog/move-out-cleaning-cost-claremont-cape-town",
-    title: "Move-out cleaning cost",
-    subtitle: "What drives quotes and deposits",
+    href: "/blog/move-out-cleaning-checklist-cape-town",
+    title: "Move-out cleaning checklist",
+    subtitle: "Handover scope for Cape Town rentals",
   },
 ];
 
