@@ -1,6 +1,6 @@
 /**
  * Canonical Cape Town suburb catalogue for `/locations/[slug]`.
- * Source of truth: `data/location-hubs.json` (slug, enrichment: locationType, propertyTypes, pricingBand).
+ * Source of truth: `data/location-hubs.json` (slug, enrichment: locationType, propertyTypes, pricingBand, optional serviceDemandProfile / localizedFaq).
  * Editorial blocks live in `LOCATION_SEO_PAGES` (`capeTownSeoPages.ts`).
  */
 
@@ -29,6 +29,10 @@ export type CapeTownLocationRow = {
   readonly locationType: LocationEnvironmentType;
   readonly propertyTypes: readonly LocationPropertyType[];
   readonly pricingBand: LocationPricingBandId;
+  /** 2–4 short demand lines — rendered once per hub for locality (see `location-hubs.json`). */
+  readonly serviceDemandProfile?: readonly string[];
+  /** One suburb-specific FAQ merged into hub FAQ + JSON-LD (see `location-hubs.json`). */
+  readonly localizedFaq?: { readonly q: string; readonly a: string };
 };
 
 type LocationHubFile = {

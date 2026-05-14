@@ -19,6 +19,11 @@ import {
 } from "@/lib/seo/location-seo-feedback";
 import { resolveLocationTitleVariant } from "@/lib/seo/resolve-location-title-variant";
 import { buildLocationPageMetaTitleForVariant } from "@/lib/seo/location-title-variants";
+import {
+  CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF,
+  CANONICAL_DEEP_VS_STANDARD_BLOG_HREF,
+  CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF,
+} from "@/lib/blog/canonicalEditorialBlogLinks";
 
 /** Fallback when hub row is unavailable (should be rare). */
 const DEFAULT_LOCATION_META_PRICE_HINT = "~R380–R950+";
@@ -859,8 +864,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     rankingServiceReinforcementParagraph:
       "From regular home cleaning to detailed move out cleaning, our services are designed for Claremont residents, students, and property managers.",
     relatedBlogGuide: {
-      href: "/locations/claremont-cleaning-services",
-      linkAnchorText: "cleaning services in Claremont",
+      href: CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF,
+      linkAnchorText: "Move-out cleaning checklist for Cape Town rentals",
     },
     intro: [
       "Claremont sits where Southern Suburb families, students, and professionals overlap—homes range from compact apartments near Main Road to larger properties tucked off arterial routes. That mix means cleaning requests swing from lease-end resets to recurring school-week upkeep.",
@@ -890,8 +895,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/locations/wynberg-cleaning-services",
-      linkAnchorText: "cleaning services in Wynberg",
+      href: "/locations/plumstead-cleaning-services",
+      linkAnchorText: "Plumstead cleaning services (nearby Southern Suburbs hub)",
     },
     intro: [
       "Wynberg combines older character homes with newer infill—gardens, pets, and school-week traffic mean most households want predictable maintenance cleaning rather than one-off hero visits.",
@@ -921,8 +926,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/locations/rondebosch-cleaning-services",
-      linkAnchorText: "cleaning services in Rondebosch",
+      href: CANONICAL_DEEP_VS_STANDARD_BLOG_HREF,
+      linkAnchorText: "Deep vs regular home cleaning in Cape Town",
     },
     intro: [
       "Rondebosch blends university-adjacent rentals with long-standing family streets, so cleaning demand shifts between compact flats that need fast bathroom and kitchen resets and multi-bedroom homes that want fuller floor-to-ceiling attention.",
@@ -976,8 +981,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/locations/observatory-cleaning-services",
-      linkAnchorText: "cleaning services in Observatory",
+      href: "/locations/rosebank-cleaning-services",
+      linkAnchorText: "Rosebank cleaning services (student-adjacent corridor)",
     },
     intro: [
       "Observatory mixes student shares, young professionals, and Main Road living—compact kitchens and busy bathrooms reward affordable, repeatable cleaning rather than sporadic deep resets.",
@@ -1106,8 +1111,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Support if something is missed before check-ins or inspections.",
     ],
     relatedBlogGuide: {
-      href: "/locations/green-point-cleaning-services",
-      linkAnchorText: "cleaning services in Green Point",
+      href: "/locations/sea-point-cleaning-services",
+      linkAnchorText: "Sea Point cleaning services (nearby Atlantic Seaboard hub)",
     },
   },
   "woodstock-cleaning-services": {
@@ -1147,8 +1152,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/locations/gardens-cleaning-services",
-      linkAnchorText: "cleaning services in Gardens",
+      href: "/locations/tamboerskloof-cleaning-services",
+      linkAnchorText: "Tamboerskloof cleaning services (nearby City Bowl hub)",
     },
     intro: [
       "Gardens mixes heritage apartment blocks, steep streets, and professionals who want predictable resets between Cape Town’s festival weeks and ordinary work nights.",
@@ -1178,8 +1183,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/locations/plumstead-cleaning-services",
-      linkAnchorText: "cleaning services in Plumstead",
+      href: "/locations/kenilworth-cleaning-services",
+      linkAnchorText: "Kenilworth cleaning services (nearby Southern Suburbs hub)",
     },
     intro: [
       "Plumstead’s quieter streets and family homes reward predictable maintenance cleaning—kitchens, bathrooms, and living zones stay manageable without constant deep resets.",
@@ -1281,8 +1286,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
     relatedBlogGuide: {
-      href: "/locations/camps-bay-cleaning-services",
-      linkAnchorText: "cleaning services in Camps Bay",
+      href: "/locations/bantry-bay-cleaning-services",
+      linkAnchorText: "Bantry Bay cleaning services (nearby Atlantic Seaboard hub)",
     },
     intro: [
       "Camps Bay pairs luxury finishes with ocean exposure—salt film on glass, balcony grit, and large footprints that reward structured, careful cleaning.",
@@ -1384,8 +1389,8 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: false,
     hasApartmentFocus: false,
     relatedBlogGuide: {
-      href: "/locations/constantia-cleaning-services",
-      linkAnchorText: "cleaning services in Constantia",
+      href: CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF,
+      linkAnchorText: "Airbnb cleaning checklist for Cape Town hosts",
     },
     intro: [
       "Constantia pairs generous floorplans with gardens and tree canopy—pollen, outdoor dust, and multi-room traffic mean structured cleaning beats occasional quick wipes.",

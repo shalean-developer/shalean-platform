@@ -1,5 +1,4 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { getLocationPricingFaqRange } from "@/lib/seo/location-pricing";
 
 function propertyMixPhrase(row: CapeTownLocationRow): string {
@@ -41,7 +40,7 @@ export function buildDynamicLocationFaqs(row: CapeTownLocationRow): { q: string;
     },
     {
       q: `What do ${name} customers usually highlight after a Shalean visit?`,
-      a: `Straightforward quotes, punctual arrivals, and thorough kitchens and bathrooms come up often alongside our ${GOOGLE_BUSINESS_REVIEWS.rating}★ Google rating (${GOOGLE_BUSINESS_REVIEWS.count} reviews)—themes across real bookings in ${city}.`,
+      a: `Feedback on ${name} visits most often mentions clear totals before arrival, on-time starts, and kitchens and bathrooms that match the locked checklist—those same themes show up across ${city} bookings when scope is set accurately online.`,
     },
     {
       q: `How much does house cleaning cost in ${name}?`,

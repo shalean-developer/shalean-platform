@@ -19,6 +19,7 @@ import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDept
 import { LocationHubShareBar } from "@/components/seo/LocationHubShareBar";
 import { SeaPointLocationEnhancements } from "@/components/seo/SeaPointLocationEnhancements";
 import { LocationReviewHighlights } from "@/components/seo/LocationReviewHighlights";
+import { LocationHubServiceDemandSection } from "@/components/seo/LocationHubServiceDemandSection";
 import { LocationHubTrustedResidentsSection } from "@/components/seo/LocationHubTrustedResidentsSection";
 import { LocationTrustSignals } from "@/components/seo/LocationTrustSignals";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
@@ -42,7 +43,6 @@ import { primaryLocationKeywordPhrase } from "@/lib/seo/location-keyword";
 import { getLocationSeoPriority, hubContentTierFromPriority } from "@/lib/seo/location-priority";
 import { CAPE_TOWN_SERVICE_SEO, type LocationSeoBlock } from "@/lib/seo/capeTownSeoPages";
 import { getLocationHubAboveFoldServiceLink, getLocationHubRelatedServiceLinks } from "@/lib/seo/internalLinks";
-import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { pickNearbyHubAnchor } from "@/lib/seo/anchorVariants";
 import {
   getLocationHubPeerContextLine,
@@ -82,13 +82,13 @@ const STANDARD_SERVICE = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].pa
 const DEEP_SERVICE = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
 const MOVE_OUT_SERVICE = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
 
-/** Editorial themes aligned with Google feedback — not attributed verbatim quotes. */
+/** Editorial themes — not attributed verbatim quotes; avoids repeating star-count boilerplate. */
 function locationCustomerVoiceBullets(loc: CapeTownLocationRow): string[] {
   const { name } = loc;
   return [
-    `Straightforward quotes and punctual arrivals — patterns ${name} customers often mention alongside our ${GOOGLE_BUSINESS_REVIEWS.rating}★ Google rating.`,
-    `Reviewers frequently note thorough kitchens and bathrooms—the areas ${name} homes depend on between visits.`,
-    `Same-week booking slots open often; pick a time online after you lock your ${name} address and scope.`,
+    `Clear totals before arrival and on-time starts show up often on ${name} visits—wet areas carry most of the perceived quality.`,
+    `Kitchens and bathrooms lead feedback when scope matched the room list locked at checkout.`,
+    `Same-week slots appear when routing allows; lock bedrooms, bathrooms, and add-ons online before you pick a time.`,
   ];
 }
 
@@ -97,8 +97,7 @@ function defaultWhyChooseBullets(loc: CapeTownLocationRow): string[] {
   return [
     `Vetted, insured cleaners who understand typical ${name} homes—from apartments to freestanding houses.`,
     `Clear scope and pricing online before we dispatch; no surprise surcharges for what you selected.`,
-    `Easy booking with human support if access codes, parking, or pets need a quick update in ${city}.`,
-    `Trusted by households across ${city}; ratings reflect real visits booked through Shalean.`,
+    `Human support when access codes, parking, or pets need a quick update in ${city}.`,
   ];
 }
 
@@ -137,10 +136,13 @@ export function ProgrammaticLocationCleaningPage({
     rankingResolved?.useRankingHero && seo ? buildRankingHeroParagraphs(location, seo) : null;
   const baseFaqs = seo?.faqs?.length ? seo.faqs : buildDynamicLocationFaqs(location);
   const peopleAlsoAskBase = buildPeopleAlsoAskFaqs(location);
-  const peopleAlsoAskSeed =
+  const peopleAlsoAskSeedRaw =
     editorialOverride?.extraFaqs?.length && editorialOverride.extraFaqs.length > 0
       ? [...editorialOverride.extraFaqs, ...peopleAlsoAskBase]
       : peopleAlsoAskBase;
+  const peopleAlsoAskSeed = location.localizedFaq
+    ? [{ q: location.localizedFaq.q, a: location.localizedFaq.a }, ...peopleAlsoAskSeedRaw]
+    : peopleAlsoAskSeedRaw;
   const peopleAlsoAsk =
     rankingResolved?.prependCostFaq
       ? [
@@ -301,11 +303,11 @@ export function ProgrammaticLocationCleaningPage({
           ) : null}
           <div className="mt-6 space-y-4 text-lg leading-relaxed text-zinc-600">
             <p>
-              Need recurring visits or a once-off reset? Start with{" "}
+              Start with{" "}
               <Link href={hubAboveFoldServiceLink.href} className={`font-semibold ${linkEmphasisClassName}`}>
                 {hubAboveFoldServiceLink.anchor}
               </Link>{" "}
-              — then compare deep and move-out scope in the sections below.
+              when you know your room list; deep and move-out are linked below.
             </p>
             {rankingHeroParagraphs
               ? rankingHeroParagraphs.map((p, i) => <p key={i}>{p}</p>)
@@ -331,9 +333,9 @@ export function ProgrammaticLocationCleaningPage({
                   <Link href={`/locations/${loc.slug}`} className={`${linkEmphasisClassName} font-medium`}>
                     {pickNearbyHubAnchor(`${slug}|hero-near|${loc.slug}`, loc.name)}
                   </Link>
+                  {i === arr.length - 1 ? "." : null}
                 </span>
               ))}
-              —each uses the same locked-quote booking flow.
             </p>
           ) : null}
           <p className="mt-5 border-l-4 border-emerald-200 pl-4 text-base font-medium leading-relaxed text-zinc-800">
@@ -349,15 +351,14 @@ export function ProgrammaticLocationCleaningPage({
             </Link>{" "}
             for your area.
           </p>
-          {!rankingResolved?.useRankingHero ? (
+          {!rankingResolved?.useRankingHero && hubTier !== "base" ? (
             <p className="mt-5 text-base leading-relaxed text-zinc-700">
-              We help families, professionals, and Airbnb hosts in {location.name}, {location.city}, with vetted cleaners
-              and transparent online quoting—tell us your address and room count so your total is clear before you
-              confirm.
+              {location.name} bookings span hosts, tenants, and family homes—your address and room list set the checklist
+              before you confirm.
             </p>
           ) : null}
           <p className="mt-4 text-sm font-medium text-zinc-700">
-            {publicTrustRatingBadgeLine(trustStats)} · Thousands of Cape Town cleans completed through Shalean
+            {publicTrustRatingBadgeLine(trustStats)} · Totals lock online before dispatch.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {(swapHeroBookCtas
@@ -443,8 +444,8 @@ export function ProgrammaticLocationCleaningPage({
             What type of cleaning service do you need?
           </h2>
           <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            Same vetted crews citywide—pick a guide, then confirm your {location.name} address at checkout so scope matches
-            lifts, parking, and bathrooms on the ground.
+            Pick a guide, then confirm your {location.name} address at checkout so scope matches lifts, parking, and the
+            bathrooms you selected.
           </p>
           <ul className="mt-6 space-y-3 text-base leading-relaxed text-zinc-700">
             <li>
@@ -510,12 +511,35 @@ export function ProgrammaticLocationCleaningPage({
               —mention building access, parking, and outdoor zones in your booking notes so scope matches what teams see
               on the ground in {location.name}.
             </p>
-            {geoHints.propertyTypeDensity || geoHints.parkingNotes || geoHints.accessNotes ? (
+            {geoHints.propertyTypeDensity ||
+            geoHints.parkingNotes ||
+            geoHints.accessNotes ||
+            (geoHints.estates && geoHints.estates.length > 0) ||
+            (geoHints.apartmentZones && geoHints.apartmentZones.length > 0) ||
+            geoHints.transportAccess ? (
               <ul className="mt-6 list-disc space-y-3 pl-5 text-base leading-relaxed text-zinc-700">
                 {geoHints.propertyTypeDensity ? (
                   <li>
                     <span className="font-medium text-zinc-900">Property mix: </span>
                     {geoHints.propertyTypeDensity}
+                  </li>
+                ) : null}
+                {geoHints.estates && geoHints.estates.length > 0 ? (
+                  <li>
+                    <span className="font-medium text-zinc-900">Estates / complexes: </span>
+                    {geoHints.estates.join(", ")}
+                  </li>
+                ) : null}
+                {geoHints.apartmentZones && geoHints.apartmentZones.length > 0 ? (
+                  <li>
+                    <span className="font-medium text-zinc-900">Apartment zones: </span>
+                    {geoHints.apartmentZones.join(", ")}
+                  </li>
+                ) : null}
+                {geoHints.transportAccess ? (
+                  <li>
+                    <span className="font-medium text-zinc-900">Transport & access: </span>
+                    {geoHints.transportAccess}
                   </li>
                 ) : null}
                 {geoHints.parkingNotes ? (
@@ -535,6 +559,8 @@ export function ProgrammaticLocationCleaningPage({
           </div>
         </section>
       ) : null}
+
+      <LocationHubServiceDemandSection location={location} />
 
       <LocationHubEntityStack location={location} slug={slug} />
 
@@ -609,8 +635,7 @@ export function ProgrammaticLocationCleaningPage({
               Related services in {location.name}
             </h3>
             <p className="mt-3 text-base leading-relaxed text-zinc-600">
-              Looking for reliable cleaning services in {location.name}? Explore our Cape Town-wide guides—your quote
-              still locks to your {location.name} address at checkout.
+              Citywide guides below—checkout still pins to your {location.name} street and room list.
             </p>
             <ul className="mt-4 list-disc space-y-2 pl-5 text-base leading-relaxed text-zinc-700">
               {getLocationHubRelatedServiceLinks(location.name, slug).map((item) => (
@@ -621,10 +646,6 @@ export function ProgrammaticLocationCleaningPage({
                 </li>
               ))}
             </ul>
-            <p className="mt-4 text-base text-zinc-600">
-              Open a Cape Town-wide guide, enter your {location.name} address at checkout, and lock scope before we
-              dispatch.
-            </p>
             <LocationHubServiceTiles
               ctx={seoCtx}
               tiles={[
@@ -667,9 +688,8 @@ export function ProgrammaticLocationCleaningPage({
         <div className="mx-auto max-w-4xl px-4">
           <h2 className="text-2xl font-bold tracking-tight text-zinc-900">What customers say in {location.name}</h2>
           <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            Customers in {location.name} book Shalean for recurring and deep cleans. On Google we hold a{" "}
-            {GOOGLE_BUSINESS_REVIEWS.rating}★ rating from {GOOGLE_BUSINESS_REVIEWS.count} reviews — here are themes people
-            highlight again and again (summaries, not verbatim quotes):
+            Recurring themes from {location.name} bookings (summaries, not verbatim quotes). Citywide quality signals still
+            live on the public Google profile for Shalean—this section stays suburb-specific.
           </p>
           <ul className="mt-6 space-y-3 text-sm leading-relaxed text-zinc-700">
             {locationCustomerVoiceBullets(location).map((line, i) => (
