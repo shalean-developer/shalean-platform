@@ -14,6 +14,7 @@ import { fetchPublishedClusterPeersUnified } from "@/lib/blog/seo/fetch-cluster-
 import { warnIfSerializedBlogBodyContainsLegacyManualClusterRelatedGuidesMarkdown } from "@/lib/blog/cluster-related-guides-legacy-markdown-guard";
 import { normalizeManualRelatedGuideSlugs } from "@/lib/blog/fetch-cluster-related-guides";
 import { validateBlogPublish } from "@/lib/blog/seo/publish-validation";
+import { validateCmsBlogLinksForAdminSave } from "@/lib/blog/cms-blog-link-validation";
 import {
   normalizeSemanticClusterInput,
   resolveSemanticClusterKey,
@@ -345,6 +346,28 @@ export async function POST(request: Request) {
     row.reading_time_minutes = computeReadingTimeMinutes(content);
   }
 
+  if (parsed.data.status === "published" || parsed.data.status === "scheduled") {
+    const cmsBroken = await validateCmsBlogLinksForAdminSave(admin, {
+      slug: slugForInject,
+      content: injected,
+      canonical_url: row.canonical_url == null ? null : String(row.canonical_url),
+      related_guide_override_slugs: Array.isArray(row.related_guide_override_slugs)
+        ? (row.related_guide_override_slugs as string[])
+        : null,
+      status: parsed.data.status,
+    });
+    if (cmsBroken.length) {
+      return NextResponse.json(
+        {
+          error: "CMS internal blog link validation failed.",
+          code: "cms_link_validation",
+          broken: cmsBroken,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   let publishGovernanceResult: ReturnType<typeof validateBlogPublish> | null = null;
   if (parsed.data.status === "published") {
     publishGovernanceResult = await runPublishGovernanceValidation(admin, {
@@ -463,6 +486,28 @@ export async function PUT(request: Request) {
   } catch {
     row.content_json = content;
     row.reading_time_minutes = computeReadingTimeMinutes(content);
+  }
+
+  if (parsed.data.status === "published" || parsed.data.status === "scheduled") {
+    const cmsBroken = await validateCmsBlogLinksForAdminSave(admin, {
+      slug: slugForInject,
+      content: injected,
+      canonical_url: row.canonical_url == null ? null : String(row.canonical_url),
+      related_guide_override_slugs: Array.isArray(row.related_guide_override_slugs)
+        ? (row.related_guide_override_slugs as string[])
+        : null,
+      status: parsed.data.status,
+    });
+    if (cmsBroken.length) {
+      return NextResponse.json(
+        {
+          error: "CMS internal blog link validation failed.",
+          code: "cms_link_validation",
+          broken: cmsBroken,
+        },
+        { status: 400 },
+      );
+    }
   }
 
   let publishGovernanceResultPut: ReturnType<typeof validateBlogPublish> | null = null;

@@ -1,4 +1,4 @@
-import { PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 import { CAPE_TOWN_HUB_BLOG_SLUGS, type HubBlogCard } from "@/lib/blog/get-all-posts";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -11,7 +11,7 @@ export async function getLocationHubBlogCards(locationName: string): Promise<Hub
   const supabase = getSupabaseServer();
   if (!supabase) return [];
 
-  const localSlugs = PROGRAMMATIC_POSTS.filter((p) => p.location === locationName).map((p) => p.slug);
+  const localSlugs = ROUTED_PROGRAMMATIC_POSTS.filter((p) => p.location === locationName).map((p) => p.slug);
   const orderedUnique = [...new Set([...localSlugs, ...CAPE_TOWN_HUB_BLOG_SLUGS])];
   if (orderedUnique.length === 0) return [];
 

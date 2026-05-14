@@ -29,6 +29,8 @@
     "process-favicons": "node scripts/process-favicons-transparent.mjs",
     "generate-favicons": "node scripts/generate-favicons-from-logo.mjs",
     "validate:blog-images": "tsx scripts/validate-blog-images.ts",
+    "validate:cms-blog-links": "tsx scripts/validate-cms-blog-links.ts",
+    "reconcile:production-blog-404s": "tsx scripts/reconcile-production-blog-404s.ts",
     "check:blog-seed-cluster-markdown": "tsx scripts/check-governed-blog-seed-markdown-cluster-section.ts",
     "import:cursor-blog-pool": "tsx scripts/import-cursor-blog-png-pool.ts",
     "import:governed-blog-seed-drafts": "tsx scripts/import-governed-blog-seed-drafts.ts"

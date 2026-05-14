@@ -1073,13 +1073,35 @@ for (const s of BLOG_POST_SLUGS) {
   }
 }
 
+/** Set `NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES=false` after migrating programmatic URLs to `blog_posts`. */
+export const LEGACY_PROGRAMMATIC_ROUTES_ENABLED =
+  typeof process.env.NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES === "undefined" ||
+  process.env.NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES !== "false";
+
+/** Posts still rendered from in-repo definitions (routing + static params). */
+export const ROUTED_PROGRAMMATIC_POSTS: ProgrammaticPost[] = LEGACY_PROGRAMMATIC_ROUTES_ENABLED
+  ? PROGRAMMATIC_POSTS
+  : [];
+
+export function getProgrammaticPost(slug: string): ProgrammaticPost | null {
+  return ROUTED_PROGRAMMATIC_POSTS.find((p) => p.slug === slug) ?? null;
+}
+
+/**
+ * Programmatic posts that are safe to surface as internal `/blog/{slug}` links.
+ * Matches {@link ROUTED_PROGRAMMATIC_POSTS} — never the full {@link PROGRAMMATIC_POSTS} pool when legacy routes are off.
+ */
+export function getLinkableProgrammaticPosts(): readonly ProgrammaticPost[] {
+  return ROUTED_PROGRAMMATIC_POSTS;
+}
+
 /** `sea-point-cleaning-services` → `sea-point` for programmatic `/blog/*-{area}-cape-town` slugs. */
 export function hubAreaKebabFromHubSlug(hubSlug: string): string {
   return hubSlug.replace(/-cleaning-services$/, "");
 }
 
 export function programmaticBlogHrefIfExists(slug: string): string | null {
-  return PROGRAMMATIC_POSTS.some((p) => p.slug === slug) ? `/blog/${slug}` : null;
+  return ROUTED_PROGRAMMATIC_POSTS.some((p) => p.slug === slug) ? `/blog/${slug}` : null;
 }
 
 function editorialClusterLinkLabel(slug: string, areaName: string): string {
@@ -1099,7 +1121,7 @@ function editorialClusterLinkLabel(slug: string, areaName: string): string {
 /** Four editorial guides (pricing, frequency, checklist, move-out cost) — primary programmatic spine per suburb. */
 export function getHubEditorialGuideLinks(hubSlug: string, areaName: string): { href: string; label: string }[] {
   const base = hubAreaKebabFromHubSlug(hubSlug);
-  const slugs = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
+  const slugs = new Set(ROUTED_PROGRAMMATIC_POSTS.map((p) => p.slug));
   const pack = [
     `cleaning-prices-${base}-cape-town`,
     `home-cleaning-frequency-${base}-cape-town`,
@@ -1157,7 +1179,7 @@ export function getLocalGuideEditorialCrossLinks(post: ProgrammaticPost): LocalG
   const hubSlug = hubSlugFromPlaceName(areaName);
   if (!hubSlug) return null;
   const base = hubAreaKebabFromHubSlug(hubSlug);
-  const slugs = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
+  const slugs = new Set(ROUTED_PROGRAMMATIC_POSTS.map((p) => p.slug));
   const clusterSlugs = [
     `cleaning-prices-${base}-cape-town`,
     `home-cleaning-frequency-${base}-cape-town`,
@@ -1179,20 +1201,6 @@ export function getLocalGuideEditorialCrossLinks(post: ProgrammaticPost): LocalG
     serviceHref,
     serviceLabel,
   };
-}
-
-/** Set `NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES=false` after migrating programmatic URLs to `blog_posts`. */
-export const LEGACY_PROGRAMMATIC_ROUTES_ENABLED =
-  typeof process.env.NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES === "undefined" ||
-  process.env.NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES !== "false";
-
-/** Posts still rendered from in-repo definitions (routing + static params). */
-export const ROUTED_PROGRAMMATIC_POSTS: ProgrammaticPost[] = LEGACY_PROGRAMMATIC_ROUTES_ENABLED
-  ? PROGRAMMATIC_POSTS
-  : [];
-
-export function getProgrammaticPost(slug: string): ProgrammaticPost | null {
-  return ROUTED_PROGRAMMATIC_POSTS.find((p) => p.slug === slug) ?? null;
 }
 
 const AREA_BLOG_HUB_LOCATIONS = [
@@ -1238,7 +1246,7 @@ export function getAreaProgrammaticBlogLinksForCapeTownService(
   if (!svc) return null;
   const phrase = AREA_HUB_LINK_LABEL_PHRASE[svc];
   return AREA_BLOG_HUB_LOCATIONS.map((loc) => {
-    const post = PROGRAMMATIC_POSTS.find((p) => p.service === svc && p.location === loc);
+    const post = ROUTED_PROGRAMMATIC_POSTS.find((p) => p.service === svc && p.location === loc);
     if (post) {
       return { href: `/blog/${post.slug}`, label: `${phrase} in ${loc}` };
     }

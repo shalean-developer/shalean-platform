@@ -127,6 +127,20 @@ export function collectStaticCodeOwnedBlogSlugs(): Set<string> {
 export const STATIC_CODE_OWNED_BLOG_SLUGS: ReadonlySet<string> = collectStaticCodeOwnedBlogSlugs();
 
 /**
+ * True when `/blog/{slug}` can be served from in-repo pools **or** appears in optional published DB slugs.
+ * Use for internal link safety: never emit `/blog/*` for redirect-only aliases.
+ *
+ * @param opts.dbPublishedSlugs — pass `new Set(await getPublishedBlogSlugs())` when links must include CMS-only posts.
+ */
+export function isRoutableBlogSlug(slug: string, opts?: { dbPublishedSlugs?: ReadonlySet<string> }): boolean {
+  const s = slug.trim().toLowerCase();
+  if (!s) return false;
+  if (REDIRECT_ALIAS_BLOG_SLUGS.has(s)) return false;
+  if (opts?.dbPublishedSlugs?.has(s)) return true;
+  return STATIC_CODE_OWNED_BLOG_SLUGS.has(s);
+}
+
+/**
  * Dev/build allowlist: code-defined posts + redirect canonical blog targets + editorial constants.
  * CMS-only URLs may still 200 — absent here does not imply 404.
  */
