@@ -3,6 +3,7 @@
 import { TEAM_MEMBER_ADD_CODE } from "./teamMemberAddCodes";
 import type { CleanerPreferencesPayload, PreferredTimeBlock } from "@/lib/cleaner/cleanerPreferencesTypes";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 
 export type AdminBookingRow = {
   id: string;
@@ -53,6 +54,35 @@ export type AdminCustomerRow = {
   lastBookingAt: string | null;
   status: "active" | "inactive";
 };
+
+export class AdminDashboardActionError extends Error {
+  warnings: AdminWarning[];
+  code?: string;
+  blocking?: boolean;
+
+  constructor(message: string, details?: { warnings?: AdminWarning[]; code?: string; blocking?: boolean }) {
+    super(message);
+    this.name = "AdminDashboardActionError";
+    this.warnings = details?.warnings ?? [];
+    this.code = details?.code;
+    this.blocking = details?.blocking;
+  }
+}
+
+type AdminActionErrorJson = {
+  error?: string;
+  code?: string;
+  blocking?: boolean;
+  warnings?: AdminWarning[];
+};
+
+function adminActionError(json: AdminActionErrorJson, fallback: string): AdminDashboardActionError {
+  return new AdminDashboardActionError(json.error ?? fallback, {
+    warnings: Array.isArray(json.warnings) ? json.warnings : [],
+    code: json.code,
+    blocking: json.blocking,
+  });
+}
 
 async function getAdminToken(): Promise<string> {
   const sb = getSupabaseBrowser();
@@ -336,8 +366,8 @@ export async function assignCleaner(bookingId: string, cleanerId: string, force 
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ cleanerId, force }),
   });
-  const json = (await res.json()) as { error?: string };
-  if (!res.ok) throw new Error(json.error ?? "Failed to assign cleaner.");
+  const json = (await res.json()) as AdminActionErrorJson;
+  if (!res.ok) throw adminActionError(json, "Failed to assign cleaner.");
 }
 
 export async function assignTeamToBookingAdmin(bookingId: string, teamId: string) {
@@ -361,8 +391,8 @@ export async function updateBookingStatus(id: string, status: string) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   });
-  const json = (await res.json()) as { error?: string };
-  if (!res.ok) throw new Error(json.error ?? "Failed to update booking status.");
+  const json = (await res.json()) as AdminActionErrorJson;
+  if (!res.ok) throw adminActionError(json, "Failed to update booking status.");
 }
 
 export async function updateBooking(id: string, patch: { date?: string; time?: string; status?: string }) {
@@ -372,8 +402,8 @@ export async function updateBooking(id: string, patch: { date?: string; time?: s
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  const json = (await res.json()) as { error?: string };
-  if (!res.ok) throw new Error(json.error ?? "Failed to update booking.");
+  const json = (await res.json()) as AdminActionErrorJson;
+  if (!res.ok) throw adminActionError(json, "Failed to update booking.");
 }
 
 export async function deleteBookingAdmin(bookingId: string) {
@@ -382,8 +412,8 @@ export async function deleteBookingAdmin(bookingId: string) {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
-  const json = (await res.json()) as { error?: string };
-  if (!res.ok) throw new Error(json.error ?? "Failed to delete booking.");
+  const json = (await res.json()) as AdminActionErrorJson;
+  if (!res.ok) throw adminActionError(json, "Failed to delete booking.");
 }
 
 export async function updateCleanerStatus(id: string, status: "available" | "busy" | "offline") {

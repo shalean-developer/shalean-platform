@@ -7,6 +7,7 @@ import {
   isAssignFailureFresh,
   recordAssignFailure,
 } from "@/lib/admin/assignFailureCache";
+import { AdminWarningList } from "@/components/admin/AdminWarningList";
 import {
   getBestCleaner,
   getBestCleanerForAssign,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/admin/assignRanking";
 import { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart.constants";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 
 export type { CleanerOption } from "@/lib/admin/assignRanking";
 export {
@@ -52,6 +54,7 @@ export type AssignEligibilityUi = {
    * responses from before the API surfaced it; treated as `false` when absent.
    */
   accountIneligible?: boolean;
+  warnings?: AdminWarning[];
   canAssignWithoutForce: boolean;
 };
 
@@ -109,6 +112,7 @@ export function AdminAssignForm({
   const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [submitWarnings, setSubmitWarnings] = useState<AdminWarning[]>([]);
   const [progressNote, setProgressNote] = useState<string | null>(null);
   const [elig, setElig] = useState<Record<string, AssignEligibilityUi> | null>(null);
   const [eligStatus, setEligStatus] = useState<EligStatus>("idle");
@@ -123,6 +127,7 @@ export function AdminAssignForm({
     setCleanerId("");
     setForce(false);
     setMsg(null);
+    setSubmitWarnings([]);
     setExtremeSlaEscalateConfirm(false);
   }, [bookingId]);
 
@@ -177,6 +182,7 @@ export function AdminAssignForm({
               offline: Boolean(r.offline),
               // M-13/M-14: defaults to `false` when missing (older cached API responses).
               accountIneligible: Boolean(r.accountIneligible),
+              warnings: Array.isArray(r.warnings) ? r.warnings : [],
               canAssignWithoutForce: Boolean(r.canAssignWithoutForce),
             };
           }
@@ -246,6 +252,7 @@ export function AdminAssignForm({
     }
     setBusy(true);
     setMsg(null);
+    setSubmitWarnings([]);
     const sb = getSupabaseBrowser();
     const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
     const token = sessionData.session?.access_token;
@@ -259,15 +266,17 @@ export function AdminAssignForm({
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ cleanerId: cleanerId.trim(), force }),
     });
-    const j = (await res.json()) as { error?: string };
+    const j = (await res.json()) as { error?: string; warnings?: AdminWarning[] };
     if (!res.ok) {
       const err = j.error ?? "Failed to send job offer";
+      setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
       if (res.status === 400) recordAssignFailure(bookingId, cleanerId.trim());
       setMsg(err);
       onError(err);
       setBusy(false);
       return;
     }
+    setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
     clearAssignFailuresForBooking(bookingId);
     onDone({ cleanerId: cleanerId.trim() });
     setBusy(false);
@@ -300,6 +309,7 @@ export function AdminAssignForm({
 
     setBusy(true);
     setMsg(null);
+    setSubmitWarnings([]);
     setProgressNote("Smart assign (server)…");
     const sb = getSupabaseBrowser();
     const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
@@ -335,16 +345,19 @@ export function AdminAssignForm({
       cleanerId?: string;
       attempts?: number;
       escalated?: boolean;
+      warnings?: AdminWarning[];
     };
     setProgressNote(null);
     if (res.ok && j.ok) {
       clearAssignFailuresForBooking(bookingId);
       if (j.cleanerId) setCleanerId(j.cleanerId);
+      setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
       setBusy(false);
       onDone({ cleanerId: j.cleanerId ?? "", assignAttempts: j.attempts });
       return;
     }
     const err = j.error ?? "Smart assign failed.";
+    setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
     setMsg(
       j.escalated ? `${err} · Escalation was notified (extreme SLA).` : err,
     );
@@ -373,6 +386,9 @@ export function AdminAssignForm({
 
   const showSlotHint =
     checkable && eligStatus === "ready" && !force && slotOkList.length === 0 && roster.length > 0;
+  const selectedEligibilityWarnings =
+    cleanerId && eligStatus === "ready" && elig ? (elig[cleanerId]?.warnings ?? []) : [];
+  const visibleWarnings = submitWarnings.length > 0 ? submitWarnings : selectedEligibilityWarnings;
 
   return (
     <form
@@ -483,6 +499,7 @@ export function AdminAssignForm({
           risk.
         </p>
       ) : null}
+      <AdminWarningList warnings={visibleWarnings} compact />
       {slaBreachMinutes != null && slaBreachMinutes > EXTREME_SLA_AUTO_ESCALATE_MINUTES ? (
         <label className="flex items-start gap-2 text-[11px] text-zinc-700 dark:text-zinc-300">
           <input

@@ -9,6 +9,7 @@ import { persistLastOpsQuick, readLastOpsQuick } from "@/lib/admin/lastOpsQuickF
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { AdminAssignForm, type CleanerOption } from "@/components/admin/AdminAssignForm";
+import { AdminWarningList } from "@/components/admin/AdminWarningList";
 import { BookingCard } from "@/components/admin/BookingCard";
 import BookingDetailsSheet from "@/components/admin/BookingDetailsSheet";
 import { adminRowFlags } from "@/lib/admin/adminBookingsListDerived";
@@ -18,8 +19,9 @@ import {
   sortRowsForAttentionQueue,
   type AttentionQueueFilter,
 } from "@/lib/admin/opsSnapshot";
-import { deleteBookingAdmin } from "@/lib/admin/dashboard";
+import { AdminDashboardActionError, deleteBookingAdmin } from "@/lib/admin/dashboard";
 import { adminNeedsFollowUpQueue } from "@/lib/admin/adminDashboardLifecycleDisplay";
+import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 
 type BookingRow = AdminBookingsListRow;
 
@@ -176,6 +178,7 @@ export default function AdminBookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastState>(null);
+  const [adminActionWarnings, setAdminActionWarnings] = useState<AdminWarning[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<string>("all");
   const [routeRows, setRouteRows] = useState<AdminRouteRow[]>([]);
@@ -524,11 +527,12 @@ export default function AdminBookingsPage() {
 
   async function deleteBookingFromList(id: string) {
     const ok = window.confirm(
-      "Permanently delete this booking? Only bookings already linked to a payout run are blocked (remove from the payout first if needed).",
+      "Permanently delete this booking? This cannot be undone. Financially sensitive bookings are blocked, including paid, completed, monthly invoice-backed, payout-linked, payout-eligible, payout-frozen, or earnings-bearing rows.",
     );
     if (!ok) return;
     try {
       await deleteBookingAdmin(id);
+      setAdminActionWarnings([]);
       emitAdminToast("Booking deleted.", "success");
       setRows((cur) => cur.filter((row) => row.id !== id));
       setSelectedBookingId((cur) => {
@@ -540,6 +544,7 @@ export default function AdminBookingsPage() {
         return null;
       });
     } catch (e) {
+      if (e instanceof AdminDashboardActionError) setAdminActionWarnings(e.warnings);
       emitAdminToast(e instanceof Error ? e.message : "Could not delete booking.", "error");
     }
   }
@@ -739,6 +744,7 @@ export default function AdminBookingsPage() {
   return (
     <div>
       <main className="mx-auto max-w-6xl">
+        <AdminWarningList warnings={adminActionWarnings} className="mb-4" />
         {recurringIdParam && /^[0-9a-f-]{36}$/i.test(recurringIdParam) ? (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-50">
             <span>

@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, Loader2, MapPin, Pencil, Phone, TriangleAlert } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import {
+  AdminDashboardActionError,
   assignCleaner,
   assignTeamToBookingAdmin,
   deleteBookingAdmin,
@@ -15,6 +16,8 @@ import {
   updateBookingStatus,
   type AdminCleanerRow,
 } from "@/lib/admin/dashboard";
+import { AdminWarningList } from "@/components/admin/AdminWarningList";
+import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
 import { issueReportReasonDisplay } from "@/lib/cleaner/cleanerJobIssueReasons";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
@@ -797,6 +800,7 @@ export default function BookingDetailsView({
   const [markPaidSettlementMode, setMarkPaidSettlementMode] = useState<"full" | "deposit">("full");
   const [markPaidDepositReason, setMarkPaidDepositReason] = useState("");
   const [markPaidBusy, setMarkPaidBusy] = useState(false);
+  const [adminActionWarnings, setAdminActionWarnings] = useState<AdminWarning[]>([]);
   const [retryChargeBusy, setRetryChargeBusy] = useState(false);
   const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
   const [editDetailsBusy, setEditDetailsBusy] = useState(false);
@@ -1714,6 +1718,7 @@ export default function BookingDetailsView({
         skipped?: boolean;
         reason?: string;
         error?: string;
+        warnings?: AdminWarning[];
         deposit_recorded?: boolean;
         deposit_paid_cents?: number;
         settlement?: {
@@ -1725,6 +1730,7 @@ export default function BookingDetailsView({
         };
       };
       if (!res.ok) {
+        setAdminActionWarnings(Array.isArray(json.warnings) ? json.warnings : []);
         setToast({
           kind: "error",
           text: json.error ?? (markPaidSettlementMode === "deposit" ? "Could not record deposit." : "Could not mark as paid."),
@@ -1732,6 +1738,7 @@ export default function BookingDetailsView({
         return;
       }
       if (json.deposit_recorded === true && typeof json.deposit_paid_cents === "number") {
+        setAdminActionWarnings([]);
         setFullBooking({
           ...fullBooking,
           deposit_paid_cents: json.deposit_paid_cents,
@@ -1746,6 +1753,7 @@ export default function BookingDetailsView({
         return;
       }
       if (json.skipped && json.reason === "already_paid") {
+        setAdminActionWarnings([]);
         setToast({ kind: "info", text: "Already recorded as paid." });
         setMarkPaidModalOpen(false);
         setDetailRefresh((n) => n + 1);
@@ -1767,6 +1775,7 @@ export default function BookingDetailsView({
         });
       }
       setToast({ kind: "success", text: "Marked as paid." });
+      setAdminActionWarnings([]);
       setMarkPaidModalOpen(false);
       setMarkPaidReference("");
       setMarkPaidAmountZar("");
@@ -1845,12 +1854,14 @@ export default function BookingDetailsView({
     setFullBooking((p) => (p ? { ...p, status } : p));
     try {
       await updateBookingStatus(fullBooking.id, status);
+      setAdminActionWarnings([]);
       setToast({
         kind: "success",
         text: status === "completed" ? "Booking completed" : status === "cancelled" ? "Booking cancelled" : "Booking updated",
       });
     } catch (e) {
       setFullBooking((p) => (p ? { ...p, status: prev } : p));
+      if (e instanceof AdminDashboardActionError) setAdminActionWarnings(e.warnings);
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Something went wrong" });
     } finally {
       setStatusBusy(null);
@@ -1860,15 +1871,17 @@ export default function BookingDetailsView({
   const handleDeleteBooking = async () => {
     if (!fullBooking?.id) return;
     const ok = window.confirm(
-      "Permanently delete this booking? This cannot be undone. Bookings already linked to a payout run cannot be deleted here — remove them from the payout first if appropriate.",
+      "Permanently delete this booking? This cannot be undone. Financially sensitive bookings are blocked, including paid, completed, monthly invoice-backed, payout-linked, payout-eligible, payout-frozen, or earnings-bearing rows.",
     );
     if (!ok) return;
     try {
       await deleteBookingAdmin(fullBooking.id);
+      setAdminActionWarnings([]);
       setToast({ kind: "success", text: "Booking deleted." });
       onBookingDeleted?.(fullBooking.id);
       onClose?.();
     } catch (e) {
+      if (e instanceof AdminDashboardActionError) setAdminActionWarnings(e.warnings);
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Could not delete booking." });
     }
   };
@@ -2034,6 +2047,7 @@ export default function BookingDetailsView({
     });
     try {
       await assignCleaner(fullBooking.id, selected.id);
+      setAdminActionWarnings([]);
       setAssignModalOpen(false);
       setEditingCleanerInline(false);
       setToast({ kind: "success", text: "Cleaner assigned" });
@@ -2041,6 +2055,7 @@ export default function BookingDetailsView({
     } catch (e) {
       setFullBooking((p) => (p ? { ...p, cleaner_id: prevCleanerId } : p));
       setCleaner(prevCleaner);
+      if (e instanceof AdminDashboardActionError) setAdminActionWarnings(e.warnings);
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Something went wrong" });
     } finally {
       setAssigningCleanerId(null);
@@ -2164,6 +2179,11 @@ export default function BookingDetailsView({
       </header>
 
       <main className="mx-auto grid max-w-7xl grid-cols-12 gap-6 px-6 py-6">
+        {adminActionWarnings.length > 0 ? (
+          <div className="col-span-12">
+            <AdminWarningList warnings={adminActionWarnings} />
+          </div>
+        ) : null}
         {needsDispatchManualAttention ? (
           <div
             className="col-span-12 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 shadow-sm"
