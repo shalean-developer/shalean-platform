@@ -102,34 +102,35 @@ function isSlaBreachRow(r: OpsSnapshotRow, nowMs: number, slaMinutes: number): b
 
 export type AttentionQueueFilter = "unassignable" | "sla" | "unassigned" | "starting-soon";
 
+export function classifyAttentionQueue(
+  r: OpsSnapshotRow,
+  nowMs = Date.now(),
+  slaMinutes: number = getDispatchSlaBreachMinutes(),
+): AttentionQueueFilter | null {
+  if (isClosedStatus(r.status)) return null;
+  const st = String(r.status ?? "").toLowerCase();
+  if (st === "pending_payment") return null;
+
+  const ds = String(r.dispatch_status ?? "").toLowerCase();
+  const noCleaner = !r.cleaner_id;
+
+  if (isSlaBreachRow(r, nowMs, slaMinutes)) return "sla";
+  if (ds === "unassignable") return "unassignable";
+  if (noCleaner && isPaid(r)) return "unassigned";
+  if (noCleaner) {
+    const startsIn = startsInMinutesFromNow(r.date, r.time, nowMs);
+    if (startsIn != null && startsIn >= 0 && startsIn < 120) return "starting-soon";
+  }
+  return null;
+}
+
 export function rowMatchesAttentionFilter(
   r: OpsSnapshotRow,
   key: AttentionQueueFilter,
   nowMs = Date.now(),
   slaMinutes: number = getDispatchSlaBreachMinutes(),
 ): boolean {
-  if (isClosedStatus(r.status)) return false;
-  const st = String(r.status ?? "").toLowerCase();
-  if (st === "pending_payment") return false;
-
-  const ds = String(r.dispatch_status ?? "").toLowerCase();
-  const noCleaner = !r.cleaner_id;
-
-  if (key === "unassignable") {
-    return ds === "unassignable";
-  }
-  if (key === "sla") {
-    return isSlaBreachRow(r, nowMs, slaMinutes);
-  }
-  if (key === "unassigned") {
-    return noCleaner && isPaid(r);
-  }
-  if (key === "starting-soon") {
-    if (!noCleaner) return false;
-    const startsIn = startsInMinutesFromNow(r.date, r.time, nowMs);
-    return startsIn != null && startsIn >= 0 && startsIn < 120;
-  }
-  return false;
+  return classifyAttentionQueue(r, nowMs, slaMinutes) === key;
 }
 
 function breachOverdueMinutes(r: OpsSnapshotRow, nowMs: number, slaMinutes: number): number | null {
@@ -210,18 +211,12 @@ export function computeOpsSnapshotFromRows(rows: OpsSnapshotRow[], nowMs = Date.
   let startingSoonNextMinutes: number | null = null;
 
   for (const r of rows) {
-    if (isClosedStatus(r.status)) continue;
-    const st = String(r.status ?? "").toLowerCase();
-    if (st === "pending_payment") continue;
-
-    const ds = String(r.dispatch_status ?? "").toLowerCase();
-    const noCleaner = !r.cleaner_id;
-
-    if (ds === "unassignable") {
+    const queue = classifyAttentionQueue(r, nowMs, slaMinutes);
+    if (queue === "unassignable") {
       unassignable++;
     }
 
-    if (isSlaBreachRow(r, nowMs, slaMinutes)) {
+    if (queue === "sla") {
       slaBreaches++;
       const overdue = breachOverdueMinutes(r, nowMs, slaMinutes) ?? 0;
       oldestBreachMinutes = Math.max(oldestBreachMinutes, overdue);
@@ -240,13 +235,13 @@ export function computeOpsSnapshotFromRows(rows: OpsSnapshotRow[], nowMs = Date.
       }
     }
 
-    if (noCleaner && isPaid(r)) {
+    if (queue === "unassigned") {
       unassigned++;
     }
 
-    if (noCleaner) {
+    if (queue === "starting-soon") {
       const startsIn = startsInMinutesFromNow(r.date, r.time, nowMs);
-      if (startsIn != null && startsIn >= 0 && startsIn < 120) {
+      if (startsIn != null) {
         startingSoon++;
         startingSoonNextMinutes =
           startingSoonNextMinutes == null ? startsIn : Math.min(startingSoonNextMinutes, startsIn);
