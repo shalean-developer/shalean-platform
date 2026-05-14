@@ -275,6 +275,7 @@ type DashboardStats = {
   paidBookingsMonth: number;
   totalBookingsWindow: number;
   avgBookingValueZar: number;
+  revenueScope?: string;
   conversionRatePct: number;
   funnelSessionsQuote: number;
   funnelSessionsPayment: number;
@@ -337,7 +338,7 @@ export default function AdminDashboardPage() {
       <div>
         <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Overview</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Revenue and bookings from Supabase. Conversion uses <span className="font-medium">booking_events</span> (quote
+          Revenue uses successful booking payments by Johannesburg payment date. Conversion uses <span className="font-medium">booking_events</span> (quote
           views → checkout) over the last 30 days.
         </p>
         <p className="mt-3 text-xs text-zinc-500">
@@ -404,7 +405,7 @@ export default function AdminDashboardPage() {
               <CardDescription>Bookings (30d window)</CardDescription>
               <CardTitle className="text-2xl tabular-nums">{data.totalBookingsWindow}</CardTitle>
             </CardHeader>
-            <CardContent className="text-xs text-zinc-500">All rows in rolling window from API query</CardContent>
+            <CardContent className="text-xs text-zinc-500">Revenue-eligible paid bookings in rolling 30d</CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
