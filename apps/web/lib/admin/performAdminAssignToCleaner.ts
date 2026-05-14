@@ -11,6 +11,8 @@ import {
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { buildAdminWarning, type AdminWarning } from "@/lib/admin/adminWarningPayload";
+import { adminAssignmentWarningFromWorkloadWarning } from "@/lib/admin/adminAssignEligibility";
 
 export type AdminAssignOneResult =
   | {
@@ -21,8 +23,9 @@ export type AdminAssignOneResult =
       workloadWarning?: DailyWorkloadWarning | null;
       workloadOverrideCode?: "admin_daily_workload_over_limit_force_override";
       workloadOverrideReason?: string;
+      warnings?: AdminWarning[];
     }
-  | { ok: false; httpStatus: number; error: string; code?: "admin_daily_workload_over_limit"; workloadWarning?: DailyWorkloadWarning | null };
+  | { ok: false; httpStatus: number; error: string; code?: "admin_daily_workload_over_limit"; workloadWarning?: DailyWorkloadWarning | null; warnings?: AdminWarning[] };
 
 type BookingRow = {
   id: string;
@@ -148,6 +151,18 @@ export async function performAdminAssignToCleaner(
         httpStatus: 400,
         error:
           "Cleaner is not eligible for this slot (calendar, service area, overlap, or service capability). Pass force=true to override.",
+        warnings: [
+          buildAdminWarning({
+            code: "admin.assignment.ineligible_cleaner_force_override_available",
+            domain: "assignment",
+            severity: "high",
+            action: "force_override_available",
+            blocking: true,
+            message:
+              "Cleaner is not eligible for this slot because of calendar, service area, overlap, or service capability.",
+            fields: ["cleaner_id", "date", "time", "location_id", "service_slug"],
+          }),
+        ],
       };
     }
   }
@@ -161,7 +176,22 @@ export async function performAdminAssignToCleaner(
     return { ok: false, httpStatus: 400, error: "Cleaner is in a different city." };
   }
   if (!force && cleanerStatus === "offline") {
-    return { ok: false, httpStatus: 400, error: "Cleaner is not available." };
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: "Cleaner is not available.",
+      warnings: [
+        buildAdminWarning({
+          code: "admin.assignment.offline_cleaner_force_override_available",
+          domain: "assignment",
+          severity: "high",
+          action: "force_override_available",
+          blocking: true,
+          message: "Cleaner is offline. Admin force assignment can override this.",
+          fields: ["cleaner_id"],
+        }),
+      ],
+    };
   }
   // M-14: explicit defense-in-depth. Even though `getEligibleCleaners` above
   // already DB-filters `is_available=true` (and would have returned `[]` for
@@ -177,6 +207,17 @@ export async function performAdminAssignToCleaner(
       ok: false,
       httpStatus: 400,
       error: "Cleaner has toggled themselves unavailable. Pass force=true to override.",
+      warnings: [
+        buildAdminWarning({
+          code: "admin.assignment.unavailable_cleaner_force_override_available",
+          domain: "assignment",
+          severity: "high",
+          action: "force_override_available",
+          blocking: true,
+          message: "Cleaner has toggled themselves unavailable. Admin force assignment can override this.",
+          fields: ["cleaner_id"],
+        }),
+      ],
     };
   }
 
@@ -201,6 +242,7 @@ export async function performAdminAssignToCleaner(
       workloadWarning,
       error:
         "Cleaner would exceed the 8-hour daily workload limit for this date. Use force=true to override.",
+      warnings: [adminAssignmentWarningFromWorkloadWarning(workloadWarning)],
     };
   }
 
@@ -246,12 +288,15 @@ export async function performAdminAssignToCleaner(
     await syncCleanerBusyFromBookings(admin, prevCleaner);
   }
 
+  const warnings = workloadWarning ? [adminAssignmentWarningFromWorkloadWarning(workloadWarning)] : [];
+
   return {
     ok: true,
     cleanerId: resolvedCleanerId,
     offerId: offer.offerId,
     expiresAtIso: offer.expiresAtIso,
     workloadWarning,
+    ...(warnings.length > 0 ? { warnings } : {}),
     ...(force && workloadWarning?.code === "daily_workload_over_limit"
       ? {
           workloadOverrideCode: "admin_daily_workload_over_limit_force_override" as const,

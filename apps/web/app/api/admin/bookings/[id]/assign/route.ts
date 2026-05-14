@@ -82,7 +82,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const status = typeof op.httpStatus === "number" ? op.httpStatus : 400;
     const payload =
       op.cause && typeof op.cause === "object" && !Array.isArray(op.cause) && "error" in op.cause
-        ? (op.cause as { error: string })
+        ? (op.cause as { error: string; warnings?: unknown })
         : { error: op.message };
     return NextResponse.json(payload, { status });
   }
@@ -97,5 +97,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     cleanerId: data.cleanerId,
     offerId: data.offerId,
     expiresAt: data.expiresAt,
+    ...(data.warnings && data.warnings.length > 0 ? { warnings: data.warnings } : {}),
   });
 }

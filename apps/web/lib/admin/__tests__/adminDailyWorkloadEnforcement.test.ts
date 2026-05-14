@@ -164,6 +164,15 @@ describe("Phase 2E-E admin daily workload enforcement flag", () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.workloadWarning?.code).toBe("daily_workload_over_limit");
+    if (res.ok) {
+      expect(res.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.daily_workload_over_limit_requires_confirmation",
+        domain: "assignment",
+        severity: "high",
+        action: "requires_confirmation",
+        blocking: true,
+      });
+    }
     expect(createDispatchOfferRow).toHaveBeenCalled();
   });
 
@@ -185,6 +194,13 @@ describe("Phase 2E-E admin daily workload enforcement flag", () => {
     if (!res.ok) {
       expect(res.workloadWarning?.code).toBe("daily_workload_over_limit");
       expect(res.error).toMatch(/8-hour daily workload/i);
+      expect(res.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.daily_workload_over_limit_requires_confirmation",
+        domain: "assignment",
+        severity: "high",
+        action: "requires_confirmation",
+        blocking: true,
+      });
     }
     expect(createDispatchOfferRow).not.toHaveBeenCalled();
   });
@@ -202,6 +218,13 @@ describe("Phase 2E-E admin daily workload enforcement flag", () => {
       expect(res.workloadWarning?.code).toBe("daily_workload_over_limit");
       expect(res.workloadOverrideCode).toBe("admin_daily_workload_over_limit_force_override");
       expect(res.workloadOverrideReason).toMatch(/force override/i);
+      expect(res.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.daily_workload_over_limit_requires_confirmation",
+        domain: "assignment",
+        severity: "high",
+        action: "requires_confirmation",
+        blocking: true,
+      });
     }
     expect(getEligibleCleaners).not.toHaveBeenCalled();
     expect(createDispatchOfferRow).toHaveBeenCalled();
@@ -216,7 +239,16 @@ describe("Phase 2E-E admin daily workload enforcement flag", () => {
     );
 
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.workloadWarning?.code).toBe("daily_workload_near_limit");
+    if (res.ok) {
+      expect(res.workloadWarning?.code).toBe("daily_workload_near_limit");
+      expect(res.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.daily_workload_near_limit",
+        domain: "assignment",
+        severity: "medium",
+        action: "diagnostic_only",
+        blocking: false,
+      });
+    }
   });
 
   it("missing existing duration uses fallback and returns a warning without blocking", async () => {
@@ -235,6 +267,13 @@ describe("Phase 2E-E admin daily workload enforcement flag", () => {
           fallbackBookingIds: ["missing-duration"],
         }),
       );
+      expect(res.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.duration_fallback_used",
+        domain: "assignment",
+        severity: "medium",
+        action: "diagnostic_only",
+        blocking: false,
+      });
     }
   });
 

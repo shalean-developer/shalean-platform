@@ -56,6 +56,7 @@ import {
   type AdminMarkBookingPaidResult,
   type AdminMarkPaidMethod,
 } from "@/lib/booking/adminMarkBookingPaid";
+import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 import {
   adminEditBookingDetailsNotesOnly,
   adminEditBookingDetailsRepricingOnly,
@@ -521,6 +522,7 @@ export type AdminAssignCleanerToBookingSuccessBody = {
   cleanerId: string;
   offerId: string;
   expiresAt: string;
+  warnings?: AdminWarning[];
 };
 
 /**
@@ -540,7 +542,7 @@ export async function adminAssignCleanerToBooking(
       bookingId: args.bookingId,
       code: `admin_assign_cleaner_http_${inner.httpStatus}`,
       message: inner.error,
-      cause: { error: inner.error },
+      cause: { error: inner.error, ...(inner.warnings ? { warnings: inner.warnings } : {}) },
       httpStatus: inner.httpStatus,
     };
   }
@@ -549,6 +551,7 @@ export async function adminAssignCleanerToBooking(
     cleanerId: inner.cleanerId,
     offerId: inner.offerId,
     expiresAt: inner.expiresAtIso,
+    ...(inner.warnings ? { warnings: inner.warnings } : {}),
   };
   const event = buildBookingEvent({
     type: "booking.assigned",

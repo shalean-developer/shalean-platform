@@ -102,6 +102,56 @@ describe("POST /api/admin/bookings/[id]/assign", () => {
     });
   });
 
+  it("returns canonical assignment warnings on force assignment without dropping legacy success fields", async () => {
+    adminAssignCleanerToBookingMock.mockResolvedValue({
+      ok: true,
+      bookingId: "b-assign-warn",
+      data: {
+        ok: true,
+        cleanerId: "00000000-0000-4000-8000-00000000c101",
+        offerId: "offer-warn",
+        expiresAt: "2026-08-01T10:00:00.000Z",
+        warnings: [
+          {
+            code: "admin.assignment.daily_workload_over_limit_requires_confirmation",
+            domain: "assignment",
+            severity: "high",
+            action: "requires_confirmation",
+            blocking: true,
+            message: "Cleaner would exceed the 8-hour daily workload policy.",
+          },
+        ],
+      },
+      event: { type: "booking.assigned", bookingId: "b-assign-warn", actor: "admin" },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/admin/bookings/b-assign-warn/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({ cleanerId: "00000000-0000-4000-8000-00000000c101", force: true }),
+      }),
+      { params: Promise.resolve({ id: "b-assign-warn" }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      cleanerId: "00000000-0000-4000-8000-00000000c101",
+      offerId: "offer-warn",
+      expiresAt: "2026-08-01T10:00:00.000Z",
+      warnings: [
+        {
+          code: "admin.assignment.daily_workload_over_limit_requires_confirmation",
+          domain: "assignment",
+          severity: "high",
+          action: "requires_confirmation",
+          blocking: true,
+        },
+      ],
+    });
+  });
+
   it("replays assign failure from bookingOperations", async () => {
     adminAssignCleanerToBookingMock.mockResolvedValue({
       ok: false,
@@ -123,5 +173,51 @@ describe("POST /api/admin/bookings/[id]/assign", () => {
 
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Cleaner is not eligible." });
+  });
+
+  it("preserves failure error and includes canonical warnings when bookingOperations supplies them", async () => {
+    adminAssignCleanerToBookingMock.mockResolvedValue({
+      ok: false,
+      bookingId: "b-bad-warn",
+      code: "admin_assign_cleaner_http_400",
+      message: "Cleaner is not eligible.",
+      httpStatus: 400,
+      cause: {
+        error: "Cleaner is not eligible.",
+        warnings: [
+          {
+            code: "admin.assignment.ineligible_cleaner_force_override_available",
+            domain: "assignment",
+            severity: "high",
+            action: "force_override_available",
+            blocking: true,
+            message: "Cleaner is not eligible for this slot.",
+          },
+        ],
+      },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/admin/bookings/b-bad-warn/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({ cleanerId: "00000000-0000-4000-8000-00000000c101" }),
+      }),
+      { params: Promise.resolve({ id: "b-bad-warn" }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "Cleaner is not eligible.",
+      warnings: [
+        {
+          code: "admin.assignment.ineligible_cleaner_force_override_available",
+          domain: "assignment",
+          severity: "high",
+          action: "force_override_available",
+          blocking: true,
+        },
+      ],
+    });
   });
 });

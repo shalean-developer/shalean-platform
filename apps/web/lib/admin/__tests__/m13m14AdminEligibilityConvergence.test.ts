@@ -547,6 +547,13 @@ describe("performAdminAssignToCleaner preserves admin-override semantics for is_
     if (!r.ok) {
       expect(r.httpStatus).toBe(400);
       expect(r.error.toLowerCase()).toMatch(/unavailable|toggled/);
+      expect(r.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.unavailable_cleaner_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+      });
     }
   });
 
@@ -579,7 +586,16 @@ describe("performAdminAssignToCleaner preserves admin-override semantics for is_
       force: false,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.httpStatus).toBe(400);
+    if (!r.ok) {
+      expect(r.httpStatus).toBe(400);
+      expect(r.warnings?.[0]).toMatchObject({
+        code: "admin.assignment.offline_cleaner_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+      });
+    }
   });
 
   it("a healthy cleaner with no slot info passes both account-state gates", async () => {

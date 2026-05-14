@@ -6,6 +6,7 @@ import {
   countBookingsOverlappingDemandSlot,
   effectiveJobDurationMinutes,
   formatMinutesAsHm,
+  buildAdminAssignmentEligibilityWarnings,
 } from "@/lib/admin/adminAssignEligibility";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -120,6 +121,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       // or is in a blocked lifecycle status (`busy`/`suspended`/...). Mirrors
       // the same exclusion `getEligibleCleaners` applies at checkout/dispatch.
       accountIneligible: boolean;
+      warnings?: ReturnType<typeof buildAdminAssignmentEligibilityWarnings>;
       canAssignWithoutForce: boolean;
     }
   > = {};
@@ -140,6 +142,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       nextAvailableHm: row.nextAvailableStartHm,
       offline: row.offline,
       accountIneligible: row.accountIneligible,
+      warnings: buildAdminAssignmentEligibilityWarnings(row),
       canAssignWithoutForce: row.canAssignWithoutForce,
     };
   }

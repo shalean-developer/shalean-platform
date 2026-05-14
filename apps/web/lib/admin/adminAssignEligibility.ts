@@ -14,6 +14,7 @@ import {
   warningFromDailyWorkloadShadowDay,
 } from "@/lib/booking/cleanerDailyWorkloadShadow";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
+import { buildAdminWarning, type AdminWarning } from "@/lib/admin/adminWarningPayload";
 
 export const DEFAULT_ASSIGN_JOB_DURATION_MIN = 240;
 
@@ -150,7 +151,9 @@ export type AssignEligibilityRow = {
   cleanerId: string;
   /** Admin roster: booking weekday is in `cleaners.availability_weekdays`. */
   weekdayOk: boolean;
+  calendarWindowOk?: boolean;
   slotCalendarOk: boolean;
+  locationOk?: boolean;
   overlapBlocked: boolean;
   busyUntilMin: number | null;
   overlapJobRangeLabel: string | null;
@@ -171,9 +174,149 @@ export type AssignEligibilityRow = {
    * is the broader "should not be in normal eligibility" signal.
    */
   accountIneligible: boolean;
+  serviceCapabilityOk?: boolean;
   workloadWarning: DailyWorkloadWarning | null;
   canAssignWithoutForce: boolean;
 };
+
+export function adminAssignmentWarningFromWorkloadWarning(warning: DailyWorkloadWarning): AdminWarning {
+  if (warning.code === "daily_workload_over_limit") {
+    return buildAdminWarning({
+      code: "admin.assignment.daily_workload_over_limit_requires_confirmation",
+      domain: "assignment",
+      severity: "high",
+      action: "requires_confirmation",
+      blocking: true,
+      message: "Cleaner would exceed the 8-hour daily workload policy.",
+      fields: ["cleaner_id", "duration_minutes"],
+      diagnostics: { workloadWarning: warning },
+      requiredConfirmation: { token: "force_8h_workload", reasonRequired: true },
+    });
+  }
+  if (warning.code === "duration_fallback_used") {
+    return buildAdminWarning({
+      code: "admin.assignment.duration_fallback_used",
+      domain: "assignment",
+      severity: "medium",
+      action: "diagnostic_only",
+      blocking: false,
+      message: "Assignment workload calculation used fallback duration for one or more bookings.",
+      fields: ["duration_minutes"],
+      diagnostics: { workloadWarning: warning },
+    });
+  }
+  return buildAdminWarning({
+    code: "admin.assignment.daily_workload_near_limit",
+    domain: "assignment",
+    severity: "medium",
+    action: "diagnostic_only",
+    blocking: false,
+    message: "Cleaner is near the 8-hour daily workload policy.",
+    fields: ["cleaner_id", "duration_minutes"],
+    diagnostics: { workloadWarning: warning },
+  });
+}
+
+export function buildAdminAssignmentEligibilityWarnings(row: AssignEligibilityRow): AdminWarning[] {
+  const warnings: AdminWarning[] = [];
+  if (row.offline) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.offline_cleaner_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner is offline. Admin force assignment can override this.",
+        fields: ["cleaner_id"],
+      }),
+    );
+  }
+  if (row.accountIneligible) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.account_ineligible_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner account is unavailable, inactive, or blocked.",
+        fields: ["cleaner_id"],
+      }),
+    );
+  }
+  if (row.overlapBlocked) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.overlap_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner has an overlapping active booking.",
+        fields: ["cleaner_id", "time"],
+        diagnostics: {
+          busyUntilMin: row.busyUntilMin,
+          overlapJobRangeLabel: row.overlapJobRangeLabel,
+        },
+      }),
+    );
+  }
+  if (!row.weekdayOk) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.weekday_unavailable_force_override_available",
+        domain: "assignment",
+        severity: "medium",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner does not normally work on this weekday.",
+        fields: ["cleaner_id", "date"],
+      }),
+    );
+  }
+  if (row.calendarWindowOk === false) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.availability_window_force_override_available",
+        domain: "assignment",
+        severity: "medium",
+        action: "force_override_available",
+        blocking: true,
+        message: "Booking time is outside the cleaner availability window.",
+        fields: ["cleaner_id", "time"],
+      }),
+    );
+  }
+  if (row.locationOk === false) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.location_mismatch_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner is not configured for this service area.",
+        fields: ["cleaner_id", "location_id"],
+      }),
+    );
+  }
+  if (row.serviceCapabilityOk === false) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.service_capability_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner is missing the service capability for this booking.",
+        fields: ["cleaner_id", "service_slug"],
+      }),
+    );
+  }
+  if (row.workloadWarning) warnings.push(adminAssignmentWarningFromWorkloadWarning(row.workloadWarning));
+  return warnings;
+}
 
 export async function computeAssignEligibility(
   admin: SupabaseClient,
@@ -211,13 +354,16 @@ export async function computeAssignEligibility(
       out.set(id, {
         cleanerId: id,
         weekdayOk: false,
+        calendarWindowOk: false,
         slotCalendarOk: false,
+        locationOk: false,
         overlapBlocked: false,
         busyUntilMin: null,
         overlapJobRangeLabel: null,
         nextAvailableStartHm: null,
         offline: false,
         accountIneligible: false,
+        serviceCapabilityOk: true,
         workloadWarning: null,
         canAssignWithoutForce: false,
       });
@@ -458,13 +604,16 @@ export async function computeAssignEligibility(
     out.set(id, {
       cleanerId: id,
       weekdayOk,
+      calendarWindowOk: slotCalendarOk,
       slotCalendarOk: slotCalendarOk && locationOk,
+      locationOk,
       overlapBlocked,
       busyUntilMin,
       overlapJobRangeLabel,
       nextAvailableStartHm,
       offline,
       accountIneligible,
+      serviceCapabilityOk: capabilityOk,
       workloadWarning: workloadWarningByCleaner.get(id) ?? null,
       canAssignWithoutForce,
     });
