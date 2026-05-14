@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
+import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
 import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvider";
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { ReferralCapture } from "@/components/referrals/ReferralCapture";
@@ -46,6 +47,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <GoogleTagManager />
         <SessionReplayProvider />
         <GlobalTopNav />
         {children}

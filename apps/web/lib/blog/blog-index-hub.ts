@@ -198,7 +198,7 @@ const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
   "deep-cleaning-vs-regular-cleaning-cape-town":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
   "how-much-does-cleaning-cost-cape-town-2026":
-    "Skip guesswork: learn what drives Cape Town cleaning totals—rooms, tier, and add-ons—so your quote matches real time on site.",
+    "Why quotes vary: rooms, tier, condition, and scope—so you can read totals fairly. Live from-prices sit on the cleaning prices hub.",
 };
 
 function simpleHash(input: string): number {

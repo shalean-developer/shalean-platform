@@ -279,12 +279,12 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
             </p>
             <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">
               For <strong className="font-semibold text-slate-800">how to read</strong> market bands, compare providers, and spot scope
-              gaps—not checkout—see the{" "}
+              gaps—not checkout—see{" "}
               <Link
                 href="/blog/how-much-does-cleaning-cost-cape-town-2026"
                 className="font-semibold text-blue-700 underline-offset-2 hover:underline"
               >
-                2026 Cape Town cleaning cost guide
+                why Cape Town cleaning quotes vary (2026)
               </Link>
               .
             </p>
@@ -543,7 +543,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               href="/blog/how-much-does-cleaning-cost-cape-town-2026"
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
             >
-              2026 cost guide
+              quote methodology explainer
             </Link>
             .
           </p>
@@ -657,7 +657,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
           <p className="mt-3 text-slate-600">
             Checkout mechanics and fixed totals—methodology lives on the{" "}
             <Link href="/blog/how-much-does-cleaning-cost-cape-town-2026" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              2026 cost guide
+              quote methodology explainer
             </Link>
             .
           </p>

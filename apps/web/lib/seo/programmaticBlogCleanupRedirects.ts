@@ -83,6 +83,18 @@ const coreProgrammaticBlogCleanupRedirects = [
     destination: "/cleaning-prices-cape-town",
     permanent: true,
   },
+  /** SiteGuru / legacy CMS — same transactional intent as hub; consolidate PageRank + SERP clarity. */
+  {
+    source: "/blog/what-does-professional-cleaning-cost",
+    destination: "/cleaning-prices-cape-town",
+    permanent: true,
+  },
+  /** Geo-suffixed variant — same transactional intent as hub (avoid duplicate `/blog` terminals). */
+  {
+    source: "/blog/what-does-professional-cleaning-cost-cape-town",
+    destination: "/cleaning-prices-cape-town",
+    permanent: true,
+  },
 
   /** Retired commercial-intent area blogs → suburb hubs (canonical local money pages). */
   {

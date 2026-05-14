@@ -286,15 +286,15 @@ async function main() {
 
   const row = {
     slug: SLUG,
-    title: "How Much Does Cleaning Cost in Cape Town? (2026 Pricing Guide)",
-    h1: "How Much Does Cleaning Cost in Cape Town? (2026 Pricing Guide)",
+    title: "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)",
+    h1: "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)",
     excerpt,
     status: "draft" as const,
     source: "programmatic" as const,
     published_at: null as string | null,
-    meta_title: "Cleaning Prices in Cape Town (2026 Guide) | Book Trusted Cleaners",
+    meta_title: "How Cape Town Cleaning Quotes Work (2026) | Shalean",
     meta_description:
-      "Discover real cleaning costs in Cape Town. Compare standard, deep & move-out cleaning prices and book trusted cleaners instantly.",
+      "Why cleaning quotes vary in Cape Town: rooms, tier, condition, and scope. Compare totals fairly—see live from-prices on the cleaning prices hub before you book.",
     canonical_url: `/blog/${SLUG}`,
     featured_image_url: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
     featured_image_alt: "Professional home cleaning service in a Cape Town residence",
@@ -302,9 +302,9 @@ async function main() {
     reading_time_minutes,
     primary_keyword: "how much does cleaning cost Cape Town",
     secondary_keywords: [
-      "cleaning prices Cape Town",
-      "house cleaning cost Cape Town",
-      "cleaning services Cape Town prices",
+      "why cleaning quotes vary",
+      "standard vs deep cleaning cost",
+      "how cleaners estimate time",
     ],
     search_intent: "informational",
     noindex: false,

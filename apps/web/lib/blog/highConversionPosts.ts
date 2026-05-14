@@ -998,13 +998,13 @@ export const WHAT_DOES_PROFESSIONAL_CLEANER_DO_CAPE_TOWN_ARTICLE = {
 
 const HC_CLEANING_COST_2026_PUBLISHED = "2026-04-30T20:30:00+02:00";
 
-/** Cleaning cost Cape Town — 2026 pricing guide (ranges + quote CTA). */
+/** Educational support for the pricing hub: drivers, scope, comparison — live from-prices stay on `/cleaning-prices-cape-town`. */
 export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
   slug: "how-much-does-cleaning-cost-cape-town-2026",
-  title: "How Much Does Cleaning Cost in Cape Town? (2026 Pricing Guide)",
+  title: "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)",
   description:
-    "How Cape Town cleaning quotes are built: indicative session bands, comparison methodology, standard vs deep pricing logic, and when checkout—not averages—should drive your decision.",
-  h1: "How Much Does Cleaning Cost in Cape Town? (2026 Pricing Guide)",
+    "Educational explainer: how cleaners estimate Cape Town jobs, what moves quotes (rooms, tier, condition), standard vs deep scope, and how to compare totals fairly—use the cleaning prices hub for live line items.",
+  h1: "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)",
   publishedAt: HC_CLEANING_COST_2026_PUBLISHED,
   dateModified: HC_MODIFIED,
   heroImage: {
@@ -1023,7 +1023,7 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
   sections: [
     {
       id: "average-cleaning-cost-cape-town",
-      heading: "Average cleaning cost in Cape Town (indicative ranges)",
+      heading: "Indicative session bands (comparison only—not a live price list)",
       level: "h2",
       paragraphs: [
         "These figures orient comparisons between providers—not last-rand budgets. Shalean’s current tier anchors and checkout math live only on the cleaning prices hub; treat that screen as truth for this team.",
