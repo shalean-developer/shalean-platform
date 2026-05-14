@@ -32,7 +32,7 @@ describe("generateCtrTitle", () => {
       fromPrice: "~R450",
       templateKey: "test-long-place",
     });
-    expect(s.length).toBeLessThanOrEqual(58);
+    expect(s.length).toBeLessThanOrEqual(65);
   });
 
   it("uses near-you language for location intent", () => {
@@ -86,7 +86,7 @@ describe("generateBlogArticleTitle", () => {
     });
     expect(s).toContain("2026");
     expect(s.toLowerCase()).toContain("cape town");
-    expect(s.length).toBeLessThanOrEqual(72);
+    expect(s.length).toBeLessThanOrEqual(68);
   });
 });
 

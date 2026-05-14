@@ -1,6 +1,7 @@
-/** Visible SERP window is tight — clip aggressively to preserve CTR cues at the start. */
-export const DEFAULT_SERP_TITLE_MAX = 58;
-export const BLOG_SERP_TITLE_MAX = 72;
+/** SERP title cap — balances pixel width vs keeping primary keywords + brand visible. */
+export const DEFAULT_SERP_TITLE_MAX = 65;
+/** Blog posts / taxonomy titles often carry a longer headline before geo + brand. */
+export const BLOG_SERP_TITLE_MAX = 68;
 
 export type TitlePageIntent = "location" | "service" | "hub";
 
@@ -17,17 +18,29 @@ export function stableTitleStructureIndex(key: string, len: number): number {
   return fnv1a32(`${key}|title`) % len;
 }
 
+/**
+ * Hard-cap length; trims on a space when possible so truncation is less abrupt than mid-token cuts.
+ */
 export function clipSerpTitle(raw: string, maxLen = DEFAULT_SERP_TITLE_MAX): string {
   const t = raw.trim();
   if (t.length <= maxLen) return t;
   const ellipsis = "…";
-  return `${t.slice(0, maxLen - ellipsis.length).trimEnd()}${ellipsis}`;
+  const budget = Math.max(1, maxLen - ellipsis.length);
+  let cut = t.slice(0, budget).trimEnd();
+  const lastSpace = cut.lastIndexOf(" ");
+  if (lastSpace >= Math.floor(budget * 0.45)) {
+    cut = cut.slice(0, lastSpace).trimEnd();
+  }
+  if (!cut) {
+    return `${t.slice(0, budget)}${ellipsis}`;
+  }
+  return `${cut}${ellipsis}`;
 }
 
 export type GenerateCtrTitleArgs = {
   base: string;
   place: string;
-  /** Lead price token for template 0, e.g. "~R450" */
+  /** Lead price token for price-aware templates, e.g. "~R450" */
   fromPrice?: string;
   templateKey: string;
   /** Appended as ` | Shalean` when non-empty */
@@ -41,6 +54,7 @@ const DEFAULT_FROM_PRICE = "~R380";
 
 /**
  * Deterministic CTR `<title>` templates (location + service hubs). Same stability rules as meta descriptions.
+ * Templates stay compact (`|` separators, minimal modifiers); `clipSerpTitle` enforces `maxLen`.
  */
 export function generateCtrTitle({
   base,
@@ -59,18 +73,17 @@ export function generateCtrTitle({
   type Args = { b: string; p: string; fp: string; brand: string };
 
   const serviceOrHubTemplates: ((a: Args) => string)[] = [
-    ({ b, p, fp, brand }) => `${b} in ${p} (From ${fp}) – Same-Day Booking${brand}`,
-    ({ b, p, brand }) => `Best ${b} in ${p} – Instant Booking & Trusted Cleaners${brand}`,
-    ({ b, p, brand }) => `${p} ${b} – Affordable, Trusted & Easy Booking${brand}`,
-    ({ b, p, brand }) => `Book ${b} in ${p} Today – Fast & Reliable Cleaning${brand}`,
+    ({ b, p, brand }) => `${b} in ${p}${brand}`,
+    ({ b, p, brand }) => `${b} | ${p}${brand}`,
+    ({ b, p, fp, brand }) => `${b} in ${p} | From ${fp}${brand}`,
+    ({ b, p, brand }) => `${b} in ${p} | Same-Day Booking${brand}`,
   ];
 
-  /** Lead with proximity phrases so aggressive SERP clipping still keeps “near you”. */
   const locationTemplates: ((a: Args) => string)[] = [
-    ({ b, p, fp, brand }) => `${b} Near You in ${p} (From ${fp}) – Same-Day Booking${brand}`,
-    ({ b, p, fp, brand }) => `Best ${b} Near You in ${p} – From ${fp}${brand}`,
-    ({ b, p, brand }) => `${b} Near You – ${p} – Trusted Cleaners & Booking${brand}`,
-    ({ b, p, fp, brand }) => `Book ${b} Near You in ${p} Today – From ${fp}${brand}`,
+    ({ b, p, brand }) => `${b} Near You in ${p}${brand}`,
+    ({ b, p, brand }) => `${b} in ${p} | Near You${brand}`,
+    ({ b, p, fp, brand }) => `${b} Near You in ${p} | ${fp}${brand}`,
+    ({ b, p, brand }) => `${b} Near You | ${p}${brand}`,
   ];
 
   const templates = pageIntent === "location" ? locationTemplates : serviceOrHubTemplates;
@@ -98,8 +111,8 @@ export function serviceTitleBaseForCtr(bookingLabel: string, slug: string): stri
 }
 
 const BLOG_TITLE_STRUCTURES: readonly ((h: string, year: number, brand: string) => string)[] = [
-  (h, year, brand) => `${h} (${year} Guide) – Cape Town | ${brand}`,
-  (h, year, brand) => `${h} – Cape Town (${year}) – Instant Booking Tips | ${brand}`,
+  (h, year, brand) => `${h} | Cape Town (${year}) | ${brand}`,
+  (h, year, brand) => `${h} (${year}) | Cape Town | ${brand}`,
 ];
 
 /**
