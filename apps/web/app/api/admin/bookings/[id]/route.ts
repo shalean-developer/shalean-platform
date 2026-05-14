@@ -37,6 +37,7 @@ import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaSer
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
+import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -930,8 +931,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 }
 
 /**
- * Hard-delete a booking (cascades child rows). Only blocks when the row is tied to a
- * generated payout (`payout_id`) — payment and job status are not restricted.
+ * Hard-delete a booking (cascades child rows). This is only for operationally
+ * safe rows that have not entered payment, monthly invoice, or payout flows.
  */
 export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminSession(request);
@@ -946,7 +947,9 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
   const { data: row, error: loadErr } = await admin
     .from("bookings")
-    .select("id, status, payout_id, cleaner_id, date, time")
+    .select(
+      "id, status, payment_status, payment_completed_at, paid_at, monthly_invoice_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, cleaner_id, date, time",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -955,18 +958,29 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
   const r = row as {
     status?: string | null;
+    payment_status?: string | null;
+    payment_completed_at?: string | null;
+    paid_at?: string | null;
+    monthly_invoice_id?: string | null;
     payout_id?: string | null;
+    payout_status?: string | null;
+    payout_frozen_cents?: number | string | null;
+    display_earnings_cents?: number | string | null;
+    amount_paid_cents?: number | string | null;
     cleaner_id?: string | null;
     date?: string | null;
     time?: string | null;
   };
 
   const st = String(r.status ?? "").toLowerCase();
-  const payoutId = r.payout_id != null && String(r.payout_id).trim() ? String(r.payout_id).trim() : null;
-
-  if (payoutId) {
+  const deleteSafety = assertAdminBookingDeleteSafe(r);
+  if (!deleteSafety.ok) {
     return NextResponse.json(
-      { error: "Cannot delete a booking that is already linked to a payout run. Remove it from the payout first if appropriate." },
+      {
+        error: deleteSafety.error,
+        code: deleteSafety.code,
+        blocks: deleteSafety.blocks,
+      },
       { status: 409 },
     );
   }
