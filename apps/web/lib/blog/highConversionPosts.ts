@@ -1013,8 +1013,8 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
   },
   readingTimeMinutes: 12,
   introParagraphs: [
-    "Cleaning cost in Cape Town is not a single sticker price—it moves with bedrooms, bathrooms, service tier, add-ons, and how long the home has gone between resets. For planning, most households still think in session bands: modest flats on routine standard cleans sit lower, while deep or move-out scope with ovens and extra baths climbs predictably.",
-    "Below are realistic 2026-style indicative ranges for comparing providers—not cash quotes. For Shalean’s published from-prices and the live line-item total, start at the cleaning prices hub, then use this article to interpret bands and methodology.",
+    "Cleaning cost in Cape Town is not one sticker price: bedrooms, bathrooms, tier, add-ons, and how long you have let soil compound all move the fair number. This guide is for comparing providers and reading quotes—not for replacing checkout.",
+    "Indicative bands below help you budget and spot scope gaps. When you want Shalean’s published from-prices and the live line-item total, use the cleaning prices hub first, then return here if you still need methodology.",
   ],
   mandatoryServiceLinkLabels: {
     standard: "cleaning services in Cape Town",
@@ -1026,7 +1026,7 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
       heading: "Average cleaning cost in Cape Town (indicative ranges)",
       level: "h2",
       paragraphs: [
-        "Use these figures to orient comparisons between providers, not to budget to the last rand. Independent helpers sometimes quote per hour; booked professional services more often price the full job from room counts and extras—compare totals and what is included (supplies, vetting, insurance) before you judge “cheap.” Shalean’s current tier anchors live on the cleaning prices hub; treat checkout as the source of truth for your home.",
+        "These figures orient comparisons between providers—not last-rand budgets. Shalean’s current tier anchors and checkout math live only on the cleaning prices hub; treat that screen as truth for this team.",
       ],
       bullets: [
         "Hourly-style thinking: divide any job quote by the booked crew-hours shown. That “effective rate” is how you compare a three-hour standard visit against a five-hour deep clean—not headline per-hour ads that omit materials or travel.",
@@ -1038,7 +1038,7 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
     },
     {
       id: "what-affects-cleaning-prices",
-      heading: "What affects house cleaning prices in Cape Town?",
+      heading: "Why Cape Town cleaning quotes vary (drivers, not checkout fields)",
       level: "h2",
       paragraphs: [
         "Cost of domestic cleaning in South Africa reflects labour, consumables, fuel, and the risk profile of entering strangers’ homes with equipment. Transparent platforms break those drivers into line items so you can see why two identical-looking flats might quote differently.",
@@ -1050,6 +1050,46 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
         "Extras: inside oven, fridge, carpet spotting, or balcony resets each add time and chemistry—tick only what inventory or your lease demands.",
         "Frequency: fortnightly or weekly standard cleans keep soil shallow, so average cost per visit trends lower than sporadic rescues of the same home.",
         "Slot demand: peak Fridays, month-end moves, and storm-week reschedules can tighten capacity—book early when calendars are loud.",
+      ],
+    },
+    {
+      id: "compare-quotes-fairly",
+      heading: "How to compare cleaning companies on price",
+      level: "h2",
+      paragraphs: [
+        "A lower rand figure often hides a narrower checklist, fewer supplies, or uninsured solo helpers. Compare on equal scope first, then on total.",
+      ],
+      bullets: [
+        "Match bedrooms, bathrooms, tier, and add-ons line by line—if one quote omits baths or ovens, it is not cheaper, it is shorter.",
+        "Ask what happens when access runs late: estates, lifts, and parking can eat clock; fair quotes bake that in up front.",
+        "Divide total by booked crew-hours only after you confirm supplies, vetting, and rework policy are in the same bundle.",
+        "Cheapest wins only when the scope matches reality; otherwise you pay twice—once in cash, once in your Saturday.",
+      ],
+    },
+    {
+      id: "hidden-costs-cleaning",
+      heading: "Hidden cost risks when you optimize for the headline rate",
+      level: "h2",
+      paragraphs: [
+        "These are the gaps that turn a “deal” into a second booking or a deposit fight—none replace the hub’s line items, but they explain why two totals differ.",
+      ],
+      bullets: [
+        "Under-counted bathrooms or ovens that still need degrease on the day.",
+        "Materials or equipment surcharges that were never in the written scope.",
+        "Move-out framed as standard—then inventory photos fail wet rooms.",
+      ],
+    },
+    {
+      id: "understand-cleaning-scope",
+      heading: "Understanding cleaning scope before you judge a quote",
+      level: "h2",
+      paragraphs: [
+        "Scope is the contract under the price. If the checklist is vague, the rand figure is advertising, not a promise.",
+      ],
+      bullets: [
+        "Standard assumes a fair maintenance baseline; deep buys reset dwell; move-out assumes near-empty handover evidence.",
+        "Extras should be explicit line items—glass, ovens, fridges—not “we will see on the day.”",
+        "When unsure, read the service page checklist, then re-run the quote builder with honest room counts.",
       ],
     },
     {
@@ -1113,14 +1153,9 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
         "Many professionals still price the full job from rooms and extras rather than advertising a naked hourly rate. Compare quotes by dividing the total by the booked hours shown—then check whether supplies, vetting, and insurance are included so the hourly math is fair.",
     },
     {
-      question: "Is deep cleaning more expensive than standard?",
+      question: "How do I line up a fair total before I pick a provider?",
       answer:
-        "Yes—deep work buys more dwell on kitchens, wet rooms, and edges. Expect a higher line item than standard for the same bedroom count until the home returns to an easy-maintenance baseline.",
-    },
-    {
-      question: "Can I get an exact quote before someone visits?",
-      answer:
-        "Yes. Start a Shalean booking with your address, bedroom and bathroom counts, tier, and add-ons—you will see an itemised total before checkout, with no obligation until you confirm.",
+        "Lock the same bedroom count, bathroom count, tier, and add-ons in each quote, then read what is excluded. On Shalean, the cleaning prices hub carries published anchors and the booking flow shows the itemised total before you confirm—use this article when you still need comparison methodology.",
     },
     {
       question: "How often should I book a cleaner?",
@@ -1133,12 +1168,11 @@ export const HOW_MUCH_CLEANING_COST_CAPE_TOWN_2026_ARTICLE = {
     label: "Claremont cleaning services",
   },
   cta: {
-    heading: "Looking for affordable cleaning in Cape Town?",
-    subtext: "Get a transparent quote and book a trusted cleaner today.",
+    heading: "Turn methodology into a line-item total",
+    subtext: "Use the cleaning prices hub for current from-prices, then booking when you want the exact checkout number.",
   },
   conclusionParagraphs: [
-    "Cleaning cost in Cape Town should be legible: same inputs (rooms, tier, extras, slot) should produce the same class of total, with no surprises at the door. Use indicative bands here to shortlist providers, then lock the number that matters—your checkout line—with screenshots you can share with flatmates or landlords.",
-    "When you are ready to book Shalean, open cleaning services in Cape Town, compare standard against deep if you are unsure, and pick a slot that fits your calendar. For published from-prices on our tiers, use the cleaning prices hub; use this guide when you still need comparison methodology.",
+    "Use this guide when you are comparing bands, spotting hidden scope, or deciding whether cheapest is honest. When you are ready to book Shalean, the cleaning prices hub plus checkout stay the only places that should lock your rand total.",
   ],
 } as const satisfies HighConversionBlogArticle;
 

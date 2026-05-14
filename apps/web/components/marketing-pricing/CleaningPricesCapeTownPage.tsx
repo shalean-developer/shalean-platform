@@ -57,6 +57,12 @@ export const CLEANING_PRICES_CAPE_TOWN_FAQS = [
     answer:
       "Office cleans, unusual layouts, and multi-day commercial schedules usually need a short custom quote—start from our office cleaning page or contact us with square metres and frequency. Homes and apartments get instant quotes via the booking flow.",
   },
+  {
+    idSlug: "extras-live-price",
+    question: "Do add-ons and extras change the price before I pay?",
+    answer:
+      "Yes. Tick interior oven, fridge, windows, or other add-ons in the flow and the line-item total updates before checkout—nothing is bolted on after you confirm unless you edit the booking.",
+  },
 ] as const;
 
 function buildPricingFaqJsonLdNode(pageUrl: string): Record<string, unknown> {
@@ -233,13 +239,6 @@ const homeSizePricingBands = [
   { label: "4+ bedroom home", price: "Custom quote" },
 ] as const;
 
-const exampleCleaningPrices = [
-  "1-bedroom apartment (standard cleaning): from R280",
-  "2-bedroom apartment (deep cleaning): from R520",
-  "3-bedroom house (move-out cleaning): from R720",
-  "Airbnb turnover cleaning: from R320",
-] as const;
-
 type CleaningPricesCapeTownPageProps = {
   seoLocationLinks?: readonly { readonly href: string; readonly label: string }[];
 };
@@ -270,17 +269,17 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               Cleaning Prices in Cape Town
             </h1>
             <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-              Cleaning prices in Cape Town vary depending on the size of your home, the type of cleaning service, and how often you
-              book. House cleaning prices stay lower for routine upkeep; deep cleaning cost and move-out cleaning cost rise when
-              bathrooms, buildup, or handover detail need more time. Compare the guide below, then lock your exact cleaning cost online
-              before you pay.
+              This page lists Shalean&apos;s <strong className="font-semibold text-slate-800">current from-prices</strong> by tier and
+              home-size anchors. Your checkout total is built from the same fields—bedrooms, bathrooms, service type, frequency, and
+              selected extras—so what you approve before payment is what crews brief against.
             </p>
             <p className="mt-3 text-base leading-relaxed text-slate-700 sm:text-lg">
-              Get an instant cleaning price in Cape Town based on your home size and service type — no guessing. The booking flow works
-              like a price calculator: select rooms, service tier, and extras, then see your fixed total before checkout.
+              Open <strong className="font-semibold text-slate-800">Get instant quote</strong>, walk the steps, then confirm only when
+              the line items match your home. No post-booking price surprises for scope already in your selection.
             </p>
             <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">
-              For indicative session bands and how to compare quotes between providers—not a substitute for checkout—read the{" "}
+              For <strong className="font-semibold text-slate-800">how to read</strong> market bands, compare providers, and spot scope
+              gaps—not checkout—see the{" "}
               <Link
                 href="/blog/how-much-does-cleaning-cost-cape-town-2026"
                 className="font-semibold text-blue-700 underline-offset-2 hover:underline"
@@ -356,13 +355,13 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               Cleaning services prices Cape Town — at a glance
             </h2>
             <p className="mt-3 text-slate-600">
-              Typical entry bands for residential bookings—including deeper resets and empty-home handovers. Office cleaning prices in
-              Cape Town usually start from a short custom scope (square metres + frequency). Your live quote may vary with bedrooms,
-              bathrooms, and add-ons.
+              Shown amounts are <strong className="font-semibold text-slate-800">entry bands</strong> for planning. Checkout applies
+              your exact bedroom and bathroom counts, tier, and extras. Office work still routes through a short scoped quote from
+              footprint and frequency.
             </p>
             <p className="mx-auto mt-5 max-w-2xl text-center text-slate-600">
-              Recurring plans usually cost less per visit than once-off cleans on the same home—weekly upkeep stays lighter than letting
-              grease and dust compound between sporadic bookings.
+              In the booking flow, switch <strong className="font-semibold text-slate-800">once-off vs recurring</strong> before you
+              pay—the total updates to match the slot pattern you chose.
             </p>
           </div>
 
@@ -440,34 +439,6 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
         </div>
       </section>
 
-      {/* Concrete examples — trust + snippet-style clarity */}
-      <section className="border-b border-slate-100 bg-white py-14 md:py-16" aria-labelledby="example-prices-heading">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 id="example-prices-heading" className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Example cleaning prices in Cape Town
-          </h2>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            Illustrative starting bands—your live total updates when you enter bedrooms, bathrooms, and add-ons.
-          </p>
-          <ul className="mt-6 list-disc space-y-2 pl-5 text-slate-700 marker:text-blue-600">
-            {exampleCleaningPrices.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <p className="mt-6 leading-relaxed text-slate-600">
-            For ongoing home help, many households book{" "}
-            <Link href={svc["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              standard cleaning services in Cape Town
-            </Link>{" "}
-            weekly or bi-weekly—the rhythm people often mean when they search for maid services in Cape Town. See{" "}
-            <Link href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              maid services in Cape Town
-            </Link>{" "}
-            for recurring schedules; pricing above still applies before each visit.
-          </p>
-        </div>
-      </section>
-
       {/* Popular areas — micro-location + pricing hub */}
       <section className="border-b border-slate-100 bg-white py-14 md:py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
@@ -475,7 +446,15 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
             Cleaning prices in popular Cape Town areas
           </h2>
           <p className="mt-4 leading-relaxed text-slate-600">
-            Cleaning prices can vary slightly depending on your location—for example:
+            Hub links below are for access notes—your line-item total still comes from{" "}
+            <GrowthCtaLink
+              href="/booking/details"
+              source="cleaning_prices_popular_areas_quote"
+              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+            >
+              instant quote
+            </GrowthCtaLink>{" "}
+            with your address and room counts.
           </p>
           <ul className="mt-6 list-disc space-y-2 pl-5 text-slate-700 marker:text-blue-600">
             {popularCapeTownAreaHubs.map((hub) => (
@@ -514,55 +493,6 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               </ul>
             </>
           ) : null}
-          <p className="mt-6 leading-relaxed text-slate-600">
-            Get an exact cleaning quote in Cape Town for your area:{" "}
-            <GrowthCtaLink
-              href="/booking/details"
-              source="cleaning_prices_popular_areas_quote"
-              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-            >
-              Get your cleaning quote
-            </GrowthCtaLink>
-            .
-          </p>
-        </div>
-      </section>
-
-      {/* Intent: why prices change */}
-      <section className="border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            What affects cleaning prices in Cape Town?
-          </h2>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            If you are asking why quotes differ—or how much cleaning should cost—these are the drivers almost every Cape Town booking
-            shares:
-          </p>
-          <ul className="mt-6 list-disc space-y-3 pl-5 text-slate-700 marker:text-blue-600">
-            <li>Size of your home (1-bedroom vs 4-bedroom)</li>
-            <li>Type of cleaning (standard, deep, move-out)</li>
-            <li>Condition of the property</li>
-            <li>Frequency (once-off vs weekly cleaning)</li>
-            <li>Location and access (travel, parking, estates)</li>
-          </ul>
-        </div>
-      </section>
-
-      {/* Affordable angle */}
-      <section className="border-b border-slate-100 bg-white py-14 md:py-16">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Affordable cleaning prices in Cape Town
-          </h2>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            Many customers search for cheap cleaning services in Cape Town, but the best option is affordable cleaning that balances
-            price and quality—you still want vetted teams, clear scope, and totals you approve before anyone arrives.
-          </p>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            We offer affordable cleaning services in Cape Town without compromising on quality. Our pricing is transparent and designed
-            to suit different budgets—ideal if you are weighing cheap cleaning Cape Town rates against quality, or browsing affordable
-            cleaning Cape Town teams for a monthly rhythm. You always see the full total before you pay.
-          </p>
         </div>
       </section>
 
@@ -573,8 +503,8 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
             Cleaning prices by home size in Cape Town
           </h2>
           <p className="mt-4 leading-relaxed text-slate-600">
-            Cleaning prices in Cape Town increase based on the size of your home and the level of cleaning required. These entry bands
-            assume a typical standard clean—deep cleaning, move-outs, and extras step up from here.
+            These rows mirror the <strong className="font-semibold text-slate-800">standard-tier anchors</strong> in checkout for
+            typical layouts—change tier or add-ons and the builder reprices before you pay.
           </p>
           <ul className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-slate-50/90 p-6 text-slate-800">
             {homeSizePricingBands.map((row) => (
@@ -600,99 +530,74 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
         </div>
       </section>
 
-      {/* Detailed explanation */}
+      {/* Quote builder → total (transactional mapping only) */}
       <section className="border-b border-slate-100 bg-white py-14 md:py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            How much does cleaning cost in Cape Town?
+            What changes your total before checkout
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Whether you are comparing house cleaning prices in Cape Town, estimating deep cleaning cost for a reset, tallying move-out
-            cleaning cost before handover, or scoping office cleaning prices for your workplace, most quotes map to the same drivers we
-            listed above—just with more nuance per room. Nail bedrooms, bathrooms, service tier, and extras in the booking flow and your
-            fixed price stays predictable—no surprises at the door.
+            The quote builder maps each field to time on the clock—nothing here is generic “market” advice. For why two different homes
+            might quote differently across Cape Town, read the{" "}
+            <Link
+              href="/blog/how-much-does-cleaning-cost-cape-town-2026"
+              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+            >
+              2026 cost guide
+            </Link>
+            .
           </p>
           <ul className="mt-8 space-y-6 text-slate-600">
             <li>
-              <h3 className="text-lg font-semibold text-slate-900">Size of property</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Bedrooms and bathrooms</h3>
               <p className="mt-2 leading-relaxed">
-                Bedrooms and bathrooms drive time on floors, surfaces, and sanitising. Larger homes and duplexes need longer
-                runs—especially when passages, staircases, or outdoor adjoining areas add metres to mop lines.
+                Each room and bath you select extends the checklist Shalean prices—under-count here and the visit runs short; over-count
+                and you pay fairly for the real footprint.
               </p>
             </li>
             <li>
-              <h3 className="text-lg font-semibold text-slate-900">Type of service</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Service tier</h3>
               <p className="mt-2 leading-relaxed">
                 <Link href={svc["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  Standard cleaning services in Cape Town
-                </Link>{" "}
-                stay lighter and faster;{" "}
+                  Standard
+                </Link>
+                ,{" "}
                 <Link href={svc["deep-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  deep cleaning services in Cape Town
-                </Link>{" "}
-                allocate extra minutes to buildup;{" "}
+                  deep
+                </Link>
+                , or{" "}
                 <Link href={svc["move-out-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  move-out cleaning services in Cape Town
+                  move-out
                 </Link>{" "}
-                reflect empty-home detailing landlords photograph room by room.
+                switches the base template before add-ons. Open the service page if you need checklist wording, then return to{" "}
+                <GrowthCtaLink
+                  href="/booking/details"
+                  source="cleaning_prices_quote_builder_inline"
+                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                >
+                  instant quote
+                </GrowthCtaLink>
+                .
               </p>
             </li>
             <li>
               <h3 className="text-lg font-semibold text-slate-900">Frequency</h3>
               <p className="mt-2 leading-relaxed">
-                Weekly or bi-weekly maintenance often keeps each visit shorter than sporadic one-offs because grease, dust, and
-                bathroom films do not compound. That rhythm can make recurring{" "}
-                <span className="font-medium text-slate-800">cleaning services prices Cape Town</span> budgets easier to plan.
+                Once-off vs recurring updates the slot pattern and total in the same screen—pick what you will actually run before you
+                pay.
               </p>
             </li>
             <li>
               <h3 className="text-lg font-semibold text-slate-900">Extras</h3>
               <p className="mt-2 leading-relaxed">
-                Interior windows, oven degrease, fridge interiors, walls in targeted rooms, or heavy balcony resets extend the
-                checklist. Add them in the quote builder so your total reflects the real scope—especially alongside{" "}
+                Oven, fridge, interior glass, and similar add-ons each add line items you can toggle on or off. Pair glass with{" "}
                 <Link href={svc["window-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  window cleaning services in Cape Town
+                  window cleaning
                 </Link>{" "}
-                when glass is part of handover.
+                when it is part of your handover pack.
               </p>
             </li>
           </ul>
-        </div>
-      </section>
-
-      {/* Hourly */}
-      <section className="border-b border-slate-100 bg-white py-14 md:py-16">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Hourly cleaning rates in Cape Town
-          </h2>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            Cleaning services in Cape Town typically range from{" "}
-            <strong className="font-semibold text-slate-800">R80 to R150 per hour</strong>, depending on the type of service and the
-            experience of the cleaner—hourly cleaning rate searches land here because people want a quick benchmark before they compare
-            fixed packages.
-          </p>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            Many fixed residential bookings equate to roughly{" "}
-            <strong className="font-semibold text-slate-800">R90–R140 per cleaner-hour</strong> when you divide the quoted total by
-            scheduled time—the band still moves with scope, access, and extras.
-          </p>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            For accurate pricing, it&apos;s best to get a fixed quote based on your home:{" "}
-            <GrowthCtaLink
-              href="/booking/details"
-              source="cleaning_prices_hourly_instant_quote"
-              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-            >
-              Get instant quote
-            </GrowthCtaLink>
-            . Shalean still leads with <strong className="font-semibold text-slate-800">fixed pricing</strong> from your selections so
-            you know the full cleaning cost in Cape Town before checkout. Hourly-style arrangements fit open-ended office workflows—where{" "}
-            <Link href={svc["office-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              office cleaning services in Cape Town
-            </Link>{" "}
-            are scoped from footprint, frequency, and shared facilities.
-          </p>
         </div>
       </section>
 
@@ -749,7 +654,13 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
       <section id="faq" className="scroll-mt-24 border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Cleaning prices FAQ</h2>
-          <p className="mt-3 text-slate-600">Quick answers about residential and commercial cleaning costs.</p>
+          <p className="mt-3 text-slate-600">
+            Checkout mechanics and fixed totals—methodology lives on the{" "}
+            <Link href="/blog/how-much-does-cleaning-cost-cape-town-2026" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              2026 cost guide
+            </Link>
+            .
+          </p>
 
           <div className="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
             {CLEANING_PRICES_CAPE_TOWN_FAQS.map((faq) => (
