@@ -39,6 +39,7 @@ import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensure
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
+import { buildAdminWarningPayload } from "@/lib/admin/adminWarningPayload";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -279,11 +280,22 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
   const assignmentGuard = assertAdminBookingPatchDoesNotMutateAssignmentFields(body as Record<string, unknown>);
   if (!assignmentGuard.ok) {
+    const payload = buildAdminWarningPayload({
+      ok: false,
+      error: assignmentGuard.message,
+      code: assignmentGuard.code,
+      warning: {
+        code: "admin.assignment.patch_field_blocked",
+        domain: "assignment",
+        severity: "high",
+        action: "blocked",
+        message: assignmentGuard.message,
+        fields: assignmentGuard.blockedFields,
+      },
+    });
     return NextResponse.json(
       {
-        ok: false,
-        error: assignmentGuard.message,
-        code: assignmentGuard.code,
+        ...payload,
         blocked_fields: assignmentGuard.blockedFields,
       },
       { status: 409 },
@@ -989,11 +1001,19 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const deleteSafety = assertAdminBookingDeleteSafe(r);
   if (!deleteSafety.ok) {
     return NextResponse.json(
-      {
+      buildAdminWarningPayload({
         error: deleteSafety.error,
         code: deleteSafety.code,
         blocks: deleteSafety.blocks,
-      },
+        warning: {
+          code: "admin.delete.financial_booking_blocked",
+          domain: "delete",
+          severity: "critical",
+          action: "blocked",
+          message: deleteSafety.error,
+          diagnostics: { legacyCode: deleteSafety.code },
+        },
+      }),
       { status: 409 },
     );
   }

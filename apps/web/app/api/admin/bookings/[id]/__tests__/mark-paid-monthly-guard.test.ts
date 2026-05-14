@@ -118,13 +118,34 @@ describe("POST /api/admin/bookings/[id]/mark-paid monthly child guard", () => {
     });
 
     const res = await postMarkPaid();
-    const json = (await res.json()) as { ok?: boolean; code?: string; error?: string; indicators?: string[] };
+    const json = (await res.json()) as {
+      ok?: boolean;
+      code?: string;
+      error?: string;
+      indicators?: string[];
+      domain?: string;
+      severity?: string;
+      action?: string;
+      blocking?: boolean;
+      warnings?: Array<{ code: string; domain: string; severity: string; action: string; blocking: boolean }>;
+    };
 
     expect(res.status).toBe(409);
     expect(json.ok).toBe(false);
     expect(json.code).toBe("admin_mark_paid_monthly_invoice_child_blocked");
     expect(json.error).toContain("monthly invoice payment flow");
     expect(json.indicators).toContain(expectedIndicator);
+    expect(json.domain).toBe("payment");
+    expect(json.severity).toBe("critical");
+    expect(json.action).toBe("blocked");
+    expect(json.blocking).toBe(true);
+    expect(json.warnings?.[0]).toMatchObject({
+      code: "admin.payment.monthly_child_mark_paid_blocked",
+      domain: "payment",
+      severity: "critical",
+      action: "blocked",
+      blocking: true,
+    });
     expect(adminMarkBookingPaidOperationMock).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertAdminMarkPaidNotMonthlyInvoiceChild } from "@/lib/admin/adminMarkPaidMonthlyChildGuard";
+import { buildAdminWarningPayload } from "@/lib/admin/adminWarningPayload";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,12 +85,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const monthlyGuard = assertAdminMarkPaidNotMonthlyInvoiceChild(bookingRow);
   if (!monthlyGuard.ok) {
     return NextResponse.json(
-      {
+      buildAdminWarningPayload({
         ok: false,
         error: monthlyGuard.message,
         code: monthlyGuard.code,
         indicators: monthlyGuard.indicators,
-      },
+        warning: {
+          code: "admin.payment.monthly_child_mark_paid_blocked",
+          domain: "payment",
+          severity: "critical",
+          action: "blocked",
+          message: monthlyGuard.message,
+          fields: monthlyGuard.indicators,
+        },
+      }),
       { status: 409 },
     );
   }

@@ -128,11 +128,30 @@ describe("DELETE /api/admin/bookings/[id] financial hardening", () => {
     installAdmin(row);
 
     const res = await callDelete();
-    const json = (await res.json()) as { code?: string; blocks?: Array<{ code: string }> };
+    const json = (await res.json()) as {
+      code?: string;
+      blocks?: Array<{ code: string }>;
+      domain?: string;
+      severity?: string;
+      action?: string;
+      blocking?: boolean;
+      warnings?: Array<{ code: string; domain: string; severity: string; action: string; blocking: boolean }>;
+    };
 
     expect(res.status).toBe(409);
     expect(json.code).toBe(expectedCode);
     expect(json.blocks?.map((b) => b.code)).toContain(expectedCode);
+    expect(json.domain).toBe("delete");
+    expect(json.severity).toBe("critical");
+    expect(json.action).toBe("blocked");
+    expect(json.blocking).toBe(true);
+    expect(json.warnings?.[0]).toMatchObject({
+      code: "admin.delete.financial_booking_blocked",
+      domain: "delete",
+      severity: "critical",
+      action: "blocked",
+      blocking: true,
+    });
     expect(deleteCalls).toEqual([]);
   });
 
@@ -142,10 +161,12 @@ describe("DELETE /api/admin/bookings/[id] financial hardening", () => {
       installAdmin(safeBooking({ payout_status: payoutStatus }));
 
       const res = await callDelete();
-      const json = (await res.json()) as { code?: string };
+      const json = (await res.json()) as { code?: string; blocking?: boolean; warnings?: Array<{ code: string }> };
 
       expect(res.status).toBe(409);
       expect(json.code).toBe("admin_booking_delete_payout_status_locked");
+      expect(json.blocking).toBe(true);
+      expect(json.warnings?.[0]?.code).toBe("admin.delete.financial_booking_blocked");
       expect(deleteCalls).toEqual([]);
     }
   });

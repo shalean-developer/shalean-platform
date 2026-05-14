@@ -134,12 +134,33 @@ describe("PATCH /api/admin/bookings/[id] assignment field guard", () => {
     ["accepted_at", { accepted_at: "2026-06-01T09:05:00.000Z" }],
   ])("blocks generic PATCH assignment field %s", async (field, body) => {
     const res = await patchBooking(body);
-    const json = (await res.json()) as { code?: string; blocked_fields?: string[]; error?: string };
+    const json = (await res.json()) as {
+      code?: string;
+      blocked_fields?: string[];
+      error?: string;
+      domain?: string;
+      severity?: string;
+      action?: string;
+      blocking?: boolean;
+      warnings?: Array<{ code: string; domain: string; severity: string; action: string; blocking: boolean; fields?: string[] }>;
+    };
 
     expect(res.status).toBe(409);
     expect(json.code).toBe("admin_booking_patch_assignment_fields_blocked");
     expect(json.error).toContain("admin assignment flow");
     expect(json.blocked_fields).toEqual([field]);
+    expect(json.domain).toBe("assignment");
+    expect(json.severity).toBe("high");
+    expect(json.action).toBe("blocked");
+    expect(json.blocking).toBe(true);
+    expect(json.warnings?.[0]).toMatchObject({
+      code: "admin.assignment.patch_field_blocked",
+      domain: "assignment",
+      severity: "high",
+      action: "blocked",
+      blocking: true,
+      fields: [field],
+    });
     expect(getSupabaseAdminMock).not.toHaveBeenCalled();
     expect(updateCalls).toEqual([]);
   });
