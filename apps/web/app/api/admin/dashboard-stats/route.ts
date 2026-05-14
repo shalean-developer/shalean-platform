@@ -20,6 +20,7 @@ export async function GET(request: Request) {
 
   const since = new Date();
   since.setDate(since.getDate() - 30);
+  const fetchedAt = new Date().toISOString();
 
   const sinceNotify = startOfTodayJohannesburgUtcIso();
 
@@ -41,7 +42,17 @@ export async function GET(request: Request) {
       .limit(8),
   ]);
 
-  const notifyRows = (notifyRes.error ? [] : (notifyRes.data ?? [])) as {
+  const notificationsAvailable = !notifyRes.error;
+  if (notifyRes.error) {
+    await logSystemEvent({
+      level: "warn",
+      source: "notification_logs",
+      message: "dashboard_stats_read_failed",
+      context: { error: notifyRes.error.message },
+    });
+  }
+
+  const notifyRows = (notificationsAvailable ? (notifyRes.data ?? []) : []) as {
     channel: string;
     status: string;
     role: string | null;
@@ -182,6 +193,7 @@ export async function GET(request: Request) {
     emailFailed >= 3;
 
   return NextResponse.json({
+    fetchedAt,
     revenueTodayZar: revenueSummary.revenueTodayZar,
     revenueMonthZar: revenueSummary.revenueMonthZar,
     paidBookingsToday: revenueSummary.paidBookingsToday,
@@ -204,6 +216,8 @@ export async function GET(request: Request) {
     revenueByDay: revenueSummary.revenueByDay,
     bookingsByDay: revenueSummary.bookingsByDay,
     notificationsToday: {
+      available: notificationsAvailable,
+      ...(notificationsAvailable ? {} : { error: notifyRes.error?.message ?? "Could not read notification logs." }),
       windowStartIso: sinceNotify,
       email: { sent: emailSent, failed: emailFailed },
       whatsapp: { sent: whatsappSent, failed: whatsappFailed },

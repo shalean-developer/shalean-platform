@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  ADMIN_DASHBOARD_CONVERSION_SOURCE_LABEL,
+  ADMIN_DASHBOARD_REVENUE_SCOPE_LABEL,
+  dashboardFetchedAtLabel,
+  dashboardStaleBadgeTone,
+  notificationMetricDetail,
+  notificationMetricHeadline,
+} from "@/lib/admin/dashboardStatsPresentation";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { AttentionRequiredPanel } from "@/components/admin/AttentionRequiredPanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 type FailureBucketEntry = { count: number; pctOfFailed: number | null };
 
 type NotificationsToday = {
+  available?: boolean;
+  error?: string;
   windowStartIso: string;
   email: { sent: number; failed: number };
   whatsapp: { sent: number; failed: number };
@@ -61,7 +71,20 @@ function maskPhoneKey(phoneKey: string): string {
 }
 
 function NotificationDeliverySummaryCard({ n }: { n: NotificationsToday }) {
-  const waT = n.whatsapp.sent + n.whatsapp.failed;
+  if (n.available === false) {
+    return (
+      <Card className="sm:col-span-2 lg:col-span-4">
+        <CardHeader className="pb-2">
+          <CardDescription>Notifications today (Johannesburg day)</CardDescription>
+          <CardTitle className="text-lg font-semibold text-amber-700 dark:text-amber-300">Data unavailable</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-zinc-600 dark:text-zinc-400">
+          {notificationMetricDetail(n)}
+        </CardContent>
+      </Card>
+    );
+  }
+
   const ph = n.providerHealth;
   const waBuckets = ph?.whatsapp.failureBreakdown
     ? Object.entries(ph.whatsapp.failureBreakdown).filter(([, v]) => v.count > 0)
@@ -77,20 +100,7 @@ function NotificationDeliverySummaryCard({ n }: { n: NotificationsToday }) {
       <CardHeader className="pb-2">
         <CardDescription>Notifications today (Johannesburg day)</CardDescription>
         <CardTitle className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          Email {n.email.sent} sent
-          {n.email.failed > 0 ? (
-            <span className="text-rose-600 dark:text-rose-400"> · {n.email.failed} failed</span>
-          ) : null}
-          <span className="mx-2 text-zinc-300 dark:text-zinc-600">|</span>
-          WhatsApp {n.whatsapp.sent}/{waT || 0} ok
-          {n.whatsappSuccessRatePct != null ? (
-            <span className="text-zinc-500"> ({n.whatsappSuccessRatePct}%)</span>
-          ) : null}
-          <span className="mx-2 text-zinc-300 dark:text-zinc-600">|</span>
-          SMS {n.sms.sent} sent
-          {n.sms.failed > 0 ? (
-            <span className="text-rose-600 dark:text-rose-400"> · {n.sms.failed} failed</span>
-          ) : null}
+          {notificationMetricHeadline(n)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm text-zinc-600 dark:text-zinc-400">
@@ -269,6 +279,7 @@ function NotificationDeliverySummaryCard({ n }: { n: NotificationsToday }) {
 }
 
 type DashboardStats = {
+  fetchedAt?: string;
   revenueTodayZar: number;
   revenueMonthZar: number;
   paidBookingsToday: number;
@@ -321,6 +332,8 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
+  const staleTone = dashboardStaleBadgeTone(data?.fetchedAt);
+
   return (
     <main className="mx-auto max-w-6xl space-y-8">
       <AttentionRequiredPanel />
@@ -338,10 +351,22 @@ export default function AdminDashboardPage() {
         </div>
       ) : null}
       <div>
-        <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Overview</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Overview</h2>
+          {data?.fetchedAt ? (
+            <span
+              className={`rounded-full border px-2.5 py-1 text-xs tabular-nums ${
+                staleTone === "stale"
+                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+              }`}
+            >
+              {dashboardFetchedAtLabel(data.fetchedAt)}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Revenue uses successful booking payments by Johannesburg payment date. Conversion uses <span className="font-medium">booking_events</span> (quote
-          views → checkout) over the last 30 days.
+          Revenue uses successful booking payments by Johannesburg payment date. {ADMIN_DASHBOARD_CONVERSION_SOURCE_LABEL}
         </p>
         <p className="mt-3 text-xs text-zinc-500">
           <Link href="/admin/ops/sla-breaches" className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
@@ -400,7 +425,9 @@ export default function AdminDashboardPage() {
               <CardDescription>Revenue this month</CardDescription>
               <CardTitle className="text-2xl tabular-nums">R {data.revenueMonthZar.toLocaleString("en-ZA")}</CardTitle>
             </CardHeader>
-            <CardContent className="text-xs text-zinc-500">Paid bookings (MTD): {data.paidBookingsMonth}</CardContent>
+            <CardContent className="text-xs text-zinc-500">
+              Paid bookings (MTD): {data.paidBookingsMonth}. {ADMIN_DASHBOARD_REVENUE_SCOPE_LABEL}
+            </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
