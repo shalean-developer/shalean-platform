@@ -83,6 +83,16 @@ export function MarketingHomeFooter() {
                 </SafeInternalLink>
               </li>
               <li>
+                <SafeInternalLink href="/cleaning-services-cape-town" className="transition hover:text-white">
+                  Cape Town cleaning hub
+                </SafeInternalLink>
+              </li>
+              <li>
+                <SafeInternalLink href="/locations" className="transition hover:text-white">
+                  Locations
+                </SafeInternalLink>
+              </li>
+              <li>
                 <SafeInternalLink href="/cleaning-prices-cape-town" className="transition hover:text-white">
                   Cleaning prices in Cape Town
                 </SafeInternalLink>

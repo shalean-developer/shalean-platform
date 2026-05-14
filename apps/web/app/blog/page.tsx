@@ -14,6 +14,7 @@ import {
   parseBlogTopicParam,
   resolveFeaturedPost,
   resolvePopularPosts,
+  sortBlogIndexPostsCommercialFirst,
   type BlogTopicFilterId,
 } from "@/lib/blog/blog-index-hub";
 import { getAllPublishedPosts } from "@/lib/blog/get-all-posts";
@@ -118,6 +119,8 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
         p.displayExcerpt.toLowerCase().includes(searchQuery) ||
         p.slug.toLowerCase().includes(searchQuery),
     );
+  } else if (activeTopic === "all" && visible.length > 1) {
+    visible = sortBlogIndexPostsCommercialFirst(visible);
   }
 
   const jsonLdPosts: typeof enriched = [];
@@ -294,7 +297,11 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-600">
             Browse suburb hubs—cleaners near me across Claremont, the Atlantic Seaboard, Southern Suburbs, and
-            Durbanville—then pair local coverage with the guides above.
+            Durbanville—then pair local coverage with the guides above. For citywide scope and booking, start from the{" "}
+            <SafeInternalLink href="/cleaning-services-cape-town" className="font-semibold text-blue-800 underline-offset-2 hover:underline">
+              Cape Town cleaning services hub
+            </SafeInternalLink>
+            .
           </p>
           <ul className="mt-8 flex flex-wrap gap-2">
             {BLOG_INDEX_LOCATION_HUBS.map((hub) => (

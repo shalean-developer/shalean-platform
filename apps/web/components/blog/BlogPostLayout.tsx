@@ -2,6 +2,7 @@ import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import type { ReactNode } from "react";
 import { BlogArticleEndCta } from "@/components/blog/BlogArticleConversionBlocks";
 import { BlogLocationBookCta } from "@/components/blog/BlogLocationBookCta";
+import { BlogAuthorityHubStrip } from "@/components/blog/BlogAuthorityHubStrip";
 import { BlogIntroServiceLink } from "@/components/blog/BlogIntroServiceLink";
 import { BlogEngagementAnalytics } from "@/components/blog/BlogEngagementAnalytics";
 import { BlogPreFooterTrust } from "@/components/blog/BlogPreFooterTrust";
@@ -187,6 +188,7 @@ export function BlogPostLayout({
                   <p className="text-lg leading-relaxed text-zinc-600 sm:text-[1.125rem]">{lede}</p>
                 ) : null}
                 <BlogIntroServiceLink slug={trackingSlug} />
+                <BlogAuthorityHubStrip slug={trackingSlug} />
               </header>
 
               {tocEntries && tocEntries.length >= 2 ? (

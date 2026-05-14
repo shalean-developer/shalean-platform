@@ -21,8 +21,37 @@ export const BLOG_FEATURED_SLUG_PREFERENCE = "how-much-does-cleaning-cost-cape-t
 
 /** Curated “most popular” strip (filled from merge list; padded by recency). */
 export const BLOG_MOST_POPULAR_SLUGS: string[] = [
-  ...new Set<string>(["how-much-does-cleaning-cost-cape-town-2026", ...CAPE_TOWN_HUB_BLOG_SLUGS]),
+  ...new Set<string>([
+    "how-much-does-cleaning-cost-cape-town-2026",
+    "deep-cleaning-vs-regular-cleaning-cape-town",
+    "move-out-cleaning-checklist-cape-town",
+    "airbnb-cleaning-checklist-cape-town",
+    "how-often-book-home-cleaning-cape-town",
+    ...CAPE_TOWN_HUB_BLOG_SLUGS,
+  ]),
 ];
+
+/** Commercial intent ordering for /blog “all” grid (stable; unknown slugs sort after). */
+export const COMMERCIAL_BLOG_INDEX_PRIORITY_SLUGS: readonly string[] = [
+  "how-much-does-cleaning-cost-cape-town-2026",
+  "deep-cleaning-vs-regular-cleaning-cape-town",
+  "move-out-cleaning-checklist-cape-town",
+  "airbnb-cleaning-checklist-cape-town",
+  "how-often-book-home-cleaning-cape-town",
+  "best-airbnb-cleaning-tips-cape-town",
+  "book-home-cleaning-online-cape-town-checklist",
+  "what-affects-cleaning-quotes-cape-town",
+];
+
+export function commercialBlogIndexSortKey(slug: string): number {
+  const i = COMMERCIAL_BLOG_INDEX_PRIORITY_SLUGS.indexOf(slug);
+  if (i !== -1) return i;
+  return 400 + (slug.charCodeAt(0) % 120);
+}
+
+export function sortBlogIndexPostsCommercialFirst<T extends { slug: string }>(posts: T[]): T[] {
+  return [...posts].sort((a, b) => commercialBlogIndexSortKey(a.slug) - commercialBlogIndexSortKey(b.slug));
+}
 
 /** Re-export for blog index (same seven priority suburbs as the footer). */
 export const BLOG_INDEX_LOCATION_HUBS = FOOTER_POPULAR_LOCATION_HUBS;

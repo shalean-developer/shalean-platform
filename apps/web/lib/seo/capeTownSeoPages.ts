@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { locationHubPathFromAreaInput, type CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
+import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, locationHubPathFromAreaInput, type CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { ensureMetaDescriptionKeyword } from "@/lib/seo/location-keyword";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import {
@@ -1681,6 +1681,8 @@ let homepageInternalSeoLinksCache: { href: string; label: string }[] | undefined
 export function getHomepageInternalSeoLinks(): { href: string; label: string }[] {
   if (homepageInternalSeoLinksCache) return homepageInternalSeoLinksCache;
   homepageInternalSeoLinksCache = [
+    { href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: "Cape Town cleaning services hub" },
+    { href: "/locations", label: "All suburb cleaning locations" },
     { href: "/cleaning-prices-cape-town", label: "Cleaning prices Cape Town" },
     { href: "/maid-services-cape-town", label: "Maid services Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },

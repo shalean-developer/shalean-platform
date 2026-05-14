@@ -241,6 +241,12 @@ export function ProgrammaticLocationCleaningPage({
           <span className="mx-2 text-zinc-300" aria-hidden>
             ·
           </span>
+          <Link href="/cleaning-prices-cape-town" className={`font-medium ${linkEmphasisClassName}`}>
+            Cleaning prices in Cape Town
+          </Link>
+          <span className="mx-2 text-zinc-300" aria-hidden>
+            ·
+          </span>
           <Link href={STANDARD_SERVICE} className={`font-medium ${linkEmphasisClassName}`}>
             Citywide house cleaning hub
           </Link>
@@ -704,11 +710,19 @@ export function ProgrammaticLocationCleaningPage({
       <section className="border-b border-zinc-100 bg-zinc-50/50 py-16" aria-labelledby="hub-nearby-areas-heading">
         <div className="mx-auto max-w-4xl px-4">
           <h2 id="hub-nearby-areas-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Cleaning services near {location.name}
+            Popular nearby areas
           </h2>
           <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            We also provide professional cleaning services in nearby Cape Town areas—each hub explains local access and
-            links to the same citywide guides you can book for your street.
+            Neighbouring Cape Town hubs below—each links to local access context and the same service guides. Return to
+            the{" "}
+            <Link href="/locations" className={`font-semibold ${linkEmphasisClassName}`}>
+              locations index
+            </Link>{" "}
+            or the{" "}
+            <Link href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={`font-semibold ${linkEmphasisClassName}`}>
+              citywide cleaning hub
+            </Link>{" "}
+            when you want the full metro picture.
           </p>
           {nearby.length > 0 ? (
             <ul className="mt-6 space-y-4 text-base leading-relaxed text-zinc-700">

@@ -53,7 +53,16 @@ export function MarketingAreasSection({ locations }: Props) {
   const programmatic = buildProgrammaticHubLinks();
   const allHubs = mergeCmsHubExtras(programmatic, locations);
 
-  /** Homepage-only row — matches `FOOTER_POPULAR_LOCATION_HUBS` order (horizontal flow, wraps when narrow). */
+  /** Homepage “Popular cleaning areas” row — explicit hubs for crawl + topical clustering. */
+  const popularCleaningAreas: AreasHubLink[] = [
+    { key: "sea-point-cleaning-services", href: "/locations/sea-point-cleaning-services", name: "Sea Point" },
+    { key: "claremont-cleaning-services", href: "/locations/claremont-cleaning-services", name: "Claremont" },
+    { key: "constantia-cleaning-services", href: "/locations/constantia-cleaning-services", name: "Constantia" },
+    { key: "bellville-cleaning-services", href: "/locations/bellville-cleaning-services", name: "Bellville" },
+    { key: "durbanville-cleaning-services", href: "/locations/durbanville-cleaning-services", name: "Durbanville" },
+  ];
+
+  /** Secondary row — broader discovery (footer-aligned order). */
   const popularRowLinks: AreasHubLink[] = FOOTER_POPULAR_LOCATION_HUBS.map(({ name, slug }) => ({
     key: slug,
     href: `/locations/${slug}`,
@@ -133,14 +142,34 @@ export function MarketingAreasSection({ locations }: Props) {
               <SafeInternalLink href="/locations/green-point-cleaning-services" className={linkInParagraphClassName}>
                 Green Point cleaning services
               </SafeInternalLink>
-              .
+              . For every hub, see{" "}
+              <SafeInternalLink href="/cleaning-prices-cape-town" className={linkInParagraphClassName}>
+                cleaning prices in Cape Town
+              </SafeInternalLink>{" "}
+              before you book.
             </p>
           </div>
         </div>
 
         <div className="mt-10 md:mt-12">
-          <h3 className="text-sm font-bold text-slate-900 md:text-base">Popular Areas</h3>
-          <nav className="mt-2 text-sm leading-relaxed text-slate-700 md:text-base" aria-label="Popular Areas">
+          <h3 className="text-sm font-bold text-slate-900 md:text-base">Popular cleaning areas</h3>
+          <nav className="mt-2 flex flex-wrap gap-2 text-sm md:text-base" aria-label="Popular cleaning areas">
+            {popularCleaningAreas.map((hub) => (
+              <SafeInternalLink
+                key={hub.key}
+                href={hub.href}
+                className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                title={`Cleaning services in ${hub.name}`}
+              >
+                {hub.name}
+              </SafeInternalLink>
+            ))}
+          </nav>
+        </div>
+
+        <div className="mt-8 md:mt-10">
+          <h3 className="text-sm font-bold text-slate-900 md:text-base">More popular hubs</h3>
+          <nav className="mt-2 text-sm leading-relaxed text-slate-700 md:text-base" aria-label="More popular hubs">
             {popularRowLinks.map((hub, index) => (
               <span key={hub.key}>
                 {index > 0 ? ", " : null}
@@ -181,6 +210,12 @@ export function MarketingAreasSection({ locations }: Props) {
           </span>
           <SafeInternalLink href="/cleaning-services-cape-town" className={`font-semibold ${linkInParagraphClassName}`}>
             Cape Town cleaning overview
+          </SafeInternalLink>
+          <span className="text-slate-300" aria-hidden>
+            ·
+          </span>
+          <SafeInternalLink href="/cleaning-prices-cape-town" className={`font-semibold ${linkInParagraphClassName}`}>
+            Cleaning prices in Cape Town
           </SafeInternalLink>
         </p>
 

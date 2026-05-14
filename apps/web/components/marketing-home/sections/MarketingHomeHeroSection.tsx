@@ -103,6 +103,24 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
               </div>
             </div>
 
+            <nav className="mt-4 flex flex-wrap gap-x-3 gap-y-2 text-sm text-slate-600" aria-label="City hubs and pricing">
+              <SafeInternalLink href="/cleaning-services-cape-town" className={cn(linkInNavClassName, "text-sm font-semibold")}>
+                Cape Town cleaning hub
+              </SafeInternalLink>
+              <span className="text-slate-300" aria-hidden>
+                ·
+              </span>
+              <SafeInternalLink href="/cleaning-prices-cape-town" className={cn(linkInNavClassName, "text-sm font-semibold")}>
+                Cleaning prices
+              </SafeInternalLink>
+              <span className="text-slate-300" aria-hidden>
+                ·
+              </span>
+              <SafeInternalLink href="/locations" className={cn(linkInNavClassName, "text-sm font-semibold")}>
+                All locations
+              </SafeInternalLink>
+            </nav>
+
             <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Popular pages">
               <SafeInternalLink href="/services" className={cn(linkInNavClassName, "text-sm")}>
                 All services

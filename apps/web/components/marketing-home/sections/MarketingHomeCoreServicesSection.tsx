@@ -55,6 +55,23 @@ export function MarketingHomeCoreServicesSection() {
             </li>
           ))}
         </ul>
+        <p className="mt-6 max-w-2xl text-sm leading-relaxed text-slate-600">
+          <Link href="/cleaning-services-cape-town" className={linkCls}>
+            Citywide cleaning hub
+          </Link>
+          <span className="mx-2 text-slate-300" aria-hidden>
+            ·
+          </span>
+          <Link href="/cleaning-prices-cape-town" className={linkCls}>
+            Cleaning prices in Cape Town
+          </Link>
+          <span className="mx-2 text-slate-300" aria-hidden>
+            ·
+          </span>
+          <Link href="/locations" className={linkCls}>
+            All suburb location pages
+          </Link>
+        </p>
       </div>
     </section>
   );

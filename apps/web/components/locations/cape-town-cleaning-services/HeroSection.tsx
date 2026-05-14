@@ -15,6 +15,23 @@ export function HeroSection() {
     <section className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-gradient-to-br from-zinc-50 via-white to-blue-50/40 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950/20">
       <div className="grid gap-10 px-6 py-12 md:grid-cols-2 md:items-center md:gap-12 md:px-10 md:py-16 lg:px-12">
         <div className="order-2 flex flex-col gap-6 md:order-1">
+          <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-zinc-500 md:text-sm" aria-label="City hubs">
+            <Link href="/cleaning-services-cape-town" className="text-blue-700 underline-offset-2 hover:underline">
+              Cape Town cleaning hub
+            </Link>
+            <span aria-hidden className="text-zinc-300">
+              ·
+            </span>
+            <Link href="/cleaning-prices-cape-town" className="text-blue-700 underline-offset-2 hover:underline">
+              Cleaning prices
+            </Link>
+            <span aria-hidden className="text-zinc-300">
+              ·
+            </span>
+            <Link href="/locations" className="text-blue-700 underline-offset-2 hover:underline">
+              All locations
+            </Link>
+          </nav>
           <h1 className="text-balance text-3xl font-semibold tracking-tight text-zinc-900 md:text-5xl dark:text-zinc-50">
             Cleaning Services in Cape Town
           </h1>
