@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchAdminDashboardConversionSummary } from "@/lib/admin/dashboardConversion";
 import { fetchAdminDashboardRevenueSummary } from "@/lib/admin/dashboardRevenue";
 import { requireAdminFromRequest } from "@/lib/admin/requireAdmin";
 import { startOfTodayJohannesburgUtcIso } from "@/lib/booking/dateInJohannesburg";
@@ -9,8 +10,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type EventRow = { session_id: string; step: string; event_type: string };
 
 export async function GET(request: Request) {
   const auth = await requireAdminFromRequest(request);
@@ -24,13 +23,9 @@ export async function GET(request: Request) {
 
   const sinceNotify = startOfTodayJohannesburgUtcIso();
 
-  const [revenueSummary, eventsRes, notifyRes, flagsRes, contactHealthRes] = await Promise.all([
+  const [revenueSummary, conversionSummary, notifyRes, flagsRes, contactHealthRes] = await Promise.all([
     fetchAdminDashboardRevenueSummary(admin),
-    admin
-      .from("booking_events")
-      .select("session_id, step, event_type")
-      .gte("created_at", since.toISOString())
-      .limit(25000),
+    fetchAdminDashboardConversionSummary(admin, since.toISOString()),
     admin
       .from("notification_logs")
       .select("channel, status, role, template_key, error, decision, payload")
@@ -46,7 +41,6 @@ export async function GET(request: Request) {
       .limit(8),
   ]);
 
-  const events = (eventsRes.error ? [] : (eventsRes.data ?? [])) as EventRow[];
   const notifyRows = (notifyRes.error ? [] : (notifyRes.data ?? [])) as {
     channel: string;
     status: string;
@@ -187,17 +181,6 @@ export async function GET(request: Request) {
     smsFailed >= 3 &&
     emailFailed >= 3;
 
-  const quoteViews = new Set<string>();
-  const paymentReached = new Set<string>();
-  for (const e of events) {
-    if (e.event_type === "view" && e.step === "quote") quoteViews.add(e.session_id);
-    if ((e.event_type === "view" || e.event_type === "next") && e.step === "payment") {
-      paymentReached.add(e.session_id);
-    }
-  }
-  const funnelStart = Math.max(quoteViews.size, 1);
-  const conversionRatePct = Math.round((paymentReached.size / funnelStart) * 1000) / 10;
-
   return NextResponse.json({
     revenueTodayZar: revenueSummary.revenueTodayZar,
     revenueMonthZar: revenueSummary.revenueMonthZar,
@@ -213,9 +196,11 @@ export async function GET(request: Request) {
       todayEndExclusiveIso: revenueSummary.todayEndExclusiveIso,
       timezone: "Africa/Johannesburg",
     },
-    conversionRatePct,
-    funnelSessionsQuote: quoteViews.size,
-    funnelSessionsPayment: paymentReached.size,
+    conversionAvailable: conversionSummary.available,
+    conversionRatePct: conversionSummary.conversionRatePct,
+    funnelSessionsQuote: conversionSummary.funnelSessionsQuote,
+    funnelSessionsPayment: conversionSummary.funnelSessionsPayment,
+    ...(conversionSummary.available ? {} : { conversionError: conversionSummary.error }),
     revenueByDay: revenueSummary.revenueByDay,
     bookingsByDay: revenueSummary.bookingsByDay,
     notificationsToday: {

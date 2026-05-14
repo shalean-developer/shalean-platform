@@ -276,9 +276,11 @@ type DashboardStats = {
   totalBookingsWindow: number;
   avgBookingValueZar: number;
   revenueScope?: string;
-  conversionRatePct: number;
-  funnelSessionsQuote: number;
-  funnelSessionsPayment: number;
+  conversionAvailable?: boolean;
+  conversionRatePct: number | null;
+  funnelSessionsQuote: number | null;
+  funnelSessionsPayment: number | null;
+  conversionError?: string;
   notificationsToday?: NotificationsToday;
   error?: string;
 };
@@ -417,11 +419,21 @@ export default function AdminDashboardPage() {
           <Card className="sm:col-span-2 lg:col-span-4">
             <CardHeader className="pb-2">
               <CardDescription>Conversion rate</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">{data.conversionRatePct}%</CardTitle>
+              <CardTitle className="text-2xl tabular-nums">
+                {data.conversionAvailable === false || data.conversionRatePct == null ? "Data unavailable" : `${data.conversionRatePct}%`}
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-zinc-600 dark:text-zinc-400">
-              Sessions that viewed <strong>quote</strong> vs sessions that reached <strong>payment</strong> checkout (
-              {data.funnelSessionsPayment} / {Math.max(data.funnelSessionsQuote, 1)} quote sessions).
+              {data.conversionAvailable === false ? (
+                <span>
+                  Could not read booking funnel events. {data.conversionError ? `Error: ${data.conversionError}` : null}
+                </span>
+              ) : (
+                <span>
+                  Sessions that viewed <strong>quote</strong> vs sessions that reached <strong>payment</strong> checkout (
+                  {data.funnelSessionsPayment ?? 0} / {data.funnelSessionsQuote ?? 0} quote sessions).
+                </span>
+              )}
             </CardContent>
           </Card>
           {data.notificationsToday ? (
