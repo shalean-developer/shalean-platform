@@ -1867,9 +1867,23 @@ for (const p of PROGRAMMATIC_POSTS) {
   }
 }
 
+/**
+ * When `NEXT_PUBLIC_LEGACY_HIGH_CONVERSION_ROUTES=false`, thin HC URLs are intentionally not served from
+ * in-repo templates until each slug is owned by `blog_posts`. These four are core internal authority URLs
+ * (SiteGuru / deep links); keep them routable so `/blog/[slug]` and sitemap stay 200 while migration continues.
+ * Supabase `getPostBySlug` still wins when a published row exists for the same slug.
+ */
+export const CORE_AUTHORITY_HIGH_CONVERSION_SLUGS: ReadonlySet<string> = new Set([
+  "move-out-cleaning-checklist-cape-town",
+  "deep-cleaning-vs-regular-cleaning-cape-town",
+  "what-does-professional-cleaner-do-cape-town",
+  "how-much-does-cleaning-cost-cape-town-2026",
+]);
+
 /** Routing pool — disable legacy env flag once content lives in Supabase. */
-export const ROUTED_HIGH_CONVERSION_POSTS: readonly HighConversionBlogArticle[] =
-  LEGACY_HIGH_CONVERSION_ROUTES_ENABLED ? HIGH_CONVERSION_POSTS : [];
+export const ROUTED_HIGH_CONVERSION_POSTS: readonly HighConversionBlogArticle[] = LEGACY_HIGH_CONVERSION_ROUTES_ENABLED
+  ? HIGH_CONVERSION_POSTS
+  : HIGH_CONVERSION_POSTS.filter((p) => CORE_AUTHORITY_HIGH_CONVERSION_SLUGS.has(p.slug));
 
 export function getHighConversionBlogPost(slug: string): HighConversionBlogArticle | null {
   return ROUTED_HIGH_CONVERSION_POSTS.find((p) => p.slug === slug) ?? null;
