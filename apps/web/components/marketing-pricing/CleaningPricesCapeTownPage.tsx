@@ -28,28 +28,22 @@ const pricingSuburbAuthorityCluster = moneyPageSuburbAuthorityKeywordLinks();
 
 export const CLEANING_PRICES_CAPE_TOWN_FAQS = [
   {
-    idSlug: "cleaner-cost",
-    question: "How much is a cleaner in Cape Town?",
+    idSlug: "lock-fixed-total",
+    question: "How do I lock my fixed total before anyone visits?",
     answer:
-      "For booked residential cleaning through Shalean, most homes fall within transparent fixed quotes that reflect bedrooms, bathrooms, service type, and extras—typically from around R280 for lighter standard scopes up to R1,200+ for larger deep or move-out jobs. Your exact total is shown online before you pay.",
+      "Start Get instant quote or Book a cleaner, then enter bedrooms, bathrooms, service tier, and extras. Shalean shows the full line-item total at checkout before you confirm—that selection is what crews brief against on the day.",
   },
   {
-    idSlug: "average-house-cleaning",
-    question: "What is the average cost of house cleaning in Cape Town?",
+    idSlug: "from-vs-checkout",
+    question: "Do the ‘from’ prices on this page match checkout?",
     answer:
-      "There is no single average—house cleaning prices in Cape Town move with bedrooms, bathrooms, service tier, and extras. As a practical benchmark, many standard maintenance visits start from roughly R280–R500 for compact homes and rise with size and scope; deep cleans and move-outs typically sit higher. Enter your rooms online to see the average that applies to your home—your fixed total before payment.",
+      "Tiers and home-size anchors here are entry bands for planning. Checkout reflects the exact rooms, baths, add-ons, and tier you select—the number you agree to before payment.",
   },
   {
-    idSlug: "hourly-rate",
-    question: "How much should I pay a cleaner per hour in Cape Town?",
+    idSlug: "pick-tier-checkout",
+    question: "Which service type should I pick at checkout?",
     answer:
-      "Hourly cleaning rates in Cape Town are often quoted around R80–R150 per hour depending on experience and job type. Many customers still prefer fixed quotes tied to home size and checklist so the total is predictable—use instant quote to lock your number before anyone arrives.",
-  },
-  {
-    idSlug: "price-factors",
-    question: "What affects cleaning prices?",
-    answer:
-      "Cleaning cost in Cape Town depends on property size (rooms and bathrooms), the service tier (standard vs deep vs move-out), how often you book, travel and access, property condition, and add-ons such as interior windows, ovens, fridges, or extra laundry.",
+      "Choose standard for occupied maintenance, deep when kitchens or wet rooms need reset dwell, and move-out for near-empty handover scope. Open each service page for checklist notes, then return to the quote builder to switch tier before you pay.",
   },
   {
     idSlug: "fixed-pricing",
@@ -284,6 +278,16 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
             <p className="mt-3 text-base leading-relaxed text-slate-700 sm:text-lg">
               Get an instant cleaning price in Cape Town based on your home size and service type — no guessing. The booking flow works
               like a price calculator: select rooms, service tier, and extras, then see your fixed total before checkout.
+            </p>
+            <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">
+              For indicative session bands and how to compare quotes between providers—not a substitute for checkout—read the{" "}
+              <Link
+                href="/blog/how-much-does-cleaning-cost-cape-town-2026"
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                2026 Cape Town cleaning cost guide
+              </Link>
+              .
             </p>
             <ul className="mx-auto mt-6 max-w-lg space-y-2.5 text-left text-sm leading-relaxed text-slate-700 sm:max-w-xl sm:text-base">
               <li className="flex gap-2.5">
@@ -749,7 +753,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
 
           <div className="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
             {CLEANING_PRICES_CAPE_TOWN_FAQS.map((faq) => (
-              <details key={faq.question} className="group p-5 [&_summary::-webkit-details-marker]:hidden">
+              <details key={faq.idSlug} className="group p-5 [&_summary::-webkit-details-marker]:hidden">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-left font-semibold text-slate-900">
                   {faq.question}
                   <span className="text-slate-400 transition group-open:rotate-180" aria-hidden>

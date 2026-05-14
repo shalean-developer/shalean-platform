@@ -292,6 +292,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     ogImage: "/images/marketing/deep-cleaning-cape-town-kitchen.webp",
     h1: "Deep cleaning services in Cape Town for homes that need a real reset",
     bookingLabel: "deep cleaning",
+    introSectionHeading: "How deep cleaning works as a reset visit",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
       blogPath: "/locations/claremont-cleaning-services",
@@ -324,14 +325,14 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     explanation: [
       "Deep cleaning is the service Cape Town customers choose when a standard tidy is not enough. Build-up on ovens, grout lines, skirting boards, and bathroom fixtures takes time, and Shalean teams are briefed to work through those detail zones methodically.",
       "Whether you are recovering after renovations, preparing for guests, or refreshing a rental before handover photos, deep cleaning focuses on the areas that change how a space feels day to day across the Western Cape seaboard and Southern Suburbs.",
-      "If you are comparing house cleaning Cape Town options, think of professional cleaning services as the layer that restores kitchens and bathrooms after busy weeks—while home cleaning services Cape Town wide stay easier to maintain once the heavy reset is done.",
+      "After a reset, most homes return to lighter maintenance: fewer hours on the clock, fewer chemicals, and a checklist built around rhythm rather than recovery. If you only need handover evidence in an empty unit, compare move-out scope instead of defaulting to deep by habit.",
     ],
     included: [
-      "Kitchen degrease, appliance fronts, counters, and sinks",
-      "Bathroom descale, sanitaryware, mirrors, and fixtures",
-      "Dusting reachable surfaces, corners, and high-touch areas",
-      "Vacuuming and mopping hard floors according to your booking scope",
-      "Living areas and bedrooms refreshed to an agreed checklist",
+      "Degrease cooktops, appliance fronts, and sink zones where film returns fastest",
+      "Descale and polish bathroom sanitaryware, glass, and fixtures that hold limescale",
+      "Dust skirting, corners, and high-touch edges—not only open surfaces",
+      "Vacuum and mop hard floors with extra passes where grit hides along walls",
+      "Living areas and bedrooms worked to a reset checklist you confirm online",
     ],
     benefits: [
       {
@@ -423,14 +424,14 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     explanation: [
       "Standard cleaning keeps Cape Town apartments and houses in a steady rhythm: floors walked daily, kitchens used nightly, and bathrooms that need dependable sanitisation without booking a full deep clean every time.",
       "It suits professionals near the CBD, families in the Southern Suburbs, and lock-up-and-go homes that still deserve a reliable reset on a predictable schedule.",
-      "Across house cleaning Cape Town demand, professional cleaning services like this one protect your week: home cleaning services Cape Town customers book most often focus on high-touch surfaces, fresh floors, and bathrooms guests actually notice.",
+      "Think maintenance, not recovery: visits stay within the dwell you booked so weekly or fortnightly plans stay honest. When wet rooms or kitchens outgrow that clock, switch tier for a single deeper visit, then return here.",
     ],
     included: [
-      "Kitchen surfaces, exterior of appliances, and sink area",
-      "Bathroom sanitisation and wipe-down of fixtures",
-      "Dusting of reachable surfaces in living areas and bedrooms",
-      "Vacuuming carpets and rugs where applicable",
-      "Mopping hard floors according to your booking details",
+      "Kitchen surfaces, appliance exteriors, and sink area on a maintenance checklist",
+      "Bathroom sanitisation and fixture wipe-downs for routine hygiene",
+      "Dusting reachable surfaces in living areas and bedrooms between deeper passes",
+      "Vacuuming carpets and rugs where applicable to keep grit shallow",
+      "Mopping hard floors on the cadence tied to your booking frequency",
     ],
     benefits: [
       {

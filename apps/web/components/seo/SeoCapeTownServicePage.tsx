@@ -21,7 +21,7 @@ import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES, resolveCapeTownServiceSchemaFields } from "@/lib/seo/capeTownSeoPages";
 import {
   getSecondaryEditorialBlogLink,
-  getServicePagePricingBlogInlineLink,
+  getServicePagePricingEducationBlogLink,
   partitionServiceHubLocationLinks,
   servicePageExtraLocationSentenceLinks,
 } from "@/lib/seo/internalLinks";
@@ -79,7 +79,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, initialLocationSlug =
   const areasShownHrefs = new Set(areasPillLinks.map((l) => l.href));
   const areasSentenceLinks = servicePageExtraLocationSentenceLinks(areasShownHrefs);
   const areaProgrammaticBlogLinks = getAreaProgrammaticBlogLinksForCapeTownService(slug);
-  const pricingBlogInline = getServicePagePricingBlogInlineLink(slug);
+  const pricingEducationBlog = getServicePagePricingEducationBlogLink(slug);
   const secondaryEditorialBlog = getSecondaryEditorialBlogLink(slug);
 
   const heroTrustStrip =
@@ -354,13 +354,17 @@ export function SeoCapeTownServicePage({ slug, trustStats, initialLocationSlug =
                 href="/cleaning-prices-cape-town"
                 className="font-semibold text-blue-700 underline-offset-2 hover:underline"
               >
-                See our cleaning prices in Cape Town
+                See current tier from-prices
               </SafeInternalLink>{" "}
-              before you book — or read{" "}
-              <SafeInternalLink href={pricingBlogInline.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                {pricingBlogInline.anchor}
-              </SafeInternalLink>{" "}
-              on the blog.
+              and lock your fixed total before checkout. For indicative bands and comparison methodology—not a substitute for
+              checkout—read{" "}
+              <SafeInternalLink
+                href={pricingEducationBlog.href}
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              >
+                {pricingEducationBlog.anchor}
+              </SafeInternalLink>
+              .
             </p>
             <p>
               Need scope clarity first? Read{" "}

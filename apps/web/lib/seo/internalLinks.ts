@@ -29,6 +29,9 @@ export type SeoInternalLink = { href: string; anchor: string };
  */
 export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/cleaning-prices-cape-town";
 
+/** Methodology + indicative bands (2026) — pair with {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} on service pages, not as a duplicate hub link. */
+export const CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF = "/blog/how-much-does-cleaning-cost-cape-town-2026" as const;
+
 /**
  * Back-compat name: historically pointed at a retired `/blog/*` guide. Now aliases the pricing hub so
  * existing imports resolve to a live URL. Prefer {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} in new code.
@@ -274,11 +277,17 @@ export function getLocationHubAboveFoldServiceLink(suburbDisplayName: string, hu
   };
 }
 
-/** Inline “See pricing” line on Cape Town service SEO pages. */
-export function getServicePagePricingBlogInlineLink(serviceSlug: CapeTownSeoServiceSlug): SeoInternalLink {
+const PRICING_EDUCATION_BLOG_ANCHORS = [
+  "how indicative Cape Town cleaning bands compare (2026 guide)",
+  "how to read cleaning quotes fairly between providers",
+] as const;
+
+/** Inline link to the 2026 pricing methodology article — use beside a single hub link to `/cleaning-prices-cape-town`. */
+export function getServicePagePricingEducationBlogLink(serviceSlug: CapeTownSeoServiceSlug): SeoInternalLink {
+  const idx = stableHash(`${serviceSlug}|service-pricing-edu`) % PRICING_EDUCATION_BLOG_ANCHORS.length;
   return {
-    href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
-    anchor: pickPricingBlogAnchor(`${serviceSlug}|service-inline`),
+    href: CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF,
+    anchor: PRICING_EDUCATION_BLOG_ANCHORS[idx]!,
   };
 }
 

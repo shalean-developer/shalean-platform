@@ -3,8 +3,8 @@ export type MoneyPageFaq = { q: string; a: string };
 
 export const STANDARD_CLEANING_SNIPPET_FAQS: MoneyPageFaq[] = [
   {
-    q: "How much does cleaning cost in Cape Town?",
-    a: "Cleaning services in Cape Town typically range from R250 to R600+, depending on property size, bedrooms and bathrooms, add-ons, and whether you book standard maintenance cleaning or a deeper reset.",
+    q: "Is standard cleaning the same as a deep clean?",
+    a: "No. Standard visits maintain surfaces, floors, and wet rooms on a lighter checklist. Deep cleans add dwell on build-up, edges, and heavy kitchens or bathrooms—book deep when that reset is honest, then return to standard for rhythm.",
   },
   {
     q: "Do you offer same-day cleaning in Cape Town?",
