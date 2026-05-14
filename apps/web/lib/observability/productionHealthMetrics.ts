@@ -23,7 +23,8 @@ export type ProductionHealthCode =
   | "duration_fallback_usage"
   | "dispatch_stale_unassigned"
   | "cron_stale_or_missing_success"
-  | "workload_force_override_usage";
+  | "workload_force_override_usage"
+  | "scanner_query_failed";
 
 export type ProductionHealthFinding = {
   code: ProductionHealthCode;
@@ -36,6 +37,7 @@ export type ProductionHealthFinding = {
 
 export type ProductionHealthSummary = {
   ok: true;
+  degraded?: boolean;
   generatedAt: string;
   scanLimit: number;
   findings: ProductionHealthFinding[];
@@ -46,6 +48,12 @@ export type ProductionHealthSummary = {
     low: number;
     info: number;
   };
+};
+
+export type ProductionHealthScannerFailure = {
+  scanner: string;
+  message: string;
+  code?: string | null;
 };
 
 export type PaymentFinalizationSignalRow = {
@@ -136,6 +144,7 @@ export type ProductionHealthInput = {
   expectedCronJobs?: readonly ExpectedCronJob[];
   durationFallbackLogs?: readonly SystemLogHealthRow[];
   workloadForceOverrideLogs?: readonly SystemLogHealthRow[];
+  scannerFailures?: readonly ProductionHealthScannerFailure[];
 };
 
 const DEFAULT_SCAN_LIMIT = 500;
@@ -208,6 +217,12 @@ function addFinding(
 
 function severityRank(severity: ProductionHealthSeverity): number {
   return { critical: 0, high: 1, medium: 2, low: 3, info: 4 }[severity];
+}
+
+function errorMessage(value: unknown): string {
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === "object" && "message" in value) return String((value as { message?: unknown }).message ?? "Unknown scanner error");
+  return String(value ?? "Unknown scanner error");
 }
 
 function recurringSeverityToProduction(severity: RecurringMonthlyDriftSeverity): ProductionHealthSeverity {
@@ -460,6 +475,34 @@ export function detectStaleCronRuns(
   return findings;
 }
 
+export function detectScannerFailures(failures: readonly ProductionHealthScannerFailure[]): ProductionHealthFinding[] {
+  const cleaned = failures
+    .map((failure) => ({
+      scanner: String(failure.scanner ?? "").trim() || "unknown_scanner",
+      message: String(failure.message ?? "").trim() || "Unknown scanner error",
+      code: failure.code ?? null,
+    }))
+    .filter((failure) => failure.scanner.length > 0);
+
+  const findings: ProductionHealthFinding[] = [];
+  addFinding(
+    findings,
+    "scanner_query_failed",
+    "high",
+    "One or more Ops Health scanners could not read all required data.",
+    cleaned.map((failure) => failure.scanner),
+    {
+      scanners: sample(cleaned.map((failure) => failure.scanner)),
+      errors: cleaned.slice(0, MAX_SAMPLE_IDS).map((failure) => ({
+        scanner: failure.scanner,
+        message: failure.message,
+        ...(failure.code ? { code: failure.code } : {}),
+      })),
+    },
+  );
+  return findings;
+}
+
 export function buildProductionHealthSummary(input: ProductionHealthInput): ProductionHealthSummary {
   const now = input.now ?? new Date();
   const scanLimit = clampLimit(input.scanLimit);
@@ -478,6 +521,7 @@ export function buildProductionHealthSummary(input: ProductionHealthInput): Prod
     ...detectStaleUnassignedDispatch((input.dispatchRows ?? []).slice(0, scanLimit), now),
     ...detectStaleCronRuns(input.cronRows ?? [], input.expectedCronJobs ?? [], now),
     ...detectWorkloadForceOverrides((input.workloadForceOverrideLogs ?? []).slice(0, scanLimit)),
+    ...detectScannerFailures(input.scannerFailures ?? []),
   ].sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.code.localeCompare(b.code));
 
   const totals = findings.reduce<ProductionHealthSummary["totals"]>(
@@ -490,6 +534,7 @@ export function buildProductionHealthSummary(input: ProductionHealthInput): Prod
 
   return {
     ok: true,
+    ...(input.scannerFailures && input.scannerFailures.length > 0 ? { degraded: true } : {}),
     generatedAt: now.toISOString(),
     scanLimit,
     findings,
@@ -561,93 +606,150 @@ export async function runProductionHealthScan(
   const scanLimit = clampLimit(options?.scanLimit);
   try {
     const since24h = new Date((options?.now ?? new Date()).getTime() - 24 * 60 * 60_000).toISOString();
-    const [failedJobs, monthlyChildren, earningsRows, payoutRows, recurringRows, invoices, dispatchRows, cronRows, durationLogs, workloadLogs] =
-      await Promise.all([
-        admin
+    const querySpecs = [
+      {
+        name: "payment_finalization_jobs",
+        query: admin
           .from("failed_jobs")
           .select("id, type, created_at, payload")
           .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation"])
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-        admin
+      },
+      {
+        name: "monthly_invoice_children",
+        query: admin
           .from("bookings")
           .select("id, monthly_invoice_id, status, payment_status, payout_status, payout_frozen_cents, monthly_invoices!inner(status)")
           .not("monthly_invoice_id", "is", null)
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-        admin
+      },
+      {
+        name: "completed_booking_earnings",
+        query: admin
           .from("bookings")
           .select("id, status, display_earnings_cents, payout_frozen_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_id, selected_cleaner_id, team_id, is_team_job")
           .eq("status", "completed")
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-        admin
+      },
+      {
+        name: "payout_eligibility",
+        query: admin
           .from("bookings")
           .select("id, payout_status, payout_frozen_cents, payout_paid_at, payout_id")
           .in("payout_status", ["eligible", "approved", "processing", "paid"])
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-        admin
+      },
+      {
+        name: "recurring_snapshot",
+        query: admin
           .from("bookings")
           .select("id, recurring_id, is_recurring_generated, is_monthly_billing_booking, billing_type, monthly_invoice_id, status, payment_status, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_id, selected_cleaner_id, is_team_job, team_id, duration_minutes, extras, booking_snapshot, price_snapshot, total_paid_zar, amount_paid_cents")
           .or("is_recurring_generated.eq.true,recurring_id.not.is.null,is_monthly_billing_booking.eq.true")
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-        admin.from("monthly_invoices").select("id, status").order("created_at", { ascending: false }).limit(scanLimit),
-        admin
+      },
+      {
+        name: "monthly_invoices",
+        query: admin.from("monthly_invoices").select("id, status").order("created_at", { ascending: false }).limit(scanLimit),
+      },
+      {
+        name: "dispatch_assignment",
+        query: admin
           .from("bookings")
           .select("id, status, payment_status, payment_completed_at, dispatch_status, cleaner_id, selected_cleaner_id, team_id, is_team_job, created_at, updated_at")
           .in("payment_status", ["paid", "success", "succeeded"])
           .order("payment_completed_at", { ascending: false, nullsFirst: false })
           .limit(scanLimit),
-        admin.from("cron_runs").select("job_name, status, created_at, message").order("created_at", { ascending: false }).limit(2000),
-        admin
+      },
+      {
+        name: "cron_runs",
+        query: admin.from("cron_runs").select("job_name, status, created_at, message").order("created_at", { ascending: false }).limit(2000),
+      },
+      {
+        name: "duration_fallback_logs",
+        query: admin
           .from("system_logs")
           .select("id, source, message, created_at, context")
           .gte("created_at", since24h)
           .or("message.ilike.%duration_fallback%,message.ilike.%duration fallback%,source.ilike.%duration_fallback%")
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-        admin
+      },
+      {
+        name: "workload_force_override_logs",
+        query: admin
           .from("system_logs")
           .select("id, source, message, created_at, context")
           .gte("created_at", since24h)
           .or("message.ilike.%admin_daily_workload_over_limit_force_override%,message.ilike.%workload_over_limit_force%")
           .order("created_at", { ascending: false })
           .limit(scanLimit),
-      ]);
+      },
+    ] as const;
+    const results = await Promise.all(querySpecs.map((spec) => spec.query));
+    const failures: ProductionHealthScannerFailure[] = [];
 
-    const invoiceMap = new Map<string, RecurringMonthlyDriftInvoiceRow>();
-    for (const row of invoices.data ?? []) {
-      const r = row as RecurringMonthlyDriftInvoiceRow;
-      if (r.id) invoiceMap.set(r.id, r);
+    function rowsAt<T>(index: number): T[] {
+      const result = results[index] as { data?: T[] | null; error?: { message?: string; code?: string | null } | null };
+      if (result.error) {
+        failures.push({
+          scanner: querySpecs[index].name,
+          message: errorMessage(result.error),
+          code: result.error.code ?? null,
+        });
+      }
+      return (result.data ?? []) as T[];
     }
 
-    const monthlyChildRows = (monthlyChildren.data ?? []).map((row) => {
-      const r = row as MonthlyInvoiceChildSettlementRow & { monthly_invoices?: { status?: string | null } | null };
-      return { ...r, invoice_status: r.monthly_invoices?.status ?? r.invoice_status ?? null };
+    const failedJobs = rowsAt<PaymentFinalizationSignalRow>(0);
+    const monthlyChildren = rowsAt<MonthlyInvoiceChildSettlementRow & { monthly_invoices?: { status?: string | null } | null }>(1);
+    const earningsRows = rowsAt<BookingEarningsHealthRow>(2);
+    const payoutRows = rowsAt<PayoutEligibilityHealthRow>(3);
+    const recurringRows = rowsAt<RecurringMonthlyDriftBookingRow>(4);
+    const invoices = rowsAt<RecurringMonthlyDriftInvoiceRow>(5);
+    const dispatchRows = rowsAt<DispatchHealthRow>(6);
+    const cronRows = rowsAt<CronRunHealthRow>(7);
+    const durationLogs = rowsAt<SystemLogHealthRow>(8);
+    const workloadLogs = rowsAt<SystemLogHealthRow>(9);
+
+    const invoiceMap = new Map<string, RecurringMonthlyDriftInvoiceRow>();
+    for (const row of invoices) {
+      if (row.id) invoiceMap.set(row.id, row);
+    }
+
+    const monthlyChildRows = monthlyChildren.map((row) => {
+      return { ...row, invoice_status: row.monthly_invoices?.status ?? row.invoice_status ?? null };
     });
 
     const summary = buildProductionHealthSummary({
       now: options?.now,
       scanLimit,
-      paymentSignals: (failedJobs.data ?? []) as PaymentFinalizationSignalRow[],
+      paymentSignals: failedJobs,
       monthlyChildren: monthlyChildRows,
-      earningsRows: (earningsRows.data ?? []) as BookingEarningsHealthRow[],
-      payoutRows: (payoutRows.data ?? []) as PayoutEligibilityHealthRow[],
-      recurringRows: (recurringRows.data ?? []) as RecurringMonthlyDriftBookingRow[],
+      earningsRows,
+      payoutRows,
+      recurringRows,
       recurringInvoicesById: invoiceMap,
-      dispatchRows: (dispatchRows.data ?? []) as DispatchHealthRow[],
-      cronRows: (cronRows.data ?? []) as CronRunHealthRow[],
+      dispatchRows,
+      cronRows,
       expectedCronJobs: options?.expectedCronJobs ?? DEFAULT_PRODUCTION_HEALTH_CRON_JOBS,
-      durationFallbackLogs: (durationLogs.data ?? []) as SystemLogHealthRow[],
-      workloadForceOverrideLogs: (workloadLogs.data ?? []) as SystemLogHealthRow[],
+      durationFallbackLogs: durationLogs,
+      workloadForceOverrideLogs: workloadLogs,
+      scannerFailures: failures,
     });
 
     if (options?.recordMetrics === true) await recordProductionHealthSummaryMetrics(summary);
     return summary;
   } catch (err) {
-    const summary = buildProductionHealthSummary({ now: options?.now, scanLimit });
+    const summary = buildProductionHealthSummary({
+      now: options?.now,
+      scanLimit,
+      scannerFailures: [{ scanner: "production_health_scan", message: errorMessage(err) }],
+    });
     await logSystemEvent({
       level: "error",
       source: "production_health",

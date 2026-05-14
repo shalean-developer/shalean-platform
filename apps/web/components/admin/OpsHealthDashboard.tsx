@@ -87,6 +87,26 @@ function shortId(id: string): string {
   return `${s.slice(0, 8)}...${s.slice(-6)}`;
 }
 
+function diagnosticLines(diagnostics?: Record<string, unknown>): string[] {
+  if (!diagnostics) return [];
+  const errors = Array.isArray(diagnostics.errors) ? diagnostics.errors : [];
+  if (errors.length > 0) {
+    return errors.slice(0, 4).map((entry) => {
+      if (entry && typeof entry === "object") {
+        const e = entry as { scanner?: unknown; message?: unknown; code?: unknown };
+        const scanner = String(e.scanner ?? "scanner");
+        const message = String(e.message ?? "unknown error");
+        const code = e.code ? ` (${String(e.code)})` : "";
+        return `${scanner}: ${message}${code}`;
+      }
+      return String(entry);
+    });
+  }
+  return Object.entries(diagnostics)
+    .slice(0, 4)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`);
+}
+
 export function OpsHealthDashboard({ data }: Props) {
   const status = statusCopy[data.status];
   const StatusIcon = data.status === "healthy" ? CheckCircle2 : data.status === "critical" ? ShieldAlert : AlertTriangle;
@@ -176,6 +196,18 @@ export function OpsHealthDashboard({ data }: Props) {
                           </code>
                         ))}
                       </div>
+                    </div>
+                  ) : null}
+                  {diagnosticLines(finding.diagnostics).length > 0 ? (
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Diagnostics</p>
+                      <ul className="mt-1 space-y-1">
+                        {diagnosticLines(finding.diagnostics).map((line) => (
+                          <li key={line} className="break-words text-xs">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   ) : null}
                 </div>

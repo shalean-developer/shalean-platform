@@ -53,6 +53,28 @@ function criticalSummary(scanLimit = 500) {
   };
 }
 
+function degradedSummary(scanLimit = 500) {
+  return {
+    ok: true as const,
+    degraded: true,
+    generatedAt: "2026-05-14T10:00:00.000Z",
+    scanLimit,
+    findings: [
+      {
+        code: "scanner_query_failed",
+        severity: "high",
+        count: 1,
+        message: "One or more Ops Health scanners could not read all required data.",
+        sampleIds: ["payment_finalization_jobs"],
+        diagnostics: {
+          errors: [{ scanner: "payment_finalization_jobs", message: "failed_jobs unavailable" }],
+        },
+      },
+    ],
+    totals: { critical: 0, high: 1, medium: 0, low: 0, info: 0 },
+  };
+}
+
 describe("GET /api/admin/ops-health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -138,6 +160,44 @@ describe("GET /api/admin/ops-health", () => {
       sampleIds: { payment_verified_not_finalized: ["job-1", "job-2"] },
     });
     expect(json.summaries).toHaveLength(1);
+  });
+
+  it("returns degraded status when scanner reports partial query failure", async () => {
+    mocks.runProductionHealthScan.mockResolvedValueOnce(degradedSummary(200));
+
+    const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=200"));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({
+      ok: true,
+      status: "degraded",
+      degraded: true,
+      lastScan: { scanLimit: 200, degraded: true },
+      counts: { high: 1, totalFindings: 1 },
+      sampleIds: { scanner_query_failed: ["payment_finalization_jobs"] },
+    });
+    expect(json.summaries[0]).toMatchObject({
+      code: "scanner_query_failed",
+      diagnostics: {
+        errors: [{ scanner: "payment_finalization_jobs", message: "failed_jobs unavailable" }],
+      },
+    });
+  });
+
+  it("keeps healthy empty scans healthy", async () => {
+    mocks.runProductionHealthScan.mockResolvedValueOnce(healthySummary(25));
+
+    const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=25"));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({
+      status: "healthy",
+      degraded: false,
+      lastScan: { scanLimit: 25, degraded: false },
+      summaries: [],
+    });
   });
 
   it("returns a safe degraded response when scanner throws", async () => {

@@ -62,17 +62,18 @@ function responseFromSummary(params: {
   error?: string;
 }): AdminOpsHealthResponse {
   const { summary, degraded, metricsRecorded, error } = params;
+  const isDegraded = degraded || summary.degraded === true;
   return {
     ok: true,
-    status: statusFromSummary(summary, degraded),
-    degraded,
+    status: statusFromSummary(summary, isDegraded),
+    degraded: isDegraded,
     ...(error ? { error } : {}),
     generatedAt: summary.generatedAt,
     lastScan: {
       source: "production_health",
       scanLimit: summary.scanLimit,
       metricsRecorded,
-      degraded,
+      degraded: isDegraded,
     },
     counts: {
       ...summary.totals,

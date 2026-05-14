@@ -20,6 +20,7 @@ import {
   detectPaymentFinalizationDrift,
   detectStaleCronRuns,
   recordProductionHealthMetric,
+  runProductionHealthScan,
 } from "@/lib/observability/productionHealthMetrics";
 
 describe("productionHealthMetrics", () => {
@@ -218,5 +219,59 @@ describe("productionHealthMetrics", () => {
         value: 1,
       }),
     ).resolves.toEqual({ ok: false, error: "log sink down" });
+  });
+
+  it("represents Supabase query errors as degraded scanner findings", async () => {
+    const queryResults = [
+      { data: [], error: { message: "failed_jobs unavailable", code: "PGRST500" } },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+    ];
+    const admin = {
+      from: vi.fn(() => {
+        const builder = {
+          select: vi.fn(() => builder),
+          in: vi.fn(() => builder),
+          order: vi.fn(() => builder),
+          limit: vi.fn(() => Promise.resolve(queryResults.shift() ?? { data: [], error: null })),
+          not: vi.fn(() => builder),
+          eq: vi.fn(() => builder),
+          or: vi.fn(() => builder),
+          gte: vi.fn(() => builder),
+        };
+        return builder;
+      }),
+    };
+
+    const summary = await runProductionHealthScan(admin as never, {
+      scanLimit: 25,
+      now: new Date("2026-05-14T10:00:00.000Z"),
+      expectedCronJobs: [],
+    });
+
+    expect(summary.degraded).toBe(true);
+    expect(summary.findings).toContainEqual(
+      expect.objectContaining({
+        code: "scanner_query_failed",
+        severity: "high",
+        sampleIds: ["payment_finalization_jobs"],
+        diagnostics: expect.objectContaining({
+          errors: [
+            {
+              scanner: "payment_finalization_jobs",
+              message: "failed_jobs unavailable",
+              code: "PGRST500",
+            },
+          ],
+        }),
+      }),
+    );
   });
 });

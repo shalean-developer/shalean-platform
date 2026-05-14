@@ -91,4 +91,31 @@ describe("OpsHealthDashboard", () => {
     expect(html).toContain("metrics recorded");
     expect(html).toContain("degraded");
   });
+
+  it("renders degraded scanner diagnostics", () => {
+    const html = render(
+      payload({
+        status: "degraded",
+        degraded: true,
+        counts: { critical: 0, high: 1, medium: 0, low: 0, info: 0, totalFindings: 1 },
+        summaries: [
+          {
+            code: "scanner_query_failed",
+            severity: "high",
+            count: 1,
+            message: "One or more Ops Health scanners could not read all required data.",
+            sampleIds: ["payment_finalization_jobs"],
+            diagnostics: {
+              errors: [{ scanner: "payment_finalization_jobs", message: "failed_jobs unavailable", code: "PGRST500" }],
+            },
+          },
+        ],
+        sampleIds: { scanner_query_failed: ["payment_finalization_jobs"] },
+      }),
+    );
+
+    expect(html).toContain("scanner_query_failed");
+    expect(html).toContain("Diagnostics");
+    expect(html).toContain("payment_finalization_jobs: failed_jobs unavailable (PGRST500)");
+  });
 });
