@@ -4,6 +4,7 @@ import { adminMarkBookingPaidOperation } from "@/lib/booking/bookingOperations";
 import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertAdminMarkPaidNotMonthlyInvoiceChild } from "@/lib/admin/adminMarkPaidMonthlyChildGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,6 +67,31 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  const { data: bookingRow, error: bookingLoadErr } = await admin
+    .from("bookings")
+    .select("monthly_invoice_id, payment_status, is_monthly_billing_booking, billing_type")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (bookingLoadErr) {
+    return NextResponse.json({ ok: false, error: bookingLoadErr.message }, { status: 500 });
+  }
+  if (!bookingRow) {
+    return NextResponse.json({ ok: false, error: "Booking not found." }, { status: 404 });
+  }
+
+  const monthlyGuard = assertAdminMarkPaidNotMonthlyInvoiceChild(bookingRow);
+  if (!monthlyGuard.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: monthlyGuard.message,
+        code: monthlyGuard.code,
+        indicators: monthlyGuard.indicators,
+      },
+      { status: 409 },
+    );
   }
 
   const settlementMode = String(body.settlement_mode ?? "full").trim().toLowerCase();

@@ -21,6 +21,7 @@ import { processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/se
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { notifyCleanerBookingPaid } from "@/lib/notifications/notifyCleanerBookingPaid";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
+import { assertAdminMarkPaidNotMonthlyInvoiceChild } from "@/lib/admin/adminMarkPaidMonthlyChildGuard";
 
 export type AdminMarkPaidMethod = "cash" | "zoho" | "eft";
 
@@ -252,7 +253,7 @@ export async function adminMarkBookingPaid(
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_completed_at, customer_email, user_id, created_at, booking_snapshot, date, time, city_id, total_price, total_paid_cents, amount_paid_cents, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, paystack_reference, dispatch_status, assignment_type, payment_mismatch",
+      "id, status, payment_status, payment_completed_at, customer_email, user_id, created_at, booking_snapshot, date, time, city_id, total_price, total_paid_cents, amount_paid_cents, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, paystack_reference, dispatch_status, assignment_type, payment_mismatch, monthly_invoice_id, is_monthly_billing_booking, billing_type",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -263,6 +264,7 @@ export async function adminMarkBookingPaid(
 
   const b = row as {
     status?: string | null;
+    payment_status?: string | null;
     payment_completed_at?: string | null;
     customer_email?: string | null;
     user_id?: string | null;
@@ -277,7 +279,15 @@ export async function adminMarkBookingPaid(
     cleaner_id?: string | null;
     selected_cleaner_id?: string | null;
     paystack_reference?: string | null;
+    monthly_invoice_id?: string | null;
+    is_monthly_billing_booking?: boolean | null;
+    billing_type?: string | null;
   };
+
+  const monthlyGuard = assertAdminMarkPaidNotMonthlyInvoiceChild(b);
+  if (!monthlyGuard.ok) {
+    return { ok: false, error: monthlyGuard.message, httpStatus: 409 };
+  }
 
   /**
    * M-2: capture the existing `paystack_reference` BEFORE we touch the row so we can:
