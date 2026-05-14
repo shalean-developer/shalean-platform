@@ -3,11 +3,18 @@ import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun, logSystemEvent } from "@/lib/logging/systemLog";
+import { listOpsHealthAcknowledgements } from "@/lib/observability/opsHealthAcknowledgements";
+import {
+  recordOpsHealthAlertCooldownMarker,
+  selectOpsHealthAlertCandidatesSafe,
+  type OpsHealthAlertCandidate,
+} from "@/lib/observability/opsHealthAlerts";
 import {
   buildProductionHealthSummary,
   runProductionHealthScan,
   type ProductionHealthSummary,
 } from "@/lib/observability/productionHealthMetrics";
+import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,6 +23,14 @@ export const dynamic = "force-dynamic";
 const DEFAULT_SCAN_LIMIT = 500;
 const MAX_SCAN_LIMIT = 5_000;
 const JOB_NAME = "ops-health";
+
+type OpsHealthCronAlertSummary = {
+  enabled: boolean;
+  candidates: number;
+  sent: number;
+  suppressed: number;
+  errors: string[];
+};
 
 function clampScanLimit(raw: string | null): number {
   const n = Number(raw);
@@ -49,6 +64,70 @@ function responseFromSummary(summary: ProductionHealthSummary) {
       diagnostics: finding.diagnostics,
     })),
   };
+}
+
+function alertsEnabled(): boolean {
+  return process.env.OPS_HEALTH_ALERTS_ENABLED === "true";
+}
+
+function alertMessage(candidate: OpsHealthAlertCandidate): string {
+  return `[Ops Health] ${candidate.severity.toUpperCase()} ${candidate.code}: ${candidate.message}`;
+}
+
+async function processAlertPolicy(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  summary: ProductionHealthSummary,
+): Promise<OpsHealthCronAlertSummary> {
+  if (!alertsEnabled()) {
+    return { enabled: false, candidates: 0, sent: 0, suppressed: 0, errors: [] };
+  }
+
+  const errors: string[] = [];
+  let sent = 0;
+  let suppressed = 0;
+
+  try {
+    const acknowledgements = await listOpsHealthAcknowledgements(admin).catch(() => []);
+    const selection = await selectOpsHealthAlertCandidatesSafe(admin, summary, { acknowledgements });
+    suppressed += selection.suppressed.length;
+    errors.push(...selection.errors);
+
+    for (const candidate of selection.candidates) {
+      try {
+        await postDispatchControlAlert(
+          {
+            errorType: `ops_health_${candidate.code}`,
+            message: alertMessage(candidate),
+            dedupeKey: `ops_health:${candidate.cooldownKey}`,
+            dedupeWindowMinutes: candidate.cooldownMinutes,
+            extra: candidate.payload,
+          },
+          { supabase: admin },
+        );
+        const marker = await recordOpsHealthAlertCooldownMarker(admin, candidate);
+        if (!marker.ok) errors.push(marker.error);
+        sent += 1;
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    return {
+      enabled: true,
+      candidates: selection.candidates.length,
+      sent,
+      suppressed,
+      errors: errors.slice(0, 10),
+    };
+  } catch (err) {
+    return {
+      enabled: true,
+      candidates: 0,
+      sent,
+      suppressed,
+      errors: [err instanceof Error ? err.message : String(err)].slice(0, 10),
+    };
+  }
 }
 
 async function logSummary(summary: ProductionHealthSummary): Promise<void> {
@@ -103,7 +182,8 @@ export async function POST(request: Request) {
           recordMetrics: true,
         });
         await logSummary(summary);
-        return responseFromSummary(summary);
+        const alerts = await processAlertPolicy(admin, summary);
+        return { ...responseFromSummary(summary), alerts };
       },
     );
 

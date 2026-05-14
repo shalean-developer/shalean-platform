@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   buildProductionHealthSummary: vi.fn(),
   logCronRun: vi.fn(),
   logSystemEvent: vi.fn(),
+  listOpsHealthAcknowledgements: vi.fn(),
+  selectOpsHealthAlertCandidatesSafe: vi.fn(),
+  recordOpsHealthAlertCooldownMarker: vi.fn(),
+  postDispatchControlAlert: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -30,6 +34,19 @@ vi.mock("@/lib/observability/productionHealthMetrics", async (importOriginal) =>
     buildProductionHealthSummary: mocks.buildProductionHealthSummary,
   };
 });
+
+vi.mock("@/lib/observability/opsHealthAcknowledgements", () => ({
+  listOpsHealthAcknowledgements: mocks.listOpsHealthAcknowledgements,
+}));
+
+vi.mock("@/lib/observability/opsHealthAlerts", () => ({
+  selectOpsHealthAlertCandidatesSafe: mocks.selectOpsHealthAlertCandidatesSafe,
+  recordOpsHealthAlertCooldownMarker: mocks.recordOpsHealthAlertCooldownMarker,
+}));
+
+vi.mock("@/lib/ops/dispatchControlWebhook", () => ({
+  postDispatchControlAlert: mocks.postDispatchControlAlert,
+}));
 
 import { POST } from "../route";
 
@@ -63,6 +80,48 @@ function degradedSummary(scanLimit = 500) {
   };
 }
 
+function criticalSummary(scanLimit = 500) {
+  return {
+    ok: true as const,
+    generatedAt: "2026-05-14T10:00:00.000Z",
+    scanLimit,
+    findings: [
+      {
+        code: "payment_verified_not_finalized",
+        severity: "critical",
+        count: 1,
+        message: "Verified payment was not finalized.",
+        sampleIds: ["failed-job-1"],
+      },
+    ],
+    totals: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+  };
+}
+
+function alertCandidate() {
+  return {
+    code: "payment_verified_not_finalized",
+    severity: "critical",
+    count: 1,
+    message: "Verified payment has not finalized into booking settlement.",
+    sampleIds: ["failed-job-1"],
+    findingKey: "payment_verified_not_finalized:failed-job-1",
+    cooldownKey: "payment_verified_not_finalized",
+    cooldownMinutes: 15,
+    payload: {
+      kind: "ops_health_alert",
+      code: "payment_verified_not_finalized",
+      severity: "critical",
+      count: 1,
+      message: "Verified payment has not finalized into booking settlement.",
+      sampleIds: ["failed-job-1"],
+      findingKey: "payment_verified_not_finalized:failed-job-1",
+      cooldownKey: "payment_verified_not_finalized",
+      generatedAt: "2026-05-14T10:00:00.000Z",
+    },
+  };
+}
+
 function request(path = "http://localhost/api/cron/ops-health?scanLimit=250", token = "secret") {
   return new Request(path, {
     method: "POST",
@@ -74,11 +133,16 @@ describe("POST /api/cron/ops-health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.CRON_SECRET = "secret";
+    delete process.env.OPS_HEALTH_ALERTS_ENABLED;
     mocks.getSupabaseAdmin.mockReturnValue({ from: vi.fn() });
     mocks.runProductionHealthScan.mockResolvedValue(healthySummary(250));
     mocks.buildProductionHealthSummary.mockReturnValue(degradedSummary(250));
     mocks.logCronRun.mockResolvedValue(undefined);
     mocks.logSystemEvent.mockResolvedValue(undefined);
+    mocks.listOpsHealthAcknowledgements.mockResolvedValue([]);
+    mocks.selectOpsHealthAlertCandidatesSafe.mockResolvedValue({ ok: true, candidates: [], suppressed: [], errors: [] });
+    mocks.recordOpsHealthAlertCooldownMarker.mockResolvedValue({ ok: true });
+    mocks.postDispatchControlAlert.mockResolvedValue(undefined);
     mocks.withCronLock.mockImplementation(async (_admin, _opts, fn) => ({
       ok: true,
       skipped: false,
@@ -126,6 +190,133 @@ describe("POST /api/cron/ops-health", () => {
       ok: true,
       status: "healthy",
       counts: { totalFindings: 0 },
+      alerts: { enabled: false, candidates: 0, sent: 0, suppressed: 0, errors: [] },
+    });
+  });
+
+  it("does not evaluate or send Ops Health alerts when the feature flag is off", async () => {
+    mocks.runProductionHealthScan.mockResolvedValueOnce(criticalSummary(250));
+
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({
+      status: "critical",
+      alerts: { enabled: false, candidates: 0, sent: 0, suppressed: 0, errors: [] },
+    });
+    expect(mocks.listOpsHealthAcknowledgements).not.toHaveBeenCalled();
+    expect(mocks.selectOpsHealthAlertCandidatesSafe).not.toHaveBeenCalled();
+    expect(mocks.postDispatchControlAlert).not.toHaveBeenCalled();
+    expect(mocks.recordOpsHealthAlertCooldownMarker).not.toHaveBeenCalled();
+  });
+
+  it("sends alert candidates when the feature flag is on", async () => {
+    process.env.OPS_HEALTH_ALERTS_ENABLED = "true";
+    const candidate = alertCandidate();
+    mocks.runProductionHealthScan.mockResolvedValueOnce(criticalSummary(250));
+    mocks.selectOpsHealthAlertCandidatesSafe.mockResolvedValueOnce({
+      ok: true,
+      candidates: [candidate],
+      suppressed: [],
+      errors: [],
+    });
+
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mocks.listOpsHealthAcknowledgements).toHaveBeenCalledWith(expect.anything());
+    expect(mocks.selectOpsHealthAlertCandidatesSafe).toHaveBeenCalledWith(expect.anything(), criticalSummary(250), {
+      acknowledgements: [],
+    });
+    expect(mocks.postDispatchControlAlert).toHaveBeenCalledWith(
+      {
+        errorType: "ops_health_payment_verified_not_finalized",
+        message: "[Ops Health] CRITICAL payment_verified_not_finalized: Verified payment has not finalized into booking settlement.",
+        dedupeKey: "ops_health:payment_verified_not_finalized",
+        dedupeWindowMinutes: 15,
+        extra: candidate.payload,
+      },
+      { supabase: expect.anything() },
+    );
+    expect(mocks.recordOpsHealthAlertCooldownMarker).toHaveBeenCalledWith(expect.anything(), candidate);
+    expect(json.alerts).toEqual({ enabled: true, candidates: 1, sent: 1, suppressed: 0, errors: [] });
+  });
+
+  it("suppresses acknowledged findings through the alert policy selection", async () => {
+    process.env.OPS_HEALTH_ALERTS_ENABLED = "true";
+    const ack = {
+      key: "payment_verified_not_finalized:failed-job-1",
+      code: "payment_verified_not_finalized",
+      sampleIds: ["failed-job-1"],
+      status: "acknowledged",
+      createdAt: "2026-05-14T10:05:00.000Z",
+    };
+    mocks.runProductionHealthScan.mockResolvedValueOnce(criticalSummary(250));
+    mocks.listOpsHealthAcknowledgements.mockResolvedValueOnce([ack]);
+    mocks.selectOpsHealthAlertCandidatesSafe.mockResolvedValueOnce({
+      ok: true,
+      candidates: [],
+      suppressed: [],
+      errors: [],
+    });
+
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mocks.selectOpsHealthAlertCandidatesSafe).toHaveBeenCalledWith(expect.anything(), criticalSummary(250), {
+      acknowledgements: [ack],
+    });
+    expect(mocks.postDispatchControlAlert).not.toHaveBeenCalled();
+    expect(json.alerts).toEqual({ enabled: true, candidates: 0, sent: 0, suppressed: 0, errors: [] });
+  });
+
+  it("reports cooldown-suppressed duplicate alerts", async () => {
+    process.env.OPS_HEALTH_ALERTS_ENABLED = "true";
+    mocks.runProductionHealthScan.mockResolvedValueOnce(criticalSummary(250));
+    mocks.selectOpsHealthAlertCandidatesSafe.mockResolvedValueOnce({
+      ok: true,
+      candidates: [],
+      suppressed: [{ candidate: alertCandidate(), reason: "cooldown", latestAt: "2026-05-14T09:55:00.000Z" }],
+      errors: [],
+    });
+
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mocks.postDispatchControlAlert).not.toHaveBeenCalled();
+    expect(mocks.recordOpsHealthAlertCooldownMarker).not.toHaveBeenCalled();
+    expect(json.alerts).toEqual({ enabled: true, candidates: 0, sent: 0, suppressed: 1, errors: [] });
+  });
+
+  it("does not fail cron when webhook delivery fails", async () => {
+    process.env.OPS_HEALTH_ALERTS_ENABLED = "true";
+    mocks.runProductionHealthScan.mockResolvedValueOnce(criticalSummary(250));
+    mocks.selectOpsHealthAlertCandidatesSafe.mockResolvedValueOnce({
+      ok: true,
+      candidates: [alertCandidate()],
+      suppressed: [],
+      errors: [],
+    });
+    mocks.postDispatchControlAlert.mockRejectedValueOnce(new Error("webhook down"));
+
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({
+      ok: true,
+      status: "critical",
+      alerts: {
+        enabled: true,
+        candidates: 1,
+        sent: 0,
+        suppressed: 0,
+        errors: ["webhook down"],
+      },
     });
   });
 
