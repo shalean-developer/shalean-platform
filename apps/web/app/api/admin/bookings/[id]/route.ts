@@ -38,6 +38,7 @@ import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
+import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -275,6 +276,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     body = (await request.json()) as PatchBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+  const assignmentGuard = assertAdminBookingPatchDoesNotMutateAssignmentFields(body as Record<string, unknown>);
+  if (!assignmentGuard.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: assignmentGuard.message,
+        code: assignmentGuard.code,
+        blocked_fields: assignmentGuard.blockedFields,
+      },
+      { status: 409 },
+    );
   }
   const updates: Record<string, unknown> = {};
 
