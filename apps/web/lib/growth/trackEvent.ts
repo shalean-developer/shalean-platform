@@ -5,12 +5,6 @@ import { tagReplay } from "@/lib/analytics/sessionReplay";
 import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
 import { ANALYTICS_EVENTS, type AnalyticsClientEventName } from "@/lib/analytics/userEventRegistry";
 
-declare global {
-  interface Window {
-    gtag?: (...args: unknown[]) => void;
-  }
-}
-
 export type GrowthEventType = AnalyticsClientEventName;
 
 const RETARGETING_KEY = "shalean_retargeting_pending";
@@ -51,10 +45,9 @@ export function markRetargetingCandidate(enabled: boolean): void {
   else window.localStorage.removeItem(RETARGETING_KEY);
 }
 
-function forwardToGa4(eventType: GrowthEventType, payload: Record<string, unknown>): void {
+/** SEO growth signals for GTM → GA4 (no direct `gtag` / measurement id in the app bundle). */
+function pushSeoGrowthEventToDataLayer(eventType: GrowthEventType, payload: Record<string, unknown>): void {
   if (typeof window === "undefined") return;
-  const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
-  if (!measurementId || typeof window.gtag !== "function") return;
   const name =
     eventType === ANALYTICS_EVENTS.SEO_LOCATION_SCROLL
       ? "seo_scroll_depth"
@@ -68,8 +61,11 @@ function forwardToGa4(eventType: GrowthEventType, payload: Record<string, unknow
               ? "seo_pricing_click"
               : eventType;
   try {
-    window.gtag("event", name, {
-      measurement_id: measurementId,
+    type DataLayerWindow = Window & { dataLayer?: Record<string, unknown>[] };
+    const w = window as DataLayerWindow;
+    w.dataLayer = w.dataLayer || [];
+    w.dataLayer.push({
+      event: name,
       event_category: "seo_growth",
       event_type: eventType,
       ...payload,
@@ -114,7 +110,7 @@ export function trackGrowthEvent(
     eventType === ANALYTICS_EVENTS.SEO_FAQ_EXPAND ||
     eventType === ANALYTICS_EVENTS.SEO_PRICING_INTERACTION
   ) {
-    forwardToGa4(eventType, enriched);
+    pushSeoGrowthEventToDataLayer(eventType, enriched);
   }
 
   try {

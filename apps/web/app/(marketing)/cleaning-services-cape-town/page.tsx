@@ -13,41 +13,42 @@ import { WhyChooseUs } from "@/components/locations/cape-town-cleaning-services/
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
-import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import {
+  CLEANING_SERVICES_CAPE_TOWN_HUB_DESCRIPTION,
+  CLEANING_SERVICES_CAPE_TOWN_HUB_PATH,
+  cleaningServicesCapeTownHubJsonLdScriptContent,
+} from "@/lib/seo/cleaningServicesCapeTownHub";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
-const PATH = "/cleaning-services-cape-town";
-const CANONICAL_ABSOLUTE = absoluteCanonicalUrl(PATH);
+const CANONICAL_ABSOLUTE = absoluteCanonicalUrl(CLEANING_SERVICES_CAPE_TOWN_HUB_PATH);
 const OG = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
-
-const CT_CLEANING_HUB_DESC = clampMetaDescription(
-  "Book reliable cleaning services in Cape Town. Trusted cleaners, flexible scheduling, and instant quotes for homes, apartments, and Airbnb properties.",
-);
 
 export const metadata: Metadata = {
   title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
-  description: CT_CLEANING_HUB_DESC,
+  description: CLEANING_SERVICES_CAPE_TOWN_HUB_DESCRIPTION,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL_ABSOLUTE },
   openGraph: {
     type: "website",
     url: CANONICAL_ABSOLUTE,
     title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
-    description: CT_CLEANING_HUB_DESC,
+    description: CLEANING_SERVICES_CAPE_TOWN_HUB_DESCRIPTION,
     images: [{ url: OG, width: 1024, height: 576, alt: "Home cleaning services in Cape Town" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Cleaning Services Cape Town | Book Trusted Cleaners | Shalean",
-    description: CT_CLEANING_HUB_DESC,
+    description: CLEANING_SERVICES_CAPE_TOWN_HUB_DESCRIPTION,
     images: [OG],
   },
 };
 
 export default function CleaningServicesCapeTownPage() {
+  const hubJsonLd = cleaningServicesCapeTownHubJsonLdScriptContent();
   return (
     <MarketingLayout>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: hubJsonLd }} />
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{

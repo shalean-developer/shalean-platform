@@ -50,6 +50,11 @@ function normalizeSitemapUrl(url: string): string {
 
 /**
  * Public index URLs with priorities. De-duplicates by normalized URL (e.g. trailing slashes).
+ *
+ * **Excluded by design** (canonical elsewhere or `noindex`):
+ * - `/blog/tag/*`, `/blog/category/*` — taxonomy shells (`noindex,follow`); not listed.
+ * - Any `/blog/{slug}` that 301s (see `shouldExcludeBlogSlugFromSitemap` + `programmaticBlogCleanupRedirects`).
+ * - Paystack return paths (`SITEMAP_EXCLUDED_PATHNAMES`).
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
@@ -117,8 +122,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const blogPriority = commercialBlogSlugHints.has(slug) ? 0.72 : 0.68;
     push(`${SITE_ORIGIN}/blog/${slug}`, blogPriority);
   }
-
-  /** Tag/category archives are `noindex` — omit from sitemap to match robots & save crawl budget. */
 
   return entries;
 }

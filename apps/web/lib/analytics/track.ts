@@ -1,6 +1,6 @@
 /**
  * SEO growth analytics — thin helpers over {@link trackGrowthEvent}.
- * Persists to `user_events` via `/api/analytics/event` (+ optional GA4 via `gtag` when configured).
+ * Persists to `user_events` via `/api/analytics/event`; SEO events also `dataLayer.push` for GTM → GA4.
  *
  * Example payloads (stored in `payload` JSON):
  *

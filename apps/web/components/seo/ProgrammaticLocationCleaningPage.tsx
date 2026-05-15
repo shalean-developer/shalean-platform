@@ -122,10 +122,7 @@ export function ProgrammaticLocationCleaningPage({
   const hubTier = hubContentTierFromPriority(seoPriority);
   const lifestyleDepth = buildLifestyleDepthParagraphs(location, hubTier);
   const stickyBookingLine = locationStickyCtaLine(location);
-  const h1 =
-    slug === "sea-point-cleaning-services" && seo?.h1?.trim()
-      ? seo.h1.trim()
-      : primaryLocationKeywordPhrase(location);
+  const h1 = seo?.h1?.trim() ? seo.h1.trim() : primaryLocationKeywordPhrase(location);
   const intro = seo?.intro?.length
     ? mergeIntroWithPrimaryKeyword(seo.intro, location)
     : buildStructuredLocationIntro(location);

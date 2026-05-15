@@ -9,7 +9,7 @@ import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 
 /** Bump when refreshing hub copy site-wide (JSON-LD freshness signal). */
-export const LOCATION_HUB_SCHEMA_DATE_MODIFIED = "2026-05-05";
+export const LOCATION_HUB_SCHEMA_DATE_MODIFIED = "2026-05-15";
 
 export type LocationHubFaqItem = { q: string; a: string };
 

@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
-import { isNonIndexableMarketingPath } from "@/lib/seo/indexationRules";
-import { SEO_INDEX_FOLLOW, SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -35,12 +34,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = clampMetaDescription(
     `Posts tagged “${label}”—practical Cape Town cleaning tips, scopes, and instant-quote booking from Shalean.`,
   );
-  const robots = isNonIndexableMarketingPath(`/blog/tag/${slug}`) ? SEO_NOINDEX_FOLLOW : SEO_INDEX_FOLLOW;
   return {
     title,
     description,
     alternates: { canonical: canonicalAbs },
-    robots,
+    robots: SEO_NOINDEX_FOLLOW,
     openGraph: {
       title,
       description,

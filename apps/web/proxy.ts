@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getLocation } from "@/lib/locations";
+import { resolveLegacyGrowthLocal, resolveLegacySingularLocation } from "@/lib/seo/legacyPhase1EdgeRedirects";
 import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
 
@@ -34,6 +35,31 @@ async function runProxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  /** `/location/{city}/{suburb}` (singular) — hub, JHB growth page, or 410 (never `/` or weak catalogue). */
+  const legacySingularLocation = pathname.match(/^\/location\/([^/]+)\/([^/]+)\/?$/);
+  if (legacySingularLocation) {
+    const city = legacySingularLocation[1] ?? "";
+    const suburb = legacySingularLocation[2] ?? "";
+    const resolved = resolveLegacySingularLocation(city, suburb);
+    if (resolved.type === "gone") {
+      return new NextResponse(null, { status: 410 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = resolved.pathname;
+    return NextResponse.redirect(url, 308);
+  }
+
+  /** `/growth/local/*` — Stage 19, else `/services/*-cape-town` by intent, else 410. */
+  const growthLocal = resolveLegacyGrowthLocal(pathname);
+  if (growthLocal !== null) {
+    if (growthLocal.type === "gone") {
+      return new NextResponse(null, { status: 410 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = growthLocal.pathname;
+    return NextResponse.redirect(url, 308);
+  }
+
   /** Thin “best cleaners in {area}” clones → canonical suburb hub (`/locations/{area}-cleaning-services`). */
   const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
   if (bestCleaningBlog) {
@@ -41,7 +67,6 @@ async function runProxy(request: NextRequest) {
     if (area) {
       const url = request.nextUrl.clone();
       url.pathname = `/locations/${area}-cleaning-services`;
-      url.search = "";
       return NextResponse.redirect(url, 308);
     }
   }
@@ -53,12 +78,10 @@ async function runProxy(request: NextRequest) {
     if (svc?.citySlug === "cape-town" && segment === "cape-town") {
       const url = request.nextUrl.clone();
       url.pathname = "/services/standard-cleaning-cape-town";
-      url.search = "";
       return NextResponse.redirect(url, 308);
     }
     const url = request.nextUrl.clone();
     url.pathname = locationHubPathFromAreaInput(segment);
-    url.search = "";
     return NextResponse.redirect(url, 308);
   }
 
@@ -69,12 +92,10 @@ async function runProxy(request: NextRequest) {
     if (svc?.citySlug === "cape-town" && segment === "cape-town") {
       const url = request.nextUrl.clone();
       url.pathname = "/services/standard-cleaning-cape-town";
-      url.search = "";
       return NextResponse.redirect(url, 308);
     }
     const url = request.nextUrl.clone();
     url.pathname = locationHubPathFromAreaInput(segment);
-    url.search = "";
     return NextResponse.redirect(url, 308);
   }
 
