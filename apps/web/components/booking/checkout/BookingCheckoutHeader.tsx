@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
-import Image from "next/image";
+import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, LogOut, UserRound } from "lucide-react";
@@ -165,17 +165,10 @@ function MobileBrandMark() {
   return (
     <Link
       href="/"
-      className="relative flex h-9 w-9 shrink-0 overflow-hidden rounded-full bg-blue-600 ring-2 ring-blue-500/30 transition-opacity hover:opacity-90"
+      className="flex shrink-0 transition-opacity hover:opacity-90"
       aria-label="Shalean home"
     >
-      <Image
-        src="/images/shalean-logo.png"
-        alt=""
-        fill
-        className="object-contain p-1"
-        sizes="36px"
-        priority
-      />
+      <ShaleanNavLogo className="h-7 w-auto max-w-[120px]" intrinsicHeight={120} />
     </Link>
   );
 }
@@ -206,16 +199,8 @@ export function BookingCheckoutHeader({ currentStep }: BookingCheckoutHeaderProp
   const photo = user ? avatarUrl(user) : undefined;
 
   const logoBlock = (
-    <Link href="/" className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90">
-      <Image
-        src="/images/shalean-logo.png"
-        alt="Shalean"
-        width={120}
-        height={32}
-        className="h-6 w-auto shrink-0"
-        priority
-      />
-      <span className="hidden font-semibold text-lg text-zinc-900 sm:inline dark:text-zinc-50">Shalean</span>
+    <Link href="/" className="flex min-w-0 shrink-0 transition-opacity hover:opacity-90">
+      <ShaleanNavLogo className="h-7 w-auto max-w-[160px] sm:h-8 sm:max-w-[180px]" />
     </Link>
   );
 

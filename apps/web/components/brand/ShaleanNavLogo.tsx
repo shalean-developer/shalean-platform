@@ -2,30 +2,31 @@ import Image from "next/image";
 import { BRAND_ASSET_VERSION } from "@/lib/brandAssetVersion";
 import { cn } from "@/lib/utils";
 
+export const SHALEAN_LOGO_WIDTH = 709;
+export const SHALEAN_LOGO_HEIGHT = 204;
+
 type ShaleanNavLogoProps = {
-  /** Display box, e.g. `h-9 w-9 sm:h-10 sm:w-10` */
+  /** Display box, e.g. `h-8 w-auto sm:h-10` */
   className?: string;
-  /** `width` / `height` on `next/image` (keep ≥ display size for sharpness) */
-  intrinsicSize?: number;
+  /** Pixel height passed to `next/image` (keep ≥ rendered height for sharpness) */
+  intrinsicHeight?: number;
 };
 
 /**
- * Asset is processed to true transparency outside the blue disc (`process-shalean-logo.mjs`).
- * `object-contain` keeps the full mark without cropping.
+ * Full wordmark (`public/images/shalean-logo.png`). Transparent PNG; use `h-* w-auto` in `className`.
  */
-export function ShaleanNavLogo({ className, intrinsicSize = 128 }: ShaleanNavLogoProps) {
+export function ShaleanNavLogo({ className, intrinsicHeight = 204 }: ShaleanNavLogoProps) {
+  const intrinsicWidth = Math.round(intrinsicHeight * (SHALEAN_LOGO_WIDTH / SHALEAN_LOGO_HEIGHT));
+
   return (
     <Image
       key={BRAND_ASSET_VERSION}
       src={`/images/shalean-logo.png?v=${BRAND_ASSET_VERSION}`}
-      alt=""
-      width={intrinsicSize}
-      height={intrinsicSize}
-      className={cn(
-        "aspect-square shrink-0 rounded-lg object-contain object-center",
-        className,
-      )}
-      sizes="96px"
+      alt="Shalean Cleaning Services"
+      width={intrinsicWidth}
+      height={intrinsicHeight}
+      className={cn("h-auto w-auto shrink-0 object-contain object-left", className)}
+      sizes="(max-width: 640px) 140px, 200px"
       priority
     />
   );

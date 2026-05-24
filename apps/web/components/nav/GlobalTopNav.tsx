@@ -160,7 +160,7 @@ export function GlobalTopNav() {
     <header className="sticky top-0 z-50 border-b border-blue-100 bg-white/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Shalean home">
-          <ShaleanNavLogo className="h-10 w-10" />
+          <ShaleanNavLogo className="h-8 w-auto max-w-[148px] sm:h-9 sm:max-w-[168px]" />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
