@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
-import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
+import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
 import {
   allStandardDaySlots,
   BOOKING_MIN_LEAD_MINUTES,
@@ -68,12 +68,11 @@ function writeStoredBilling(userId: string, billing_type: string, schedule_type:
 }
 
 const SERVICE_OPTIONS: { value: BookingServiceId; label: string }[] = [
-  { value: "quick", label: "Quick" },
   { value: "standard", label: "Standard" },
   { value: "airbnb", label: "Airbnb" },
   { value: "deep", label: "Deep" },
-  { value: "carpet", label: "Carpet" },
   { value: "move", label: "Move-out" },
+  { value: "carpet", label: "Carpet" },
 ];
 
 type CustomerHit = {
@@ -301,10 +300,7 @@ export default function AdminCreateBookingPage() {
           ...s,
           selectedCustomer: hit,
           customerQuery: hit.email ?? hit.full_name ?? hit.id,
-          service:
-            (hit.schedule_type ?? "").toLowerCase() === "on_demand" && s.service === "standard"
-              ? ("airbnb" as BookingServiceId)
-              : s.service,
+          service: s.service,
         };
       });
     })();
@@ -713,11 +709,7 @@ export default function AdminCreateBookingPage() {
         const hit = (json.customers ?? []).find((c) => c.id === userId) ?? (json.customers ?? [])[0];
         if (!hit) return;
         hydratedSessionAddressUserRef.current = null;
-        const storedService = (typeof o.service === "string" ? o.service : "standard") as BookingServiceId;
-        const svc =
-          (hit.schedule_type ?? "").toLowerCase() === "on_demand" && storedService === "standard"
-            ? ("airbnb" as BookingServiceId)
-            : storedService;
+        const svc = parseBookingServiceId(o.service) ?? "standard";
         const sid = typeof o.saved_address_id === "string" ? o.saved_address_id : "";
         const loc = typeof o.location === "string" ? o.location : "";
         const extrasRaw = o.selected_extras;
@@ -771,7 +763,7 @@ export default function AdminCreateBookingPage() {
           ...s,
           date: typeof o.date === "string" ? o.date : s.date,
           time: normalizeTimeHm(typeof o.time === "string" ? o.time : s.time),
-          service: (typeof o.service === "string" ? o.service : s.service) as BookingServiceId,
+          service: parseBookingServiceId(o.service) ?? s.service,
           rooms:
             typeof o.rooms === "number" && Number.isFinite(o.rooms)
               ? String(Math.round(o.rooms))
@@ -1120,7 +1112,7 @@ export default function AdminCreateBookingPage() {
         const nextSid = typeof o.saved_address_id === "string" ? o.saved_address_id : s.savedAddressId;
         return {
           ...s,
-          service: (typeof o.service === "string" ? o.service : s.service) as BookingServiceId,
+          service: parseBookingServiceId(o.service) ?? s.service,
           rooms:
             typeof o.rooms === "number" && Number.isFinite(o.rooms)
               ? String(Math.round(o.rooms))
@@ -1261,10 +1253,7 @@ export default function AdminCreateBookingPage() {
                             savedAddressId: "",
                             useCustomAddress: false,
                             location: "",
-                            service:
-                              (hit.schedule_type ?? "").toLowerCase() === "on_demand"
-                                ? ("airbnb" as BookingServiceId)
-                                : s.service,
+                            service: s.service,
                           }));
                         }}
                       >
@@ -1450,7 +1439,7 @@ export default function AdminCreateBookingPage() {
                 id="service"
                 label="Service *"
                 value={form.service}
-                onChange={(e) => setForm((s) => ({ ...s, service: e.target.value as BookingServiceId }))}
+                onChange={(e) => setForm((s) => ({ ...s, service: parseBookingServiceId(e.target.value) ?? s.service }))}
                 disabled={submitting}
               >
                 {SERVICE_OPTIONS.map((o) => (

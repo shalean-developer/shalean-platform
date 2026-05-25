@@ -19,6 +19,7 @@ describe("normalizeBookingServiceIdForPayout", () => {
   it("falls back to label heuristics", () => {
     expect(normalizeBookingServiceIdForPayout(null, "Move In/Out Cleaning")).toBe("move");
     expect(normalizeBookingServiceIdForPayout(null, "Deep clean today")).toBe("deep");
+    expect(normalizeBookingServiceIdForPayout(null, "Quick clean")).toBe("standard");
   });
 });
 

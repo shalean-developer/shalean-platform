@@ -14,23 +14,21 @@ export type CleanerPreferencesPayload = {
 
 /** Service slugs aligned with `bookings.service_slug` / booking flow. */
 export const ADMIN_DISPATCH_SERVICE_SLUGS = [
-  "quick",
   "standard",
   "airbnb",
   "deep",
-  "carpet",
   "move",
+  "carpet",
 ] as const;
 
 export type AdminDispatchServiceSlug = (typeof ADMIN_DISPATCH_SERVICE_SLUGS)[number];
 
 export const ADMIN_DISPATCH_SERVICE_LABELS: Record<AdminDispatchServiceSlug, string> = {
-  quick: "Quick",
   standard: "Standard",
   airbnb: "Airbnb",
   deep: "Deep clean",
-  carpet: "Carpet",
   move: "Move-out / move-in",
+  carpet: "Carpet",
 };
 
 export const WEEKDAY_OPTIONS: { value: number; label: string }[] = [

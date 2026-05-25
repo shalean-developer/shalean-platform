@@ -517,7 +517,7 @@ export async function GET(request: Request) {
   });
 }
 
-const ADMIN_BOOKING_SERVICE_IDS = new Set<string>(["quick", "standard", "airbnb", "deep", "carpet", "move"]);
+const ADMIN_BOOKING_SERVICE_IDS = new Set<string>(["standard", "airbnb", "deep", "move", "carpet"]);
 
 /**
  * Admin: create a booking for an existing customer (monthly → no Paystack; per_booking → Paystack + notifications).
@@ -579,7 +579,7 @@ export async function POST(request: Request) {
   }
   if (!ADMIN_BOOKING_SERVICE_IDS.has(serviceRaw)) {
     return NextResponse.json(
-      { error: "Invalid service. Use one of: quick, standard, airbnb, deep, carpet, move." },
+      { error: "Invalid service. Use one of: standard, airbnb, deep, move, carpet." },
       { status: 400 },
     );
   }

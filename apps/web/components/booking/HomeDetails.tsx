@@ -63,13 +63,7 @@ export function HomeDetails({
       >
         <StepperInput
           label={seg ? "Beds" : "Bedrooms"}
-          description={
-            seg
-              ? undefined
-              : state.service === "quick"
-                ? "Bedrooms, living areas — Quick Clean caps main rooms at 5."
-                : "Bedrooms, living areas"
-          }
+          description={seg ? undefined : "Bedrooms, living areas"}
           value={state.rooms}
           min={1}
           max={maxRooms}

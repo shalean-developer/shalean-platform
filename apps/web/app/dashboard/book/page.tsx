@@ -19,7 +19,7 @@ import { Select } from "@/components/ui/select";
 import { DashboardPageSkeleton } from "@/components/dashboard/dashboard-skeletons";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const SERVICE_IDS: BookingServiceId[] = ["quick", "standard", "airbnb", "deep", "carpet", "move"];
+const SERVICE_IDS: BookingServiceId[] = ["standard", "airbnb", "deep", "move", "carpet"];
 
 function serviceOptions(): { id: BookingServiceId; name: string }[] {
   const out: { id: BookingServiceId; name: string }[] = [];

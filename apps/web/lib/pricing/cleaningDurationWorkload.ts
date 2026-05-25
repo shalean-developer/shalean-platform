@@ -81,25 +81,6 @@ export type DurationWorkloadResult = {
 };
 
 const SERVICE_DURATION_POLICIES: Record<BookingServiceId, ServiceDurationPolicy> = {
-  quick: {
-    serviceId: "quick",
-    label: "Quick Clean",
-    durationBasis: "room_based",
-    baseMinutes: 120,
-    bedroomMinutes: 20,
-    bathroomMinutes: 20,
-    extraRoomMinutes: 12,
-    minMinutes: 90,
-    maxMinutes: 300,
-    workloadBase: 0.8,
-    bedroomWorkload: 0.12,
-    bathroomWorkload: 0.12,
-    extraRoomWorkload: 0.06,
-    operationalComplexity: "routine",
-    teamScalable: false,
-    teamScalingBehavior: "single_cleaner_default",
-    recurringSnapshotCompatibility: "legacy_only",
-  },
   standard: {
     serviceId: "standard",
     label: "Standard Cleaning",

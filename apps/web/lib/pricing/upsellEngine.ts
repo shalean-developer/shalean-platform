@@ -56,10 +56,6 @@ export function getRecommendedExtraIds(input: UpsellContextInput, snapshot: Pric
     push("inside-fridge");
     push("inside-cabinets");
   }
-  if (svc === "quick") {
-    push("inside-fridge");
-    push("laundry");
-  }
   if (input.rooms >= 3) {
     push("inside-cabinets");
   }

@@ -8,6 +8,8 @@
  * traceability, Paystack dashboards, and finalize fallbacks.
  */
 
+import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
+
 export const PAYSTACK_CHECKOUT_METADATA_CONTRACT_VERSION = "2";
 
 const UUID_RE =
@@ -77,7 +79,7 @@ export function buildCanonicalPaystackCheckoutMetadata(
     cleaner_id: sel,
     cleaner_name: input.cleaner_name,
     assignment_type: input.assignment_type,
-    service_slug: input.service_slug.trim().toLowerCase(),
+    service_slug: canonicalizeBookingServiceSlug(input.service_slug),
     customer_email: input.customer_email,
     customer_name: input.customer_name,
     customer_phone: input.customer_phone,

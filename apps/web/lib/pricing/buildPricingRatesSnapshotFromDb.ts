@@ -5,24 +5,23 @@ import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pric
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 
 const SERVICE_KEYS: readonly BookingServiceId[] = [
-  "quick",
   "standard",
   "airbnb",
   "deep",
-  "carpet",
   "move",
+  "carpet",
 ];
 
 function serviceTypeToServiceIds(st: string): BookingServiceId[] {
   const s = st.trim().toLowerCase();
-  if (s === "light") return ["quick", "standard", "airbnb"];
+  if (s === "light") return ["standard", "airbnb"];
   if (s === "heavy") return ["deep", "move", "carpet"];
-  return ["quick", "standard", "airbnb", "deep", "carpet", "move"];
+  return ["standard", "airbnb", "deep", "move", "carpet"];
 }
 
 function scopeToBundleServices(scope: string): BookingServiceId[] | undefined {
   const s = scope.trim().toLowerCase();
-  if (s === "light") return ["quick", "standard", "airbnb"];
+  if (s === "light") return ["standard", "airbnb"];
   if (s === "heavy") return ["deep", "move", "carpet"];
   return undefined;
 }

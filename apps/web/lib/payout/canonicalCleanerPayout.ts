@@ -165,7 +165,6 @@ export function normalizeBookingServiceIdForPayout(
   if (s.includes("move")) return "move";
   if (s.includes("airbnb")) return "airbnb";
   if (s.includes("carpet")) return "carpet";
-  if (s.includes("quick")) return "quick";
   return "standard";
 }
 

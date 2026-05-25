@@ -2,12 +2,11 @@ import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 
 const SERVICE_KEYS: readonly BookingServiceId[] = [
-  "quick",
   "standard",
   "airbnb",
   "deep",
-  "carpet",
   "move",
+  "carpet",
 ];
 
 export type SnapshotExtraRow = {

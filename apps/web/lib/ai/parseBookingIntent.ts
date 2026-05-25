@@ -45,7 +45,6 @@ function pickService(text: string): BookingServiceId | null {
   if (/\bdeep\b/i.test(text)) return "deep";
   if (/\bmove\b|moving/i.test(text)) return "move";
   if (/\bcarpet\b/i.test(text)) return "carpet";
-  if (/\bquick\b|express/i.test(text)) return "quick";
   if (/\bstandard\b|regular\b|normal\b|clean(ing)?\b/i.test(text)) return "standard";
   return null;
 }

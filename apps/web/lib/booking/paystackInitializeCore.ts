@@ -85,6 +85,7 @@ import {
   buildCanonicalPaystackCheckoutMetadata,
   PAYSTACK_CHECKOUT_METADATA_CONTRACT_VERSION,
 } from "@/lib/booking/bookingPaystackCheckoutMetadataFlat";
+import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
 
@@ -760,8 +761,9 @@ export async function processPaystackInitializeBody(
   }
 
   const assignmentTypeForMeta = cleanerId ? "user_selected" : rowAssignmentType;
-  const serviceSlugForMeta =
-    rowServiceSlug || (locked.service ? adminBookingServiceSlug(String(locked.service)) : "");
+  const serviceSlugForMeta = canonicalizeBookingServiceSlug(
+    rowServiceSlug || (locked.service ? adminBookingServiceSlug(String(locked.service)) : ""),
+  );
 
   const bookingContextForMeta = {
     service: locked.service,

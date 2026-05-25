@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Building, Home, Sofa, Sparkles, Truck, Zap, type LucideIcon } from "lucide-react";
+import { Building, Home, Sofa, Sparkles, Truck, type LucideIcon } from "lucide-react";
 import { ServiceGridCard } from "@/components/booking/ServiceGridCard";
 import { formatServiceName } from "@/lib/booking/formatServiceName";
 import { cn } from "@/lib/utils";
@@ -13,14 +13,8 @@ export type ServiceGridItem = {
   Icon: LucideIcon;
 };
 
-/** Fixed 6 services — ids align with `BookingServiceId` / pricing catalog. */
+/** Fixed services — ids align with `BookingServiceId` / pricing catalog. */
 export const SERVICE_GRID_ITEMS: readonly ServiceGridItem[] = [
-  {
-    id: "quick",
-    name: "Quick",
-    description: "Fast refresh for light cleaning needs",
-    Icon: Zap,
-  },
   {
     id: "standard",
     name: "Standard",

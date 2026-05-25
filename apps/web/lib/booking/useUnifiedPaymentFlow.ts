@@ -17,6 +17,7 @@ import {
   normalizePaystackCleanerUuid,
   parseLockTimingFromBookingSnapshotJson,
 } from "@/lib/booking/bookingPaystackCheckoutMetadataFlat";
+import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
 
 type PaystackTransaction = { reference?: string };
 
@@ -75,7 +76,7 @@ export function buildInlinePaystackMetadata(
   const selId = normalizePaystackCleanerUuid(summary.selectedCleanerId ?? "");
   let assignmentStr = summary.assignmentType?.trim() ?? "";
   if (!assignmentStr && selId) assignmentStr = "user_selected";
-  const serviceSlug = summary.serviceSlug?.trim().toLowerCase() ?? "";
+  const serviceSlug = canonicalizeBookingServiceSlug(summary.serviceSlug ?? summary.service);
 
   return buildCanonicalPaystackCheckoutMetadata({
     payment_path: "inline_checkout",

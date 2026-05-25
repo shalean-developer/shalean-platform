@@ -57,7 +57,7 @@ type BookingDetails = {
   id: string;
   customer_email: string | null;
   service: string | null;
-  /** Catalog slug when persisted (`quick`, `standard`, `move`, …). */
+  /** Catalog slug when persisted (`standard`, `airbnb`, `move`, etc.). */
   service_slug?: string | null;
   date: string | null;
   time: string | null;
@@ -138,7 +138,7 @@ type BookingDetails = {
   payment_state?: string | null;
 };
 
-/** Solo-cleaner assign card: only these catalog services (deep/move/quick use dispatch / team flows). */
+/** Solo-cleaner assign card: only these catalog services (deep/move use dispatch / team flows). */
 const ADMIN_SOLO_CLEANER_DETAIL_CARD_SERVICES = new Set(["standard", "airbnb", "carpet"]);
 
 function adminBookingShowsSoloCleanerDetailCard(booking: BookingDetails): boolean {

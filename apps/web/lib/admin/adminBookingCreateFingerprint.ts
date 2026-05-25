@@ -2,17 +2,21 @@ import "server-only";
 
 import crypto from "crypto";
 
+import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
+
 /** Stable service slug for idempotency (must match admin POST body `service`). */
 export function adminBookingServiceSlug(serviceRaw: string): string {
-  return serviceRaw.trim().toLowerCase();
+  return canonicalizeBookingServiceSlug(serviceRaw);
 }
 
 /** Read slug from persisted booking snapshot (admin monthly, Paystack locked, or future rows). */
 export function serviceSlugFromBookingSnapshot(snap: unknown): string | null {
   if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
   const o = snap as { service_slug?: string; locked?: { service?: string } };
-  if (typeof o.service_slug === "string" && o.service_slug.trim()) return o.service_slug.trim().toLowerCase();
-  if (typeof o.locked?.service === "string" && o.locked.service.trim()) return o.locked.service.trim().toLowerCase();
+  if (typeof o.service_slug === "string" && o.service_slug.trim()) return canonicalizeBookingServiceSlug(o.service_slug);
+  if (typeof o.locked?.service === "string" && o.locked.service.trim()) {
+    return canonicalizeBookingServiceSlug(o.locked.service);
+  }
   return null;
 }
 

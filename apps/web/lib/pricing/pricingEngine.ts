@@ -46,7 +46,7 @@ export function normalizePricingJobInput(input: PricingJobInput): PricingJobInpu
   };
 }
 
-const SERVICE_ID_SET = new Set<BookingServiceId>(["quick", "standard", "airbnb", "deep", "carpet", "move"]);
+const SERVICE_ID_SET = new Set<BookingServiceId>(["standard", "airbnb", "deep", "move", "carpet"]);
 const SERVICE_TYPE_SET = new Set<BookingServiceTypeKey>([
   "standard_cleaning",
   "airbnb_cleaning",

@@ -4,12 +4,11 @@ import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
 const SERVICE_KEYS: readonly BookingServiceId[] = [
-  "quick",
   "standard",
   "airbnb",
   "deep",
-  "carpet",
   "move",
+  "carpet",
 ];
 
 const TARIFF: ServiceTariff = {

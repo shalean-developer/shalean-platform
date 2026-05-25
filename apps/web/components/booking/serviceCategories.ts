@@ -5,20 +5,16 @@
 import type { ServiceCategoryKind } from "./CategoryPicker";
 
 export type BookingServiceId =
-  | "quick"
   | "standard"
   | "airbnb"
   | "deep"
-  | "carpet"
-  | "move";
+  | "move"
+  | "carpet";
 
 /** High-level funnel grouping (Step 2 cards + persistence). */
 export type BookingServiceGroupKey = "regular" | "specialised";
 
-/**
- * Funnel service keys — map to `BookingServiceId` for pricing.
- * `quick` remains a catalog id only; infer as regular / standard_cleaning for legacy data.
- */
+/** Funnel service keys — map to `BookingServiceId` for pricing. */
 export type BookingServiceTypeKey =
   | "standard_cleaning"
   | "airbnb_cleaning"
@@ -67,8 +63,8 @@ export function bookingServiceIdFromType(t: BookingServiceTypeKey): BookingServi
   return TYPE_TO_SERVICE_ID[t];
 }
 
-const REGULAR_FLOW_SERVICE_IDS = new Set<BookingServiceId>(["quick", "standard", "airbnb"]);
-const SPECIALISED_FLOW_SERVICE_IDS = new Set<BookingServiceId>(["deep", "carpet", "move"]);
+const REGULAR_FLOW_SERVICE_IDS = new Set<BookingServiceId>(["standard", "airbnb"]);
+const SPECIALISED_FLOW_SERVICE_IDS = new Set<BookingServiceId>(["deep", "move", "carpet"]);
 
 export function inferServiceGroupFromServiceId(service: BookingServiceId | null): BookingServiceGroupKey | null {
   if (!service) return null;
@@ -81,7 +77,6 @@ export function inferServiceTypeFromServiceId(service: BookingServiceId | null):
   if (!service) return null;
   switch (service) {
     case "standard":
-    case "quick":
       return "standard_cleaning";
     case "airbnb":
       return "airbnb_cleaning";
@@ -102,7 +97,6 @@ export function getBookingSummaryServiceLabel(
   serviceType: BookingServiceTypeKey | null,
 ): string {
   if (!service && !serviceType) return "Not selected";
-  if (service === "quick") return "Quick Clean";
   if (serviceType) return SERVICE_TYPE_DISPLAY[serviceType];
   if (!service) return "Not selected";
   return getServiceLabel(service);
@@ -114,18 +108,6 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     name: "Regular Cleaning",
     description: "For routine home cleaning",
     services: [
-      {
-        id: "quick",
-        name: "Quick Clean",
-        description: "Fast refresh for light cleaning needs",
-        badge: "Fast & affordable",
-        baseTimeMultiplier: 0.65,
-        basePriceMultiplier: 0.72,
-        constraints: {
-          maxRooms: 5,
-          blockedExtraIds: ["inside-cabinets", "inside-oven", "ironing"],
-        },
-      },
       {
         id: "standard",
         name: "Standard Cleaning",

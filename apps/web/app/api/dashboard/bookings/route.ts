@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   const timeRaw = typeof body.time === "string" ? body.time.trim() : "";
   const time = timeRaw.length >= 5 ? timeRaw.slice(0, 5) : timeRaw;
   const serviceRaw = typeof body.service === "string" ? body.service.trim().toLowerCase() : "";
-  const SERVICE_IDS = new Set<string>(["quick", "standard", "airbnb", "deep", "carpet", "move"]);
+  const SERVICE_IDS = new Set<string>(["standard", "airbnb", "deep", "move", "carpet"]);
   const location = typeof body.location === "string" ? body.location.trim() : "";
   const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 4000) : "";
   const totalPaidZar =
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   }
   if (!SERVICE_IDS.has(serviceRaw)) {
     return NextResponse.json(
-      { error: "Invalid service. Use one of: quick, standard, airbnb, deep, carpet, move." },
+      { error: "Invalid service. Use one of: standard, airbnb, deep, move, carpet." },
       { status: 400 },
     );
   }

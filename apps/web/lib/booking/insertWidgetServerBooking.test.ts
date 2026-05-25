@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => {
   const fakeSnapshot: PricingRatesSnapshot = {
     codeVersion: 1,
     services: {
-      quick: tariff(),
       standard: tariff(),
       airbnb: tariff(),
       deep: tariff(),

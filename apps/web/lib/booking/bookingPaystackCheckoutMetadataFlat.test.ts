@@ -45,9 +45,28 @@ describe("buildCanonicalPaystackCheckoutMetadata", () => {
     expect(m.selected_cleaner_id).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     expect(m.cleaner_id).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     expect(m.assignment_type).toBe("user_selected");
-    expect(m.service_slug).toBe("standard_cleaning");
+    expect(m.service_slug).toBe("standard");
     expect(m.shalean_booking_id).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     expect(m.booking_id).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  });
+
+  it.each([
+    ["standard", "standard"],
+    ["standard_cleaning", "standard"],
+    ["Standard Cleaning", "standard"],
+    ["airbnb", "airbnb"],
+    ["airbnb_cleaning", "airbnb"],
+    ["deep_cleaning", "deep"],
+    ["move_cleaning", "move"],
+    ["move_in_out_cleaning", "move"],
+    ["carpet_cleaning", "carpet"],
+    ["quick", "standard"],
+    ["quick_cleaning", "standard"],
+    ["Quick Cleaning", "standard"],
+  ])("canonicalizes Paystack service_slug %s to %s", (input, expected) => {
+    const m = buildCanonicalPaystackCheckoutMetadata({ ...minimal, service_slug: input });
+    expect(m.service_slug).toBe(expected);
+    expect(["standard", "airbnb", "deep", "move", "carpet"]).toContain(m.service_slug);
   });
 
   it("normalizes empty selected cleaner to empty cleaner_id", () => {
@@ -156,6 +175,7 @@ describe("metadata parity: inline summary vs server-shaped canonical", () => {
 
     expect(meta.selected_cleaner_id).toBe(cleanerUuid.toLowerCase());
     expect(meta.cleaner_id).toBe(cleanerUuid.toLowerCase());
+    expect(meta.service_slug).toBe("standard");
     expect(meta.quote_signature).toBe("qs");
     expect(meta.lock_expires_at).toBe("2026-03-01T13:00:00.000Z");
   });

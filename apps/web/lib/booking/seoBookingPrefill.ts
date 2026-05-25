@@ -18,7 +18,6 @@ const SEO_BOOKING_STEP_PATH: Record<SeoBookingStep, string> = {
 };
 
 const SEO_SERVICE_EXTRAS: Record<BookingServiceId, string[]> = {
-  quick: ["inside-fridge"],
   standard: ["inside-fridge"],
   airbnb: ["inside-fridge", "laundry"],
   deep: ["inside-oven", "interior-walls", "inside-cabinets"],

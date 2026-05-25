@@ -9,7 +9,7 @@ import {
   isExtraAllowedInSnapshot,
 } from "@/lib/pricing/pricingEngineSnapshot";
 
-const LIGHT: readonly BookingServiceId[] = ["quick", "standard", "airbnb"];
+const LIGHT: readonly BookingServiceId[] = ["standard", "airbnb"];
 const HEAVY: readonly BookingServiceId[] = ["deep", "move", "carpet"];
 
 /** Known extra slugs (align with `pricing_extras.slug`). */

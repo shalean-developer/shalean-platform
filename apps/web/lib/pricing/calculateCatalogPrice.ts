@@ -16,7 +16,7 @@ import {
 } from "@/lib/pricing/pricingEngineSnapshot";
 import { normalizeVipTier } from "@/lib/pricing/vipTier";
 import { getServiceBaseZarFromSnapshot } from "@/lib/pricing/pricingConfig";
-/** Homepage / live widget service keys (maps 1:1 to `BookingServiceId` except `quick`). */
+/** Homepage / live widget service keys map 1:1 to `BookingServiceId`. */
 export type HomeWidgetServiceKey = "standard" | "airbnb" | "deep" | "move" | "carpet";
 
 export type CalculatePriceCatalogInput = PricingJobInput;

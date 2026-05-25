@@ -125,8 +125,8 @@ describe("canonical duration/workload resolver (Phase 2C)", () => {
   });
 
   it("applies minimum and maximum guards", () => {
-    const quickMinimum = resolveCanonicalDurationWorkload({
-      service: "quick",
+    const standardMinimum = resolveCanonicalDurationWorkload({
+      service: "standard",
       rooms: 1,
       bathrooms: 1,
       extras: [],
@@ -139,7 +139,7 @@ describe("canonical duration/workload resolver (Phase 2C)", () => {
       extras: ["interior-walls", "garage-cleaning", "outside-windows"],
     });
 
-    expect(quickMinimum.duration_minutes).toBeGreaterThanOrEqual(quickMinimum.service_policy.minMinutes);
+    expect(standardMinimum.duration_minutes).toBeGreaterThanOrEqual(standardMinimum.service_policy.minMinutes);
     expect(largeStandard.duration_minutes).toBe(largeStandard.service_policy.maxMinutes);
     expect(largeStandard.guards).toContain("max_duration_clamped");
   });

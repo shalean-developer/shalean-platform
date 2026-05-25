@@ -63,9 +63,11 @@ function parseLegacyPriceSnapshotV1(raw: unknown): AdminPriceSnapshotCardView | 
 
 export function inferAdminServiceTypeSlug(serviceSlug: string | null, serviceLabel: string | null): string {
   const ss = typeof serviceSlug === "string" ? serviceSlug.trim().toLowerCase() : "";
+  if (ss === "quick") return "standard";
   if (ss) return ss;
   const lab = typeof serviceLabel === "string" ? serviceLabel.trim().toLowerCase() : "";
-  const keywords = ["quick", "standard", "airbnb", "deep", "carpet", "move"] as const;
+  if (lab.includes("quick")) return "standard";
+  const keywords = ["standard", "airbnb", "deep", "carpet", "move"] as const;
   for (const k of keywords) {
     if (lab.includes(k)) return k;
   }
