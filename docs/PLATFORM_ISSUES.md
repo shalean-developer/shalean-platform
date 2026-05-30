@@ -24,6 +24,8 @@
 
 **Headline (post Phase 2):** Full vitest and typecheck are green. CI now runs a revenue-focused vitest slice in addition to `test:critical`. Admin schedule hints apply strict `cleaner_preferences` when `bookingCapabilitySlug` is set (aligned with picker/dispatch). Remaining debt is mostly repo-wide ESLint and optional E2E/staging coverage.
 
+**Standard cleaning E2E audit:** Service-scoped funnel + dashboard issues (S-*, C-*, CL-*, A-*) — see [`docs/reports/standard-cleaning-end-to-end-audit.md`](reports/standard-cleaning-end-to-end-audit.md).
+
 **Cleaner eligibility convergence:** `getEligibleCleaners` + `adminAssignEligibility` + dispatch share `cleanerPreferenceStrictExcludesJob` when a service slug is known.
 
 ---

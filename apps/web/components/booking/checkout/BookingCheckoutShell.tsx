@@ -528,7 +528,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         }
       />
 
-      {showStepNav && segment !== "payment" ? (
+      {showStepNav ? (
         <div className="fixed inset-x-0 bottom-0 z-50 lg:hidden">
           <MobileBottomBar
             totalDisplay=""
