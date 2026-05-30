@@ -524,8 +524,9 @@ describe("GET /api/cleaner/dashboard", { timeout: 15_000 }, () => {
       id: `b-${i}`,
       cleaner_id: "cleaner-1",
       status: "assigned",
+      cleaner_response_status: "accepted",
       service: "Standard",
-      date: `2026-05-${String(10 + i).padStart(2, "0")}`,
+      date: `2099-06-${String(1 + i).padStart(2, "0")}`,
       time: "09:00",
     }));
     mockState.admin = new MockSupabase({
@@ -543,9 +544,33 @@ describe("GET /api/cleaner/dashboard", { timeout: 15_000 }, () => {
       cleaners: [{ id: "cleaner-1" }],
       team_members: [],
       bookings: [
-        { id: "b-dup", cleaner_id: "cleaner-1", status: "assigned", service: "A", date: "2026-06-01", time: "08:00" },
-        { id: "b-dup", cleaner_id: "cleaner-1", status: "assigned", service: "B", date: "2026-06-01", time: "09:00" },
-        { id: "b-x", cleaner_id: "cleaner-1", status: "assigned", service: "C", date: "2026-06-02", time: "10:00" },
+        {
+          id: "b-dup",
+          cleaner_id: "cleaner-1",
+          status: "assigned",
+          cleaner_response_status: "accepted",
+          service: "A",
+          date: "2099-07-01",
+          time: "08:00",
+        },
+        {
+          id: "b-dup",
+          cleaner_id: "cleaner-1",
+          status: "assigned",
+          cleaner_response_status: "accepted",
+          service: "B",
+          date: "2099-07-01",
+          time: "09:00",
+        },
+        {
+          id: "b-x",
+          cleaner_id: "cleaner-1",
+          status: "assigned",
+          cleaner_response_status: "accepted",
+          service: "C",
+          date: "2099-07-02",
+          time: "10:00",
+        },
       ],
     });
     const res2 = await GET(new Request("http://localhost/api/cleaner/dashboard"));

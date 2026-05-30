@@ -13,6 +13,8 @@
 
 **Customer-facing states:** If Paystack paid but the row is not saved yet, `/booking/success` shows **persist-pending** (not “booking confirmed”) and the customer may get **`sendCustomerBookingPaymentProcessingEmail`** (“We’re finalising your booking”) before the full confirmation email.
 
+**Selected cleaner at checkout (REV-010):** If the picked cleaner is no longer in the slot pool at payment time, checkout may **fall back** to dispatch while still creating an **offer** visible to that cleaner. Auto-assign will not target them (`excludeCleanerIds`). See [`docs/PLATFORM_ISSUES.md`](PLATFORM_ISSUES.md) and `apps/web/lib/booking/checkoutCleanerEligibility.ts`.
+
 ---
 
 ## Case: Customer paid but booking not visible

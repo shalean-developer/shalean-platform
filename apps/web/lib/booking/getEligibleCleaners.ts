@@ -18,6 +18,10 @@ import {
   cleanerHasOccupyingSlotOverlap,
   indexOccupyingBookingsByCleanerId,
 } from "@/lib/booking/cleanerSlotEligibility";
+import {
+  cleanerPreferenceStrictExcludesJob,
+  type CleanerPreferenceRowLike,
+} from "@/lib/dispatch/cleanerPreferenceMatch";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 
 export type CleanerLocationPair = { cleaner_id: string; location_id: string };
@@ -49,6 +53,8 @@ export type GetEligibleCleanersParams = {
   preloadedAvailability?: CleanerAvailabilityRow[];
   /** When set, skips DB fetch for `cleaner_locations`. */
   preloadedCleanerLocations?: CleanerLocationPair[];
+  /** When set, skips DB fetch for `cleaner_preferences` (strict service/time gating). */
+  preloadedCleanerPreferences?: Map<string, CleanerPreferenceRowLike>;
   /** When set, skips cleaners list query (must match `cleanerIds` filter intent). */
   preloadedCleaners?: CleanerBase[];
   /**
@@ -223,8 +229,10 @@ export async function getEligibleCleaners(
 
   const needAvail = params.preloadedAvailability == null;
   const needLoc = params.preloadedCleanerLocations == null;
+  const jobServiceSlug = (params.serviceType ?? "").trim().toLowerCase() || null;
+  const needPrefs = params.preloadedCleanerPreferences == null && jobServiceSlug != null;
 
-  const [availRes, locRes, bookRes] = await Promise.all([
+  const [availRes, locRes, bookRes, prefRes] = await Promise.all([
     needAvail
       ? admin
           .from("cleaner_availability")
@@ -242,11 +250,39 @@ export async function getEligibleCleaners(
       )
       .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
       .or(`date.eq.${params.date},booking_date.eq.${params.date}`),
+    needPrefs
+      ? admin
+          .from("cleaner_preferences")
+          .select("cleaner_id, preferred_areas, preferred_services, preferred_time_blocks, is_strict")
+          .in("cleaner_id", ids)
+      : Promise.resolve({ data: null as Record<string, unknown>[] | null, error: null }),
   ]);
 
   const availData = params.preloadedAvailability ?? (availRes as { data: CleanerAvailabilityRow[] | null }).data;
   const locRows = params.preloadedCleanerLocations ?? (locRes as { data: unknown[] | null }).data;
   const bookRows = (bookRes as { data: unknown[] | null }).data;
+
+  const prefByCleaner =
+    params.preloadedCleanerPreferences ??
+    (() => {
+      const m = new Map<string, CleanerPreferenceRowLike>();
+      if (!needPrefs) return m;
+      for (const raw of (prefRes as { data: Record<string, unknown>[] | null }).data ?? []) {
+        const cid = String((raw as { cleaner_id?: string }).cleaner_id ?? "");
+        if (cid) m.set(cid, raw as CleanerPreferenceRowLike);
+      }
+      return m;
+    })();
+
+  const jobPrefCtx =
+    jobServiceSlug != null
+      ? {
+          jobLocationId: params.locationId,
+          jobServiceSlug,
+          jobDateYmd: params.date,
+          jobTimeHm: slotHm,
+        }
+      : null;
 
   const availabilityByCleaner = new Map<string, CleanerAvailabilityRow[]>();
   for (const row of (availData ?? []) as CleanerAvailabilityRow[]) {
@@ -272,7 +308,7 @@ export async function getEligibleCleaners(
   const occupyingByCleaner = indexOccupyingBookingsByCleanerId((bookRows ?? []) as OccupyingBookingRow[]);
 
   const trace = process.env.BOOKING_CLEANERS_TRACE === "1";
-  const drop = { weekday: 0, calendar: 0, area: 0, conflict: 0, capability: 0, dailyWorkload: 0 };
+  const drop = { weekday: 0, calendar: 0, area: 0, conflict: 0, capability: 0, preference: 0, dailyWorkload: 0 };
 
   const filtered: CleanerBase[] = [];
   for (const c of cleaners) {
@@ -309,6 +345,14 @@ export async function getEligibleCleaners(
     if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) {
       if (trace) drop.capability++;
       continue;
+    }
+
+    if (jobPrefCtx) {
+      const prefRow = prefByCleaner.get(c.id);
+      if (prefRow && cleanerPreferenceStrictExcludesJob(prefRow, jobPrefCtx)) {
+        if (trace) drop.preference++;
+        continue;
+      }
     }
 
     filtered.push(c);

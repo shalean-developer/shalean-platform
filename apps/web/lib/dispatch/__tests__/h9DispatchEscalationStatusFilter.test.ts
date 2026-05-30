@@ -290,39 +290,45 @@ describe("H-9: dispatch escalation status filter widens to include pending_assig
 describe("H-9: source content guards (lock the widened status filter into both modules)", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const dispatchDir = path.resolve(here, "..");
+  const bookingCommandsDir = path.resolve(here, "..", "..", "booking");
 
-  function readFile(rel: string): string {
-    return readFileSync(path.join(dispatchDir, rel), "utf8");
+  function readFile(base: string, rel: string): string {
+    return readFileSync(path.join(base, rel), "utf8");
   }
 
-  it("runDispatchTimeouts.ts: terminal offer-cap UPDATE uses .in('status',[pending,pending_assignment])", () => {
-    const src = readFile("runDispatchTimeouts.ts");
-    expect(
-      /\.update\(\{\s*dispatch_status:\s*"unassignable"\s*\}\)[^]*?\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/.test(src),
-      "offer-cap escalation must update dispatch_status with widened status filter and cleaner_id null guard",
-    ).toBe(true);
+  const h9TerminalStatusGuard =
+    /\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/;
 
+  it("assignmentBookingStateCommands: terminal marks use widened status + cleaner_id null guard", () => {
+    const src = readFile(bookingCommandsDir, "assignmentBookingStateCommands.ts");
+    expect(
+      h9TerminalStatusGuard.test(src),
+      "markDispatchOfferCapUnassignable / markDispatchRetryTerminalBookingStatus must guard pending + pending_assignment",
+    ).toBe(true);
+    expect(src).toContain("markDispatchOfferCapUnassignable");
+    expect(src).toContain("markDispatchRetryTerminalBookingStatus");
+  });
+
+  it("runDispatchTimeouts.ts: offer-cap escalation uses shared terminal command", () => {
+    const src = readFile(dispatchDir, "runDispatchTimeouts.ts");
+    expect(src).toContain("markDispatchOfferCapUnassignable");
     expect(
       src.includes('.update({ dispatch_status: "unassignable" })\n          .eq("id", bookingId)\n          .eq("status", "pending")'),
-      "legacy .eq('status','pending') terminal mark must be removed",
+      "legacy inline .eq('status','pending') terminal mark must be removed",
     ).toBe(false);
   });
 
-  it("dispatchRetryQueue.ts: retry-exhausted terminal UPDATE uses .in('status',[pending,pending_assignment])", () => {
-    const src = readFile("dispatchRetryQueue.ts");
-    expect(
-      /\.update\(\{\s*dispatch_status:\s*terminalDispatchStatus\s*\}\)[^]*?\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)[^]*?\.is\(\s*"cleaner_id"\s*,\s*null\s*\)/.test(src),
-      "retry-exhausted escalation must update dispatch_status with widened status filter and cleaner_id null guard",
-    ).toBe(true);
-
+  it("dispatchRetryQueue.ts: retry-exhausted escalation uses shared terminal command", () => {
+    const src = readFile(dispatchDir, "dispatchRetryQueue.ts");
+    expect(src).toContain("markDispatchRetryTerminalBookingStatus");
     expect(
       src.includes('.update({ dispatch_status: terminalDispatchStatus })\n        .eq("id", bookingId)\n        .eq("status", "pending")'),
-      "legacy .eq('status','pending') terminal mark must be removed",
+      "legacy inline .eq('status','pending') terminal mark must be removed",
     ).toBe(false);
   });
 
   it("dispatchRetryQueue.ts: enqueueStrandedBookings candidate scan filters status with IN(...)", () => {
-    const src = readFile("dispatchRetryQueue.ts");
+    const src = readFile(dispatchDir, "dispatchRetryQueue.ts");
     // Match `.from("bookings").select("id, created_at").in("status", [...])`
     expect(
       /\.from\("bookings"\)\s*\.select\("id, created_at"\)\s*\.in\(\s*"status"\s*,\s*\[\s*"pending"\s*,\s*"pending_assignment"\s*\]\s*\)/.test(src),
@@ -331,7 +337,7 @@ describe("H-9: source content guards (lock the widened status filter into both m
   });
 
   it("does not weaken status filtering elsewhere (offer-side `.eq(\"status\", \"pending\")` on dispatch_offers stays untouched)", () => {
-    const src = readFile("runDispatchTimeouts.ts");
+    const src = readFile(dispatchDir, "runDispatchTimeouts.ts");
     // dispatch_offers.status='pending' filters MUST still be exactly that — those refer to the
     // offer row lifecycle, not the booking status, and are correct as-is.
     const offersExpiredSelect =
@@ -349,7 +355,7 @@ describe("H-9: source content guards (lock the widened status filter into both m
     // and must NOT touch payment / payout columns.
     const stripComments = (s: string) => s.replace(/\/\/[^\n]*/g, "").replace(/\/\*[^]*?\*\//g, "");
     for (const rel of ["runDispatchTimeouts.ts", "dispatchRetryQueue.ts"]) {
-      const code = stripComments(readFile(rel));
+      const code = stripComments(readFile(dispatchDir, rel));
       expect(/\bamount_paid_cents\b/.test(code), `${rel} must not touch amount_paid_cents`).toBe(false);
       expect(/\bpaystack_reference\b/.test(code), `${rel} must not touch paystack_reference`).toBe(false);
       expect(/\bcleaner_payout_cents\b/.test(code), `${rel} must not touch cleaner_payout_cents`).toBe(false);

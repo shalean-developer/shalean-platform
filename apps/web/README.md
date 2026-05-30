@@ -1,36 +1,27 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Shalean web (`apps/web`)
 
-## Getting Started
+Next.js App Router app for booking, Paystack checkout, cleaner/dispatch, and admin.
 
-First, run the development server:
+## Local dev
 
 ```bash
+cd apps/web
+npm install
+cp .env.example .env.local   # if present; otherwise copy from team vault
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, Paystack keys — see Vercel project settings.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tests
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Purpose |
+|---------|---------|
+| `npm run test:critical` | CI payment/referral gates (~31 tests) |
+| `npm run test` | Full vitest (~2248 tests) |
+| `npx tsc --noEmit` | Typecheck |
+| `npm run build` | Production build |
+| `npm run ops:smoke` | Ops checklist (needs service role + DB) |
+| `npm run test:e2e` | Playwright — see [`e2e/README.md`](e2e/README.md) |
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Revenue issue register: [`docs/PLATFORM_ISSUES.md`](../../docs/PLATFORM_ISSUES.md). Payments ops: [`docs/runbook-payments.md`](../../docs/runbook-payments.md).

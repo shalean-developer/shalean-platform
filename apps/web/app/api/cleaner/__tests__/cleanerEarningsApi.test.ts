@@ -19,6 +19,22 @@ vi.mock("@/lib/cleaner/scheduleStuckEarningsRecompute", () => ({
   scheduleStuckEarningsRecomputeDebounced: vi.fn(),
 }));
 
+vi.mock("@/lib/payout/persistCleanerPayout", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/payout/persistCleanerPayout")>();
+  return {
+    ...actual,
+    previewDisplayEarningsCentsForCleanerJob: vi.fn(
+      async (_admin: unknown, params: { bookingId?: string }) => {
+        const id = String(params?.bookingId ?? "").trim();
+        if (id === "b-team" || id === "b3") return null;
+        if (id === "b4") return 19_000;
+        if (id === "b-card-hint") return 31_500;
+        return null;
+      },
+    ),
+  };
+});
+
 /** Legacy mega-.or() used by older tests; production now merges branches instead. */
 function matchesBookingsVisibilityOrLegacy(row: Row, expr: string): boolean {
   const head = /^cleaner_id\.eq\.([^,]+)/.exec(expr);
@@ -403,10 +419,11 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     const json = (await res.json()) as { jobs: Array<Record<string, unknown>> };
     const row = json.jobs[0]!;
 
-    expect(typeof row.displayEarningsCents).toBe("number");
+    expect(row.displayEarningsCents).toBe(31_500);
     expect(row.displayEarningsIsEstimate).toBe(true);
     expect(row.earnings_estimated).toBe(true);
     expect(row.earnings_is_estimate).toBe(true);
+    expect(row.earnings_basis_pending).toBe(false);
     expect(row.total_paid_zar).toBe(450);
   });
 

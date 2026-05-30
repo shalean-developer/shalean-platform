@@ -291,6 +291,7 @@ describe("H-15 cron lock — per-route guards", () => {
     { dir: "freeze-payouts", key: "freezePayouts" },
     { dir: "payout-integrity-daily", key: "payoutIntegrityDaily" },
     { dir: "reconcile-paystack-transfers", key: "reconcilePaystackTransfers" },
+    { dir: "ops-health", key: "opsHealthMetrics" },
   ];
 
   for (const route of protectedRoutes) {
@@ -377,6 +378,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "freeze-payouts",
     "payout-integrity-daily",
     "reconcile-paystack-transfers",
+    "ops-health",
   ]);
 
   const expectedUnblocked = new Set([

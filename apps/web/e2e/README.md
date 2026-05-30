@@ -13,6 +13,9 @@
 | `PLAYWRIGHT_SKIP_WEBSERVER` | Set to `1` if the app is already running (or when targeting a remote preview URL). |
 | `E2E_WIDGET_DRAFT` | Set to `1` to enable the **widget-draft insert** smoke test (needs Supabase admin on the server). |
 | `E2E_PAYSTACK` | Set to `1` to enable **Paystack sandbox** API tests under `e2e/paystack/` (see `e2e/paystack/README.md`). |
+| `E2E_DISPATCH` | Set to `1` where specs gate on dispatch lifecycle (staging only; not run in default CI). |
+
+Revenue E2E is intentionally **env-gated**. For staging runs, set `PLAYWRIGHT_BASE_URL` to the preview URL and supply Supabase service role on the server. See also [`docs/PLATFORM_ISSUES.md`](../../docs/PLATFORM_ISSUES.md) (REV-012).
 
 Server-side (for quote + widget-draft to succeed):
 

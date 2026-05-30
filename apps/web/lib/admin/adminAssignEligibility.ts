@@ -14,6 +14,10 @@ import {
   warningFromDailyWorkloadShadowDay,
 } from "@/lib/booking/cleanerDailyWorkloadShadow";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
+import {
+  cleanerPreferenceStrictExcludesJob,
+  type CleanerPreferenceRowLike,
+} from "@/lib/dispatch/cleanerPreferenceMatch";
 import { buildAdminWarning, type AdminWarning } from "@/lib/admin/adminWarningPayload";
 
 export const DEFAULT_ASSIGN_JOB_DURATION_MIN = 240;
@@ -175,6 +179,11 @@ export type AssignEligibilityRow = {
    */
   accountIneligible: boolean;
   serviceCapabilityOk?: boolean;
+  /**
+   * Strict `cleaner_preferences.preferred_services` — same gate as
+   * {@link getEligibleCleaners} / dispatch when `bookingCapabilitySlug` is set.
+   */
+  servicePreferenceOk?: boolean;
   workloadWarning: DailyWorkloadWarning | null;
   canAssignWithoutForce: boolean;
 };
@@ -314,6 +323,19 @@ export function buildAdminAssignmentEligibilityWarnings(row: AssignEligibilityRo
       }),
     );
   }
+  if (row.servicePreferenceOk === false) {
+    warnings.push(
+      buildAdminWarning({
+        code: "admin.assignment.service_preference_force_override_available",
+        domain: "assignment",
+        severity: "high",
+        action: "force_override_available",
+        blocking: true,
+        message: "Cleaner strict service preferences exclude this booking.",
+        fields: ["cleaner_id", "service_slug"],
+      }),
+    );
+  }
   if (row.workloadWarning) warnings.push(adminAssignmentWarningFromWorkloadWarning(row.workloadWarning));
   return warnings;
 }
@@ -364,6 +386,7 @@ export async function computeAssignEligibility(
         offline: false,
         accountIneligible: false,
         serviceCapabilityOk: true,
+        servicePreferenceOk: true,
         workloadWarning: null,
         canAssignWithoutForce: false,
       });
@@ -371,6 +394,16 @@ export async function computeAssignEligibility(
     return out;
   }
   const slotEnd = startMin + durationMinutes;
+  const jobServiceSlug = (bookingCapabilitySlug ?? "").trim().toLowerCase() || null;
+  const jobPrefCtx =
+    jobServiceSlug != null
+      ? {
+          jobLocationId: (bookingLocationId ?? "").trim(),
+          jobServiceSlug,
+          jobDateYmd: bookingDateYmd,
+          jobTimeHm: bookingTimeHm.trim().slice(0, 5),
+        }
+      : null;
 
   type CleanerAvailRow = {
     id?: string;
@@ -488,6 +521,18 @@ export async function computeAssignEligibility(
     });
   }
 
+  const prefByCleaner = new Map<string, CleanerPreferenceRowLike>();
+  if (jobPrefCtx) {
+    const { data: prefRows } = await admin
+      .from("cleaner_preferences")
+      .select("cleaner_id, preferred_areas, preferred_services, preferred_time_blocks, is_strict")
+      .in("cleaner_id", cleanerIds);
+    for (const raw of prefRows ?? []) {
+      const cid = String((raw as { cleaner_id?: string }).cleaner_id ?? "");
+      if (cid) prefByCleaner.set(cid, raw as CleanerPreferenceRowLike);
+    }
+  }
+
   const { data: locRows } = await admin.from("cleaner_locations").select("cleaner_id, location_id").in("cleaner_id", cleanerIds);
   const locByCleaner = new Map<string, Set<string>>();
   for (const id of cleanerIds) locByCleaner.set(id, new Set());
@@ -577,6 +622,9 @@ export async function computeAssignEligibility(
     const offline = offlineById.get(id) ?? false;
     const accountIneligible = accountIneligibleById.get(id) ?? false;
     const capabilityOk = capabilityOkById.get(id) ?? true;
+    const prefRow = prefByCleaner.get(id);
+    const servicePreferenceOk =
+      !jobPrefCtx || !prefRow || !cleanerPreferenceStrictExcludesJob(prefRow, jobPrefCtx);
     // M-13/M-14: include `accountIneligible` (is_active=false / is_available=false /
     // blocked lifecycle status) as a hard gate, parallel to `offline`. Without this
     // a cleaner who toggled "Go offline" still showed `canAssignWithoutForce: true`
@@ -589,7 +637,8 @@ export async function computeAssignEligibility(
       !overlapBlocked &&
       !offline &&
       !accountIneligible &&
-      capabilityOk;
+      capabilityOk &&
+      servicePreferenceOk;
     let nextAvailableStartHm: string | null = null;
     // M-13/M-14: don't suggest a "next available" slot for someone who is
     // account-ineligible — the suggestion would be misleading because the
@@ -614,6 +663,7 @@ export async function computeAssignEligibility(
       offline,
       accountIneligible,
       serviceCapabilityOk: capabilityOk,
+      servicePreferenceOk,
       workloadWarning: workloadWarningByCleaner.get(id) ?? null,
       canAssignWithoutForce,
     });

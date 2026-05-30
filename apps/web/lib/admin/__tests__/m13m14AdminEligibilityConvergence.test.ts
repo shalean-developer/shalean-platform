@@ -239,6 +239,14 @@ function buildEligibilityMock(opts: MockOpts): SupabaseClient {
     };
   }
 
+  function cleanerPreferencesBuilder() {
+    return {
+      select: () => ({
+        in: () => Promise.resolve({ data: [], error: null }),
+      }),
+    };
+  }
+
   const client = {
     from(table: string) {
       switch (table) {
@@ -248,6 +256,8 @@ function buildEligibilityMock(opts: MockOpts): SupabaseClient {
           return cleanerAvailabilityBuilder();
         case "cleaner_locations":
           return cleanerLocationsBuilder();
+        case "cleaner_preferences":
+          return cleanerPreferencesBuilder();
         case "bookings":
           return bookingsBuilder();
         default:
@@ -975,6 +985,7 @@ describe("M-13/M-14 test plumbing", () => {
       "nextAvailableStartHm",
       "offline",
       "accountIneligible",
+      "servicePreferenceOk",
       "workloadWarning",
       "canAssignWithoutForce",
     ];
