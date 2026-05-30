@@ -8,6 +8,7 @@ import { maxCleanerDailyWorkloadEnforcePublic } from "@/lib/booking/availability
 import type { AvailableCleaner, CleanerAvailabilityRow, CleanerReviewSnippet } from "@/lib/booking/cleanerPoolTypes";
 import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
 import type { CleanerBase } from "@/lib/booking/getEligibleCleaners";
+import { bookingSlotEligibilityDurationMinutes } from "@/lib/booking/bookingTimeSlots";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
 export type { AvailableCleaner, CleanerReviewSnippet, CleanerAvailabilityRow } from "@/lib/booking/cleanerPoolTypes";
@@ -334,15 +335,28 @@ export async function getAvailableTimeSlots(
           ? [loc]
           : null;
 
+    const jobDurationMinutes = Math.max(30, Math.round(args.durationMinutes));
+
     for (let mins = startHour * 60; mins <= endHour * 60; mins += stepMinutes) {
       const hh = String(Math.floor(mins / 60)).padStart(2, "0");
       const mm = String(mins % 60).padStart(2, "0");
       const time = `${hh}:${mm}`;
 
+      const slotDurationMinutes = bookingSlotEligibilityDurationMinutes(mins, jobDurationMinutes);
+      if (slotDurationMinutes == null) {
+        out.push({
+          time,
+          available: false,
+          cleanersCount: 0,
+          locationId: loc ? loc : null,
+        });
+        continue;
+      }
+
       const cleaners = await getEligibleCleaners(admin, {
         date: args.selectedDate,
         startTime: time,
-        durationMinutes: args.durationMinutes,
+        durationMinutes: slotDurationMinutes,
         locationId: loc || "",
         locationExpandedIds: expanded,
         userLat: args.userLat,

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { checkoutSummaryPriceLabel, type CheckoutSummaryStep } from "@/lib/booking/checkoutSidebarPricing";
+import { type CheckoutSummaryStep } from "@/lib/booking/checkoutSidebarPricing";
 import { cn } from "@/lib/utils";
 
 function formatHoursLine(h: number): string {
@@ -15,6 +15,8 @@ export type SummaryBlockProps = {
   checkoutStep: CheckoutSummaryStep;
   hours: number;
   totalZar: number;
+  /** Sidebar price label (EST. PRICE / BOOKING PRICE / TOTAL). */
+  priceLabel: string;
   loading?: boolean;
   className?: string;
   /** Tighter padding for the mobile dock strip */
@@ -25,11 +27,12 @@ function SummaryBlockInner({
   checkoutStep,
   hours,
   totalZar,
+  priceLabel,
   loading,
   className,
   compact,
 }: SummaryBlockProps) {
-  const label = checkoutSummaryPriceLabel(checkoutStep);
+  const label = priceLabel;
   const prev = useRef({ hours, totalZar });
   const [tick, setTick] = useState(false);
 

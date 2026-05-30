@@ -4,11 +4,11 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCustomerBookingCancelled } from "@/lib/notifications/customerUserNotifications";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { isCustomerCancellableBookingStatus } from "@/lib/dashboard/customerBookingModifyStatuses";
+import { expirePendingDispatchOffersForBooking } from "@/lib/dispatch/expirePendingDispatchOffersForBooking";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const CANCELLABLE = new Set(["pending", "confirmed", "assigned"]);
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -50,7 +50,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const status = String((row as { status?: string }).status ?? "").toLowerCase();
-  if (!CANCELLABLE.has(status)) {
+  if (!isCustomerCancellableBookingStatus(status)) {
     return NextResponse.json({ error: "This booking cannot be cancelled." }, { status: 400 });
   }
 
@@ -73,6 +73,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
   }
 
+  const { expiredCount, error: offerExpireErr } = await expirePendingDispatchOffersForBooking(admin, bookingId);
+  if (offerExpireErr) {
+    return NextResponse.json({ error: offerExpireErr }, { status: 500 });
+  }
+
   const { error: upErr } = await admin
     .from("bookings")
     .update({
@@ -90,6 +95,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (upErr) {
     return NextResponse.json({ error: upErr.message }, { status: 500 });
   }
+
+  void logSystemEvent({
+    level: "info",
+    source: "customer_booking_cancel",
+    message: "Expired pending dispatch offers on customer cancel",
+    context: { bookingId, expiredCount },
+  });
 
   await admin
     .from("booking_lifecycle_jobs")

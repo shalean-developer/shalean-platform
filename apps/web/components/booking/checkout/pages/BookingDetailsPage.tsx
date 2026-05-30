@@ -1,19 +1,13 @@
 "use client";
 
 import { ChevronDown, Lock } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AddOnsSection } from "@/components/booking/checkout/AddOnsSection";
 import { DetailsPriceAnchor } from "@/components/booking/DetailsPriceAnchor";
 import { HomeDetailsStep } from "@/components/booking/steps/HomeDetailsStep";
-import { ServiceStep } from "@/components/booking/steps/ServiceStep";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
 import { bookingCopy } from "@/lib/booking/copy";
-import { checkoutSegmentPath } from "@/lib/booking/bookingCheckoutGuards";
 import { checkoutSidebarPriceDisplay } from "@/lib/booking/checkoutSidebarPricing";
-import { withBookingQuery } from "@/lib/booking/bookingUrl";
 import { formatBookingHoursCompact } from "@/lib/booking/formatBookingHours";
 import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
@@ -21,8 +15,6 @@ import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 const copy = bookingCopy.details;
 
 export function BookingDetailsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: catalog, loading } = usePricingCatalog();
   const snapshot = catalog?.snapshot ?? null;
 
@@ -34,8 +26,6 @@ export function BookingDetailsPage() {
   const extras = useBookingCheckoutStore((s) => s.extras);
   const patch = useBookingCheckoutStore((s) => s.patch);
 
-  const [serviceBrowseOpen, setServiceBrowseOpen] = useState(false);
-  /** Avoid SSR/client mismatch: persisted extras differ after hydrate; start closed then sync. */
   const [extrasPanelOpen, setExtrasPanelOpen] = useState(false);
 
   /** Catalog `loading` / options differ SSR vs first client paint — render controls only after mount. */
@@ -79,31 +69,12 @@ export function BookingDetailsPage() {
       ? `R ${Math.round(sidebarPricing.totalZar).toLocaleString("en-ZA")}`
       : "—";
 
-  const onServiceSelect = useCallback(
-    (next: string) => {
-      patch({ service: next, detailsFlowPhase: "home-details" });
-      setServiceBrowseOpen(false);
-    },
-    [patch],
-  );
+  const onServiceSelect = (next: string) => {
+    patch({ service: next, detailsFlowPhase: "home-details" });
+  };
 
   const services = catalog?.services ?? [];
   const disableServiceControls = !clientMounted || loading || services.length === 0;
-
-  const serviceValid = useMemo(() => {
-    if (!catalog?.services?.length) return false;
-    const ids = new Set(catalog.services.map((s) => s.id));
-    return Boolean(service?.trim() && sid && ids.has(service));
-  }, [catalog, service, sid]);
-
-  const detailsHome = detailsFlowPhase === "home-details";
-  const propertyValid = bedrooms >= 1 && bathrooms >= 1;
-  const continueDisabled = !serviceValid || !detailsHome || !propertyValid;
-
-  const goSchedule = useCallback(() => {
-    if (continueDisabled) return;
-    router.push(withBookingQuery(checkoutSegmentPath("schedule"), searchParams));
-  }, [continueDisabled, router, searchParams]);
 
   return (
     <div className="space-y-4 pb-3 sm:space-y-5 lg:pb-2">
@@ -117,8 +88,7 @@ export function BookingDetailsPage() {
             >
               {copy.yourServiceLabel}
             </label>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
-              <div className="relative min-w-0 flex-1">
+            <div className="relative min-w-0 flex-1">
                 {clientMounted ? (
                   <>
                     <select
@@ -146,17 +116,6 @@ export function BookingDetailsPage() {
                   />
                 )}
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="hidden h-11 shrink-0 px-4 font-medium lg:inline-flex"
-                disabled={disableServiceControls}
-                onClick={() => setServiceBrowseOpen(true)}
-              >
-                {copy.changeService}
-              </Button>
-            </div>
           </div>
 
           {/* Property */}
@@ -208,8 +167,8 @@ export function BookingDetailsPage() {
             </details>
           </div>
 
-          {/* Price anchor */}
-          <div className="border-t border-zinc-100 pt-5 dark:border-zinc-800">
+          {/* Price anchor — mobile only; desktop uses sticky sidebar */}
+          <div className="border-t border-zinc-100 pt-5 dark:border-zinc-800 lg:hidden">
             <DetailsPriceAnchor
               hoursLine={anchorHoursLine}
               priceLine={anchorPriceLine}
@@ -218,18 +177,8 @@ export function BookingDetailsPage() {
             />
           </div>
 
-          {/* Mobile blueprint: primary CTA + trust inside the card (desktop uses shell footer). */}
           <div className="border-t border-zinc-100 pt-5 dark:border-zinc-800 lg:hidden">
-            <Button
-              type="button"
-              size="xl"
-              className="h-12 w-full rounded-xl font-semibold shadow-sm"
-              disabled={continueDisabled}
-              onClick={goSchedule}
-            >
-              {copy.cta}
-            </Button>
-            <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200/90 bg-zinc-50 py-3 dark:border-zinc-700 dark:bg-zinc-900/60">
+            <div className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200/90 bg-zinc-50 py-3 dark:border-zinc-700 dark:bg-zinc-900/60">
               <Lock className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
               <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
                 {copy.footerTrustCompact}
@@ -238,15 +187,6 @@ export function BookingDetailsPage() {
           </div>
         </div>
       </section>
-
-      <Dialog open={serviceBrowseOpen} onOpenChange={setServiceBrowseOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl border-zinc-200 dark:border-zinc-800 sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-left text-lg font-semibold">Choose cleaning type</DialogTitle>
-          </DialogHeader>
-          <ServiceStep value={service} onChange={onServiceSelect} services={services} loading={loading} />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

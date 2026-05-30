@@ -7,15 +7,14 @@ import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
 export type CheckoutSummaryStep = 1 | 2 | 3 | 4;
 
-export const CHECKOUT_SUMMARY_PRICE_LABEL: Record<CheckoutSummaryStep, string> = {
-  1: "EST. PRICE",
-  2: "EST. PRICE",
-  3: "BOOKING PRICE",
-  4: "TOTAL",
-};
+export function hasCheckoutSelectedTime(time: string | null | undefined): boolean {
+  return /^\d{1,2}:\d{2}$/.test(time?.trim() ?? "");
+}
 
-export function checkoutSummaryPriceLabel(step: CheckoutSummaryStep): string {
-  return CHECKOUT_SUMMARY_PRICE_LABEL[step];
+export function checkoutSummaryPriceLabel(step: CheckoutSummaryStep, hasSelectedTime: boolean): string {
+  if (step === 4) return "TOTAL";
+  if (hasSelectedTime && step >= 2) return "BOOKING PRICE";
+  return "EST. PRICE";
 }
 
 export function segmentToCheckoutStep(segment: BookingCheckoutSegment): CheckoutSummaryStep {
@@ -27,9 +26,18 @@ function slotTimeOrAnchor(time: string | null | undefined): string {
   return /^\d{1,2}:\d{2}$/.test(t) ? t : JOB_DURATION_QUOTE_ANCHOR_HM;
 }
 
+export type CheckoutSidebarPriceResult = {
+  step: CheckoutSummaryStep;
+  hours: number;
+  totalZar: number;
+  /** True when total uses slot-aware smart quote (selected time). */
+  slotPricingActive: boolean;
+  priceLabel: string;
+};
+
 /**
- * Sidebar headline hours + ZAR: steps 1–2 use base catalog quote (no slot surge);
- * steps 3–4 use checkout quote for the selected time (demand / slot curve).
+ * Sidebar headline hours + ZAR. Uses base catalog quote until a time is selected;
+ * once a time is chosen, uses checkout smart quote (demand / slot curve) on all steps.
  */
 export function checkoutSidebarPriceDisplay(args: {
   snapshot: PricingRatesSnapshot | null;
@@ -40,11 +48,13 @@ export function checkoutSidebarPriceDisplay(args: {
   extraRooms: number;
   extras: string[];
   time: string | null;
-}): { step: CheckoutSummaryStep; hours: number; totalZar: number } {
+}): CheckoutSidebarPriceResult {
   const step = segmentToCheckoutStep(args.segment);
+  const hasSelectedTime = hasCheckoutSelectedTime(args.time);
+  const priceLabel = checkoutSummaryPriceLabel(step, hasSelectedTime);
 
   if (!args.snapshot || !args.service) {
-    return { step, hours: 0, totalZar: 0 };
+    return { step, hours: 0, totalZar: 0, slotPricingActive: false, priceLabel };
   }
 
   const input: CalculatePriceInput = {
@@ -55,12 +65,18 @@ export function checkoutSidebarPriceDisplay(args: {
     extras: args.extras,
   };
 
-  if (step <= 2) {
+  if (!hasSelectedTime) {
     const p = calculatePrice(input, args.snapshot);
-    return { step, hours: p.hours, totalZar: p.total };
+    return { step, hours: p.hours, totalZar: p.total, slotPricingActive: false, priceLabel };
   }
 
   const timeHm = slotTimeOrAnchor(args.time);
   const smart = calculateSmartQuote(input, args.snapshot, timeHm, "regular", {});
-  return { step, hours: smart.hours, totalZar: smart.total };
+  return {
+    step,
+    hours: smart.hours,
+    totalZar: smart.total,
+    slotPricingActive: true,
+    priceLabel,
+  };
 }

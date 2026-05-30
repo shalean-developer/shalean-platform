@@ -19,6 +19,7 @@ import {
   parseBookingServiceId,
 } from "@/components/booking/serviceCategories";
 import { formatCheckoutWhenLabel } from "@/components/booking/summary/formatCheckoutWhenLabel";
+import { formatCheckoutAddress } from "@/lib/booking/formatCheckoutAddress";
 import type { PriceSummaryCardProps } from "@/components/booking/PriceSummaryCard";
 import { checkoutSidebarPriceDisplay } from "@/lib/booking/checkoutSidebarPricing";
 import { isBookingPaymentUuid } from "@/lib/booking/bookingPaymentUuid";
@@ -75,6 +76,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const extras = useBookingCheckoutStore((s) => s.extras);
   const date = useBookingCheckoutStore((s) => s.date);
   const time = useBookingCheckoutStore((s) => s.time);
+  const timeUserSelected = useBookingCheckoutStore((s) => s.timeUserSelected);
   const location = useBookingCheckoutStore((s) => s.location);
   const detailsFlowPhase = useBookingCheckoutStore((s) => s.detailsFlowPhase);
   const serviceAreaName = useBookingCheckoutStore((s) => s.serviceAreaName);
@@ -169,11 +171,12 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
           date,
           time,
           location,
+          timeUserSelected,
         },
         catalog?.services?.map((x) => x.id),
         { catalogLoading, currentSegmentIndex: stepIndex },
       ),
-    [service, bedrooms, bathrooms, date, time, location, catalog?.services, catalogLoading, stepIndex],
+    [service, bedrooms, bathrooms, date, time, location, timeUserSelected, catalog?.services, catalogLoading, stepIndex],
   );
 
   useEffect(() => {
@@ -246,9 +249,15 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   );
 
   const whereLabel = useMemo(
-    () => serviceAreaName?.trim() || location?.trim() || "Not set yet",
+    () =>
+      formatCheckoutAddress({
+        serviceAreaName,
+        streetAddress: location,
+      }),
     [serviceAreaName, location],
   );
+
+  const priceFootnote = sidebarPricing.slotPricingActive ? scheduleCheckoutCopy.slotPricingFootnote : undefined;
 
   const whatLabel = useMemo(
     () => getBookingSummaryServiceLabel(sid, inferServiceTypeFromServiceId(sid)),
@@ -263,8 +272,8 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
   const propertyValid = bedrooms >= 1 && bathrooms >= 1;
 
   const scheduleComplete = useMemo(
-    () => scheduleStepComplete({ date, time, location }),
-    [date, time, location],
+    () => scheduleStepComplete({ date, time, location, timeUserSelected }),
+    [date, time, location, timeUserSelected],
   );
 
   const continueDisabled = useMemo(() => {
@@ -363,6 +372,8 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
       editWhatHref: withBookingQuery(checkoutSegmentPath("details"), searchParams),
       editWhenHref: withBookingQuery(checkoutSegmentPath("schedule"), searchParams),
       checkoutStep: sidebarPricing.step,
+      priceLabel: sidebarPricing.priceLabel,
+      priceFootnote,
       summaryHours: sidebarPricing.hours,
       summaryTotalZar: sidebarPricing.totalZar,
       extrasRows,
@@ -389,6 +400,8 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
     whenLabel,
     searchParams,
     sidebarPricing.step,
+    sidebarPricing.priceLabel,
+    priceFootnote,
     sidebarPricing.hours,
     sidebarPricing.totalZar,
     extrasRows,
@@ -409,7 +422,6 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
 
   const hideContinueOnDetailsPick = segment === "details" && !detailsHome;
 
-  const isScheduleOrCleaner = segment === "schedule" || segment === "cleaner";
 
   const continueCtaLabel =
     segment === "schedule"
@@ -423,62 +435,33 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
           : "Continue";
 
   const desktopFooter =
-    showStepNav && (prevSeg || nextSeg) ? (
-      <div
-        className={cn("hidden flex-row gap-4 border-t border-gray-100 pt-6 dark:border-zinc-800 lg:flex")}
-      >
-        {isScheduleOrCleaner ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="xl"
-              className="h-12 flex-1 rounded-xl border-gray-200 font-semibold text-zinc-700 transition-all duration-200 hover:bg-gray-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-              disabled={!prevSeg}
-              onClick={goBack}
-            >
-              Back
-            </Button>
-            {nextSeg && !hideContinueOnDetailsPick ? (
-              <Button
-                type="button"
-                size="xl"
-                className="h-12 min-w-0 flex-1 rounded-xl font-semibold shadow-md shadow-blue-600/20 transition-all duration-200 hover:bg-blue-600/95 hover:shadow-lg hover:shadow-blue-600/25 active:scale-[0.99] disabled:opacity-60 disabled:active:scale-100 dark:hover:bg-blue-500/95"
-                disabled={continueDisabled || (segment === "cleaner" && cleanerContinueBusy)}
-                onClick={() => void goNext()}
-              >
-                {continueCtaLabel}
-              </Button>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="xl"
-              className={cn(
-                "rounded-xl border-gray-200 font-semibold transition-all duration-200 hover:bg-gray-50 dark:border-zinc-600 dark:hover:bg-zinc-800/80",
-                hideContinueOnDetailsPick ? "w-full" : "flex-1",
-              )}
-              disabled={!prevSeg}
-              onClick={goBack}
-            >
-              Back
-            </Button>
-            {nextSeg && !hideContinueOnDetailsPick ? (
-              <Button
-                type="button"
-                size="xl"
-                className="flex-1 rounded-xl font-semibold shadow-sm transition-all duration-200 disabled:opacity-60"
-                disabled={continueDisabled}
-                onClick={() => void goNext()}
-              >
-                {continueCtaLabel}
-              </Button>
-            ) : null}
-          </>
-        )}
+    showStepNav && nextSeg ? (
+      <div className={cn("hidden flex-row gap-4 border-t border-gray-100 pt-6 dark:border-zinc-800 lg:flex")}>
+        {prevSeg ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="xl"
+            className="h-12 flex-1 rounded-xl border-gray-200 font-semibold text-zinc-700 transition-all duration-200 hover:bg-gray-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
+            onClick={goBack}
+          >
+            Back
+          </Button>
+        ) : null}
+        {!hideContinueOnDetailsPick ? (
+          <Button
+            type="button"
+            size="xl"
+            className={cn(
+              "h-12 min-w-0 rounded-xl font-semibold shadow-md shadow-blue-600/20 transition-all duration-200 hover:bg-blue-600/95 hover:shadow-lg hover:shadow-blue-600/25 active:scale-[0.99] disabled:opacity-60 disabled:active:scale-100 dark:hover:bg-blue-500/95",
+              prevSeg ? "flex-1" : "w-full",
+            )}
+            disabled={continueDisabled || (segment === "cleaner" && cleanerContinueBusy)}
+            onClick={() => void goNext()}
+          >
+            {continueCtaLabel}
+          </Button>
+        ) : null}
       </div>
     ) : null;
 
@@ -490,7 +473,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         stepTotal={TOTAL}
         showTopProgress={false}
         summary={summaryCard}
-        hideDesktopSummary={segment === "details" || skipFunnelPaymentGuards}
+        hideDesktopSummary={skipFunnelPaymentGuards}
         desktopFooter={desktopFooter}
         main={
           <AnimatePresence mode="wait">
@@ -505,9 +488,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
                 segment === "payment"
                   ? "pb-4 max-lg:pb-[11.5rem] lg:pb-0"
                   : showStepNav
-                    ? segment === "cleaner"
-                      ? "pb-4 max-lg:pb-[10rem] lg:pb-0"
-                      : "pb-4 max-lg:pb-5 lg:pb-0"
+                    ? "pb-4 max-lg:pb-[10rem] lg:pb-0"
                     : "pb-5 max-lg:pb-6 lg:pb-0",
               )}
             >
@@ -547,7 +528,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
         }
       />
 
-      {segment === "cleaner" && showStepNav ? (
+      {showStepNav && segment !== "payment" ? (
         <div className="fixed inset-x-0 bottom-0 z-50 lg:hidden">
           <MobileBottomBar
             totalDisplay=""
@@ -557,8 +538,9 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
             checkoutDock={{
               onBack: goBack,
               backDisabled: !prevSeg,
+              hideBack: !prevSeg,
               onContinue: () => void goNext(),
-              continueDisabled: continueDisabled || cleanerContinueBusy,
+              continueDisabled: continueDisabled || (segment === "cleaner" && cleanerContinueBusy),
               continueLabel: continueCtaLabel,
               hideContinue: hideContinueOnDetailsPick || !nextSeg,
             }}

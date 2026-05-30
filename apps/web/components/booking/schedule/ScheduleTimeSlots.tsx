@@ -64,6 +64,8 @@ type ScheduleTimeSlotsProps = {
   onChange: (time: string | null) => void;
   /** Per `HH:mm` — false = treated unavailable (hidden). */
   availability?: Record<string, boolean>;
+  /** Show skeleton chips while fetching availability. */
+  loading?: boolean;
   variant?: "default" | "checkout";
   bandLabels?: { morning: string; midday: string; evening: string };
   seeMoreTimeSlotsLabel?: string;
@@ -75,6 +77,7 @@ export function ScheduleTimeSlots({
   value,
   onChange,
   availability,
+  loading = false,
   variant = "default",
   bandLabels = { morning: "Morning", midday: "Midday", evening: "Evening" },
   seeMoreTimeSlotsLabel = "See more time slots",
@@ -250,7 +253,22 @@ export function ScheduleTimeSlots({
 
   return (
     <div className={checkout ? "space-y-4" : "space-y-5"}>
-      {morning.length > 0 ? (
+      {loading ? (
+        <div
+          className={cn(
+            checkoutSlotStripBase,
+            "lg:grid lg:grid-cols-5 lg:gap-2.5 lg:overflow-visible lg:pb-0",
+          )}
+          aria-hidden
+        >
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className={checkoutSlotChipWrap}>
+              <div className="min-h-[50px] animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800 sm:min-h-[52px]" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {!loading && morning.length > 0 ? (
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p
@@ -281,7 +299,7 @@ export function ScheduleTimeSlots({
         </div>
       ) : null}
 
-      {midday.length > 0 ? (
+      {!loading && midday.length > 0 ? (
         <div ref={middayRef} className="scroll-mt-4">
           <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p
@@ -308,7 +326,7 @@ export function ScheduleTimeSlots({
         </div>
       ) : null}
 
-      {evening.length > 0 ? (
+      {!loading && evening.length > 0 ? (
         <div ref={eveningRef} className="scroll-mt-4">
           <p className={cn("mb-2", bandTitleClass)}>{bandLabels.evening}</p>
           {renderBandSlots(

@@ -7,6 +7,41 @@ export const BOOKING_SLOT_END_MINUTE = 30;
 export const BOOKING_SLOT_INTERVAL_MIN = 30;
 
 const SLOT_END_TOTAL_MIN = BOOKING_SLOT_END_HOUR * 60 + BOOKING_SLOT_END_MINUTE;
+const SLOT_START_TOTAL_MIN = BOOKING_SLOT_START_HOUR * 60;
+
+/** Last minute of the public same-day booking window (18:30). */
+export function bookingServiceDayEndMinutes(): number {
+  return SLOT_END_TOTAL_MIN;
+}
+
+export function bookingSlotStartToMinutes(hm: string): number | null {
+  const m = hm.trim().slice(0, 5).match(/^(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** Longest job (minutes) that can start at the first slot and finish same day. */
+export function bookingMaxSameDayJobMinutesFromFirstSlot(): number {
+  return bookingServiceDayEndMinutes() - SLOT_START_TOTAL_MIN;
+}
+
+/**
+ * Minutes of work used to test cleaner availability for a slot start time.
+ * Caps inflated quote durations so the public slot grid still surfaces bookable starts.
+ * Returns null when fewer than 30 minutes remain in the service day.
+ */
+export function bookingSlotEligibilityDurationMinutes(
+  slotStartMinutes: number,
+  jobDurationMinutes: number,
+): number | null {
+  const remaining = bookingServiceDayEndMinutes() - slotStartMinutes;
+  if (remaining < 30) return null;
+  const cappedJob = Math.min(
+    Math.max(30, Math.round(jobDurationMinutes)),
+    bookingMaxSameDayJobMinutesFromFirstSlot(),
+  );
+  return Math.min(cappedJob, remaining);
+}
 
 /** All slots from 07:00 … 18:30 in 30-minute steps (independent of date). */
 export function generateBookingTimeSlots(): string[] {

@@ -8,6 +8,8 @@ export type MobileCheckoutDockActions = {
   onBack: () => void;
   backDisabled?: boolean;
   backLabel?: string;
+  /** Omit Back control (e.g. first checkout step). */
+  hideBack?: boolean;
   onContinue: () => void;
   continueDisabled?: boolean;
   continueLabel?: string;
@@ -190,15 +192,21 @@ export function MobileBottomBar({
 
     const inner = checkoutDock ? (
       <div className="flex w-full items-center gap-1.5">
-        <button
-          type="button"
-          onClick={checkoutDock.onBack}
-          disabled={checkoutDock.backDisabled}
-          className="-mx-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-        >
-          {checkoutDock.backLabel ?? "Back"}
-        </button>
-        {checkoutDockHideCenter ? <span className="min-w-2 flex-1" aria-hidden /> : centerPriceTap}
+        {checkoutDock.hideBack ? null : (
+          <button
+            type="button"
+            onClick={checkoutDock.onBack}
+            disabled={checkoutDock.backDisabled}
+            className="-mx-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          >
+            {checkoutDock.backLabel ?? "Back"}
+          </button>
+        )}
+        {checkoutDockHideCenter && !checkoutDock.hideBack ? (
+          <span className="min-w-2 flex-1" aria-hidden />
+        ) : checkoutDockHideCenter ? null : (
+          centerPriceTap
+        )}
         {checkoutDock.hideContinue ? (
           <span className="w-[5.25rem] shrink-0 sm:w-24" aria-hidden />
         ) : (

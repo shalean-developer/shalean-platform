@@ -16,6 +16,7 @@ import {
   availabilityScoreFromLabel,
   type AvailabilityLabel,
 } from "@/lib/admin/replacementCandidateScoring";
+import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -81,7 +82,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, duration_minutes, city_id, latitude, longitude")
+    .select("id, date, time, duration_minutes, city_id, latitude, longitude, location_id, service_slug, service")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -96,6 +97,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     city_id?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    location_id?: string | null;
+    service_slug?: string | null;
+    service?: string | null;
   };
 
   const dateYmd = String(b.date ?? "").trim();
@@ -119,6 +123,27 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   for (const id of excludeExtra) rosterIds.add(id);
 
   const othersByCleaner = await loadCleanerDayScheduleOthers(admin, { dateYmd, excludeBookingId: bookingId });
+
+  const locId = String(b.location_id ?? "").trim();
+  const durationMinutes =
+    typeof b.duration_minutes === "number" && Number.isFinite(b.duration_minutes)
+      ? Math.max(30, Math.round(b.duration_minutes))
+      : demand.durationMin;
+
+  let eligibleIds: Set<string> | null = null;
+  if (locId) {
+    const eligible = await getEligibleCleaners(admin, {
+      date: dateYmd,
+      startTime: timeHm.trim().slice(0, 5),
+      durationMinutes,
+      locationId: locId,
+      locationExpandedIds: [locId],
+      serviceType: String(b.service_slug ?? "").trim() || null,
+      serviceLabelForCapability: String(b.service ?? "").trim() || null,
+      limit: 500,
+    });
+    eligibleIds = new Set(eligible.map((row) => row.id));
+  }
 
   const jobLat =
     typeof b.latitude === "number" && Number.isFinite(b.latitude) ? b.latitude : null;
@@ -161,6 +186,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const c = raw as CRow;
     const id = String(c.id ?? "").trim();
     if (!id || rosterIds.has(id)) continue;
+    if (eligibleIds && !eligibleIds.has(id)) continue;
 
     const lat = typeof c.latitude === "number" && Number.isFinite(c.latitude) ? c.latitude : c.home_lat;
     const lng = typeof c.longitude === "number" && Number.isFinite(c.longitude) ? c.longitude : c.home_lng;

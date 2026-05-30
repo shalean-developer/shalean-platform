@@ -1,5 +1,6 @@
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
+import { formatCheckoutAddress } from "@/lib/booking/formatCheckoutAddress";
 import type { ExtraLineItem } from "@/lib/pricing/extrasConfig";
 
 const UUID_RE =
@@ -68,6 +69,8 @@ export type BookingPaymentSummary = {
   assignmentType: string | null;
   /** DB `service_slug` or normalized service from snapshot / `service` label. */
   serviceSlug: string | null;
+  /** Visit location for review (street + area). */
+  locationDisplay: string | null;
 };
 
 function extrasFromRow(raw: unknown): { slug?: string; name?: string }[] {
@@ -105,6 +108,7 @@ export type BookingRowPaymentInput = {
   booking_snapshot?: unknown;
   selected_cleaner_id?: string | null;
   assignment_type?: string | null;
+  location?: string | null;
 };
 
 export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): BookingPaymentSummary {
@@ -194,6 +198,16 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
         ? snapRaw.trim()
         : null;
 
+  const rowLocation = typeof row.location === "string" ? row.location.trim() : "";
+  const lockedLocation = typeof locked?.location === "string" ? locked.location.trim() : "";
+  const lockedAreaName =
+    typeof locked?.serviceAreaName === "string" ? locked.serviceAreaName.trim() : "";
+  const locationDisplay = formatCheckoutAddress({
+    serviceAreaName: lockedAreaName || null,
+    streetAddress: null,
+    displayLocation: rowLocation || lockedLocation || null,
+  });
+
   return {
     id: row.id,
     email: row.customer_email ?? null,
@@ -220,6 +234,7 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
     selectedCleanerId,
     assignmentType,
     serviceSlug,
+    locationDisplay: locationDisplay === "Not set yet" ? null : locationDisplay,
   };
 }
 

@@ -2,13 +2,15 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { BOOKING_MIN_LEAD_MINUTES, billingMonthFromYmd, filterBookableTimeSlots, johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
+import {
+  CUSTOMER_RESCHEDULE_REDISPATCH_STATUSES,
+  isCustomerReschedulableBookingStatus,
+} from "@/lib/dashboard/customerBookingModifyStatuses";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const RESCHEDULE_STATUSES = new Set(["pending", "confirmed", "assigned"]);
 
 function isYmd(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -96,7 +98,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const status = String((row as { status?: string }).status ?? "").toLowerCase();
-  if (!RESCHEDULE_STATUSES.has(status)) {
+  if (!isCustomerReschedulableBookingStatus(status)) {
     return NextResponse.json({ error: "This booking cannot be rescheduled." }, { status: 400 });
   }
 
@@ -149,7 +151,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const cleanerId = (row as { cleaner_id?: string | null }).cleaner_id;
   const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
-  if (status === "pending" && !cleanerId && autoDispatch) {
+  if (CUSTOMER_RESCHEDULE_REDISPATCH_STATUSES.has(status) && !cleanerId && autoDispatch) {
     void ensureBookingAssignment(admin, bookingId, { source: "customer_reschedule" });
   }
 

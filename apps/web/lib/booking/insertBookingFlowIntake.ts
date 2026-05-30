@@ -16,8 +16,9 @@ import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import { formatCheckoutAddress } from "@/lib/booking/formatCheckoutAddress";
 import { buildPriceSnapshotV1Checkout } from "@/lib/booking/priceSnapshotBooking";
-import { calculatePrice } from "@/lib/pricing/calculatePrice";
+import { calculateSmartQuote } from "@/lib/pricing/calculatePrice";
 import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveBookingLocationContext } from "@/lib/booking/resolveLocationId";
@@ -106,7 +107,7 @@ export async function insertBookingFromFlowIntake(
   const pv = await getOrCreatePricingVersionId(admin, snapshot);
   const pricingVersionId = pv?.id?.trim() ?? null;
 
-  const { total: totalZar, hours } = calculatePrice(
+  const smart = calculateSmartQuote(
     {
       service: svc,
       rooms: input.bedrooms,
@@ -115,7 +116,12 @@ export async function insertBookingFromFlowIntake(
       extras: Array.isArray(input.extras) ? input.extras : [],
     },
     snapshot,
+    time,
+    "regular",
+    {},
   );
+  const totalZar = smart.total;
+  const hours = smart.hours;
 
   if (!Number.isFinite(totalZar) || totalZar <= 0) return { ok: false, error: "Could not calculate price." };
 
@@ -154,7 +160,10 @@ export async function insertBookingFromFlowIntake(
     }
   }
 
-  const displayLocation = [serviceAreaNameOut, loc].filter((x) => x.length > 0).join(" — ").slice(0, 500);
+  const displayLocation = formatCheckoutAddress({
+    serviceAreaName: serviceAreaNameOut,
+    streetAddress: loc,
+  }).slice(0, 500);
 
   const step1 = normalizeStep1ForService({
     ...INITIAL_BOOKING_STEP1_STATE,
@@ -182,7 +191,7 @@ export async function insertBookingFromFlowIntake(
     time,
     finalPrice: Math.round(totalZar),
     finalHours: Number.isFinite(hours) ? hours : 0,
-    surge: 1,
+    surge: smart.surge,
     locked: true,
     lockedAt,
     pricing_version_id: pricingVersionId,

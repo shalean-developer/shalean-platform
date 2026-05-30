@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
+import { Check } from "lucide-react";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -90,7 +91,7 @@ export function BookingCheckoutHeaderStep({
         )}
         aria-label={`${label}, step ${number}`}
       >
-        {number}
+        {completed && !active ? <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden /> : number}
       </div>
       <span
         className={cn(
@@ -141,7 +142,7 @@ function BookingCheckoutMobileFourStepRow({
                   aria-current={active ? "step" : undefined}
                   aria-label={`${step.label}, step ${n}${active ? ", current" : ", completed"}`}
                 >
-                  {n}
+                  {completed ? <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden /> : n}
                 </div>
               )}
             </div>

@@ -1,5 +1,9 @@
 "use client";
 
+import { bookingCopy } from "@/lib/booking/copy";
+
+const payCopy = bookingCopy.checkoutPayment;
+
 type CustomerDetailsStepProps = {
   customerName: string;
   customerEmail: string;
@@ -15,7 +19,7 @@ export function CustomerDetailsStep({ customerName, customerEmail, customerPhone
     <div className="space-y-4">
       <div>
         <label htmlFor="cust-name" className="mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Full name <span className="text-red-600">*</span>
+          {payCopy.contactFullNameLabel} <span className="text-red-600">*</span>
         </label>
         <input
           id="cust-name"
@@ -24,12 +28,12 @@ export function CustomerDetailsStep({ customerName, customerEmail, customerPhone
           value={customerName}
           onChange={(e) => onChange({ customerName: e.target.value })}
           className={field}
-          placeholder="Jane Doe"
+          placeholder={payCopy.contactNamePlaceholder}
         />
       </div>
       <div>
         <label htmlFor="cust-email" className="mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Email <span className="text-red-600">*</span>
+          {payCopy.contactEmailLabel} <span className="text-red-600">*</span>
         </label>
         <input
           id="cust-email"
@@ -38,12 +42,12 @@ export function CustomerDetailsStep({ customerName, customerEmail, customerPhone
           value={customerEmail}
           onChange={(e) => onChange({ customerEmail: e.target.value })}
           className={field}
-          placeholder="you@example.com"
+          placeholder={payCopy.contactEmailPlaceholder}
         />
       </div>
       <div>
         <label htmlFor="cust-phone" className="mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Phone <span className="text-red-600">*</span>
+          {payCopy.contactPhoneLabel} <span className="text-red-600">*</span>
         </label>
         <input
           id="cust-phone"
@@ -52,7 +56,7 @@ export function CustomerDetailsStep({ customerName, customerEmail, customerPhone
           value={customerPhone}
           onChange={(e) => onChange({ customerPhone: e.target.value })}
           className={field}
-          placeholder="+27 …"
+          placeholder={payCopy.contactPhonePlaceholder}
         />
       </div>
     </div>

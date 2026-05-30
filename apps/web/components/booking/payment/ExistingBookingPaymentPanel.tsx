@@ -11,6 +11,9 @@ import { PaymentMethodCard } from "./PaymentMethodCard";
 import { PaymentPricingAccordion } from "./PaymentPricingAccordion";
 import { RetryPaymentNotice } from "./RetryPaymentNotice";
 import { TrustReinforcementCard } from "./TrustReinforcementCard";
+import { bookingCopy } from "@/lib/booking/copy";
+
+const payCopy = bookingCopy.checkoutPayment;
 
 type Props = {
   summary: BookingPaymentSummary;
@@ -61,7 +64,7 @@ export function ExistingBookingPaymentPanel({
           disabled={primaryDisabled}
           onClick={() => void handlePay()}
         >
-          {busy ? "Processing…" : "Pay & confirm"}
+          {busy ? payCopy.payProcessing : payCopy.payCta}
         </Button>
       </div>
 
@@ -90,7 +93,7 @@ export function ExistingBookingPaymentPanel({
             disabled={primaryDisabled}
             onClick={() => void handlePay()}
           >
-            {busy ? "Processing…" : "Pay & confirm"}
+            {busy ? payCopy.payProcessing : payCopy.payCta}
           </Button>
         </div>
       </div>

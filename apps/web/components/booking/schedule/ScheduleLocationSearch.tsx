@@ -140,13 +140,28 @@ export function ScheduleLocationSearch({
         });
       } else {
         const hint = BOOKING_FLOW_LOCATION_HINTS.find((h) => h.slug === opt.slug);
-        onHintSelect(opt.slug, hint?.name ?? opt.label.split("(")[0]?.trim() ?? opt.label);
+        const apiMatch = apiRows.find((r) => {
+          const slug = String(r.slug ?? "").trim().toLowerCase();
+          const name = String(r.name ?? "").trim().toLowerCase();
+          const hintSlug = opt.slug.trim().toLowerCase();
+          const hintName = (hint?.name ?? "").trim().toLowerCase();
+          return slug === hintSlug || (hintName.length > 0 && name === hintName);
+        });
+        if (apiMatch) {
+          onApiSelect({
+            locationId: apiMatch.id,
+            cityId: apiMatch.city_id,
+            name: apiMatch.name,
+          });
+        } else {
+          onHintSelect(opt.slug, hint?.name ?? opt.label.split("(")[0]?.trim() ?? opt.label);
+        }
       }
       setOpen(false);
       setQuery("");
       inputRef.current?.blur();
     },
-    [onApiSelect, onHintSelect],
+    [onApiSelect, onHintSelect, apiRows],
   );
 
   const inputValue = open ? query : selectedLabel;

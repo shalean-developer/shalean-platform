@@ -15,6 +15,8 @@ export type BookingCheckoutState = {
   extras: string[];
   date: string | null;
   time: string | null;
+  /** User explicitly tapped a time slot (not auto-selected). */
+  timeUserSelected: boolean;
   location: string;
   locationSlug: string | null;
   serviceAreaLocationId: string | null;
@@ -40,6 +42,7 @@ const initialState: BookingCheckoutState = {
   extras: [],
   date: null,
   time: null,
+  timeUserSelected: false,
   location: "",
   locationSlug: null,
   serviceAreaLocationId: null,
@@ -68,6 +71,7 @@ function persistedSlice(s: BookingCheckoutStore): BookingCheckoutState {
     extras: s.extras,
     date: s.date,
     time: s.time,
+    timeUserSelected: s.timeUserSelected,
     location: s.location,
     locationSlug: s.locationSlug,
     serviceAreaLocationId: s.serviceAreaLocationId,
@@ -117,6 +121,7 @@ export const useBookingCheckoutStore = create<BookingCheckoutStore>()(
               ? p.cleanerDisplayName
               : current.cleanerDisplayName,
           detailsFlowPhase: phase,
+          timeUserSelected: p.timeUserSelected === true,
           patch: current.patch,
           reset: current.reset,
         };

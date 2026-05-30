@@ -26,7 +26,7 @@ export function BookingReviewPanel({ summary, className }: Props) {
   const scheduleLine =
     datePart === "Not set yet" && timePart === "Not set yet" ? "—" : `${datePart} · ${timePart}`;
 
-  const whereLabel = "From your booking";
+  const whereLabel = summary.locationDisplay?.trim() || payCopy.locationFallback;
 
   const cleanerLabel = summary.cleanerName?.trim()
     ? `${payCopy.cleanerSelectedShort}: ${summary.cleanerName.trim()}`

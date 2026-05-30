@@ -6,8 +6,11 @@ import type { ServiceAreaSelection } from "@/components/booking/ServiceAreaPicke
 import { ScheduleDateScroller, generateScheduleDateRange } from "@/components/booking/schedule/ScheduleDateScroller";
 import { ScheduleLocationSearch } from "@/components/booking/schedule/ScheduleLocationSearch";
 import { ScheduleTimeSlots, getRenderableScheduleTimes } from "@/components/booking/schedule/ScheduleTimeSlots";
-import { defaultBookingTimeForDate } from "@/lib/booking/bookingTimeSlots";
+import { findLocationBySlug } from "@/lib/booking/bookingFlowLocationCatalog";
+import { formatCheckoutAddress } from "@/lib/booking/formatCheckoutAddress";
+import { useCheckoutScheduleAvailability } from "@/lib/booking/useCheckoutScheduleAvailability";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
+import { useBookingAvailabilityArea } from "@/components/booking/useBookingAvailabilityArea";
 import { bookingCopy } from "@/lib/booking/copy";
 import { cn } from "@/lib/utils";
 
@@ -49,13 +52,48 @@ export function ScheduleStep({
   onAreaHintSelect,
 }: ScheduleStepProps) {
   const [addressExpanded, setAddressExpanded] = useState(() => !location.trim());
+  const service = useBookingCheckoutStore((s) => s.service);
+  const bedrooms = useBookingCheckoutStore((s) => s.bedrooms);
+  const bathrooms = useBookingCheckoutStore((s) => s.bathrooms);
+  const extraRooms = useBookingCheckoutStore((s) => s.extraRooms);
+  const extras = useBookingCheckoutStore((s) => s.extras);
+  const serviceAreaCityId = useBookingCheckoutStore((s) => s.serviceAreaCityId);
+
+  const areaLabel = useMemo(() => {
+    if (serviceAreaName.trim()) return serviceAreaName.trim();
+    const hint = locationSlug ? findLocationBySlug(locationSlug) : undefined;
+    return hint ? `${hint.name} (${hint.cityName})` : "";
+  }, [serviceAreaName, locationSlug]);
+
+  const { locationId: resolvedLocationId } = useBookingAvailabilityArea({
+    serviceAreaLocationId,
+    serviceAreaCityId,
+    locationLabel: areaLabel,
+    allowFreeTextFallback: true,
+  });
+
+  const { availability, loading: slotsLoading, fetchError: slotsFetchError } = useCheckoutScheduleAvailability({
+      dateYmd: date,
+      locationId: resolvedLocationId,
+      serviceType: service,
+      bedrooms,
+      bathrooms,
+      extraRooms,
+      extras,
+    });
+
+  const hasResolvedArea = Boolean(resolvedLocationId);
+  const resolvingArea = Boolean(areaLabel.trim() && !serviceAreaLocationId && !resolvedLocationId);
 
   const firstBookableDate = useMemo(() => {
     const chips = generateScheduleDateRange(90);
     return chips.find((c) => !c.isPast && !c.unavailable)?.value ?? null;
   }, []);
 
-  const slotsForDate = useMemo(() => (date ? getRenderableScheduleTimes(date) : []), [date]);
+  const slotsForDate = useMemo(
+    () => (date ? getRenderableScheduleTimes(date, availability) : []),
+    [date, availability],
+  );
 
   useEffect(() => {
     if (!date && firstBookableDate) {
@@ -65,21 +103,21 @@ export function ScheduleStep({
 
   useEffect(() => {
     if (!date) return;
-    const allowed = getRenderableScheduleTimes(date);
+    const allowed = getRenderableScheduleTimes(date, availability);
     if (allowed.length === 0) {
-      useBookingCheckoutStore.getState().patch({ time: null });
-      return;
+      useBookingCheckoutStore.getState().patch({ time: null, timeUserSelected: false });
     }
-    const cur = useBookingCheckoutStore.getState().time;
-    if (!cur || !allowed.includes(cur)) {
-      const preferred = defaultBookingTimeForDate(date);
-      const next = allowed.includes(preferred) ? preferred : allowed[0]!;
-      useBookingCheckoutStore.getState().patch({ time: next });
-    }
-  }, [date, time]);
+  }, [date, availability]);
+
+  const formattedStreetAddress = useMemo(
+    () => formatCheckoutAddress({ serviceAreaName: areaLabel, streetAddress: location }),
+    [areaLabel, location],
+  );
 
   const showAvailabilityBanner = Boolean(date && time && slotsForDate.length > 0);
-  const showNoTimesBanner = Boolean(date && slotsForDate.length === 0);
+  const showNoTimesBanner = Boolean(
+    date && hasResolvedArea && !slotsLoading && !resolvingArea && slotsForDate.length === 0,
+  );
 
   return (
     <div className="space-y-5 max-lg:space-y-4">
@@ -105,11 +143,31 @@ export function ScheduleStep({
 
       <div>
         <p className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{sch.timeLabel}</p>
+        {!areaLabel.trim() ? (
+          <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-400">{sch.areaRequiredForTimes}</p>
+        ) : null}
+        {areaLabel.trim() && resolvingArea ? (
+          <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400" role="status">
+            {sch.resolvingArea}
+          </p>
+        ) : null}
+        {hasResolvedArea && slotsLoading ? (
+          <p className="sr-only" role="status">
+            {sch.loadingTimes}
+          </p>
+        ) : null}
+        {hasResolvedArea && slotsFetchError && !slotsLoading ? (
+          <p className="mb-2 text-sm text-amber-800 dark:text-amber-200" role="status">
+            {sch.timesLoadError}
+          </p>
+        ) : null}
         <ScheduleTimeSlots
-          key={date ?? "no-date"}
+          key={`${date ?? "no-date"}-${resolvedLocationId ?? "no-loc"}`}
           dateYmd={date}
           value={time}
           onChange={onTimeChange}
+          availability={availability}
+          loading={hasResolvedArea && slotsLoading}
           variant="checkout"
           bandLabels={{ morning: sch.morning, midday: sch.midday, evening: sch.evening }}
           seeMoreTimeSlotsLabel={sch.seeMoreTimeSlots}
@@ -148,7 +206,7 @@ export function ScheduleStep({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{sch.addressLabel}</p>
               <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-zinc-700 dark:text-zinc-300">
-                {location}
+                {formattedStreetAddress}
               </p>
             </div>
             <button

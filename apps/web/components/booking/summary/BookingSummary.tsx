@@ -39,6 +39,10 @@ export type BookingSummaryProps = {
   checkoutStep: CheckoutSummaryStep;
   summaryHours: number;
   summaryTotalZar: number;
+  /** Sidebar price label (EST. PRICE / BOOKING PRICE / TOTAL). */
+  priceLabel: string;
+  /** Optional note when slot-aware pricing applies. */
+  priceFootnote?: string;
   extrasRows: SelectedExtraRow[];
   onRemoveExtra?: (id: string) => void;
   loading?: boolean;
@@ -78,6 +82,8 @@ function BookingSummaryInner({
   checkoutStep,
   summaryHours,
   summaryTotalZar,
+  priceLabel,
+  priceFootnote,
   extrasRows,
   onRemoveExtra,
   loading,
@@ -116,6 +122,7 @@ function BookingSummaryInner({
             checkoutStep={checkoutStep}
             hours={summaryHours}
             totalZar={summaryTotalZar}
+            priceLabel={priceLabel}
             loading={loading}
             compact
           />
@@ -126,7 +133,7 @@ function BookingSummaryInner({
         <ChevronUp className="h-4 w-4 shrink-0 text-gray-400 transition-opacity group-hover:opacity-80 dark:text-zinc-500" aria-hidden />
       </div>
     ),
-    [checkoutStep, summaryHours, summaryTotalZar, loading],
+    [checkoutStep, summaryHours, summaryTotalZar, priceLabel, loading],
   );
 
   if (layoutMode === "mobile-dock-compact") {
@@ -358,9 +365,14 @@ function BookingSummaryInner({
           checkoutStep={checkoutStep}
           hours={summaryHours}
           totalZar={summaryTotalZar}
+          priceLabel={priceLabel}
           loading={loading}
         />
       </div>
+
+      {priceFootnote ? (
+        <p className="text-xs leading-snug text-zinc-500 dark:text-zinc-400">{priceFootnote}</p>
+      ) : null}
 
       {sidebarTrustLine ? (
         <div className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-100/90 bg-emerald-50/60 py-2.5 dark:border-emerald-900/45 dark:bg-emerald-950/25">

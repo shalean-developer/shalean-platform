@@ -25,7 +25,10 @@ export type MaxReachableCheckoutOpts = {
 
 /** Highest segment index allowed (0–3) without skipping required intake. */
 export function getMaxReachableCheckoutSegmentIndex(
-  state: Pick<BookingCheckoutState, "service" | "bedrooms" | "bathrooms" | "date" | "time" | "location">,
+  state: Pick<
+    BookingCheckoutState,
+    "service" | "bedrooms" | "bathrooms" | "date" | "time" | "location" | "timeUserSelected"
+  >,
   catalogServiceIds: readonly string[] | undefined,
   opts?: MaxReachableCheckoutOpts,
 ): number {
@@ -41,9 +44,7 @@ export function getMaxReachableCheckoutSegmentIndex(
   const serviceOk = Boolean(state.service.trim() && sid && ids.has(state.service));
   if (!serviceOk || state.bedrooms < 1 || state.bathrooms < 1) return 0;
 
-  const scheduleOk = Boolean(
-    state.date && String(state.date).trim() && state.time && String(state.time).trim() && state.location.trim().length >= 3,
-  );
+  const scheduleOk = scheduleStepComplete(state);
   if (!scheduleOk) return 1;
 
   return 3;
@@ -63,8 +64,15 @@ export function prevCheckoutSegment(seg: BookingCheckoutSegment): BookingCheckou
   return BOOKING_CHECKOUT_SEGMENTS[i - 1] ?? null;
 }
 
-export function scheduleStepComplete(state: Pick<BookingCheckoutState, "date" | "time" | "location">): boolean {
+export function scheduleStepComplete(
+  state: Pick<BookingCheckoutState, "date" | "time" | "location" | "timeUserSelected">,
+): boolean {
   return Boolean(
-    state.date && String(state.date).trim() && state.time && String(state.time).trim() && state.location.trim().length >= 3,
+    state.date &&
+      String(state.date).trim() &&
+      state.time &&
+      String(state.time).trim() &&
+      state.timeUserSelected &&
+      state.location.trim().length >= 3,
   );
 }
