@@ -11,7 +11,7 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/about";
 const CANONICAL = absoluteCanonicalUrl(PATH);
-
+const OG_IMAGE = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
 const ABOUT_META_DESC = clampMetaDescription(
   "Vetted cleaners, transparent pricing, and reliable home cleaning across Cape Town. Learn how Shalean works and book online with upfront quotes.",
 );
@@ -32,11 +32,20 @@ export const metadata: Metadata = {
     url: CANONICAL,
     title: "About Shalean | Trusted Home Cleaning Cape Town",
     description: ABOUT_OG_DESC,
+    images: [
+      {
+        url: OG_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: "Shalean Cleaning Services Cape Town",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "About Shalean | Trusted Home Cleaning Cape Town",
     description: ABOUT_TWITTER_DESC,
+    images: [OG_IMAGE],
   },
 };
 
