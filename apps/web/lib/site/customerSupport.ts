@@ -1,11 +1,14 @@
 /** Customer-facing support (guest bookings, cancellations, general enquiries). */
 
-export const CUSTOMER_SUPPORT_EMAIL = "support@shalean.co.za";
+export const CUSTOMER_SUPPORT_EMAIL = "support@shalean.com";
 
-/** E.164 for JSON-LD and tel: links. */
-export const CUSTOMER_SUPPORT_TELEPHONE_E164 = "+27215550123";
+/** Call number */
+export const CUSTOMER_SUPPORT_TELEPHONE_E164 = "+27871535250";
 
-/** Pre-filled WhatsApp chat (wa.me digits = E.164 without +). */
+/** WhatsApp number */
+export const CUSTOMER_SUPPORT_WHATSAPP_E164 = "+27825915525";
+
+/** Pre-filled WhatsApp chat */
 export const CUSTOMER_SUPPORT_WHATSAPP_URL =
   process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_URL?.trim() ||
-  "https://wa.me/27215550123?text=Hi%20I%20want%20to%20book%20a%20cleaning";
+  "https://wa.me/27825915525?text=Hi%20I%20want%20to%20book%20a%20cleaning";
