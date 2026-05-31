@@ -13,8 +13,16 @@ export function GrowthTracking({
   markRetargeting?: boolean;
 }) {
   useEffect(() => {
-    if (markRetargeting) markRetargetingCandidate(true);
-    trackGrowthEvent(event, payload);
+    const run = () => {
+      if (markRetargeting) markRetargetingCandidate(true);
+      trackGrowthEvent(event, payload);
+    };
+
+    const timeoutId = window.setTimeout(run, 1500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [event, markRetargeting, payload]);
 
   return null;

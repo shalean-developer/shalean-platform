@@ -3,7 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
 
-/** Absolute app root — required when a parent folder (e.g. `apps/web/package.json` shim) has its own lockfile and Turbopack would otherwise infer the wrong root. */
 const turbopackRoot = path.dirname(fileURLToPath(import.meta.url));
 
 function supabaseImageHost(): string | null {
@@ -25,19 +24,12 @@ const imageRemotePatterns = [
 const nextConfig: NextConfig = {
   async redirects() {
     return [
-      /**
-       * Canonical host: apex `https://shalean.co.za`. `www.shalean.co.za` → apex (backup if DNS/Vercel redirect differs).
-       * Next uses **308** for `permanent: true` (same semantics as 301 for SEO; method/body preserved).
-       */
       {
         source: "/:path*",
         has: [{ type: "host", value: "www.shalean.co.za" }],
         destination: "https://shalean.co.za/:path*",
         permanent: true,
       },
-      /**
-       * Legacy `.com` → canonical apex `.co.za` with path + query preserved.
-       */
       {
         source: "/:path*",
         has: [{ type: "host", value: "shalean.com" }],
@@ -60,19 +52,11 @@ const nextConfig: NextConfig = {
         destination: "/services/deep-cleaning-cape-town",
         permanent: true,
       },
-      /**
-       * Legacy `/cleaning-services/:slug` URLs are handled only in `proxy.ts` so slugs already ending in
-       * `-cleaning-services` are never double-suffixed. Unknown slugs redirect to `/locations`.
-       */
       ...programmaticBlogCleanupRedirects,
     ];
   },
   images: {
     remotePatterns: imageRemotePatterns,
-    /**
-     * Next 16+ requires local `next/image` src paths to match here.
-     * Omit `search` so optional `?v=` cache-bust query strings under `/images/**` are allowed.
-     */
     localPatterns: [{ pathname: "/images/**" }, { pathname: "/marketing/**" }],
   },
   turbopack: {
