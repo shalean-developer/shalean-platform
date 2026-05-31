@@ -14,8 +14,8 @@ function safeCustomerRedirect(raw: string | null | undefined): string {
   return t;
 }
 
-const TERMS_HREF = "mailto:hello@shaleancleaning.com?subject=Terms%20of%20service";
-const PRIVACY_HREF = "mailto:hello@shaleancleaning.com?subject=Privacy%20policy";
+const TERMS_HREF = "/terms-of-service";
+const PRIVACY_HREF = "/privacy-policy";
 
 export type AuthRoleChoiceScreenProps = {
   /** Safe in-app path after customer sign-in (e.g. from `?redirect=`). */
