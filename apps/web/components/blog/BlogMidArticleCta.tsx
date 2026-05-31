@@ -18,7 +18,7 @@ export function BlogMidArticleCta({ trackingSlug }: Props) {
         Get instant pricing based on your home size—bedrooms, bathrooms, add-ons—before you pick a slot.
       </p>
       <GrowthCtaLink
-        href="/booking"
+        href="/booking/details"
         source={`blog_${trackingSlug}_mid_cta`}
         blogAnalyticsPlacement={`${trackingSlug}_mid_cta`}
         className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-100"

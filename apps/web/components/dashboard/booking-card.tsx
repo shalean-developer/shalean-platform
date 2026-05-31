@@ -174,7 +174,7 @@ export function BookingCard({
               ) : null}
               {showRebook ? (
                 <Button asChild variant="outline" size="lg" className="min-h-12 flex-1 rounded-xl sm:flex-none">
-                  <Link href="/booking">Rebook</Link>
+                  <Link href="/booking/details">Rebook</Link>
                 </Button>
               ) : null}
             </div>

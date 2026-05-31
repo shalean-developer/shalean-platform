@@ -20,7 +20,7 @@ export function FaqHero() {
             Get instant price
           </GrowthCtaLink>
           <GrowthCtaLink
-            href="/booking"
+            href="/booking/details"
             source="faq_hero_book"
             className="inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-8 text-base font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50"
           >

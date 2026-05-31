@@ -318,7 +318,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
                 Get Instant Quote
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking"
+                href="/booking/details"
                 source="cleaning_prices_cta_book_cleaner"
                 className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-900 transition hover:bg-slate-50"
               >
@@ -712,7 +712,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
                 Get your exact cleaning price now
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking"
+                href="/booking/details"
                 source="cleaning_prices_final_cta_book"
                 className="inline-flex items-center justify-center rounded-full border-2 border-white/80 bg-transparent px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10"
               >

@@ -35,7 +35,7 @@ export function BlogServiceLinks({ trackingSlug, service = "standard", dense = f
       <p className="mt-3 text-sm leading-relaxed text-zinc-600">
         Explore Cape Town-wide service guides, high-intent suburb hubs, and pricing—then{" "}
         <GrowthCtaLink
-          href="/booking"
+          href="/booking/details"
           source={`blog_internal_links_book_${service}`}
           className="font-semibold text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline"
         >

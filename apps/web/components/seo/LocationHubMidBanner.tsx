@@ -42,7 +42,7 @@ export function LocationHubMidBanner({ location, slug, tier, analyticsCtx }: Pro
             Check slots &amp; total for {name}
           </SeoHubGrowthCtaLink>
           <SeoHubGrowthCtaLink
-            href="/booking"
+            href="/booking/details"
             source={`seo_loc_${slug}_mid_banner_quick`}
             ctx={analyticsCtx}
             ctaLocation="pricing"

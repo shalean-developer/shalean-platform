@@ -20,7 +20,7 @@ export function LocationsIndexStickyCta() {
           Get exact price
         </CTAButton>
         <CTAButton
-          href="/booking"
+          href="/booking/details"
           variant="secondary"
           trackSource="locations_index_sticky_book"
           className="min-h-12 flex-1 rounded-xl border-emerald-200 text-emerald-900"

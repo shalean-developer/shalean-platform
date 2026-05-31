@@ -84,7 +84,7 @@ export function AboutPageView() {
             </ul>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <GrowthCtaLink
-                href="/booking"
+                href="/booking/details"
                 source="about_hero_book"
                 className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
               >
@@ -306,7 +306,7 @@ export function AboutPageView() {
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <GrowthCtaLink
-                href="/booking"
+                href="/booking/details"
                 source="about_footer_book"
                 className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl bg-white px-8 text-base font-semibold text-emerald-950 transition hover:bg-emerald-50 sm:w-auto"
               >

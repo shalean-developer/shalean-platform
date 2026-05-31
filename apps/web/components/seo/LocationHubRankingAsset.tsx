@@ -361,7 +361,7 @@ export function LocationHubRankingAsset({ location, seo, ranking, ctx }: Props) 
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <SeoHubGrowthCtaLink
-                href="/booking"
+                href="/booking/details"
                 source={`seo_loc_${slug}_ranking_check_availability`}
                 ctx={ctx}
                 ctaLocation={`${slug}_ranking_band`}

@@ -229,7 +229,7 @@ function BookFlowInner() {
       ) : null}
 
       <p className="text-center text-xs text-zinc-500">
-        <Link href="/booking" className="underline-offset-2 hover:underline">
+        <Link href="/booking/details" className="underline-offset-2 hover:underline">
           Use the current booking flow
         </Link>
       </p>

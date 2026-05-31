@@ -23,6 +23,7 @@ import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
+
 const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
 const PAGE_URL = CANONICAL_ABS;
 
@@ -58,6 +59,7 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
           pageIntent: "hub",
           maxLen: BLOG_SERP_TITLE_MAX,
         });
+
   const description =
     topic === "all"
       ? DEFAULT_DESCRIPTION
@@ -95,6 +97,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
 
   const featured = resolveFeaturedPost(enriched);
   const featuredSlug = featured?.slug ?? null;
+
   const popular = resolvePopularPosts(enriched, {
     excludeSlugs: featuredSlug ? new Set([featuredSlug]) : new Set(),
   });
@@ -112,6 +115,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
   let visible = filterPostsByTopic(gridSource, activeTopic);
   const rawQ = sp.q;
   const searchQuery = typeof rawQ === "string" ? rawQ.trim().toLowerCase() : "";
+
   if (searchQuery) {
     visible = visible.filter(
       (p) =>
@@ -125,6 +129,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
 
   const jsonLdPosts: typeof enriched = [];
   const jsonLdSeen = new Set<string>();
+
   for (const post of enriched) {
     if (jsonLdSeen.has(post.slug)) continue;
     jsonLdSeen.add(post.slug);
@@ -159,6 +164,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
       },
     })),
   };
+
   const jsonLdStr = JSON.stringify(blogIndexJsonLd).replace(/</g, "\\u003c");
 
   return (
@@ -166,7 +172,6 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
-        {/* Hero */}
         <header className="mx-auto max-w-3xl text-center lg:max-w-4xl">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Shalean · Cape Town</p>
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.75rem] lg:leading-[1.12]">
@@ -177,14 +182,12 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           </p>
         </header>
 
-        {/* Featured */}
         {featured ? (
           <div className="mt-12 lg:mt-14">
             <BlogFeaturedHeroCard post={featured} />
           </div>
         ) : null}
 
-        {/* Start here */}
         <section className="mt-16 lg:mt-20" aria-labelledby="start-here-heading">
           <div className="mx-auto max-w-2xl text-center">
             <h2 id="start-here-heading" className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
@@ -194,6 +197,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
               Choose what brought you here—we route pricing, move-outs, Airbnb, or straight to booking.
             </p>
           </div>
+
           <ul className="mx-auto mt-10 grid max-w-6xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {BLOG_START_HERE_CARDS.map((card) => (
               <li key={card.title}>
@@ -212,7 +216,6 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           </ul>
         </section>
 
-        {/* Most popular */}
         <section className="mt-16 lg:mt-24" aria-labelledby="popular-heading">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -224,6 +227,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
               </p>
             </div>
           </div>
+
           {popular.length > 0 ? (
             <div className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4 lg:gap-6">
               {popular.map((post, i) => (
@@ -233,7 +237,6 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           ) : null}
         </section>
 
-        {/* Filter + grid */}
         <section className="mt-16 lg:mt-24" aria-labelledby="articles-heading">
           <div className="flex flex-col gap-4 border-t border-zinc-200/80 pt-14 lg:pt-16">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -246,6 +249,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
                   Airbnb, pricing, and online booking.
                 </p>
               </div>
+
               {activeTopic !== "all" || searchQuery ? (
                 <p className="text-sm font-medium text-blue-800 lg:text-right" role="status">
                   {activeTopic !== "all" ? (
@@ -287,7 +291,6 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           )}
         </section>
 
-        {/* Locations */}
         <section
           className="mt-16 rounded-2xl border border-zinc-200/90 bg-white px-6 py-10 shadow-sm ring-1 ring-zinc-950/[0.03] lg:mt-20"
           aria-labelledby="blog-locations-heading"
@@ -298,11 +301,15 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-600">
             Browse suburb hubs—cleaners near me across Claremont, the Atlantic Seaboard, Southern Suburbs, and
             Durbanville—then pair local coverage with the guides above. For citywide scope and booking, start from the{" "}
-            <SafeInternalLink href="/cleaning-services-cape-town" className="font-semibold text-blue-800 underline-offset-2 hover:underline">
+            <SafeInternalLink
+              href="/cleaning-services-cape-town"
+              className="font-semibold text-blue-800 underline-offset-2 hover:underline"
+            >
               Cape Town cleaning services hub
             </SafeInternalLink>
             .
           </p>
+
           <ul className="mt-8 flex flex-wrap gap-2">
             {BLOG_INDEX_LOCATION_HUBS.map((hub) => (
               <li key={hub.slug}>
@@ -317,7 +324,6 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           </ul>
         </section>
 
-        {/* Final CTA */}
         <section
           className="mt-16 overflow-hidden rounded-3xl bg-zinc-900 px-6 py-14 text-center shadow-xl sm:px-10 lg:mt-20 lg:py-16"
           aria-labelledby="blog-final-cta-heading"
@@ -332,13 +338,15 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
             Book vetted Cape Town teams online—see your total first, then choose a slot that fits. Same transparent flow
             whether you need standard upkeep, deep cleaning, move-out, or Airbnb turnover.
           </p>
+
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <SafeInternalLink
-              href="/booking"
+              href="/booking/details"
               className="inline-flex min-h-[48px] min-w-[200px] items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               Get instant quote
             </SafeInternalLink>
+
             <SafeInternalLink
               href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
               className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-zinc-600 px-6 py-3 text-sm font-semibold text-white transition hover:border-zinc-400 hover:bg-white/5"

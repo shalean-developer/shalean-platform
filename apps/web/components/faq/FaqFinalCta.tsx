@@ -19,7 +19,7 @@ export function FaqFinalCta() {
             Contact us
           </a>
           <GrowthCtaLink
-            href="/booking"
+            href="/booking/details"
             source="faq_footer_book"
             className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl bg-white px-8 text-base font-semibold text-emerald-950 transition hover:bg-emerald-50 sm:w-auto"
           >

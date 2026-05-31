@@ -40,7 +40,7 @@ export function BlogGridWithQuoteCta({ posts, eagerFirstRow = 3 }: Props) {
           </p>
         </div>
         <SafeInternalLink
-          href="/booking"
+          href="/booking/details"
           className="inline-flex shrink-0 items-center justify-center rounded-full bg-blue-600 px-7 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
         >
           Get instant quote

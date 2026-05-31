@@ -129,7 +129,7 @@ export function RelatedLinks({
           {localBlog ? "See live slots for your address" : "Ready to book?"}
         </p>
         <GrowthCtaLink
-          href="/booking"
+          href="/booking/details"
           source={bookingSource}
           className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >

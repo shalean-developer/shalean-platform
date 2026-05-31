@@ -256,7 +256,7 @@ export function BlogPostLayout({
                     Cape Town service areas
                   </SafeInternalLink>
                   {" · "}
-                  <SafeInternalLink href="/booking" className={linkInNavClassName}>
+                  <SafeInternalLink href="/booking/details" className={linkInNavClassName}>
                     Book cleaning
                   </SafeInternalLink>
                 </p>

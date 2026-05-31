@@ -18,7 +18,7 @@ export function FaqStickyMobileCta() {
           Get instant price
         </GrowthCtaLink>
         <GrowthCtaLink
-          href="/booking"
+          href="/booking/details"
           source="faq_sticky_book"
           className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-emerald-200 text-sm font-semibold text-emerald-900 hover:bg-emerald-50"
         >

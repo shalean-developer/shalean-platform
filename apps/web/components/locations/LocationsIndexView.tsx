@@ -282,7 +282,7 @@ export function LocationsIndexView() {
                 Get exact price
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking"
+                href="/booking/details"
                 source="locations_index_footer_book"
                 className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl border border-emerald-400/80 bg-transparent px-8 text-base font-semibold text-white transition hover:bg-emerald-900/50 sm:w-auto"
               >

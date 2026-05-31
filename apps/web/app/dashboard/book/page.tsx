@@ -125,7 +125,7 @@ export default function DashboardBookPage() {
         </div>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Button asChild size="xl" className="rounded-2xl">
-            <Link href="/booking">Go to standard booking</Link>
+            <Link href="/booking/details">Go to standard booking</Link>
           </Button>
           <Button asChild variant="outline" size="xl" className="rounded-2xl">
             <Link href="/dashboard/bookings">View my bookings</Link>

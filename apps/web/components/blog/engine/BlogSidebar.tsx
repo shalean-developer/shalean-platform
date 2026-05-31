@@ -87,7 +87,7 @@ export function BlogSidebar({ categories, trending, trackingSlug, className }: P
           Instant quote for Cape Town—pick rooms, tier, and add-ons.
         </p>
         <GrowthCtaLink
-          href="/booking"
+          href="/booking/details"
           source={`blog_${trackingSlug}_sidebar_book`}
           blogAnalyticsPlacement={`${trackingSlug}_sidebar_book`}
           className="mt-4 flex w-full min-h-11 items-center justify-center rounded-lg bg-blue-600 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"

@@ -301,7 +301,7 @@ export default function ServicesHubPage() {
                 title="Airbnb Cleaning"
                 description="Turnover-ready resets between guests — presentation, hygiene, and speed when calendars are tight."
                 learnMoreHref={p["airbnb-cleaning-cape-town"].path}
-                bookHref="/booking"
+                bookHref="/booking/details"
                 bookSource="services_hub_card_airbnb"
                 seoHubTrack
               />
