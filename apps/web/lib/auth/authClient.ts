@@ -53,14 +53,16 @@ export async function signIn(email: string, password: string) {
   return { user: data.user, session: data.session, error: null };
 }
 
-export async function signUp(email: string, password: string, fullName: string) {
+export async function signUp(email: string, password: string, fullName: string, phone?: string) {
   const sb = client();
+  const phoneNorm = typeof phone === "string" ? phone.trim() : "";
   const { data, error } = await sb.auth.signUp({
     email: email.trim(),
     password,
     options: {
       data: {
         full_name: fullName.trim(),
+        ...(phoneNorm ? { phone: phoneNorm, book_auth_type: "register" } : {}),
       },
     },
   });

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import StructuredData from "@/components/home/StructuredData";
+import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeAboutSection } from "@/components/marketing-home/sections/MarketingHomeAboutSection";
 import { MarketingHomeCtaSection } from "@/components/marketing-home/sections/MarketingHomeCtaSection";
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
-import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
 import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
@@ -78,7 +78,7 @@ export default async function MarketingHomePage() {
           <MarketingHomeFaqSection faqs={faqs} />
           <MarketingAreasSection locations={locations} />
         </main>
-        <MarketingHomeFooter />
+        <FooterSection />
         <MarketingStickyTrustBadge />
       </div>
     </>

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { MaidServicesCapeTownPage } from "@/components/marketing-maid/MaidServicesCapeTownPage";
+import { FooterSection } from "@/components/home/sections/FooterSection";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
-import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { getHomePageData } from "@/lib/home/data";
 import { buildHubCleaningServiceLinks } from "@/lib/marketing/hubCleaningServiceLinks";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -56,7 +56,7 @@ export default async function MaidServicesCapeTownRoutePage() {
       <main>
         <MaidServicesCapeTownPage seoLocationLinks={seoLocationLinks} />
       </main>
-      <MarketingHomeFooter />
+      <FooterSection />
     </div>
   );
 }
