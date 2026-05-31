@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import { locationPageServiceLinks } from "@/lib/seo/capeTownSeoPages";
