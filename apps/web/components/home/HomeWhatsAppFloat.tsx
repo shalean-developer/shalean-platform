@@ -2,7 +2,7 @@
 
 import { MessageCircle } from "lucide-react";
 
-const defaultHref = "https://wa.me/27215550123?text=Hi%20Shalean%2C%20I%27d%20like%20to%20book%20a%20cleaning.";
+const defaultHref = "https://wa.me/27825915525?text=Hi%20Shalean%2C%20I%27d%20like%20to%20book%20a%20cleaning.";
 
 export function HomeWhatsAppFloat({ href = defaultHref }: { href?: string }) {
   return (

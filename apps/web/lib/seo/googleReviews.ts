@@ -40,7 +40,7 @@ export function getGoogleReviewWhatsAppUrl(): string | null {
   const reviewUrl = getGoogleReviewWriteUrl();
   if (!reviewUrl) return null;
   const m = CUSTOMER_SUPPORT_WHATSAPP_URL.match(/wa\.me\/(\d+)/i);
-  const phone = m?.[1] ?? "27215550123";
+  const phone = m?.[1] ?? "27825915525";
   const text = `Hi! Thanks for booking with Shalean 🙌 Please leave us a quick Google review: ${reviewUrl}`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }

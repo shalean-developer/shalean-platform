@@ -86,6 +86,6 @@ export function buildCleanerJobIssueWhatsAppUrl(params: {
     u.searchParams.set("text", text);
     return u.toString();
   } catch {
-    return `https://wa.me/27215550123?text=${encodeURIComponent(text)}`;
+    return `https://wa.me/27825915525?text=${encodeURIComponent(text)}`;
   }
 }
