@@ -16,7 +16,7 @@ const ctaBtnClass =
   "inline-flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700";
 
 const AIRBNB_SERVICE = CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path;
-const BOOKING = "/booking";
+const BOOKING = "/booking/details";
 
 function NeedHelpCta() {
   return (

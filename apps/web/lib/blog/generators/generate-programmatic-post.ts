@@ -37,7 +37,7 @@ function locationHref(locationAreaSlug: string): string {
 
 function serviceHref(serviceSlug: string, citySlug: string): string {
   if (citySlug === "cape-town") return `/services/${serviceSlug}-cape-town`;
-  return "/booking";
+  return "/booking/details";
 }
 
 export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): ProgrammaticGeneratedPost {
