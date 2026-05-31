@@ -39,8 +39,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: OG_IMAGE,
-        width: 1024,
-        height: 576,
+        width: 1200,
+        height: 630,
         alt: "Professional cleaning services in Cape Town",
       },
     ],

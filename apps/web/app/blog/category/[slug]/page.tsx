@@ -11,6 +11,8 @@ import { SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ slug: string }> };
 
+const OG_IMAGE = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
+
 function titleCaseFromSlug(slug: string): string {
   return slug
     .split("-")
@@ -22,6 +24,7 @@ function titleCaseFromSlug(slug: string): string {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const label = titleCaseFromSlug(slug);
+
   const title = generateCtrTitle({
     base: `${label} Articles`,
     place: "Cape Town",
@@ -30,10 +33,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     pageIntent: "hub",
     maxLen: BLOG_SERP_TITLE_MAX,
   });
+
   const canonicalAbs = absoluteCanonicalUrl(`/blog/category/${slug}`);
+
   const description = clampMetaDescription(
     `${label} articles—Cape Town cleaning guides, pricing context, and booking tips from Shalean.`,
   );
+
   return {
     title,
     description,
@@ -44,11 +50,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       url: canonicalAbs,
       type: "website",
+      images: [
+        {
+          url: OG_IMAGE,
+          width: 1200,
+          height: 630,
+          alt: "Shalean Cleaning Services in Cape Town",
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [OG_IMAGE],
     },
   };
 }
@@ -64,26 +79,42 @@ export default async function BlogCategoryPage({ params }: Props) {
           <SafeInternalLink href="/" className={cn(linkInNavClassName, "text-sm")}>
             Home
           </SafeInternalLink>
+
           <span className="mx-2 text-zinc-400">/</span>
+
           <SafeInternalLink href="/blog" className={cn(linkInNavClassName, "text-sm")}>
             Blog
           </SafeInternalLink>
+
           <span className="mx-2 text-zinc-400">/</span>
+
           <span className="text-zinc-700">Category</span>
         </nav>
 
-        <h1 className="mt-6 text-3xl font-bold tracking-tight text-zinc-900 capitalize">{slug.replace(/-/g, " ")}</h1>
+        <h1 className="mt-6 text-3xl font-bold tracking-tight text-zinc-900 capitalize">
+          {slug.replace(/-/g, " ")}
+        </h1>
+
         <p className="mt-2 text-zinc-600">Articles in this category.</p>
 
         <ul className="mt-10 space-y-6">
           {posts.length === 0 ? (
-            <li className="text-sm text-zinc-500">No published posts in this category yet.</li>
+            <li className="text-sm text-zinc-500">
+              No published posts in this category yet.
+            </li>
           ) : (
             posts.map((p) => (
-              <li key={p.slug} className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <SafeInternalLink href={`/blog/${p.slug}`} className="text-lg font-semibold text-blue-700 hover:underline">
+              <li
+                key={p.slug}
+                className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm"
+              >
+                <SafeInternalLink
+                  href={`/blog/${p.slug}`}
+                  className="text-lg font-semibold text-blue-700 hover:underline"
+                >
                   {p.title}
                 </SafeInternalLink>
+
                 <p className="mt-2 text-sm text-zinc-600">{p.excerpt}</p>
               </li>
             ))
