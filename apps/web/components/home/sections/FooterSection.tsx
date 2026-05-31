@@ -105,6 +105,7 @@ export function FooterSection() {
                 <span>Cape Town &amp; surrounds</span>
               </li>
             </ul>
+
             <div className="mt-4 flex flex-wrap gap-2">
               <a
                 href="https://www.facebook.com"
@@ -137,12 +138,12 @@ export function FooterSection() {
             <Link href="/auth" className="transition hover:text-zinc-300">
               Sign in
             </Link>
-            <a href="mailto:hello@shaleancleaning.com?subject=Privacy%20policy" className="transition hover:text-zinc-300">
+            <Link href="/privacy-policy" className="transition hover:text-zinc-300">
               Privacy Policy
-            </a>
-            <a href="mailto:hello@shaleancleaning.com?subject=Terms%20of%20service" className="transition hover:text-zinc-300">
+            </Link>
+            <Link href="/terms-of-service" className="transition hover:text-zinc-300">
               Terms of Service
-            </a>
+            </Link>
           </div>
         </div>
       </div>
