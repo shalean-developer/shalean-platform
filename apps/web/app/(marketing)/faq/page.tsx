@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FooterSection } from "@/components/home/sections/FooterSection";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { FaqFinalCta } from "@/components/faq/FaqFinalCta";
@@ -7,7 +8,6 @@ import { FaqPageExperience } from "@/components/faq/FaqPageExperience";
 import { FaqStickyMobileCta } from "@/components/faq/FaqStickyMobileCta";
 import { FaqTrustStrip } from "@/components/faq/FaqTrustStrip";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
-import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { flattenAllFaqItems } from "@/lib/faq/faq-page-data";
 import { buildFaqPageJsonLd } from "@/lib/faq/faq-jsonld";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -64,7 +64,7 @@ export default function FaqPage() {
         <FaqTrustStrip />
         <FaqFinalCta />
       </main>
-      <MarketingHomeFooter />
+      <FooterSection />
       <FaqStickyMobileCta />
     </div>
   );

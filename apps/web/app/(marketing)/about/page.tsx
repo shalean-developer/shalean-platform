@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { AboutPageView } from "@/components/about/AboutPageView";
+import { FooterSection } from "@/components/home/sections/FooterSection";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
-import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
@@ -53,7 +53,7 @@ export default function AboutPage() {
       <main>
         <AboutPageView />
       </main>
-      <MarketingHomeFooter />
+      <FooterSection />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
-import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
@@ -46,7 +46,7 @@ export default function ReviewsPage() {
       <main>
         <MarketingGoogleReviewsBand />
       </main>
-      <MarketingHomeFooter />
+      <FooterSection />
     </div>
   );
 }
