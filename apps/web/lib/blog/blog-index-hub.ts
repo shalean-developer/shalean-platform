@@ -104,7 +104,7 @@ export const BLOG_START_HERE_CARDS: {
   {
     title: "Book online",
     body: "Cleaners near me with instant totals—bedrooms, baths, and add-ons locked before checkout.",
-    href: "/booking",
+    href: "/booking/details",
     cta: "Get instant quote",
   },
 ];
