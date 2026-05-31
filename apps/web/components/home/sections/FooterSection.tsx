@@ -4,9 +4,18 @@ import { locationPageServiceLinks } from "@/lib/seo/capeTownSeoPages";
 import { PopularCapeTownStrip } from "@/components/seo/PopularCapeTownStrip";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 
-const waHref = "https://wa.me/27215550123?text=Hi%20Shalean%20Cleaning%20Services";
+const waHref = "https://wa.me/27825915525?text=Hi%20Shalean%20Cleaning%20Services";
 
 const footerServices = locationPageServiceLinks();
+
+const trackEvent = (eventName: string) => {
+  if (
+    typeof window !== "undefined" &&
+    typeof (window as any).gtag === "function"
+  ) {
+    (window as any).gtag("event", eventName);
+  }
+};
 
 export function FooterSection() {
   return (
@@ -24,6 +33,7 @@ export function FooterSection() {
               href={waHref}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackEvent("whatsapp_click")}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto"
             >
               WhatsApp us
@@ -74,8 +84,12 @@ export function FooterSection() {
             <ul className="mt-3 space-y-3 text-sm text-zinc-300">
               <li className="flex items-start gap-2">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" aria-hidden />
-                <a href="tel:+27215550123" className="transition hover:text-white">
-                  +27 21 555 0123
+                <a
+                  href="tel:+27871535250"
+                  onClick={() => trackEvent("phone_click")}
+                  className="transition hover:text-white"
+                >
+                  +27 87 153 5250
                 </a>
               </li>
               <li className="flex items-start gap-2">
