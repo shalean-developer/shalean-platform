@@ -341,11 +341,11 @@ describe("H-9: source content guards (lock the widened status filter into both m
     // dispatch_offers.status='pending' filters MUST still be exactly that — those refer to the
     // offer row lifecycle, not the booking status, and are correct as-is.
     const offersExpiredSelect =
-      /\.from\("dispatch_offers"\)\s*\.select\("id, booking_id, cleaner_id"\)\s*\.eq\(\s*"status"\s*,\s*"pending"\s*\)/;
+      /\.from\("dispatch_offers"\)\s*\.select\("id, booking_id, cleaner_id, offer_type"\)\s*\.eq\(\s*"status"\s*,\s*"pending"\s*\)/;
     expect(offersExpiredSelect.test(src)).toBe(true);
 
     const offerExpireUpdate =
-      /\.update\(\{\s*status:\s*"expired",\s*responded_at:\s*respondedAt\s*\}\)[^]*?\.eq\(\s*"status"\s*,\s*"pending"\s*\)/;
+      /\.update\(\{\s*status:\s*"expired",\s*responded_at:\s*respondedAt,\s*expired_at:\s*respondedAt\s*\}\)[^]*?\.eq\(\s*"status"\s*,\s*"pending"\s*\)/;
     expect(offerExpireUpdate.test(src)).toBe(true);
   });
 
