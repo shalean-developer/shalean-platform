@@ -24,7 +24,7 @@ export function ServiceCard({
   title,
   description,
   learnMoreHref,
-  bookHref = "/booking/details",
+  bookHref = "/book",
   bookSource,
   className,
   seoHubTrack,

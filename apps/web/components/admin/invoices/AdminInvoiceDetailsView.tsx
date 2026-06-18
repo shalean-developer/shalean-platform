@@ -191,21 +191,35 @@ export function AdminInvoiceDetailsView({ invoiceId }: { invoiceId: string }) {
   const billingRiskRaw = String(customerProfile?.account_billing_risk ?? "ok").toLowerCase();
   const accountBillingRisk: "ok" | "at_risk" = billingRiskRaw === "at_risk" ? "at_risk" : "ok";
 
+  const zohoInvoiceId = typeof invoice.zoho_invoice_id === "string" ? invoice.zoho_invoice_id.trim() : "";
+
   const headerActions = (
-    <InvoiceHeaderActions
-      invoiceId={invoiceId}
-      status={status}
-      isClosed={isClosed}
-      paymentLink={paymentLink}
-      sentAt={sentAt}
-      currencyCode={currency}
-      totalAmountCents={totalCents}
-      amountPaidCents={paidCents}
-      balanceCents={balanceCents}
-      bookingCountToSettle={bookingCountToSettle}
-      getAccessToken={getAccessToken}
-      onDone={load}
-    />
+    <div className="flex flex-wrap items-center gap-2">
+      {zohoInvoiceId ? (
+        <a
+          href={`/api/admin/invoices/${invoiceId}/pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+        >
+          Zoho invoice (PDF)
+        </a>
+      ) : null}
+      <InvoiceHeaderActions
+        invoiceId={invoiceId}
+        status={status}
+        isClosed={isClosed}
+        paymentLink={paymentLink}
+        sentAt={sentAt}
+        currencyCode={currency}
+        totalAmountCents={totalCents}
+        amountPaidCents={paidCents}
+        balanceCents={balanceCents}
+        bookingCountToSettle={bookingCountToSettle}
+        getAccessToken={getAccessToken}
+        onDone={load}
+      />
+    </div>
   );
 
   return (

@@ -6,6 +6,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
+import { syncPaidBookingSideEffects } from "@/lib/booking/syncPaidBookingSideEffects";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
@@ -257,6 +258,13 @@ export async function POST(request: Request) {
         message: "paystack.webhook.idempotent_skip_finalize",
         context: { reference, bookingId: persistedHead.bookingId, status: persistedHead.status },
       });
+      // Backfill Zoho + recurring even when finalize was already done by the verify
+      // path — both are idempotent (zoho_invoice_id guard + recurring plan dedup).
+      await syncPaidBookingSideEffects(supabase, {
+        bookingId: persistedHead.bookingId,
+        reference,
+        amountCents: amount,
+      });
       return NextResponse.json({ received: true });
     }
   }
@@ -307,6 +315,15 @@ export async function POST(request: Request) {
       message: "paystack.booking.created",
       context: { reference, bookingId: result.bookingId, skipped: result.skipped },
     });
+
+    // Idempotent: Zoho invoice + recurring plan provisioning.
+    if (supabase) {
+      await syncPaidBookingSideEffects(supabase, {
+        bookingId: result.bookingId,
+        reference,
+        amountCents: amount,
+      });
+    }
   }
 
   return NextResponse.json({ received: true });

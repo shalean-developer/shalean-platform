@@ -11,31 +11,40 @@ describe("pickCleanerNavTabBadge", () => {
     expect(pickCleanerNavTabBadge({ href: "/cleaner/profile", openJobsCount: 5, pendingOffersCount: 2 })).toBeNull();
   });
 
-  it("returns a 'jobs' badge on /cleaner/jobs when there are open jobs", () => {
-    const badge = pickCleanerNavTabBadge({ href: "/cleaner/jobs", openJobsCount: 3, pendingOffersCount: 0 });
+  it("returns a 'jobs' badge on /jobs/list when there are open jobs", () => {
+    const badge = pickCleanerNavTabBadge({ href: "/jobs/list", openJobsCount: 3, pendingOffersCount: 0 });
     expect(badge).toEqual({ kind: "jobs", count: 3 });
   });
 
-  it("returns an 'offers' badge on /cleaner/dashboard when there are pending offers (SMS-failed surface)", () => {
-    const badge = pickCleanerNavTabBadge({ href: "/cleaner/dashboard", openJobsCount: 0, pendingOffersCount: 1 });
+  it("returns an 'offers' badge on /jobs when there are pending offers", () => {
+    const badge = pickCleanerNavTabBadge({ href: "/jobs", openJobsCount: 0, pendingOffersCount: 1 });
     expect(badge).toEqual({ kind: "offers", count: 1 });
+  });
+
+  it("still maps legacy /cleaner/* hrefs for badge lookup", () => {
+    expect(
+      pickCleanerNavTabBadge({ href: "/cleaner/jobs", openJobsCount: 2, pendingOffersCount: 0 }),
+    ).toEqual({ kind: "jobs", count: 2 });
+    expect(
+      pickCleanerNavTabBadge({ href: "/cleaner/dashboard", openJobsCount: 0, pendingOffersCount: 1 }),
+    ).toEqual({ kind: "offers", count: 1 });
   });
 
   it("does NOT cross tabs (offers do not appear on Jobs, jobs do not appear on Home)", () => {
     expect(
-      pickCleanerNavTabBadge({ href: "/cleaner/jobs", openJobsCount: 0, pendingOffersCount: 4 }),
+      pickCleanerNavTabBadge({ href: "/jobs/list", openJobsCount: 0, pendingOffersCount: 4 }),
     ).toBeNull();
     expect(
-      pickCleanerNavTabBadge({ href: "/cleaner/dashboard", openJobsCount: 7, pendingOffersCount: 0 }),
+      pickCleanerNavTabBadge({ href: "/jobs", openJobsCount: 7, pendingOffersCount: 0 }),
     ).toBeNull();
   });
 
   it("treats negative / non-finite counts as zero", () => {
     expect(
-      pickCleanerNavTabBadge({ href: "/cleaner/jobs", openJobsCount: -3, pendingOffersCount: 0 }),
+      pickCleanerNavTabBadge({ href: "/jobs/list", openJobsCount: -3, pendingOffersCount: 0 }),
     ).toBeNull();
     expect(
-      pickCleanerNavTabBadge({ href: "/cleaner/dashboard", openJobsCount: 0, pendingOffersCount: Number.NaN }),
+      pickCleanerNavTabBadge({ href: "/jobs", openJobsCount: 0, pendingOffersCount: Number.NaN }),
     ).toBeNull();
   });
 });

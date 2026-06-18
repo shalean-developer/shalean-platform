@@ -14,7 +14,9 @@ export type CleanerNavTabBadge = {
 };
 
 const TAB_BADGE_BY_HREF: Record<string, CleanerNavTabBadgeKind> = {
+  "/jobs/list": "jobs",
   "/cleaner/jobs": "jobs",
+  "/jobs": "offers",
   "/cleaner/dashboard": "offers",
 };
 

@@ -18,7 +18,7 @@ export function AuthGuard({ children }: Props) {
     if (loading) return;
     if (user) return;
 
-    router.replace(`/login?role=customer&redirect=${encodeURIComponent(pathname)}`);
+    router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
   }, [loading, user, router, pathname]);
 
   if (loading) {

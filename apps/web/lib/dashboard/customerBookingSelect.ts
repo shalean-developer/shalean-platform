@@ -5,9 +5,21 @@ export const CUSTOMER_BOOKING_SELECT = [
   "user_id",
   "customer_email",
   "service",
+  "service_slug",
   "date",
   "time",
   "location",
+  "suburb",
+  "postal_code",
+  "access_instructions",
+  "parking_instructions",
+  "gate_code",
+  "service_details",
+  "selected_extras",
+  "pricing_summary",
+  "cleaner_mode",
+  "cleaner_count",
+  "booking_type",
   "total_paid_zar",
   "total_price",
   "price_breakdown",
@@ -20,9 +32,11 @@ export const CUSTOMER_BOOKING_SELECT = [
   "fallback_reason",
   "payment_needs_follow_up",
   "selected_cleaner_id",
+  "preferred_dispatch_status",
   "payment_status",
   "booking_snapshot",
   "created_at",
+  "booking_reference",
   "paystack_reference",
   "cleaner_id",
   /*
@@ -54,5 +68,8 @@ export const CUSTOMER_BOOKING_SELECT = [
   "monthly_invoice_id",
   "is_monthly_billing_booking",
   "monthly_invoices(status,is_closed)",
-  "cleaners(full_name,phone)",
+  /** Zoho Books invoice id (set on payment); gates the in-app invoice PDF button. */
+  "zoho_invoice_id",
+  /* cleaners join intentionally omitted — multiple FKs cause PostgREST ambiguity;
+     cleaner name is resolved via booking_snapshot.cleaner_name in cleanerFromRow(). */
 ].join(",");

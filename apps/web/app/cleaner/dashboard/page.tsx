@@ -1,5 +1,6 @@
-import { CleanerDashboard } from "@/components/cleaner-dashboard/CleanerDashboard";
+import { redirect } from "next/navigation";
 
-export default function CleanerDashboardPage() {
-  return <CleanerDashboard />;
+/** Legacy route — cleaner home lives at `/jobs`. */
+export default function CleanerDashboardRedirectPage() {
+  redirect("/jobs");
 }

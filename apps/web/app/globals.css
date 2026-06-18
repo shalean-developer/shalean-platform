@@ -5,6 +5,32 @@
   --foreground: #171717;
   --primary: #2563eb;
   --primary-foreground: #ffffff;
+
+  /* Semantic surface tokens */
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #2563eb;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+
+  /* Sidebar / dashboard chrome */
+  --sidebar-bg: #0f172a;
+  --sidebar-fg: #f1f5f9;
+  --sidebar-muted: #94a3b8;
+  --sidebar-active: #1e40af;
+  --sidebar-active-fg: #dbeafe;
+  --sidebar-border: #1e293b;
+  --sidebar-hover: #1e293b;
+
+  /* Brand navy (SiteTopBar) */
+  --navy-from: #0d1b69;
+  --navy-to: #1a3dbd;
 }
 
 @theme inline {
@@ -12,6 +38,17 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -20,9 +57,20 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
-    /* Same brand blue; foreground on primary buttons stays white */
     --primary: #2563eb;
     --primary-foreground: #ffffff;
+
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --card: #09090b;
+    --card-foreground: #fafafa;
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #2563eb;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
   }
 }
 

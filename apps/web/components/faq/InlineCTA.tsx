@@ -10,7 +10,7 @@ export function InlineCTA({ source, className }: Props) {
   return (
     <div className={className}>
       <GrowthCtaLink
-        href="/booking/details"
+        href="/book"
         source={source}
         className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
       >

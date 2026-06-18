@@ -13,14 +13,14 @@ export function FaqHero() {
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <GrowthCtaLink
-            href="/booking/details"
+            href="/book"
             source="faq_hero_price"
             className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
           >
             Get instant price
           </GrowthCtaLink>
           <GrowthCtaLink
-            href="/booking/details"
+            href="/book"
             source="faq_hero_book"
             className="inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-8 text-base font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50"
           >

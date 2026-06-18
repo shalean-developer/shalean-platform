@@ -10,7 +10,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
  * sync with the projection in `loadBookingForOfferEarningsSnapshot`.
  */
 export const BOOKING_SNAPSHOT_SELECT =
-  "id, service, date, time, is_team_job, team_member_count_snapshot, base_amount_cents, service_fee_cents, total_paid_zar, total_paid_cents, amount_paid_cents, booking_snapshot";
+  "id, service, date, time, is_team_job, team_member_count_snapshot, base_amount_cents, service_fee_cents, total_paid_zar, total_paid_cents, amount_paid_cents, price_snapshot, booking_snapshot";
 
 export type ResolveAndPersistDispatchOfferEarningsParams = {
   supabase: SupabaseClient;

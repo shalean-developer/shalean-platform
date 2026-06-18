@@ -174,7 +174,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
           matches your visit, then confirm when it feels right.
         </p>
         <GrowthCtaLink
-          href="/booking/details"
+          href="/book"
           source={`blog_programmatic_${post.slug}_cta`}
           blogAnalyticsPlacement={`${post.slug}_guide_book`}
           className={ctaBtnClass}

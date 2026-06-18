@@ -341,7 +341,6 @@ describe("M-13: admin scheduling eligibility converges with the canonical pool",
   });
 
   it.each([
-    ["busy", BUSY_STATUS_ID],
     ["suspended", SUSPENDED_ID],
     ["banned", "aaaaaaa7-aaaa-4aaa-8aaa-aaaaaaaaaaa1"],
     ["disabled", "aaaaaaa8-aaaa-4aaa-8aaa-aaaaaaaaaaa2"],
@@ -351,6 +350,20 @@ describe("M-13: admin scheduling eligibility converges with the canonical pool",
     const row = map.get(id)!;
     expect(row.accountIneligible).toBe(true);
     expect(row.canAssignWithoutForce).toBe(false);
+  });
+
+  it("workload status `busy` is not an account block (overlap checks handle conflicts)", async () => {
+    const map = await runEligibilityFor([healthyCleaner(BUSY_STATUS_ID, { status: "busy" })]);
+    const row = map.get(BUSY_STATUS_ID)!;
+    expect(row.accountIneligible).toBe(false);
+    expect(row.canAssignWithoutForce).toBe(true);
+    expect(
+      cleanerAccountEligibleForCustomerBooking({
+        is_active: true,
+        is_available: true,
+        status: "busy",
+      }),
+    ).toBe(true);
   });
 
   it("`status='offline'` populates BOTH the legacy `offline` flag and `accountIneligible` (the canonical pool excludes offline status)", async () => {
@@ -395,7 +408,7 @@ describe("M-13: admin scheduling eligibility converges with the canonical pool",
       { label: "healthy", input: { is_active: true, is_available: true, status: "available" }, eligible: true },
       { label: "is_active=false", input: { is_active: false, is_available: true, status: "available" }, eligible: false },
       { label: "is_available=false", input: { is_active: true, is_available: false, status: "available" }, eligible: false },
-      { label: "status=busy", input: { is_active: true, is_available: true, status: "busy" }, eligible: false },
+      { label: "status=busy", input: { is_active: true, is_available: true, status: "busy" }, eligible: true },
       { label: "status=suspended", input: { is_active: true, is_available: true, status: "suspended" }, eligible: false },
       { label: "status=banned", input: { is_active: true, is_available: true, status: "banned" }, eligible: false },
       { label: "status=disabled", input: { is_active: true, is_available: true, status: "disabled" }, eligible: false },

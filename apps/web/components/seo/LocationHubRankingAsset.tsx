@@ -80,7 +80,7 @@ export function LocationHubRankingAsset({ location, seo, ranking, ctx }: Props) 
         )}
         <p className="mt-4 text-base leading-relaxed text-zinc-600">
           <SeoHubGrowthCtaLink
-            href="/booking/details"
+            href="/book"
             source={`seo_loc_${slug}_ranking_price_quote`}
             ctx={ctx}
             ctaLocation={`${slug}_pricing_section`}
@@ -361,7 +361,7 @@ export function LocationHubRankingAsset({ location, seo, ranking, ctx }: Props) 
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <SeoHubGrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source={`seo_loc_${slug}_ranking_check_availability`}
                 ctx={ctx}
                 ctaLocation={`${slug}_ranking_band`}

@@ -39,3 +39,9 @@ export function selectActiveJob(jobs: readonly CleanerUpcomingJob[]): CleanerUpc
   }
   return best?.job ?? null;
 }
+
+/** Navigation is only relevant while driving to the job — not once cleaning has started. */
+export function cleanerActiveJobShowsNavigation(phaseDisplay: string | null | undefined): boolean {
+  const p = String(phaseDisplay ?? "").trim().toLowerCase();
+  return p === "en route" || p === "on the way" || p === "on my way";
+}

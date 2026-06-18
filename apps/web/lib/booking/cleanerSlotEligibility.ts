@@ -27,7 +27,6 @@ export type OccupyingBookingRow = {
 
 const INELIGIBLE_ACCOUNT_STATUS = new Set([
   "offline",
-  "busy",
   "suspended",
   "banned",
   "disabled",

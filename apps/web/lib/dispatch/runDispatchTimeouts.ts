@@ -6,6 +6,7 @@ import { enqueueDispatchRetry, enqueueStrandedBookings } from "@/lib/dispatch/di
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import { markDispatchOfferCapUnassignable } from "@/lib/booking/assignmentBookingStateCommands";
+import { markPreferredOfferExpiredOnBooking } from "@/lib/dispatch/preferredCleanerDispatchStatus";
 
 const MAX_EXPIRED_BATCH = 200;
 
@@ -75,7 +76,7 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
 
   const { data: expiredOffers, error } = await supabase
     .from("dispatch_offers")
-    .select("id, booking_id, cleaner_id")
+    .select("id, booking_id, cleaner_id, offer_type")
     .eq("status", "pending")
     .lt("expires_at", new Date().toISOString())
     .order("expires_at", { ascending: true })
@@ -104,9 +105,10 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
       if (!offerId || !bookingId) continue;
 
       const respondedAt = new Date().toISOString();
+      const offerType = String((offer as { offer_type?: string | null }).offer_type ?? "").trim().toLowerCase();
       const { data: updated, error: upErr } = await supabase
         .from("dispatch_offers")
-        .update({ status: "expired", responded_at: respondedAt })
+        .update({ status: "expired", responded_at: respondedAt, expired_at: respondedAt })
         .eq("id", offerId)
         .eq("status", "pending")
         .select("id")
@@ -128,6 +130,10 @@ export async function runDispatchTimeouts(supabase: SupabaseClient): Promise<Run
       }
 
       out.expired++;
+
+      if (offerType === "preferred") {
+        await markPreferredOfferExpiredOnBooking(supabase, bookingId);
+      }
 
       await logSystemEvent({
         level: "info",

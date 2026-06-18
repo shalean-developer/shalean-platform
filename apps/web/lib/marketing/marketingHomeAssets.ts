@@ -1,5 +1,3 @@
-import { bookingFlowHref, bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
-
 /**
  * When you overwrite any PNG under `public/` that the marketing homepage uses, bump this string.
  * `next/image` and browsers cache by full URL, including `?v=…`.
@@ -17,7 +15,7 @@ export function marketingHeroImage(filename: string): string {
   return `/images/marketing/${filename}?v=${MARKETING_HERO_IMAGE_VERSION}`;
 }
 
-/** Booking entry URL with promo + default UTM-style source (matches previous marketing home). */
+/** Booking entry URL — new redesign flow. */
 export function marketingHomeBookingHref(): string {
-  return bookingFlowHref("entry", { ...(bookingMarketingPromoExtra("SAVE10") ?? {}), source: "marketing_home" });
+  return "/book";
 }

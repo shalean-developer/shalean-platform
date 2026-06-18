@@ -152,3 +152,71 @@ export function parseAdminBookingPriceSnapshot(
     total_price: totalVisit,
   };
 }
+
+function readPriceBreakdownExtrasZar(pb: unknown): number | null {
+  if (!pb || typeof pb !== "object" || Array.isArray(pb)) return null;
+  const o = pb as Record<string, unknown>;
+  const job = o.job;
+  if (job && typeof job === "object" && !Array.isArray(job)) {
+    const ez = (job as { extrasZar?: unknown }).extrasZar;
+    if (typeof ez === "number" && Number.isFinite(ez)) return Math.round(ez);
+  }
+  const top = o.extrasZar;
+  if (typeof top === "number" && Number.isFinite(top)) return Math.round(top);
+  return null;
+}
+
+/** Admin visit pricing split from persisted checkout snapshot / booking columns (not estimates). */
+export function adminBookingVisitPricingSplit(booking: {
+  total_paid_zar?: number | null;
+  amount_paid_cents?: number | null;
+  total_price?: number | null;
+  base_amount_cents?: number | null;
+  price_snapshot?: unknown;
+  price_breakdown?: unknown;
+  service?: string | null;
+  service_slug?: string | null;
+}): { basePrice: number; extrasPrice: number; total: number } {
+  const total =
+    typeof booking.total_price === "number" && Number.isFinite(booking.total_price) && booking.total_price > 0
+      ? Math.round(booking.total_price)
+      : typeof booking.total_paid_zar === "number" && Number.isFinite(booking.total_paid_zar) && booking.total_paid_zar > 0
+        ? Math.round(booking.total_paid_zar)
+        : Math.round((booking.amount_paid_cents ?? 0) / 100);
+
+  const snap = parseAdminBookingPriceSnapshot(booking.price_snapshot, {
+    serviceSlug: typeof booking.service_slug === "string" ? booking.service_slug : null,
+    serviceLabel: typeof booking.service === "string" ? booking.service : null,
+  });
+  if (snap) {
+    const extrasFromSnap = snap.extras.reduce((sum, row) => sum + row.price, 0);
+    const visitTotal = snap.total_price > 0 ? snap.total_price : total;
+    const extrasPrice =
+      extrasFromSnap > 0 ? extrasFromSnap : Math.max(0, visitTotal - snap.base_price);
+    return { basePrice: snap.base_price, extrasPrice, total: visitTotal };
+  }
+
+  const baseFromCents =
+    typeof booking.base_amount_cents === "number" && Number.isFinite(booking.base_amount_cents)
+      ? Math.round(booking.base_amount_cents / 100)
+      : null;
+  const extrasFromBreakdown = readPriceBreakdownExtrasZar(booking.price_breakdown);
+
+  if (baseFromCents != null) {
+    return {
+      basePrice: baseFromCents,
+      extrasPrice: extrasFromBreakdown ?? Math.max(0, total - baseFromCents),
+      total,
+    };
+  }
+
+  if (extrasFromBreakdown != null) {
+    return {
+      basePrice: Math.max(0, total - extrasFromBreakdown),
+      extrasPrice: extrasFromBreakdown,
+      total,
+    };
+  }
+
+  return { basePrice: total, extrasPrice: 0, total };
+}

@@ -25,7 +25,7 @@ export function BlogConversionMidBanner({ trackingSlug, className }: Props) {
         </p>
       </div>
       <GrowthCtaLink
-        href="/booking/details"
+        href="/book"
         source={`blog_${trackingSlug}_mid_blue_banner`}
         blogAnalyticsPlacement={`${trackingSlug}_mid_blue`}
         className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-white px-6 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"

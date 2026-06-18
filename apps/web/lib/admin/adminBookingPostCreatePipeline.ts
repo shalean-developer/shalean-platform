@@ -7,6 +7,7 @@ import {
   resolvePersistCleanerIdForBooking,
   type BookingPersistIdsRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
+import { evaluatePersistCleanerPayoutEligibility } from "@/lib/payout/bookingPayoutPersistEligibility";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -147,6 +148,60 @@ export async function triggerPersistCleanerPayoutIfCompleted(
 }
 
 /**
+ * Persist `display_earnings_cents` for assigned / in-progress bookings that qualify for
+ * pre-completion assignment basis (paid solo per-booking, invoice-backed monthly, paid team).
+ * Without this, cleaners see "Job earning unavailable" until completion or a cron repair.
+ */
+export async function triggerPersistPreCompletionAssignmentDisplayEarnings(
+  admin: SupabaseClient,
+  bookingId: string,
+  logSource: string,
+): Promise<void> {
+  const { data: b, error } = await admin
+    .from("bookings")
+    .select(
+      "status, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, total_paid_zar, total_paid_cents, amount_paid_cents, payment_needs_follow_up, payment_status, paid_at, refunded_at, refund_status",
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error || !b) return;
+
+  const st = String((b as { status?: string | null }).status ?? "").trim().toLowerCase();
+  if (st === "completed") return;
+  if (st !== "assigned" && st !== "in_progress") return;
+
+  const eligibility = evaluatePersistCleanerPayoutEligibility(b as Record<string, unknown>);
+  if (!eligibility.allowed || eligibility.mode !== "pre_completion_assignment_basis") return;
+
+  const cleanerId = resolvePersistCleanerIdForBooking(b as BookingPersistIdsRow);
+  if (!cleanerId) return;
+
+  void logSystemEvent({
+    level: "info",
+    source: logSource,
+    message: "earnings_trigger_persist_pre_completion_assignment_basis",
+    context: { bookingId, cleanerId, status: st },
+  });
+
+  const payout = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
+  if (!payout.ok) {
+    void reportOperationalIssue("warn", logSource, payout.error ?? "pre_completion_assignment_persist_failed", {
+      bookingId,
+      cleanerId,
+    });
+    return;
+  }
+  if (payout.skipped) {
+    void logSystemEvent({
+      level: "info",
+      source: logSource,
+      message: "pre_completion_assignment_earnings_persist_skipped",
+      context: { bookingId, cleanerId, skipReason: payout.skipReason },
+    });
+  }
+}
+
+/**
  * Monthly admin booking with a pre-selected cleaner skips the dispatch-offer funnel and writes
  * `cleaner_id` + `status='assigned'` directly. Without an offer snapshot
  * (`resolveAndPersistDispatchOfferEarningsSnapshot`), `bookings.display_earnings_cents` would stay
@@ -158,61 +213,15 @@ export async function triggerPersistCleanerPayoutIfCompleted(
  * invoice-backed solo rows. This helper is a safe no-op for per-booking rows, team rows without
  * an owner, completed rows (handled by {@link triggerPersistCleanerPayoutIfCompleted}), and rows
  * that don't satisfy the eligibility gate.
+ *
+ * @deprecated Prefer {@link triggerPersistPreCompletionAssignmentDisplayEarnings} — kept as a thin alias.
  */
 export async function triggerPersistMonthlyAssignedDisplayEarnings(
   admin: SupabaseClient,
   bookingId: string,
   logSource: string,
 ): Promise<void> {
-  const { data: b, error } = await admin
-    .from("bookings")
-    .select(
-      "status, cleaner_id, payout_owner_cleaner_id, is_team_job, billing_type, is_monthly_billing_booking, monthly_invoice_id",
-    )
-    .eq("id", bookingId)
-    .maybeSingle();
-  if (error || !b) return;
-
-  const st = String((b as { status?: string | null }).status ?? "").trim().toLowerCase();
-  if (st === "completed") return;
-  if (st !== "assigned" && st !== "in_progress") return;
-
-  const billingType = String((b as { billing_type?: string | null }).billing_type ?? "").trim().toLowerCase();
-  const monthlyInvoiceId = (b as { monthly_invoice_id?: string | null }).monthly_invoice_id;
-  const monthlyInvoiceLinked = monthlyInvoiceId != null && String(monthlyInvoiceId).trim() !== "";
-  const isMonthlyManaged =
-    (b as { is_monthly_billing_booking?: boolean | null }).is_monthly_billing_booking === true ||
-    billingType === "recurring_invoice" ||
-    billingType === "monthly_contract" ||
-    monthlyInvoiceLinked;
-  if (!isMonthlyManaged) return;
-
-  const cleanerId = resolvePersistCleanerIdForBooking(b as BookingPersistIdsRow);
-  if (!cleanerId) return;
-
-  void logSystemEvent({
-    level: "info",
-    source: logSource,
-    message: "earnings_trigger_persist_monthly_assigned_basis",
-    context: { bookingId, cleanerId, status: st },
-  });
-
-  const payout = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
-  if (!payout.ok) {
-    void reportOperationalIssue("warn", logSource, payout.error ?? "persist_monthly_assigned_failed", {
-      bookingId,
-      cleanerId,
-    });
-    return;
-  }
-  if (payout.skipped) {
-    void logSystemEvent({
-      level: "info",
-      source: logSource,
-      message: "monthly_assigned_earnings_persist_skipped",
-      context: { bookingId, cleanerId, skipReason: payout.skipReason },
-    });
-  }
+  await triggerPersistPreCompletionAssignmentDisplayEarnings(admin, bookingId, logSource);
 }
 
 export async function runAdminBookingPostCreateNormalizationAndEarnings(
@@ -222,5 +231,5 @@ export async function runAdminBookingPostCreateNormalizationAndEarnings(
 ): Promise<void> {
   await ensureBookingAssignedStatusInvariant(admin, bookingId);
   await triggerPersistCleanerPayoutIfCompleted(admin, bookingId, logSource);
-  await triggerPersistMonthlyAssignedDisplayEarnings(admin, bookingId, logSource);
+  await triggerPersistPreCompletionAssignmentDisplayEarnings(admin, bookingId, logSource);
 }

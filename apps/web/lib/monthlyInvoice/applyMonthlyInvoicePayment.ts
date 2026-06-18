@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
+import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 
 export type ApplyMonthlyInvoicePaymentResult =
   | { ok: true; skipped: true; reason: "not_found" | "already_paid" | "duplicate_charge" }
@@ -172,6 +173,30 @@ export async function applyMonthlyInvoicePayment(
       message: "monthly_invoice_paid_full",
       context: { invoice_id: row.id, reference: ref, amount_paid_cents: capPaid, total_amount_cents: total },
     });
+
+    // Sync payment to Zoho Books (non-blocking — failures are logged but don't fail settlement)
+    if (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
+      const { data: invRow } = await admin
+        .from("monthly_invoices")
+        .select("zoho_invoice_id, customer_id")
+        .eq("id", row.id)
+        .maybeSingle();
+
+      const zohoInvoiceId = (invRow as { zoho_invoice_id?: string | null } | null)?.zoho_invoice_id;
+      if (zohoInvoiceId) {
+        const userRes = await admin.auth.admin.getUserById(
+          (invRow as { customer_id?: string } | null)?.customer_id ?? "",
+        );
+        const customerEmail = String(userRes.data.user?.email ?? "").trim();
+        await markZohoInvoicePaid({
+          zohoInvoiceId,
+          amountZar: capPaid / 100,
+          paymentDate: todayYmdJhb(),
+          reference: ref,
+          customerEmail: customerEmail || undefined,
+        });
+      }
+    }
 
     return { ok: true, settled: "full", invoiceId: row.id };
   }

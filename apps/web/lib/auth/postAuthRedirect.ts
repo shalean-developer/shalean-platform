@@ -1,48 +1,37 @@
-import { sanitizeCleanerPostAuthRedirect } from "@/lib/cleaner/cleanerRedirect";
+import type { AppUserRole } from "@/lib/auth/userRole";
+import { dashboardRouteForRole, safePostLoginRedirect } from "@/lib/auth/userRole";
 import type { AuthRoleIntent } from "@/lib/auth/authRoleIntent";
 
+/** @deprecated Prefer {@link safePostLoginRedirect} */
 export function safeCustomerRedirect(raw: string): string {
-  const fallback = "/dashboard/bookings";
-  const t = raw.trim();
-  if (!t.startsWith("/") || t.startsWith("//") || t.includes("://")) return fallback;
-  return t;
-}
-
-function isCustomerSurfacePath(path: string): boolean {
-  if (!path.startsWith("/")) return false;
-  if (path.startsWith("/cleaner")) return false;
-  if (path.startsWith("/admin")) return false;
-  return true;
+  return safePostLoginRedirect(raw, "customer");
 }
 
 /**
- * After Supabase email/password auth on the **customer** surfaces, pick a safe next URL.
- *
- * - Linked cleaner accounts default to `/cleaner/dashboard` unless the user explicitly
- *   chose the customer path and `redirect` is a normal customer URL (booking, dashboard, track).
- * - Non-cleaner sessions cannot be sent to `/cleaner/*` from this helper.
+ * Legacy redirect helper — prefer {@link resolvePostAuthDestination} with `user_profiles.role`.
+ * Kept for tests and callers that already have a resolved role.
  */
 export function computePostAuthRedirect(args: {
-  intent: AuthRoleIntent | null;
-  isCleaner: boolean;
+  role: AppUserRole;
   redirect: string;
+  intent?: AuthRoleIntent | null;
 }): string {
-  const { intent, isCleaner, redirect } = args;
-  const r = (redirect || "").trim() || "/dashboard/bookings";
+  const { role, redirect, intent } = args;
 
-  if (isCleaner) {
-    if (r.startsWith("/cleaner")) {
-      return sanitizeCleanerPostAuthRedirect(r);
-    }
-    if (intent === "customer" && isCustomerSurfacePath(r)) {
-      return safeCustomerRedirect(r);
-    }
-    return "/cleaner/dashboard";
+  if (role === "admin") {
+    return safePostLoginRedirect(redirect.startsWith("/office") ? redirect : "", "admin");
   }
 
-  if (r.startsWith("/cleaner")) {
-    return "/dashboard/bookings";
+  if (role === "cleaner") {
+    if (intent === "customer" && redirect.startsWith("/account")) {
+      return safePostLoginRedirect(redirect, "customer");
+    }
+    return safePostLoginRedirect(redirect.startsWith("/jobs") ? redirect : "", "cleaner");
   }
 
-  return safeCustomerRedirect(r);
+  return safePostLoginRedirect(redirect, "customer");
+}
+
+export function defaultDashboardForRole(role: AppUserRole): string {
+  return dashboardRouteForRole(role);
 }

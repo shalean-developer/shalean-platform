@@ -31,7 +31,7 @@ export function LocationHubMidBanner({ location, slug, tier, analyticsCtx }: Pro
         </p>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <SeoHubGrowthCtaLink
-            href="/booking/details"
+            href="/book"
             source={`seo_loc_${slug}_mid_banner`}
             ctx={analyticsCtx}
             ctaLocation="pricing"
@@ -42,7 +42,7 @@ export function LocationHubMidBanner({ location, slug, tier, analyticsCtx }: Pro
             Check slots &amp; total for {name}
           </SeoHubGrowthCtaLink>
           <SeoHubGrowthCtaLink
-            href="/booking/details"
+            href="/book"
             source={`seo_loc_${slug}_mid_banner_quick`}
             ctx={analyticsCtx}
             ctaLocation="pricing"

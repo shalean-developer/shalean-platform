@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { fetchCleanerRowForSupabaseAuthUser } from "@/lib/cleaner/resolveCleanerFromRequest";
+import { createClient } from "@supabase/supabase-js";
+import { resolveUserRoleServer } from "@/lib/auth/resolveUserRoleServer";
+import { dashboardRouteForRole } from "@/lib/auth/userRole";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -9,8 +10,8 @@ export const dynamic = "force-dynamic";
 type Body = { access_token?: string };
 
 /**
- * Validates a Supabase access token and reports whether the user is linked to a cleaner row.
- * Used by customer login/signup to route dual-role accounts without exposing service role to the client.
+ * Validates a Supabase access token and returns `user_profiles.role` for post-login routing.
+ * Used by login, signup, and client route guards (service role resolves profile server-side).
  */
 export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
@@ -39,13 +40,27 @@ export async function POST(request: Request) {
   }
 
   const uid = userData.user.id;
-  const row = await fetchCleanerRowForSupabaseAuthUser(admin, uid);
-  const isCleaner = Boolean(row?.id);
+  const email = userData.user.email;
 
-  return NextResponse.json({
-    ok: true,
-    userId: uid,
-    isCleaner,
-    cleanerId: isCleaner ? row!.id : undefined,
-  });
+  try {
+    const resolved = await resolveUserRoleServer(admin, { userId: uid, email });
+    if (resolved.kind === "missing_profile") {
+      return NextResponse.json({ ok: false, missingProfile: true, error: "Profile not found." }, { status: 404 });
+    }
+    if (resolved.kind === "invalid_role") {
+      return NextResponse.json({ ok: false, invalidRole: true, error: "Invalid account role." }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      userId: uid,
+      role: resolved.role,
+      dashboardRoute: dashboardRouteForRole(resolved.role),
+      /** @deprecated use `role` — kept for older clients */
+      isCleaner: resolved.role === "cleaner",
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Role lookup failed.";
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
 }

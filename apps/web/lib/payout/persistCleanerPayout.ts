@@ -25,6 +25,7 @@ import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
   fetchActiveTeamMemberIdsAtAppointment,
+  resolveTeamPayoutParticipantIds,
 } from "@/lib/payout/teamRosterPayoutAllocation";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -92,12 +93,17 @@ function resolveTeamPayoutOwnershipInvariant(params: {
   const expected = normalizeId(params.expectedCleanerId);
   if (expected !== owner) return { ok: false, error: "Team payout persist cleaner does not match payout owner" };
 
-  const activeIds = new Set(params.activeCleanerIds.map(normalizeId).filter(Boolean));
-  if (!activeIds.has(owner)) return { ok: false, error: "Team payout owner is not an active team member" };
-
   const rosterIds = new Set(params.rosterRows.map((row) => normalizeId(row.cleaner_id)).filter(Boolean));
-  if (rosterIds.size > 0 && !rosterIds.has(owner)) {
-    return { ok: false, error: "Team payout owner is missing from booking roster" };
+
+  if (rosterIds.size > 0) {
+    if (!rosterIds.has(owner)) {
+      return { ok: false, error: "Team payout owner is missing from booking roster" };
+    }
+  } else {
+    const activeIds = new Set(params.activeCleanerIds.map(normalizeId).filter(Boolean));
+    if (!activeIds.has(owner)) {
+      return { ok: false, error: "Team payout owner is not an active team member" };
+    }
   }
 
   const leadIds = params.rosterRows
@@ -253,6 +259,7 @@ async function buildFallbackEarnings(params: {
     serviceFeeCents: r.service_fee_cents,
     totalPaidZar: r.total_paid_zar,
     amountPaidCents: r.total_paid_cents ?? r.amount_paid_cents,
+    priceSnapshot: (r as { price_snapshot?: unknown }).price_snapshot,
   });
   const sid = resolveServiceIdForPersist(r.booking_snapshot ?? null, r.service ?? null);
   const appt = bookingAppointmentIsoUtc(r.date, r.time);
@@ -351,6 +358,7 @@ export async function resolvePersistEarningsComputation(params: {
     serviceFeeCents: r.service_fee_cents,
     totalPaidZar: r.total_paid_zar,
     amountPaidCents: r.total_paid_cents ?? r.amount_paid_cents,
+    priceSnapshot: (r as { price_snapshot?: unknown }).price_snapshot,
   });
   const bookingDateIso = bookingAppointmentIsoUtc(r.date, r.time) ?? "";
   const serviceId = resolveServiceIdForPersist(r.booking_snapshot ?? null, r.service ?? null);
@@ -462,41 +470,7 @@ async function previewTeamMemberAllocatedCents(params: {
   earnings: ComputeBookingEarningsOutput;
   bookingDateIso: string;
 }): Promise<number | null> {
-  const { admin, bookingId, teamId, cleanerId, earnings, bookingDateIso } = params;
-
-  const { data: members, error: membersErr } = await admin
-    .from("team_members")
-    .select("cleaner_id, active_from, active_to")
-    .eq("team_id", teamId)
-    .not("cleaner_id", "is", null);
-  if (membersErr) return null;
-
-  const bookingMs = new Date(bookingDateIso).getTime();
-  const activeMembers = (members ?? [])
-    .map((m) => m as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
-    .filter((m) => {
-      const cid = String(m.cleaner_id ?? "").trim();
-      if (!cid) return false;
-      const from = m.active_from ? new Date(m.active_from).getTime() : null;
-      const to = m.active_to ? new Date(m.active_to).getTime() : null;
-      if (!Number.isNaN(bookingMs)) {
-        if (from != null && !Number.isNaN(from) && bookingMs < from) return false;
-        if (to != null && !Number.isNaN(to) && bookingMs > to) return false;
-      }
-      return true;
-    });
-  if (!activeMembers.length) return null;
-
-  const activeIds = activeMembers.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean);
-  const exp = cleanerId.trim();
-  if (!activeIds.includes(exp)) return null;
-
-  if (!useLegacyPayoutEngine()) {
-    return FIXED_SPECIAL_PAYOUT_CENTS;
-  }
-
-  const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
-  if (poolCents <= 0) return null;
+  const { admin, bookingId, cleanerId, earnings } = params;
 
   const { data: rosterRows, error: rosterErr } = await admin
     .from("booking_cleaners")
@@ -505,12 +479,33 @@ async function previewTeamMemberAllocatedCents(params: {
     .order("cleaner_id", { ascending: true });
   if (rosterErr) return null;
 
+  const activeTeamMemberIds = await fetchActiveTeamMemberIdsAtAppointment(
+    admin,
+    params.teamId,
+    params.bookingDateIso,
+  );
+  const participantIds = resolveTeamPayoutParticipantIds({
+    rosterRows: rosterRows ?? [],
+    activeTeamMemberIds,
+  });
+  if (!participantIds.length) return null;
+
+  const exp = cleanerId.trim();
+  if (!participantIds.includes(exp)) return null;
+
+  if (!useLegacyPayoutEngine()) {
+    return FIXED_SPECIAL_PAYOUT_CENTS;
+  }
+
+  const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
+  if (poolCents <= 0) return null;
+
   const payoutRows = buildTeamJobMemberPayoutInsertRows({
     bookingId,
-    teamId,
+    teamId: params.teamId,
     poolCents,
     rosterRows: rosterRows ?? [],
-    fallbackCleanerIds: activeIds,
+    fallbackCleanerIds: participantIds,
   });
   const mine = payoutRows.find((pr) => pr.cleaner_id === exp);
   return mine != null ? Math.max(0, Math.floor(mine.payout_cents)) : null;
@@ -812,11 +807,6 @@ async function persistCleanerPayoutIfUnsetCore(
         }
         return true;
       });
-    if (!activeMembers.length) return { ok: false, error: "No active team members for payout" };
-
-    const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
-    const activeIds = activeMembers.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean);
-    const legacyTeamPool = useLegacyPayoutEngine();
 
     const { data: rosterRows, error: rosterErr } = await admin
       .from("booking_cleaners")
@@ -825,10 +815,20 @@ async function persistCleanerPayoutIfUnsetCore(
       .order("cleaner_id", { ascending: true });
     if (rosterErr) return { ok: false, error: rosterErr.message };
 
+    const activeTeamMemberIds = activeMembers.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean);
+    const participantIds = resolveTeamPayoutParticipantIds({
+      rosterRows: rosterRows ?? [],
+      activeTeamMemberIds,
+    });
+    if (!participantIds.length) return { ok: false, error: "No team payout participants for booking" };
+
+    const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
+    const legacyTeamPool = useLegacyPayoutEngine();
+
     const ownership = resolveTeamPayoutOwnershipInvariant({
       expectedCleanerId,
       payoutOwnerCleanerId: r.payout_owner_cleaner_id,
-      activeCleanerIds: activeIds,
+      activeCleanerIds: activeTeamMemberIds,
       rosterRows: rosterRows ?? [],
     });
     if (!ownership.ok) return ownership;
@@ -853,13 +853,13 @@ async function persistCleanerPayoutIfUnsetCore(
             teamId,
             poolCents,
             rosterRows: rosterRows ?? [],
-            fallbackCleanerIds: activeIds,
+            fallbackCleanerIds: participantIds,
           })
         : buildTeamJobMemberFixedPerCleanerPayoutRows({
             bookingId,
             teamId,
             rosterRows: rosterRows ?? [],
-            fallbackCleanerIds: activeIds,
+            fallbackCleanerIds: participantIds,
           });
 
       if (payoutRows.length > 0) {
@@ -877,11 +877,11 @@ async function persistCleanerPayoutIfUnsetCore(
         (existingRows ?? []).map((row) => String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim()).filter(Boolean),
       );
       const perMember = legacyTeamPool
-        ? activeIds.length > 0
-          ? Math.max(0, Math.floor(poolCents / activeIds.length))
+        ? participantIds.length > 0
+          ? Math.max(0, Math.floor(poolCents / participantIds.length))
           : 0
         : FIXED_SPECIAL_PAYOUT_CENTS;
-      const inserts = activeIds
+      const inserts = participantIds
         .filter((cid) => cid && !existingCleanerIds.has(cid))
         .map((cid) => ({
           booking_id: bookingId,
@@ -934,7 +934,7 @@ async function persistCleanerPayoutIfUnsetCore(
     if (!teamVerify.ok) {
       return { ok: false, error: teamVerify.error };
     }
-    const teamCount = Math.max(1, activeIds.length);
+    const teamCount = Math.max(1, participantIds.length);
     const teamCanon = resolveCanonicalCleanerPayout({
       bookingId,
       serviceId: resolveServiceIdForPersist(r.booking_snapshot ?? null, r.service ?? null),

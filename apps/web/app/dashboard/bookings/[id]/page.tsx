@@ -352,9 +352,9 @@ export default function BookingDetailPage() {
               ) : null}
             </CardHeader>
             <CardContent className="space-y-3">
-              {booking.priceLines.map((line) => (
+              {booking.priceLines.map((line, index) => (
                 <div
-                  key={`${booking.id}-price-${line.kind}`}
+                  key={`${booking.id}-price-${index}-${line.label}`}
                   className="flex justify-between text-sm"
                   data-booking-id={booking.checkoutPriceContext?.bookingId ?? booking.id}
                 >

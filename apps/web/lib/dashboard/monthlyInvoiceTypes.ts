@@ -16,4 +16,6 @@ export type CustomerMonthlyInvoiceRow = {
   currency_code: string;
   created_at: string;
   updated_at: string;
+  /** Zoho Books invoice id (set at finalization); enables the in-app invoice PDF link. */
+  zoho_invoice_id?: string | null;
 };

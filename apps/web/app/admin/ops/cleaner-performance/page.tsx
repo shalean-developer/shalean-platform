@@ -108,7 +108,7 @@ export default function AdminCleanerPerformancePage() {
             SLA queue
           </Link>
           {" · "}
-          <Link href="/admin/cleaners" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+          <Link href="/office/cleaners" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
             Cleaner roster
           </Link>
         </p>

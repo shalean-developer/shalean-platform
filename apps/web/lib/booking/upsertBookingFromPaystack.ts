@@ -1,3 +1,4 @@
+import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import type { CheckoutPriceSnapshotV1 } from "@/lib/booking/priceSnapshotBooking";
 import {
@@ -5,7 +6,7 @@ import {
   parseCheckoutPriceSnapshotV1FromMeta,
 } from "@/lib/booking/priceSnapshotBooking";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
-import { resolveBookingLocationContext } from "@/lib/booking/resolveLocationId";
+import { resolveBookingLocationContext, type BookingLocationSource } from "@/lib/booking/resolveLocationId";
 import { runAdminAssignSmart } from "@/lib/admin/runAdminAssignSmart";
 import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestCleaner";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
@@ -28,6 +29,7 @@ import {
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import { promoteV2TeamBookingAfterPayment } from "@/lib/booking/promoteV2TeamBookingAfterPayment";
 import { learnFromPaymentSuccess } from "@/lib/ai-autonomy/learningLoop";
 import { recordConversionExperimentResultsOnPayment } from "@/lib/conversion/conversionExperimentOutcomes";
 import { attributePaidBookingToGrowthOutcomes } from "@/lib/growth/growthActionOutcomes";
@@ -37,7 +39,6 @@ import { syncUserPrimaryCityFromBooking } from "@/lib/growth/syncPrimaryCity";
 import { createPendingCustomerReferral, processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
-  checkoutDispatchOfferTtlSeconds,
   checkoutPaidDispatchOfferCleanerId,
   resolveCheckoutCleanerSelection,
 } from "@/lib/booking/checkoutCleanerEligibility";
@@ -45,10 +46,14 @@ import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConvers
 import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
 import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import {
+  roomsBathroomsCountsFromServiceDetails,
+  serviceLabelFromBookingRow,
+} from "@/lib/booking/bookingV2CustomerDisplay";
 import { resolvePaymentAttributionTouches } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { escalateFailedCheckoutDispatchOffer } from "@/lib/booking/checkoutDispatchOfferFailureEscalation";
 import { dispatchFallbackAfterSelectedCleanerOfferInsertFailure } from "@/lib/booking/checkoutDispatchOfferFailureFallback";
-import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
+import { startPreferredCleanerDispatchAfterPayment } from "@/lib/dispatch/preferredCleanerDispatch";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { metrics } from "@/lib/metrics/counters";
 import {
@@ -176,6 +181,48 @@ export type UpsertBookingFromPaystackResult = {
   recoveryEnqueue?: boolean;
 };
 
+/**
+ * Booking V2 finalize returns only `{ id, created_at, user_id }` from the UPDATE — schedule fields
+ * live on the pending row and the patch row built in this module. Without this helper, preferred
+ * dispatch reads empty date/time and fails with `invalid_preferred_dispatch_params`.
+ */
+export function resolvePreferredDispatchScheduleAtPayment(params: {
+  finalizeRow: { date?: unknown; time?: unknown };
+  pendingRow?: { date?: unknown; time?: unknown } | null;
+  lockedRow?: { date?: unknown; time?: unknown } | null;
+  bookingSnapshot?: unknown;
+}): { dateYmd: string; timeHm: string } {
+  const ymd = (raw: unknown): string => {
+    const s = raw != null ? String(raw).trim().slice(0, 10) : "";
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+  };
+  const hm = (raw: unknown): string => {
+    const s = raw != null ? String(raw).trim() : "";
+    return s ? s.slice(0, 5) : "";
+  };
+
+  let snapDate = "";
+  let snapTime = "";
+  if (params.bookingSnapshot && typeof params.bookingSnapshot === "object" && !Array.isArray(params.bookingSnapshot)) {
+    const snap = params.bookingSnapshot as Record<string, unknown>;
+    snapDate = ymd(snap.date);
+    snapTime = hm(snap.time);
+  }
+
+  const dateYmd =
+    ymd(params.finalizeRow.date) ||
+    ymd(params.pendingRow?.date) ||
+    ymd(params.lockedRow?.date) ||
+    snapDate;
+  const timeHm =
+    hm(params.finalizeRow.time) ||
+    hm(params.pendingRow?.time) ||
+    hm(params.lockedRow?.time) ||
+    snapTime;
+
+  return { dateYmd, timeHm };
+}
+
 export async function upsertBookingFromPaystack(input: UpsertBookingInput): Promise<UpsertBookingFromPaystackResult> {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -186,7 +233,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   }
 
   const existingSelect =
-    "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status" as const;
+    "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type" as const;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -460,17 +507,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     input.paystackMetadata ?? null,
     emailStored,
   );
+  let customerPhone = cust?.phone?.trim() || null;
+  if (!customerPhone && userIdResolved && supabase) {
+    customerPhone = (await resolveCustomerPhoneFromAuthAdmin(supabase, userIdResolved)) ?? null;
+  }
 
   const flat = buildSnapshotFlat(locked ?? undefined);
   const bookingSnapshotMerged = mergeSnapshotWithFlat(input.snapshot, flat);
 
-  const locationContext = await resolveBookingLocationContext(supabase, locked ?? undefined);
-  const locationId = locationContext.locationId;
-  const cityId = locationContext.cityId;
-  const ds = await getDemandSupplySnapshotByCity(supabase, cityId);
-  const lockedSurge = typeof locked?.surge === "number" && Number.isFinite(locked.surge) ? locked.surge : ds.multiplier;
-  const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
-  const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
   const baseAmountCents = Math.max(0, Math.round(priceSnapshot.subtotal_zar * 100));
   const extrasAmountCents = Math.max(0, Math.round(priceSnapshot.extras_total_zar * 100));
   const totalPaidCents = Math.max(0, Math.round(input.amountCents));
@@ -549,6 +593,71 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? adminBookingServiceSlug(String(locked.service))
       : null;
 
+  type PendingPersistedRow = {
+    location?: string | null;
+    date?: string | null;
+    time?: string | null;
+    service?: string | null;
+    service_slug?: string | null;
+    service_details?: Record<string, unknown> | null;
+    selected_extras?: string[] | null;
+    pricing_summary?: unknown;
+    booking_snapshot?: unknown;
+    rooms?: number | null;
+    bathrooms?: number | null;
+    extras?: unknown;
+    suburb?: string | null;
+    access_instructions?: string | null;
+    parking_instructions?: string | null;
+    gate_code?: string | null;
+    cleaner_mode?: string | null;
+    cleaner_count?: number | null;
+    assigned_team_id?: string | null;
+    booking_type?: string | null;
+  };
+  const pendingExisting = (existing ?? null) as PendingPersistedRow | null;
+  const locationSource: BookingLocationSource = {
+    ...(typeof locked === "object" && locked ? locked : {}),
+    location:
+      (typeof locked?.location === "string" && locked.location.trim()) ||
+      pendingExisting?.suburb?.trim() ||
+      pendingExisting?.location?.trim() ||
+      null,
+  };
+  const locationContextResolved = await resolveBookingLocationContext(supabase, locationSource);
+  const locationId = locationContextResolved.locationId;
+  const cityId = locationContextResolved.cityId;
+  const ds = await getDemandSupplySnapshotByCity(supabase, cityId);
+  const lockedSurge = typeof locked?.surge === "number" && Number.isFinite(locked.surge) ? locked.surge : ds.multiplier;
+  const surgeMultiplier = Math.min(2, Math.max(1, lockedSurge));
+  const surgeReason = surgeMultiplier > 1 ? getSurgeLabel(surgeMultiplier) : null;
+  const countsFromServiceDetails = roomsBathroomsCountsFromServiceDetails(pendingExisting?.service_details);
+  const preservedServiceLabel =
+    locked?.service != null
+      ? getServiceLabel(locked.service)
+      : pendingExisting?.service?.trim() ||
+        serviceLabelFromBookingRow({
+          service: pendingExisting?.service ?? null,
+          service_slug: pendingExisting?.service_slug ?? null,
+        });
+  const preservedExtras =
+    extrasSnapshot.length > 0
+      ? extrasSnapshot
+      : Array.isArray(pendingExisting?.extras) && pendingExisting.extras.length > 0
+        ? pendingExisting.extras
+        : extrasSnapshot;
+  const preservedSnapshot =
+    lockedRow != null
+      ? bookingSnapshotMerged
+      : pendingExisting?.booking_snapshot &&
+          typeof pendingExisting.booking_snapshot === "object" &&
+          !Array.isArray(pendingExisting.booking_snapshot) &&
+          ("serviceDetails" in (pendingExisting.booking_snapshot as object) ||
+            "selectedExtras" in (pendingExisting.booking_snapshot as object) ||
+            "pricingSummary" in (pendingExisting.booking_snapshot as object))
+        ? pendingExisting.booking_snapshot
+        : bookingSnapshotMerged;
+
   const cleanerIdForTenureSnap = userConfirmedCleanerId ?? normalizedPickedCleaner;
   const tenureShareLine = await resolveTenureBasedCleanerShareForBookingRow({
     admin: supabase,
@@ -575,7 +684,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
     customer_name: cust?.name?.trim() || null,
-    customer_phone: cust?.phone?.trim() || null,
+    customer_phone: customerPhone,
     user_id: userIdResolved,
     amount_paid_cents: input.amountCents,
     total_paid_cents: totalPaidCents,
@@ -583,7 +692,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     extras_amount_cents: extrasAmountCents,
     service_fee_cents: serviceFeeCents,
     currency: input.currency || "ZAR",
-    booking_snapshot: bookingSnapshotMerged,
+    booking_snapshot: preservedSnapshot,
     ...lockedDurationMinutesPatch(lockedRow),
     ...(serviceSlugForRow ? { service_slug: serviceSlugForRow } : {}),
     status: "pending",
@@ -591,15 +700,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     is_test: isTest,
     surge_multiplier: surgeMultiplier,
     surge_reason: surgeReason,
-    service: locked?.service != null ? getServiceLabel(locked.service) : null,
-    rooms: locked?.rooms ?? null,
-    bathrooms: locked?.bathrooms ?? null,
-    extras: extrasSnapshot,
-    location: locked?.location?.trim() || null,
+    service: preservedServiceLabel ?? null,
+    rooms: locked?.rooms ?? pendingExisting?.rooms ?? countsFromServiceDetails.rooms ?? null,
+    bathrooms: locked?.bathrooms ?? pendingExisting?.bathrooms ?? countsFromServiceDetails.bathrooms ?? null,
+    extras: preservedExtras,
+    location: locked?.location?.trim() || pendingExisting?.location?.trim() || null,
     location_id: locationId,
     city_id: cityId,
-    date: locked?.date ?? null,
-    time: locked?.time ?? null,
+    date: locked?.date ?? pendingExisting?.date ?? null,
+    time: locked?.time ?? pendingExisting?.time ?? null,
     total_paid_zar: Math.round(paidZar),
     pricing_version_id: pricing_version_id || null,
     price_breakdown: price_breakdown,
@@ -823,6 +932,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
     await refreshRecurringPaymentStateForBooking(supabase, id);
 
+    const v2TeamPromote = await promoteV2TeamBookingAfterPayment(supabase, id);
+    if (!v2TeamPromote.ok) {
+      void reportOperationalIssue("warn", "upsertBookingFromPaystack", v2TeamPromote.error, {
+        bookingId: id,
+        paystackReference: input.paystackReference,
+      });
+    }
+
     const referralCode = String(input.paystackMetadata?.referral_code ?? input.paystackMetadata?.client_referralCode ?? "").trim();
     if (referralCode) {
       await createPendingCustomerReferral({
@@ -858,39 +975,50 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       normalizedPickedCleaner,
     });
     if (dispatchOfferCleanerId) {
-      const ttl = checkoutDispatchOfferTtlSeconds();
-      const offerRes = await createDispatchOfferRow({
-        supabase,
-        bookingId: id,
-        cleanerId: dispatchOfferCleanerId,
-        rankIndex: 0,
-        ttlSeconds: ttl,
+      const { dateYmd: dispatchDate, timeHm: dispatchTime } = resolvePreferredDispatchScheduleAtPayment({
+        finalizeRow: row,
+        pendingRow: pendingExisting,
+        lockedRow,
+        bookingSnapshot: preservedSnapshot,
       });
-      if (offerRes.ok) {
+      const { data: priorityRow } = await supabase
+        .from("bookings")
+        .select("booking_priority, dispatch_attempt_count")
+        .eq("id", id)
+        .maybeSingle();
+      const dispatchResult = await startPreferredCleanerDispatchAfterPayment(supabase, {
+        bookingId: id,
+        preferredCleanerId: dispatchOfferCleanerId,
+        dateYmd: dispatchDate,
+        timeHm: dispatchTime,
+        bookingPriority:
+          priorityRow && typeof priorityRow === "object"
+            ? (priorityRow as { booking_priority?: string | null }).booking_priority
+            : null,
+        paystackReference: input.paystackReference,
+        dispatchAttemptCount:
+          priorityRow && typeof priorityRow === "object"
+            ? (priorityRow as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0
+            : 0,
+      });
+      if (
+        dispatchResult.kind === "preferred_offer_sent" ||
+        dispatchResult.kind === "skipped_urgent"
+      ) {
         metrics.increment("booking.checkout_assignment", {
           assignment_type: "user_selected",
           bookingId: id,
           selected_cleaner_id: dispatchOfferCleanerId,
-          phase: "offered",
+          phase: dispatchResult.kind === "skipped_urgent" ? "skipped_urgent_backup" : "preferred_offered",
         });
-      } else {
+      } else if (dispatchResult.kind === "offer_failed") {
         await escalateFailedCheckoutDispatchOffer({
           supabase,
           bookingId: id,
           paystackReference: input.paystackReference,
           cleanerId: dispatchOfferCleanerId,
-          offerError: offerRes.error,
+          offerError: dispatchResult.error,
         });
-        /*
-         * H-7: when the customer-selected dispatch_offers insert fails
-         * post-payment, the row is left in `pending_assignment` with no
-         * pending offer — a paid customer would otherwise wait
-         * indefinitely. Run the standard auto-dispatch ladder so the
-         * booking always has a forward path. Admin escalation already
-         * fired above; this only ADDS a recovery attempt and never
-         * suppresses the audit trail. Isolated to the offer-insert
-         * failure branch — offer-success path is unchanged.
-         */
         await dispatchFallbackAfterSelectedCleanerOfferInsertFailure({
           supabase,
           bookingId: id,
@@ -904,8 +1032,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         selectionInvalidatedCleaner && pickedCleanerUuid
           ? { excludeCleanerIds: [pickedCleanerUuid] as const }
           : undefined;
+      /** Booking V2 team checkout already selected a team — do not run marketplace auto-assign. */
+      const skipAutoDispatchForV2Team =
+        String(pendingExisting?.cleaner_mode ?? "").trim().toLowerCase() === "team" &&
+        Boolean(String(pendingExisting?.assigned_team_id ?? "").trim());
       /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
-      const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
+      const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false" && !skipAutoDispatchForV2Team;
       const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
       if (autoDispatch) {
         const r = await assignBestCleaner(supabase, id, {

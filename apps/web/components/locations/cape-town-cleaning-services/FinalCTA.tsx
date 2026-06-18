@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { bookingFlowHref, bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
 
 export function FinalCTA() {
-  const quoteHref = bookingFlowHref("quote", { ...(bookingMarketingPromoExtra("SAVE10") ?? {}), source: "cape_town_main_footer" });
-  const bookHref = bookingFlowHref("entry", { ...(bookingMarketingPromoExtra("SAVE10") ?? {}), source: "cape_town_main_footer" });
+  const quoteHref = "/book";
+  const bookHref = "/book";
 
   return (
     <section

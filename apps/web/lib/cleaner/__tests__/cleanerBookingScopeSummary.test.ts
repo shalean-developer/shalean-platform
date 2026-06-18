@@ -108,4 +108,18 @@ describe("cleanerBookingScopeLines", () => {
     });
     expect(lines).toEqual(["Extras: Water Plants"]);
   });
+
+  it("uses booking-v2 selected_extras and pricing_summary when extras json is empty", () => {
+    const lines = cleanerBookingScopeLines({
+      rooms: 3,
+      bathrooms: 2,
+      extras: [],
+      selected_extras: ["inside_oven"],
+      pricing_summary: {
+        selected_extras: [{ extra_id: "inside_oven", name: "Inside oven", price: 20, total: 20, quantity: 1 }],
+      },
+      booking_snapshot: null,
+    });
+    expect(lines).toEqual(["Rooms: 3 bedrooms, 2 bathrooms", "Extras: Inside oven"]);
+  });
 });

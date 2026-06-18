@@ -1,3 +1,8 @@
+import {
+  CUSTOMER_ONLINE_BOOKING_TIME_SLOTS,
+  filterCustomerOnlineBookingTimeSlots,
+} from "@/lib/booking-v2/customerBookingTimeSlots";
+
 const TZ = "Africa/Johannesburg";
 
 /** Default minimum lead time from “now” in Johannesburg before a same-day slot is bookable. */
@@ -78,18 +83,10 @@ export function filterBookableTimeSlots(
   dateYmd: string,
   opts?: { now?: Date; leadMinutes?: number },
 ): string[] {
-  const now = opts?.now ?? new Date();
-  const leadMinutes = opts?.leadMinutes ?? BOOKING_MIN_LEAD_MINUTES;
-  const all = baseDaySlots();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return [];
+  return filterCustomerOnlineBookingTimeSlots(dateYmd, opts);
+}
 
-  const { ymd: todayYmd, minutes: nowMin } = johannesburgNowParts(now);
-  if (dateYmd > todayYmd) return all;
-  if (dateYmd < todayYmd) return [];
-
-  const minSlotMin = nowMin + leadMinutes;
-  return all.filter((slot) => {
-    const sm = hmToMinutes(slot);
-    return sm != null && sm >= minSlotMin;
-  });
+/** @deprecated Use {@link CUSTOMER_ONLINE_BOOKING_TIME_SLOTS} for customer-facing grids. */
+export function customerOnlineBookingTimeSlots(): string[] {
+  return [...CUSTOMER_ONLINE_BOOKING_TIME_SLOTS];
 }

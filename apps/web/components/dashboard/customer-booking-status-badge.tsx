@@ -1,55 +1,37 @@
-import { Badge } from "@/components/ui/badge";
 import { customerBookingCardOperationalDisplay } from "@/lib/dashboard/customerBookingDisplay";
+import { operationalDisplayBadgeClassName } from "@/lib/booking/describeBookingOperationalState";
 import type { DashboardBooking } from "@/lib/dashboard/types";
+import { cn } from "@/lib/utils";
 
-export function CustomerBookingStatusBadge({ booking }: { booking: DashboardBooking }) {
-  const { statusLabel: label, displayBadge, displayTone, operationalPhase, lifecycleSource } =
+/**
+ * Customer-facing operational status — same `displayBadge` / tone derivation as
+ * admin {@link BookingCardStatusBadge} and cleaner dashboard lifecycle badges.
+ */
+export function CustomerBookingStatusBadge({
+  booking,
+  className,
+}: {
+  booking: DashboardBooking;
+  className?: string;
+}) {
+  const { statusLabel, displayBadge, displayTone, operationalPhase, lifecycleSource } =
     customerBookingCardOperationalDisplay(booking);
-  const title = `${displayBadge} · ${operationalPhase}`;
-  switch (label) {
-    case "Completed":
-      return (
-        <Badge variant="success" data-lifecycle-source={lifecycleSource} data-display-tone={displayTone} title={title}>
-          {label}
-        </Badge>
-      );
-    case "Completed (billed monthly)":
-      return (
-        <Badge
-          variant="success"
-          data-lifecycle-source={lifecycleSource}
-          data-display-tone={displayTone}
-          title={title}
-          className="border border-emerald-300/80 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100"
-        >
-          {label}
-        </Badge>
-      );
-    case "Cancelled":
-    case "Failed":
-      return (
-        <Badge variant="destructive" data-lifecycle-source={lifecycleSource} data-display-tone={displayTone} title={title}>
-          {label}
-        </Badge>
-      );
-    case "Billed monthly":
-      return (
-        <Badge
-          variant="outline"
-          data-lifecycle-source={lifecycleSource}
-          data-display-tone={displayTone}
-          title={title}
-          className="border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-200"
-        >
-          {label}
-        </Badge>
-      );
-    case "Scheduled":
-    default:
-      return (
-        <Badge variant="default" data-lifecycle-source={lifecycleSource} data-display-tone={displayTone} title={title}>
-          {label}
-        </Badge>
-      );
-  }
+  const cls = operationalDisplayBadgeClassName(displayTone);
+  const title = `${displayBadge} · ${operationalPhase} · ${statusLabel}`;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        cls,
+        className,
+      )}
+      data-lifecycle-source={lifecycleSource}
+      data-display-tone={displayTone}
+      data-operational-phase={operationalPhase}
+      title={title}
+    >
+      {displayBadge}
+    </span>
+  );
 }

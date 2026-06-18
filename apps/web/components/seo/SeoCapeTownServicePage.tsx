@@ -33,11 +33,6 @@ import {
 import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
-import {
-  buildSeoBookingHref,
-  inferBookingServiceFromSeoSlug,
-  recommendedSeoExtras,
-} from "@/lib/booking/seoBookingPrefill";
 
 type Props = {
   slug: CapeTownSeoServiceSlug;
@@ -45,28 +40,10 @@ type Props = {
   initialLocationSlug?: string | null;
 };
 
-function sanitizeSeoLocationSlug(slug: string | null | undefined): string | null {
-  const s = slug?.trim().toLowerCase() ?? "";
-  if (!/^[a-z0-9-]{2,80}$/.test(s)) return null;
-  return s;
-}
-
-export function SeoCapeTownServicePage({ slug, trustStats, initialLocationSlug = null }: Props) {
+export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
-  const seoService = inferBookingServiceFromSeoSlug(slug);
-  const locationSlug = sanitizeSeoLocationSlug(initialLocationSlug);
-  const bookingPath = buildSeoBookingHref("details", {
-    service: seoService,
-    locationSlug,
-    extras: recommendedSeoExtras(seoService),
-    source: `seo_service_${slug}`,
-  });
-  const bookingStartPath = buildSeoBookingHref("entry", {
-    service: seoService,
-    locationSlug,
-    extras: recommendedSeoExtras(seoService),
-    source: `seo_service_${slug}_start`,
-  });
+  const bookingPath = "/book";
+  const bookingStartPath = "/book";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
   const includedHeading = data.includedSectionHeading ?? "What's included";
   const areasHeading = data.areasSectionHeading ?? "Areas we serve in Cape Town";

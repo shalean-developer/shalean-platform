@@ -27,7 +27,7 @@ function locationHubSitemapPriority(locSlug: string): number {
 }
 
 /** Never list transactional Paystack return URLs (including query variants if ever added). */
-const SITEMAP_EXCLUDED_PATHNAMES = new Set(["/booking/success", "/payment/success"]);
+const SITEMAP_EXCLUDED_PATHNAMES = new Set(["/account/success", "/booking/success", "/payment/success"]);
 
 function pathnameNotExcluded(url: string): boolean {
   try {

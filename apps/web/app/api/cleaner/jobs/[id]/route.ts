@@ -32,6 +32,13 @@ import {
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
+import {
+  cleanerJobAccessDetailLines,
+  cleanerJobServiceDetailLines,
+  formatCleanerJobLocationDisplay,
+  resolveCleanerJobCustomerContact,
+  syncSoloCleanerDisplayEarningsPreviewCents,
+} from "@/lib/cleaner/cleanerJobDetailDisplayEnrich";
 import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import {
   fetchTeamRosterByBookingIds,
@@ -116,7 +123,7 @@ function markBookingCompletedOpToLifecycleResult(
 }
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email, user_id, extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -205,6 +212,22 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (typeof previewCents === "number" && Number.isFinite(previewCents) && previewCents > 0) {
       displayEarningsCents = previewCents;
       displayEarningsIsEstimate = true;
+    } else if (record.is_team_job !== true) {
+      const { data: cleanerRow } = await admin
+        .from("cleaners")
+        .select("joined_at, created_at")
+        .eq("id", session.cleanerId)
+        .maybeSingle();
+      const joinedAt = String(
+        (cleanerRow as { joined_at?: string | null; created_at?: string | null } | null)?.joined_at ??
+          (cleanerRow as { created_at?: string | null } | null)?.created_at ??
+          "",
+      ).trim();
+      const syncCents = syncSoloCleanerDisplayEarningsPreviewCents({ record, cleanerJoinedAtIso: joinedAt });
+      if (typeof syncCents === "number" && syncCents > 0) {
+        displayEarningsCents = syncCents;
+        displayEarningsIsEstimate = true;
+      }
     }
   }
   const snapRaw = record.team_member_count_snapshot;
@@ -227,6 +250,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     total_price: _omitTotalPrice,
     price_breakdown: _omitPriceBreakdown,
     amount_paid_cents: _omitAmountPaid,
+    base_amount_cents: _omitBaseAmount,
+    service_fee_cents: _omitServiceFee,
+    user_id: _omitUserId,
+    customer_email: _omitCustomerEmail,
+    selected_extras: _omitSelectedExtras,
+    service_details: _omitServiceDetails,
+    pricing_summary: _omitPricingSummary,
+    duration_minutes: _omitDurationMinutes,
+    access_instructions: _omitAccessInstructions,
+    gate_code: _omitGateCode,
+    parking_instructions: _omitParkingInstructions,
+    suburb: _omitSuburb,
     ...safe
   } = record;
   const jobPayHintWire =
@@ -242,16 +277,41 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       : {};
 
   const snap = record.booking_snapshot;
-  const snapCust =
-    snap && typeof snap === "object" && !Array.isArray(snap)
-      ? (snap as { customer?: { name?: string; phone?: string } }).customer
-      : undefined;
-  const snapCustomerName = typeof snapCust?.name === "string" ? snapCust.name.trim() : "";
-  const snapCustomerPhone = typeof snapCust?.phone === "string" ? snapCust.phone.trim() : "";
-  const dbName = typeof safe.customer_name === "string" ? safe.customer_name.trim() : "";
-  const dbPhone = typeof safe.customer_phone === "string" ? safe.customer_phone.trim() : "";
-  const customer_name = snapCustomerName || dbName || null;
-  const customer_phone = snapCustomerPhone || dbPhone || null;
+  const { customer_name, customer_phone } = await resolveCleanerJobCustomerContact(admin, {
+    customer_name: typeof safe.customer_name === "string" ? safe.customer_name : null,
+    customer_phone: typeof safe.customer_phone === "string" ? safe.customer_phone : null,
+    customer_email: typeof record.customer_email === "string" ? record.customer_email : null,
+    user_id: typeof record.user_id === "string" ? record.user_id : null,
+    booking_snapshot: snap,
+  });
+  if (customer_phone && !record.customer_phone) {
+    const mergedSnap =
+      snap && typeof snap === "object" && !Array.isArray(snap)
+        ? {
+            ...(snap as Record<string, unknown>),
+            contactPhone: customer_phone,
+            customer: {
+              ...((snap as { customer?: Record<string, unknown> }).customer ?? {}),
+              phone: customer_phone,
+            },
+          }
+        : { contactPhone: customer_phone };
+    void admin.from("bookings").update({ customer_phone, booking_snapshot: mergedSnap }).eq("id", bookingId);
+  }
+  const location_display = formatCleanerJobLocationDisplay({
+    location: typeof safe.location === "string" ? safe.location : null,
+    suburb: typeof record.suburb === "string" ? record.suburb : null,
+    booking_snapshot: snap,
+  });
+  const service_detail_lines = cleanerJobServiceDetailLines({
+    service_details: record.service_details,
+    booking_snapshot: snap,
+  });
+  const access_detail_lines = cleanerJobAccessDetailLines({
+    access_instructions: typeof record.access_instructions === "string" ? record.access_instructions : null,
+    gate_code: typeof record.gate_code === "string" ? record.gate_code : null,
+    parking_instructions: typeof record.parking_instructions === "string" ? record.parking_instructions : null,
+  });
 
   let teamMemberCount: number | null = null;
   if (record.is_team_job === true) {
@@ -292,6 +352,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     rooms: record.rooms,
     bathrooms: record.bathrooms,
     extras: record.extras,
+    selected_extras: record.selected_extras,
+    pricing_summary: record.pricing_summary,
+    service_details: record.service_details,
     booking_snapshot: record.booking_snapshot,
     lineItems,
   });
@@ -320,6 +383,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       server_now_ms: Date.now(),
       customer_name,
       customer_phone,
+      location_display,
+      service_detail_lines,
+      access_detail_lines,
       scope_lines,
       lineItems: lineItems && lineItems.length > 0 ? lineItems : null,
       displayEarningsCents,

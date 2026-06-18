@@ -48,3 +48,13 @@ describe("selectActiveJob", () => {
     expect(selectActiveJob([job({ id: "z", phaseDisplay: "  IN PROGRESS  " })])?.id).toBe("z");
   });
 });
+
+describe("cleanerActiveJobShowsNavigation", () => {
+  it("shows navigation only for en-route phases", async () => {
+    const { cleanerActiveJobShowsNavigation } = await import("@/lib/cleaner-dashboard/selectActiveJob");
+    expect(cleanerActiveJobShowsNavigation("En route")).toBe(true);
+    expect(cleanerActiveJobShowsNavigation("On the way")).toBe(true);
+    expect(cleanerActiveJobShowsNavigation("In progress")).toBe(false);
+    expect(cleanerActiveJobShowsNavigation("Assigned")).toBe(false);
+  });
+});

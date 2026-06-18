@@ -867,7 +867,7 @@ export async function processPaystackInitializeBody(
   }
 
   const appUrl = getPublicAppUrlBase();
-  const callbackUrl = `${appUrl}/booking/success`;
+  const callbackUrl = `${appUrl}/account/success`;
 
   const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",

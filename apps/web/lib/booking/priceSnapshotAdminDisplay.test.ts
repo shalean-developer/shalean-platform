@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferAdminServiceTypeSlug, parseAdminBookingPriceSnapshot } from "@/lib/booking/priceSnapshotAdminDisplay";
+import { adminBookingVisitPricingSplit, inferAdminServiceTypeSlug, parseAdminBookingPriceSnapshot } from "@/lib/booking/priceSnapshotAdminDisplay";
 
 describe("parseAdminBookingPriceSnapshot", () => {
   it("parses legacy v:1 snapshots", () => {
@@ -60,6 +60,38 @@ describe("parseAdminBookingPriceSnapshot", () => {
     expect(out).not.toBeNull();
     expect(out!.extras).toEqual([{ id: "addons-subtotal", name: "Add-ons (subtotal)", price: 40 }]);
     expect(out!.base_price).toBe(310);
+  });
+});
+
+describe("adminBookingVisitPricingSplit", () => {
+  it("uses price_snapshot instead of estimated splits", () => {
+    const out = adminBookingVisitPricingSplit({
+      total_price: 450,
+      total_paid_zar: 0,
+      amount_paid_cents: 0,
+      price_snapshot: {
+        v: 1,
+        service_type: "standard",
+        base_price: 383,
+        extras: [{ id: "oven", name: "Inside oven", price: 67 }],
+        total_price: 450,
+      },
+      service: "Standard Cleaning",
+      service_slug: "standard",
+    });
+    expect(out).toEqual({ basePrice: 383, extrasPrice: 67, total: 450 });
+  });
+
+  it("prefers total_price for unpaid bookings", () => {
+    const out = adminBookingVisitPricingSplit({
+      total_price: 450,
+      total_paid_zar: 0,
+      base_amount_cents: 38300,
+      amount_paid_cents: 0,
+      service: "Standard Cleaning",
+    });
+    expect(out.total).toBe(450);
+    expect(out.basePrice).toBe(383);
   });
 });
 

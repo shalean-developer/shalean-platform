@@ -94,7 +94,7 @@ export function LocationHubEngagementClient({
           <p className="text-center text-sm font-medium leading-snug text-zinc-800 sm:text-left">{stickyLine}</p>
           <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
             <SeoHubGrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source={`seo_loc_${trackingSlug}_sticky_cta`}
               ctx={analyticsCtx}
               ctaLocation="sticky_bar"

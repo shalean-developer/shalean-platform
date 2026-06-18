@@ -20,6 +20,7 @@ import { fetchSlaDispatchLastActions } from "@/lib/admin/slaDispatchLastAction";
 import { isAdmin } from "@/lib/auth/admin";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
+  computeOpsSnapshotFromRows,
   getDispatchSlaBreachMinutes,
   rowMatchesAttentionFilter,
   slaBreachOverdueMinutes,
@@ -182,6 +183,107 @@ function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
 }
 
 const ADMIN_LIST_ROSTER_CHUNK = 120;
+const PAGINATED_DEFAULT_PAGE_SIZE = 25;
+const PAGINATED_MAX_PAGE_SIZE = 100;
+const STATUS_COUNT_KEYS = [
+  "confirmed",
+  "assigned",
+  "in_progress",
+  "completed",
+  "cancelled",
+  "pending_payment",
+  "pending",
+] as const;
+
+// Supabase builder generics diverge by selected column shape; this helper preserves runtime chaining across those shapes.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AdminBookingQuery = any;
+
+function parsePositiveInt(raw: string | null, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+function clampPageSize(raw: string | null): number {
+  return Math.min(PAGINATED_MAX_PAGE_SIZE, Math.max(1, parsePositiveInt(raw, PAGINATED_DEFAULT_PAGE_SIZE)));
+}
+
+function safeSearchTerm(raw: string | null): string {
+  return String(raw ?? "")
+    .trim()
+    .replace(/[(),]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+}
+
+function escapeIlike(raw: string): string {
+  return raw.replace(/[%_]/g, (m) => `\\${m}`);
+}
+
+function applyAdminBookingDbFilters(params: {
+  query: AdminBookingQuery;
+  cityId: string | null;
+  recurringIdFilter: string | null;
+  recurringListScope: boolean;
+  bookingStatus: string | null;
+  from: string | null;
+  to: string | null;
+  filter: string;
+  opsQuick: string;
+  search: string;
+  today: string;
+  includeBookingStatus?: boolean;
+}): AdminBookingQuery {
+  let q = params.query;
+  if (params.cityId && !params.recurringListScope) q = q.eq("city_id", params.cityId);
+  if (params.recurringIdFilter) q = q.eq("recurring_id", params.recurringIdFilter);
+  if (params.includeBookingStatus !== false && params.bookingStatus && params.bookingStatus !== "all") {
+    q = q.eq("status", params.bookingStatus);
+  }
+  if (!params.recurringListScope && params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) {
+    q = q.gte("date", params.from);
+  }
+  if (!params.recurringListScope && params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to)) {
+    q = q.lte("date", params.to);
+  }
+  if (!params.recurringListScope) {
+    if (params.filter === "follow-up") {
+      q = q.eq("payment_needs_follow_up", true);
+    } else if (params.filter === "today") {
+      q = q.eq("date", params.today);
+    } else if (params.filter === "upcoming") {
+      q = q.gt("date", params.today);
+    } else if (params.filter === "completed") {
+      q = q.or(`status.in.(completed,cancelled,failed,payment_expired),date.lt.${params.today}`);
+    } else if (params.filter === "sla") {
+      q = q.eq("status", "pending").is("cleaner_id", null).in("dispatch_status", ["searching", "offered"]);
+    }
+
+    if (params.opsQuick === "awaiting_payment") {
+      q = q.eq("status", "pending_payment");
+    } else if (params.opsQuick === "tomorrow") {
+      q = q.eq("date", addDaysYmd(params.today, 1));
+    } else if (params.opsQuick === "today") {
+      q = q.eq("date", params.today);
+    }
+  }
+
+  if (params.search) {
+    const like = `%${escapeIlike(params.search)}%`;
+    const clauses = [
+      `customer_name.ilike.${like}`,
+      `customer_email.ilike.${like}`,
+      `location.ilike.${like}`,
+      `service.ilike.${like}`,
+      `service_slug.ilike.${like}`,
+      `paystack_reference.ilike.${like}`,
+    ];
+    if (/^[0-9a-f-]{36}$/i.test(params.search)) clauses.unshift(`id.eq.${params.search}`);
+    q = q.or(clauses.join(","));
+  }
+
+  return q;
+}
 
 async function attachTeamAndRosterToBookings(admin: SupabaseClient, bookings: Row[]): Promise<Row[]> {
   if (!bookings.length) return bookings;
@@ -206,12 +308,42 @@ async function attachTeamAndRosterToBookings(admin: SupabaseClient, bookings: Ro
     }
   }
 
+  const directCleanerIds = [
+    ...new Set(
+      bookings
+        .map((r) => String(r.cleaner_id ?? "").trim())
+        .filter((id) => /^[0-9a-f-]{36}$/i.test(id)),
+    ),
+  ];
+  const directCleanerNameMap = new Map<string, string | null>();
+  for (let i = 0; i < directCleanerIds.length; i += ADMIN_LIST_ROSTER_CHUNK) {
+    const slice = directCleanerIds.slice(i, i + ADMIN_LIST_ROSTER_CHUNK);
+    const { data: cleanerRows } = await admin.from("cleaners").select("id, full_name").in("id", slice);
+    for (const c of cleanerRows ?? []) {
+      const row = c as { id?: string; full_name?: string | null };
+      const id = String(row.id ?? "").trim();
+      if (id) directCleanerNameMap.set(id, row.full_name?.trim() ? row.full_name.trim() : null);
+    }
+  }
+
   return bookings.map((r) => {
     const tid = String(r.team_id ?? "").trim();
+    const directCleanerId = String(r.cleaner_id ?? "").trim();
+    const roster = rosterMap.get(r.id) ?? [];
+    const bookingCleaners =
+      roster.length > 0 || !directCleanerId
+        ? roster
+        : [
+            {
+              cleaner_id: directCleanerId,
+              full_name: directCleanerNameMap.get(directCleanerId) ?? null,
+              role: "lead",
+            },
+          ];
     return {
       ...r,
       team: tid ? { id: tid, name: teamNameMap.get(tid) ?? null } : null,
-      booking_cleaners: rosterMap.get(r.id) ?? [],
+      booking_cleaners: bookingCleaners,
     };
   });
 }
@@ -257,6 +389,12 @@ export async function GET(request: Request) {
   const bookingStatus = searchParams.get("bookingStatus");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const search = safeSearchTerm(searchParams.get("search"));
+  const paginationRequested = searchParams.has("page") || searchParams.has("pageSize") || search.length > 0;
+  const requestedPage = parsePositiveInt(searchParams.get("page"), 1);
+  const pageSize = clampPageSize(searchParams.get("pageSize"));
+  const rangeFrom = (requestedPage - 1) * pageSize;
+  const rangeTo = rangeFrom + pageSize - 1;
   const opsQuick = (searchParams.get("opsQuick") ?? "").trim().toLowerCase();
   const recurringIdRaw = (searchParams.get("recurring_id") ?? searchParams.get("recurringId") ?? "").trim();
   const recurringIdFilter = /^[0-9a-f-]{36}$/i.test(recurringIdRaw) ? recurringIdRaw : null;
@@ -264,40 +402,35 @@ export async function GET(request: Request) {
   const recurringListScope = Boolean(recurringIdFilter);
   /** SLA breach queue only needs pending dispatch rows — avoid scanning 4k bookings + heavy metrics (prevents client timeouts / "Failed to fetch"). */
   const slaFast = filter === "sla" && !recurringListScope;
+  const today = todayYmdJohannesburg();
 
   const bookingSelect =
     "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, billing_type, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
 
-  let bookingQuery = admin.from("bookings").select(bookingSelect);
-
-  if (slaFast) {
+  let bookingQuery = admin.from("bookings").select(bookingSelect, paginationRequested ? { count: "exact" } : undefined);
+  bookingQuery = applyAdminBookingDbFilters({
+    query: bookingQuery,
+    cityId,
+    recurringIdFilter,
+    recurringListScope,
+    bookingStatus,
+    from,
+    to,
+    filter,
+    opsQuick,
+    search,
+    today,
+  });
+  if (!paginationRequested && slaFast) {
+    bookingQuery = bookingQuery.order("created_at", { ascending: false }).limit(800);
+  } else if (!paginationRequested && filter === "follow-up" && !recurringListScope) {
     bookingQuery = bookingQuery
-      .eq("status", "pending")
-      .is("cleaner_id", null)
-      .in("dispatch_status", ["searching", "offered"])
-      .order("created_at", { ascending: false })
-      .limit(800);
-  } else if (filter === "follow-up" && !recurringListScope) {
-    bookingQuery = bookingQuery
-      .eq("payment_needs_follow_up", true)
       .order("payment_conversion_seconds", { ascending: false, nullsFirst: false })
       .order("payment_link_send_count", { ascending: false })
       .limit(2000);
   } else {
-    bookingQuery = bookingQuery.order("created_at", { ascending: false }).limit(4000);
-  }
-  if (cityId && !recurringListScope) bookingQuery = bookingQuery.eq("city_id", cityId);
-  if (recurringIdFilter) {
-    bookingQuery = bookingQuery.eq("recurring_id", recurringIdFilter);
-  }
-  if (bookingStatus && bookingStatus !== "all") {
-    bookingQuery = bookingQuery.eq("status", bookingStatus);
-  }
-  if (!recurringListScope && from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
-    bookingQuery = bookingQuery.gte("date", from);
-  }
-  if (!recurringListScope && to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
-    bookingQuery = bookingQuery.lte("date", to);
+    bookingQuery = bookingQuery.order("created_at", { ascending: false });
+    bookingQuery = paginationRequested ? bookingQuery.range(rangeFrom, rangeTo) : bookingQuery.limit(4000);
   }
 
   const topSpendSince = new Date();
@@ -324,7 +457,7 @@ export async function GET(request: Request) {
   topSpendQuery = topSpendQuery.limit(TOP_CUSTOMERS_AGG_ROW_CAP);
 
   const topSpendExec = slaFast ? Promise.resolve({ data: [] as Row[], error: null }) : topSpendQuery;
-  const [{ data: rawRows, error: selErr }, topSpendRes] = await Promise.all([bookingQuery, topSpendExec]);
+  const [{ data: rawRows, error: selErr, count: listCount }, topSpendRes] = await Promise.all([bookingQuery, topSpendExec]);
 
   if (selErr) {
     await reportOperationalIssue("error", "api/admin/bookings", selErr.message);
@@ -332,7 +465,6 @@ export async function GET(request: Request) {
   }
 
   const rows = (rawRows ?? []) as Row[];
-  const today = todayYmdJohannesburg();
 
   let filtered = rows;
   if (!recurringListScope) {
@@ -443,6 +575,71 @@ export async function GET(request: Request) {
   }
 
   const paymentLinkChannelStats = slaFast ? aggregatePaymentLinkDeliveryStats([]) : aggregatePaymentLinkDeliveryStats(rows);
+  const countQueryForStatus = (status: string | null) =>
+    applyAdminBookingDbFilters({
+      query: admin.from("bookings").select("id", { count: "exact", head: true }),
+      cityId,
+      recurringIdFilter,
+      recurringListScope,
+      bookingStatus: status,
+      from,
+      to,
+      filter,
+      opsQuick,
+      search,
+      today,
+      includeBookingStatus: status != null,
+    });
+  const countResults = paginationRequested
+    ? await Promise.all([
+        countQueryForStatus(null),
+        ...STATUS_COUNT_KEYS.map((status) => countQueryForStatus(status)),
+        applyAdminBookingDbFilters({
+          query: admin.from("bookings").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "completed"),
+          cityId,
+          recurringIdFilter,
+          recurringListScope,
+          bookingStatus: null,
+          from: null,
+          to: null,
+          filter: "all",
+          opsQuick: "",
+          search,
+          today,
+          includeBookingStatus: false,
+        }),
+      ])
+    : [];
+  const statusCounts = paginationRequested
+    ? {
+        all: countResults[0]?.count ?? 0,
+        ...Object.fromEntries(STATUS_COUNT_KEYS.map((status, index) => [status, countResults[index + 1]?.count ?? 0])),
+        completedToday: countResults[STATUS_COUNT_KEYS.length + 1]?.count ?? 0,
+      }
+    : {
+        all: filtered.length,
+        ...Object.fromEntries(STATUS_COUNT_KEYS.map((status) => [status, filtered.filter((r) => r.status === status).length])),
+        completedToday: filtered.filter((r) => r.status === "completed" && r.date === today).length,
+      };
+  const { data: attentionRows } = await applyAdminBookingDbFilters({
+    query: admin
+      .from("bookings")
+      .select("id,status,date,time,cleaner_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents")
+      .not("status", "in", "(completed,cancelled,failed,payment_expired)")
+      .limit(3500),
+    cityId,
+    recurringIdFilter,
+    recurringListScope,
+    bookingStatus: null,
+    from,
+    to,
+    filter: "all",
+    opsQuick: "",
+    search,
+    today,
+    includeBookingStatus: false,
+  });
+  const attention = computeOpsSnapshotFromRows((attentionRows ?? []) as OpsSnapshotRow[]);
 
   const profileUserIds = [...new Set(filtered.map((r) => r.user_id).filter(Boolean))] as string[];
   const profileById = new Map<string, { billing_type: string; schedule_type: string }>();
@@ -489,9 +686,29 @@ export async function GET(request: Request) {
     ...r,
     dashboardLifecycle: buildDashboardLifecycleAlignmentWire(r as Record<string, unknown>),
   }));
+  const totalRows = paginationRequested ? listCount ?? 0 : bookingsPayload.length;
+  const totalPages = paginationRequested ? Math.max(1, Math.ceil(totalRows / pageSize)) : 1;
+  const safePage = paginationRequested ? Math.min(requestedPage, totalPages) : 1;
 
   return NextResponse.json({
     bookings: bookingsPayload,
+    pagination: {
+      page: safePage,
+      pageSize: paginationRequested ? pageSize : bookingsPayload.length,
+      total: totalRows,
+      totalPages,
+      from: totalRows === 0 ? 0 : rangeFrom + 1,
+      to: totalRows === 0 ? 0 : Math.min(rangeFrom + bookingsPayload.length, totalRows),
+      hasNextPage: paginationRequested ? requestedPage < totalPages : false,
+      hasPreviousPage: paginationRequested ? requestedPage > 1 : false,
+    },
+    statusCounts,
+    attention: {
+      unassigned: attention.unassigned,
+      slaBreaches: attention.slaBreaches,
+      startingSoon: attention.startingSoon,
+      unassignable: attention.unassignable,
+    },
     metrics: {
       totalBookingsToday,
       revenueTodayZar,

@@ -30,6 +30,8 @@ export type CleanerOfferRow = {
    * also logged server-side via `cleaner_offer_job_earning_unavailable`).
    */
   jobEarning?: CleanerJobEarning;
+  offer_type?: "preferred" | "backup" | null;
+  sent_at?: string | null;
   booking: {
     id: string;
     service: string | null;

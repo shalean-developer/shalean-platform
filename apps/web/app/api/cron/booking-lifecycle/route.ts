@@ -19,6 +19,7 @@ import {
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
+import { syncCleanersBusyAfterBookingTerminalChange } from "@/lib/cleaner/syncCleanerStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -177,6 +178,8 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       admin,
       cleanerId,
     });
+
+    await syncCleanersBusyAfterBookingTerminalChange(admin, [cleanerId, persistCleanerId]);
 
     if (dateYmd && rawEmail.trim().length >= 3) {
       const reminderDay = addDaysToYmd(dateYmd, 14);

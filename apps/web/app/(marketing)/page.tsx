@@ -3,10 +3,8 @@ import StructuredData from "@/components/home/StructuredData";
 import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeAboutSection } from "@/components/marketing-home/sections/MarketingHomeAboutSection";
-import { MarketingHomeCtaSection } from "@/components/marketing-home/sections/MarketingHomeCtaSection";
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
-import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
 import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
@@ -70,10 +68,8 @@ export default async function MarketingHomePage() {
           <MarketingHomeHeroSection reviewBanner={reviewBanner} />
           <MarketingHomeCoreServicesSection />
           <MarketingHomeTrustSection />
-          <MarketingGoogleReviewsBand />
           <MarketingHomeServicesSection />
           <MarketingHomeAboutSection />
-          <MarketingHomeCtaSection />
           <MarketingHomeHowItWorksSection />
           <MarketingHomeFaqSection faqs={faqs} />
           <MarketingAreasSection locations={locations} />

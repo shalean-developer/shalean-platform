@@ -61,16 +61,57 @@ export async function GET(request: Request) {
   }
 
   const now = Date.now();
-  const customers = [...byEmail.entries()].map(([email, v]) => {
+  const emails = [...byEmail.keys()];
+  const userIdByEmail = new Map<string, string>();
+  await Promise.all(
+    emails.map(async (email) => {
+      const uid = await findAuthUserIdByEmail(admin, email);
+      if (uid) userIdByEmail.set(email, uid);
+    }),
+  );
+
+  const userIds = [...new Set(userIdByEmail.values())];
+  const profileById = new Map<string, { full_name: string | null; tier: string | null }>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("user_profiles")
+      .select("id, full_name, tier")
+      .in("id", userIds);
+    for (const p of profiles ?? []) {
+      const id = String((p as { id?: string }).id ?? "").trim();
+      if (!id) continue;
+      profileById.set(id, {
+        full_name: (p as { full_name?: string | null }).full_name ?? null,
+        tier: (p as { tier?: string | null }).tier ?? null,
+      });
+    }
+  }
+
+  const customers = emails.map((email) => {
+    const v = byEmail.get(email)!;
     const recentMs = v.lastBookingAt ? now - new Date(v.lastBookingAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const userId = userIdByEmail.get(email) ?? null;
+    const profile = userId ? profileById.get(userId) : null;
     return {
+      id: userId ?? email,
+      user_id: userId,
       email,
+      full_name: profile?.full_name ?? null,
+      phone: null,
+      location: null,
+      suburb: null,
+      total_bookings: v.totalBookings,
+      total_spend_zar: v.totalSpendZar,
+      last_booking_at: v.lastBookingAt,
+      tier: profile?.tier ?? null,
       totalBookings: v.totalBookings,
       totalSpendZar: v.totalSpendZar,
       lastBookingAt: v.lastBookingAt,
       status: recentMs <= 1000 * 60 * 60 * 24 * 90 ? "active" : "inactive",
     };
   });
+
+  customers.sort((a, b) => (b.last_booking_at ?? "").localeCompare(a.last_booking_at ?? ""));
 
   return NextResponse.json({ customers });
 }

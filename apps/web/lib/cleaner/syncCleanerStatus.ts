@@ -44,3 +44,31 @@ export async function syncCleanerBusyFromBookings(
 
   await supabase.from("cleaners").update({ status: next }).eq("id", cleanerId);
 }
+
+/** Booking terminal states that should release workload (`busy` → `available`). */
+const BOOKING_TERMINAL_WORKLOAD_STATUSES = new Set(["completed", "cancelled", "failed"]);
+
+export function isBookingTerminalForCleanerWorkloadSync(status: string | null | undefined): boolean {
+  return BOOKING_TERMINAL_WORKLOAD_STATUSES.has(String(status ?? "").trim().toLowerCase());
+}
+
+function collectCleanerIdsForWorkloadSync(cleanerIds: Iterable<string | null | undefined>): string[] {
+  const out = new Set<string>();
+  for (const raw of cleanerIds) {
+    const id = typeof raw === "string" ? raw.trim() : "";
+    if (id && /^[0-9a-f-]{36}$/i.test(id)) out.add(id);
+  }
+  return [...out];
+}
+
+/**
+ * Recompute workload status for every cleaner tied to a booking after it
+ * completes, cancels, or fails. Safe to call with null/duplicate ids.
+ */
+export async function syncCleanersBusyAfterBookingTerminalChange(
+  supabase: SupabaseClient,
+  cleanerIds: Iterable<string | null | undefined>,
+): Promise<void> {
+  const ids = collectCleanerIdsForWorkloadSync(cleanerIds);
+  await Promise.all(ids.map((id) => syncCleanerBusyFromBookings(supabase, id)));
+}

@@ -80,7 +80,7 @@ export function LocationsIndexView() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="locations_index_hero_price"
                 className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
               >
@@ -275,14 +275,14 @@ export function LocationsIndexView() {
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="locations_index_footer_price"
                 className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl bg-white px-8 text-base font-semibold text-emerald-950 transition hover:bg-emerald-50 sm:w-auto"
               >
                 Get exact price
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="locations_index_footer_book"
                 className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl border border-emerald-400/80 bg-transparent px-8 text-base font-semibold text-white transition hover:bg-emerald-900/50 sm:w-auto"
               >

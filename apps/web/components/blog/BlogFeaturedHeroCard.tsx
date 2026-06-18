@@ -72,7 +72,7 @@ export function BlogFeaturedHeroCard({ post }: { post: BlogIndexCardPost }) {
               Read full guide
             </SafeInternalLink>
             <SafeInternalLink
-              href="/booking/details"
+              href="/book"
               className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-6 py-2.5 text-sm font-semibold text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50"
             >
               Get instant quote

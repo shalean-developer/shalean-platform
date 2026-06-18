@@ -1,27 +1,15 @@
-import { getResolvedAuthIntent } from "@/lib/auth/authRoleIntent";
-import { computePostAuthRedirect } from "@/lib/auth/postAuthRedirect";
-
-type ResolveProfileResponse = {
-  ok?: boolean;
-  isCleaner?: boolean;
-  error?: string;
-};
+import { resolvePostAuthDestination } from "@/lib/auth/resolvePostAuthDestination";
 
 /**
- * Uses a freshly issued access token to detect cleaner linkage, then returns the path to navigate to.
+ * @deprecated Use {@link resolvePostAuthDestination} — resolves `user_profiles.role` for routing.
  */
 export async function resolveCustomerPostAuthDestination(
   accessToken: string,
   redirect: string,
-  intentParam: string | null | undefined,
+  _intentParam?: string | null,
 ): Promise<string> {
-  const intent = getResolvedAuthIntent(intentParam);
-  const res = await fetch("/api/auth/resolve-profile", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ access_token: accessToken }),
-  });
-  const j = (await res.json().catch(() => ({}))) as ResolveProfileResponse;
-  const isCleaner = Boolean(res.ok && j.ok && j.isCleaner);
-  return computePostAuthRedirect({ intent, isCleaner, redirect });
+  const result = await resolvePostAuthDestination(accessToken, redirect);
+  if (result.kind === "redirect") return result.path;
+  if (result.kind === "timeout") throw new Error("ROLE_FETCH_TIMEOUT");
+  throw new Error(result.message);
 }

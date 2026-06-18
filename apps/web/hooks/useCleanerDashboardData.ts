@@ -28,6 +28,7 @@ import { deriveCleanerAvailabilityState } from "@/lib/cleaner/cleanerAvailabilit
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { setCleanerAvailability } from "@/lib/cleaner/setCleanerAvailability";
 import { jobStartMsJohannesburg } from "@/lib/cleaner/jobStartJohannesburgMs";
+import { cleanerJobDetailHref } from "@/lib/cleaner/cleanerJobDetailHref";
 import { CLEANER_DASHBOARD_JOBS_REFRESH_EVENT, writeCleanerDashboardCache } from "@/lib/cleaner/cleanerDashboardSessionCache";
 import { useCleanerRealtime } from "@/lib/realtime/useCleanerRealtime";
 import { hrefForNotificationKind } from "@/lib/notifications/notificationRoutes";
@@ -417,8 +418,12 @@ export function useCleanerDashboardData() {
     if (!id) return;
     const prev = prevPathnameRef.current;
     prevPathnameRef.current = pathname;
-    const onDashboard = pathname === "/cleaner/dashboard";
-    const cameFromJobsArea = Boolean(prev && prev !== pathname && prev.startsWith("/cleaner/jobs"));
+    const onDashboard = pathname === "/cleaner/dashboard" || pathname === "/jobs";
+    const cameFromJobsArea = Boolean(
+      prev &&
+        prev !== pathname &&
+        (prev.startsWith("/cleaner/jobs") || prev.startsWith("/jobs/job/")),
+    );
     if (onDashboard && cameFromJobsArea) {
       void refetchDashboardOnly();
     }
@@ -549,10 +554,11 @@ export function useCleanerDashboardData() {
     [offerRows, jhbClock.now],
   );
 
-  const upcomingJobs = useMemo(
-    () => buildDashboardUpcomingJobs(jobRows, jhbClock.now, jhbClock.todayYmd),
-    [jobRows, jhbClock.now, jhbClock.todayYmd],
-  );
+  const upcomingJobs = useMemo(() => {
+    const jobs = buildDashboardUpcomingJobs(jobRows, jhbClock.now, jhbClock.todayYmd);
+    if (!pathname.startsWith("/jobs")) return jobs;
+    return jobs.map((j) => ({ ...j, href: cleanerJobDetailHref(j.id) }));
+  }, [jobRows, jhbClock.now, jhbClock.todayYmd, pathname]);
 
   const earningsLabel = useMemo(() => {
     if (todayCents == null) return "—";
@@ -968,10 +974,10 @@ export function useCleanerDashboardData() {
     for (const r of sorted) {
       const pd = mobilePhaseDisplayForDashboard(r);
       if (pd === "Completed" || pd === "Cancelled") continue;
-      return cleanerBookingRowToUpcomingJob(r, jhbClock.now);
+      return cleanerBookingRowToUpcomingJob(r, jhbClock.now, jhbClock.todayYmd);
     }
     return null;
-  }, [jobRows, jhbClock.now]);
+  }, [jobRows, jhbClock.now, jhbClock.todayYmd]);
 
   const nextJobPinExtras = useMemo(() => {
     if (!nextHighlightedJob) {
@@ -1000,6 +1006,19 @@ export function useCleanerDashboardData() {
     return { startsAtMs, mapsQuery, clockOffsetMs: serverClockOffsetMs, showMapsNavigation };
   }, [nextHighlightedJob, jobRows, serverClockOffsetMs]);
 
+  const nextHighlightedJobRow = useMemo(() => {
+    if (!nextHighlightedJob) return null;
+    return jobRows.find((r) => r.id === nextHighlightedJob.id) ?? null;
+  }, [nextHighlightedJob, jobRows]);
+
+  const patchJobRow = useCallback((bookingId: string, patch: Partial<CleanerBookingRow>) => {
+    const bid = bookingId.trim();
+    if (!bid) return;
+    setJobRows((prev) =>
+      prev.map((r) => (r.id === bid ? ({ ...r, ...patch } as CleanerBookingRow) : r)),
+    );
+  }, []);
+
   /**
    * The cleaner's currently-running job (in progress > en route). When this
    * is non-null the dashboard surfaces it as the primary hero — above the
@@ -1007,6 +1026,11 @@ export function useCleanerDashboardData() {
    * most urgent operational state.
    */
   const activeJob = useMemo(() => selectActiveJob(upcomingJobs), [upcomingJobs]);
+
+  const activeJobRow = useMemo(() => {
+    if (!activeJob) return null;
+    return jobRows.find((r) => r.id === activeJob.id) ?? null;
+  }, [activeJob, jobRows]);
 
   /**
    * True when the cleaner has at least one accepted/assigned booking that is
@@ -1090,8 +1114,12 @@ export function useCleanerDashboardData() {
     offerCards,
     upcomingJobs,
     nextHighlightedJob,
+    nextHighlightedJobRow,
     nextJobPinExtras,
     activeJob,
+    activeJobRow,
+    patchJobRow,
+    refreshDashboard: refetchDashboardOnly,
     confirmedIdle,
     availabilityState,
     hasFutureBookedJob,

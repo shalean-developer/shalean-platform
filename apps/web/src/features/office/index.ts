@@ -1,1 +1,1 @@
-export { OfficeShellPage } from "@/src/features/office/OfficeShellPage";
+export { OfficeShell } from "@/src/features/office/OfficeShell";

@@ -17,6 +17,40 @@ import {
   applyTeamLeadCleanerNamesToRows,
   extractTeamLeadCleanerIdsForEnrichment,
 } from "@/lib/reviews/teamLeadCleanerNameEnrichment";
+import {
+  applyCustomerDisplayCleanerNamesToRows,
+  extractCustomerDisplayCleanerIds,
+} from "@/lib/customer/customerCleanerNameEnrichment";
+
+async function enrichCustomerBookingRowFromSavedAddress(
+  admin: SupabaseClient,
+  row: BookingRow,
+): Promise<BookingRow> {
+  if (row.location?.trim() || !row.user_id) return row;
+  const suburb = row.suburb?.trim();
+  if (!suburb) return row;
+
+  const { data, error } = await admin
+    .from("customer_saved_addresses")
+    .select("line1, suburb, city, created_at")
+    .eq("user_id", row.user_id)
+    .eq("suburb", suburb)
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  if (error || !data?.length) return row;
+
+  const bookingCreatedMs = Date.parse(row.created_at);
+  const picked =
+    data.find((addr) => {
+      const createdMs = Date.parse(String((addr as { created_at?: string }).created_at ?? ""));
+      return Number.isFinite(bookingCreatedMs) && Number.isFinite(createdMs) && Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000;
+    }) ?? data[0];
+
+  const line1 = typeof (picked as { line1?: unknown }).line1 === "string" ? (picked as { line1: string }).line1.trim() : "";
+  if (!line1) return row;
+  return { ...row, location: line1 };
+}
 
 export type LoadCustomerBookingsOptions = {
   /** When set, also returns paid bookings with `user_id` null but matching `customer_email` (orphan repair). */
@@ -79,33 +113,31 @@ export async function loadCustomerBookingRowsForUser(
   // can show "Reviewing X's clean". Roster-safe: the IN(...) lookup only
   // contains lead UUIDs already on the row payload — never `team_members`.
   // Skipped entirely for solo-cleaner pages (no extra round-trip).
-  await enrichRowsWithTeamLeadCleanerNames(admin, rows, userId);
+  await enrichRowsWithCleanerDisplayNames(admin, rows, userId);
+
+  for (let i = 0; i < rows.length; i += 1) {
+    rows[i] = await enrichCustomerBookingRowFromSavedAddress(admin, rows[i]!);
+  }
 
   return { ok: true, bookings: rows };
 }
 
-async function enrichRowsWithTeamLeadCleanerNames(
+async function enrichRowsWithCleanerDisplayNames(
   admin: SupabaseClient,
   rows: BookingRow[],
   userId: string,
 ): Promise<void> {
-  const leadIds = extractTeamLeadCleanerIdsForEnrichment(rows);
-  if (leadIds.length === 0) return;
+  const teamLeadIds = extractTeamLeadCleanerIdsForEnrichment(rows);
+  const displayIds = extractCustomerDisplayCleanerIds(rows);
+  const allIds = Array.from(new Set([...teamLeadIds, ...displayIds]));
+  if (allIds.length === 0) return;
   try {
-    const { data, error } = await admin
-      .from("cleaners")
-      .select("id, full_name")
-      .in("id", leadIds);
+    const { data, error } = await admin.from("cleaners").select("id, full_name").in("id", allIds);
     if (error) {
-      // Non-fatal: missing names just fall back to the existing snapshot/null
-      // path in `cleanerFromRow` — the customer dashboard never blanks on
-      // this enrichment (it is purely additive UX).
-      void reportOperationalIssue(
-        "warn",
-        "customer/bookings/team_lead_name_enrichment",
-        error.message,
-        { userId, leadIds: leadIds.length },
-      );
+      void reportOperationalIssue("warn", "customer/bookings/cleaner_name_enrichment", error.message, {
+        userId,
+        cleanerIds: allIds.length,
+      });
       return;
     }
     const nameById = new Map<string, string>();
@@ -114,12 +146,13 @@ async function enrichRowsWithTeamLeadCleanerNames(
       if (n) nameById.set(String(r.id), n);
     }
     applyTeamLeadCleanerNamesToRows(rows, nameById);
+    applyCustomerDisplayCleanerNamesToRows(rows, nameById);
   } catch (e) {
     void reportOperationalIssue(
       "warn",
-      "customer/bookings/team_lead_name_enrichment",
+      "customer/bookings/cleaner_name_enrichment",
       e instanceof Error ? e.message : String(e),
-      { userId, leadIds: leadIds.length },
+      { userId, cleanerIds: allIds.length },
     );
   }
 }
@@ -153,5 +186,8 @@ export async function loadCustomerBookingRowForUser(
   if (!customerCanAccessBookingRow(row, userId, viewerNorm)) {
     return { ok: false, error: "Not found.", status: 404 };
   }
-  return { ok: true, booking: attachCanonicalCustomerBookingLifecycle(row) };
+  const enriched = attachCanonicalCustomerBookingLifecycle(row);
+  await enrichRowsWithCleanerDisplayNames(admin, [enriched], userId);
+  const withAddress = await enrichCustomerBookingRowFromSavedAddress(admin, enriched);
+  return { ok: true, booking: withAddress };
 }

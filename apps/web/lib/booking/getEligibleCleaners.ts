@@ -45,6 +45,8 @@ export type GetEligibleCleanersParams = {
   serviceLabelForCapability?: string | null;
   /** When set, only these cleaner ids are considered. */
   cleanerIds?: string[];
+  /** When set, this booking is ignored for slot overlap (admin reassign / offer on same row). */
+  excludeBookingId?: string | null;
   userLat?: number | null;
   userLng?: number | null;
   limit?: number;
@@ -337,7 +339,7 @@ export async function getEligibleCleaners(
       continue;
     }
 
-    if (cleanerHasOccupyingSlotOverlap(occupyingByCleaner, c.id, params.date, slotStart, slotEnd, null)) {
+    if (cleanerHasOccupyingSlotOverlap(occupyingByCleaner, c.id, params.date, slotStart, slotEnd, params.excludeBookingId ?? null)) {
       if (trace) drop.conflict++;
       continue;
     }

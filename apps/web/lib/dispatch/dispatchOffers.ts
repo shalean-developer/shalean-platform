@@ -22,6 +22,10 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { metrics } from "@/lib/metrics/counters";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
 import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
+import {
+  finalizePreferredDispatchOnOfferAccept,
+  setPreferredDispatchStatus,
+} from "@/lib/dispatch/preferredCleanerDispatchStatus";
 import { marketplaceBookingPatchOnAssign } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
 import { assignmentTruthPatchForOfferAccept } from "@/lib/dispatch/assignmentTruth";
 
@@ -76,6 +80,11 @@ export async function createDispatchOfferRow(params: {
    * Used to cap outbound cost while parallel offers exist.
    */
   skipImmediateNotification?: boolean;
+  /** preferred = customer pick; backup = post-preferred auto-dispatch wave. */
+  offerType?: "preferred" | "backup" | null;
+  /** Absolute expiry (overrides ttlSeconds when set). */
+  expiresAtIso?: string | null;
+  reason?: string | null;
 }): Promise<CreateDispatchOfferRowResult> {
   const { data: bookingHead, error: headErr } = await params.supabase
     .from("bookings")
@@ -106,7 +115,11 @@ export async function createDispatchOfferRow(params: {
 
   const visibleAtMs = params.dispatchVisibleAtIso ? new Date(params.dispatchVisibleAtIso).getTime() : Date.now();
   const anchorMs = Number.isFinite(visibleAtMs) ? visibleAtMs : Date.now();
-  const expiresAt = new Date(anchorMs + params.ttlSeconds * 1000).toISOString();
+  const explicitExpiryMs = params.expiresAtIso ? new Date(params.expiresAtIso).getTime() : NaN;
+  const expiresAt = Number.isFinite(explicitExpiryMs)
+    ? new Date(explicitExpiryMs).toISOString()
+    : new Date(anchorMs + params.ttlSeconds * 1000).toISOString();
+  const sentAtIso = new Date(anchorMs).toISOString();
   const nowMs = Date.now();
   const deferNotify = anchorMs > nowMs + 2500;
   const ux_variant = assignCleanerUxVariantForCleaner(params.cleanerId);
@@ -132,6 +145,7 @@ export async function createDispatchOfferRow(params: {
     status: "pending",
     rank_index: params.rankIndex,
     expires_at: expiresAt,
+    sent_at: sentAtIso,
     ux_variant,
     offer_token,
     dispatch_tier: params.dispatchTier ?? null,
@@ -144,6 +158,12 @@ export async function createDispatchOfferRow(params: {
   };
   if (params.batchId && typeof params.batchId === "string" && params.batchId.trim()) {
     insertRow.batch_id = params.batchId.trim();
+  }
+  if (params.offerType === "preferred" || params.offerType === "backup") {
+    insertRow.offer_type = params.offerType;
+  }
+  if (params.reason && String(params.reason).trim()) {
+    insertRow.reason = String(params.reason).trim();
   }
 
   const { data, error } = await params.supabase.from("dispatch_offers").insert(insertRow).select("id").single();
@@ -206,8 +226,13 @@ export async function createDispatchOfferRow(params: {
       dispatch_tier: params.dispatchTier ?? null,
       dispatch_visible_at: params.dispatchVisibleAtIso ?? null,
       offer_notification_deferred: deferNotify,
+      offer_type: params.offerType ?? null,
     },
   });
+
+  if (params.offerType === "backup") {
+    void setPreferredDispatchStatus(params.supabase, params.bookingId, "backup_offer_pending");
+  }
 
   const seg = await loadDispatchMetricSegmentation(params.supabase, params.bookingId, {
     includePendingAnchors: true,
@@ -447,7 +472,7 @@ export async function acceptDispatchOffer(params: {
   const { data: offer, error: oErr } = await params.supabase
     .from("dispatch_offers")
     .select(
-      "id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at, dispatch_tier, dispatch_visible_at",
+      "id, booking_id, cleaner_id, status, created_at, ux_variant, expires_at, whatsapp_sent_at, sms_sent_at, dispatch_tier, dispatch_visible_at, offer_type",
     )
     .eq("id", params.offerId)
     .maybeSingle();
@@ -464,6 +489,7 @@ export async function acceptDispatchOffer(params: {
     sms_sent_at?: string | null;
     dispatch_tier?: string | null;
     dispatch_visible_at?: string | null;
+    offer_type?: string | null;
   };
   const ux_variant = sanitizeCleanerUxVariant(row.ux_variant);
   if (String(row.cleaner_id) !== params.cleanerId) {
@@ -673,6 +699,18 @@ export async function acceptDispatchOffer(params: {
 
   void notifyCleanerAssignedBooking(params.supabase, bookingId, params.cleanerId);
 
+  void finalizePreferredDispatchOnOfferAccept(params.supabase, {
+    bookingId,
+    cleanerId: params.cleanerId,
+    offerType: row.offer_type,
+  });
+
+  void params.supabase
+    .from("dispatch_offers")
+    .update({ accepted_at: new Date().toISOString() })
+    .eq("id", params.offerId)
+    .eq("status", "accepted");
+
   const seg = await loadDispatchMetricSegmentation(params.supabase, bookingId);
   const segFields = {
     assignment_type: seg.assignment_type,
@@ -865,7 +903,7 @@ export async function rejectDispatchOffer(params: {
 
   const { error } = await params.supabase
     .from("dispatch_offers")
-    .update({ status: "rejected", responded_at: now, response_latency_ms: responseLatencyMs })
+    .update({ status: "rejected", responded_at: now, declined_at: now, response_latency_ms: responseLatencyMs })
     .eq("id", params.offerId)
     .eq("status", "pending");
 

@@ -2,13 +2,38 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Loader2, MapPin, Pencil, Phone, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Bell,
+  Calendar,
+  CheckCircle2,
+  Circle,
+  Clock,
+  CreditCard,
+  Loader2,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  ReceiptText,
+  Send,
+  TriangleAlert,
+  User,
+  Users,
+} from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
+import { OfficeBookingDetailsShell, type OfficeTimelineStep } from "@/components/admin/office/OfficeBookingDetailsShell";
+import { BookingNotificationTimeline } from "@/components/admin/office/BookingNotificationTimeline";
+import type { BookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AdminDashboardActionError,
-  assignCleaner,
   assignTeamToBookingAdmin,
   deleteBookingAdmin,
   fetchCleaners,
@@ -16,6 +41,7 @@ import {
   updateBookingStatus,
   type AdminCleanerRow,
 } from "@/lib/admin/dashboard";
+import { AdminAssignForm, type CleanerOption } from "@/components/admin/AdminAssignForm";
 import { AdminWarningList } from "@/components/admin/AdminWarningList";
 import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 import { CLEANER_UX_VARIANTS, type CleanerUxVariant } from "@/lib/cleaner/cleanerOfferUxVariant";
@@ -31,9 +57,12 @@ import {
 } from "@/components/admin/EmergencyRosterReassignModal";
 import type { ServiceQaAdminWire } from "@/lib/booking/bookingServiceQa";
 import {
+  adminBookingVisitPricingSplit,
   parseAdminBookingPriceSnapshot,
   type AdminPriceSnapshotCardView,
 } from "@/lib/booking/priceSnapshotAdminDisplay";
+import { parseStoredPriceBreakdown } from "@/lib/dashboard/storedPriceBreakdown";
+import { adminLinesFromPricingSummary } from "@/lib/booking-v2/adminPricingDisplay";
 import { adminBookingDispatchAttemptId } from "@/lib/admin/adminBookingAssignmentLabels";
 import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
 import {
@@ -45,17 +74,23 @@ import {
   type AdminBookingsListRow,
   normalizeAdminBookingDispatchStatus,
 } from "@/lib/admin/adminBookingsListRow";
+import { preferredDispatchStatusAdminLabel } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
 import {
   adminDispatchNeedsAttentionFromLifecycle,
   adminLifecycleDispatchCaption,
   adminLifecycleRawDiagnosticLine,
 } from "@/lib/admin/adminDashboardLifecycleDisplay";
+import {
+  resolveAdminBookingCustomerName,
+  resolveAdminBookingCustomerPhone,
+} from "@/lib/admin/adminBookingCustomerContact";
 
 type BookingSeed = { id: string };
 
 type BookingDetails = {
   id: string;
   customer_email: string | null;
+  customer_name?: string | null;
   service: string | null;
   /** Catalog slug when persisted (`standard`, `airbnb`, `move`, etc.). */
   service_slug?: string | null;
@@ -80,6 +115,8 @@ type BookingDetails = {
   status: string | null;
   /** Auto-dispatch funnel; terminal `unassignable` / `no_cleaner` need manual assign or reset. */
   dispatch_status?: string | null;
+  /** Preferred-cleaner dispatch workflow phase (see `preferredCleanerDispatch`). */
+  preferred_dispatch_status?: string | null;
   /** Cleaner lifecycle: `on_my_way` enables live GPS tracking. */
   cleaner_response_status?: string | null;
   user_id: string | null;
@@ -94,9 +131,11 @@ type BookingDetails = {
   is_team_job?: boolean | null;
   booking_snapshot?: unknown;
   duration_hours?: number | null;
+  duration_minutes?: number | null;
   /** Legacy string slugs or persisted `{ slug, name, price }` rows from checkout. */
   extras?: unknown[] | null;
   created_at: string;
+  customer_phone?: string | null;
   phone?: string | null;
   /** Admin bypassed duplicate-slot guard (intentional second row on same slot). */
   admin_force_slot_override?: boolean | null;
@@ -136,6 +175,8 @@ type BookingDetails = {
   recurring_id?: string | null;
   /** Derived recurring Paystack collection label (see `deriveRecurringPaymentState`). */
   payment_state?: string | null;
+  /** Booking-v2 structured pricing breakdown JSONB. */
+  pricing_summary?: unknown;
 };
 
 /** Solo-cleaner assign card: only these catalog services (deep/move use dispatch / team flows). */
@@ -210,6 +251,8 @@ type DispatchOfferAdminRow = {
   created_at: string | null;
   responded_at: string | null;
   ux_variant?: string | null;
+  offer_type?: string | null;
+  sent_at?: string | null;
 };
 
 type ToastState = { kind: "success" | "error" | "info"; text: string } | null;
@@ -290,7 +333,14 @@ function variantCountShareLabel(count: number, total: number): string {
 }
 
 function money(booking: BookingDetails): number {
-  if (typeof booking.total_paid_zar === "number") return booking.total_paid_zar;
+  if (typeof booking.total_price === "number" && Number.isFinite(booking.total_price) && booking.total_price > 0) {
+    return Math.round(booking.total_price);
+  }
+  const breakdown = parseStoredPriceBreakdown(booking.price_breakdown);
+  if (breakdown) return breakdown.totalZar;
+  if (typeof booking.total_paid_zar === "number" && Number.isFinite(booking.total_paid_zar)) {
+    return Math.round(booking.total_paid_zar);
+  }
   return Math.round((booking.amount_paid_cents ?? 0) / 100);
 }
 
@@ -565,6 +615,12 @@ function adminServiceHomeSummary(booking: BookingDetails): {
     positiveRoomCount(booking.bathrooms) ?? positiveRoomCount(locked?.bathrooms) ?? null;
 
   let durationHours: number | null = positiveDurationHours(booking.duration_hours);
+  if (durationHours == null) {
+    const durationMinutes = (booking as { duration_minutes?: number | null }).duration_minutes;
+    if (typeof durationMinutes === "number" && Number.isFinite(durationMinutes) && durationMinutes > 0) {
+      durationHours = positiveDurationHours(durationMinutes / 60);
+    }
+  }
   if (durationHours == null && locked) {
     durationHours =
       positiveDurationHours(locked.finalHours) ?? positiveDurationHours(locked.duration) ?? null;
@@ -739,14 +795,27 @@ async function rescheduleBooking(bookingId: string, newDate: string, newTime: st
   return Promise.resolve({ bookingId, newDate, newTime });
 }
 
+function toCleanerAssignOptions(rows: AdminCleanerRow[]): CleanerOption[] {
+  return rows.map((c) => ({
+    id: c.id,
+    full_name: c.full_name,
+    status: c.status ?? null,
+    is_available: c.is_available,
+    rating: c.rating,
+    jobs_completed: c.jobs_completed,
+  }));
+}
+
 export default function BookingDetailsView({
   booking,
   onClose,
   onBookingDeleted,
+  basePath = "/admin/bookings",
 }: {
   booking: BookingSeed;
   onClose?: () => void;
   onBookingDeleted?: (id: string) => void;
+  basePath?: "/admin/bookings" | "/office/bookings";
 }) {
   const router = useRouter();
   const bookingId = booking.id;
@@ -757,9 +826,10 @@ export default function BookingDetailsView({
   /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
   const [selectedCleaner, setSelectedCleaner] = useState<Cleaner | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [customerContactPhone, setCustomerContactPhone] = useState<string | null>(null);
+  const [customerContactName, setCustomerContactName] = useState<string | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [cleanerOptions, setCleanerOptions] = useState<AdminCleanerRow[]>([]);
-  const [assigningCleanerId, setAssigningCleanerId] = useState<string | null>(null);
   const [statusBusy, setStatusBusy] = useState<"completed" | "cancelled" | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
@@ -833,12 +903,13 @@ export default function BookingDetailsView({
   const [detailDashboardLifecycle, setDetailDashboardLifecycle] = useState<DashboardLifecycleAlignmentWire | null>(null);
 
   const detailRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailLoadAbortRef = useRef<AbortController | null>(null);
   const bumpDetailRefreshDebounced = useCallback(() => {
     if (detailRefreshTimerRef.current != null) clearTimeout(detailRefreshTimerRef.current);
     detailRefreshTimerRef.current = setTimeout(() => {
       detailRefreshTimerRef.current = null;
       setDetailRefresh((n) => n + 1);
-    }, 400);
+    }, 1200);
   }, []);
 
   const adminOperational = useMemo(() => {
@@ -884,6 +955,16 @@ export default function BookingDetailsView({
     });
   }, [fullBooking, detailDashboardLifecycle]);
 
+  const preferredDispatchStatusLabel = useMemo(() => {
+    if (!fullBooking?.preferred_dispatch_status) return null;
+    const pendingPreferred = dispatchOffers.find(
+      (o) => o.status === "pending" && String(o.offer_type ?? "").toLowerCase() === "preferred",
+    );
+    return preferredDispatchStatusAdminLabel(fullBooking.preferred_dispatch_status, {
+      pendingDeadlineIso: pendingPreferred?.expires_at ?? null,
+    });
+  }, [fullBooking?.preferred_dispatch_status, dispatchOffers]);
+
   useEffect(() => {
     if (cleanerIssueReports.length === 0) return;
     const id = window.setInterval(() => setIssueReportNowMs(Date.now()), 60_000);
@@ -891,6 +972,10 @@ export default function BookingDetailsView({
   }, [cleanerIssueReports.length]);
 
   useEffect(() => {
+    const ac = new AbortController();
+    detailLoadAbortRef.current?.abort();
+    detailLoadAbortRef.current = ac;
+
     async function loadDetails() {
       if (!bookingId) {
         setError("Missing booking ID.");
@@ -903,105 +988,145 @@ export default function BookingDetailsView({
       setFleetBestUxVariant(null);
       setLedgerCleanerEarnings([]);
       setSelectedCleaner(null);
-      const sb = getSupabaseBrowser();
-      const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
-      const token = sessionData.session?.access_token;
-      if (!token) {
-        setError("Please sign in as an admin.");
-        setLoading(false);
-        return;
-      }
+      setCustomerContactPhone(null);
+      setCustomerContactName(null);
+      try {
+        const sb = getSupabaseBrowser();
+        let token: string | undefined;
+        try {
+          token = (await sb?.auth.getSession())?.data.session?.access_token;
+        } catch {
+          if (ac.signal.aborted) return;
+          setError("Could not read admin session. Check your connection and try again.");
+          return;
+        }
+        if (!token) {
+          if (ac.signal.aborted) return;
+          setError("Please sign in as an admin.");
+          return;
+        }
 
-      const [res, anRes] = await Promise.all([
-        fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch("/api/admin/analytics", { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+        const [res, anRes] = await Promise.all([
+          fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
+          }),
+          fetch("/api/admin/analytics", { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal }),
+        ]);
 
-      const [json, anJson] = await Promise.all([
-        res.json() as Promise<{
-          booking?: BookingDetails;
-          dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
-          cleaner?: Cleaner | null;
-          selected_cleaner?: Cleaner | null;
-          userProfile?: UserProfile | null;
-          dispatch_offers?: DispatchOfferAdminRow[];
-          cleaner_issue_reports?: CleanerIssueReportRow[];
-          cleaner_earnings?: Array<{ id: string; status?: string | null }>;
-          supports_team_assignment?: boolean;
-          team_summary?: TeamSummary | null;
-          service_qa?: ServiceQaAdminWire;
-          error?: string;
-        }>,
-        anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
-      ]);
+        const [json, anJson] = await Promise.all([
+          res.json() as Promise<{
+            booking?: BookingDetails;
+            dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
+            cleaner?: Cleaner | null;
+            selected_cleaner?: Cleaner | null;
+            userProfile?: UserProfile | null;
+            dispatch_offers?: DispatchOfferAdminRow[];
+            cleaner_issue_reports?: CleanerIssueReportRow[];
+            cleaner_earnings?: Array<{ id: string; status?: string | null }>;
+            supports_team_assignment?: boolean;
+            team_summary?: TeamSummary | null;
+            service_qa?: ServiceQaAdminWire;
+            customer_contact_phone?: string | null;
+            customer_contact_name?: string | null;
+            error?: string;
+          }>,
+          anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
+        ]);
 
-      if (anRes.ok) {
-        const raw = anJson.experimentBestUxVariant;
-        if (raw === "unknown") setFleetBestUxVariant("unknown");
-        else if (typeof raw === "string" && (CLEANER_UX_VARIANTS as readonly string[]).includes(raw)) {
-          setFleetBestUxVariant(raw as CleanerUxVariant);
+        if (ac.signal.aborted) return;
+
+        if (anRes.ok) {
+          const raw = anJson.experimentBestUxVariant;
+          if (raw === "unknown") setFleetBestUxVariant("unknown");
+          else if (typeof raw === "string" && (CLEANER_UX_VARIANTS as readonly string[]).includes(raw)) {
+            setFleetBestUxVariant(raw as CleanerUxVariant);
+          } else {
+            setFleetBestUxVariant(null);
+          }
         } else {
           setFleetBestUxVariant(null);
         }
-      } else {
-        setFleetBestUxVariant(null);
+        if (!res.ok) {
+          setError(json.error ?? "Could not load booking.");
+          return;
+        }
+        setFullBooking(json.booking ?? null);
+        setDetailDashboardLifecycle(
+          json.dashboardLifecycle && typeof json.dashboardLifecycle === "object"
+            ? json.dashboardLifecycle
+            : null,
+        );
+        const ce = Array.isArray(json.cleaner_earnings)
+          ? json.cleaner_earnings.map((r) => ({
+              id: String((r as { id?: string }).id ?? ""),
+              status: (r as { status?: string | null }).status ?? null,
+            }))
+          : [];
+        setLedgerCleanerEarnings(ce.filter((r) => r.id));
+        setCleaner(json.cleaner ?? null);
+        setSelectedCleaner(json.selected_cleaner ?? null);
+        setUserProfile(json.userProfile ?? null);
+        setCustomerContactPhone(
+          typeof json.customer_contact_phone === "string" && json.customer_contact_phone.trim()
+            ? json.customer_contact_phone.trim()
+            : null,
+        );
+        setCustomerContactName(
+          typeof json.customer_contact_name === "string" && json.customer_contact_name.trim()
+            ? json.customer_contact_name.trim()
+            : null,
+        );
+        setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
+        setCleanerIssueReports(Array.isArray(json.cleaner_issue_reports) ? json.cleaner_issue_reports : []);
+        setIssueReportNowMs(Date.now());
+        const rawQa = json.service_qa;
+        if (
+          rawQa &&
+          typeof rawQa === "object" &&
+          !Array.isArray(rawQa) &&
+          Array.isArray((rawQa as ServiceQaAdminWire).sections)
+        ) {
+          setServiceQa(rawQa as ServiceQaAdminWire);
+        } else {
+          setServiceQa(null);
+        }
+        setSupportsTeamAssignment(json.supports_team_assignment === true);
+        setTeamSummary(json.team_summary ?? null);
+        let roster: BookingCleanerRow[] = [];
+        try {
+          const cr = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/cleaners`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
+          });
+          const cj = (await cr.json()) as { booking_cleaners?: BookingCleanerRow[] };
+          if (cr.ok && Array.isArray(cj.booking_cleaners)) roster = cj.booking_cleaners;
+        } catch {
+          roster = [];
+        }
+        if (ac.signal.aborted) return;
+        setBookingCleaners(roster);
+        setDraftDate(json.booking?.date ?? "");
+        setDraftTime((json.booking?.time ?? "").slice(0, 5));
+        setError(null);
+      } catch (e) {
+        if (ac.signal.aborted) return;
+        setError(
+          e instanceof TypeError && e.message === "Failed to fetch"
+            ? "Network error — check the dev server is running."
+            : e instanceof Error
+              ? e.message
+              : "Could not load booking.",
+        );
+      } finally {
+        if (!ac.signal.aborted) setLoading(false);
       }
-      if (!res.ok) {
-        setError(json.error ?? "Could not load booking.");
-        setLoading(false);
-        return;
-      }
-      setFullBooking(json.booking ?? null);
-      setDetailDashboardLifecycle(
-        json.dashboardLifecycle && typeof json.dashboardLifecycle === "object"
-          ? json.dashboardLifecycle
-          : null,
-      );
-      const ce = Array.isArray(json.cleaner_earnings)
-        ? json.cleaner_earnings.map((r) => ({
-            id: String((r as { id?: string }).id ?? ""),
-            status: (r as { status?: string | null }).status ?? null,
-          }))
-        : [];
-      setLedgerCleanerEarnings(ce.filter((r) => r.id));
-      setCleaner(json.cleaner ?? null);
-      setSelectedCleaner(json.selected_cleaner ?? null);
-      setUserProfile(json.userProfile ?? null);
-      setDispatchOffers(Array.isArray(json.dispatch_offers) ? json.dispatch_offers : []);
-      setCleanerIssueReports(Array.isArray(json.cleaner_issue_reports) ? json.cleaner_issue_reports : []);
-      setIssueReportNowMs(Date.now());
-      const rawQa = json.service_qa;
-      if (
-        rawQa &&
-        typeof rawQa === "object" &&
-        !Array.isArray(rawQa) &&
-        Array.isArray((rawQa as ServiceQaAdminWire).sections)
-      ) {
-        setServiceQa(rawQa as ServiceQaAdminWire);
-      } else {
-        setServiceQa(null);
-      }
-      setSupportsTeamAssignment(json.supports_team_assignment === true);
-      setTeamSummary(json.team_summary ?? null);
-      let roster: BookingCleanerRow[] = [];
-      try {
-        const cr = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/cleaners`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const cj = (await cr.json()) as { booking_cleaners?: BookingCleanerRow[] };
-        if (cr.ok && Array.isArray(cj.booking_cleaners)) roster = cj.booking_cleaners;
-      } catch {
-        roster = [];
-      }
-      setBookingCleaners(roster);
-      setDraftDate(json.booking?.date ?? "");
-      setDraftTime((json.booking?.time ?? "").slice(0, 5));
-      setError(null);
-      setLoading(false);
     }
     void loadDetails();
+    return () => {
+      ac.abort();
+      if (detailLoadAbortRef.current === ac) detailLoadAbortRef.current = null;
+    };
   }, [bookingId, detailRefresh]);
 
   useEffect(() => {
@@ -1018,6 +1143,11 @@ export default function BookingDetailsView({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "booking_cleaners", filter: `booking_id=eq.${bookingId}` },
+        () => bumpDetailRefreshDebounced(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dispatch_offers", filter: `booking_id=eq.${bookingId}` },
         () => bumpDetailRefreshDebounced(),
       )
       .subscribe();
@@ -1078,29 +1208,39 @@ export default function BookingDetailsView({
     let cancelled = false;
     void (async () => {
       setNotificationLogsLoading(true);
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
-      if (!token) {
-        setNotificationLogsLoading(false);
-        return;
+      try {
+        const sb = getSupabaseBrowser();
+        let token: string | undefined;
+        try {
+          token = (await sb?.auth.getSession())?.data.session?.access_token;
+        } catch {
+          if (!cancelled) setNotificationLogs([]);
+          return;
+        }
+        if (!token) {
+          return;
+        }
+        const qs = new URLSearchParams({
+          booking_id: bookingId,
+          limit: "40",
+          offset: "0",
+        });
+        const res = await fetch(`/api/admin/notification-logs?${qs.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = (await res.json()) as { logs?: BookingNotificationLogRow[]; error?: string };
+        if (cancelled) return;
+        if (!res.ok) {
+          setNotificationLogs([]);
+        } else {
+          const rows = j.logs ?? [];
+          setNotificationLogs([...rows].reverse());
+        }
+      } catch {
+        if (!cancelled) setNotificationLogs([]);
+      } finally {
+        if (!cancelled) setNotificationLogsLoading(false);
       }
-      const qs = new URLSearchParams({
-        booking_id: bookingId,
-        limit: "40",
-        offset: "0",
-      });
-      const res = await fetch(`/api/admin/notification-logs?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const j = (await res.json()) as { logs?: BookingNotificationLogRow[]; error?: string };
-      if (cancelled) return;
-      if (!res.ok) {
-        setNotificationLogs([]);
-      } else {
-        const rows = j.logs ?? [];
-        setNotificationLogs([...rows].reverse());
-      }
-      setNotificationLogsLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -1478,7 +1618,7 @@ export default function BookingDetailsView({
               Close
             </button>
           ) : (
-            <Link href="/admin/bookings" className="mt-4 inline-block text-sm font-medium text-emerald-700">
+            <Link href={basePath} className="mt-4 inline-block text-sm font-medium text-emerald-700">
               Back to bookings
             </Link>
           )}
@@ -1491,8 +1631,7 @@ export default function BookingDetailsView({
   const adminServiceHome = adminServiceHomeSummary(fullBooking);
   const showAdminSoloCleanerDetailCard = adminBookingShowsSoloCleanerDetailCard(fullBooking);
   const serviceExtrasForAdmin = extrasPayloadForAdminServiceCard(fullBooking);
-  const basePrice = Math.round(total * 0.85);
-  const extrasPrice = Math.max(total - basePrice, 0);
+  const { basePrice, extrasPrice } = adminBookingVisitPricingSplit(fullBooking);
   const cleanerPayoutCard = computeAdminBookingCleanerPayoutDisplay(fullBooking);
   const cleanerPayoutZar = cleanerPayoutCard.payoutZar;
   const cleanerBonusZar = cleanerPayoutCard.bonusZar;
@@ -1501,6 +1640,7 @@ export default function BookingDetailsView({
     cleanerPayoutCard.projected === true && cleanerPayoutCard.projectedCompanyZar != null
       ? cleanerPayoutCard.projectedCompanyZar
       : centsToZar(fullBooking.company_revenue_cents);
+  const v2PricingLines = adminLinesFromPricingSummary(fullBooking.pricing_summary);
   const isAssigned = !!fullBooking.cleaner_id;
   const jobRosterLocked =
     (fullBooking.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0;
@@ -2022,44 +2162,16 @@ export default function BookingDetailsView({
     }
   };
 
-  const handleAssignCleaner = async (selected: AdminCleanerRow) => {
-    if (!fullBooking?.id || !selected?.id) {
-      const msg = "Missing booking or cleaner id.";
-      if (process.env.NODE_ENV === "development") {
-        console.error("Assign cleaner:", { cleanerId: selected?.id, jobId: fullBooking?.id });
-      }
-      setToast({ kind: "error", text: msg });
-      return;
-    }
-    if (process.env.NODE_ENV === "development") {
-      console.log("Assign cleaner:", { cleanerId: selected.id, jobId: fullBooking.id });
-    }
-    const prevCleanerId = fullBooking.cleaner_id;
-    const prevCleaner = cleaner;
-    setAssigningCleanerId(selected.id);
-    setFullBooking((p) => (p ? { ...p, cleaner_id: selected.id, status: "assigned" } : p));
-    setCleaner({
-      id: selected.id,
-      full_name: selected.full_name,
-      status: selected.status ?? "available",
-      rating: selected.rating ?? null,
-      jobs_completed: selected.jobs_completed ?? null,
-    });
-    try {
-      await assignCleaner(fullBooking.id, selected.id);
-      setAdminActionWarnings([]);
-      setAssignModalOpen(false);
-      setEditingCleanerInline(false);
-      setToast({ kind: "success", text: "Cleaner assigned" });
-      setDetailRefresh((n) => n + 1);
-    } catch (e) {
-      setFullBooking((p) => (p ? { ...p, cleaner_id: prevCleanerId } : p));
-      setCleaner(prevCleaner);
-      if (e instanceof AdminDashboardActionError) setAdminActionWarnings(e.warnings);
-      setToast({ kind: "error", text: e instanceof Error ? e.message : "Something went wrong" });
-    } finally {
-      setAssigningCleanerId(null);
-    }
+  const onAssignOfferDone = () => {
+    setAssignModalOpen(false);
+    setEditingCleanerInline(false);
+    setAdminActionWarnings([]);
+    setToast({ kind: "success", text: "Job offer sent" });
+    setDetailRefresh((n) => n + 1);
+  };
+
+  const onAssignOfferError = (message: string) => {
+    setToast({ kind: "error", text: message || "Failed to assign cleaner" });
   };
 
   const saveScheduleInline = async () => {
@@ -2084,7 +2196,14 @@ export default function BookingDetailsView({
   };
 
   const handleContactCustomer = () => {
-    const phone = fullBooking.phone ?? userProfile?.phone ?? null;
+    const phone =
+      resolveAdminBookingCustomerPhone({
+        customer_phone: fullBooking.customer_phone,
+        phone: fullBooking.phone,
+        userProfilePhone: userProfile?.phone,
+        bookingSnapshot: fullBooking.booking_snapshot,
+        fallbackPhone: customerContactPhone,
+      }) ?? null;
     const email = fullBooking.customer_email ?? userProfile?.email ?? null;
     if (phone) {
       const normalized = normalizePhoneForWhatsApp(phone);
@@ -2100,7 +2219,339 @@ export default function BookingDetailsView({
 
   const offPlatformPaidLabel = adminOffPlatformPaidBadgeLabel(fullBooking);
 
+  const isOfficeBooking = basePath === "/office/bookings";
+  const createdLabel = fullBooking.created_at ? formatAdminDateTime(fullBooking.created_at) : "Created date unavailable";
+  const scheduleDateLabel = fullBooking.date ? formatAdminDate(fullBooking.date) : "Date not set";
+  const scheduleTimeLabel = fullBooking.time ? formatAdminTime(fullBooking.time) : "Time not set";
+  const locationParts = splitBookingLocation(fullBooking.location);
+  const customerName = resolveAdminBookingCustomerName({
+    customer_name: fullBooking.customer_name,
+    userProfileFullName: userProfile?.full_name,
+    bookingSnapshot: fullBooking.booking_snapshot,
+    fallbackName: customerContactName,
+    customerEmail: fullBooking.customer_email ?? userProfile?.email,
+  });
+  const customerEmail = fullBooking.customer_email ?? userProfile?.email ?? "Email not available";
+  const resolvedCustomerPhone = resolveAdminBookingCustomerPhone({
+    customer_phone: fullBooking.customer_phone,
+    phone: fullBooking.phone,
+    userProfilePhone: userProfile?.phone,
+    bookingSnapshot: fullBooking.booking_snapshot,
+    fallbackPhone: customerContactPhone,
+  });
+  const customerPhone = resolvedCustomerPhone ?? "Not on file";
+  const customerMissingPhone = !resolvedCustomerPhone;
+  const paymentStatusLabel =
+    adminOperational?.displayBadge?.trim() ||
+    (offPlatformPaidLabel ? offPlatformPaidLabel : canMarkPaid ? "Pending payment" : "Paid");
+  const paymentStatusShort = shortPaymentStatusLabel(paymentStatusLabel);
+  const scheduleRelativeShort = compactScheduleRelative(fullBooking.date, fullBooking.time);
+  const serviceSummaryLine =
+    adminServiceHome.bedrooms != null || adminServiceHome.bathrooms != null
+      ? `${adminServiceHome.bedrooms ?? "—"} bedrooms · ${adminServiceHome.bathrooms ?? "—"} bathrooms`
+      : null;
+  const bookingRef = formatBookingReference(fullBooking.id);
+  const durationLabel =
+    adminServiceHome.durationHours != null
+      ? adminServiceHome.durationHours % 1 === 0
+        ? `${adminServiceHome.durationHours} hours`
+        : `${adminServiceHome.durationHours.toFixed(1)} hours`
+      : "Not set";
+  const cleanerEntityLabel = supportsTeamAssignment ? "Cleaner / Team" : "Cleaner";
+  const cleanerDisplayName =
+    cleaner?.full_name?.trim() || teamSummary?.name?.trim() || (fullBooking.cleaner_id ? "Assigned cleaner" : null);
+  const cleanerStatusLabel = fullBooking.cleaner_id || fullBooking.team_id ? "Assigned" : "Unassigned";
+  const cleanerRatingLine =
+    typeof cleaner?.rating === "number"
+      ? `${cleaner.rating.toFixed(1)} rating · ${cleaner.jobs_completed ?? 0} jobs completed`
+      : null;
+  const statusSteps: OfficeTimelineStep[] = [
+    { label: "Created", done: true, time: createdLabel },
+    {
+      label: "Pending payment",
+      done: Boolean(fullBooking.payment_completed_at || fullBooking.payment_status === "success" || offPlatformPaidLabel),
+      active: canMarkPaid,
+      time: fullBooking.payment_completed_at ? formatAdminDateTime(fullBooking.payment_completed_at) : paymentStatusLabel,
+      hint: canMarkPaid ? "Awaiting customer payment" : undefined,
+    },
+    {
+      label: "Assigned",
+      done: Boolean(fullBooking.cleaner_id || fullBooking.team_id),
+      time: fullBooking.assigned_at ? formatAdminDateTime(fullBooking.assigned_at) : cleanerStatusLabel,
+    },
+    {
+      label: "Cleaner accepted",
+      done: Boolean(fullBooking.accepted_at || fullBooking.cleaner_response_status === "accepted"),
+      time: fullBooking.accepted_at ? formatAdminDateTime(fullBooking.accepted_at) : "Awaiting acceptance",
+    },
+    {
+      label: "In progress",
+      done: Boolean(fullBooking.started_at || fullBooking.status === "in_progress"),
+      time: fullBooking.started_at ? formatAdminDateTime(fullBooking.started_at) : "Not started",
+    },
+    {
+      label: "Completed",
+      done: Boolean(fullBooking.completed_at || fullBooking.status === "completed"),
+      time: fullBooking.completed_at ? formatAdminDateTime(fullBooking.completed_at) : "Not completed",
+    },
+    {
+      label: "Payout",
+      done: fullBooking.payout_status === "paid",
+      time: fullBooking.payout_status?.trim() ? titleCase(fullBooking.payout_status.replace(/_/g, " ")) : "Pending",
+    },
+  ];
+
+  const officeOverviewExtras =
+    serviceExtrasForAdmin.length > 0 ? (
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Extras</p>
+        <div className="mt-2 space-y-1">
+          {serviceExtrasForAdmin.map((item) => {
+            const { key, label } = formatBookingExtraChip(item);
+            return (
+              <span key={key} className="block rounded-lg bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
+                {label}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    ) : (
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Extras</p>
+        <p className="mt-2 text-sm text-slate-500">No extras selected</p>
+      </div>
+    );
+
+  const officeOverviewIssues =
+    cleanerIssueReports.length > 0 ? (
+      <div className="space-y-3">
+        {cleanerIssueReports.slice(0, 3).map((rep) => {
+          const reasonLabel = issueReportReasonDisplay(String(rep.reason_key ?? "").trim(), rep.reason_version);
+          return (
+            <div key={rep.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold">{reasonLabel}</p>
+                <span className="text-xs">{rep.created_at ? formatAdminDateTime(rep.created_at) : "—"}</span>
+              </div>
+              {rep.detail?.trim() ? <p className="mt-2 text-amber-900">{rep.detail.trim()}</p> : null}
+              {!rep.resolved_at ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3 bg-white"
+                  disabled={issueResolveBusyId === rep.id}
+                  onClick={() => void markIssueReportResolved(rep.id)}
+                >
+                  Mark resolved
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    ) : null;
+
+  const officeOverviewDispatch =
+    dispatchOffers.length > 0 ? (
+      <div className="space-y-3">
+        <select
+          value={dispatchOfferUxFilter}
+          onChange={(e) => setDispatchOfferUxFilter(e.target.value as DispatchOfferUxFilter)}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+        >
+          <option value="all">All offers ({dispatchOfferUxCounts.total})</option>
+          {CLEANER_UX_VARIANTS.map((v) => (
+            <option key={v} value={v}>
+              {v} ({variantCountShareLabel(dispatchOfferUxCounts.byVariant[v], dispatchOfferUxCounts.total)})
+            </option>
+          ))}
+          <option value="unknown">unknown ({variantCountShareLabel(dispatchOfferUxCounts.unknown, dispatchOfferUxCounts.total)})</option>
+        </select>
+        <div className="space-y-2">
+          {filteredDispatchOffers.slice(0, 4).map((offer) => (
+            <div key={offer.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-medium text-slate-800">{offer.status ?? "Pending"}</span>
+              <span className="text-xs text-slate-500">Rank {offer.rank_index ?? "—"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  const officeOverviewNotifications = (
+    <BookingNotificationTimeline rows={notificationLogs} compact limit={4} />
+  );
+
   return (
+    <>
+      {isOfficeBooking ? (
+        <OfficeBookingDetailsShell
+          basePath={basePath}
+          onBack={() => (onClose ? onClose() : router.push(basePath))}
+          bookingRef={bookingRef}
+          createdLabel={createdLabel}
+          bookingId={fullBooking.id}
+          paymentStatusLabel={paymentStatusLabel}
+          paymentStatusShort={paymentStatusShort}
+          canMarkPaid={canMarkPaid}
+          serviceName={fullBooking.service ?? "Not set"}
+          serviceSummaryLine={serviceSummaryLine}
+          scheduleDateLabel={scheduleDateLabel}
+          scheduleTimeLabel={scheduleTimeLabel}
+          scheduleRelativeShort={scheduleRelativeShort}
+          startsInIsPast={startsInIsPast}
+          locationPrimary={locationParts.primary}
+          locationSecondary={locationParts.secondary}
+          locationRaw={fullBooking.location}
+          cleanerEntityLabel={cleanerEntityLabel}
+          cleanerDisplayName={cleanerDisplayName}
+          cleanerStatusLabel={cleanerStatusLabel}
+          cleanerRatingLine={cleanerRatingLine}
+          customerName={customerName}
+          customerEmail={customerEmail}
+          customerPhone={customerPhone}
+          customerMissingPhone={customerMissingPhone}
+          userId={fullBooking.user_id}
+          total={total}
+          basePrice={basePrice}
+          extrasPrice={extrasPrice}
+          durationLabel={durationLabel}
+          bedrooms={adminServiceHome.bedrooms != null ? String(adminServiceHome.bedrooms) : "—"}
+          bathrooms={adminServiceHome.bathrooms != null ? String(adminServiceHome.bathrooms) : "—"}
+          statusSteps={statusSteps}
+          flags={flags}
+          snapshotNotesText={snapshotNotesText}
+          notesCreatedLabel={
+            snapshotNotesText
+              ? fullBooking.updated_at
+                ? formatAdminDateTime(fullBooking.updated_at)
+                : createdLabel
+              : null
+          }
+          cleanerIssueCount={cleanerIssueReports.length}
+          dispatchOfferCount={dispatchOffers.length}
+          notificationLogCount={notificationLogs.length}
+          notificationLogsLoading={notificationLogsLoading}
+          adminActionWarnings={adminActionWarnings}
+          needsDispatchAttention={needsDispatchManualAttention}
+          dispatchCaption={dispatchLifecycleCaptionDetail.trim()}
+          showAdminMarkComplete={showAdminMarkComplete}
+          showAdminMarkCancel={showAdminMarkCancel}
+          markPaidBusy={markPaidBusy}
+          fixEarningsBusy={fixEarningsBusy}
+          resetEarningsBusy={resetEarningsBusy}
+          statusBusy={statusBusy}
+          resetDispatchBusy={resetDispatchBusy}
+          editBookingBlockedReason={editBookingClientBlockReason}
+          resetEarningsBlockedReason={resetEarningsClientBlockReason}
+          editDetailsBusy={editDetailsBusy}
+          savingSchedule={savingSchedule}
+          editingSchedule={editingSchedule}
+          draftDate={draftDate}
+          draftTime={draftTime}
+          zohoInvoiceId={(fullBooking as { zoho_invoice_id?: string | null }).zoho_invoice_id ?? null}
+          cleanerTotalZar={cleanerTotalZar}
+          companyRevenueZar={companyRevenueZar}
+          existingDepositLabel={existingDepositZar != null ? formatZar(existingDepositZar) : null}
+          operationalPhase={(adminOperational?.operationalPhase ?? "unknown") as BookingOperationalPhase}
+          assignedCleanerId={fullBooking.cleaner_id}
+          supportsTeamAssignment={supportsTeamAssignment}
+          isTeamAssigned={Boolean(fullBooking.team_id)}
+          onAssignPrimary={() => (supportsTeamAssignment ? void openTeamModal() : void openAssignModal())}
+          onEditBooking={() => openEditDetailsModal()}
+          onReschedule={() => setRescheduleOpen(true)}
+          onContactCustomer={handleContactCustomer}
+          onMarkPaid={() => {
+            setMarkPaidMethod("cash");
+            setMarkPaidReference("");
+            setMarkPaidAmountZar("");
+            setMarkPaidSettlementMode("full");
+            setMarkPaidDepositReason("");
+            setMarkPaidModalOpen(true);
+          }}
+          onFixEarnings={() => void handleFixEarnings()}
+          onResetEarnings={() => setResetEarningsModalOpen(true)}
+          onMarkComplete={() => void setStatusOptimistic("completed")}
+          onCancel={() => void setStatusOptimistic("cancelled")}
+          onAssignManually={() => void openAssignModal()}
+          onResetDispatch={() => void handleResetDispatchRetry()}
+          onEditSchedule={() => setEditingSchedule(true)}
+          onCancelEditSchedule={() => {
+            setEditingSchedule(false);
+            setDraftDate(fullBooking.date ?? "");
+            setDraftTime((fullBooking.time ?? "").slice(0, 5));
+          }}
+          onSaveSchedule={() => void saveScheduleInline()}
+          onDraftDateChange={setDraftDate}
+          onDraftTimeChange={setDraftTime}
+          onViewCleanerProfile={() => void openCleanerPickerInline()}
+          overviewExtras={officeOverviewExtras}
+          overviewIssues={officeOverviewIssues}
+          overviewDispatch={officeOverviewDispatch}
+          overviewNotifications={officeOverviewNotifications}
+          tabCustomer={
+            <AdminInfoCard title="Customer" icon={User}>
+              <DetailRow label="Name" value={customerName} />
+              <DetailRow label="Email" value={customerEmail} />
+              <DetailRow label="Phone" value={customerPhone} />
+              <DetailRow label="User ID" value={fullBooking.user_id ?? "—"} mono />
+            </AdminInfoCard>
+          }
+          tabService={
+            <AdminInfoCard title="Service details" icon={ReceiptText}>
+              <DetailRow label="Service type" value={fullBooking.service ?? "—"} />
+              <DetailRow label="Bedrooms" value={adminServiceHome.bedrooms != null ? String(adminServiceHome.bedrooms) : "—"} />
+              <DetailRow label="Bathrooms" value={adminServiceHome.bathrooms != null ? String(adminServiceHome.bathrooms) : "—"} />
+              <DetailRow label="Base price" value={`R ${basePrice.toLocaleString("en-ZA")}`} />
+              <DetailRow label="Extras total" value={`R ${extrasPrice.toLocaleString("en-ZA")}`} />
+              <DetailRow label="Total visit" value={`R ${total.toLocaleString("en-ZA")}`} strong />
+            </AdminInfoCard>
+          }
+          tabSchedule={
+            <AdminInfoCard title="Schedule" icon={Clock}>
+              <DetailRow label="Date" value={scheduleDateLabel} />
+              <DetailRow label="Time" value={scheduleTimeLabel} />
+              <DetailRow label="Starts" value={startsInText} />
+            </AdminInfoCard>
+          }
+          tabCleaner={
+            <AdminInfoCard title={cleanerEntityLabel} icon={Users}>
+              <DetailRow label="Name" value={cleanerDisplayName ?? "Not assigned"} />
+              <DetailRow label="Status" value={cleanerStatusLabel} />
+              <DetailRow label="Assignment" value={assignmentSummaryLine || "—"} />
+              {preferredDispatchStatusLabel ? (
+                <DetailRow label="Cleaner dispatch" value={preferredDispatchStatusLabel} />
+              ) : null}
+            </AdminInfoCard>
+          }
+          tabPayments={
+            <AdminInfoCard title="Payments" icon={CreditCard}>
+              <DetailRow label="Payment status" value={paymentStatusLabel} />
+              <DetailRow label="Total visit" value={`R ${total.toLocaleString("en-ZA")}`} strong />
+              <DetailRow
+                label={cleanerPayoutCard.payoutLabel}
+                value={cleanerPayoutZar == null ? "Pending" : `R ${cleanerPayoutZar.toLocaleString("en-ZA")}`}
+              />
+              <DetailRow label="Cleaner bonus" value={`R ${cleanerBonusZar.toLocaleString("en-ZA")}`} />
+            </AdminInfoCard>
+          }
+          tabNotifications={
+            <AdminInfoCard title="Notification timeline" icon={Mail}>
+              <BookingNotificationTimeline rows={notificationLogs} compact />
+            </AdminInfoCard>
+          }
+          tabActivity={
+            <AdminInfoCard title="Activity" icon={Bell}>
+              <div className="space-y-0">
+                {statusSteps.map((step, index) => (
+                  <OfficeTimelineStepRow key={step.label} step={step} isLast={index === statusSteps.length - 1} />
+                ))}
+              </div>
+            </AdminInfoCard>
+          }
+        />
+      ) : (
     <div className="min-h-dvh bg-zinc-50">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-4">
@@ -2223,7 +2674,7 @@ export default function BookingDetailsView({
           </DetailCard>
           <DetailCard title="Customer">
             <p className="text-base font-medium text-zinc-900">{fullBooking.customer_email ?? userProfile?.email ?? "—"}</p>
-            <DetailRow label="Phone" value={fullBooking.phone ?? userProfile?.phone ?? "—"} />
+            <DetailRow label="Phone" value={customerPhone} />
             <DetailRow label="User ID" value={fullBooking.user_id ?? "—"} mono />
           </DetailCard>
           <DetailCard title="Service">
@@ -2548,7 +2999,7 @@ export default function BookingDetailsView({
                   const waUrl = typeof snap?.wa_url === "string" ? snap.wa_url : null;
                   const assignedTel =
                     cleaner?.id === rep.cleaner_id ? digitsForWhatsApp(cleaner?.phone ?? null) : null;
-                  const customerWa = digitsForWhatsApp(userProfile?.phone ?? fullBooking.phone ?? null);
+                  const customerWa = digitsForWhatsApp(resolvedCustomerPhone);
                   const resolved = Boolean(rep.resolved_at);
                   return (
                     <li
@@ -2718,7 +3169,7 @@ export default function BookingDetailsView({
           ) : null}
           <DetailCard title="Notification timeline">
             <p className="text-sm text-zinc-600">
-              Outbound delivery attempts for this booking (email, WhatsApp, SMS).{" "}
+              Outbound delivery attempts for this booking.{" "}
               <Link
                 href="/admin/notification-logs"
                 className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
@@ -2726,89 +3177,20 @@ export default function BookingDetailsView({
                 Full logs
               </Link>
             </p>
-            {notificationLogsLoading ? (
-              <p className="text-sm text-zinc-500">Loading notification history…</p>
-            ) : notificationLogs.length === 0 ? (
-              <p className="text-sm text-zinc-500">No notification log rows for this booking yet.</p>
-            ) : (
-              <ul className="space-y-2 border-t border-zinc-100 pt-3">
-                {notificationLogs.map((row) => {
-                  const pl = row.payload && typeof row.payload === "object" ? row.payload : {};
-                  const retriedFrom = typeof pl.retried_from === "string" ? pl.retried_from : null;
-                  const fb = pl.automated_channel_fallback === true;
-                  return (
-                    <li
-                      key={row.id}
-                      className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                        <div className="min-w-0 flex-1 space-y-1.5">
-                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                            <span className="shrink-0 font-medium capitalize text-zinc-800 dark:text-zinc-100">
-                              {row.channel}
-                            </span>
-                            <span className="text-zinc-400 dark:text-zinc-500" aria-hidden>
-                              ·
-                            </span>
-                            <span className="min-w-0 break-words font-mono text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
-                              {row.template_key}
-                            </span>
-                            {row.role ? (
-                              <span className="shrink-0 rounded-md bg-zinc-200/80 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-700/60 dark:text-zinc-200">
-                                {row.role}
-                              </span>
-                            ) : null}
-                          </div>
-                          {row.event_type ? (
-                            <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                              <span className="font-medium text-zinc-500 dark:text-zinc-500">Event</span>{" "}
-                              <span className="break-all font-mono">{row.event_type}</span>
-                            </p>
-                          ) : null}
-                          {retriedFrom ? (
-                            <p className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
-                              ↳ retry of {retriedFrom.slice(0, 8)}…
-                            </p>
-                          ) : null}
-                          {fb ? (
-                            <p className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
-                              Automated SMS after WhatsApp
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex shrink-0 flex-col gap-1 border-t border-zinc-200/80 pt-2 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0 dark:border-zinc-700">
-                          <span
-                            className={
-                              row.status === "sent"
-                                ? "inline-flex w-fit rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                : "inline-flex w-fit rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                            }
-                          >
-                            {row.status}
-                          </span>
-                          <time
-                            className="whitespace-nowrap text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400"
-                            dateTime={row.created_at ?? undefined}
-                          >
-                            {row.created_at
-                              ? new Date(row.created_at).toLocaleString("en-ZA", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: false,
-                                })
-                              : "—"}
-                          </time>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <div className="border-t border-zinc-100 pt-3">
+              <BookingNotificationTimeline
+                rows={notificationLogs}
+                loading={notificationLogsLoading}
+                emptyMessage="No notification log rows for this booking yet."
+              />
+            </div>
           </DetailCard>
           <DetailCard title="Dispatch offers">
+            {preferredDispatchStatusLabel ? (
+              <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+                {preferredDispatchStatusLabel}
+              </p>
+            ) : null}
             {dispatchOffers.length === 0 ? (
               <p className="text-sm text-zinc-500">No dispatch offers for this booking.</p>
             ) : (
@@ -2983,33 +3365,25 @@ export default function BookingDetailsView({
             ) : null}
             {editingCleanerInline ? (
               <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2 transition">
-                <div className="max-h-56 space-y-1 overflow-y-auto">
-                  {cleanerOptions.length === 0 ? (
-                    <p className="px-2 py-3 text-sm text-zinc-500">Loading cleaners…</p>
-                  ) : (
-                    cleanerOptions.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        disabled={assigningCleanerId !== null}
-                        onClick={() => {
-                          void handleAssignCleaner(c);
-                        }}
-                        className="flex w-full items-center justify-between rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-left hover:bg-zinc-50 disabled:opacity-60"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-zinc-900">{c.full_name ?? "Unnamed cleaner"}</p>
-                          <p className="text-xs text-zinc-500">{typeof c.rating === "number" ? `${c.rating.toFixed(1)} ★` : "No rating"}</p>
-                        </div>
-                        <span className="text-xs text-zinc-500">{(c.status ?? "busy").toLowerCase() === "available" ? "Available" : "Busy"}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
+                {cleanerOptions.length === 0 ? (
+                  <p className="px-2 py-3 text-sm text-zinc-500">Loading cleaners…</p>
+                ) : (
+                  <AdminAssignForm
+                    booking={{
+                      id: fullBooking.id,
+                      date: fullBooking.date,
+                      time: fullBooking.time,
+                      duration_minutes: fullBooking.duration_minutes,
+                    }}
+                    bookingId={fullBooking.id}
+                    cleaners={toCleanerAssignOptions(cleanerOptions)}
+                    onDone={onAssignOfferDone}
+                    onError={onAssignOfferError}
+                  />
+                )}
                 <div className="mt-2 flex justify-end">
                   <button
                     type="button"
-                    disabled={assigningCleanerId !== null}
                     onClick={() => setEditingCleanerInline(false)}
                     className="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700"
                   >
@@ -3138,8 +3512,28 @@ export default function BookingDetailsView({
             ) : null}
             <DetailRow label="Base price" value={`R ${basePrice.toLocaleString("en-ZA")}`} />
             <DetailRow label="Extras total" value={`R ${extrasPrice.toLocaleString("en-ZA")}`} />
+            {v2PricingLines ? (
+              <>
+                <div className="my-2 border-t border-zinc-200" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Customer breakdown (v2)</p>
+                {v2PricingLines.map((line) => (
+                  <DetailRow
+                    key={line.label}
+                    label={line.label}
+                    value={line.value}
+                    strong={line.emphasis}
+                  />
+                ))}
+              </>
+            ) : null}
             <div className="my-2 border-t border-zinc-200" />
             <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">TOTAL</span><span className="text-2xl font-bold text-emerald-700">R {total.toLocaleString("en-ZA")}</span></div>
+            {cleanerTotalZar != null ? (
+              <DetailRow label="Cleaner earnings (stored/projected)" value={`R ${cleanerTotalZar.toLocaleString("en-ZA")}`} />
+            ) : null}
+            {companyRevenueZar != null ? (
+              <DetailRow label="Company revenue" value={`R ${companyRevenueZar.toLocaleString("en-ZA")}`} />
+            ) : null}
           </DetailCard>
           <DetailCard title="Cleaner payout">
             {cleanerPayoutCard.pending || cleanerTotalZar == null ? (
@@ -3464,6 +3858,8 @@ export default function BookingDetailsView({
           </div>
         </div>
       ) : null}
+    </div>
+      )}
 
       {markPaidModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -3866,30 +4262,31 @@ export default function BookingDetailsView({
           )
         : null}
 
-      {assignModalOpen ? (
+      {assignModalOpen && fullBooking ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-zinc-900">Assign cleaner</h3>
-            <p className="mt-2 text-sm text-zinc-600">Select an available cleaner for this booking.</p>
-            <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
-              {cleanerOptions.length === 0 ? (
-                <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500">No cleaners available.</p>
-              ) : (
-                cleanerOptions.map((c) => (
-                  <button key={c.id} type="button" disabled={assigningCleanerId !== null} onClick={() => void handleAssignCleaner(c)} className="flex w-full items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-left hover:bg-zinc-50 disabled:opacity-60">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-900">{c.full_name ?? "Unnamed cleaner"}</p>
-                      <p className="text-xs text-zinc-500">{typeof c.rating === "number" ? `${c.rating.toFixed(1)} ★` : "No rating"} · Jobs {c.jobs_completed ?? 0}</p>
-                    </div>
-                    <span className={["rounded-full px-2 py-0.5 text-xs font-semibold", (c.status ?? "").toLowerCase() === "available" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"].join(" ")}>
-                      {c.status ?? "busy"}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
+            <p className="mt-2 text-sm text-zinc-600">
+              Sends a job offer to the cleaner. Slot checks run before sending; use override only when you accept the risk.
+            </p>
+            {cleanerOptions.length === 0 ? (
+              <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500">Loading cleaners…</p>
+            ) : (
+              <AdminAssignForm
+                booking={{
+                  id: fullBooking.id,
+                  date: fullBooking.date,
+                  time: fullBooking.time,
+                  duration_minutes: fullBooking.duration_minutes,
+                }}
+                bookingId={fullBooking.id}
+                cleaners={toCleanerAssignOptions(cleanerOptions)}
+                onDone={onAssignOfferDone}
+                onError={onAssignOfferError}
+              />
+            )}
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => { setAssignModalOpen(false); setAssigningCleanerId(null); }} className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700">Close</button>
+              <button type="button" onClick={() => setAssignModalOpen(false)} className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700">Close</button>
             </div>
           </div>
         </div>
@@ -3919,6 +4316,143 @@ export default function BookingDetailsView({
       ) : null}
 
       {toast ? <Toast kind={toast.kind} text={toast.text} onClose={() => setToast(null)} /> : null}
+    </>
+  );
+}
+
+function formatBookingReference(bookingId: string): string {
+  const segment = bookingId.split("-")[0]?.slice(0, 7) ?? bookingId.slice(0, 7);
+  return `#B-${segment.toUpperCase()}`;
+}
+
+function formatAdminDate(value: string): string {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatAdminDateShort(value: string): string {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function compactScheduleRelative(date: string | null | undefined, time: string | null | undefined): string | null {
+  if (!date || !time) return null;
+  const dt = new Date(`${date}T${time.slice(0, 5)}:00+02:00`);
+  if (Number.isNaN(dt.getTime())) return null;
+  const mins = Math.round((dt.getTime() - Date.now()) / 60000);
+  const abs = Math.abs(mins);
+  if (mins >= 0) {
+    if (mins < 60) return `${mins}m`;
+    if (mins < 1440) return `${Math.floor(mins / 60)}h`;
+    return `${Math.floor(mins / 1440)}d`;
+  }
+  if (abs < 60) return `${abs}m ago`;
+  if (abs < 1440) return `${Math.floor(abs / 60)}h ago`;
+  return `${Math.floor(abs / 1440)}d ago`;
+}
+
+function shortPaymentStatusLabel(label: string): string {
+  const normalized = label.trim().toLowerCase();
+  if (normalized.includes("pending")) return "Pending payment";
+  if (normalized.includes("paid") || normalized.includes("success")) return "Paid";
+  if (normalized.includes("overdue")) return "Overdue";
+  if (normalized.includes("deposit")) return "Deposit";
+  return label.length > 16 ? label.split(/\s+/).slice(0, 2).join(" ") : label;
+}
+
+function formatAdminTime(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "—";
+  return raw.slice(0, 5);
+}
+
+function formatAdminDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-ZA", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function splitBookingLocation(location: string | null | undefined): { primary: string; secondary: string } {
+  const raw = location?.trim() ?? "";
+  if (!raw) return { primary: "Location not set", secondary: "—" };
+  const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return { primary: raw, secondary: raw };
+  return { primary: parts[0] ?? raw, secondary: parts.slice(1).join(", ") };
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
+function AdminInfoCard({
+  title,
+  icon: Icon,
+  children,
+  footer,
+}: {
+  title: string;
+  icon: ComponentType<{ className?: string }>;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  return (
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
+      <CardHeader className="flex-row items-center gap-2 space-y-0 pb-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+          <Icon className="h-4 w-4" />
+        </div>
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">{children}</CardContent>
+      {footer ? <CardFooter className="border-t border-slate-100 pt-3">{footer}</CardFooter> : null}
+    </Card>
+  );
+}
+
+function EmptyAdminState({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-slate-500">{children}</p>;
+}
+
+function OfficeTimelineStepRow({ step, isLast }: { step: OfficeTimelineStep; isLast: boolean }) {
+  const dotClass = step.done
+    ? "bg-emerald-500 text-white"
+    : step.active
+      ? "bg-amber-100 text-amber-600 ring-2 ring-amber-300"
+      : "bg-slate-200 text-slate-400";
+
+  return (
+    <div className="grid grid-cols-[1.25rem_1fr] gap-3">
+      <div className="flex flex-col items-center">
+        <span className={["mt-0.5 flex h-5 w-5 items-center justify-center rounded-full", dotClass].join(" ")}>
+          {step.done ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-2.5 w-2.5 fill-current" />}
+        </span>
+        {!isLast ? <span className={["h-10 w-px", step.done ? "bg-emerald-200" : "bg-slate-200"].join(" ")} /> : null}
+      </div>
+      <div className="pb-4">
+        <p className="text-sm font-semibold text-slate-900">{step.label}</p>
+        <p className="text-xs text-slate-500">{step.hint ?? step.time}</p>
+      </div>
     </div>
   );
 }

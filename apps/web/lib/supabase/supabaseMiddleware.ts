@@ -92,5 +92,37 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Protect customer dashboard — redirect unauthenticated users to login
+  if (pathname.startsWith("/account") && !user) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  // Protect cleaner jobs dashboard
+  if (pathname.startsWith("/jobs") && !user) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  // Protect admin office dashboard
+  if (pathname.startsWith("/office") && !user) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  // Payment step requires any signed-in user
+  if (pathname.startsWith("/book/payment") && !user) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+    return NextResponse.redirect(redirectUrl);
+  }
+
   return supabaseResponse;
 }

@@ -1,13 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { CUSTOMER_BOOKING_SELECT } from "@/lib/dashboard/customerBookingSelect";
 import { mapBookingRow, isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
-import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
+import type { DashboardBooking } from "@/lib/dashboard/types";
 import { johannesburgMonthKey } from "@/lib/dashboard/johannesburgMonth";
 import { daysPastDueJhb } from "@/lib/dashboard/invoiceOverdueEscalation";
 import { johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
-import { normalizeCustomerBookingRow } from "@/lib/dashboard/normalizeCustomerBookingRow";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { loadCustomerBookingRowsForUser } from "@/lib/customer/customerBookingsForUser";
 import type { CustomerMonthlyInvoiceRow } from "@/lib/dashboard/monthlyInvoiceTypes";
 
 export const runtime = "nodejs";
@@ -33,48 +32,6 @@ const INVOICE_SELECT = [
   "updated_at",
 ].join(",");
 
-async function fetchBookings(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string): Promise<BookingRow[]> {
-  let res = await admin
-    .from("bookings")
-    .select(CUSTOMER_BOOKING_SELECT)
-    .eq("user_id", userId)
-    .neq("status", "pending_payment")
-    .neq("status", "payment_expired")
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (res.error && /cleaners|relationship|schema|monthly_invoices/i.test(res.error.message)) {
-    const noMi = CUSTOMER_BOOKING_SELECT.replace(",monthly_invoices(status,is_closed)", "");
-    res = await admin
-      .from("bookings")
-      .select(noMi)
-      .eq("user_id", userId)
-      .neq("status", "pending_payment")
-      .neq("status", "payment_expired")
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(100);
-  }
-
-  if (res.error && /cleaners|relationship|schema/i.test(res.error.message)) {
-    const noMi = CUSTOMER_BOOKING_SELECT.replace(",monthly_invoices(status,is_closed)", "");
-    const minimal = noMi.replace(",cleaners(full_name,phone)", "");
-    res = await admin
-      .from("bookings")
-      .select(minimal)
-      .eq("user_id", userId)
-      .neq("status", "pending_payment")
-      .neq("status", "payment_expired")
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(100);
-  }
-
-  if (res.error || !res.data) return [];
-  return (res.data as unknown as BookingRow[]).map((r) => normalizeCustomerBookingRow(r));
-}
-
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
@@ -95,6 +52,7 @@ export async function GET(request: Request) {
   }
 
   const userId = userData.user.id;
+  const viewerEmail = userData.user.email ?? null;
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -104,8 +62,8 @@ export async function GET(request: Request) {
   const ym = johannesburgMonthKey(nowSnapshot);
   const todayYmd = johannesburgTodayYmd(nowSnapshot);
 
-  const [bookingsRes, invRes] = await Promise.all([
-    fetchBookings(admin, userId),
+  const [bookingsLoad, invRes] = await Promise.all([
+    loadCustomerBookingRowsForUser(admin, userId, { viewerEmail }),
     admin
       .from("monthly_invoices")
       .select(INVOICE_SELECT)
@@ -114,15 +72,25 @@ export async function GET(request: Request) {
       .limit(120),
   ]);
 
-  const mapped = bookingsRes.map((r) => mapBookingRow(r));
+  if (!bookingsLoad.ok) {
+    return NextResponse.json({ error: bookingsLoad.error }, { status: bookingsLoad.status });
+  }
+
+  const mapped = bookingsLoad.bookings.map((r) => mapBookingRow(r));
   const upcoming = [...mapped]
     .filter(isUpcomingBookingRow)
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   const nextBooking: DashboardBooking | null = upcoming[0] ?? null;
 
-  const bookingsThisMonthCount = mapped.filter((b) => typeof b.date === "string" && b.date.startsWith(ym)).length;
+  const thisMonthBookings = mapped.filter((b) => typeof b.date === "string" && b.date.startsWith(ym));
+  const bookingsThisMonthCount = thisMonthBookings.length;
+  const hoursBookedThisMonth = Math.round(
+    thisMonthBookings.reduce((sum, b) => sum + ((b.durationHours ?? 0) > 0 ? b.durationHours : 0), 0),
+  );
 
-  const recentBookings = [...mapped].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3);
+  const recentBookings = [...mapped]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
 
   const invoices = (invRes.data ?? []) as unknown as CustomerMonthlyInvoiceRow[];
   const hasAnyInvoices = invoices.length > 0;
@@ -147,6 +115,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ym,
     bookingsThisMonthCount,
+    hoursBookedThisMonth,
     nextBooking,
     recentBookings,
     invoiceThisMonth,

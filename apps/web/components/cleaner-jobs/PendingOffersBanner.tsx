@@ -20,7 +20,7 @@ export function PendingOffersBanner({ pendingOfferCount }: PendingOffersBannerPr
   const plural = pendingOfferCount > 1;
   return (
     <Link
-      href="/cleaner/dashboard"
+      href="/jobs"
       className="block rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm shadow-sm transition-colors hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/20"
       aria-label={`You have ${pendingOfferCount} pending job offer${plural ? "s" : ""}. Open the dashboard to respond.`}
     >

@@ -57,7 +57,7 @@ export function CleanerPerformanceTable({ rows }: { rows: CleanerPerfRow[] }) {
                       </span>
                     ) : null}
                     <Link
-                      href="/admin/cleaners"
+                      href="/office/cleaners"
                       className="text-blue-600 hover:underline dark:text-blue-400"
                     >
                       Roster

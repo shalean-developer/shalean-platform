@@ -5,7 +5,7 @@ import { canonicalUrl } from "@/lib/site/canonicalUrl";
 export const metadata: Metadata = {
   title: "Booking confirmed | Shalean",
   robots: "noindex, nofollow, noimageindex",
-  alternates: { canonical: canonicalUrl("/booking/success") },
+  alternates: { canonical: canonicalUrl("/account/success") },
 };
 
 export default function BookingSuccessLayout({ children }: { children: React.ReactNode }) {

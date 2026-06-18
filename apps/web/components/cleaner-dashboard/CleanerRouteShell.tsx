@@ -125,7 +125,7 @@ export function CleanerRouteShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!needsAuthRedirect || onPublicPage) return;
-    const redirectPath = pathname?.trim() || "/cleaner/dashboard";
+    const redirectPath = pathname?.trim() || "/jobs";
     router.replace(`/cleaner/login?redirect=${encodeURIComponent(redirectPath)}`);
   }, [needsAuthRedirect, onPublicPage, pathname, router]);
 

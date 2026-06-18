@@ -20,7 +20,7 @@ export function BlogPostHeroConversion({ trackingSlug }: Props) {
         </p>
       </div>
       <GrowthCtaLink
-        href="/booking/details"
+        href="/book"
         source={source}
         blogAnalyticsPlacement={`${trackingSlug}_hero_quote`}
         className="inline-flex shrink-0 items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"

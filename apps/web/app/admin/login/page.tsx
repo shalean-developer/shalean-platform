@@ -20,7 +20,7 @@ export default async function AdminLoginAliasPage({ searchParams }: Props) {
   const redirectTo =
     redirectParam && redirectParam.startsWith("/")
       ? redirectParam
-      : "/admin";
+      : "/office";
 
   redirect(
     `/login?role=admin&redirect=${encodeURIComponent(redirectTo)}`

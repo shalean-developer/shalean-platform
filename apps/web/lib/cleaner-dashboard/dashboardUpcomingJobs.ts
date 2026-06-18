@@ -1,9 +1,12 @@
+import { cleanerJobDetailHref } from "@/lib/cleaner/cleanerJobDetailHref";
 import type { CleanerUpcomingJob } from "@/components/cleaner-dashboard/types";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { groupCleanerScheduleRows, mobilePhaseDisplayForDashboard } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
-import { suburbFromLocationForOffer } from "@/lib/cleaner/cleanerOfferLocationSuburb";
-import { resolveCleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
+import { cleanerFacingAreaLabel } from "@/lib/cleaner/cleanerOfferLocationSuburb";
+import { cleanerJobEarningFromCents, resolveCleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
+import { cleanerFacingDisplayEarningsCents } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 
 const SECTION_ORDER = ["overdue", "today", "upcoming", "completed"] as const;
 
@@ -11,14 +14,26 @@ const MAX_TOTAL = 36;
 const MAX_COMPLETED = 10;
 
 /** Single row → dashboard “Your jobs” / next-pin card shape. */
-export function cleanerBookingRowToUpcomingJob(r: CleanerBookingRow, now: Date): CleanerUpcomingJob {
+export function cleanerBookingRowToUpcomingJob(r: CleanerBookingRow, now: Date, todayYmdOverride?: string): CleanerUpcomingJob {
+  const todayYmd = (() => {
+    const ov = String(todayYmdOverride ?? "").trim().slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(ov) ? ov : johannesburgCalendarYmd(now);
+  })();
+  const dateYmd = String(r.date ?? "").trim().slice(0, 10);
+  const status = String(r.status ?? "").trim().toLowerCase();
+  const isOverdue =
+    /^\d{4}-\d{2}-\d{2}$/.test(dateYmd) &&
+    dateYmd < todayYmd &&
+    status !== "completed" &&
+    status !== "cancelled";
   const head = jobDateHeading(String(r.date ?? ""), now);
   const t = (r.time ?? "—").trim() || "—";
+  const schedule = `${head} • ${t}`;
   return {
     id: r.id,
-    timeLine: `${head} • ${t}`,
-    suburb: suburbFromLocationForOffer(r.location),
-    href: `/cleaner/jobs/${encodeURIComponent(r.id)}`,
+    timeLine: isOverdue ? `Overdue · ${schedule}` : schedule,
+    suburb: cleanerFacingAreaLabel(r),
+    href: cleanerJobDetailHref(r.id),
     phaseDisplay: mobilePhaseDisplayForDashboard(r),
     /**
      * Reuses the same source-of-truth resolver as the offer card, so the
@@ -27,11 +42,15 @@ export function cleanerBookingRowToUpcomingJob(r: CleanerBookingRow, now: Date):
      * booking has no persisted earning AND the dashboard route's preview
      * pass also returned null (already logged as a data-integrity issue).
      */
-    jobEarning: resolveCleanerJobEarning({
-      cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
-      payout_frozen_cents: r.payout_frozen_cents,
-      display_earnings_cents: r.display_earnings_cents,
-    }),
+    jobEarning: (() => {
+      const previewCents = cleanerFacingDisplayEarningsCents(r);
+      if (previewCents != null && previewCents > 0) return cleanerJobEarningFromCents(previewCents);
+      return resolveCleanerJobEarning({
+        cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
+        payout_frozen_cents: r.payout_frozen_cents,
+        display_earnings_cents: r.display_earnings_cents,
+      });
+    })(),
   };
 }
 
@@ -53,7 +72,7 @@ export function buildDashboardUpcomingJobs(
     const slice = sec.rows.slice(0, Math.max(0, cap));
     for (const r of slice) {
       if (used >= MAX_TOTAL) break;
-      out.push(cleanerBookingRowToUpcomingJob(r, now));
+      out.push(cleanerBookingRowToUpcomingJob(r, now, todayYmdOverride));
       used++;
     }
   }

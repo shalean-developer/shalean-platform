@@ -253,33 +253,49 @@ export function AdminAssignForm({
     setBusy(true);
     setMsg(null);
     setSubmitWarnings([]);
-    const sb = getSupabaseBrowser();
-    const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setMsg("Session expired.");
-      setBusy(false);
-      return;
-    }
-    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/offer`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ cleanerId: cleanerId.trim(), force }),
-    });
-    const j = (await res.json()) as { error?: string; warnings?: AdminWarning[] };
-    if (!res.ok) {
-      const err = j.error ?? "Failed to send job offer";
+    try {
+      const sb = getSupabaseBrowser();
+      const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setMsg("Session expired.");
+        setBusy(false);
+        return;
+      }
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/offer`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ cleanerId: cleanerId.trim(), force }),
+      });
+      let j: { error?: string; warnings?: AdminWarning[] };
+      try {
+        j = (await res.json()) as { error?: string; warnings?: AdminWarning[] };
+      } catch {
+        const err = "Failed to send job offer";
+        setMsg(err);
+        onError(err);
+        setBusy(false);
+        return;
+      }
+      if (!res.ok) {
+        const err = j.error ?? "Failed to send job offer";
+        setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
+        if (res.status === 400) recordAssignFailure(bookingId, cleanerId.trim());
+        setMsg(err);
+        onError(err);
+        setBusy(false);
+        return;
+      }
       setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
-      if (res.status === 400) recordAssignFailure(bookingId, cleanerId.trim());
+      clearAssignFailuresForBooking(bookingId);
+      onDone({ cleanerId: cleanerId.trim() });
+    } catch {
+      const err = "Network error — could not send job offer.";
       setMsg(err);
       onError(err);
+    } finally {
       setBusy(false);
-      return;
     }
-    setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
-    clearAssignFailuresForBooking(bookingId);
-    onDone({ cleanerId: cleanerId.trim() });
-    setBusy(false);
   }
 
   async function autoAssign() {
@@ -311,59 +327,64 @@ export function AdminAssignForm({
     setMsg(null);
     setSubmitWarnings([]);
     setProgressNote("Smart assign (server)…");
-    const sb = getSupabaseBrowser();
-    const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setMsg("Session expired.");
+    try {
+      const sb = getSupabaseBrowser();
+      const { data: sessionData } = (await sb?.auth.getSession()) ?? { data: { session: null } };
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setMsg("Session expired.");
+        setProgressNote(null);
+        setBusy(false);
+        return;
+      }
+
+      const autoEscalateExtremeSla =
+        extremeSlaEscalateConfirm &&
+        slaBreachMinutes != null &&
+        slaBreachMinutes > EXTREME_SLA_AUTO_ESCALATE_MINUTES
+          ? ({ confirm: true as const, slaBreachMinutes } as const)
+          : undefined;
+
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-smart`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          force,
+          slaBreachMinutes: slaBreachMinutes ?? undefined,
+          cleanerIds: toTry.map((c) => c.id),
+          maxAttempts: MAX_SMART_ATTEMPTS,
+          autoEscalateExtremeSla,
+        }),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        cleanerId?: string;
+        attempts?: number;
+        escalated?: boolean;
+        warnings?: AdminWarning[];
+      };
       setProgressNote(null);
-      setBusy(false);
-      return;
-    }
-
-    const autoEscalateExtremeSla =
-      extremeSlaEscalateConfirm &&
-      slaBreachMinutes != null &&
-      slaBreachMinutes > EXTREME_SLA_AUTO_ESCALATE_MINUTES
-        ? ({ confirm: true as const, slaBreachMinutes } as const)
-        : undefined;
-
-    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-smart`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        force,
-        slaBreachMinutes: slaBreachMinutes ?? undefined,
-        cleanerIds: toTry.map((c) => c.id),
-        maxAttempts: MAX_SMART_ATTEMPTS,
-        autoEscalateExtremeSla,
-      }),
-    });
-    const j = (await res.json()) as {
-      ok?: boolean;
-      error?: string;
-      cleanerId?: string;
-      attempts?: number;
-      escalated?: boolean;
-      warnings?: AdminWarning[];
-    };
-    setProgressNote(null);
-    if (res.ok && j.ok) {
-      clearAssignFailuresForBooking(bookingId);
-      if (j.cleanerId) setCleanerId(j.cleanerId);
+      if (res.ok && j.ok) {
+        clearAssignFailuresForBooking(bookingId);
+        if (j.cleanerId) setCleanerId(j.cleanerId);
+        setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
+        onDone({ cleanerId: j.cleanerId ?? "", assignAttempts: j.attempts });
+        return;
+      }
+      const err = j.error ?? "Smart assign failed.";
       setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
+      setMsg(j.escalated ? `${err} · Escalation was notified (extreme SLA).` : err);
+      onError(err);
+      if (!j.escalated) void Promise.resolve(onCascadeExhausted?.()).catch(() => {});
+    } catch {
+      setProgressNote(null);
+      const err = "Network error — smart assign could not reach the server.";
+      setMsg(err);
+      onError(err);
+    } finally {
       setBusy(false);
-      onDone({ cleanerId: j.cleanerId ?? "", assignAttempts: j.attempts });
-      return;
     }
-    const err = j.error ?? "Smart assign failed.";
-    setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
-    setMsg(
-      j.escalated ? `${err} · Escalation was notified (extreme SLA).` : err,
-    );
-    onError(err);
-    if (!j.escalated) void Promise.resolve(onCascadeExhausted?.()).catch(() => {});
-    setBusy(false);
   }
 
   function optionSuffix(c: CleanerOption): string {

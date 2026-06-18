@@ -28,7 +28,7 @@ function BlogHighConversionCtaBlock({
       <h3 className="text-lg font-semibold text-zinc-900">{heading}</h3>
       <p className="mt-2 text-zinc-600">{subtext}</p>
       <GrowthCtaLink
-        href="/booking/details"
+        href="/book"
         source={source}
         blogAnalyticsPlacement={blogPlacement}
         className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"

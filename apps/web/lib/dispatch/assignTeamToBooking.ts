@@ -863,3 +863,61 @@ export async function assignTeamToBooking(
   }
   return { ok: false, error: "no_candidate", message: "Team capacity exceeded" };
 }
+
+/**
+ * Assign a customer-selected team (Booking V2 `assigned_team_id`) without running the
+ * marketplace team picker. Reuses the same finalize path as auto team dispatch.
+ */
+export async function assignSpecificTeamToPendingBooking(
+  supabase: SupabaseClient,
+  params: {
+    bookingId: string;
+    teamId: string;
+    dateYmd: string;
+    serviceType: "deep_cleaning" | "move_cleaning";
+  },
+): Promise<TeamAssignResult> {
+  const teamId = String(params.teamId ?? "").trim();
+  const dateYmd = String(params.dateYmd ?? "").trim().slice(0, 10);
+  if (!teamId || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
+    return { ok: false, error: "db_error", message: "Invalid team or booking date." };
+  }
+
+  const { data: teamRow, error: teamErr } = await supabase
+    .from("teams")
+    .select("id, capacity_per_day")
+    .eq("id", teamId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (teamErr) return { ok: false, error: "db_error", message: teamErr.message };
+  if (!teamRow) return { ok: false, error: "no_candidate", message: "Team not found or inactive." };
+
+  const { data: rosterRows, error: rosterErr } = await supabase
+    .from("team_members")
+    .select("cleaner_id, active_from, active_to")
+    .eq("team_id", teamId)
+    .not("cleaner_id", "is", null);
+  if (rosterErr) return { ok: false, error: "db_error", message: rosterErr.message };
+
+  const rosterSnapshot = countActiveTeamMembersOnDate(rosterRows ?? [], dateYmd);
+  if (rosterSnapshot <= 0) {
+    return { ok: false, error: "no_candidate", message: "No active team members" };
+  }
+
+  const candidate: TeamCandidate = {
+    id: String((teamRow as { id: string }).id),
+    capacity_per_day: Number((teamRow as { capacity_per_day?: number | null }).capacity_per_day ?? 1) || 1,
+    rosterSnapshot,
+    assignedJobsToday: 0,
+    slotLoadForCapacity: 0,
+    loadScore: 0,
+  };
+
+  return finalizeBookingTeamAssignment(
+    supabase,
+    params.bookingId,
+    dateYmd,
+    candidate,
+    params.serviceType,
+  );
+}

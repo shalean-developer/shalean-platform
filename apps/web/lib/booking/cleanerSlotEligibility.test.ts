@@ -15,8 +15,13 @@ describe("cleanerAccountEligibleForCustomerBooking", () => {
     );
   });
 
-  it("rejects busy and offline", () => {
-    expect(cleanerAccountEligibleForCustomerBooking({ is_active: true, is_available: true, status: "busy" })).toBe(false);
+  it("allows busy workload status when manual availability is on (overlap checks handle conflicts)", () => {
+    expect(cleanerAccountEligibleForCustomerBooking({ is_active: true, is_available: true, status: "busy" })).toBe(
+      true,
+    );
+  });
+
+  it("rejects offline lifecycle status", () => {
     expect(cleanerAccountEligibleForCustomerBooking({ is_active: true, is_available: true, status: "offline" })).toBe(
       false,
     );

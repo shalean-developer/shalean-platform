@@ -6,7 +6,7 @@
  * - `BOOKING_SERVICE_FEE_CENTS` / `NEXT_PUBLIC_BOOKING_SERVICE_FEE_CENTS` override flat default (3000 = R30)
  */
 
-export type BookingServiceFeeRule = "flat" | "percent_floor" | "optimized";
+export type BookingServiceFeeRule = "flat" | "percent_floor" | "optimized" | "none" | "percent";
 
 function parseEnvCents(v: string | undefined): number | null {
   if (v == null || !String(v).trim()) return null;
@@ -22,6 +22,8 @@ export function resolveBookingServiceFeeRule(): BookingServiceFeeRule {
   )
     .trim()
     .toLowerCase();
+  if (raw === "none" || raw === "disabled" || raw === "off") return "none";
+  if (raw === "percent") return "percent";
   if (raw === "percent_floor") return "percent_floor";
   if (raw === "optimized") return "optimized";
   return "flat";
@@ -44,6 +46,10 @@ export const DEFAULT_BOOKING_SERVICE_FEE_CENTS = 3000;
 export function computeServiceFeeCentsFromBaseZar(baseZar: number): number {
   const baseCents = Math.max(0, Math.round(baseZar * 100));
   const rule = resolveBookingServiceFeeRule();
+  if (rule === "none") return 0;
+  if (rule === "percent") {
+    return Math.round(baseCents * 0.05);
+  }
   if (rule === "optimized") {
     return computeOptimizedServiceFeeCentsFromBaseZar(baseZar);
   }

@@ -40,10 +40,10 @@ export function AccountRouteLayout({ children }: { children: ReactNode }) {
                   </>
                 ) : (
                   <>
-                    <Link href="/login?role=customer&redirect=/dashboard/bookings" className="text-zinc-700 dark:text-zinc-300">
+                    <Link href="/login?role=customer&redirect=/account/bookings" className="text-zinc-700 dark:text-zinc-300">
                       Login
                     </Link>
-                    <Link href="/auth/signup?redirect=/dashboard/bookings" className="text-blue-700 dark:text-blue-400">
+                    <Link href="/auth/signup?redirect=/account/bookings" className="text-blue-700 dark:text-blue-400">
                       Signup
                     </Link>
                   </>

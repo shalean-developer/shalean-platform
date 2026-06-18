@@ -39,9 +39,18 @@ type BookingRow = {
   cleaner_id?: string | null;
   payout_owner_cleaner_id?: string | null;
   is_team_job?: boolean | null;
+  team_id?: string | null;
   billing_type?: string | null;
   is_monthly_billing_booking?: boolean | null;
   monthly_invoice_id?: string | null;
+  total_paid_zar?: number | null;
+  total_paid_cents?: number | null;
+  amount_paid_cents?: number | null;
+  payment_needs_follow_up?: boolean | null;
+  payment_status?: string | null;
+  paid_at?: string | null;
+  refunded_at?: string | null;
+  refund_status?: string | null;
 };
 
 /**
@@ -68,6 +77,8 @@ const CLEANER_A = "00000000-0000-4000-8000-000000000a01";
 const CLEANER_B = "00000000-0000-4000-8000-000000000a02";
 const INVOICE_A = "00000000-0000-4000-8000-000000000bb1";
 const BID = "00000000-0000-4000-8000-000000000b01";
+
+const TEAM_ID = "00000000-0000-4000-8000-000000000t01";
 
 const monthlyAssignedRow = (overrides: Partial<BookingRow> = {}): BookingRow => ({
   status: "assigned",
@@ -114,6 +125,7 @@ describe("triggerAssignmentEarningsSnapshotForBooking (M-8)", () => {
           cleaner_id: null,
           payout_owner_cleaner_id: CLEANER_B,
           is_team_job: true,
+          team_id: TEAM_ID,
         }),
       ),
       BID,
@@ -137,6 +149,7 @@ describe("triggerAssignmentEarningsSnapshotForBooking (M-8)", () => {
           is_team_job: true,
           cleaner_id: null,
           payout_owner_cleaner_id: CLEANER_A,
+          team_id: TEAM_ID,
         }),
       ),
       BID,

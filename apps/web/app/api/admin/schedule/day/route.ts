@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -57,10 +58,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: bErr.message }, { status: 500 });
   }
 
-  const { data: cleanerRows, error: cErr } = await admin
+  const cleanerSelectWithRoster = "id, full_name, phone, is_available, status, availability_weekdays";
+  const cleanerSelectBase = "id, full_name, phone, is_available, status";
+  let { data: cleanerRows, error: cErr } = await admin
     .from("cleaners")
-    .select("id, full_name, phone, is_available")
+    .select(cleanerSelectWithRoster)
     .order("full_name", { ascending: true });
+
+  if (cErr && isUnknownColumnError(cErr, "availability_weekdays")) {
+    const fallback = await admin.from("cleaners").select(cleanerSelectBase).order("full_name", { ascending: true });
+    cleanerRows = (fallback.data ?? []).map((row) => ({ ...row, availability_weekdays: null }));
+    cErr = fallback.error;
+  }
 
   if (cErr) {
     return NextResponse.json({ error: cErr.message }, { status: 500 });

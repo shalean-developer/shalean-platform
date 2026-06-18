@@ -173,10 +173,19 @@ export function JobOfferCard({ offer, busy, onAccept, onDecline, onOfferExpired 
         </div>
       ) : null}
 
-      {/* Top row — NEW pill + countdown chip. */}
+      {/* Top row — dispatch label + countdown chip. */}
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-          New
+        <span
+          className={cn(
+            "inline-flex max-w-[70%] items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white",
+            offer.offerType === "preferred" ? "bg-violet-600" : "bg-emerald-600",
+          )}
+        >
+          {offer.offerType === "preferred"
+            ? offer.isUrgentOffer
+              ? "Urgent job offer"
+              : "Preferred customer request"
+            : "New"}
         </span>
         <CountdownTimer
           variant="chip"
@@ -185,6 +194,21 @@ export function JobOfferCard({ offer, busy, onAccept, onDecline, onOfferExpired 
           onExpired={onOfferExpired}
         />
       </div>
+
+      {offer.offerType === "preferred" ? (
+        <p className="mt-2 text-[11px] font-medium leading-snug text-violet-900 dark:text-violet-100">
+          {offer.isUrgentOffer
+            ? "Accept quickly before this offer expires."
+            : `Please accept before ${new Date(offer.acceptDeadlineIso ?? offer.expiresAt).toLocaleString("en-ZA", {
+                timeZone: "Africa/Johannesburg",
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              })}.`}
+        </p>
+      ) : null}
 
       {/* Title. */}
       <h3 className="mt-2 truncate text-base font-bold leading-tight text-foreground">

@@ -12,7 +12,7 @@ export function LocationsIndexStickyCta() {
     >
       <div className="mx-auto flex max-w-lg gap-2">
         <CTAButton
-          href="/booking/details"
+          href="/book"
           variant="primary"
           trackSource="locations_index_sticky_price"
           className="min-h-12 flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700"
@@ -20,7 +20,7 @@ export function LocationsIndexStickyCta() {
           Get exact price
         </CTAButton>
         <CTAButton
-          href="/booking/details"
+          href="/book"
           variant="secondary"
           trackSource="locations_index_sticky_book"
           className="min-h-12 flex-1 rounded-xl border-emerald-200 text-emerald-900"

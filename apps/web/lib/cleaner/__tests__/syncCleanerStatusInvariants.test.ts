@@ -12,7 +12,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
+import { syncCleanerBusyFromBookings, isBookingTerminalForCleanerWorkloadSync } from "@/lib/cleaner/syncCleanerStatus";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -132,5 +132,14 @@ describe("syncCleanerBusyFromBookings — invariants", () => {
         expect(Object.prototype.hasOwnProperty.call(payload, "is_available")).toBe(false);
       }
     }
+  });
+});
+
+describe("isBookingTerminalForCleanerWorkloadSync", () => {
+  it("recognises terminal booking statuses", () => {
+    expect(isBookingTerminalForCleanerWorkloadSync("completed")).toBe(true);
+    expect(isBookingTerminalForCleanerWorkloadSync("cancelled")).toBe(true);
+    expect(isBookingTerminalForCleanerWorkloadSync("failed")).toBe(true);
+    expect(isBookingTerminalForCleanerWorkloadSync("assigned")).toBe(false);
   });
 });

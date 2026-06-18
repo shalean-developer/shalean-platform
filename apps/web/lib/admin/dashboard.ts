@@ -85,11 +85,16 @@ function adminActionError(json: AdminActionErrorJson, fallback: string): AdminDa
 }
 
 async function getAdminToken(): Promise<string> {
-  const sb = getSupabaseBrowser();
-  const session = await sb?.auth.getSession();
-  const token = session?.data.session?.access_token;
-  if (!token) throw new Error("Please sign in as an admin.");
-  return token;
+  try {
+    const sb = getSupabaseBrowser();
+    const session = await sb?.auth.getSession();
+    const token = session?.data.session?.access_token;
+    if (!token) throw new Error("Please sign in as an admin.");
+    return token;
+  } catch (e) {
+    if (e instanceof Error && e.message === "Please sign in as an admin.") throw e;
+    throw new Error("Could not read admin session. Check your connection and try again.");
+  }
 }
 
 export async function fetchBookings(filter: "all" | "today" | "upcoming" | "completed" = "all") {

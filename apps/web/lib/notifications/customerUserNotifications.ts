@@ -5,6 +5,7 @@
  * Future: per-user rate limits / batching if volume grows; optional `idempotency_key` column for multi-step dedupe.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PREFERRED_CLEANER_UNAVAILABLE_URGENT_MESSAGE } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   bookingStartUtcMs,
@@ -115,11 +116,41 @@ export async function notifyCustomerBookingPlaced(
   });
 }
 
+/** After preferred cleaner skipped (booking starts within 2 hours) — backup dispatch runs immediately. */
+export async function notifyCustomerPreferredCleanerSkippedUrgent(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<void> {
+  const { data: row, error } = await admin
+    .from("bookings")
+    .select("user_id, date, time, service")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error || !row || typeof row !== "object") return;
+
+  const userId = String((row as { user_id?: string | null }).user_id ?? "").trim();
+  if (!userId) return;
+
+  const when = formatWhenForCustomerCopy(
+    (row as { date?: string | null }).date ?? null,
+    (row as { time?: string | null }).time ?? null,
+  );
+  const svc = serviceTitleForCopy(String((row as { service?: string | null }).service ?? ""));
+
+  await insertCustomerUserNotification(admin, {
+    userId,
+    type: "system",
+    title: PREFERRED_CLEANER_UNAVAILABLE_URGENT_MESSAGE,
+    body: `We're assigning the best available cleaner for your ${svc} on ${when} to keep your booking on schedule.`,
+    bookingId,
+  });
+}
+
 /** After `cleaner_id` is set and status is assigned (auto-dispatch, offer accept, or admin). */
 export async function notifyCustomerCleanerAssigned(admin: SupabaseClient, bookingId: string): Promise<void> {
   const { data: row, error } = await admin
     .from("bookings")
-    .select("user_id, date, time, service, cleaner_id")
+    .select("user_id, date, time, service, cleaner_id, selected_cleaner_id, preferred_dispatch_status, assignment_type")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !row || typeof row !== "object") return;
@@ -144,11 +175,19 @@ export async function notifyCustomerCleanerAssigned(admin: SupabaseClient, booki
       ? String((c as { full_name?: string | null }).full_name ?? "").trim() || "Your cleaner"
       : "Your cleaner";
 
+  const selectedId = String((row as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim();
+  const preferredStatus = String((row as { preferred_dispatch_status?: string | null }).preferred_dispatch_status ?? "");
+  const isBackupAssignment =
+    preferredStatus === "assigned_to_backup_cleaner" ||
+    (selectedId && selectedId !== cleanerId && String((row as { assignment_type?: string | null }).assignment_type ?? "") === "user_selected");
+
   await insertCustomerUserNotification(admin, {
     userId: userId,
     type: "assigned",
-    title: `${name} is your cleaner`,
-    body: `You’re all set for ${svc} on ${when}. You can open this booking anytime for details.`,
+    title: isBackupAssignment ? `${name} is assigned to your booking` : `${name} is your cleaner`,
+    body: isBackupAssignment
+      ? `Your preferred cleaner wasn't available in time. ${name} will cover ${svc} on ${when}.`
+      : `You’re all set for ${svc} on ${when}. You can open this booking anytime for details.`,
     bookingId,
   });
 }

@@ -1,66 +1,120 @@
 /**
- * **Responsibility:** Paystack **transfer** webhooks (`transfer.success` / `transfer.failed`) for payout rails — **not** checkout `charge.success` finalization.
- * Checkout charges are handled by `/api/paystack/webhook`. `lib/booking/paystackRouteResponsibilityContract.ts`
+ * Paystack **transfer** webhooks (cleaner payout rail) — not checkout finalization.
+ * Checkout `charge.success` / `charge.failed` → `POST /api/paystack/webhook` only.
+ * See `lib/booking/paystackRouteResponsibilityContract.ts`.
  */
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { logSystemEvent } from "@/lib/logging/systemLog";
-import {
-  applyTransferFailed,
-  applyTransferSuccess,
-  type PaystackStatusPayload,
-} from "@/lib/payout/paystackTransferStatus";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { logSystemEvent } from "@/lib/logging/systemLog";
+import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
-function hasValidSignature(body: string, signature: string | null, secret: string): boolean {
-  if (!signature) return false;
-
-  const expected = crypto.createHmac("sha512", secret).update(body).digest("hex");
-  const expectedBuffer = Buffer.from(expected, "hex");
-  const signatureBuffer = Buffer.from(signature, "hex");
-
-  return expectedBuffer.length === signatureBuffer.length && crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+function verifyPaystackSignature(rawBody: string, signature: string): boolean {
+  const secret = process.env.PAYSTACK_SECRET_KEY ?? "";
+  if (!secret) {
+    console.warn("[webhooks/paystack] PAYSTACK_SECRET_KEY not set — skipping signature verification");
+    return process.env.NODE_ENV !== "production";
+  }
+  const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
+  return hash === signature;
 }
 
+type PaystackWebhookEvent = {
+  event: string;
+  data?: {
+    reference?: string;
+    transfer_code?: string;
+    reason?: string;
+    [key: string]: unknown;
+  };
+};
+
 export async function POST(request: Request) {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!secret) return NextResponse.json({ error: "PAYSTACK_SECRET_KEY is not configured." }, { status: 503 });
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-paystack-signature") ?? "";
 
-  const body = await request.text();
-  const signature = request.headers.get("x-paystack-signature");
-  if (!hasValidSignature(body, signature, secret)) {
-    return new Response("Invalid signature", { status: 401 });
+  if (!verifyPaystackSignature(rawBody, signature)) {
+    console.warn("[webhooks/paystack] Invalid signature — rejecting");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-
-  let event: PaystackStatusPayload;
+  let event: PaystackWebhookEvent;
   try {
-    event = JSON.parse(body) as PaystackStatusPayload;
+    event = JSON.parse(rawBody) as PaystackWebhookEvent;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  try {
-    let result: Record<string, unknown> = { ignored: "unsupported event" };
-    if (event.event === "transfer.success") {
-      result = await applyTransferSuccess(supabase, event.data ?? {}, event);
-    } else if (event.event === "transfer.failed") {
-      result = await applyTransferFailed(supabase, event.data ?? {}, event);
-    }
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+  }
 
-    return NextResponse.json({ ok: true, event: event.event, ...result });
-  } catch (error) {
-    await logSystemEvent({
-      level: "error",
-      source: "PAYSTACK_WEBHOOK_ERROR",
-      message: error instanceof Error ? error.message : "Paystack webhook failed",
-      context: { event: event.event },
+  const eventName = String(event.event ?? "").trim();
+
+  if (eventName === "charge.success" || eventName === "charge.failed") {
+    void logSystemEvent({
+      level: "warn",
+      source: "webhooks_paystack",
+      message: "charge_event_ignored_use_canonical_webhook",
+      context: {
+        event: eventName,
+        reference: String(event.data?.reference ?? "").trim() || null,
+        hint: "Configure Paystack to POST charge events to /api/paystack/webhook",
+      },
     });
-    return NextResponse.json({ error: "Webhook processing failed." }, { status: 500 });
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      message: "Charge events are handled by /api/paystack/webhook",
+    });
   }
+
+  if (eventName === "transfer.success") {
+    try {
+      const result = await applyTransferSuccess(admin, event.data ?? {}, event);
+      void logSystemEvent({
+        level: "info",
+        source: "webhooks_paystack",
+        message: "transfer_success_processed",
+        context: { transfer_code: event.data?.transfer_code ?? null, result },
+      });
+      return NextResponse.json({ ok: true, result });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      void logSystemEvent({
+        level: "error",
+        source: "webhooks_paystack",
+        message: "transfer_success_failed",
+        context: { transfer_code: event.data?.transfer_code ?? null, error: msg },
+      });
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+  }
+
+  if (eventName === "transfer.failed") {
+    try {
+      const result = await applyTransferFailed(admin, event.data ?? {}, event);
+      void logSystemEvent({
+        level: "warn",
+        source: "webhooks_paystack",
+        message: "transfer_failed_processed",
+        context: { transfer_code: event.data?.transfer_code ?? null, result },
+      });
+      return NextResponse.json({ ok: true, result });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      void logSystemEvent({
+        level: "error",
+        source: "webhooks_paystack",
+        message: "transfer_failed_handler_error",
+        context: { transfer_code: event.data?.transfer_code ?? null, error: msg },
+      });
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ ok: true, message: `Event ${eventName || "unknown"} acknowledged` });
 }

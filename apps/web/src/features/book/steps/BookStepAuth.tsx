@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AlertCircle, CheckCircle2, Mail, Phone, User } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { signIn, signUp } from "@/lib/auth/authClient";
@@ -109,84 +110,88 @@ export function BookStepAuth({ onAuthenticated }: BookStepAuthProps) {
         >
           Sign in to continue
         </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
           Bookings require an account. Sign in or create one to review and confirm.
         </p>
       </div>
 
+      {/* Tab toggle — blue active style consistent with booking-v2 */}
       <div className="flex rounded-xl border border-zinc-200 p-1 dark:border-zinc-700">
-        <button
-          type="button"
-          className={cn(
-            "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition",
-            mode === "login"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-              : "text-zinc-600 dark:text-zinc-400",
-          )}
-          onClick={() => {
-            setMode("login");
-            setError(null);
-            setInfo(null);
-          }}
-        >
-          Log in
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition",
-            mode === "signup"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-              : "text-zinc-600 dark:text-zinc-400",
-          )}
-          onClick={() => {
-            setMode("signup");
-            setError(null);
-            setInfo(null);
-          }}
-        >
-          Sign up
-        </button>
+        {(["login", "signup"] as AuthMode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={cn(
+              "flex-1 rounded-lg py-2 text-sm font-semibold transition",
+              mode === m
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200",
+            )}
+            onClick={() => {
+              setMode(m);
+              setError(null);
+              setInfo(null);
+            }}
+          >
+            {m === "login" ? "Log in" : "Sign up"}
+          </button>
+        ))}
       </div>
 
       {mode === "login" ? (
         <form onSubmit={(e) => void handleLogin(e)} className="space-y-4">
           <div>
             <label htmlFor="book-login-email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Email
+              Email address
             </label>
-            <input
-              id="book-login-email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-950"
-            />
+            <div className="relative mt-1.5">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="book-login-email"
+                type="email"
+                autoComplete="email"
+                required
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm outline-none placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </div>
           </div>
           <div>
-            <label htmlFor="book-login-password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="book-login-password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Password
+              </label>
+              <a
+                href="/auth/forgot-password"
+                className="text-xs font-medium text-primary hover:underline"
+                tabIndex={-1}
+              >
+                Forgot password?
+              </a>
+            </div>
             <PasswordInput
               id="book-login-password"
               autoComplete="current-password"
               required
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              wrapperClassName="mt-1"
+              wrapperClassName="mt-1.5"
             />
           </div>
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/50 dark:text-red-200" role="alert">
+            <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300" role="alert">
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
               {error}
-            </p>
+            </div>
           ) : null}
           {info ? (
-            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
               {info}
-            </p>
+            </div>
           ) : null}
           <Button type="submit" size="lg" disabled={busy} className="h-12 w-full rounded-2xl">
             {busy ? "Signing in…" : "Log in and continue"}
@@ -198,43 +203,55 @@ export function BookStepAuth({ onAuthenticated }: BookStepAuthProps) {
             <label htmlFor="book-signup-name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Full name
             </label>
-            <input
-              id="book-signup-name"
-              type="text"
-              autoComplete="name"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-950"
-            />
+            <div className="relative mt-1.5">
+              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="book-signup-name"
+                type="text"
+                autoComplete="name"
+                required
+                placeholder="Jane Doe"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm outline-none placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </div>
           </div>
           <div>
             <label htmlFor="book-signup-phone" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Cell number
             </label>
-            <input
-              id="book-signup-phone"
-              type="tel"
-              autoComplete="tel"
-              required
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-950"
-            />
+            <div className="relative mt-1.5">
+              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="book-signup-phone"
+                type="tel"
+                autoComplete="tel"
+                required
+                placeholder="0821234567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm outline-none placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </div>
           </div>
           <div>
             <label htmlFor="book-signup-email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Email
+              Email address
             </label>
-            <input
-              id="book-signup-email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-950"
-            />
+            <div className="relative mt-1.5">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="book-signup-email"
+                type="email"
+                autoComplete="email"
+                required
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm outline-none placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </div>
           </div>
           <div>
             <label htmlFor="book-signup-password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -245,20 +262,23 @@ export function BookStepAuth({ onAuthenticated }: BookStepAuthProps) {
               autoComplete="new-password"
               required
               minLength={6}
+              placeholder="Min. 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              wrapperClassName="mt-1"
+              wrapperClassName="mt-1.5"
             />
           </div>
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/50 dark:text-red-200" role="alert">
+            <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300" role="alert">
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
               {error}
-            </p>
+            </div>
           ) : null}
           {info ? (
-            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
               {info}
-            </p>
+            </div>
           ) : null}
           <Button type="submit" size="lg" disabled={busy} className="h-12 w-full rounded-2xl">
             {busy ? "Creating account…" : "Create account and continue"}

@@ -1,5 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { clearAuthIntent } from "@/lib/auth/authRoleIntent";
+import { clearCachedUserRole } from "@/lib/auth/userRole";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 
@@ -38,6 +39,7 @@ export async function signIn(email: string, password: string) {
       const { error: insErr } = await sb.from("user_profiles").insert({
         id: u.id,
         tier: "regular",
+        role: "customer",
         booking_count: 0,
         total_spent_cents: 0,
         updated_at: new Date().toISOString(),
@@ -75,6 +77,7 @@ export async function signUp(email: string, password: string, fullName: string, 
       {
         id: user.id,
         tier: "regular",
+        role: "customer",
         booking_count: 0,
         total_spent_cents: 0,
         updated_at: new Date().toISOString(),
@@ -97,6 +100,7 @@ export async function signOut(): Promise<{ error: Error | null }> {
   const sb = getSupabaseBrowser();
   if (!sb) return { error: new Error("Supabase is not configured.") };
   clearAuthIntent();
+  clearCachedUserRole();
   const { error } = await sb.auth.signOut();
   return { error: error ? new Error(error.message) : null };
 }

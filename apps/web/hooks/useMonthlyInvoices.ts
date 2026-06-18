@@ -23,6 +23,7 @@ const SELECT = [
   "currency_code",
   "created_at",
   "updated_at",
+  "zoho_invoice_id",
 ].join(",");
 
 export function useMonthlyInvoices(): {

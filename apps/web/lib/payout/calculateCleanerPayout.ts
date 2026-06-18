@@ -44,6 +44,16 @@ export function resolveTotalPaidCents(totalPaidZar: number | null | undefined, a
   return 0;
 }
 
+function payoutBaseCentsFromPriceSnapshot(snapshot: unknown): number | null {
+  if (snapshot == null || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  const o = snapshot as { base_price?: unknown; total_price?: unknown };
+  const base = Number(o.base_price);
+  if (Number.isFinite(base) && base > 0) return Math.max(0, Math.floor(base));
+  const total = Number(o.total_price);
+  if (Number.isFinite(total) && total > 0) return Math.max(0, Math.floor(total));
+  return null;
+}
+
 /**
  * Resolve payout base (cleaner share pool) and platform fee from stored booking columns.
  * Legacy rows: `base_amount_cents` null → entire amount paid is the payout base; fee treated as 0 for split.
@@ -53,9 +63,11 @@ export function resolvePayoutBaseAndServiceFeeCents(params: {
   serviceFeeCents: number | null | undefined;
   totalPaidZar: number | null | undefined;
   amountPaidCents: number | null | undefined;
+  /** Booking-v2 `price_snapshot` fallback when quoted columns exist but paid totals are not yet written. */
+  priceSnapshot?: unknown;
 }): { payoutBaseCents: number; serviceFeeCents: number } {
   const totalCents = resolveTotalPaidCents(params.totalPaidZar, params.amountPaidCents);
-  const baseStored =
+  let baseStored =
     params.baseAmountCents != null && Number.isFinite(Number(params.baseAmountCents))
       ? Math.max(0, Math.floor(Number(params.baseAmountCents)))
       : null;
@@ -64,11 +76,24 @@ export function resolvePayoutBaseAndServiceFeeCents(params: {
       ? Math.max(0, Math.floor(Number(params.serviceFeeCents)))
       : 0;
 
+  if ((baseStored == null || baseStored <= 0) && params.priceSnapshot != null) {
+    const fromSnap = payoutBaseCentsFromPriceSnapshot(params.priceSnapshot);
+    if (fromSnap != null && fromSnap > 0) baseStored = fromSnap;
+  }
+
   if (baseStored == null || baseStored <= 0) {
     return { payoutBaseCents: totalCents, serviceFeeCents: 0 };
   }
 
   if (baseStored + feeStored > totalCents + 5) {
+    /**
+     * Quoted subtotal + fee exceeds recorded customer total. When nothing is paid yet
+     * (`totalCents === 0`) we still use the quoted base so assigned cleaners see a
+     * real job earning instead of R0 / "unavailable".
+     */
+    if (totalCents <= 0) {
+      return { payoutBaseCents: baseStored, serviceFeeCents: feeStored };
+    }
     return { payoutBaseCents: totalCents, serviceFeeCents: 0 };
   }
 

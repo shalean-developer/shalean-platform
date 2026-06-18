@@ -44,6 +44,12 @@ export type CleanerJobOffer = {
   offerCreatedAtIso?: string;
   /** When dispatch SMS was recorded; absence + fresh row → subtle “SMS may have failed” hint. */
   smsSentAt?: string | null;
+  /** preferred | backup — drives dispatch copy on the offer card. */
+  offerType?: "preferred" | "backup" | null;
+  /** Short-window same-day / urgent offer. */
+  isUrgentOffer?: boolean;
+  /** ISO deadline for preferred-cleaner accept copy. */
+  acceptDeadlineIso?: string;
 };
 
 export type CleanerUpcomingJob = {

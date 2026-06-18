@@ -41,6 +41,7 @@ export type OfferEarningsBookingInput = {
   total_paid_zar?: number | null;
   total_paid_cents?: number | null;
   amount_paid_cents?: number | null;
+  price_snapshot?: unknown;
   /** Roster size at appointment for team jobs; falls back to 1 inside the canonical engine. */
   team_member_count_snapshot?: number | null;
 };
@@ -132,6 +133,7 @@ export function computeCleanerOfferEarningsSnapshot(params: {
     serviceFeeCents: booking.service_fee_cents,
     totalPaidZar: booking.total_paid_zar,
     amountPaidCents: booking.total_paid_cents ?? booking.amount_paid_cents,
+    priceSnapshot: booking.price_snapshot,
   });
 
   const appointmentIso = bookingAppointmentIsoUtc(booking.date ?? null, booking.time ?? null);

@@ -31,7 +31,7 @@ const NEARBY_HUB_LINKS = (
 /**
  * Location-intent blocks for `/locations/sea-point-cleaning-services` — mirrors money-page depth (trust, snippet pricing, links).
  */
-export function SeaPointLocationEnhancements({ ctx, quoteHref = "/booking/details" }: Props) {
+export function SeaPointLocationEnhancements({ ctx, quoteHref = "/book" }: Props) {
   const lc = `${linkEmphasisClassName} font-semibold`;
 
   return (

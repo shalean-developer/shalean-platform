@@ -24,13 +24,36 @@ export type BookingRow = {
   user_id?: string | null;
   customer_email?: string | null;
   service: string | null;
+  /** Booking-v2 slug (`regular-cleaning`, etc.) when `service` label was not denormalized. */
+  service_slug?: string | null;
   date: string | null;
   time: string | null;
   rooms?: number | null;
   bathrooms?: number | null;
   /** Persisted add-on line items `{ slug, name, price }[]` from checkout. */
   extras?: unknown;
+  /** Booking-v2 dynamic form answers (bedrooms, propertyType, etc.). */
+  service_details?: Record<string, unknown> | null;
+  /** Booking-v2 selected extra ids (`inside_fridge`, etc.). */
+  selected_extras?: string[] | null;
+  /** Booking-v2 checkout line items persisted at confirm. */
+  pricing_summary?: {
+    total?: number;
+    basePrice?: number;
+    extrasTotal?: number;
+    cleanerSurcharge?: number;
+    lineItems?: Array<{ label: string; amountZar: number }>;
+  } | null;
+  access_instructions?: string | null;
+  parking_instructions?: string | null;
+  gate_code?: string | null;
+  cleaner_mode?: string | null;
+  cleaner_count?: number | null;
+  booking_type?: string | null;
+  postal_code?: string | null;
   location: string | null;
+  /** Street suburb — separate column written by booking-v2 confirm; used by mapBookingRow to avoid comma-splitting `location`. */
+  suburb?: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   currency: string | null;
@@ -40,6 +63,7 @@ export type BookingRow = {
   fallback_reason?: string | null;
   payment_needs_follow_up?: boolean | null;
   selected_cleaner_id?: string | null;
+  preferred_dispatch_status?: string | null;
   cleaner_response_status?: string | null;
   /** Monthly billing sub-state when set (e.g. `pending_monthly`). */
   payment_status?: string | null;
@@ -47,9 +71,18 @@ export type BookingRow = {
   is_monthly_billing_booking?: boolean | null;
   /** Nested from `monthly_invoices(status,is_closed)` when selected. */
   monthly_invoices?: { status: string; is_closed?: boolean } | null;
+  /** Zoho Books invoice id (set on payment); presence means an invoice PDF is available. */
+  zoho_invoice_id?: string | null;
   booking_snapshot: BookingSnapshotV1 | null | unknown;
   created_at: string;
+  /** Customer reference (`SHL-BK-…`); assigned by DB trigger on insert. */
+  booking_reference?: string | null;
   paystack_reference: string;
+  /**
+   * Server-enriched display name for assigned or preferred cleaner when the
+   * `cleaners` embed is omitted from {@link CUSTOMER_BOOKING_SELECT}.
+   */
+  display_cleaner_name?: string | null;
   cleaner_id?: string | null;
   /** Team-lead cleaner UUID; carries the assignee for team jobs where `cleaner_id` is cleared. */
   payout_owner_cleaner_id?: string | null;
@@ -139,6 +172,12 @@ export type DashboardBooking = {
   durationHours: number;
   rooms: string[];
   extras: string[];
+  /** Non-room answers from booking-v2 `service_details`. */
+  cleanDetails: Array<{ label: string; value: string }>;
+  /** Access / gate / parking captured at booking. */
+  accessNotes: Array<{ label: string; value: string }>;
+  /** False when schedule columns were cleared — do not infer from `created_at`. */
+  scheduleConfirmed: boolean;
   priceLines: StoredPriceLine[];
   cleaner: { name: string; initials: string; phone?: string } | null;
   paystackReference: string;

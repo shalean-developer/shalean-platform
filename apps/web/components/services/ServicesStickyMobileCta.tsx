@@ -12,7 +12,7 @@ export function ServicesStickyMobileCta() {
     >
       <div className="mx-auto flex max-w-[1100px] gap-2 px-1">
         <CTAButton
-          href="/booking/details"
+          href="/book"
           variant="primary"
           trackSource="services_hub_sticky_book"
           seoHubCta={{ cta_location: "sticky_bar", cta_label: "Book now", cta_kind: "book_now" }}
@@ -21,7 +21,7 @@ export function ServicesStickyMobileCta() {
           Book now
         </CTAButton>
         <CTAButton
-          href="/booking/details"
+          href="/book"
           variant="secondary"
           trackSource="services_hub_sticky_price"
           seoHubCta={{ cta_location: "sticky_bar", cta_label: "Get price", cta_kind: "get_price" }}

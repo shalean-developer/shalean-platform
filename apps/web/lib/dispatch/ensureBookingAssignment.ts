@@ -36,7 +36,8 @@ export type EnsureAssignmentSource =
    * fallback because the customer-selected `dispatch_offers` insert failed.
    * See `lib/booking/checkoutDispatchOfferFailureFallback.ts`.
    */
-  | "paystack_checkout_offer_failure_fallback";
+  | "paystack_checkout_offer_failure_fallback"
+  | "preferred_skipped_urgent";
 
 export type EnsureBookingAssignmentOptions = AssignCleanerOptions & {
   source: EnsureAssignmentSource;

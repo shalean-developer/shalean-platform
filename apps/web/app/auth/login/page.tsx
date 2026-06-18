@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import BookingContainer from "@/components/layout/BookingContainer";
+import { AlertCircle, Mail } from "lucide-react";
+import { AuthBackLink, AuthCard } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getResolvedAuthIntent, parseIntentQuery } from "@/lib/auth/authRoleIntent";
-import { resolveCustomerPostAuthDestination } from "@/lib/auth/resolveCustomerPostAuthDestination";
+import { resolvePostAuthDestination } from "@/lib/auth/resolvePostAuthDestination";
 import { signIn } from "@/lib/auth/authClient";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect")?.trim() || "/dashboard/bookings";
+  const redirect = searchParams.get("redirect")?.trim() || "/account";
   const intentParam = searchParams.get("intent");
 
   const [email, setEmail] = useState("");
@@ -25,8 +26,7 @@ function LoginForm() {
   }, [intentParam]);
 
   useEffect(() => {
-    const first = document.querySelector<HTMLInputElement>('input[type="email"]');
-    first?.focus();
+    document.querySelector<HTMLInputElement>('input[type="email"]')?.focus();
   }, []);
 
   const intentForSignup = parseIntentQuery(intentParam) ?? "customer";
@@ -45,8 +45,16 @@ function LoginForm() {
         setError("No session returned. Try again.");
         return;
       }
-      const next = await resolveCustomerPostAuthDestination(session.access_token, redirect, intentParam);
-      router.replace(next);
+      const result = await resolvePostAuthDestination(session.access_token, redirect);
+      if (result.kind === "timeout") {
+        setError("Could not verify your account role in time. Check your connection and try again.");
+        return;
+      }
+      if (result.kind === "error") {
+        setError(result.message);
+        return;
+      }
+      router.replace(result.path);
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -54,34 +62,42 @@ function LoginForm() {
   }
 
   return (
-    <BookingContainer className="py-12 sm:py-16">
-      <div className="mx-auto max-w-md">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Log in</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Welcome back to Shalean Cleaning.</p>
+    <>
+      <AuthCard>
+        <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Welcome back</h1>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Sign in to your Shalean account.</p>
 
-        {/* suppressHydrationWarning: extensions (e.g. password managers) inject attrs like fdprocessedid before hydrate */}
-        <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4" suppressHydrationWarning>
+        <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4" suppressHydrationWarning>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Email
+              Email address
             </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
-              placeholder="you@example.com"
-              suppressHydrationWarning
-            />
+            <div className="relative mt-1.5">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                placeholder="you@example.com"
+                suppressHydrationWarning
+              />
+            </div>
           </div>
+
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Password
+              </label>
+              <Link href="/auth/forgot-password" className="text-xs font-medium text-primary hover:underline" tabIndex={-1}>
+                Forgot password?
+              </Link>
+            </div>
             <PasswordInput
               id="password"
               name="password"
@@ -89,59 +105,57 @@ function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              wrapperClassName="mt-1"
+              wrapperClassName="mt-1.5"
               suppressHydrationWarning
             />
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/50 dark:text-red-200" role="alert">
+            <div
+              className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300"
+              role="alert"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
               {error}
-            </p>
+            </div>
           ) : null}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
+            className="mt-2 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 disabled:opacity-60"
             suppressHydrationWarning
           >
-            {submitting ? "Signing in…" : "Login"}
+            {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
           No account?{" "}
           <Link
             href={`/auth/signup?redirect=${encodeURIComponent(redirect)}&intent=${encodeURIComponent(intentForSignup)}`}
             className="font-semibold text-primary hover:underline"
           >
-            Create account
+            Create one
           </Link>
         </p>
+      </AuthCard>
 
-        <p className="mt-4 text-center">
-          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-            ← Home
-          </Link>
-        </p>
-      </div>
-    </BookingContainer>
+      <AuthBackLink href={`/auth?redirect=${encodeURIComponent(redirect)}`}>← Back to account selection</AuthBackLink>
+    </>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      <Suspense
-        fallback={
-          <BookingContainer className="py-16">
-            <p className="text-center text-sm text-zinc-500">Loading…</p>
-          </BookingContainer>
-        }
-      >
-        <LoginForm />
-      </Suspense>
-    </div>
+    <Suspense
+      fallback={
+        <AuthCard>
+          <p className="text-center text-sm text-zinc-500">Loading…</p>
+        </AuthCard>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

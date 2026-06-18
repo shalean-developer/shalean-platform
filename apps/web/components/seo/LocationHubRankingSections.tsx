@@ -100,7 +100,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
           </div>
           <p className="mt-8 text-center">
             <SeoHubGrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source={`seo_loc_${slug}_choose_compare`}
               ctx={analyticsCtx}
               ctaLocation="compare_section"
@@ -332,7 +332,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
           </details>
           <div className="mt-6 flex flex-col items-stretch gap-3 sm:items-center">
             <SeoHubGrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source={`seo_loc_${slug}_pricing_quote_teaser`}
               ctx={analyticsCtx}
               ctaLocation="pricing"
@@ -344,7 +344,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
               Get exact quote →
             </SeoHubGrowthCtaLink>
             <SeoHubGrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source={`seo_loc_${slug}_pricing_quote_secondary`}
               ctx={analyticsCtx}
               ctaLocation="pricing"
@@ -365,7 +365,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
               </Link>{" "}
               ·{" "}
               <SeoHubGrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source={`seo_loc_${slug}_pricing_deep`}
                 ctx={analyticsCtx}
                 ctaLocation="pricing"
@@ -380,7 +380,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
           </div>
           <p className="mt-6 text-center">
             <SeoHubGrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source={`seo_loc_${slug}_pricing_see_exact`}
               ctx={analyticsCtx}
               ctaLocation="pricing"
@@ -437,7 +437,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
           </ul>
           <div className="mt-8 flex flex-wrap gap-3">
             <SeoHubGrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source={`seo_loc_${slug}_risk_cta`}
               ctx={analyticsCtx}
               ctaLocation="risk_section"

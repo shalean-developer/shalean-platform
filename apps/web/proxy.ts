@@ -104,7 +104,7 @@ async function runProxy(request: NextRequest) {
     res.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);
   } else {
     const pathNorm = pathname.replace(/\/+$/, "") || "/";
-    if (pathNorm === "/booking/success" || pathNorm === "/payment/success") {
+    if (pathNorm === "/account/success" || pathNorm === "/booking/success" || pathNorm === "/payment/success") {
       res.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);
     }
   }

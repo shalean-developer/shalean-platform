@@ -420,7 +420,12 @@ describe("M-15: source-level contract — review hooks/route surface the cleaner
     expect(customerLoaderSrc).not.toMatch(/from\(["']team_members["']\)/);
     expect(customerLoaderSrc).toMatch(/from\("cleaners"\)/);
     expect(customerLoaderSrc).toMatch(/\.select\("id, full_name"\)/);
-    expect(customerLoaderSrc).toMatch(/\.in\("id",\s*leadIds\)/);
+    expect(customerLoaderSrc).toMatch(/\.in\("id",\s*allIds\)/);
+  });
+
+  it("customer-bookings loader uses extractCustomerDisplayCleanerIds for preferred/assigned cleaners", () => {
+    expect(customerLoaderSrc).toMatch(/extractCustomerDisplayCleanerIds/);
+    expect(customerLoaderSrc).toMatch(/applyCustomerDisplayCleanerNamesToRows/);
   });
 
   it("customer-bookings loader uses extractTeamLeadCleanerIdsForEnrichment so lead-id source can't drift", () => {

@@ -144,6 +144,7 @@ export async function performAdminAssignToCleaner(
       limit: 5,
       serviceType: String(b.service_slug ?? "").trim() || null,
       serviceLabelForCapability: String(b.service ?? "").trim() || null,
+      excludeBookingId: bookingId,
     });
     if (eligible.length === 0) {
       return {

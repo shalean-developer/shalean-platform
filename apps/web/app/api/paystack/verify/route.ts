@@ -31,6 +31,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
+import { loadBookingReferenceForId } from "@/lib/booking/loadBookingReference";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -459,6 +460,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         snapshot: snapShort,
         customerEmailHint: emailNorm || emailFromCustomerPost || undefined,
       });
+      const bookingReference = await loadBookingReferenceForId(adminPost, existingPost.bookingId);
       return NextResponse.json({
         success: true,
         ok: true,
@@ -472,6 +474,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         bookingSnapshot: snapShort ?? null,
         bookingInDatabase: true,
         bookingId: existingPost.bookingId,
+        bookingReference,
         state: "already_processed",
         alreadyExists: true,
         skipped: true,
@@ -555,6 +558,10 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     });
   }
 
+  const bookingReference = adminPost
+    ? await loadBookingReferenceForId(adminPost, result.bookingId)
+    : null;
+
   return NextResponse.json({
     success: true,
     ok: true,
@@ -568,6 +575,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     bookingSnapshot: snapshot ?? null,
     bookingInDatabase,
     bookingId: result.bookingId,
+    bookingReference,
     state: chargeState,
     alreadyExists,
     skipped: Boolean(result.skipped),

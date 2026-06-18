@@ -46,7 +46,7 @@ function RecoverContent() {
     void verifyReference(fromQuery)
       .then((r) => {
         if (r.ok && r.reference) {
-          window.location.href = `/booking/success?reference=${encodeURIComponent(r.reference)}`;
+          window.location.href = `/account/success?reference=${encodeURIComponent(r.reference)}`;
           return;
         }
         setMessage(r.error ?? null);
@@ -61,7 +61,7 @@ function RecoverContent() {
     try {
       const r = await verifyReference(reference);
       if (r.ok && r.reference) {
-        window.location.href = `/booking/success?reference=${encodeURIComponent(r.reference)}`;
+        window.location.href = `/account/success?reference=${encodeURIComponent(r.reference)}`;
         return;
       }
       setMessage(r.error ?? null);

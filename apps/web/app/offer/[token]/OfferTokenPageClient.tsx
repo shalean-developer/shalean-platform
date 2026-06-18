@@ -197,7 +197,7 @@ export function OfferTokenPageClient({ token, initial, linkStaleHint = false }: 
         {showClosedChrome || (expired && view.status === "pending") ? (
           <div className="mt-4">
             <Button asChild variant="secondary" className="w-full sm:w-auto">
-              <Link href="/cleaner/dashboard">View available jobs</Link>
+              <Link href="/jobs">View available jobs</Link>
             </Button>
           </div>
         ) : null}

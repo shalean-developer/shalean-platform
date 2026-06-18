@@ -16,6 +16,7 @@ import {
   scheduleRedispatchRecoveryBackoff,
   tagUserSelectedRedispatchFallback,
 } from "@/lib/booking/assignmentBookingStateCommands";
+import { setPreferredDispatchStatus } from "@/lib/dispatch/preferredCleanerDispatchStatus";
 
 /** Paid checkout “chosen cleaner” rows use `pending_assignment`; legacy paths may use `pending` or `offered`. */
 const REDISPATCH_ELIGIBLE_BOOKING_STATUSES = ["pending", "pending_assignment", "offered"] as const;
@@ -145,6 +146,10 @@ export async function maybeRedispatchPendingBookingIfOffersExhausted(
     didIncrement = true;
 
     if (process.env.AUTO_DISPATCH_CLEANERS === "false") return;
+
+    if (isUserSelected) {
+      await setPreferredDispatchStatus(supabase, params.bookingId, "backup_dispatch_started");
+    }
 
     const exclude = [params.rejectedCleanerId];
 

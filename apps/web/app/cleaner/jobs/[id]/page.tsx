@@ -52,6 +52,7 @@ import {
   JOB_EARNING_LABEL,
   JOB_EARNING_UNAVAILABLE_CONTACT_LABEL,
 } from "@/lib/cleaner/cleanerJobEarning";
+import { optimisticPatchForLifecycleAction } from "@/lib/cleaner/cleanerLifecycleOptimisticPatch";
 import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
 import {
   clearAllCleanerDashboardSessionCaches,
@@ -61,6 +62,7 @@ import { cleanerLifecycleFailureMessage } from "@/lib/cleaner/cleanerLifecycleCl
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { BookingServiceQaPanel } from "@/components/cleaner/BookingServiceQaPanel";
 import type { ServiceQaCleanerWire } from "@/lib/booking/bookingServiceQa";
+import { serviceLabelFromBookingRow } from "@/lib/booking/bookingV2CustomerDisplay";
 import { cn } from "@/lib/utils";
 import { useCleanerRealtime } from "@/lib/realtime/useCleanerRealtime";
 
@@ -73,6 +75,7 @@ type CleanerJobDetailWire = {
   date?: string | null;
   time?: string | null;
   location?: string | null;
+  location_display?: string | null;
   status?: string | null;
   /** From `bookings.dispatch_status` — used with status for lifecycle chips. */
   dispatch_status?: string | null;
@@ -88,7 +91,12 @@ type CleanerJobDetailWire = {
   amount_paid_cents?: number | null;
   pricing_version_id?: string | null;
   lineItems?: CleanerBookingLineItemWire[] | null;
-  scope_lines?: string[];
+  scope_lines?: string[] | null;
+  service_detail_lines?: Array<{ label: string; value: string }>;
+  access_detail_lines?: Array<{ label: string; value: string }>;
+  selected_extras?: unknown;
+  pricing_summary?: unknown;
+  service_details?: unknown;
   duration_hours?: number | null;
   job_notes?: string | null;
   displayEarningsCents?: number | null;
@@ -243,39 +251,6 @@ function lifecyclePhaseBeforeLabel(
     return String(deriveMobilePhase(wireToBookingRow(merged), { nowMs: Date.now() }));
   } catch {
     return String(job.status ?? "unknown");
-  }
-}
-
-function optimisticPatchForAction(
-  action: "accept" | "en_route" | "start" | "complete",
-  base: CleanerJobDetailWire | null,
-): Partial<CleanerJobDetailWire> {
-  const now = new Date().toISOString();
-  switch (action) {
-    case "accept": {
-      const cur = String(base?.status ?? "").toLowerCase();
-      const dst = String(base?.dispatch_status ?? "").trim().toLowerCase();
-      const patch: Partial<CleanerJobDetailWire> = { cleaner_response_status: CLEANER_RESPONSE.ACCEPTED };
-      if (cur === "pending_payment") {
-        const now = new Date().toISOString();
-        return { ...patch, accepted_at: now };
-      }
-      if (cur === "offered" || cur === "confirmed") patch.status = "assigned";
-      if (dst === "offered") patch.dispatch_status = "assigned";
-      return patch;
-    }
-    case "en_route":
-      return { en_route_at: now, cleaner_response_status: CLEANER_RESPONSE.ON_MY_WAY };
-    case "start":
-      return {
-        status: "in_progress",
-        started_at: now,
-        cleaner_response_status: CLEANER_RESPONSE.STARTED,
-      };
-    case "complete":
-      return { status: "completed", completed_at: now, cleaner_response_status: CLEANER_RESPONSE.COMPLETED };
-    default:
-      return {};
   }
 }
 
@@ -633,11 +608,20 @@ export default function CleanerJobDetailPage() {
       rooms: displayJob.rooms,
       bathrooms: displayJob.bathrooms,
       extras: displayJob.extras,
+      selected_extras: displayJob.selected_extras,
+      pricing_summary: displayJob.pricing_summary,
+      service_details: displayJob.service_details,
       booking_snapshot: displayJob.booking_snapshot,
       lineItems: displayJob.lineItems ?? null,
-      scope_lines: displayJob.scope_lines,
+      scope_lines: displayJob.scope_lines ?? undefined,
     };
   }, [displayJob]);
+
+  const locationLabel = useMemo(() => {
+    const display = displayJob?.location_display?.trim();
+    if (display) return display;
+    return displayJob?.location?.trim() ?? "";
+  }, [displayJob?.location_display, displayJob?.location]);
 
   const unified = useMemo(
     () => (scopeSource ? buildUnifiedJobScope(scopeSource) : { propertyLine: null as string | null, extras: [] as string[] }),
@@ -677,17 +661,23 @@ export default function CleanerJobDetailPage() {
   }, [contactSheetOpen]);
 
   const addressMapsHref = useMemo(() => {
-    const loc = displayJob?.location ? String(displayJob.location).trim() : "";
+    const loc = locationLabel;
     if (!loc) return null;
     const q = loc.split(/\r?\n/)[0]?.trim() ?? loc;
     return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
-  }, [displayJob?.location]);
+  }, [locationLabel]);
 
   const title = useMemo(() => {
     if (!displayJob) return "Job";
-    const a = String(displayJob.service_name ?? "").trim();
-    const b = String(displayJob.service ?? "").trim();
-    return a || b || "Job";
+    return (
+      serviceLabelFromBookingRow({
+        service: displayJob.service ?? null,
+        service_slug: displayJob.service_slug ?? null,
+      }) ||
+      String(displayJob.service_name ?? "").trim() ||
+      String(displayJob.service ?? "").trim() ||
+      "Job"
+    );
   }, [displayJob]);
 
   const earningsCents = displayJob?.displayEarningsCents ?? displayJob?.earnings_cents ?? null;
@@ -763,7 +753,7 @@ export default function CleanerJobDetailPage() {
       const applyOptimistic = () => {
         if (optimistic) {
           setOptimisticPatch(
-            optimisticPatchForAction(action as "accept" | "en_route" | "start" | "complete", latestJobRef.current),
+            optimisticPatchForLifecycleAction(action as "accept" | "en_route" | "start" | "complete", latestJobRef.current),
           );
         }
       };
@@ -974,9 +964,9 @@ export default function CleanerJobDetailPage() {
   );
 
   const openNavigationForCurrentJob = useCallback(() => {
-    const url = mapsNavigationUrlFromJobLocation(displayJob?.location);
+    const url = mapsNavigationUrlFromJobLocation(locationLabel || displayJob?.location);
     if (url) window.open(url, "_blank", "noopener,noreferrer");
-  }, [displayJob?.location]);
+  }, [displayJob?.location, locationLabel]);
 
   /** Maps opens in the same user activation (avoids popup blockers); lifecycle POST runs immediately after. */
   const handleOnMyWay = useCallback(() => {
@@ -1028,7 +1018,7 @@ export default function CleanerJobDetailPage() {
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 bg-background p-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
-        <Link href="/cleaner/dashboard">← Dashboard</Link>
+        <Link href="/jobs">← Dashboard</Link>
       </Button>
       {loading && !displayJob ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -1163,7 +1153,7 @@ export default function CleanerJobDetailPage() {
 
               <div className="space-y-1">
                 <p className="text-sm font-medium text-foreground">{displayJob.customer_name?.trim() || "—"}</p>
-                {displayJob.location?.trim() ? (
+                {locationLabel ? (
                   <div className="flex items-start gap-2 text-sm text-muted-foreground">
                     <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
                     <div className="min-w-0 flex-1">
@@ -1175,10 +1165,10 @@ export default function CleanerJobDetailPage() {
                           aria-label="Open address in Google Maps"
                           className="whitespace-pre-wrap text-foreground underline decoration-muted-foreground/60 underline-offset-2 hover:text-primary hover:decoration-primary"
                         >
-                          {String(displayJob.location).trim()}
+                          {locationLabel}
                         </a>
                       ) : (
-                        <p className="whitespace-pre-wrap text-foreground">{String(displayJob.location).trim()}</p>
+                        <p className="whitespace-pre-wrap text-foreground">{locationLabel}</p>
                       )}
                     </div>
                   </div>
@@ -1282,7 +1272,7 @@ export default function CleanerJobDetailPage() {
                   </p>
                   {earningsEstimated ? (
                     <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-                      Final amount follows roster and payout rules after the job is recorded.
+                      Pay is confirmed once the job is recorded.
                     </p>
                   ) : null}
                 </div>
@@ -1313,6 +1303,32 @@ export default function CleanerJobDetailPage() {
                       <li key={name}>{name}</li>
                     ))}
                   </ul>
+                </div>
+              ) : null}
+              {displayJob.service_detail_lines && displayJob.service_detail_lines.length > 0 ? (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Property details</p>
+                  <dl className="mt-2 space-y-2 text-sm">
+                    {displayJob.service_detail_lines.map((line) => (
+                      <div key={line.label} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+                        <dt className="shrink-0 font-medium text-muted-foreground">{line.label}</dt>
+                        <dd className="text-foreground">{line.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ) : null}
+              {displayJob.access_detail_lines && displayJob.access_detail_lines.length > 0 ? (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Access</p>
+                  <dl className="mt-2 space-y-2 text-sm">
+                    {displayJob.access_detail_lines.map((line) => (
+                      <div key={line.label} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+                        <dt className="shrink-0 font-medium text-muted-foreground">{line.label}</dt>
+                        <dd className="whitespace-pre-wrap text-foreground">{line.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 </div>
               ) : null}
               {displayJob.lineItems && displayJob.lineItems.length > 0 ? (

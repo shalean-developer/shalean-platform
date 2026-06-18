@@ -14,3 +14,13 @@ export function suburbFromLocationForOffer(location: string | null | undefined):
   if (line.length > 48) return `${line.slice(0, 45)}…`;
   return line || "Area on file";
 }
+
+/** Prefer persisted `bookings.suburb` (booking-v2); fall back to parsing `location`. */
+export function cleanerFacingAreaLabel(row: {
+  suburb?: string | null;
+  location?: string | null;
+}): string {
+  const suburb = String(row.suburb ?? "").trim();
+  if (suburb) return suburb.length > 56 ? `${suburb.slice(0, 53)}…` : suburb;
+  return suburbFromLocationForOffer(row.location);
+}

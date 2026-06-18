@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { previewMock } = vi.hoisted(() => ({
+const { previewMock, persistMock } = vi.hoisted(() => ({
   previewMock: vi.fn(async (_admin: unknown, _params: unknown) => null as number | null),
+  persistMock: vi.fn(async () => ({ ok: true, skipped: true })),
 }));
 
 vi.mock("@/lib/payout/persistCleanerPayout", () => ({
   previewDisplayEarningsCentsForCleanerJob: previewMock,
+  persistCleanerPayoutIfUnset: persistMock,
 }));
 
 import { applyPreviewEarningsToCleanerJobRows } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";

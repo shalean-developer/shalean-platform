@@ -249,7 +249,7 @@ export default function CleanerJobsListPage() {
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 bg-background px-4 pt-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
-        <Link href="/cleaner/dashboard">← Home</Link>
+        <Link href="/jobs">← Home</Link>
       </Button>
 
       <div>
@@ -302,7 +302,7 @@ export default function CleanerJobsListPage() {
               <p className="font-medium text-foreground">No assigned jobs yet</p>
               <p className="mt-2">
                 You have {pendingOfferCount === 1 ? "an offer" : `${pendingOfferCount} offers`} waiting — open your{" "}
-                <Link href="/cleaner/dashboard" className="font-semibold text-emerald-700 underline dark:text-emerald-300">
+                <Link href="/jobs" className="font-semibold text-emerald-700 underline dark:text-emerald-300">
                   dashboard
                 </Link>{" "}
                 to respond.

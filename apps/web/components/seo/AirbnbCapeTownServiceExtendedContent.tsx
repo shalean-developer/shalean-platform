@@ -8,7 +8,7 @@ const HOME = "/";
 const DEEP = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
 const STANDARD = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
 const MOVE_OUT = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
-const BOOKING = "/booking";
+const BOOKING = "/book";
 
 /** Google Business Profile review URL — aligns on-page trust copy with GBP entity signals. */
 const GOOGLE_BUSINESS_REVIEW_URL = "https://g.page/r/Ceg4n_v9Pr59EBM/review";

@@ -150,6 +150,7 @@ export async function runParallelDispatchOfferRace(params: {
       sentRank: i,
       attempts: params.metricAttemptNumber ?? 0,
       skipImmediateNotification: notifyCap > 0 ? i >= notifyCap : false,
+      offerType: "backup",
     });
     created.push(row);
   }
@@ -335,6 +336,7 @@ export async function runTieredParallelDispatchOfferRace(params: {
       priorityScore: typeof candidate.priority_score === "number" && Number.isFinite(candidate.priority_score) ? candidate.priority_score : candidate.score,
       sentRank: i,
       attempts: params.metricAttemptNumber ?? 0,
+      offerType: "backup",
     });
     created.push(row);
   }

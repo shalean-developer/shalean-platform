@@ -14,7 +14,7 @@ const DEFAULT_ITEMS: readonly SeoInternalLinksBlockItem[] = [
   { href: SEO_HUB_MAID_SERVICES_PATH, label: "Maid services in Cape Town" },
   { href: "/services", label: "Cleaning services" },
   { href: "/locations", label: "Cleaning by suburb" },
-  { href: "/booking/details", label: "Instant quote" },
+  { href: "/book", label: "Instant quote" },
 ];
 
 type Props = {

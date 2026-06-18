@@ -69,8 +69,12 @@ export function CleanerDashboard() {
     offerCards,
     upcomingJobs,
     nextHighlightedJob,
+    nextHighlightedJobRow,
     nextJobPinExtras,
     activeJob,
+    activeJobRow,
+    patchJobRow,
+    refreshDashboard,
     confirmedIdle,
     availabilityState,
     openJobCount,
@@ -127,8 +131,20 @@ export function CleanerDashboard() {
   // pin handles "do this next". When neither is set we render NOTHING here
   // — the status strip already shows "Looking for nearby jobs" inline.
   let primaryHero: React.ReactNode = null;
-  if (activeJob) {
-    primaryHero = <ActiveJobHero job={activeJob} mapsQuery={nextJobPinExtras.mapsQuery} />;
+  if (activeJob && activeJobRow) {
+    const mapsQuery = String(activeJobRow.location ?? "").trim()
+      ? (String(activeJobRow.location).split(/\r?\n/)[0]?.trim() ?? String(activeJobRow.location))
+      : null;
+    primaryHero = (
+      <ActiveJobHero
+        job={activeJob}
+        bookingRow={activeJobRow}
+        mapsQuery={mapsQuery}
+        clockOffsetMs={nextJobPinExtras.clockOffsetMs}
+        onRowPatched={patchJobRow}
+        onRefresh={() => void refreshDashboard()}
+      />
+    );
   } else if (nextHighlightedJob) {
     primaryHero = (
       <NextJobPin

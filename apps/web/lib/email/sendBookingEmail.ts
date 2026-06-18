@@ -317,7 +317,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   const total = p.totalPaidZar.toLocaleString("en-ZA");
   const appUrl = getPublicAppUrlBase();
   const accountBookingsUrl = `${appUrl}/dashboard/bookings`;
-  const bookAgainUrl = `${appUrl}/booking/details`;
+  const bookAgainUrl = `${appUrl}/book`;
 
   const service = escapeHtml(p.serviceLabel);
   const date = escapeHtml(p.dateLabel);

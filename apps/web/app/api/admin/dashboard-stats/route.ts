@@ -6,6 +6,7 @@ import { startOfTodayJohannesburgUtcIso } from "@/lib/booking/dateInJohannesburg
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { bucketSmsFailure, bucketWhatsappFailure } from "@/lib/notifications/notificationFailureBuckets";
 import { NOTIFICATION_COST_CURRENCY } from "@/lib/notifications/notificationCostEstimates";
+import { runProductionHealthScan } from "@/lib/observability/productionHealthMetrics";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -23,8 +24,23 @@ export async function GET(request: Request) {
   const fetchedAt = new Date().toISOString();
 
   const sinceNotify = startOfTodayJohannesburgUtcIso();
+  const refundWindowStartIso = since.toISOString();
 
-  const [revenueSummary, conversionSummary, notifyRes, flagsRes, contactHealthRes] = await Promise.all([
+  const [
+    revenueSummary,
+    conversionSummary,
+    notifyRes,
+    flagsRes,
+    contactHealthRes,
+    pendingPaymentsRes,
+    overdueMonthlyInvoicesRes,
+    refundsRes,
+    recentBookingsRes,
+    recentNotificationsRes,
+    recentSystemLogsRes,
+    recentCronRunsRes,
+    productionHealthRes,
+  ] = await Promise.all([
     fetchAdminDashboardRevenueSummary(admin),
     fetchAdminDashboardConversionSummary(admin, since.toISOString()),
     admin
@@ -40,6 +56,47 @@ export async function GET(request: Request) {
       .order("success_rate", { ascending: true })
       .order("sample_size", { ascending: false })
       .limit(8),
+    admin
+      .from("bookings")
+      .select("id,total_price,total_paid_zar,amount_paid_cents,created_at")
+      .in("status", ["pending_payment"])
+      .in("payment_status", ["pending", "pending_payment"])
+      .limit(1000),
+    admin
+      .from("monthly_invoices")
+      .select("id,balance_cents,status,is_overdue,due_date")
+      .or("status.eq.overdue,is_overdue.eq.true")
+      .limit(1000),
+    admin
+      .from("bookings")
+      .select("id,total_paid_zar,amount_paid_cents,refunded_at,refund_status")
+      .or(`refunded_at.gte.${refundWindowStartIso},refund_status.in.(refunded,full,partial,chargeback,reversed)`)
+      .limit(1000),
+    admin
+      .from("bookings")
+      .select("id,status,service,date,time,total_paid_zar,amount_paid_cents,customer_name,cleaner_id,created_at,payment_completed_at,assigned_at,became_pending_at")
+      .order("created_at", { ascending: false })
+      .limit(20),
+    admin
+      .from("notification_logs")
+      .select("id,channel,status,template_key,created_at")
+      .order("created_at", { ascending: false })
+      .limit(10),
+    admin
+      .from("system_logs")
+      .select("id,level,source,message,created_at,context")
+      .order("created_at", { ascending: false })
+      .limit(20),
+    admin
+      .from("cron_runs")
+      .select("job_name,status,message,created_at")
+      .gte("created_at", new Date(Date.now() - 24 * 3600_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(80),
+    runProductionHealthScan(admin, { scanLimit: 250 }).then(
+      (summary) => ({ ok: true as const, summary }),
+      (error) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
+    ),
   ]);
 
   const notificationsAvailable = !notifyRes.error;
@@ -192,6 +249,174 @@ export async function GET(request: Request) {
     smsFailed >= 3 &&
     emailFailed >= 3;
 
+  const centsFromBookingAmount = (row: {
+    total_price?: unknown;
+    total_paid_zar?: unknown;
+    amount_paid_cents?: unknown;
+  }): number => {
+    const paidCents = Number(row.amount_paid_cents);
+    if (Number.isFinite(paidCents) && paidCents > 0) return Math.round(paidCents);
+    const paidZar = Number(row.total_paid_zar);
+    if (Number.isFinite(paidZar) && paidZar > 0) return Math.round(paidZar * 100);
+    const totalPrice = Number(row.total_price);
+    if (Number.isFinite(totalPrice) && totalPrice > 0) return Math.round(totalPrice * 100);
+    return 0;
+  };
+
+  const pendingPaymentRows = pendingPaymentsRes.error ? [] : (pendingPaymentsRes.data ?? []);
+  const pendingPaymentCents = pendingPaymentRows.reduce((sum, row) => sum + centsFromBookingAmount(row), 0);
+  const overdueInvoiceRows = overdueMonthlyInvoicesRes.error ? [] : (overdueMonthlyInvoicesRes.data ?? []);
+  const overdueMonthlyInvoiceCents = overdueInvoiceRows.reduce((sum, row) => {
+    const cents = Number((row as { balance_cents?: unknown }).balance_cents);
+    return sum + (Number.isFinite(cents) && cents > 0 ? Math.round(cents) : 0);
+  }, 0);
+  const refundRows = refundsRes.error ? [] : (refundsRes.data ?? []);
+  const refundCents = refundRows.reduce((sum, row) => sum + centsFromBookingAmount(row), 0);
+
+  const activityTime = (iso: string | null | undefined): number => {
+    if (!iso) return 0;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) ? t : 0;
+  };
+
+  const recentBookingActivities = (recentBookingsRes.error ? [] : (recentBookingsRes.data ?? [])).flatMap((row) => {
+    const r = row as {
+      id?: string | null;
+      status?: string | null;
+      service?: string | null;
+      date?: string | null;
+      time?: string | null;
+      customer_name?: string | null;
+      cleaner_id?: string | null;
+      created_at?: string | null;
+      payment_completed_at?: string | null;
+      assigned_at?: string | null;
+      became_pending_at?: string | null;
+    };
+    const bookingId = String(r.id ?? "").slice(0, 8);
+    const service = String(r.service ?? "Booking").replace(/-/g, " ");
+    const dateTime = [r.date, r.time?.slice(0, 5)].filter(Boolean).join(" at ");
+    const out: Array<{ createdAt: string; type: string; details: string; user: string; severity: string }> = [];
+    if (r.created_at) {
+      out.push({
+        createdAt: r.created_at,
+        type: "New booking",
+        details: `${service}${dateTime ? ` on ${dateTime}` : ""}${bookingId ? ` (#${bookingId})` : ""}`,
+        user: r.customer_name?.trim() || "Customer",
+        severity: "info",
+      });
+    }
+    if (r.payment_completed_at) {
+      out.push({
+        createdAt: r.payment_completed_at,
+        type: "Payment received",
+        details: `Payment captured${bookingId ? ` for booking #${bookingId}` : ""}`,
+        user: "System",
+        severity: "success",
+      });
+    }
+    if (r.assigned_at || r.cleaner_id) {
+      out.push({
+        createdAt: r.assigned_at ?? r.created_at ?? new Date(0).toISOString(),
+        type: "Cleaner assigned",
+        details: `Cleaner assigned${bookingId ? ` to booking #${bookingId}` : ""}`,
+        user: "Admin",
+        severity: "info",
+      });
+    }
+    if (String(r.status ?? "").toLowerCase() === "pending" && r.became_pending_at) {
+      out.push({
+        createdAt: r.became_pending_at,
+        type: "Booking pending dispatch",
+        details: `Booking${bookingId ? ` #${bookingId}` : ""} is waiting for cleaner assignment`,
+        user: "System",
+        severity: "warning",
+      });
+    }
+    return out;
+  });
+
+  const recentNotificationActivities = (recentNotificationsRes.error ? [] : (recentNotificationsRes.data ?? [])).map((row) => {
+    const r = row as {
+      channel?: string | null;
+      status?: string | null;
+      template_key?: string | null;
+      created_at?: string | null;
+    };
+    const status = String(r.status ?? "").toLowerCase();
+    return {
+      createdAt: r.created_at ?? new Date(0).toISOString(),
+      type: status === "failed" ? "Notification failed" : "Notification sent",
+      details: `${String(r.channel ?? "notification")} ${String(r.template_key ?? "message")}`,
+      user: "System",
+      severity: status === "failed" ? "error" : "success",
+    };
+  });
+
+  const recentSystemLogActivities = (recentSystemLogsRes.error ? [] : (recentSystemLogsRes.data ?? [])).map((row) => {
+    const r = row as {
+      level?: string | null;
+      source?: string | null;
+      message?: string | null;
+      created_at?: string | null;
+      context?: Record<string, unknown> | null;
+    };
+    const level = String(r.level ?? "").toLowerCase();
+    const source = String(r.source ?? "system").replace(/_/g, " ");
+    const message = String(r.message ?? "System event");
+    return {
+      createdAt: r.created_at ?? new Date(0).toISOString(),
+      type: source,
+      details: message,
+      user: "System",
+      severity: level === "error" ? "error" : level === "warn" ? "warning" : "info",
+    };
+  });
+
+  const recentCronActivities = (recentCronRunsRes.error ? [] : (recentCronRunsRes.data ?? [])).slice(0, 10).map((row) => {
+    const r = row as {
+      job_name?: string | null;
+      status?: string | null;
+      message?: string | null;
+      created_at?: string | null;
+    };
+    const status = String(r.status ?? "").toLowerCase();
+    return {
+      createdAt: r.created_at ?? new Date(0).toISOString(),
+      type: status === "error" ? "Cron failed" : "Cron completed",
+      details: `${String(r.job_name ?? "cron job")}${r.message ? `: ${String(r.message).slice(0, 140)}` : ""}`,
+      user: "System",
+      severity: status === "error" ? "error" : "success",
+    };
+  });
+
+  const recentActivity = [
+    ...recentSystemLogActivities,
+    ...recentCronActivities,
+    ...recentBookingActivities,
+    ...recentNotificationActivities,
+  ]
+    .filter((a) => activityTime(a.createdAt) > 0)
+    .sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt))
+    .slice(0, 6);
+
+  const productionHealthSummary = productionHealthRes.ok ? productionHealthRes.summary : null;
+  const productionFindings = productionHealthSummary?.findings ?? [];
+  const hasCritical = (productionHealthSummary?.totals.critical ?? 0) > 0;
+  const hasPaymentFindings = productionFindings.some((f) =>
+    f.code.includes("payment") || f.code.includes("invoice") || f.code.includes("payout"),
+  );
+  const hasBookingEngineFindings = productionFindings.some((f) =>
+    f.code.includes("dispatch") ||
+    f.code.includes("cron") ||
+    f.code.includes("recurring") ||
+    f.code.includes("duration") ||
+    f.code.includes("workload"),
+  );
+  const cronErrorsLast24h = (recentCronRunsRes.error ? [] : (recentCronRunsRes.data ?? [])).filter(
+    (row) => String((row as { status?: string | null }).status ?? "").toLowerCase() === "error",
+  ).length;
+
   return NextResponse.json({
     fetchedAt,
     revenueTodayZar: revenueSummary.revenueTodayZar,
@@ -255,6 +480,46 @@ export async function GET(request: Request) {
         currency: NOTIFICATION_COST_CURRENCY,
       },
       topFailingContacts,
+    },
+    paymentsSnapshot: {
+      pendingZar: Math.round(pendingPaymentCents / 100),
+      pendingCount: pendingPaymentRows.length,
+      overdueZar: Math.round(overdueMonthlyInvoiceCents / 100),
+      overdueCount: overdueInvoiceRows.length,
+      refunds30dZar: Math.round(refundCents / 100),
+      refunds30dCount: refundRows.length,
+    },
+    recentActivity,
+    systemStatus: {
+      website: recentSystemLogsRes.error ? "degraded" : "operational",
+      bookingEngine:
+        productionHealthRes.ok === false || hasCritical
+          ? "down"
+          : recentBookingsRes.error || hasBookingEngineFindings || cronErrorsLast24h > 0
+            ? "degraded"
+            : "operational",
+      paymentGateway:
+        pendingPaymentsRes.error || refundsRes.error || hasCritical
+          ? "down"
+          : hasPaymentFindings
+            ? "degraded"
+            : "operational",
+      productionHealth: productionHealthSummary
+        ? {
+            generatedAt: productionHealthSummary.generatedAt,
+            totals: productionHealthSummary.totals,
+            totalFindings: productionFindings.reduce((sum, finding) => sum + finding.count, 0),
+            topFindings: productionFindings.slice(0, 3).map((finding) => ({
+              code: finding.code,
+              severity: finding.severity,
+              count: finding.count,
+              message: finding.message,
+            })),
+          }
+        : {
+            error: productionHealthRes.ok === false ? productionHealthRes.error : "Production health unavailable.",
+          },
+      cronErrorsLast24h,
     },
   });
 }

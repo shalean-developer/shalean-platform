@@ -278,14 +278,14 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="maid_services_cta_instant_quote"
                 className={marketingPrimaryCtaClassName}
               >
                 Get Instant Quote
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="maid_services_cta_book_cleaner"
                 className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-900 transition hover:bg-slate-50"
               >
@@ -438,7 +438,7 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
           <p className="mt-6 leading-relaxed text-slate-600">
             For numbers tied to your address and rooms,{" "}
             <GrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source="maid_services_pricing_exact_quote"
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
             >
@@ -481,7 +481,7 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
           <p className="mt-6 leading-relaxed text-slate-600">
             Get an exact price based on your home and schedule:{" "}
             <GrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source="maid_services_example_prices_quote"
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
             >
@@ -577,7 +577,7 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
           <p className="mt-8 leading-relaxed text-slate-600">
             Ready when you are:{" "}
             <GrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source="maid_services_how_it_works_quote"
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
             >
@@ -684,14 +684,14 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="maid_services_final_cta_quote"
                 className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3.5 text-base font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
               >
                 Get your instant quote
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="maid_services_final_cta_book"
                 className="inline-flex items-center justify-center rounded-full border-2 border-white/80 bg-transparent px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10"
               >

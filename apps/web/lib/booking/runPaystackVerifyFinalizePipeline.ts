@@ -2,6 +2,7 @@ import "server-only";
 
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
+import { syncPaidBookingSideEffects } from "@/lib/booking/syncPaidBookingSideEffects";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { parseBookingSnapshot } from "@/lib/booking/paystackChargeTypes";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
@@ -175,6 +176,17 @@ export async function runPaystackVerifyFinalizePipeline(
       message: "paystack.booking.created",
       context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
     });
+
+    // Idempotent: Zoho invoice + recurring plan. Runs here because the success
+    // page finalizes via this verify pipeline (the webhook may never fire in dev
+    // or hits its idempotent skip once verify wins the race).
+    if (adm) {
+      await syncPaidBookingSideEffects(adm, {
+        bookingId: result.bookingId,
+        reference: ref,
+        amountCents: amount,
+      });
+    }
   }
 
   await enqueuePaystackRecoveryFailedJobs({

@@ -12,10 +12,10 @@ import {
 import { useCleanerNavBadges } from "./CleanerNavBadgesContext";
 
 const links = [
-  { href: "/cleaner/dashboard", label: "Home", icon: Home, match: (p: string) => p === "/cleaner/dashboard" || p === "/cleaner" },
-  { href: "/cleaner/jobs", label: "Jobs", icon: Briefcase, match: (p: string) => p === "/cleaner/jobs" || p.startsWith("/cleaner/jobs/") },
-  { href: "/cleaner/earnings", label: "Earnings", icon: Wallet, match: (p: string) => p.startsWith("/cleaner/earnings") },
-  { href: "/cleaner/profile", label: "Profile", icon: CircleUserRound, match: (p: string) => p.startsWith("/cleaner/profile") },
+  { href: "/jobs", label: "Home", icon: Home, match: (p: string) => p === "/jobs" || p === "/cleaner" || p === "/cleaner/dashboard" },
+  { href: "/jobs/list", label: "Jobs", icon: Briefcase, match: (p: string) => p === "/jobs/list" || p.startsWith("/jobs/job/") || p === "/cleaner/jobs" || p.startsWith("/cleaner/jobs/") },
+  { href: "/jobs/earnings", label: "Earnings", icon: Wallet, match: (p: string) => p.startsWith("/jobs/earnings") || p.startsWith("/cleaner/earnings") },
+  { href: "/jobs/profile", label: "Profile", icon: CircleUserRound, match: (p: string) => p.startsWith("/jobs/profile") || p.startsWith("/cleaner/profile") },
 ] as const;
 
 export function CleanerBottomNav() {

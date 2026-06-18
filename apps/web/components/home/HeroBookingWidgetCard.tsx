@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BOOKING_DATA_STORAGE_KEY } from "@/lib/booking/bookingWidgetDraft";
 import { defaultBookingTimeForDate, todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
-import { bookingFlowHref, bookingMarketingPromoExtra } from "@/lib/booking/bookingFlow";
 import {
   calculateHomeWidgetQuoteZar,
   type HomeWidgetServiceKey,
@@ -79,8 +78,7 @@ export function HeroBookingWidgetCard() {
     } catch {
       /* ignore */
     }
-    const href = bookingFlowHref("entry", { ...(bookingMarketingPromoExtra("SAVE10") ?? {}), source: "home_hero_widget" });
-    router.push(href);
+    router.push("/book");
   }
 
   return (

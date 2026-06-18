@@ -1,3 +1,4 @@
+import { cleanerJobDetailHref } from "@/lib/cleaner/cleanerJobDetailHref";
 import Link from "next/link";
 import { Navigation } from "lucide-react";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -29,7 +30,7 @@ export type CleanerJobListCardProps = {
 };
 
 export function CleanerJobListCard({ row, variant, now = new Date() }: CleanerJobListCardProps) {
-  const href = `/cleaner/jobs/${encodeURIComponent(row.id)}`;
+  const href = cleanerJobDetailHref(row.id);
   const cents = cleanerFacingDisplayEarningsCents(row);
   const rec = row as Record<string, unknown>;
   const estimate =

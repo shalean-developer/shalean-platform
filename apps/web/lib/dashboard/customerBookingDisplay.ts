@@ -4,6 +4,8 @@ import type { OperationalDisplayTone } from "@/lib/booking/describeBookingOperat
 import { describeDashboardBookingOperational } from "@/lib/dashboard/dashboardBookingOperational";
 import type { DashboardBooking } from "@/lib/dashboard/types";
 
+export { customerPreferredDispatchNotice } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
+
 export type CustomerBookingStatusLabel =
   | "Scheduled"
   | "Completed"
@@ -34,7 +36,8 @@ export function customerBookingStatusLabel(b: DashboardBooking): CustomerBooking
 /**
  * Customer booking card: prefer API `raw.canonicalLifecycle` when it matches the same
  * {@link describeDashboardBookingOperational} pass (no customer-facing copy drift). Otherwise
- * fall back to the describe result. Visible card label text stays {@link customerBookingStatusLabel}.
+ * fall back to the describe result. Visible badge text is {@link displayBadge} (operational),
+ * aligned with admin/cleaner surfaces; {@link statusLabel} remains for payment/completion copy.
  */
 export function customerBookingCardOperationalDisplay(booking: DashboardBooking): {
   statusLabel: CustomerBookingStatusLabel;

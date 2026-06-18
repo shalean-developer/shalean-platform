@@ -21,7 +21,7 @@ export function BlogArticleEndCta({ trackingSlug }: EndCtaProps) {
         See exact pricing and book online in minutes—your total stays tied to the rooms and tier you select.
       </p>
       <GrowthCtaLink
-        href="/booking/details"
+        href="/book"
         source={`blog_${trackingSlug}_end_cta_book`}
         blogAnalyticsPlacement={`${trackingSlug}_end_cta`}
         className="mt-8 inline-flex min-h-[52px] min-w-[220px] items-center justify-center rounded-full bg-white px-10 text-base font-semibold text-blue-700 shadow-md transition hover:bg-blue-50"

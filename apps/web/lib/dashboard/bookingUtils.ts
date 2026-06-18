@@ -1,4 +1,14 @@
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import {
+  accessNotesFromBookingRow,
+  cleanDetailLinesFromServiceDetails,
+  extrasLinesFromBookingRow,
+  hasPersistedSchedule,
+  priceLinesFromPricingSummary,
+  roomsBathroomsCountsFromServiceDetails,
+  roomsLinesFromServiceDetails,
+  serviceLabelFromBookingRow,
+} from "@/lib/booking/bookingV2CustomerDisplay";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import type { BookingRow, CleanerEmbed, DashboardBooking, NormalizedBookingStatus } from "@/lib/dashboard/types";
@@ -48,6 +58,17 @@ export function lockedTotalZarFromRow(row: Pick<BookingRow, "total_price">): num
 export function priceZarFromRow(row: BookingRow): number {
   const locked = lockedTotalZarFromRow(row);
   if (locked != null) return locked;
+  const ps = row.pricing_summary;
+  if (ps && typeof ps === "object" && !Array.isArray(ps)) {
+    const estimated = (ps as { estimated_total?: unknown }).estimated_total;
+    if (typeof estimated === "number" && Number.isFinite(estimated) && estimated > 0) {
+      return Math.round(estimated);
+    }
+    const legacyTotal = (ps as { total?: unknown }).total;
+    if (typeof legacyTotal === "number" && Number.isFinite(legacyTotal) && legacyTotal > 0) {
+      return Math.round(legacyTotal);
+    }
+  }
   const bd = parseStoredPriceBreakdown(row.price_breakdown);
   if (bd) return bd.totalZar;
   if (typeof row.total_paid_zar === "number" && Number.isFinite(row.total_paid_zar)) return row.total_paid_zar;
@@ -61,54 +82,105 @@ function initials(name: string): string {
   return (p[0]![0] + p[p.length - 1]![0]).toUpperCase();
 }
 
-function snapshotExtras(snapshot: BookingSnapshotV1 | null | undefined): string[] {
-  const ex = snapshot?.locked?.extras;
-  if (Array.isArray(ex)) return ex.map(String);
-  const flat = snapshot?.flat?.extras;
-  if (Array.isArray(flat)) return flat.map(String);
-  return [];
+function positiveRoomCount(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.round(v);
+  if (n < 1 || n > 50) return null;
+  return n;
+}
+
+function humanizeExtraSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Labels for customer booking detail — persisted row first, then checkout snapshot fallbacks. */
+function formatExtraDisplayLine(x: unknown): string | null {
+  if (typeof x === "string") {
+    const s = x.trim();
+    return s ? humanizeExtraSlug(s) : null;
+  }
+  if (x && typeof x === "object") {
+    const o = x as { name?: string; slug?: string; price?: unknown };
+    const name = typeof o.name === "string" ? o.name.trim() : "";
+    const slug = typeof o.slug === "string" ? o.slug.trim() : "";
+    const displayName = name || (slug ? humanizeExtraSlug(slug) : "");
+    if (!displayName) return null;
+    const priceRaw = o.price;
+    const p = typeof priceRaw === "number" ? priceRaw : Number(priceRaw);
+    if (Number.isFinite(p) && p > 0) {
+      return `${displayName} · R ${Math.round(p).toLocaleString("en-ZA")}`;
+    }
+    return displayName;
+  }
+  return null;
+}
+
+function extrasDisplayLinesFromPayload(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const x of raw) {
+    const line = formatExtraDisplayLine(x);
+    if (line) out.push(line);
+  }
+  return out;
 }
 
 /** Labels for dashboard only — from persisted `bookings.extras` line items when present. */
 function extrasDisplayFromRow(row: BookingRow, snapshot: BookingSnapshotV1 | null): string[] {
-  const raw = row.extras;
-  if (Array.isArray(raw) && raw.length > 0) {
-    const out: string[] = [];
-    for (const x of raw) {
-      if (x && typeof x === "object") {
-        const o = x as { name?: string; slug?: string; price?: unknown };
-        const name = typeof o.name === "string" ? o.name.trim() : "";
-        const priceRaw = o.price;
-        const p = typeof priceRaw === "number" ? priceRaw : Number(priceRaw);
-        if (name && Number.isFinite(p)) {
-          out.push(`${name} · R ${Math.round(p).toLocaleString("en-ZA")}`);
-          continue;
-        }
-        if (name) {
-          out.push(name);
-          continue;
-        }
-      }
-      out.push(String(x));
-    }
-    if (out.length) return out;
-  }
-  return snapshotExtras(snapshot);
+  const fromRow = extrasDisplayLinesFromPayload(row.extras);
+  if (fromRow.length) return fromRow;
+
+  const locked = snapshot?.locked;
+  const fromLineItems = extrasDisplayLinesFromPayload(locked?.extras_line_items);
+  if (fromLineItems.length) return fromLineItems;
+
+  const fromLockedSlugs = extrasDisplayLinesFromPayload(locked?.extras);
+  if (fromLockedSlugs.length) return fromLockedSlugs;
+
+  const fromFlat = extrasDisplayLinesFromPayload(snapshot?.flat?.extras);
+  if (fromFlat.length) return fromFlat;
+
+  return extrasLinesFromBookingRow(row);
 }
 
-function snapshotRooms(snapshot: BookingSnapshotV1 | null | undefined, rooms: number | null, bathrooms: number | null): string[] {
+function snapshotRooms(snapshot: BookingSnapshotV1 | null | undefined, rooms: number | null, bathrooms: number | null, row: BookingRow): string[] {
+  const fromServiceDetails = roomsLinesFromServiceDetails(row.service_details);
+  if (fromServiceDetails.length > 0) return fromServiceDetails;
+
+  const locked = snapshot?.locked;
+  const flat = snapshot?.flat;
+  const bedroomCount =
+    positiveRoomCount(rooms) ??
+    positiveRoomCount(locked?.rooms) ??
+    positiveRoomCount((locked as { bedrooms?: number } | undefined)?.bedrooms) ??
+    positiveRoomCount(flat?.rooms) ??
+    null;
+  const bathroomCount =
+    positiveRoomCount(bathrooms) ??
+    positiveRoomCount(locked?.bathrooms) ??
+    positiveRoomCount(flat?.bathrooms) ??
+    null;
+
   const parts: string[] = [];
-  if (typeof rooms === "number" && rooms > 0) parts.push(`${rooms} bedroom${rooms === 1 ? "" : "s"}`);
-  if (typeof bathrooms === "number" && bathrooms > 0) parts.push(`${bathrooms} bathroom${bathrooms === 1 ? "" : "s"}`);
-  if (parts.length) return parts;
-  const r = snapshot?.locked?.rooms;
-  const b = snapshot?.locked?.bathrooms;
-  if (typeof r === "number" && r > 0) parts.push(`${r} bedroom${r === 1 ? "" : "s"}`);
-  if (typeof b === "number" && b > 0) parts.push(`${b} bathroom${b === 1 ? "" : "s"}`);
-  return parts.length ? parts : ["—"];
+  if (bedroomCount != null) parts.push(`${bedroomCount} bedroom${bedroomCount === 1 ? "" : "s"}`);
+  if (bathroomCount != null) parts.push(`${bathroomCount} bathroom${bathroomCount === 1 ? "" : "s"}`);
+
+  const extraRooms = positiveRoomCount((locked as { extraRooms?: number } | undefined)?.extraRooms);
+  if (extraRooms != null && extraRooms > 0) {
+    parts.push(`${extraRooms} extra room${extraRooms === 1 ? "" : "s"}`);
+  }
+
+  return parts;
 }
 
 function priceLinesFromRow(row: BookingRow): StoredPriceLine[] {
+  const fromPricingSummary = priceLinesFromPricingSummary(row.pricing_summary);
+  if (fromPricingSummary) return fromPricingSummary;
+
   const breakdown = parseStoredPriceBreakdown(row.price_breakdown);
   const locked = lockedTotalZarFromRow(row);
   if (breakdown) {
@@ -170,9 +242,11 @@ function cleanerFromRow(row: BookingRow): DashboardBooking["cleaner"] {
   //   3. `booking_snapshot.cleaner_name` (legacy / pre-team-handoff fallback).
   const isTeamJobAssignment = row.is_team_job === true;
   const teamLead = isTeamJobAssignment ? String(row.payout_owner_cleaner_name ?? "").trim() : "";
+  const enriched = String(row.display_cleaner_name ?? "").trim();
   const name =
     (emb?.full_name && emb.full_name.trim()) ||
     teamLead ||
+    enriched ||
     (typeof snapName === "string" && snapName.trim()) ||
     "";
   if (!name) return null;
@@ -182,14 +256,27 @@ function cleanerFromRow(row: BookingRow): DashboardBooking["cleaner"] {
 
 export function mapBookingRow(row: BookingRow): DashboardBooking {
   const snapshot = (row.booking_snapshot ?? null) as BookingSnapshotV1 | null;
-  const date = row.date && /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? row.date : snapshot?.flat?.date ?? row.created_at.slice(0, 10);
-  const time = row.time?.trim() || snapshot?.flat?.time || "09:00";
+  const scheduleConfirmed = hasPersistedSchedule(row);
+  const date = scheduleConfirmed
+    ? row.date!
+    : snapshot?.flat?.date && /^\d{4}-\d{2}-\d{2}$/.test(snapshot.flat.date)
+      ? snapshot.flat.date
+      : "";
+  const time = scheduleConfirmed
+    ? (row.time!.trim().length >= 5 ? row.time!.trim().slice(0, 5) : row.time!.trim())
+    : snapshot?.flat?.time?.trim() || "";
   const loc = row.location?.trim() || snapshot?.flat?.location || "";
-  const suburb = loc.includes(",") ? loc.split(",").slice(-1)[0]!.trim() : loc || "—";
+  // v2 bookings write `suburb` as its own column; use it directly when present.
+  // Legacy bookings stored a combined "Street, Suburb" string in `location` — fall back to comma-split for those.
+  const rowSuburb = typeof row.suburb === "string" ? row.suburb.trim() : "";
+  const snapSuburb = (snapshot as { suburb?: string } | null)?.suburb?.trim() ?? "";
+  const derivedSuburb = rowSuburb || snapSuburb || (loc.includes(",") ? loc.split(",").slice(-1)[0]!.trim() : loc);
+  const suburb = derivedSuburb || "—";
   const addressLine = loc.includes(",") ? loc.split(",")[0]!.trim() : loc || "—";
   const durationMin = typeof row.duration_minutes === "number" && row.duration_minutes > 0 ? row.duration_minutes : null;
   const hoursSnap = snapshot?.locked?.finalHours;
   const breakdown = parseStoredPriceBreakdown(row.price_breakdown);
+  const priceDisplayFromCheckout = breakdown != null || row.pricing_summary != null;
   const durationHours =
     breakdown != null && typeof breakdown.hours === "number" && breakdown.hours > 0
       ? Math.round(breakdown.hours * 10) / 10
@@ -199,22 +286,28 @@ export function mapBookingRow(row: BookingRow): DashboardBooking {
           ? hoursSnap
           : 2;
 
-  const scheduledAt = `${date}T${time.length === 5 ? `${time}:00` : time}`;
-  const priceDisplayFromCheckout = breakdown != null;
+  const scheduledAt =
+    scheduleConfirmed && date && time
+      ? `${date}T${time.length === 5 ? `${time}:00` : time}`
+      : row.created_at;
   const checkoutPriceContext = priceDisplayFromCheckout ? { bookingId: row.id } : null;
+  const serviceCounts = roomsBathroomsCountsFromServiceDetails(row.service_details);
 
   return {
     id: row.id,
-    serviceName: row.service?.trim() || "Cleaning service",
+    serviceName: serviceLabelFromBookingRow(row) ?? "Cleaning service",
     date,
-    time: time.length >= 5 ? time.slice(0, 5) : time,
+    time,
     addressLine,
     suburb,
     priceZar: priceZarFromRow(row),
     status: normalizeStatus(row.status),
     durationHours,
-    rooms: snapshotRooms(snapshot, row.rooms ?? null, row.bathrooms ?? null),
+    rooms: snapshotRooms(snapshot, row.rooms ?? serviceCounts.rooms, row.bathrooms ?? serviceCounts.bathrooms, row),
     extras: extrasDisplayFromRow(row, snapshot),
+    cleanDetails: cleanDetailLinesFromServiceDetails(row.service_details),
+    accessNotes: accessNotesFromBookingRow(row),
+    scheduleConfirmed,
     priceLines: priceLinesFromRow(row),
     cleaner: cleanerFromRow(row),
     paystackReference: row.paystack_reference,
@@ -225,6 +318,22 @@ export function mapBookingRow(row: BookingRow): DashboardBooking {
     checkoutPriceContext,
     pricingAlgorithmVersion: breakdown?.pricingVersion ?? null,
   };
+}
+
+/**
+ * Builds a clean, human-readable location label from a booking's address line
+ * and suburb, dropping empty/placeholder ("—") parts and de-duping when the
+ * address line equals the suburb. Avoids ugly output like "—, Claremont" when
+ * only a suburb is on record.
+ */
+export function formatBookingLocation(
+  b: Pick<DashboardBooking, "addressLine" | "suburb">,
+): string {
+  const parts = [b.addressLine, b.suburb]
+    .map((p) => (p ?? "").trim())
+    .filter((p) => p.length > 0 && p !== "—");
+  const unique = parts.filter((p, i) => parts.indexOf(p) === i);
+  return unique.join(", ") || "—";
 }
 
 export function isUpcomingBookingRow(b: DashboardBooking): boolean {

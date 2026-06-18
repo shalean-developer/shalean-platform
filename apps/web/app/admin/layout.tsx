@@ -55,7 +55,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
   {
     title: "Workforce",
     items: [
-      { label: "Cleaners", href: "/admin/cleaners" },
+      { label: "Cleaners", href: "/office/cleaners" },
       { label: "Teams", href: "/admin/teams" },
       { label: "Cleaner Applications", href: "/admin/cleaner-applications" },
     ],

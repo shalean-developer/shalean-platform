@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { AuthCard, AuthLegalFooter } from "@/components/auth/AuthShell";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { AuthRoleChoicePageClient } from "./AuthRoleChoicePageClient";
 
@@ -13,12 +14,13 @@ export default function AuthEntryPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-dvh flex-col items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
-        </div>
+        <AuthCard>
+          <p className="text-center text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
+        </AuthCard>
       }
     >
       <AuthRoleChoicePageClient />
+      <AuthLegalFooter />
     </Suspense>
   );
 }

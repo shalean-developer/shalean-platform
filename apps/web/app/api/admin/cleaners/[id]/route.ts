@@ -3,23 +3,29 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { regenerateCleanerAvailabilityFromStoredWeekdays } from "@/lib/cleaner/regenerateCleanerAvailabilityFromStoredWeekdays";
+import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
 import { normalizeSouthAfricaPhone, southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  if (!id) return NextResponse.json({ error: "Missing cleaner id." }, { status: 400 });
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function isCleanerUuid(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
+async function requireAdminFromRequest(request: Request) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!token) return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
+  if (!token) return { ok: false as const, response: NextResponse.json({ error: "Missing authorization." }, { status: 401 }) };
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  if (!url || !anon) {
+    return { ok: false as const, response: NextResponse.json({ error: "Server configuration error." }, { status: 503 }) };
+  }
 
   const pub = createClient(url, anon);
   const {
@@ -27,11 +33,52 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     error: sessionErr,
   } = await pub.auth.getUser(token);
   if (sessionErr || !user?.email) {
-    return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
+    return { ok: false as const, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
   }
   if (!isAdmin(user.email)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    return { ok: false as const, response: NextResponse.json({ error: "Admin access required." }, { status: 403 }) };
   }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return { ok: false as const, response: NextResponse.json({ error: "Server configuration error." }, { status: 503 }) };
+  }
+
+  return { ok: true as const, admin };
+}
+
+export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  if (!id) return NextResponse.json({ error: "Missing cleaner id." }, { status: 400 });
+  if (!isCleanerUuid(id)) return NextResponse.json({ error: "Invalid cleaner id." }, { status: 400 });
+
+  const auth = await requireAdminFromRequest(_request);
+  if (!auth.ok) return auth.response;
+
+  await syncCleanerBusyFromBookings(auth.admin, id);
+
+  const { data, error } = await auth.admin
+    .from("cleaners")
+    .select(
+      "id, full_name, phone, email, rating, jobs_completed, is_available, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Cleaner not found." }, { status: 404 });
+
+  return NextResponse.json({ cleaner: data });
+}
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  if (!id) return NextResponse.json({ error: "Missing cleaner id." }, { status: 400 });
+  if (!isCleanerUuid(id)) return NextResponse.json({ error: "Invalid cleaner id." }, { status: 400 });
+
+  const auth = await requireAdminFromRequest(request);
+  if (!auth.ok) return auth.response;
+  const admin = auth.admin;
 
   // Email is updated only via POST /api/admin/update-cleaner-email (syncs auth.users + cleaners).
   // `location` + `availability_weekdays` on `cleaners` are derived from `cleaner_locations` + `cleaner_availability`
@@ -48,13 +95,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     availability_weekdays?: string[];
   };
   try {
-    body = (await request.json()) as { status?: string };
+    body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
-
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const updates: Record<string, unknown> = {};
   if (body.status !== undefined) {

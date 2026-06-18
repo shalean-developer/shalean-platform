@@ -311,14 +311,14 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
             </ul>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="cleaning_prices_cta_instant_quote"
                 className={marketingPrimaryCtaClassName}
               >
                 Get Instant Quote
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="cleaning_prices_cta_book_cleaner"
                 className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-900 transition hover:bg-slate-50"
               >
@@ -448,7 +448,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
           <p className="mt-4 leading-relaxed text-slate-600">
             Hub links below are for access notes—your line-item total still comes from{" "}
             <GrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source="cleaning_prices_popular_areas_quote"
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
             >
@@ -519,7 +519,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
           <p className="mt-6 text-sm leading-relaxed text-slate-600">
             Lock the price for your exact bedroom and bathroom count in{" "}
             <GrowthCtaLink
-              href="/booking/details"
+              href="/book"
               source="cleaning_prices_home_size_quote"
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
             >
@@ -571,7 +571,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
                 </Link>{" "}
                 switches the base template before add-ons. Open the service page if you need checklist wording, then return to{" "}
                 <GrowthCtaLink
-                  href="/booking/details"
+                  href="/book"
                   source="cleaning_prices_quote_builder_inline"
                   className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                 >
@@ -705,14 +705,14 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="cleaning_prices_final_cta_quote"
                 className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3.5 text-base font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
               >
                 Get your exact cleaning price now
               </GrowthCtaLink>
               <GrowthCtaLink
-                href="/booking/details"
+                href="/book"
                 source="cleaning_prices_final_cta_book"
                 className="inline-flex items-center justify-center rounded-full border-2 border-white/80 bg-transparent px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10"
               >

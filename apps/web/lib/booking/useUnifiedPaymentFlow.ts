@@ -181,7 +181,7 @@ export function useUnifiedPaymentFlow({
         );
         return;
       }
-      router.push(`/booking/success?reference=${encodeURIComponent(ref)}`);
+      router.push(`/account/success?reference=${encodeURIComponent(ref)}`);
     },
     [router],
   );

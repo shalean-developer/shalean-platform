@@ -390,7 +390,7 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     expect(admin.tables.team_job_member_payouts).toHaveLength(0);
   });
 
-  it("blocks team payout persistence when payout owner is not active on the team", async () => {
+  it("blocks team payout persistence when payout owner is not active on the team and roster is empty", async () => {
     const teamBookingId = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbb3";
     const teamId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaa3";
     const cLead = "11111111-1111-4111-8111-111111111111";
@@ -423,10 +423,7 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
         { team_id: teamId, cleaner_id: cLead, active_from: null, active_to: "2026-04-19T00:00:00.000Z" },
         { team_id: teamId, cleaner_id: cMem2, active_from: null, active_to: null },
       ],
-      booking_cleaners: [
-        { booking_id: teamBookingId, cleaner_id: cLead, role: "lead", payout_weight: 1, lead_bonus_cents: 0 },
-        { booking_id: teamBookingId, cleaner_id: cMem2, role: "member", payout_weight: 1, lead_bonus_cents: 0 },
-      ],
+      booking_cleaners: [],
     });
     mockState.admin = admin;
 
@@ -437,6 +434,53 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     expect(admin.updateCount.bookings ?? 0).toBe(0);
     expect(admin.insertCount.team_job_member_payouts ?? 0).toBe(0);
     expect(admin.tables.team_job_member_payouts).toHaveLength(0);
+  });
+
+  it("persists team payout from booking roster when team_members roster is stale", async () => {
+    const teamBookingId = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbb4";
+    const teamId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaa4";
+    const cLead = "11111111-1111-4111-8111-111111111111";
+    const cMem2 = "22222222-2222-4222-8222-222222222222";
+    const staleMember = "99999999-9999-4999-8999-999999999999";
+
+    const admin = new MockSupabaseClient({
+      bookings: [
+        {
+          id: teamBookingId,
+          cleaner_id: staleMember,
+          payout_owner_cleaner_id: cLead,
+          team_id: teamId,
+          is_team_job: true,
+          date: "2026-04-20",
+          time: "11:00:00",
+          total_paid_zar: 900,
+          total_paid_cents: 90_000,
+          amount_paid_cents: 90_000,
+          base_amount_cents: 90_000,
+          service_fee_cents: 0,
+          service: "Deep Cleaning",
+          booking_snapshot: { locked: { service: "deep" } },
+          cleaner_payout_cents: null,
+          cleaner_bonus_cents: null,
+          company_revenue_cents: null,
+          display_earnings_cents: null,
+        },
+      ],
+      team_members: [{ team_id: teamId, cleaner_id: staleMember, active_from: null, active_to: null }],
+      booking_cleaners: [
+        { booking_id: teamBookingId, cleaner_id: cLead, role: "lead", payout_weight: 1, lead_bonus_cents: 0 },
+        { booking_id: teamBookingId, cleaner_id: cMem2, role: "member", payout_weight: 1, lead_bonus_cents: 0 },
+      ],
+    });
+    mockState.admin = admin;
+
+    const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
+    const result = await persistCleanerPayoutIfUnset({ admin: admin as unknown as never, bookingId: teamBookingId, cleanerId: cLead });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.skipped).toBe(false);
+    expect(admin.tables.bookings[0]!.display_earnings_cents).toBe(25_000);
+    expect(admin.tables.team_job_member_payouts).toHaveLength(2);
   });
 
   it("freezes on rerun and avoids second write", async () => {

@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { AuthShell } from "@/components/auth/AuthShell";
 import { noIndexNoFollowCanonical } from "@/lib/site/transactionalMetadata";
 
 export const metadata: Metadata = {
   ...noIndexNoFollowCanonical("/login"),
-  title:
-    "Shalean Cleaning Services | Secure Login for Home Cleaning Bookings",
-  description:
-    "Secure login for customers, cleaners, and administrators at Shalean Cleaning Services.",
+  title: "Sign in — Shalean",
+  description: "Sign in to your Shalean account as a customer or cleaner.",
 };
 
-export default function LoginSegmentLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
+export default function LoginSegmentLayout({ children }: { children: ReactNode }) {
+  return <AuthShell>{children}</AuthShell>;
 }

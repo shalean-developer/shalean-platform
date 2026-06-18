@@ -41,7 +41,7 @@ export function CustomerBookingsTable({ bookings }: { bookings: DashboardBooking
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
                   <Button asChild variant="ghost" size="sm" className="rounded-lg text-blue-600">
-                    <Link href={`/dashboard/bookings/${b.id}`}>Details</Link>
+                    <Link href={`/account/bookings/${b.id}`}>Details</Link>
                   </Button>
                 </td>
               </tr>

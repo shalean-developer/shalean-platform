@@ -1,3 +1,4 @@
+import { cleanerJobDetailHref } from "@/lib/cleaner/cleanerJobDetailHref";
 import Link from "next/link";
 import { Navigation } from "lucide-react";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
@@ -15,7 +16,7 @@ export type CleanerNextJobHeroProps = {
 };
 
 export function CleanerNextJobHero({ row, now }: CleanerNextJobHeroProps) {
-  const href = `/cleaner/jobs/${encodeURIComponent(row.id)}`;
+  const href = cleanerJobDetailHref(row.id);
   const d = String(row.date ?? "").trim();
   const t = String(row.time ?? "").trim() || "—";
   const todayYmd = johannesburgCalendarYmd(now);

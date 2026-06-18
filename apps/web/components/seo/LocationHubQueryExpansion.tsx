@@ -43,7 +43,7 @@ export function LocationHubQueryExpansion({ location, slug, tier }: Props) {
         : `Same-day or next-day cleans open when routing allows: lock bedrooms, bathrooms, and extras online so ${name} bookings dispatch with the checklist you approved.`,
       links: [
         {
-          href: "/booking/details",
+          href: "/book",
           label: "Check live slots & pricing",
           growthSource: `seo_loc_${slug}_query_same_day`,
         },

@@ -102,7 +102,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
     }
     const q = new URLSearchParams();
     if (source) q.set("source", source);
-    router.push(q.size ? `/booking?${q.toString()}` : "/booking");
+    router.push(q.size ? `/book?${q.toString()}` : "/book");
   }
 
   const onWidgetDateChange = useCallback((ymd: string) => setDate(ymd), []);

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { trackSeoCtaClick, trackSeoPricingInteraction, type SeoLocationAnalyticsBase } from "@/lib/analytics/track";
-import { buildSeoBookingHref, locationSlugFromSeoSuburb } from "@/lib/booking/seoBookingPrefill";
 
 type Props = {
   href: string;
@@ -29,14 +28,7 @@ export function SeoHubGrowthCtaLink({
   ctaKind,
   pricingInteraction,
 }: Props) {
-  const bookingHref =
-    ctx.page_type !== "services_hub" && (href === "/booking" || href === "/booking/details")
-      ? buildSeoBookingHref(href === "/booking" ? "entry" : "details", {
-          service: "standard",
-          locationSlug: locationSlugFromSeoSuburb(ctx.suburb),
-          source,
-        })
-      : href;
+  const bookingHref = href === "/booking" || href === "/booking/details" ? "/book" : href;
 
   return (
     <GrowthCtaLink

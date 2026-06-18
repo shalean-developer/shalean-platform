@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   triggerPersistCleanerPayoutIfCompleted,
-  triggerPersistMonthlyAssignedDisplayEarnings,
+  triggerPersistPreCompletionAssignmentDisplayEarnings,
 } from "@/lib/admin/adminBookingPostCreatePipeline";
 
 /**
@@ -19,10 +19,11 @@ import {
  * cron-driven stuck-earnings recompute caught up).
  *
  * Coverage rules — same gating as the admin POST pipeline:
- *  - Monthly + (`assigned` | `in_progress`)         → {@link triggerPersistMonthlyAssignedDisplayEarnings}
  *  - `completed`                                     → {@link triggerPersistCleanerPayoutIfCompleted}
+ *  - assigned / in_progress + pre-completion basis   → {@link triggerPersistPreCompletionAssignmentDisplayEarnings}
+ *    (paid solo per-booking, invoice-backed monthly, paid team)
  *  - Anything else (`pending`, `pending_payment`,
- *    `pending_assignment`, non-monthly assigned,
+ *    `pending_assignment`, unpaid assigned,
  *    `cancelled`, `failed`)                          → no-op
  *
  * Idempotency: both inner triggers delegate to `persistCleanerPayoutIfUnset`,
@@ -47,5 +48,5 @@ export async function triggerAssignmentEarningsSnapshotForBooking(
   logSource: string,
 ): Promise<void> {
   await triggerPersistCleanerPayoutIfCompleted(admin, bookingId, logSource);
-  await triggerPersistMonthlyAssignedDisplayEarnings(admin, bookingId, logSource);
+  await triggerPersistPreCompletionAssignmentDisplayEarnings(admin, bookingId, logSource);
 }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
-import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
+import { previewDisplayEarningsCentsForCleanerJob, persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 /** Default cap for sequential `previewDisplayEarningsCentsForCleanerJob` calls per HTTP request. */
 export const DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP = 50;
@@ -83,6 +83,10 @@ export async function applyPreviewEarningsToCleanerJobRows(
       out.push({ ...clearedZero, earnings_basis_pending: true });
       continue;
     }
+
+    void persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId }).catch(() => {
+      /* best-effort: preview already supplies the dashboard amount */
+    });
 
     out.push({
       ...j,

@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Navigation } from "lucide-react";
 import type { CleanerUpcomingJob } from "./types";
-import { Button } from "@/components/ui/button";
-import { directionsHrefFromQuery } from "@/lib/cleaner/directionsHref";
+import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { CleanerJobPrimaryActionButton } from "@/components/cleaner/CleanerJobPrimaryActionButton";
 import { cn } from "@/lib/utils";
 import { JobEarningInline } from "./JobEarningInline";
 
 type ActiveJobHeroProps = {
   job: CleanerUpcomingJob;
-  /** Maps query string (suburb / first address line) to deep-link the navigation app. */
+  bookingRow: CleanerBookingRow;
   mapsQuery: string | null;
+  clockOffsetMs?: number;
+  onRowPatched?: (bookingId: string, patch: Partial<CleanerBookingRow>) => void;
+  onRefresh?: () => void | Promise<void>;
 };
 
 function toneForPhase(phaseDisplay: string): { badgeClass: string; chipLabel: string } {
@@ -22,7 +24,6 @@ function toneForPhase(phaseDisplay: string): { badgeClass: string; chipLabel: st
       chipLabel: "In progress",
     };
   }
-  // En route / On the way / On my way
   return {
     badgeClass: "bg-sky-600 text-white",
     chipLabel: phaseDisplay || "En route",
@@ -32,23 +33,16 @@ function toneForPhase(phaseDisplay: string): { badgeClass: string; chipLabel: st
 /**
  * Active-work hero — primary action surface on Home when the cleaner is
  * currently driving to or executing a job (`en_route` / `in_progress`).
- *
- * Why this exists in addition to {@link NextJobPin}:
- *  - The next-job pin is a "do this next" reminder; the active-job hero is
- *    a "you are doing this RIGHT NOW" affordance. Bundling lifecycle
- *    actions ("Mark on the way", "Start cleaning", "Mark complete") onto
- *    the dashboard would require extracting the orchestrator that lives
- *    inside the job-detail page — out of scope for this change. So this
- *    hero links straight to the detail page for those actions while still
- *    surfacing the most important context (suburb + Maps deep-link) above
- *    the fold.
- *  - The visual treatment (amber for in-progress, sky for en-route) keeps
- *    it distinguishable from the next-job pin's emerald.
  */
-export function ActiveJobHero({ job, mapsQuery }: ActiveJobHeroProps) {
+export function ActiveJobHero({
+  job,
+  bookingRow,
+  mapsQuery,
+  clockOffsetMs = 0,
+  onRowPatched,
+  onRefresh,
+}: ActiveJobHeroProps) {
   const { badgeClass, chipLabel } = toneForPhase(job.phaseDisplay);
-  const mapsHref =
-    mapsQuery && mapsQuery.trim().length > 0 ? directionsHrefFromQuery(mapsQuery.trim()) : null;
 
   return (
     <section
@@ -69,38 +63,25 @@ export function ActiveJobHero({ job, mapsQuery }: ActiveJobHeroProps) {
         <p className="text-lg font-semibold leading-snug text-foreground">{job.timeLine}</p>
         <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{job.suburb}</p>
       </div>
-      {/* Same source-of-truth as the offer card — never added to "Today"
-          earnings until the job is marked completed. */}
       <div className="mt-3">
         <JobEarningInline earning={job.jobEarning} />
       </div>
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        {mapsHref ? (
-          <Button
-            type="button"
-            asChild
-            className="min-h-11 h-11 flex-1 gap-2 bg-amber-600 text-white transition-colors duration-200 hover:bg-amber-600/90 active:scale-[0.98]"
-          >
-            <a href={mapsHref} target="_blank" rel="noopener noreferrer">
-              <Navigation className="size-4 shrink-0" aria-hidden />
-              Start navigation
-            </a>
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant={mapsHref ? "secondary" : "default"}
-          className={cn(
-            "min-h-11 h-11 flex-1 gap-2 active:scale-[0.98]",
-            !mapsHref && "bg-amber-600 text-white hover:bg-amber-600/90",
-          )}
-          asChild
+      <div className="mt-4 space-y-2">
+        <CleanerJobPrimaryActionButton
+          bookingId={job.id}
+          row={bookingRow}
+          mapsQuery={mapsQuery}
+          clockOffsetMs={clockOffsetMs}
+          variant="hero"
+          onRowPatched={onRowPatched}
+          onRefresh={onRefresh}
+        />
+        <Link
+          href={job.href}
+          className="flex h-11 w-full items-center justify-center rounded-xl border border-amber-600/30 bg-background/80 text-sm font-medium text-foreground transition-colors hover:bg-amber-500/10"
         >
-          <Link href={job.href}>
-            Open job
-            <ArrowRight className="size-4 shrink-0" aria-hidden />
-          </Link>
-        </Button>
+          View job details
+        </Link>
       </div>
     </section>
   );

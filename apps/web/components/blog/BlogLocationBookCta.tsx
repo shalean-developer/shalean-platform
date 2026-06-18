@@ -38,7 +38,7 @@ export function BlogLocationBookCta({ trackingSlug }: Props) {
           View cleaning services in {hub.placeName}
         </SafeInternalLink>
         <GrowthCtaLink
-          href="/booking/details"
+          href="/book"
           source={`blog_${trackingSlug}_location_hub_book`}
           blogAnalyticsPlacement={`${trackingSlug}_location_book_cta`}
           className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-600 px-8 text-sm font-semibold text-white shadow-md transition hover:bg-emerald-700"

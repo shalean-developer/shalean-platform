@@ -245,7 +245,7 @@ export default function CleanerProfilePage() {
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 bg-background px-4 pt-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
-        <Link href="/cleaner/dashboard">← Home</Link>
+        <Link href="/jobs">← Home</Link>
       </Button>
       <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground">Profile</h1>
@@ -325,7 +325,7 @@ export default function CleanerProfilePage() {
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <p className="text-sm font-medium text-foreground">You&apos;re currently offline</p>
                 <Button asChild size="sm" className="w-full shrink-0 rounded-xl sm:w-auto">
-                  <Link href="/cleaner/dashboard">Go online</Link>
+                  <Link href="/jobs">Go online</Link>
                 </Button>
               </div>
             ) : null}
@@ -339,7 +339,7 @@ export default function CleanerProfilePage() {
             Work preferences live on Profile (not Home) — see dispatch-console
             redesign. Work-settings UX (assigned area, working days, request
             changes, preferred areas) belongs in settings, not in the live
-            operational console at /cleaner/dashboard.
+            operational console at /jobs.
           */}
           <section aria-label="Work preferences" className="space-y-2">
             <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

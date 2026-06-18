@@ -1,1 +1,1 @@
-export { AccountShellPage } from "@/src/features/account/AccountShellPage";
+export { AccountShell } from "@/src/features/account/AccountShell";

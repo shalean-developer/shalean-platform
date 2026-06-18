@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import BookingContainer from "@/components/layout/BookingContainer";
+import { AlertCircle, Mail, User } from "lucide-react";
+import { AuthBackLink, AuthCard, AuthLegalFooter } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getResolvedAuthIntent, parseIntentQuery } from "@/lib/auth/authRoleIntent";
-import { resolveCustomerPostAuthDestination } from "@/lib/auth/resolveCustomerPostAuthDestination";
+import { resolvePostAuthDestination } from "@/lib/auth/resolvePostAuthDestination";
 import { signUp } from "@/lib/auth/authClient";
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect")?.trim() || "/dashboard/bookings";
+  const redirect = searchParams.get("redirect")?.trim() || "/account";
   const intentParam = searchParams.get("intent");
 
   const [fullName, setFullName] = useState("");
@@ -27,8 +28,7 @@ function SignupForm() {
   }, [intentParam]);
 
   useEffect(() => {
-    const first = document.querySelector<HTMLInputElement>("#fullName");
-    first?.focus();
+    document.querySelector<HTMLInputElement>("#fullName")?.focus();
   }, []);
 
   const intentForLogin = parseIntentQuery(intentParam) ?? "customer";
@@ -49,8 +49,16 @@ function SignupForm() {
         return;
       }
       if (session?.access_token && user) {
-        const next = await resolveCustomerPostAuthDestination(session.access_token, redirect, intentParam);
-        router.replace(next);
+        const result = await resolvePostAuthDestination(session.access_token, redirect);
+        if (result.kind === "timeout") {
+          setError("Could not verify your account role in time. Check your connection and try again.");
+          return;
+        }
+        if (result.kind === "error") {
+          setError(result.message);
+          return;
+        }
+        router.replace(result.path);
         router.refresh();
         return;
       }
@@ -61,44 +69,52 @@ function SignupForm() {
   }
 
   return (
-    <BookingContainer className="py-12 sm:py-16">
-      <div className="mx-auto max-w-md">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Create account</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Book faster next time with Shalean.</p>
+    <>
+      <AuthCard>
+        <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Create your account</h1>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Book faster next time with Shalean.</p>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">
+        <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Full name
             </label>
-            <input
-              id="fullName"
-              name="fullName"
-              type="text"
-              autoComplete="name"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
-              placeholder="Jane Doe"
-            />
+            <div className="relative mt-1.5">
+              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="fullName"
+                name="fullName"
+                type="text"
+                autoComplete="name"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                placeholder="Jane Doe"
+              />
+            </div>
           </div>
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Email
+              Email address
             </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
-              placeholder="you@example.com"
-            />
+            <div className="relative mt-1.5">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                placeholder="you@example.com"
+              />
+            </div>
           </div>
+
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Password
@@ -111,63 +127,62 @@ function SignupForm() {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              wrapperClassName="mt-1"
+              wrapperClassName="mt-1.5"
+              placeholder="Min. 6 characters"
             />
-            <p className="mt-1 text-xs text-zinc-500">At least 6 characters.</p>
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/50 dark:text-red-200" role="alert">
+            <div
+              className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300"
+              role="alert"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
               {error}
-            </p>
+            </div>
           ) : null}
           {info ? (
-            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200">
               {info}
-            </p>
+            </div>
           ) : null}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
+            className="mt-2 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 disabled:opacity-60"
           >
             {submitting ? "Creating account…" : "Create account"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
           Already have an account?{" "}
           <Link
-            href={`/auth?redirect=${encodeURIComponent(redirect)}&intent=${encodeURIComponent(intentForLogin)}`}
+            href={`/auth/login?redirect=${encodeURIComponent(redirect)}&intent=${encodeURIComponent(intentForLogin)}`}
             className="font-semibold text-primary hover:underline"
           >
-            Log in
+            Sign in
           </Link>
         </p>
+      </AuthCard>
 
-        <p className="mt-4 text-center">
-          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-            ← Home
-          </Link>
-        </p>
-      </div>
-    </BookingContainer>
+      <AuthBackLink href={`/auth?redirect=${encodeURIComponent(redirect)}`}>← Back to account selection</AuthBackLink>
+      <AuthLegalFooter />
+    </>
   );
 }
 
 export default function SignupPage() {
   return (
-    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      <Suspense
-        fallback={
-          <BookingContainer className="py-16">
-            <p className="text-center text-sm text-zinc-500">Loading…</p>
-          </BookingContainer>
-        }
-      >
-        <SignupForm />
-      </Suspense>
-    </div>
+    <Suspense
+      fallback={
+        <AuthCard>
+          <p className="text-center text-sm text-zinc-500">Loading…</p>
+        </AuthCard>
+      }
+    >
+      <SignupForm />
+    </Suspense>
   );
 }

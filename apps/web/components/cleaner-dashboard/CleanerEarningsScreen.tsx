@@ -425,7 +425,7 @@ export function CleanerEarningsScreen() {
     <div className="mx-auto w-full max-w-lg bg-background">
       <div className="space-y-4 p-4">
         <Header firstName={headerFirstName} />
-        <Link href="/cleaner/dashboard" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+        <Link href="/jobs" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
           ← Dashboard
         </Link>
       </div>
@@ -452,7 +452,7 @@ export function CleanerEarningsScreen() {
               Demand is often highest mid-week — open jobs to pick up a slot near you.
             </p>
             <Button asChild className="mt-6">
-              <Link href="/cleaner/jobs?sort=nearest&available=true">Browse open jobs</Link>
+              <Link href="/jobs/list?sort=nearest&available=true">Browse open jobs</Link>
             </Button>
           </Card>
         </div>

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createNotificationConfigBreaker } from "@/lib/email/notificationConfigBreaker";
 import { buildMonthlyInvoiceSnapshot, wrapSnapshotCurrentV1 } from "@/lib/monthlyInvoice/buildMonthlyInvoiceSnapshot";
+import { createZohoInvoice, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import {
   appendMonthlyInvoiceSnapshotEvent,
   invoicePaymentLinkEmailSentExists,
@@ -324,6 +325,36 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
         .eq("id", f.id);
       errors.push(`${f.id}: invoice_email_event:${evAppend.error}`);
       continue;
+    }
+
+    // Sync to Zoho Books (non-blocking — failures are logged but don't fail finalization)
+    if (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
+      const zohoResult = await createZohoInvoice({
+        referenceId: f.id,
+        customerEmail: email,
+        customerName: email,
+        invoiceDate: todayYmdJhb(),
+        dueDate: f.due_date,
+        lineItems: [
+          {
+            name: `Shalean Cleaning — ${formatMonthLabel(f.month)}`,
+            description: `Monthly cleaning invoice for ${formatMonthLabel(f.month)}`,
+            rate: balanceZar,
+            quantity: 1,
+          },
+        ],
+        notes: `Shalean monthly invoice ${f.id}. Pay via: ${pay.authorizationUrl}`,
+        currencyCode: "ZAR",
+      });
+
+      if (zohoResult.ok) {
+        await admin
+          .from("monthly_invoices")
+          .update({ zoho_invoice_id: zohoResult.zohoInvoiceId })
+          .eq("id", f.id);
+      } else {
+        errors.push(`${f.id}: zoho_sync:${zohoResult.error}`);
+      }
     }
 
     finalized++;

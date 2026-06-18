@@ -9,6 +9,7 @@ import { useUser } from "@/hooks/useUser";
 export type DashboardSummaryPayload = {
   ym: string;
   bookingsThisMonthCount: number;
+  hoursBookedThisMonth: number;
   nextBooking: DashboardBooking | null;
   recentBookings: DashboardBooking[];
   invoiceThisMonth: CustomerMonthlyInvoiceRow | null;

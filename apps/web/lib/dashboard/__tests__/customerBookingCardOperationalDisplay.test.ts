@@ -111,19 +111,21 @@ describe("customerBookingCardOperationalDisplay", () => {
 });
 
 describe("CustomerBookingStatusBadge", () => {
-  it("renders data-lifecycle-source=canonical when canonical matches describe", () => {
+  it("renders operational displayBadge with canonical lifecycle when API matches describe", () => {
     const raw = attachCanonicalCustomerBookingLifecycle(baseRaw());
     const html = renderToStaticMarkup(createElement(CustomerBookingStatusBadge, { booking: dashboardFromRaw(raw) }));
+    const d = customerBookingCardOperationalDisplay(dashboardFromRaw(raw));
     expect(html).toContain('data-lifecycle-source="canonical"');
-    expect(html).toContain("Scheduled");
+    expect(html).toContain(d.displayBadge);
+    expect(html).not.toContain(">Scheduled<");
     expect(html).toMatch(/title="[^"]*·[^"]*"/);
   });
 
-  it("renders data-lifecycle-source=derived when canonical is absent", () => {
-    const html = renderToStaticMarkup(
-      createElement(CustomerBookingStatusBadge, { booking: dashboardFromRaw(baseRaw()) }),
-    );
+  it("renders derived operational badge when canonical is absent", () => {
+    const b = dashboardFromRaw(baseRaw());
+    const d = customerBookingCardOperationalDisplay(b);
+    const html = renderToStaticMarkup(createElement(CustomerBookingStatusBadge, { booking: b }));
     expect(html).toContain('data-lifecycle-source="derived"');
-    expect(html).toContain("Scheduled");
+    expect(html).toContain(d.displayBadge);
   });
 });

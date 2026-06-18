@@ -20,6 +20,8 @@ export type PaystackVerifyPostSuccess = {
   bookingSnapshot: unknown;
   bookingInDatabase: boolean;
   bookingId: string | null;
+  /** Customer-facing reference (`SHL-BK-######`); never the Paystack charge reference. */
+  bookingReference?: string | null;
   /**
    * Booking-flow values: `paid` | `payment_mismatch` | `payment_reconciliation_required`.
    * **M-5** monthly-invoice routing adds: `monthly_invoice_settled` | `monthly_invoice_partial` |

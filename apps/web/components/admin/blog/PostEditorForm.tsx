@@ -100,7 +100,7 @@ function newBlock(type: AddableType): BlogContentBlock {
         type: "cta",
         title: "",
         button_text: "Book now",
-        link: "/booking/details",
+        link: "/book",
         variant: "primary",
       });
     case "internal_links":

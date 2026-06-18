@@ -80,11 +80,58 @@ export function durationHoursFromBookingSnapshot(snap: unknown): number {
   return 2;
 }
 
+function positiveDurationMinutes(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return Math.round(v);
+  if (typeof v === "string" && /^\d+$/.test(v.trim())) {
+    const n = parseInt(v.trim(), 10);
+    if (n > 0) return n;
+  }
+  return null;
+}
+
+function estimatedDurationMinutesFromBookingRecord(row: Record<string, unknown>): number | null {
+  const fromCol = positiveDurationMinutes(row.duration_minutes);
+  if (fromCol != null) return fromCol;
+
+  const pricingSummary = row.pricing_summary;
+  if (pricingSummary && typeof pricingSummary === "object" && !Array.isArray(pricingSummary)) {
+    const fromSummary = positiveDurationMinutes(
+      (pricingSummary as { estimated_duration_minutes?: unknown }).estimated_duration_minutes,
+    );
+    if (fromSummary != null) return fromSummary;
+  }
+
+  const snap = row.booking_snapshot;
+  if (snap && typeof snap === "object" && !Array.isArray(snap)) {
+    const pricingSummarySnap = (snap as { pricingSummary?: { estimated_duration_minutes?: unknown } }).pricingSummary;
+    const fromSnap = positiveDurationMinutes(pricingSummarySnap?.estimated_duration_minutes);
+    if (fromSnap != null) return fromSnap;
+  }
+
+  return null;
+}
+
 /** Like {@link durationHoursFromBookingSnapshot} but returns null when hours are not set on the snapshot (no default). */
 export function explicitDurationHoursFromBookingSnapshot(snap: unknown): number | null {
   const o = snap as { locked?: { finalHours?: number } } | null;
   const h = o?.locked?.finalHours;
   if (typeof h === "number" && Number.isFinite(h) && h > 0) return h;
+  return null;
+}
+
+/** Duration hours from booking row columns + v2 pricing summary + legacy snapshot. */
+export function durationHoursFromBookingRecord(row: Record<string, unknown>): number {
+  const explicit = explicitDurationHoursFromBookingRecord(row);
+  if (explicit != null) return explicit;
+  return durationHoursFromBookingSnapshot(row.booking_snapshot);
+}
+
+/** Explicit duration hours when set; null when only the legacy default would apply. */
+export function explicitDurationHoursFromBookingRecord(row: Record<string, unknown>): number | null {
+  const fromSnap = explicitDurationHoursFromBookingSnapshot(row.booking_snapshot);
+  if (fromSnap != null) return fromSnap;
+  const mins = estimatedDurationMinutesFromBookingRecord(row);
+  if (mins != null) return mins / 60;
   return null;
 }
 

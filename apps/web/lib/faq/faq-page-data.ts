@@ -15,7 +15,7 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
     lead: "Cleaning services in Cape Town typically cost between R300 and R900 depending on home size, service tier, bathrooms, and add-ons.",
     paragraphs: [
       "Your total is calculated online from bedrooms, bathrooms, service type (standard, deep, move-out, Airbnb, etc.), and extras—so you approve a locked quote before we dispatch.",
-      "Coastal and premium-band suburbs can trend higher when scope or routing is heavier; see any hub like [Sea Point cleaning services](/locations/sea-point-cleaning-services) for local context, then open [Get your exact price](/booking/details) with your address.",
+      "Coastal and premium-band suburbs can trend higher when scope or routing is heavier; see any hub like [Sea Point cleaning services](/locations/sea-point-cleaning-services) for local context, then open [Get your exact price](/book) with your address.",
     ],
     bullets: [
       "Small apartments often start lower; larger homes and deep cleans need more crew time.",
@@ -75,7 +75,7 @@ export const FAQ_CATEGORY_GROUPS: readonly FaqCategoryGroup[] = [
         lead: "Enter your address, rooms, bathrooms, service tier, and add-ons online—the total updates instantly before you pay.",
         paragraphs: [
           "That locked figure is what you approve before dispatch—adjust selections until it matches your visit.",
-          "Start here: [Get your exact price](/booking/details).",
+          "Start here: [Get your exact price](/book).",
         ],
         keywords: ["quote", "estimate", "total", "checkout"],
         showInlineCta: true,

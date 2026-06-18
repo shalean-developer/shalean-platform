@@ -39,6 +39,25 @@ export async function fetchActiveTeamMemberIdsAtAppointment(
   return [...new Set(active.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean))];
 }
 
+/**
+ * Cleaner ids that participate in team payout for a booking.
+ * When `booking_cleaners` rows exist they are authoritative (roster-assigned jobs);
+ * otherwise fall back to active `team_members` at appointment time.
+ */
+export function resolveTeamPayoutParticipantIds(params: {
+  rosterRows: readonly { cleaner_id?: string | null }[];
+  activeTeamMemberIds: readonly string[];
+}): string[] {
+  const uuid = (s: string) => /^[0-9a-f-]{36}$/i.test(String(s ?? "").trim());
+  const fromRoster = params.rosterRows
+    .map((r) => String(r.cleaner_id ?? "").trim())
+    .filter((id) => uuid(id));
+  if (fromRoster.length > 0) {
+    return [...new Set(fromRoster)];
+  }
+  return [...new Set(params.activeTeamMemberIds.map((c) => String(c ?? "").trim()).filter(uuid))];
+}
+
 /** Canonical per-cleaner payout for team bookings (ZAR minor units). Same as fixed-special solo rate. */
 export const TEAM_PER_CLEANER_PAYOUT_CENTS = 25_000;
 

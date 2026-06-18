@@ -51,6 +51,7 @@ export type FloatingSelectProps = {
   variant?: "default" | "room";
   className?: string;
   triggerClassName?: string;
+  labelClassName?: string;
   "aria-label"?: string;
 };
 
@@ -64,6 +65,7 @@ export function FloatingSelect({
   variant = "default",
   className,
   triggerClassName,
+  labelClassName,
   "aria-label": ariaLabel,
 }: FloatingSelectProps) {
   const reactId = useId();
@@ -169,7 +171,11 @@ export function FloatingSelect({
   return (
     <div className={cn("w-full space-y-1.5", className)}>
       {name ? <input type="hidden" name={name} value={value} readOnly aria-hidden /> : null}
-      <label id={labelId} htmlFor={triggerId} className={cn("block", isRoom ? ROOM_FIELD_LABEL_CLASS : defaultLabelClass)}>
+      <label
+        id={labelId}
+        htmlFor={triggerId}
+        className={cn("block", labelClassName ?? (isRoom ? ROOM_FIELD_LABEL_CLASS : defaultLabelClass))}
+      >
         {label}
       </label>
       <button

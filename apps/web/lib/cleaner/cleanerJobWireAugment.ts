@@ -1,6 +1,6 @@
+import { serviceLabelFromBookingRow } from "@/lib/booking/bookingV2CustomerDisplay";
 import {
-  durationHoursFromBookingSnapshot,
-  explicitDurationHoursFromBookingSnapshot,
+  durationHoursFromBookingRecord,
   mergedBookingNotesFromSnapshot,
 } from "@/lib/cleaner/cleanerMobileBookingMap";
 
@@ -17,19 +17,21 @@ export function augmentCleanerBookingWire(
   is_lead_cleaner: boolean;
 } {
   const snap = row.booking_snapshot;
-  const explicit = explicitDurationHoursFromBookingSnapshot(snap);
-  const duration_hours = explicit ?? durationHoursFromBookingSnapshot(snap);
+  const duration_hours = durationHoursFromBookingRecord(row);
   const rawNotes = mergedBookingNotesFromSnapshot(snap);
   const job_notes = rawNotes && rawNotes.length > 2000 ? `${rawNotes.slice(0, 1997)}…` : rawNotes;
-  const service = typeof row.service === "string" ? row.service.trim() : "";
   const slug = typeof row.service_slug === "string" ? row.service_slug.trim() : "";
+  const service_name = serviceLabelFromBookingRow({
+    service: typeof row.service === "string" ? row.service : null,
+    service_slug: slug || null,
+  });
   const leadId = String(row.payout_owner_cleaner_id ?? "").trim();
   const vid = String(viewerCleanerId ?? "").trim();
   const is_lead_cleaner = Boolean(vid && leadId === vid);
   return {
     duration_hours,
     job_notes,
-    service_name: service || null,
+    service_name,
     service_type: slug || null,
     is_lead_cleaner,
   };

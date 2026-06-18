@@ -7,7 +7,7 @@ import {
   tryClaimDispatchRecoveryLease,
 } from "@/lib/dispatch/dispatchRecoveryLease";
 import { maybeRedispatchPendingBookingIfOffersExhausted } from "@/lib/dispatch/redispatchAfterOfferReject";
-import { maybeRetrySameCleanerAfterFirstOfferExpiry } from "@/lib/dispatch/userSelectedOfferExpiryRetry";
+import { setPreferredDispatchStatus } from "@/lib/dispatch/preferredCleanerDispatchStatus";
 import {
   USER_SELECTED_RECOVERY_MAX_PAGES,
   USER_SELECTED_RECOVERY_PAGE_SIZE,
@@ -24,10 +24,11 @@ export async function expireStaleDispatchOffersRpc(
 }
 
 /**
- * After SQL expiry, user-selected bookings with no pending offers recover:
- * 1. **First expiry** (exactly one `dispatch_offers` row `expired` for that booking+cleaner): {@link maybeRetrySameCleanerAfterFirstOfferExpiry}
- *    may create **one** replacement pending offer to the same selected cleaner if still slot-eligible.
- * 2. Otherwise → same fallback path as decline → {@link maybeRedispatchPendingBookingIfOffersExhausted} (auto-assign, excluding selected cleaner).
+ * After SQL expiry, user-selected bookings with no pending offers recover via backup auto-dispatch
+ * ({@link maybeRedispatchPendingBookingIfOffersExhausted}), excluding the customer's preferred cleaner.
+ *
+ * Preferred-cleaner offers no longer get a second same-cleaner retry — once the deadline passes,
+ * backup cleaners are dispatched immediately (first accept wins).
  *
  * Eligibility uses `list_bookings_due_user_selected_recovery` so `dispatch_next_recovery_at` is compared with DB `now()`
  * (same clock story as the lease RPC). Any remaining app vs DB skew elsewhere is typically ±2–3s — negligible vs backoff.
@@ -70,21 +71,14 @@ export async function processUserSelectedOfferExpiryRedispatch(
       if (!claimed) continue;
 
       try {
-        const retry = await maybeRetrySameCleanerAfterFirstOfferExpiry(supabase, {
+        await setPreferredDispatchStatus(supabase, id, "backup_dispatch_started");
+        await maybeRedispatchPendingBookingIfOffersExhausted(supabase, {
           bookingId: id,
-          selectedCleanerId: sid,
+          rejectedCleanerId: sid,
+          reassignmentFallbackReason: FALLBACK_REASON_CLEANER_OFFER_EXPIRED,
+          skipBackoffScheduling: false,
         });
-        if (retry.kind === "retry_offer_created") {
-          invoked++;
-        } else {
-          await maybeRedispatchPendingBookingIfOffersExhausted(supabase, {
-            bookingId: id,
-            rejectedCleanerId: sid,
-            reassignmentFallbackReason: FALLBACK_REASON_CLEANER_OFFER_EXPIRED,
-            skipBackoffScheduling: false,
-          });
-          invoked++;
-        }
+        invoked++;
       } finally {
         await releaseDispatchRecoveryLease(supabase, id);
       }

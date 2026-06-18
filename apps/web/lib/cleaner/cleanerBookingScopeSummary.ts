@@ -100,10 +100,45 @@ function extrasShortLabelsFromLocked(locked: Record<string, unknown>): string[] 
   return out;
 }
 
+function extrasShortLabelsFromSelectedExtras(selected: unknown, pricingSummary?: unknown): string[] {
+  const summaryItems =
+    pricingSummary && typeof pricingSummary === "object" && !Array.isArray(pricingSummary)
+      ? (pricingSummary as { selected_extras?: unknown }).selected_extras
+      : null;
+  if (Array.isArray(summaryItems) && summaryItems.length > 0) {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const row of summaryItems) {
+      if (!row || typeof row !== "object") continue;
+      const name = typeof (row as { name?: unknown }).name === "string" ? (row as { name: string }).name.trim() : "";
+      const id = typeof (row as { extra_id?: unknown }).extra_id === "string" ? (row as { extra_id: string }).extra_id.trim() : "";
+      const key = id || name;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(name || titleCaseFromSlug(id.replace(/_/g, "-")));
+    }
+    if (out.length > 0) return out;
+  }
+
+  if (!Array.isArray(selected) || selected.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of selected) {
+    const slug = String(raw).trim();
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    out.push(titleCaseFromSlug(slug.replace(/_/g, "-")));
+  }
+  return out;
+}
+
 export type CleanerBookingScopeSource = {
   rooms?: unknown;
   bathrooms?: unknown;
   extras?: unknown;
+  selected_extras?: unknown;
+  pricing_summary?: unknown | null;
+  service_details?: unknown | null;
   booking_snapshot?: unknown | null;
   /** When set (e.g. cleaner APIs), preferred over legacy `extras` / snapshot parsing. */
   lineItems?: readonly CleanerBookingLineItemWire[] | null;
@@ -179,6 +214,11 @@ function buildScopeLinesFromColumnsAndSnapshot(row: CleanerBookingScopeSource): 
   const fromDbLabels = extrasShortLabelsFromDbJson(row.extras);
   if (fromDbLabels.length > 0) {
     lines.push(`Extras: ${fromDbLabels.join(", ")}`);
+    return lines;
+  }
+  const fromSelected = extrasShortLabelsFromSelectedExtras(row.selected_extras, row.pricing_summary);
+  if (fromSelected.length > 0) {
+    lines.push(`Extras: ${fromSelected.join(", ")}`);
     return lines;
   }
   if (locked) {
@@ -278,8 +318,13 @@ export function cleanerBookingCardDetailsFromRow(row: CleanerBookingScopeSource)
   const fromDbLabels = extrasShortLabelsFromDbJson(row.extras);
   if (fromDbLabels.length > 0) {
     extraNamesBase = fromDbLabels;
-  } else if (locked) {
-    extraNamesBase = extrasShortLabelsFromLocked(locked);
+  } else {
+    const fromSelected = extrasShortLabelsFromSelectedExtras(row.selected_extras, row.pricing_summary);
+    if (fromSelected.length > 0) {
+      extraNamesBase = fromSelected;
+    } else if (locked) {
+      extraNamesBase = extrasShortLabelsFromLocked(locked);
+    }
   }
 
   const lineItems = Array.isArray(row.lineItems) && row.lineItems.length > 0 ? row.lineItems : null;

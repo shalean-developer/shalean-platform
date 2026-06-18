@@ -4,6 +4,7 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { cleanerBookingCardDetailsFromRow } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import { suburbFromLocationForOffer } from "@/lib/cleaner/cleanerOfferLocationSuburb";
+import { isPreferredOfferUrgent } from "@/lib/dispatch/preferredOfferUrgentClient";
 import { formatCleanerJobEarningsLabel } from "@/lib/cleaner/cleanerZarFormat";
 import {
   cleanerJobEarningFromCents,
@@ -84,6 +85,23 @@ export function mapOfferToDashboardCard(offer: CleanerOfferRow, now: Date): Clea
       : "—";
 
   const b = offer.booking;
+  const offerTypeRaw = String(offer.offer_type ?? "").trim().toLowerCase();
+  const offerType = offerTypeRaw === "preferred" || offerTypeRaw === "backup" ? offerTypeRaw : null;
+  const sentAtIso = offer.sent_at ?? offer.created_at;
+  const sentAt = sentAtIso ? new Date(sentAtIso) : now;
+  const expiresAtDate = new Date(offer.expires_at);
+  const isUrgentOffer = Boolean(
+    offerType === "preferred" &&
+      b?.date &&
+      b?.time &&
+      isPreferredOfferUrgent({
+        dateYmd: String(b.date),
+        timeHm: String(b.time ?? ""),
+        expiresAt: expiresAtDate,
+        sentAt,
+      }),
+  );
+
   if (!b) {
     return {
       id: offer.id,
@@ -100,6 +118,9 @@ export function mapOfferToDashboardCard(offer: CleanerOfferRow, now: Date): Clea
       offerToken: offer.offer_token?.trim() || undefined,
       offerCreatedAtIso: offer.created_at,
       smsSentAt: offer.sms_sent_at ?? null,
+      offerType,
+      isUrgentOffer,
+      acceptDeadlineIso: offer.expires_at,
     };
   }
 
@@ -135,5 +156,8 @@ export function mapOfferToDashboardCard(offer: CleanerOfferRow, now: Date): Clea
     offerToken: offer.offer_token?.trim() || undefined,
     offerCreatedAtIso: offer.created_at,
     smsSentAt: offer.sms_sent_at ?? null,
+    offerType,
+    isUrgentOffer,
+    acceptDeadlineIso: offer.expires_at,
   };
 }

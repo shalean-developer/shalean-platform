@@ -21,6 +21,11 @@ import {
   DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
+import {
+  isStuckNullEarningsBooking,
+  maybeLogStuckNullEarnings,
+} from "@/lib/cleaner/cleanerPayoutInvariantLogging";
+import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,6 +116,20 @@ export async function GET(request: Request) {
     rows: prioritized as unknown as Record<string, unknown>[],
     maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
   })) as unknown as typeof prioritized;
+
+  for (const j of jobs as Record<string, unknown>[]) {
+    const id = String(j.id ?? "").trim();
+    if (!id) continue;
+    maybeLogStuckNullEarnings(id, j);
+    if (isStuckNullEarningsBooking(j)) {
+      scheduleStuckEarningsRecomputeDebounced({
+        admin,
+        bookingId: id,
+        cleanerId,
+        recomputeSource: "jobs_list",
+      });
+    }
+  }
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(
     rawList as unknown as CleanerDashboardEarningsWireRow[],

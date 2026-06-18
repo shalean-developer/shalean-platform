@@ -40,6 +40,16 @@ import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/b
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
 import { buildAdminWarningPayload } from "@/lib/admin/adminWarningPayload";
+import {
+  readCustomerNameFromBookingSnapshot,
+  resolveAdminBookingCustomerPhone,
+  trimCustomerName,
+  trimCustomerPhone,
+} from "@/lib/admin/adminBookingCustomerContact";
+import {
+  isBookingTerminalForCleanerWorkloadSync,
+  syncCleanersBusyAfterBookingTerminalChange,
+} from "@/lib/cleaner/syncCleanerStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,7 +112,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const cleanerPromise = cleanerId
     ? admin
         .from("cleaners")
-        .select("id, full_name, email, phone, status, rating")
+        .select("id, full_name, email, phone, status, rating, jobs_completed")
         .eq("id", cleanerId)
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
@@ -110,7 +120,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const selectedCleanerPromise = fetchSelectedCleanerRow
     ? admin
         .from("cleaners")
-        .select("id, full_name, email, phone, status, rating")
+        .select("id, full_name, email, phone, status, rating, jobs_completed")
         .eq("id", selectedCleanerId)
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
@@ -125,7 +135,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const offersPromise = admin
     .from("dispatch_offers")
-    .select("id, cleaner_id, status, rank_index, expires_at, created_at, responded_at, ux_variant")
+    .select("id, cleaner_id, status, rank_index, expires_at, created_at, responded_at, ux_variant, offer_type, sent_at")
     .eq("booking_id", id)
     .order("created_at", { ascending: false });
 
@@ -229,6 +239,76 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     telemetryBookingId: id,
   });
 
+  let customer_contact_phone = resolveAdminBookingCustomerPhone({
+    customer_phone: typeof b.customer_phone === "string" ? b.customer_phone : null,
+    phone: typeof b.phone === "string" ? b.phone : null,
+    userProfilePhone:
+      userProfile && typeof userProfile === "object" && "phone" in userProfile
+        ? String((userProfile as { phone?: string | null }).phone ?? "")
+        : null,
+    bookingSnapshot: b.booking_snapshot,
+  });
+
+  if (!customer_contact_phone && userId) {
+    try {
+      const { data: authUser } = await admin.auth.admin.getUserById(userId);
+      const metaPhone = trimCustomerPhone(
+        (authUser?.user?.user_metadata as { phone?: string } | undefined)?.phone,
+      );
+      if (metaPhone) customer_contact_phone = metaPhone;
+    } catch {
+      // auth lookup is best-effort
+    }
+  }
+
+  if (!customer_contact_phone && userId) {
+    const { data: lastBookingPhoneRow } = await admin
+      .from("bookings")
+      .select("customer_phone")
+      .eq("user_id", userId)
+      .not("customer_phone", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    customer_contact_phone = trimCustomerPhone(
+      (lastBookingPhoneRow as { customer_phone?: string | null } | null)?.customer_phone,
+    );
+  }
+
+  let customer_contact_name =
+    trimCustomerName(typeof b.customer_name === "string" ? b.customer_name : null) ??
+    trimCustomerName(
+      userProfile && typeof userProfile === "object" && "full_name" in userProfile
+        ? (userProfile as { full_name?: string | null }).full_name
+        : null,
+    ) ??
+    readCustomerNameFromBookingSnapshot(b.booking_snapshot);
+
+  if (!customer_contact_name && userId) {
+    try {
+      const { data: authUser } = await admin.auth.admin.getUserById(userId);
+      customer_contact_name = trimCustomerName(
+        (authUser?.user?.user_metadata as { full_name?: string } | undefined)?.full_name,
+      );
+    } catch {
+      // auth lookup is best-effort
+    }
+  }
+
+  if (!customer_contact_name && userId) {
+    const { data: lastBookingNameRow } = await admin
+      .from("bookings")
+      .select("customer_name")
+      .eq("user_id", userId)
+      .not("customer_name", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    customer_contact_name = trimCustomerName(
+      (lastBookingNameRow as { customer_name?: string | null } | null)?.customer_name,
+    );
+  }
+
   return NextResponse.json({
     booking,
     dashboardLifecycle,
@@ -237,6 +317,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     cleaner: cleaner ?? null,
     selected_cleaner: selected_cleaner ?? null,
     userProfile: userProfile ?? null,
+    customer_contact_phone,
+    customer_contact_name,
     dispatch_offers: dispatchOffers ?? [],
     cleaner_issue_reports: cleanerIssueReports ?? [],
     supports_team_assignment,
@@ -947,6 +1029,19 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     ) {
       invalidateCleanerAvailabilityCache(nd, nt);
     }
+  }
+
+  const patchedStatus = String(
+    (postPatchStatus as { status?: string | null } | null)?.status ??
+      (typeof updates.status === "string" ? updates.status : beforeStatus),
+  );
+  if (isBookingTerminalForCleanerWorkloadSync(patchedStatus) && beforeRow) {
+    await syncCleanersBusyAfterBookingTerminalChange(admin, [
+      beforeRow.cleaner_id,
+      (beforeRow as { payout_owner_cleaner_id?: string | null }).payout_owner_cleaner_id,
+      newCleaner,
+      oldCleaner,
+    ]);
   }
 
   return NextResponse.json({

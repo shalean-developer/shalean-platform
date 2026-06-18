@@ -1,1 +1,1 @@
-export { JobsShellPage } from "@/src/features/jobs/JobsShellPage";
+export { JobsShell } from "@/src/features/jobs/JobsShell";
