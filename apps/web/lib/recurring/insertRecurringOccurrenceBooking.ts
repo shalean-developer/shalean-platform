@@ -19,6 +19,7 @@ import {
   recurringOccurrenceCleanerPatch,
   resolveRecurringPreferredCleanerId,
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
+import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -117,15 +118,17 @@ export async function insertRecurringOccurrenceBooking(
   /**
    * **M-6**: copy the customer's preferred cleaner onto the new occurrence as
    * `selected_cleaner_id` + `assignment_type='user_selected'`. Resolution order:
-   * recurring column → snapshot.locked.cleaner_id → snapshot.cleaner_id. Missing /
-   * malformed UUIDs are skipped silently — they must never block generation, since the
-   * recurring schedule is the source of customer commitment for the cycle.
+   * recurring column → last assigned occurrence → snapshot.locked.cleaner_id → snapshot.cleaner_id.
    */
+  const lastAssignedCleanerId = await fetchLastAssignedCleanerForRecurringPlan(admin, params.recurring.id);
   const preferredCleanerId = resolveRecurringPreferredCleanerId({
     recurringPreferredCleanerId: params.recurring.preferred_cleaner_id ?? null,
+    lastAssignedCleanerId,
     snapshotTemplate: template,
   });
-  const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId);
+  const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId, {
+    operationalStatus: "pending_payment",
+  });
 
   const baseRow = {
     paystack_reference: paystackReference,

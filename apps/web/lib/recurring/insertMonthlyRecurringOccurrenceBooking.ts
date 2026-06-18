@@ -20,6 +20,7 @@ import {
   recurringOccurrenceCleanerPatch,
   resolveRecurringPreferredCleanerId,
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
+import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -88,14 +89,18 @@ export async function insertMonthlyRecurringOccurrenceBooking(
 
   /**
    * **M-6**: copy the customer's preferred cleaner onto the new monthly occurrence. Resolution
-   * order matches the per-booking insert path (recurring column → snapshot.locked.cleaner_id →
-   * snapshot.cleaner_id) so monthly and per-booking plans behave identically wrt cleaner intent.
+   * order matches the per-booking insert path (recurring column → last assigned occurrence →
+   * snapshot.locked.cleaner_id → snapshot.cleaner_id).
    */
+  const lastAssignedCleanerId = await fetchLastAssignedCleanerForRecurringPlan(admin, params.recurring.id);
   const preferredCleanerId = resolveRecurringPreferredCleanerId({
     recurringPreferredCleanerId: params.recurring.preferred_cleaner_id ?? null,
+    lastAssignedCleanerId,
     snapshotTemplate: template,
   });
-  const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId);
+  const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId, {
+    operationalStatus: "pending",
+  });
 
   const baseRow = {
     paystack_reference: paystackReference,

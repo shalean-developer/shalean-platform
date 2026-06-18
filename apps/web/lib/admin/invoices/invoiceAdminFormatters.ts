@@ -65,3 +65,20 @@ export function formatCurrency(amountCents: number, currencyCode: string | null 
     return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(major);
   }
 }
+
+/** Parse admin-entered ZAR amounts (supports en-ZA spacing and grouping). */
+export function parseZarInput(input: string): number | null {
+  const s = input.trim();
+  if (!s) return null;
+
+  let normalized = s.replace(/[\s\u00a0\u202f]/g, "");
+  if (normalized.includes(".") && normalized.includes(",")) {
+    normalized = normalized.replace(/,/g, "");
+  } else if (normalized.includes(",") && !normalized.includes(".")) {
+    normalized = normalized.replace(",", ".");
+  }
+
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n === 0) return null;
+  return n;
+}

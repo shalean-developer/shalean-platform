@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency, formatDate } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { formatCurrency, formatDate, parseZarInput } from "@/lib/admin/invoices/invoiceAdminFormatters";
 import {
   adjustmentCategoryLabel,
   parseAdjustmentCategory,
@@ -106,9 +106,8 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const bookingLabel = props.bookingCountToSettle === 1 ? "booking" : "bookings";
 
   const adjPreviewCents = (() => {
-    const raw = adjRand.trim().replace(",", ".");
-    const zar = Number(raw);
-    if (!Number.isFinite(zar) || zar === 0) return null;
+    const zar = parseZarInput(adjRand);
+    if (zar === null) return null;
     return { delta: Math.round(zar * 100), next: props.totalAmountCents + Math.round(zar * 100) };
   })();
 
@@ -234,9 +233,8 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
     if (actionLock.current) return;
     actionLock.current = true;
     setAdjErr(null);
-    const raw = adjRand.trim().replace(",", ".");
-    const zar = Number(raw);
-    if (!Number.isFinite(zar) || zar === 0) {
+    const zar = parseZarInput(adjRand);
+    if (zar === null) {
       setAdjErr("Enter a non-zero amount in RAND (e.g. 150 or -75.50).");
       actionLock.current = false;
       return;
@@ -415,7 +413,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
               <Input
                 id="adj-zar"
                 inputMode="decimal"
-                placeholder="e.g. 150 or -75.50"
+                placeholder="e.g. 150, -75.50, or -1 170.00"
                 value={adjRand}
                 disabled={busy !== null}
                 onChange={(e) => setAdjRand(e.target.value)}

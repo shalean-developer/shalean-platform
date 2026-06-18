@@ -8,8 +8,9 @@ import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSna
  *
  * Order of precedence (first non-null wins):
  *   1. `recurring_bookings.preferred_cleaner_id` — explicit, mutable, admin/customer-editable.
- *   2. `booking_snapshot_template.locked.cleaner_id` — legacy / inferred at intake time.
- *   3. `booking_snapshot_template.cleaner_id`       — top-level snapshot mirror, last resort.
+ *   2. `lastAssignedCleanerId` — cleaner from the most recent prior occurrence on this plan.
+ *   3. `booking_snapshot_template.locked.cleaner_id` — legacy / inferred at intake time.
+ *   4. `booking_snapshot_template.cleaner_id`       — top-level snapshot mirror, last resort.
  *
  * Returning `null` is **not** an error: it just means the occurrence will dispatch without a
  * customer-picked cleaner (existing pre-M-6 behaviour).
@@ -22,10 +23,14 @@ import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSna
  */
 export function resolveRecurringPreferredCleanerId(input: {
   recurringPreferredCleanerId: string | null | undefined;
+  lastAssignedCleanerId?: string | null | undefined;
   snapshotTemplate: BookingSnapshotV1 | null;
 }): string | null {
   const fromColumn = normalizeUuidCandidate(input.recurringPreferredCleanerId ?? null);
   if (fromColumn) return fromColumn;
+
+  const fromLastOccurrence = normalizeUuidCandidate(input.lastAssignedCleanerId ?? null);
+  if (fromLastOccurrence) return fromLastOccurrence;
 
   const tpl = input.snapshotTemplate;
   if (!tpl) return null;
@@ -39,21 +44,41 @@ export function resolveRecurringPreferredCleanerId(input: {
 
 /**
  * Builds the partial `bookings` row patch that propagates the preferred cleaner onto a
- * generated occurrence. Mirrors the customer-facing intake path
- * (`insertBookingFromFlowIntake`): when a preferred cleaner is set the row records the
- * customer's intent (`selected_cleaner_id` + `assignment_type='user_selected'`) but leaves
- * `cleaner_id` NULL so the post-payment dispatch offer (or, for monthly billing, the
- * post-finalize dispatch sweep) decides honour-vs-fallback per occurrence.
+ * generated occurrence.
  *
- * Returns an empty object when no preferred cleaner is resolved — keeps existing
- * dispatch-from-scratch behaviour for plans without a pick.
+ * - `pending_payment` (per-booking Paystack): records customer intent via
+ *   `selected_cleaner_id`; `cleaner_id` stays null until post-payment dispatch.
+ * - `pending` (monthly invoice): DB constraint forbids cleaner refs on operational
+ *   pending — promote to `assigned` with both ids when reusing a prior cleaner.
  */
-export function recurringOccurrenceCleanerPatch(preferredCleanerId: string | null): {
+export function recurringOccurrenceCleanerPatch(
+  preferredCleanerId: string | null,
+  options?: { operationalStatus?: string | null },
+): {
   selected_cleaner_id?: string;
   assignment_type?: "user_selected";
-  cleaner_id?: null;
+  cleaner_id?: string | null;
+  status?: "assigned";
+  assigned_at?: string;
+  cleaner_response_status?: "pending";
+  dispatch_status?: "assigned";
 } {
   if (!preferredCleanerId) return {};
+
+  const st = String(options?.operationalStatus ?? "").trim().toLowerCase();
+  if (st === "pending") {
+    const now = new Date().toISOString();
+    return {
+      selected_cleaner_id: preferredCleanerId,
+      cleaner_id: preferredCleanerId,
+      assignment_type: "user_selected",
+      status: "assigned",
+      assigned_at: now,
+      cleaner_response_status: "pending",
+      dispatch_status: "assigned",
+    };
+  }
+
   return {
     selected_cleaner_id: preferredCleanerId,
     assignment_type: "user_selected" as const,

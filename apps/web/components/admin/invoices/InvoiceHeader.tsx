@@ -22,6 +22,8 @@ export type InvoiceHeaderProps = {
   sentAt: string | null;
   /** From `user_profiles.account_billing_risk`. */
   accountBillingRisk: "ok" | "at_risk";
+  listHref?: string;
+  customersHref?: string;
   actions?: ReactNode;
 };
 
@@ -150,11 +152,11 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
           </div>
         </div>
         <div className="mt-4 text-sm">
-          <Link href="/admin/invoices" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+          <Link href={props.listHref ?? "/admin/invoices"} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
             ← All invoices
           </Link>
           <span className="mx-2 text-zinc-300 dark:text-zinc-600">|</span>
-          <Link href="/admin/customers" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+          <Link href={props.customersHref ?? "/admin/customers"} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
             Customers
           </Link>
         </div>

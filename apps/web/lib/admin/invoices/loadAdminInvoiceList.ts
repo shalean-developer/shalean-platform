@@ -21,6 +21,8 @@ export type AdminInvoiceListRow = {
   days_overdue: number;
   /** Latest `monthly_invoice_events.created_at` for this invoice (service role RPC). */
   last_activity_at: string | null;
+  /** Non-cancelled child bookings linked to this invoice. */
+  booking_count: number;
   /** From `invoice_adjustments` applied to this invoice (for list badges / filters). */
   has_discount_lines: boolean;
   has_missed_visit_lines: boolean;
@@ -66,6 +68,22 @@ export async function loadAdminInvoiceList(
     }
   }
 
+  const bookingCountByInvoice = new Map<string, number>();
+  const invoiceIdsForCounts = raw.map((r) => String(r.id ?? "")).filter(Boolean);
+  if (invoiceIdsForCounts.length) {
+    const { data: bookingRows, error: bkErr } = await admin
+      .from("bookings")
+      .select("monthly_invoice_id")
+      .in("monthly_invoice_id", invoiceIdsForCounts)
+      .neq("status", "cancelled");
+    if (bkErr) return { ok: false, error: bkErr.message };
+    for (const row of (bookingRows ?? []) as { monthly_invoice_id?: string | null }[]) {
+      const invoiceId = String(row.monthly_invoice_id ?? "");
+      if (!invoiceId) continue;
+      bookingCountByInvoice.set(invoiceId, (bookingCountByInvoice.get(invoiceId) ?? 0) + 1);
+    }
+  }
+
   let rows: AdminInvoiceListRow[] = raw.map((r) => {
     const id = String(r.id ?? "");
     const customer_id = String(r.customer_id ?? "");
@@ -96,6 +114,7 @@ export async function loadAdminInvoiceList(
       account_billing_risk,
       days_overdue: overdueDays,
       last_activity_at: null,
+      booking_count: bookingCountByInvoice.get(id) ?? 0,
       has_discount_lines: false,
       has_missed_visit_lines: false,
     };

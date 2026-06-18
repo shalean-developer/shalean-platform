@@ -56,6 +56,7 @@ export async function GET(request: Request) {
       updated_at: row.updated_at != null ? String(row.updated_at) : null,
       customer_email: p.customerEmail,
       customer_name: p.customerName,
+      service_label: p.serviceLabel,
       template_visit_date: p.visitDate,
       template_visit_time: p.visitTime,
       template_location: p.location,

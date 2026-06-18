@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   Calendar,
@@ -107,6 +109,9 @@ function LoadingRows() {
 }
 
 export default function BookingsPage() {
+  const searchParams = useSearchParams();
+  const recurringIdFilter = (searchParams.get("recurring_id") ?? searchParams.get("recurringId") ?? "").trim();
+
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("all");
@@ -126,7 +131,7 @@ export default function BookingsPage() {
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setPage(1), 0);
     return () => globalThis.clearTimeout(timer);
-  }, [debouncedSearch, activeFilter, pageSize]);
+  }, [debouncedSearch, activeFilter, pageSize, recurringIdFilter]);
 
   const { data, loading, error, refetch } = useAdminData<AdminBookingsResponse>(
     "/api/admin/bookings",
@@ -137,6 +142,7 @@ export default function BookingsPage() {
         pageSize: String(pageSize),
         ...(activeFilter !== "all" ? { bookingStatus: activeFilter } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(recurringIdFilter ? { recurring_id: recurringIdFilter } : {}),
       },
     },
   );
@@ -266,6 +272,27 @@ export default function BookingsPage() {
           </button>
         </div>
       </div>
+
+      {recurringIdFilter && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <p className="text-sm text-blue-800">
+            Showing bookings for recurring plan{" "}
+            <span className="font-mono text-xs">{recurringIdFilter.slice(0, 8)}…</span>
+          </p>
+          <Link
+            href="/office/bookings"
+            className="ml-auto text-xs font-semibold text-blue-700 hover:underline"
+          >
+            Clear filter
+          </Link>
+          <Link
+            href="/office/recurring"
+            className="text-xs font-semibold text-blue-700 hover:underline"
+          >
+            Back to plans
+          </Link>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (

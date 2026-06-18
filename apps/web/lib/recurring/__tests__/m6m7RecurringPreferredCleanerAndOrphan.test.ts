@@ -13,6 +13,10 @@ vi.mock("@/lib/recurring/recurringBookingInsertGuards", () => ({
   recurringPlanOccurrenceRowExists: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock("@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan", () => ({
+  fetchLastAssignedCleanerForRecurringPlan: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@/lib/recurring/autoChargeRetryPolicy", () => ({
   recurringAutoChargeMaxRetries: () => 3,
 }));
@@ -146,6 +150,19 @@ function partialTpl(opts: { lockedCleanerId?: string; topCleanerId?: string }): 
 }
 
 describe("M-6: resolveRecurringPreferredCleanerId (pure resolution)", () => {
+  it("prefers last assigned occurrence cleaner over snapshot fallbacks", () => {
+    expect(
+      resolveRecurringPreferredCleanerId({
+        recurringPreferredCleanerId: null,
+        lastAssignedCleanerId: VALID_CLEANER_B,
+        snapshotTemplate: partialTpl({
+          lockedCleanerId: VALID_CLEANER_C,
+          topCleanerId: VALID_CLEANER_A,
+        }),
+      }),
+    ).toBe(VALID_CLEANER_B);
+  });
+
   it("prefers the explicit recurring column when set", () => {
     expect(
       resolveRecurringPreferredCleanerId({
@@ -202,12 +219,23 @@ describe("M-6: resolveRecurringPreferredCleanerId (pure resolution)", () => {
 });
 
 describe("M-6: recurringOccurrenceCleanerPatch (booking row patch shape)", () => {
-  it("returns selected_cleaner_id + user_selected + null cleaner_id when preferred set", () => {
-    expect(recurringOccurrenceCleanerPatch(VALID_CLEANER_A)).toEqual({
+  it("returns selected_cleaner_id + user_selected + null cleaner_id for pending_payment", () => {
+    expect(recurringOccurrenceCleanerPatch(VALID_CLEANER_A, { operationalStatus: "pending_payment" })).toEqual({
       selected_cleaner_id: VALID_CLEANER_A,
       assignment_type: "user_selected",
       cleaner_id: null,
     });
+  });
+
+  it("promotes monthly pending rows to assigned when reusing a cleaner", () => {
+    const patch = recurringOccurrenceCleanerPatch(VALID_CLEANER_A, { operationalStatus: "pending" });
+    expect(patch.selected_cleaner_id).toBe(VALID_CLEANER_A);
+    expect(patch.cleaner_id).toBe(VALID_CLEANER_A);
+    expect(patch.assignment_type).toBe("user_selected");
+    expect(patch.status).toBe("assigned");
+    expect(patch.dispatch_status).toBe("assigned");
+    expect(patch.cleaner_response_status).toBe("pending");
+    expect(typeof patch.assigned_at).toBe("string");
   });
 
   it("returns empty patch when no preferred cleaner (preserves dispatch-from-scratch behaviour)", () => {
@@ -312,7 +340,7 @@ describe("M-6: insertRecurringOccurrenceBooking propagates preferred cleaner", (
 });
 
 describe("M-6: insertMonthlyRecurringOccurrenceBooking propagates preferred cleaner", () => {
-  it("monthly path writes the same cleaner-patch shape as per-booking path", async () => {
+  it("monthly path assigns the preferred cleaner immediately (pending + cleaner refs forbidden)", async () => {
     const { admin, captured } = buildFakeBookingsAdmin();
     const result = await insertMonthlyRecurringOccurrenceBooking(admin, {
       recurring: {
@@ -330,8 +358,9 @@ describe("M-6: insertMonthlyRecurringOccurrenceBooking propagates preferred clea
     expect(result.ok).toBe(true);
     const row = captured.inserts[0]!.row;
     expect(row.selected_cleaner_id).toBe(VALID_CLEANER_A);
+    expect(row.cleaner_id).toBe(VALID_CLEANER_A);
     expect(row.assignment_type).toBe("user_selected");
-    expect(row.cleaner_id).toBe(null);
+    expect(row.status).toBe("assigned");
     expect(row.is_monthly_billing_booking).toBe(true);
     expect(row.billing_type).toBe("recurring_invoice");
     expect(row.payment_status).toBe("pending_monthly");

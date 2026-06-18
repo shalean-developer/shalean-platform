@@ -27,7 +27,15 @@ type LoadState =
   | { status: "not_found" }
   | { status: "ready"; data: AdminInvoiceBundle };
 
-export function AdminInvoiceDetailsView({ invoiceId }: { invoiceId: string }) {
+export function AdminInvoiceDetailsView({
+  invoiceId,
+  listHref = "/admin/invoices",
+  customersHref = "/admin/customers",
+}: {
+  invoiceId: string;
+  listHref?: string;
+  customersHref?: string;
+}) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
   const load = useCallback(async () => {
@@ -239,6 +247,8 @@ export function AdminInvoiceDetailsView({ invoiceId }: { invoiceId: string }) {
         balanceCents={balanceCents}
         sentAt={sentAt}
         accountBillingRisk={accountBillingRisk}
+        listHref={listHref}
+        customersHref={customersHref}
         actions={headerActions}
       />
 
