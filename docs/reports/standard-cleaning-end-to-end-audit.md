@@ -227,7 +227,7 @@ Operational layer: [`dashboardBookingOperational.ts`](../../apps/web/lib/dashboa
 | Field | Detail |
 |-------|--------|
 | **Symptom** | "Rebook" sends customer to empty `/booking`. |
-| **Root cause** | [`booking-card.tsx`](../../apps/web/components/dashboard/booking-card.tsx) L177: `<Link href="/booking">`. [`applyRebookSnapshot`](../../apps/web/lib/booking/rebookApply.ts) only used on [`booking/success`](../../apps/web/app/booking/success/page.tsx). |
+| **Root cause** | [`booking-card.tsx`](../../apps/web/components/dashboard/booking-card.tsx) L177: `<Link href="/booking/details">`. [`applyRebookSnapshot`](../../apps/web/lib/booking/rebookApply.ts) only used on [`booking/success`](../../apps/web/app/booking/success/page.tsx). |
 | **Fix** | Link to `/booking/details?rebook=<bookingId>` or call `applyRebookSnapshot(booking.raw.booking_snapshot)` before navigate; hydrate [`bookingCheckoutStore`](../../apps/web/lib/booking/bookingCheckoutStore.ts) for path checkout (may need adapter from snapshot → store shape). |
 | **Verification** | Manual: rebook from completed Standard → rooms/extras/address prefilled. |
 
