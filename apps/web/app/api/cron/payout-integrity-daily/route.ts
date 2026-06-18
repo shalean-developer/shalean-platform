@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import { logSystemEvent, logCronRun } from "@/lib/logging/systemLog";
 import { backfillCompletedMissingDisplayEarnings } from "@/lib/payout/backfillCompletedMissingDisplayEarnings";
 import { repairCompletedStuckZeroDisplayFromSignals } from "@/lib/payout/repairCompletedStuckZeroDisplayFromSignals";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -167,6 +167,19 @@ export async function POST(request: Request) {
         payload.team_missing_owner_ratio_display,
         payload.completed_missing_display_ratio_display,
       ],
+    },
+  });
+
+  await logCronRun({
+    jobName: "payout-integrity-daily",
+    status: stuckZeroRepairError || completedMissingDisplay > 0 ? "error" : "success",
+    message: stuckZeroRepairError
+      ? stuckZeroRepairError
+      : `completed_missing_display=${completedMissingDisplay}`,
+    context: {
+      ...payload,
+      auto_recovery_completed_missing_display: autoRecovery,
+      auto_recovery_stuck_zero_display_from_signals: stuckZeroRepair,
     },
   });
 

@@ -44,6 +44,7 @@ describe("productionHealthMetrics", () => {
           payment_status: "pending_monthly",
           payout_status: "pending",
           payout_frozen_cents: null,
+          display_earnings_cents: 5000,
         },
       ],
       earningsRows: [{ id: "booking-1", status: "completed", display_earnings_cents: null }],
@@ -54,7 +55,7 @@ describe("productionHealthMetrics", () => {
           status: "pending",
           payment_status: "success",
           payment_completed_at: "2026-05-14T08:00:00.000Z",
-          dispatch_status: "no_cleaner",
+          dispatch_status: "searching",
         },
       ],
       durationFallbackLogs: [{ id: "duration-1", source: "admin", message: "duration_fallback_used" }],
@@ -197,6 +198,23 @@ describe("productionHealthMetrics", () => {
         count: 1,
         message: "Verified Paystack payment has an unresolved finalization/reconciliation job.",
         sampleIds: ["job-1"],
+      },
+    ]);
+  });
+
+  it("ignores terminal amount_mismatch booking_finalize jobs", () => {
+    expect(
+      detectPaymentFinalizationDrift([
+        { id: "job-1", type: "booking_finalize", payload: { error: "amount_mismatch" } },
+        { id: "job-2", type: "booking_finalize" },
+      ]),
+    ).toEqual([
+      {
+        code: "payment_verified_not_finalized",
+        severity: "critical",
+        count: 1,
+        message: "Verified Paystack payment has an unresolved finalization/reconciliation job.",
+        sampleIds: ["job-2"],
       },
     ]);
   });

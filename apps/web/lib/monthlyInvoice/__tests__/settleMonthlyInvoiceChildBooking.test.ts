@@ -7,7 +7,17 @@ describe("settleMonthlyInvoiceChildBooking", () => {
     const calls: Array<{ table: string; patch: Record<string, unknown>; filters: Array<[string, unknown]> }> = [];
     const admin = {
       from(table: string) {
-        return {
+        const chain = {
+          select() {
+            return {
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { payment_completed_at: "2026-05-01T10:00:00.000Z" },
+                  error: null,
+                }),
+              }),
+            };
+          },
           update(patch: Record<string, unknown>) {
             const call = { table, patch, filters: [] as Array<[string, unknown]> };
             calls.push(call);
@@ -19,6 +29,7 @@ describe("settleMonthlyInvoiceChildBooking", () => {
             };
           },
         };
+        return chain;
       },
     };
 
@@ -37,6 +48,7 @@ describe("settleMonthlyInvoiceChildBooking", () => {
           amount_paid_cents: 12345,
           payout_status: "eligible",
           payout_frozen_cents: 6789,
+          payment_completed_at: "2026-05-01T10:00:00.000Z",
         },
         filters: [["id", "booking-1"]],
       },
@@ -47,6 +59,13 @@ describe("settleMonthlyInvoiceChildBooking", () => {
     const admin = {
       from() {
         return {
+          select() {
+            return {
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            };
+          },
           update() {
             return {
               eq: async () => ({ error: { message: "db failed" } }),
@@ -75,6 +94,13 @@ describe("settleMonthlyInvoiceChildBooking", () => {
     const admin = {
       from() {
         return {
+          select() {
+            return {
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            };
+          },
           update() {
             updateCalled = true;
             return {

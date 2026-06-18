@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev --turbopack",
     "dev:webpack": "next dev --webpack",
     "build": "tsx scripts/validate-blog-routes.ts && next build --webpack",
     "validate:blog-routes": "tsx scripts/validate-blog-routes.ts",
@@ -25,6 +26,7 @@
     "backfill:zoho-invoices": "tsx --env-file=.env.local --conditions=react-server scripts/backfillZohoInvoices.ts",
     "zoho:diagnose": "tsx --env-file=.env.local scripts/zohoDiagnose.ts",
     "repair:zero-earning-assigned": "tsx --env-file=.env.local --conditions=react-server scripts/repairZeroEarningAssignedBookings.ts",
+    "repair:production-health-critical": "tsx --env-file=.env.local --conditions=react-server scripts/repairProductionHealthCritical.ts",
     "repair:dispatch-offer-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairMissingDispatchOfferEarningsSnapshot.ts",
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
     "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",

@@ -7,6 +7,10 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { bucketSmsFailure, bucketWhatsappFailure } from "@/lib/notifications/notificationFailureBuckets";
 import { NOTIFICATION_COST_CURRENCY } from "@/lib/notifications/notificationCostEstimates";
 import { runProductionHealthScan } from "@/lib/observability/productionHealthMetrics";
+import {
+  applyOpsHealthAcknowledgements,
+  listOpsHealthAcknowledgements,
+} from "@/lib/observability/opsHealthAcknowledgements";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -40,6 +44,7 @@ export async function GET(request: Request) {
     recentSystemLogsRes,
     recentCronRunsRes,
     productionHealthRes,
+    opsHealthAcknowledgements,
   ] = await Promise.all([
     fetchAdminDashboardRevenueSummary(admin),
     fetchAdminDashboardConversionSummary(admin, since.toISOString()),
@@ -97,6 +102,7 @@ export async function GET(request: Request) {
       (summary) => ({ ok: true as const, summary }),
       (error) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
     ),
+    listOpsHealthAcknowledgements(admin),
   ]);
 
   const notificationsAvailable = !notifyRes.error;
@@ -400,19 +406,26 @@ export async function GET(request: Request) {
     .sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt))
     .slice(0, 6);
 
-  const productionHealthSummary = productionHealthRes.ok ? productionHealthRes.summary : null;
+  const productionHealthSummaryRaw = productionHealthRes.ok ? productionHealthRes.summary : null;
+  const productionHealthSummary = productionHealthSummaryRaw
+    ? applyOpsHealthAcknowledgements(productionHealthSummaryRaw, opsHealthAcknowledgements).visibleSummary
+    : null;
   const productionFindings = productionHealthSummary?.findings ?? [];
   const hasCritical = (productionHealthSummary?.totals.critical ?? 0) > 0;
-  const hasPaymentFindings = productionFindings.some((f) =>
-    f.code.includes("payment") || f.code.includes("invoice") || f.code.includes("payout"),
-  );
-  const hasBookingEngineFindings = productionFindings.some((f) =>
-    f.code.includes("dispatch") ||
-    f.code.includes("cron") ||
-    f.code.includes("recurring") ||
-    f.code.includes("duration") ||
-    f.code.includes("workload"),
-  );
+  const hasBookingEngineHighFindings = productionFindings.some((f) => {
+    if (f.severity !== "critical" && f.severity !== "high") return false;
+    return (
+      f.code.includes("dispatch") ||
+      f.code.includes("cron") ||
+      f.code.includes("recurring") ||
+      f.code.includes("duration") ||
+      f.code.includes("workload")
+    );
+  });
+  const hasPaymentHighFindings = productionFindings.some((f) => {
+    if (f.severity !== "critical" && f.severity !== "high") return false;
+    return f.code.includes("payment") || f.code.includes("invoice") || f.code.includes("payout");
+  });
   const cronErrorsLast24h = (recentCronRunsRes.error ? [] : (recentCronRunsRes.data ?? [])).filter(
     (row) => String((row as { status?: string | null }).status ?? "").toLowerCase() === "error",
   ).length;
@@ -495,13 +508,13 @@ export async function GET(request: Request) {
       bookingEngine:
         productionHealthRes.ok === false || hasCritical
           ? "down"
-          : recentBookingsRes.error || hasBookingEngineFindings || cronErrorsLast24h > 0
+          : recentBookingsRes.error || hasBookingEngineHighFindings || cronErrorsLast24h > 0
             ? "degraded"
             : "operational",
       paymentGateway:
         pendingPaymentsRes.error || refundsRes.error || hasCritical
           ? "down"
-          : hasPaymentFindings
+          : hasPaymentHighFindings
             ? "degraded"
             : "operational",
       productionHealth: productionHealthSummary

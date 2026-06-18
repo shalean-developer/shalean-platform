@@ -15,13 +15,14 @@ import { emitSqlExpiredOfferTimeoutMetrics } from "@/lib/dispatch/offerTimeoutMe
 import { reportPendingBookingSlaBreaches } from "@/lib/dispatch/dispatchSlaWatchdog";
 import { processDispatchRetryQueue } from "@/lib/dispatch/dispatchRetryQueue";
 import { runOfferExpiryMaintenance } from "@/lib/dispatch/processUserSelectedOfferExpiryRedispatch";
-import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckoutReminder";
 import { logDailyOpsSummaryIfNeeded } from "@/lib/ops/dailyOpsSummary";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { syncCleanerQualityFlags } from "@/lib/ops/enforceCleanerQualityReview";
 import { processReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
+import { repairPaidMonthlyInvoiceChildSettlementDrift } from "@/lib/monthlyInvoice/repairPaidMonthlyInvoiceChildSettlementDrift";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -178,6 +179,35 @@ export async function POST(request: Request) {
       const { error: mmDelErr } = await supabase.from("failed_jobs").delete().eq("id", id);
       if (mmDelErr) {
         await reportOperationalIssue("error", "cron/retry-failed-jobs", `payment_mismatch delete failed: ${mmDelErr.message}`, {
+          failedJobId: id,
+        });
+      }
+    }
+  }
+
+  const { data: terminalFinalizeJobs, error: tfSelErr } = await supabase
+    .from("failed_jobs")
+    .select("id, payload")
+    .eq("type", "booking_finalize")
+    .order("created_at", { ascending: true })
+    .limit(MAX_BOOKING_INSERT_BATCH);
+
+  if (tfSelErr) {
+    await reportOperationalIssue("warn", "cron/retry-failed-jobs", `booking_finalize terminal select: ${tfSelErr.message}`);
+  } else {
+    for (const row of terminalFinalizeJobs ?? []) {
+      const id = typeof row.id === "string" ? row.id : null;
+      if (!id) continue;
+      const payload = row.payload as { error?: unknown } | null;
+      if (String(payload?.error ?? "").trim().toLowerCase() !== "amount_mismatch") continue;
+      await reportOperationalIssue("warn", "cron/retry-failed-jobs", "terminal amount_mismatch booking_finalize (logged; row deleted)", {
+        errorType: "booking_finalize_amount_mismatch_terminal",
+        failedJobId: id,
+        payload: row.payload,
+      });
+      const { error: tfDelErr } = await supabase.from("failed_jobs").delete().eq("id", id);
+      if (tfDelErr) {
+        await reportOperationalIssue("error", "cron/retry-failed-jobs", `booking_finalize terminal delete failed: ${tfDelErr.message}`, {
           failedJobId: id,
         });
       }
@@ -413,6 +443,11 @@ export async function POST(request: Request) {
   const dailyOpsSummary = await logDailyOpsSummaryIfNeeded(supabase);
   const cleanerQuality = await syncCleanerQualityFlags(supabase);
 
+  const monthlyChildSettlementRepair = await repairPaidMonthlyInvoiceChildSettlementDrift(supabase, {
+    repairLimit: 300,
+    scanLimit: 5000,
+  });
+
   let failedJobsCleaned = 0;
   if (process.env.FAILED_JOBS_CLEANUP_ENABLED?.trim().toLowerCase() === "true") {
     const cutoffIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -450,6 +485,13 @@ export async function POST(request: Request) {
     abandonCheckoutReminders,
     dailyOpsSummary,
     cleanerQuality,
+    monthlyChildSettlementRepair: monthlyChildSettlementRepair.ok
+      ? {
+          repaired: monthlyChildSettlementRepair.repaired,
+          failed: monthlyChildSettlementRepair.failed,
+          children_matched: monthlyChildSettlementRepair.children_matched,
+        }
+      : { error: monthlyChildSettlementRepair.error },
   };
 
   await logSystemEvent({
@@ -457,6 +499,13 @@ export async function POST(request: Request) {
     source: "cron",
     message: "cron.complete",
     context: { route: ROUTE, result: resultPayload },
+  });
+
+  await logCronRun({
+    jobName: "retry-failed-jobs",
+    status: "success",
+    message: `booking_insert_succeeded=${bookingInsertSucceeded} lifecycle_sent=${lifecycleSent}`,
+    context: resultPayload,
   });
 
   return NextResponse.json({

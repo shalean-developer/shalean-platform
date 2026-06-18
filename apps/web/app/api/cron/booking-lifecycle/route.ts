@@ -5,7 +5,7 @@ import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
-import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
 import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
@@ -293,6 +293,20 @@ export async function POST(request: Request) {
       terminalFailures: terminal,
       skipped,
       batchSize: jobs?.length ?? 0,
+    },
+  });
+
+  await logCronRun({
+    jobName: "booking-lifecycle",
+    status: "success",
+    message: `completed=${complete.completed} lifecycle_sent=${sent}`,
+    context: {
+      pastBookingsMarkedCompleted: complete.completed,
+      lifecycleEmailsSent: sent,
+      deferredRetry: retry,
+      terminalFailures: terminal,
+      skipped,
+      processed: jobs?.length ?? 0,
     },
   });
 

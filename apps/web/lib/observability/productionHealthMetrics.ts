@@ -71,6 +71,10 @@ export type MonthlyInvoiceChildSettlementRow = {
   payment_status?: string | null;
   payout_status?: string | null;
   payout_frozen_cents?: number | null;
+  display_earnings_cents?: number | null;
+  cleaner_payout_cents?: number | null;
+  is_team_job?: boolean | null;
+  team_id?: string | null;
 };
 
 export type BookingEarningsHealthRow = {
@@ -252,11 +256,24 @@ function hasEarningsBasis(row: BookingEarningsHealthRow): boolean {
   );
 }
 
+function isTerminalPaymentFinalizationJob(row: PaymentFinalizationSignalRow): boolean {
+  const type = norm(row.type);
+  if (type === "payment_mismatch") return true;
+  if (type !== "booking_finalize") return false;
+  const payload = row.payload;
+  if (!payload || typeof payload !== "object") return false;
+  return norm((payload as { error?: unknown }).error) === "amount_mismatch";
+}
+
 export function detectPaymentFinalizationDrift(rows: readonly PaymentFinalizationSignalRow[]): ProductionHealthFinding[] {
   const ids = rows
     .filter((row) => {
       const type = norm(row.type);
-      return type === "booking_finalize" || type === "booking_insert" || type === "payment_reconciliation";
+      if (type !== "booking_finalize" && type !== "booking_insert" && type !== "payment_reconciliation") {
+        return false;
+      }
+      if (isTerminalPaymentFinalizationJob(row)) return false;
+      return true;
     })
     .map((row, i) => idOf(row, `payment-signal-${i}`));
 
@@ -271,6 +288,10 @@ export function detectPaymentFinalizationDrift(rows: readonly PaymentFinalizatio
   return findings;
 }
 
+function hasMonthlyChildEarningsBasis(row: MonthlyInvoiceChildSettlementRow): boolean {
+  return positiveCents(row.display_earnings_cents) || positiveCents(row.cleaner_payout_cents);
+}
+
 export function detectMonthlyInvoiceChildSettlementDrift(
   rows: readonly MonthlyInvoiceChildSettlementRow[],
 ): ProductionHealthFinding[] {
@@ -278,6 +299,8 @@ export function detectMonthlyInvoiceChildSettlementDrift(
     .filter((row) => {
       if (norm(row.invoice_status) !== "paid") return false;
       if (isCancelledLike(row.status)) return false;
+      if (row.is_team_job === true || Boolean(row.team_id)) return false;
+      if (!hasMonthlyChildEarningsBasis(row)) return false;
       return norm(row.payment_status) !== "success" || norm(row.payout_status) !== "eligible" || !positiveCents(row.payout_frozen_cents);
     })
     .map((row, i) => idOf(row, `monthly-child-${i}`));
@@ -367,7 +390,8 @@ export function detectStaleUnassignedDispatch(
     .filter((row) => {
       if (!isPaidLike(row.payment_status) || hasAssignment(row) || isCancelledLike(row.status)) return false;
       const dispatch = norm(row.dispatch_status);
-      const relevant = dispatch === "searching" || dispatch === "failed" || dispatch === "no_cleaner" || dispatch === "unassignable" || dispatch === "";
+      if (dispatch === "unassignable" || dispatch === "no_cleaner") return false;
+      const relevant = dispatch === "searching" || dispatch === "failed" || dispatch === "" || dispatch === "offered";
       if (!relevant) return false;
       const age = isoAgeMinutes(row.payment_completed_at ?? row.updated_at ?? row.created_at, now);
       return age != null && age >= staleMinutes;
@@ -427,6 +451,10 @@ export function detectWorkloadForceOverrides(rows: readonly SystemLogHealthRow[]
   return findings;
 }
 
+export const PRODUCTION_HEALTH_CRON_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  "generate-recurring-bookings": ["charge-recurring-bookings"],
+};
+
 export function detectStaleCronRuns(
   rows: readonly CronRunHealthRow[],
   expectedJobs: readonly ExpectedCronJob[],
@@ -446,7 +474,8 @@ export function detectStaleCronRuns(
   const maxAges: Record<string, number> = {};
 
   for (const expected of expectedJobs) {
-    const jobRows = byJob.get(expected.jobName) ?? [];
+    const aliasNames = PRODUCTION_HEALTH_CRON_ALIASES[expected.jobName] ?? [];
+    const jobRows = [...(byJob.get(expected.jobName) ?? []), ...aliasNames.flatMap((name) => byJob.get(name) ?? [])];
     const successes = jobRows
       .filter((row) => norm(row.status) === "success")
       .map((row) => row.created_at)
@@ -620,7 +649,7 @@ export async function runProductionHealthScan(
         name: "monthly_invoice_children",
         query: admin
           .from("bookings")
-          .select("id, monthly_invoice_id, status, payment_status, payout_status, payout_frozen_cents, monthly_invoices!inner(status)")
+          .select("id, monthly_invoice_id, status, payment_status, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, is_team_job, team_id, monthly_invoices!inner(status)")
           .not("monthly_invoice_id", "is", null)
           .order("created_at", { ascending: false })
           .limit(scanLimit),

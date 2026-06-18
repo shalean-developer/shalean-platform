@@ -21,6 +21,24 @@ export async function settleMonthlyInvoiceChildBooking(
     return { ok: false, error: `invalid_payout_frozen_cents:${params.bookingId}` };
   }
 
+  const { data: existing, error: readErr } = await admin
+    .from("bookings")
+    .select("payment_completed_at, paid_at, completed_at")
+    .eq("id", params.bookingId)
+    .maybeSingle();
+  if (readErr) return { ok: false, error: readErr.message };
+
+  const row = existing as {
+    payment_completed_at?: string | null;
+    paid_at?: string | null;
+    completed_at?: string | null;
+  } | null;
+  const paymentCompletedAt =
+    (typeof row?.payment_completed_at === "string" && row.payment_completed_at.trim()) ||
+    (typeof row?.paid_at === "string" && row.paid_at.trim()) ||
+    (typeof row?.completed_at === "string" && row.completed_at.trim()) ||
+    new Date().toISOString();
+
   const { error } = await admin
     .from("bookings")
     .update({
@@ -28,6 +46,7 @@ export async function settleMonthlyInvoiceChildBooking(
       amount_paid_cents: params.amountPaidCents,
       payout_status: "eligible",
       payout_frozen_cents: params.payoutFrozenCents,
+      payment_completed_at: paymentCompletedAt,
     })
     .eq("id", params.bookingId);
 
