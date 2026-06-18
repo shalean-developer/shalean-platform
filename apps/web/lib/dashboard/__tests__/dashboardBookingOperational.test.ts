@@ -48,6 +48,9 @@ function dashboardBooking(overrides: {
     raw,
     priceDisplayFromCheckout: false,
     checkoutPriceContext: null,
+    cleanDetails: [],
+    accessNotes: [],
+    scheduleConfirmed: true,
   };
 }
 
