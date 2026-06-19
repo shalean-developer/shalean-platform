@@ -135,6 +135,7 @@ export async function GET(request: Request) {
   if (!session.cleanerId) {
     return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
   }
+  const cleanerId = session.cleanerId;
 
   const { data: cleanerRow } = await admin
     .from("cleaners")
@@ -265,7 +266,7 @@ export async function GET(request: Request) {
       enqueuePayoutIntegrityAnomalyLog(admin, "eligible_or_paid_without_frozen", b.id, { payout_status: rawPs });
     }
     const cents = amountCentsForRow(b);
-    const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), session.cleanerId);
+    const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), cleanerId);
     const bonusCents = facing?.bonus_cents ?? 0;
     bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);

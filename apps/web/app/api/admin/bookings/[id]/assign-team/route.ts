@@ -62,17 +62,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ supports_team_assignment: false, teams: [] });
   }
 
-  const { teams, error, qualified_for_label } = await listTeamAssignCandidatesForBooking(
-    admin,
-    booking as {
-      id: string;
-      date: string | null;
-      service: string | null;
-      service_slug?: string | null;
-      booking_snapshot?: unknown;
-      is_team_job?: boolean | null;
-    },
-  );
+  const { teams, error, qualified_for_label } = await listTeamAssignCandidatesForBooking(admin, {
+    id: booking.id,
+    date: booking.date,
+    service: booking.service,
+    service_slug: booking.service_slug ?? null,
+    booking_snapshot: booking.booking_snapshot,
+    is_team_job: booking.is_team_job ?? null,
+  });
   if (error) return NextResponse.json({ error }, { status: 400 });
 
   return NextResponse.json({

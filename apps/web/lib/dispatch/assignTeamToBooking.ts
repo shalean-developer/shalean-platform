@@ -617,7 +617,7 @@ export async function assignTeamToBooking(
   }
 
   const { count: platformUsed, error: platformErr } = await countPlatformTeamJobsOnDate(supabase, dateYmd);
-  if (platformErr) return { ok: false, error: "db_error", message: platformErr.message };
+  if (platformErr) return { ok: false, error: "db_error", message: platformErr };
   if (platformUsed >= MAX_TEAM_BOOKINGS_PER_DAY) {
     void logSystemEvent({
       level: "warn",

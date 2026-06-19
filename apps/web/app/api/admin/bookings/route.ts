@@ -693,7 +693,9 @@ export async function GET(request: Request) {
     today,
     includeBookingStatus: false,
   });
-  const attention = computeOpsSnapshotFromRows((attentionRows ?? []).map((r) => toOpsSnapshotRow(r as Row)));
+  const attention = computeOpsSnapshotFromRows(
+    ((attentionRows ?? []) as Row[]).map((r) => toOpsSnapshotRow(r)),
+  );
 
   const profileUserIds = [...new Set(filtered.map((r) => r.user_id).filter(Boolean))] as string[];
   const profileById = new Map<string, { billing_type: string; schedule_type: string }>();

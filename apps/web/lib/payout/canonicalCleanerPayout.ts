@@ -342,7 +342,7 @@ function buildResult(params: {
     payout_per_cleaner_cents: params.isTeamJob ? params.displayCents : undefined,
     team_leader_payout_cents:
       params.isTeamJob && teamLeaderId
-        ? (params.perCleanerBase.get(teamLeaderId) ?? null)
+        ? (params.perCleanerBase.get(teamLeaderId) ?? undefined)
         : undefined,
     team_rule_applied: params.isTeamJob,
   };

@@ -834,7 +834,7 @@ function ServiceDialog({
           method: "POST",
           body: JSON.stringify(payload),
         })
-      : await adminFetch("/api/admin/pricing-services", {
+      : await adminFetch<{ service?: PricingServiceRow }>("/api/admin/pricing-services", {
           method: "PATCH",
           body: JSON.stringify({ id: initial!.id, ...payload }),
         });
@@ -966,7 +966,7 @@ function ExtraDialog({
           method: "POST",
           body: JSON.stringify(payload),
         })
-      : await adminFetch("/api/admin/pricing-extras", {
+      : await adminFetch<{ extra?: PricingExtraRow }>("/api/admin/pricing-extras", {
           method: "PATCH",
           body: JSON.stringify({ id: initial!.id, ...payload }),
         });

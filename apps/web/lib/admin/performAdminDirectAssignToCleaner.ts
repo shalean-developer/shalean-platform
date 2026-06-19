@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { setAdminManualBookingDirectAssigned } from "@/lib/admin/adminManualDirectAssignCommand";
 import type { AdminAssignOneResult } from "@/lib/admin/performAdminAssignToCleaner";
+import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 import { validateAdminManualAssignToCleaner } from "@/lib/admin/validateAdminManualAssignToCleaner";
 import { logAssignmentSuccess } from "@/lib/booking/verifyBookingAssignment";

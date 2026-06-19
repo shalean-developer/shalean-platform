@@ -8,21 +8,23 @@ function mockAdmin(responses: {
 }) {
   const applied = responses.applied ?? { data: [], error: null };
   const pending = responses.pending ?? { data: [], error: null };
+  const eqColumns: string[] = [];
 
   return {
     from: vi.fn((table: string) => {
       if (table !== "invoice_adjustments") throw new Error(`unexpected table ${table}`);
       const chain = {
         select: vi.fn(() => chain),
-        eq: vi.fn(() => chain),
+        eq: vi.fn((column: string) => {
+          eqColumns.push(column);
+          return chain;
+        }),
         is: vi.fn(() => chain),
-        order: vi.fn(async () => pending),
+        order: vi.fn(async () => {
+          if (eqColumns.includes("applied_to_invoice_id")) return applied;
+          return pending;
+        }),
       };
-      chain.order = vi.fn(async () => {
-        const calls = chain.eq.mock.calls.map((c) => c[0]);
-        if (calls.includes("applied_to_invoice_id")) return applied;
-        return pending;
-      });
       return chain;
     }),
    } as unknown as Parameters<typeof loadInvoiceAdjustmentsForAdmin>[0];

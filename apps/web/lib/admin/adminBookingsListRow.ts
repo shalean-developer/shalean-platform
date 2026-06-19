@@ -73,6 +73,8 @@ export type AdminBookingsListRow = {
   team_member_count_snapshot?: number | null;
   team?: { id: string; name: string | null } | null;
   booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
+  /** From list/detail API when present — canonical earnings summary JSON. */
+  earnings_summary?: unknown;
   /** From GET /api/admin/bookings — shared lifecycle bundle (customer/cleaner parity). */
   dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
 };

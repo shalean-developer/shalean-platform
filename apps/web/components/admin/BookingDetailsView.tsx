@@ -1036,6 +1036,7 @@ export default function BookingDetailsView({
             service_qa?: ServiceQaAdminWire;
             customer_contact_phone?: string | null;
             customer_contact_name?: string | null;
+            earnings_display?: AdminEarningsDisplay | null;
             error?: string;
           }>,
           anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
