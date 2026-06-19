@@ -8,7 +8,22 @@ import {
   countOfficeScheduleStartingSoonUnassigned,
   filterOfficeScheduleBookings,
   resolveOfficeScheduleSummary,
+  type OfficeScheduleDayBooking,
 } from "@/lib/admin/officeScheduleDayPresentation";
+
+function scheduleBooking(
+  partial: Partial<OfficeScheduleDayBooking> & Pick<OfficeScheduleDayBooking, "id" | "status" | "time" | "date">,
+): OfficeScheduleDayBooking {
+  return {
+    cleaner_id: null,
+    selected_cleaner_id: null,
+    customer_name: null,
+    service: null,
+    location: null,
+    dispatch_status: null,
+    ...partial,
+  };
+}
 
 describe("resolveOfficeScheduleSummary", () => {
   it("uses API summary when provided", () => {
@@ -21,14 +36,14 @@ describe("resolveOfficeScheduleSummary", () => {
 describe("buildOfficeScheduleTimelineHours", () => {
   it("builds hour range from booking times", () => {
     const hours = buildOfficeScheduleTimelineHours([
-      { id: "1", status: "assigned", cleaner_id: "c1", time: "09:30:00", date: "2026-06-19" },
-      { id: "2", status: "assigned", cleaner_id: "c2", time: "14:00:00", date: "2026-06-19" },
+      scheduleBooking({ id: "1", status: "assigned", cleaner_id: "c1", time: "09:30:00", date: "2026-06-19" }),
+      scheduleBooking({ id: "2", status: "assigned", cleaner_id: "c2", time: "14:00:00", date: "2026-06-19" }),
     ]);
     expect(hours).toContain("09:00");
     expect(hours).toContain("14:00");
     expect(
       bookingsInTimelineHour(
-        [{ id: "1", status: "assigned", cleaner_id: "c1", time: "09:30:00", date: "2026-06-19" }],
+        [scheduleBooking({ id: "1", status: "assigned", cleaner_id: "c1", time: "09:30:00", date: "2026-06-19" })],
         "09:00",
       ),
     ).toHaveLength(1);
@@ -40,8 +55,15 @@ describe("countOfficeScheduleStartingSoonUnassigned", () => {
     const now = new Date("2026-06-19T08:00:00+02:00");
     const count = countOfficeScheduleStartingSoonUnassigned(
       [
-        { id: "1", status: "pending", cleaner_id: null, selected_cleaner_id: null, time: "09:00:00", date: "2026-06-19" },
-        { id: "2", status: "assigned", cleaner_id: "c1", time: "09:30:00", date: "2026-06-19" },
+        scheduleBooking({
+          id: "1",
+          status: "pending",
+          cleaner_id: null,
+          selected_cleaner_id: null,
+          time: "09:00:00",
+          date: "2026-06-19",
+        }),
+        scheduleBooking({ id: "2", status: "assigned", cleaner_id: "c1", time: "09:30:00", date: "2026-06-19" }),
       ],
       "2026-06-19",
       now,
@@ -58,7 +80,9 @@ describe("computeOfficeScheduleCleanerStats", () => {
         { id: "c1", full_name: "A", is_available: true, status: "online" },
         { id: "c2", full_name: "B", is_available: true, status: "online" },
       ],
-      bookings: [{ id: "b1", status: "in_progress", cleaner_id: "c2", time: "10:00", date: "2026-06-19" }],
+      bookings: [
+        scheduleBooking({ id: "b1", status: "in_progress", cleaner_id: "c2", time: "10:00", date: "2026-06-19" }),
+      ],
     });
     expect(stats.total).toBe(2);
     expect(stats.busy).toBeGreaterThanOrEqual(1);
@@ -83,8 +107,15 @@ describe("filterOfficeScheduleBookings", () => {
   it("filters unassigned bookings", () => {
     const rows = filterOfficeScheduleBookings(
       [
-        { id: "1", status: "pending", cleaner_id: null, selected_cleaner_id: null, time: "09:00", date: "2026-06-19" },
-        { id: "2", status: "assigned", cleaner_id: "c1", time: "10:00", date: "2026-06-19" },
+        scheduleBooking({
+          id: "1",
+          status: "pending",
+          cleaner_id: null,
+          selected_cleaner_id: null,
+          time: "09:00",
+          date: "2026-06-19",
+        }),
+        scheduleBooking({ id: "2", status: "assigned", cleaner_id: "c1", time: "10:00", date: "2026-06-19" }),
       ],
       "needs_action",
     );

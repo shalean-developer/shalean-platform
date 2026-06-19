@@ -1,13 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildBlogDraftPreviewQuery, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 
 describe("buildBlogPostViewPath", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-  const originalToken = process.env.BLOG_DRAFT_PREVIEW_TOKEN;
-
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
-    process.env.BLOG_DRAFT_PREVIEW_TOKEN = originalToken;
+    vi.unstubAllEnvs();
   });
 
   it("returns published path without preview", () => {
@@ -15,7 +11,7 @@ describe("buildBlogPostViewPath", () => {
   });
 
   it("appends dev preview query for drafts", () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     expect(buildBlogPostViewPath("my-post", "draft")).toBe("/blog/my-post?preview=true");
   });
 
@@ -25,14 +21,12 @@ describe("buildBlogPostViewPath", () => {
 });
 
 describe("buildBlogDraftPreviewQuery", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
+    vi.unstubAllEnvs();
   });
 
   it("returns preview=true in development", () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     expect(buildBlogDraftPreviewQuery()).toBe("?preview=true");
   });
 });
