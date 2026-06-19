@@ -77,7 +77,7 @@ function resolveLeaderId(input: CanonicalPayoutInput, participantIds: readonly s
 /** Solo booking with 2+ cleaners on `booking_cleaners` (paired / dual-cleaner job). */
 export function isPairedRosterSoloJob(params: {
   isTeamJob?: boolean | null;
-  rosterRows: readonly { cleaner_id?: string | null }[];
+  rosterRows: readonly BookingCleanerRosterRow[];
 }): boolean {
   if (params.isTeamJob === true) return false;
   const ids = resolveTeamPayoutParticipantIds({
@@ -325,15 +325,19 @@ function buildPairedRosterResult(params: {
       payout_mode: params.payoutMode,
       tenure_months: params.tenureMonths,
       payout_percentage: params.percentage,
-      raw_before_clamp_cents: params.rawPoolCents,
-      raw_after_clamp_cents: params.shareRawCents != null ? Math.round(params.shareRawCents) : null,
+      fixed_service_override: params.fixedService,
+      payout_before_clamp_cents: params.rawPoolCents,
+      payout_after_clamp_cents: params.shareRawCents != null ? Math.round(params.shareRawCents) : null,
+      bonus_cents: 0,
       final_display_cents: params.displayCents,
       is_team_job: true,
       team_cleaner_count: params.participantIds.length,
       booking_total_team_payout_cents: summary.total_cleaner_earnings_cents,
       payout_per_cleaner_cents: params.displayCents,
       team_leader_payout_cents:
-        params.teamLeaderId != null ? params.perCleanerBase.get(params.teamLeaderId) ?? null : null,
+        params.teamLeaderId != null
+          ? params.perCleanerBase.get(params.teamLeaderId) ?? undefined
+          : undefined,
       team_rule_applied: true,
     },
     earningsSummary: summary,

@@ -1146,7 +1146,7 @@ async function persistCleanerPayoutIfUnsetCore(
         bookingId,
         cleanerId: expectedCleanerId,
         leaderId,
-        roster_member_rows: rosterSync.upserted,
+        roster_member_rows: rosterSync.ok ? rosterSync.upserted : 0,
         internal_earnings_cents: soloCanonical.internalEarningsCents,
         per_cleaner_count: soloSummary.per_cleaner_earnings.length,
       },

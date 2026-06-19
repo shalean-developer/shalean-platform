@@ -88,6 +88,7 @@ describe("pairedRosterPayout", () => {
         { cleaner_id: ethel, role: "member" },
       ],
       bookingAppointmentIsoUtc: "2026-06-01T12:00:00.000Z",
+      cleanerJoinedAtIso: "2025-01-01T00:00:00.000Z",
       computedAtIso: "2026-06-01T12:00:00.000Z",
     });
     expect(result.payoutType).toBe("team_fixed_with_leader");
