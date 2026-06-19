@@ -330,6 +330,7 @@ describe("H-15 cron lock — per-route guards", () => {
       "extend-cleaner-availability",
       "deferred-payment-link-emails",
       "subscription-bookings",
+      "gsc-sync",
     ];
 
     for (const r of routesAlwaysOk) {
@@ -394,6 +395,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "extend-cleaner-availability",
     "deferred-payment-link-emails",
     "subscription-bookings",
+    "gsc-sync",
   ]);
 
   it("all cron route directories are accounted for", () => {
