@@ -267,6 +267,14 @@ export function resolvePairedRosterCanonicalPayout(input: CanonicalPayoutInput):
   });
 }
 
+function resolveTeamLeaderPayoutCents(
+  teamLeaderId: string | null,
+  perCleanerBase: Map<string, number>,
+): number | undefined {
+  if (teamLeaderId == null) return undefined;
+  return perCleanerBase.get(teamLeaderId);
+}
+
 function buildPairedRosterResult(params: {
   input: CanonicalPayoutInput;
   serviceId: string;
@@ -304,6 +312,8 @@ function buildPairedRosterResult(params: {
     computedAtIso: params.input.computedAtIso,
   });
 
+  const teamLeaderPayoutCents = resolveTeamLeaderPayoutCents(params.teamLeaderId, params.perCleanerBase);
+
   return {
     displayEarningsCents: params.displayCents,
     payoutEarningsCents: params.displayCents,
@@ -334,10 +344,7 @@ function buildPairedRosterResult(params: {
       team_cleaner_count: params.participantIds.length,
       booking_total_team_payout_cents: summary.total_cleaner_earnings_cents,
       payout_per_cleaner_cents: params.displayCents,
-      team_leader_payout_cents:
-        params.teamLeaderId != null
-          ? params.perCleanerBase.get(params.teamLeaderId) ?? undefined
-          : undefined,
+      team_leader_payout_cents: teamLeaderPayoutCents,
       team_rule_applied: true,
     },
     earningsSummary: summary,
