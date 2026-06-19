@@ -54,7 +54,7 @@ export function buildGuideTemplate(vars: GuideTemplateVars): BlogContentJson {
         title: "Book your clean",
         description: `Shalean serves ${city} with vetted teams and transparent checkout.`,
         button_text: "Get instant quote",
-        link: "/booking",
+        link: "/book",
         variant: "primary",
       },
     ],

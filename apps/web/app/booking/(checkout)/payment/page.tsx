@@ -4,7 +4,8 @@ import { BookingPaymentPage } from "@/components/booking/checkout/pages/BookingP
 import type { BookingPaymentPagePayload } from "@/lib/booking/bookingPaymentTypes";
 import { loadBookingPaymentServerState } from "@/lib/booking/loadBookingPaymentServerState";
 import { isBookingPaymentUuid } from "@/lib/booking/bookingPaymentUuid";
-import { buildBookingCleanerRedirectHref } from "@/lib/booking/bookingUrl";
+import { buildBookHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
 import { noIndexNoFollowCanonical } from "@/lib/site/transactionalMetadata";
 
 type PageProps = {
@@ -27,7 +28,11 @@ export default async function Page({ searchParams }: PageProps) {
   const sp = await searchParams;
   const raw = sp.bookingId;
   const bookingId = typeof raw === "string" ? raw.trim() : Array.isArray(raw) ? raw[0]?.trim() ?? "" : "";
-  if (!bookingId) redirect(buildBookingCleanerRedirectHref(sp));
+  if (!bookingId) {
+    redirect(
+      buildBookHrefFromLegacySearchParams(collectLegacyBookingSearchParams(sp), "payment"),
+    );
+  }
   if (!isBookingPaymentUuid(bookingId)) notFound();
 
   const serverPayload: BookingPaymentPagePayload = await loadBookingPaymentServerState(bookingId);

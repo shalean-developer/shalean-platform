@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Loader2, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, Calendar, Loader2, RotateCcw, Trash2, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ export type OfficeRecurringPlanConfirmTarget = {
   price: number;
 };
 
-export type RecurringPlanConfirmVariant = "cancel" | "backfill" | "delete";
+export type RecurringPlanConfirmVariant = "cancel" | "backfill" | "reconcile" | "delete";
 
 type OfficeRecurringPlanConfirmDialogProps = {
   open: boolean;
@@ -72,6 +72,23 @@ const VARIANT_CONFIG = {
     confirmLabel: "Backfill visits",
     confirmBusyLabel: "Backfilling…",
     confirmCls: "bg-blue-600 hover:bg-blue-700",
+  },
+  reconcile: {
+    icon: Calendar,
+    iconCls: "bg-violet-100 text-violet-700",
+    title: "Reconcile schedule?",
+    description:
+      "Aligns generated visits with this plan's current schedule. Extra draft-invoice visits are cancelled; missing dates are created. Draft invoices and payouts are refreshed.",
+    warningTitle: "Use after schedule changes",
+    warningItems: [
+      "Removes extra draft-invoice visits that no longer match the weekday/frequency schedule",
+      "Clears provisional cleaner earnings on removed visits before cancelling them",
+      "Sent/paid invoices and visits in locked cleaner payout batches are left unchanged",
+    ],
+    dismissLabel: "Not now",
+    confirmLabel: "Reconcile schedule",
+    confirmBusyLabel: "Reconciling…",
+    confirmCls: "bg-violet-600 hover:bg-violet-700",
   },
   delete: {
     icon: Trash2,

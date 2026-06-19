@@ -194,7 +194,7 @@ export function GlobalTopNav() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center" aria-label="Shalean home">
-            <ShaleanNavLogo className="h-8 w-auto max-w-[140px] sm:h-10 sm:max-w-[168px]" />
+            <ShaleanNavLogo className="h-8 w-auto max-w-[140px] sm:h-10 sm:max-w-[168px]" priority />
           </Link>
 
           {/* Desktop nav */}

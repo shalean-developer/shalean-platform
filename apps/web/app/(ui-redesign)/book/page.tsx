@@ -1,8 +1,15 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { BookIndexHeader } from "@/components/booking/BookIndexHeader";
+import { buildBookHubHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
 import { SERVICE_CONFIG, SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { ServicesCatalog } from "@/app/api/booking-v2/services/route";
+
+type BookIndexPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 async function fetchServicesCatalog(): Promise<ServicesCatalog | null> {
   try {
@@ -20,7 +27,13 @@ async function fetchServicesCatalog(): Promise<ServicesCatalog | null> {
   }
 }
 
-export default async function BookIndexPage() {
+export default async function BookIndexPage({ searchParams }: BookIndexPageProps) {
+  const sp = await searchParams;
+  const params = collectLegacyBookingSearchParams(sp);
+  if (params.get("service")?.trim()) {
+    redirect(buildBookHubHrefFromLegacySearchParams(params));
+  }
+
   const catalog = await fetchServicesCatalog();
 
   return (

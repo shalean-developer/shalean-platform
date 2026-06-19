@@ -198,7 +198,7 @@ export function injectInternalLinks(
   }
 
   /** Booking funnel — required for conversion-focused internal linking. */
-  const bookingPath = normPath("/booking");
+  const bookingPath = normPath("/book");
   if (!seen.has(bookingPath)) {
     const bookingAnchors = editorialHub
       ? [
@@ -208,7 +208,7 @@ export function injectInternalLinks(
           "Start your booking",
         ]
       : ["Book a cleaner online", "Get an instant quote", "Start your booking"];
-    push(anchorPick(bookingAnchors, "booking-funnel", 0), "/booking");
+    push(anchorPick(bookingAnchors, "booking-funnel", 0), "/book");
   }
 
   if (editorialHub) {

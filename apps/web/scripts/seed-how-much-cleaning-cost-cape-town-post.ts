@@ -3,7 +3,7 @@
  * Slug avoids cannibalization with marketing hub `/cleaning-prices-cape-town`.
  *
  * Row conventions match other `blog_posts` guides in `supabase/migrations/2026089*_*.sql`:
- * `source: programmatic`, `search_intent: informational`, booking CTAs use `/booking/details`.
+ * `source: programmatic`, `search_intent: informational`, booking CTAs use `/book`.
  *
  *   npx tsx scripts/seed-how-much-cleaning-cost-cape-town-post.ts
  *   npx tsx scripts/seed-how-much-cleaning-cost-cape-town-post.ts --dry-run
@@ -45,7 +45,7 @@ const content_json = {
     {
       type: "paragraph" as const,
       content:
-        "👉 Get an instant quote and book online in under 2 minutes: [Book now](/booking/details).",
+        "👉 Get an instant quote and book online in under 2 minutes: [Book now](/book).",
     },
     {
       type: "paragraph" as const,
@@ -198,7 +198,7 @@ const content_json = {
     {
       type: "paragraph" as const,
       content:
-        "👉 Get an instant quote and book online in under 2 minutes: [Book cleaning online](/booking/details). Want a heavier reset first? Open [deep cleaning](/services/deep-cleaning-cape-town); for upkeep after that visit, bookmark [standard cleaning](/services/standard-cleaning-cape-town).",
+        "👉 Get an instant quote and book online in under 2 minutes: [Book cleaning online](/book). Want a heavier reset first? Open [deep cleaning](/services/deep-cleaning-cape-town); for upkeep after that visit, bookmark [standard cleaning](/services/standard-cleaning-cape-town).",
     },
     {
       type: "faq" as const,
@@ -238,7 +238,7 @@ const content_json = {
         { label: "Standard cleaning in Cape Town", url: "/services/standard-cleaning-cape-town" },
         { label: "Deep cleaning in Cape Town", url: "/services/deep-cleaning-cape-town" },
         { label: "Cape Town cleaning services by area", url: "/cleaning-services-cape-town" },
-        { label: "Book a clean", url: "/booking/details" },
+        { label: "Book a clean", url: "/book" },
       ],
     },
     {
@@ -247,7 +247,7 @@ const content_json = {
       description:
         "Get an instant quote and book your cleaning service in Cape Town in under 2 minutes.",
       button_text: "Get instant quote",
-      link: "/booking/details",
+      link: "/book",
       variant: "primary" as const,
     },
   ],

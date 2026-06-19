@@ -12,9 +12,11 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   formatCurrency,
   formatDueDateLabel,
@@ -182,27 +184,49 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Total invoices", value: loading ? "—" : totalInvoices, color: "text-slate-800" },
-          { label: "Paid", value: loading ? "—" : paidCount, color: "text-emerald-600" },
-          {
-            label: "Overdue",
-            value: loading ? "—" : overdueCount,
-            color: overdueCount > 0 ? "text-red-600" : "text-slate-400",
-          },
-          {
-            label: "Outstanding",
-            value: loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR"),
-            color: "text-orange-600",
-          },
-        ].map((k) => (
-          <div key={k.label} className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
-            <p className={cn("mt-1 text-2xl font-bold tabular-nums", k.color)}>{k.value}</p>
-          </div>
-        ))}
-      </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Total invoices", value: loading ? "—" : totalInvoices, color: "text-slate-800" },
+            { label: "Paid", value: loading ? "—" : paidCount, color: "text-emerald-600" },
+            {
+              label: "Overdue",
+              value: loading ? "—" : overdueCount,
+              color: overdueCount > 0 ? "text-red-600" : "text-slate-400",
+            },
+            {
+              label: "Outstanding",
+              value: loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR"),
+              color: "text-orange-600",
+              tooltip:
+                "Sum of unpaid balances on all invoices in the list (every month). For current recurring billing, compare with the month draft total on /office/recurring.",
+            },
+          ].map((k) => (
+            <div key={k.label} className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
+                {"tooltip" in k && k.tooltip ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="rounded-full text-slate-400 transition hover:text-slate-600"
+                        aria-label={`About ${k.label}`}
+                      >
+                        <HelpCircle className="h-3 w-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-left">
+                      {k.tooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
+              <p className={cn("mt-1 text-2xl font-bold tabular-nums", k.color)}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+      </TooltipProvider>
 
       <div className="rounded-2xl bg-white border border-slate-100 shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">

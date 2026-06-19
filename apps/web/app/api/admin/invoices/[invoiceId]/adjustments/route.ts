@@ -64,7 +64,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
 
   const st = String(row.status ?? "").toLowerCase();
   if (st === "draft") {
-    await admin.rpc("recompute_monthly_invoice_totals", { p_invoice_id: invoiceId });
+    const { error: stampErr } = await admin
+      .from("invoice_adjustments")
+      .update({ applied_to_invoice_id: invoiceId, applied_at: new Date().toISOString() })
+      .eq("id", ins.id)
+      .is("applied_to_invoice_id", null);
+    if (stampErr) return NextResponse.json({ error: stampErr.message }, { status: 500 });
+
+    const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", { p_invoice_id: invoiceId });
+    if (rpcErr) return NextResponse.json({ error: rpcErr.message }, { status: 500 });
   }
 
   const payload = { ok: true as const, adjustmentId: ins.id };

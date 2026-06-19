@@ -79,7 +79,7 @@ describe("validateBlogPublish + cluster peers", () => {
     blocks: [
       { type: "section", title: "Body", content: "word ".repeat(850), heading_level: 2 },
       { type: "faq", items: [{ question: "Q?", answer: "A.".repeat(50) }] },
-      { type: "cta", title: "Book", description: "d", button_text: "Go", link: "/booking" },
+      { type: "cta", title: "Book", description: "d", button_text: "Go", link: "/book" },
       {
         type: "internal_links",
         title: "More",

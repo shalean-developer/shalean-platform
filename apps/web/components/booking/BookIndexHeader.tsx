@@ -10,7 +10,7 @@ export function BookIndexHeader() {
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 backdrop-blur-sm">
       <div className="flex w-full items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" aria-label="Shalean home">
-          <ShaleanNavLogo className="h-8 w-auto max-w-[140px]" />
+          <ShaleanNavLogo className="h-8 w-auto max-w-[140px]" priority />
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">

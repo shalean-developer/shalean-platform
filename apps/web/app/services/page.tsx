@@ -226,7 +226,7 @@ export default function ServicesHubPage() {
               </ul>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <CTAButton
-                  href="/booking/details"
+                  href="/book"
                   variant="primary"
                   trackSource="services_hub_hero_book"
                   seoHubCta={{ cta_location: "hero", cta_label: "Book a Cleaner", cta_kind: "book_now" }}
@@ -235,7 +235,7 @@ export default function ServicesHubPage() {
                   Book a Cleaner
                 </CTAButton>
                 <CTAButton
-                  href="/booking/details"
+                  href="/book"
                   variant="secondary"
                   trackSource="services_hub_hero_prices"
                   seoHubCta={{ cta_location: "hero", cta_label: "See Prices", cta_kind: "get_price" }}
@@ -301,7 +301,7 @@ export default function ServicesHubPage() {
                 title="Airbnb Cleaning"
                 description="Turnover-ready resets between guests — presentation, hygiene, and speed when calendars are tight."
                 learnMoreHref={p["airbnb-cleaning-cape-town"].path}
-                bookHref="/booking/details"
+                bookHref="/book"
                 bookSource="services_hub_card_airbnb"
                 seoHubTrack
               />
@@ -407,7 +407,7 @@ export default function ServicesHubPage() {
             </div>
             <div className="mt-8">
               <CTAButton
-                href="/booking/details"
+                href="/book"
                 variant="primary"
                 trackSource="services_hub_pricing_cta"
                 seoHubCta={{ cta_location: "pricing", cta_label: "Get exact price", cta_kind: "get_price" }}
@@ -479,7 +479,7 @@ export default function ServicesHubPage() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <CTAButton
-                href="/booking/details"
+                href="/book"
                 variant="primary"
                 trackSource="services_hub_footer_book"
                 seoHubCta={{ cta_location: "footer", cta_label: "Book now", cta_kind: "book_now" }}
@@ -488,7 +488,7 @@ export default function ServicesHubPage() {
                 Book now
               </CTAButton>
               <CTAButton
-                href="/booking/details"
+                href="/book"
                 variant="ghostOnDark"
                 trackSource="services_hub_footer_price"
                 seoHubCta={{ cta_location: "footer", cta_label: "Get instant price", cta_kind: "get_price" }}

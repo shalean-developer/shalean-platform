@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
 import { CleanerRouteShell } from "@/components/cleaner-dashboard/CleanerRouteShell";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function CleanerLayout({ children }: { children: ReactNode }) {
-  return <CleanerRouteShell>{children}</CleanerRouteShell>;
+  return (
+    <AppMonoFontScope>
+      <CleanerRouteShell>{children}</CleanerRouteShell>
+    </AppMonoFontScope>
+  );
 }

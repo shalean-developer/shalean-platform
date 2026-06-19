@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
+import { pricingSlugForMarketingKey } from "@/lib/marketing/marketingHomePricingSlugs";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 type DbRow = Record<string, unknown>;
@@ -52,6 +53,21 @@ export type HomePageData = {
 };
 
 const WIDGET_SERVICE_IDS = new Set<string>(["standard", "airbnb", "deep", "move", "carpet"]);
+
+/** Homepage / JSON-LD service slugs — widget keys plus marketing-only lines (e.g. office). */
+export const MARKETING_HOME_SERVICE_IDS = new Set<string>([...WIDGET_SERVICE_IDS, "office"]);
+
+export type MarketingHomeServiceKey = HomeWidgetServiceKey | "office";
+
+export type MarketingHomeService = {
+  id: MarketingHomeServiceKey;
+  title: string;
+  description: string;
+  price: number | null;
+  badge: string | null;
+  imageUrl: string | null;
+  features: string[];
+};
 
 function text(row: DbRow, keys: string[]): string | null {
   for (const key of keys) {
@@ -108,6 +124,49 @@ async function readRows(table: string): Promise<DbRow[]> {
     return [];
   }
   return Array.isArray(data) ? sortRows(data as DbRow[]) : [];
+}
+
+function mapMarketingHomeService(row: DbRow, index: number): MarketingHomeService | null {
+  const rawId = text(row, ["slug", "service_id", "id", "key"]);
+  const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
+  if (!id || !MARKETING_HOME_SERVICE_IDS.has(id)) return null;
+  const title = text(row, ["title", "name", "label"]);
+  const description = text(row, ["description", "summary", "short_description", "blurb"]);
+  if (!title || !description) return null;
+  return {
+    id: id as MarketingHomeServiceKey,
+    title,
+    description,
+    price: null,
+    badge: text(row, ["badge", "tagline", "eyebrow"]),
+    imageUrl: text(row, ["image_url", "image", "photo_url"]),
+    features: listValue(row, ["features", "bullets", "included"]),
+  };
+}
+
+function activePricingBaseBySlug(rows: DbRow[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    if (row.is_active === false) continue;
+    const slug = text(row, ["slug"]);
+    const price = numberValue(row, ["base_price"]);
+    if (slug && price != null) map.set(slug, price);
+  }
+  return map;
+}
+
+/** Overlay checkout catalog base prices onto marketing service rows. */
+function applyPricingCatalogToMarketingServices(
+  services: MarketingHomeService[],
+  pricingRows: DbRow[],
+): MarketingHomeService[] {
+  const catalog = activePricingBaseBySlug(pricingRows);
+  if (catalog.size === 0) return services;
+
+  return services.map((service) => {
+    const catalogPrice = catalog.get(pricingSlugForMarketingKey(service.id));
+    return catalogPrice != null ? { ...service, price: catalogPrice } : service;
+  });
 }
 
 function mapService(row: DbRow, index: number): HomeService | null {
@@ -180,3 +239,26 @@ export const getHomePageData = cache(async (): Promise<HomePageData> => {
     faqs: faqRows.map(mapFaq).filter((row): row is HomeFaq => Boolean(row)),
   };
 });
+
+/** Homepage SEO islands — skips unused `pricing_tiers` / reviews for faster TTFB. */
+export const getMarketingHomeSeoData = cache(
+  async (): Promise<Pick<HomePageData, "locations" | "faqs"> & { services: MarketingHomeService[] }> => {
+    const [servicesRows, pricingRows, locationsRows, faqRows] = await Promise.all([
+      readRows("services"),
+      readRows("pricing_services"),
+      readRows("locations"),
+      readRows("faqs"),
+    ]);
+
+    const services = applyPricingCatalogToMarketingServices(
+      servicesRows.map(mapMarketingHomeService).filter((row): row is MarketingHomeService => Boolean(row)),
+      pricingRows,
+    );
+
+    return {
+      services,
+      locations: locationsRows.map(mapLocation).filter((row): row is HomeLocation => Boolean(row)).slice(0, 12),
+      faqs: faqRows.map(mapFaq).filter((row): row is HomeFaq => Boolean(row)),
+    };
+  },
+);

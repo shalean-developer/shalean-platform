@@ -37,7 +37,7 @@ function locationHref(locationAreaSlug: string): string {
 
 function serviceHref(serviceSlug: string, citySlug: string): string {
   if (citySlug === "cape-town") return `/services/${serviceSlug}-cape-town`;
-  return "/booking/details";
+  return "/book";
 }
 
 export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): ProgrammaticGeneratedPost {
@@ -84,10 +84,10 @@ export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): 
     internalLinks.push({ label, url });
   }
   addLink(`${serviceName} in ${locationName}`, locPath);
-  addLink(`Book ${serviceName}`, "/booking");
+  addLink(`Book ${serviceName}`, "/book");
   addLink("Cleaning guides & tips", "/blog");
   const svcPath = serviceHref(serviceSlug, citySlug);
-  if (svcPath !== "/booking") {
+  if (svcPath !== "/book") {
     addLink(`${serviceName} in ${cityName} (service guide)`, svcPath);
   }
   for (const p of related) {
@@ -194,7 +194,7 @@ export function generateProgrammaticPost(input: GenerateProgrammaticPostInput): 
       type: "cta",
       title: `Book ${serviceName} in ${locationName}`,
       button_text: "Check availability",
-      link: "/booking",
+      link: "/book",
       variant: "primary",
     },
   ];

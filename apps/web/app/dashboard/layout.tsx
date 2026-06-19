@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
 import { DashboardRouteLayout } from "@/components/dashboard/dashboard-route-layout";
 
 export const metadata = {
@@ -8,5 +9,9 @@ export const metadata = {
 };
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  return <DashboardRouteLayout>{children}</DashboardRouteLayout>;
+  return (
+    <AppMonoFontScope>
+      <DashboardRouteLayout>{children}</DashboardRouteLayout>
+    </AppMonoFontScope>
+  );
 }

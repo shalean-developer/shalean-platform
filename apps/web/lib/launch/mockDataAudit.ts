@@ -16,7 +16,6 @@ export const OFFICE_PLACEHOLDER_PAGES: { path: string; constant: string }[] = [
   { path: "office/operations/page.tsx", constant: "OPEN_ISSUES" },
   { path: "office/notifications/page.tsx", constant: "CHANNEL_STATS" },
   { path: "office/templates/page.tsx", constant: "TEMPLATES" },
-  { path: "office/pricing/page.tsx", constant: "BASE_PRICING" },
   { path: "office/blog/page.tsx", constant: "POSTS" },
 ];
 

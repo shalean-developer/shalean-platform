@@ -50,7 +50,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -142,9 +142,9 @@ body {
   background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.08), transparent);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cleaner-offers-shimmer-overlay::after {
-    animation: none;
-    opacity: 0;
+@layer utilities {
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 720px;
   }
 }

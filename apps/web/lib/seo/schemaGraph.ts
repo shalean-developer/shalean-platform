@@ -4,6 +4,15 @@ import { SITE_ORIGIN } from "@/lib/site/canonical";
 /** Stable site entity — referenced by WebPage.isPartOf across templates. */
 export const SITE_WEBSITE_ID = `${SITE_ORIGIN}/#website`;
 
+/** Stable `@id` for page-scoped graph nodes (homepage uses `/#fragment`, paths use `#fragment`). */
+export function pageEntityId(canonicalUrl: string, fragment: string): string {
+  const frag = fragment.replace(/^#/, "");
+  const trimmed = canonicalUrl.replace(/\/+$/, "");
+  const origin = SITE_ORIGIN.replace(/\/+$/, "");
+  if (trimmed === origin) return `${origin}/#${frag}`;
+  return `${trimmed}#${frag}`;
+}
+
 const SEARCH_TERM_TOKEN = "{search_term_string}";
 
 function webSiteSearchPotentialAction(): Record<string, unknown> | null {
@@ -30,6 +39,7 @@ export function buildWebSiteJsonLdNode(opts?: WebSiteJsonLdOptions): Record<stri
     "@id": SITE_WEBSITE_ID,
     url: SITE_ORIGIN,
     name: "Shalean Cleaning Services",
+    inLanguage: "en-ZA",
     publisher: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
   };
   if (opts?.includeSearchAction) {
@@ -47,14 +57,16 @@ type WebPageGraphArgs = {
   primaryEntityId?: string;
   /** Passed to `SpeakableSpecification.cssSelector` when non-empty. */
   speakableCssSelectors?: string[];
+  inLanguage?: string;
 };
 
 export function buildWebPageJsonLdNode(args: WebPageGraphArgs): Record<string, unknown> {
   const node: Record<string, unknown> = {
     "@type": "WebPage",
-    "@id": `${args.canonicalUrl}#webpage`,
-    url: args.canonicalUrl,
+    "@id": pageEntityId(args.canonicalUrl, "webpage"),
+    url: args.canonicalUrl.replace(/\/+$/, "") || SITE_ORIGIN,
     name: args.name,
+    inLanguage: args.inLanguage ?? "en-ZA",
     isPartOf: { "@id": SITE_WEBSITE_ID },
     about: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
   };
@@ -79,7 +91,7 @@ export function buildBreadcrumbJsonLdNode(
 ): Record<string, unknown> {
   return {
     "@type": "BreadcrumbList",
-    "@id": `${pageCanonicalUrl}#breadcrumbs`,
+    "@id": pageEntityId(pageCanonicalUrl, "breadcrumbs"),
     itemListElement: items.map((it, idx) => ({
       "@type": "ListItem",
       position: idx + 1,

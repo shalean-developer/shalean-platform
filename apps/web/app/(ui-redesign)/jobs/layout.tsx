@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
 import { JobsShell } from "@/src/features/jobs/JobsShell";
 
 export const metadata = {
@@ -8,5 +9,9 @@ export const metadata = {
 };
 
 export default function JobsLayout({ children }: { children: ReactNode }) {
-  return <JobsShell>{children}</JobsShell>;
+  return (
+    <AppMonoFontScope>
+      <JobsShell>{children}</JobsShell>
+    </AppMonoFontScope>
+  );
 }

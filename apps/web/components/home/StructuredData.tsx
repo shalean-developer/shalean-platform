@@ -1,16 +1,22 @@
-import type { HomeFaq, HomeLocation, HomeService } from "@/lib/home/data";
+import type { HomeFaq, HomeLocation, MarketingHomeService } from "@/lib/home/data";
 import {
   buildPrimaryLocalBusinessBase,
   capeTownAdministrativeServiceArea,
   PRIMARY_LOCAL_BUSINESS_ID,
 } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { HOME_PAGE_OFFER_CATALOG_ID, homeBookableServiceJsonLdId } from "@/lib/seo/homeBookableServiceJsonLd";
-import { clampMetaDescription } from "@/lib/seo/metaDescription";
-import { buildWebPageJsonLdNode, buildWebSiteJsonLdNode } from "@/lib/seo/schemaGraph";
+import {
+  HOME_CANONICAL,
+  HOME_PAGE_HEADLINE,
+  HOME_PAGE_META_DESCRIPTION,
+  HOME_PAGE_TITLE,
+} from "@/lib/seo/homePageMeta";
+import { normalizeSchemaDescription } from "@/lib/seo/metaDescription";
+import { buildWebPageJsonLdNode, buildWebSiteJsonLdNode, pageEntityId } from "@/lib/seo/schemaGraph";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 
 type StructuredDataProps = {
-  services: HomeService[];
+  services: MarketingHomeService[];
   locations: HomeLocation[];
   faqs: HomeFaq[];
 };
@@ -26,7 +32,7 @@ const CAPE_TOWN_HOME_CITY = {
   containedInPlace: { "@type": "Country", name: "South Africa" },
 } as const;
 
-function buildHomeOfferCatalog(services: HomeService[]): Record<string, unknown> {
+function buildHomeOfferCatalog(services: MarketingHomeService[]): Record<string, unknown> {
   return {
     "@type": "OfferCatalog",
     "@id": HOME_PAGE_OFFER_CATALOG_ID,
@@ -90,7 +96,7 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     "@type": "Service",
     "@id": homeBookableServiceJsonLdId(service.id),
     name: service.title,
-    description: clampMetaDescription(service.description),
+    description: normalizeSchemaDescription(service.description),
     url: SITE_ORIGIN,
     areaServed: locationPlaces,
     serviceArea: capeTownAdministrativeServiceArea(),
@@ -100,11 +106,9 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
   const graph: unknown[] = [
     buildWebSiteJsonLdNode({ includeSearchAction: true }),
     buildWebPageJsonLdNode({
-      canonicalUrl: SITE_ORIGIN,
-      name: "Shalean Cleaning Services",
-      description: clampMetaDescription(
-        "Book vetted home cleaners in Cape Town online — transparent quotes for standard, deep, move-out, and recurring cleans.",
-      ),
+      canonicalUrl: HOME_CANONICAL,
+      name: HOME_PAGE_HEADLINE,
+      description: HOME_PAGE_META_DESCRIPTION,
       primaryEntityId: CLEANING_SERVICE_ID,
       speakableCssSelectors: ["main h1", ".marketing-hero-lead"],
     }),
@@ -119,7 +123,7 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
       "@type": "FAQPage",
       "@id": `${SITE_ORIGIN}/#faq`,
       url: SITE_ORIGIN,
-      isPartOf: { "@id": `${SITE_ORIGIN}/#webpage` },
+      isPartOf: { "@id": pageEntityId(HOME_CANONICAL, "webpage") },
       about: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
       mainEntity: faqs.map((faq, index) => ({
         "@type": "Question",

@@ -92,7 +92,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li><strong>Airbnb cleaning:</strong> R300 – R800 per turnover</li>
 <li><strong>Carpet cleaning (add-on):</strong> R100 – R300 per room</li>
 </ul>
-<p>For an exact price based on your home, you can <a href="/booking/details" class="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700">check pricing and availability instantly</a> using our booking system.</p>
+<p>For an exact price based on your home, you can <a href="/book" class="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700">check pricing and availability instantly</a> using our booking system.</p>
 
 <h2>What affects cleaning costs?</h2>
 <p>Several factors influence how much you&apos;ll pay for cleaning services in Cape Town.</p>
@@ -158,7 +158,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li>Time of booking</li>
 <li>Size of the job</li>
 </ul>
-<p>The best way to check is to <a href="/booking/details" class="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700">book online and view available time slots</a>.</p>
+<p>The best way to check is to <a href="/book" class="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700">book online and view available time slots</a>.</p>
 
 <h2>What you&apos;re really paying for</h2>
 <p>When you book a professional cleaning service, you&apos;re paying for:</p>
@@ -237,7 +237,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <h2>Same-day Airbnb cleaning in Cape Town</h2>
 <p>Same-day cleaning depends on cleaner availability, how early you book, and the size of the job relative to the gap between check-out and check-in.</p>
 <p>The fastest way to see what is realistic is to use your booking flow, enter bedrooms and bathrooms accurately, and view open slots—especially in peak season when Cape Town demand spikes and Sea Point or CBD turnovers fill fast.</p>
-<p>You can also <a href="/booking/details" class="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700">book your cleaning online</a> and see live slots before you commit.</p>
+<p>You can also <a href="/book" class="font-semibold text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700">book your cleaning online</a> and see live slots before you commit.</p>
 
 <p>For a scoped turnover aligned to guest expectations, compare what is included on our <a href="/services/airbnb-cleaning-cape-town">Airbnb cleaning Cape Town</a> service page—then book online when you are ready.</p>
 `.trim(),

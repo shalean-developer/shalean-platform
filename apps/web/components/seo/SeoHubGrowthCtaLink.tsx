@@ -28,7 +28,11 @@ export function SeoHubGrowthCtaLink({
   ctaKind,
   pricingInteraction,
 }: Props) {
-  const bookingHref = href === "/booking" || href === "/booking/details" ? "/book" : href;
+  const pathOnly = href.split("?")[0] ?? href;
+  const bookingHref =
+    pathOnly === "/booking" || (pathOnly.startsWith("/booking/") && !pathOnly.startsWith("/booking/payment"))
+      ? "/book"
+      : href;
 
   return (
     <GrowthCtaLink

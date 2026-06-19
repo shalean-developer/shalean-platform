@@ -73,6 +73,7 @@ export function BlogEngagementAnalytics({ slug }: Props) {
       const href = a.getAttribute("href") ?? "";
       const placement = a.dataset.blogCtaPlacement ?? "inline_link";
       if (
+        href.includes("/book") ||
         href.includes("/booking") ||
         href.includes("paystack") ||
         a.dataset.blogTrackCta === "1"

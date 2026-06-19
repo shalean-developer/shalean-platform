@@ -322,7 +322,7 @@ function parseEndCtaBlock(endCtaMd: string): BlogContentBlock | null {
   if (!raw) return null;
   const linkMatch = raw.match(/\[([^\]]+)\]\(([^)]+)\)/);
   const button_text = linkMatch?.[1]?.trim() || "Book cleaning";
-  const link = linkMatch?.[2] ? normalizeHref(linkMatch[2]) : "/booking/details";
+  const link = linkMatch?.[2] ? normalizeHref(linkMatch[2]) : "/book";
   const plain = markdownToPlainForFaq(raw).slice(0, 600);
   return {
     type: "cta",

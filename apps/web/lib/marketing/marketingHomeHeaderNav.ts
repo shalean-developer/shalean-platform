@@ -1,0 +1,28 @@
+export const MARKETING_HEADER_NAV = {
+  services: "/services",
+  pricing: "/book",
+  about: "/about",
+  help: "/faq",
+  contact: "/contact",
+} as const;
+
+export type MarketingHeaderNavLink = { label: string; href: string; dropdown?: boolean };
+
+export const MARKETING_HEADER_NAV_LINKS: MarketingHeaderNavLink[] = [
+  { label: "Services", href: MARKETING_HEADER_NAV.services, dropdown: true },
+  { label: "Pricing", href: MARKETING_HEADER_NAV.pricing },
+  { label: "About", href: MARKETING_HEADER_NAV.about },
+  { label: "Help", href: MARKETING_HEADER_NAV.help },
+  { label: "Contact", href: MARKETING_HEADER_NAV.contact },
+];
+
+export const MARKETING_HEADER_SERVICE_LINKS = [
+  ["Standard Cleaning", "/services/standard-cleaning"],
+  ["Deep Cleaning", "/services/deep-cleaning"],
+  ["Move In / Out Cleaning", "/services/move-in-out-cleaning"],
+  ["Office Cleaning", "/services/office-cleaning"],
+  ["All Services", "/services"],
+] as const;
+
+export const marketingHeaderNavLinkClass =
+  "flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-700";

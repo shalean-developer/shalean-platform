@@ -169,7 +169,7 @@ function MobileBrandMark() {
       className="flex shrink-0 transition-opacity hover:opacity-90"
       aria-label="Shalean home"
     >
-      <ShaleanNavLogo className="h-7 w-auto max-w-[120px]" intrinsicHeight={120} />
+      <ShaleanNavLogo className="h-7 w-auto max-w-[120px]" intrinsicHeight={120} priority />
     </Link>
   );
 }
@@ -194,14 +194,14 @@ export function BookingCheckoutHeader({ currentStep }: BookingCheckoutHeaderProp
     return n;
   }, [currentStep, stepCount]);
 
-  const path = pathname?.startsWith("/") ? pathname : "/booking/details";
+  const path = pathname?.startsWith("/") ? pathname : "/book";
   const redirectPath = `${path}${searchParams?.toString() ? `?${searchParams.toString()}` : ""}`;
   const authRedirect = encodeURIComponent(redirectPath);
   const photo = user ? avatarUrl(user) : undefined;
 
   const logoBlock = (
     <Link href="/" className="flex min-w-0 shrink-0 transition-opacity hover:opacity-90">
-      <ShaleanNavLogo className="h-7 w-auto max-w-[160px] sm:h-8 sm:max-w-[180px]" />
+      <ShaleanNavLogo className="h-7 w-auto max-w-[160px] sm:h-8 sm:max-w-[180px]" priority />
     </Link>
   );
 

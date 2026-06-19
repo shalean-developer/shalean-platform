@@ -6,6 +6,7 @@ import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { firstOccurrenceOnOrAfter, type MonthlyPattern, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { buildAdminRecurringQuickSnapshot, normalizeVisitTimeHm } from "@/lib/recurring/buildAdminRecurringQuickSnapshot";
+import { loadRecurringPageSummary } from "@/lib/recurring/loadRecurringPageSummary";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -63,7 +64,15 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({ recurring });
+  let summary;
+  try {
+    summary = await loadRecurringPageSummary(admin, recurring);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Could not load recurring summary.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
+  return NextResponse.json({ recurring, summary });
 }
 
 function isIntArrayDays(v: unknown): v is number[] {

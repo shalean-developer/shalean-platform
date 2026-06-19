@@ -68,7 +68,7 @@ export function buildLocationGuideTemplate(vars: LocationTemplateVars): BlogCont
         title: `Book ${service} in ${area}`,
         description: "Transparent pricing at checkout—vetted teams across Cape Town.",
         button_text: "Get instant quote",
-        link: "/booking",
+        link: "/book",
         variant: "primary",
       },
     ],

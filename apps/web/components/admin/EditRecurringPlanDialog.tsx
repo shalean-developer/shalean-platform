@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { adminFetch } from "@/hooks/useAdminData";
+import { emitAdminToast } from "@/lib/admin/toastBus";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -143,6 +144,74 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
         setFormError(res.error ?? "Update failed.");
         return;
       }
+
+      const propagation = (res.data as { propagation?: {
+        bookings_updated?: number;
+        bookings_cancelled?: number;
+        bookings_created?: number;
+        bookings_cancel_skipped?: number;
+        bookings_cancel_skipped_locked_invoice?: number;
+        bookings_cancel_skipped_locked_payout?: number;
+        bookings_skipped_finalized?: number;
+        bookings_skipped_locked_invoice?: number;
+        earnings_recomputed?: number;
+        invoices_recomputed?: number;
+        errors?: string[];
+      } } | undefined)?.propagation;
+
+      if (propagation) {
+        const parts: string[] = [];
+        if (propagation.bookings_cancelled) parts.push(`${propagation.bookings_cancelled} extra visit(s) removed`);
+        if (propagation.bookings_created) parts.push(`${propagation.bookings_created} visit(s) added`);
+        if (propagation.bookings_updated) parts.push(`${propagation.bookings_updated} visit(s) repriced`);
+        if (propagation.invoices_recomputed) parts.push(`${propagation.invoices_recomputed} invoice(s) updated`);
+        if (propagation.earnings_recomputed) parts.push(`${propagation.earnings_recomputed} payout(s) refreshed`);
+        if (parts.length > 0) {
+          emitAdminToast(parts.join(" · "), "success");
+        } else {
+          emitAdminToast("Plan saved", "success");
+        }
+        if (propagation.bookings_cancel_skipped_locked_invoice) {
+          emitAdminToast(
+            `${propagation.bookings_cancel_skipped_locked_invoice} visit(s) on sent/paid invoices were not removed`,
+            "error",
+          );
+        }
+        if (propagation.bookings_cancel_skipped_locked_payout) {
+          emitAdminToast(
+            `${propagation.bookings_cancel_skipped_locked_payout} visit(s) could not be removed (cleaner payout already locked)`,
+            "error",
+          );
+        }
+        if (
+          propagation.bookings_cancel_skipped &&
+          !propagation.bookings_cancel_skipped_locked_invoice &&
+          !propagation.bookings_cancel_skipped_locked_payout
+        ) {
+          emitAdminToast(
+            `${propagation.bookings_cancel_skipped} extra visit(s) could not be removed`,
+            "error",
+          );
+        }
+        if (propagation.bookings_skipped_finalized) {
+          emitAdminToast(
+            `${propagation.bookings_skipped_finalized} visit(s) skipped (earnings already finalized)`,
+            "error",
+          );
+        }
+        if (propagation.bookings_skipped_locked_invoice) {
+          emitAdminToast(
+            `${propagation.bookings_skipped_locked_invoice} visit(s) on sent/paid invoices were not changed`,
+            "error",
+          );
+        }
+        if (propagation.errors?.length) {
+          emitAdminToast(propagation.errors[0] ?? "Some rows could not be updated", "error");
+        }
+      } else {
+        emitAdminToast("Plan saved", "success");
+      }
+
       onOpenChange(false);
       await onUpdated();
     } finally {
@@ -165,7 +234,7 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
           <DialogTitle>Edit recurring plan</DialogTitle>
           <DialogDescription>
             Update schedule, price, address, or visit time for <span className="font-medium text-slate-700">{customer}</span>.
-            Next visit date is recalculated after saving.
+            Saving also updates open occurrence bookings, draft invoices, and cleaner earnings where allowed.
           </DialogDescription>
         </DialogHeader>
 

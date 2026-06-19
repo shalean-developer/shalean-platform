@@ -1,29 +1,17 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { copyAllowedBookingParams } from "@/lib/booking/bookingUrl";
+import { buildBookHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
+import { noIndexFollowCanonical } from "@/lib/site/transactionalMetadata";
 
-type Props = {
+/** Add-ons live on step 1 of `/book`; keep `/booking/extras` for bookmarks. */
+export const metadata: Metadata = noIndexFollowCanonical("/booking/extras");
+
+type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function collectSearchParams(sp: Record<string, string | string[] | undefined>): URLSearchParams {
-  const qs = new URLSearchParams();
-  for (const [key, raw] of Object.entries(sp)) {
-    if (raw === undefined) continue;
-    if (Array.isArray(raw)) {
-      for (const v of raw) {
-        if (v !== undefined && v !== "") qs.append(key, v);
-      }
-    } else if (raw !== "") {
-      qs.append(key, raw);
-    }
-  }
-  return qs;
-}
-
-/** Add-ons live on `/booking/details`; keep `/booking/extras` for bookmarks. */
-export default async function BookingExtrasLegacyRedirect({ searchParams }: Props) {
-  const params = collectSearchParams(await searchParams);
-  const allowed = copyAllowedBookingParams(params);
-  const q = allowed.toString();
-  redirect(q ? `/booking/details?${q}` : "/booking/details");
+export default async function Page({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  redirect(buildBookHrefFromLegacySearchParams(collectLegacyBookingSearchParams(sp), "details"));
 }

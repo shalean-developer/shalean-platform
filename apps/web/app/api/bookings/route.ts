@@ -34,10 +34,10 @@ export async function POST() {
     {
       success: false,
       error:
-        "POST /api/bookings is retired. Use POST /api/booking/widget-quote for conversion/widget quotes, or /booking for customer checkout.",
+        "POST /api/bookings is retired. Use POST /api/booking/widget-quote for conversion/widget quotes, or /book for customer checkout.",
       migration: {
         widgetQuote: "/api/booking/widget-quote",
-        checkout: "/booking",
+        checkout: "/book",
       },
     },
     { status: 410, headers: DEPRECATION_HEADERS },

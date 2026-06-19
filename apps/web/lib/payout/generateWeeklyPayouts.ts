@@ -19,7 +19,7 @@ import {
 import { bookingUsesAccrualPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
-import { completionDayYmd, getPreviousWeekDateBoundsUtc, getUtcWeekBoundsContainingYmd, isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
+import { completionDayYmd, getPreviousWeekDateBoundsUtc, getUtcWeekBoundsContainingYmd, isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -146,7 +146,7 @@ async function ensureNoMissingCompletedPayouts(
 async function listUnbatchedCompletionWeeks(admin: SupabaseClient): Promise<Array<{ periodStart: string; periodEnd: string }>> {
   const { data, error } = await admin
     .from("bookings")
-    .select("completed_at, date")
+    .select("completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
     .eq("status", "completed")
     .eq("is_test", false)
     .is("payout_id", null)
@@ -157,7 +157,7 @@ async function listUnbatchedCompletionWeeks(admin: SupabaseClient): Promise<Arra
 
   const weekStarts = new Set<string>();
   for (const row of data ?? []) {
-    const ymd = completionDayYmd(row as { completed_at?: string | null; date?: string | null });
+    const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
     if (!ymd) continue;
     weekStarts.add(getUtcWeekBoundsContainingYmd(ymd).periodStart);
   }
@@ -211,7 +211,7 @@ async function generateWeeklyPayoutsForPeriod(
 
     const candidateBookings = (rawBookings ?? []).filter((b) => {
       const br = b as BookingPayoutRow;
-      const ymd = completionDayYmd(br);
+      const ymd = weeklyBatchDayYmd(br);
       if (!ymd) return false;
       return isYmdInInclusiveRange(ymd, periodStart, periodEnd);
     }) as BookingPayoutRow[];
@@ -222,7 +222,7 @@ async function generateWeeklyPayoutsForPeriod(
       if (Number.isFinite(completedMs) && instantNearJhbThursdayPayoutCutoff(completedMs)) {
         jhbCutoffEdgeCaseBookings += 1;
       }
-      const ymd = completionDayYmd(br);
+      const ymd = weeklyBatchDayYmd(br);
       const uiFriday = Number.isFinite(completedMs)
         ? payoutArrivalSummaryJohannesburg(new Date(completedMs)).payoutTargetFridayYmd
         : ymd

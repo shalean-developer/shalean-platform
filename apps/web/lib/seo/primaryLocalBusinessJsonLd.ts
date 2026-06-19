@@ -36,7 +36,7 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
     telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
     email: CUSTOMER_SUPPORT_EMAIL,
     /** ZAR entry bands + moderate tier hint for rich results. */
-    priceRange: "$$ · From R280",
+    priceRange: "$$ - From R280",
     openingHours: "Mo-Su 08:00-18:00",
     address: {
       "@type": "PostalAddress",

@@ -1,4 +1,8 @@
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
+import {
+  buildBookHrefFromLegacySearchParams,
+  type LegacyCheckoutSegment,
+} from "@/lib/booking/legacyBookingToBookRedirect";
 import { buildBookingQueryString } from "@/lib/booking/bookingUrl";
 
 export type SeoBookingPrefill = {
@@ -10,11 +14,11 @@ export type SeoBookingPrefill = {
 
 type SeoBookingStep = "entry" | "details" | "when" | "checkout";
 
-const SEO_BOOKING_STEP_PATH: Record<SeoBookingStep, string> = {
-  entry: "/booking/details",
-  details: "/booking/details",
-  when: "/booking/schedule",
-  checkout: "/booking/payment",
+const SEO_STEP_TO_LEGACY_SEGMENT: Record<SeoBookingStep, LegacyCheckoutSegment> = {
+  entry: "details",
+  details: "details",
+  when: "schedule",
+  checkout: "payment",
 };
 
 const SEO_SERVICE_EXTRAS: Record<BookingServiceId, string[]> = {
@@ -59,5 +63,6 @@ export function buildSeoBookingHref(step: SeoBookingStep, prefill: SeoBookingPre
   if (extras.length > 0) extra.extras = extras.join(",");
   if (prefill.source) extra.source = prefill.source;
   const qs = buildBookingQueryString(extra);
-  return qs ? `${SEO_BOOKING_STEP_PATH[step]}?${qs}` : SEO_BOOKING_STEP_PATH[step];
+  const sp = new URLSearchParams(qs);
+  return buildBookHrefFromLegacySearchParams(sp, SEO_STEP_TO_LEGACY_SEGMENT[step]);
 }

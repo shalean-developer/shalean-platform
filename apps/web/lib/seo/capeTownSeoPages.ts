@@ -629,7 +629,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     ogImage: "/images/marketing/airbnb-cleaning-cape-town-living-room.webp",
     h1: "Airbnb Cleaning & Turnover Services in Cape Town",
     bookingLabel: "Airbnb turnover cleaning",
-    bookingPath: "/booking",
+    bookingPath: "/book",
     neighbourhoodBlogGuide: {
       areaName: "Green Point",
       blogPath: "/locations/green-point-cleaning-services",

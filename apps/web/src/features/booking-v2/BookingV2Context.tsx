@@ -25,6 +25,7 @@ import { step1Schema, step2Schema } from "@/src/features/booking-v2/schemas";
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
+import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 
 export type { LiveServiceConfig };
 
@@ -126,11 +127,32 @@ export function BookingV2Provider({
     mode: "onTouched",
   });
 
-  // After mount: restore persisted state
+  // After mount: restore persisted state, then merge marketing URL prefill (legacy /booking links).
   useEffect(() => {
     const saved = readFromStorage(serviceSlug);
-    if (saved) {
-      form.reset({ ...defaults, ...saved }, { keepDefaultValues: false });
+    const urlPatch = bookingV2PrefillPatchFromLegacySearchParams(searchParams);
+    const merged = {
+      ...defaults,
+      ...(saved ?? {}),
+      ...(urlPatch.serviceDetails
+        ? {
+            serviceDetails: {
+              ...(saved?.serviceDetails ?? defaults.serviceDetails),
+              ...urlPatch.serviceDetails,
+            },
+          }
+        : {}),
+      ...(urlPatch.suburb ? { suburb: urlPatch.suburb } : {}),
+      ...(urlPatch.selectedExtras?.length
+        ? {
+            selectedExtras: [
+              ...new Set([...(saved?.selectedExtras ?? defaults.selectedExtras), ...urlPatch.selectedExtras]),
+            ],
+          }
+        : {}),
+    };
+    if (saved || urlPatch.serviceDetails || urlPatch.suburb || urlPatch.selectedExtras?.length) {
+      form.reset(merged, { keepDefaultValues: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

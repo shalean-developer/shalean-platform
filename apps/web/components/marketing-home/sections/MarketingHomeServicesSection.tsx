@@ -1,61 +1,11 @@
 import Image from "next/image";
-import Link from "next/link";
-import { ArrowRight, UserCheck, Sprout, Clock3, BadgeCheck } from "lucide-react";
+import { UserCheck, Sprout, Clock3, BadgeCheck } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { MarketingHomeServicesGrid } from "@/components/marketing-home/sections/MarketingHomeServicesGrid";
 import { marketingLandingImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import type { MarketingHomeServiceCard } from "@/lib/marketing/marketingHomeServicePresentation";
 
 const mimg = marketingLandingImage;
-
-const SERVICES = [
-  {
-    image: mimg("/images/marketing/standard-cleaning-cape-town-kitchen.webp"),
-    alt: "Regular home cleaning in a bright Cape Town kitchen",
-    title: "Regular Cleaning",
-    description: "Keep your home fresh and comfortable.",
-    price: "R350",
-    href: "/services/standard-cleaning",
-  },
-  {
-    image: mimg("/images/marketing/deep-cleaning-cape-town-kitchen.webp"),
-    alt: "Deep cleaning service in a Cape Town kitchen",
-    title: "Deep Cleaning",
-    description: "A detailed clean for a healthier home.",
-    price: "R550",
-    href: "/services/deep-cleaning",
-  },
-  {
-    image: mimg("/images/marketing/move-out-cleaning-cape-town-handover.webp"),
-    alt: "Move-in / move-out cleaning service in Cape Town",
-    title: "Move-in / Move-out",
-    description: "We'll get your new space move-ready.",
-    price: "R650",
-    href: "/services/move-in-out-cleaning",
-  },
-  {
-    image: mimg("/images/marketing/office-cleaning-workspace-cape-town.webp"),
-    alt: "Professional office cleaning in a Cape Town workspace",
-    title: "Office Cleaning",
-    description: "A clean workspace boosts productivity.",
-    price: "R450",
-    href: "/services/office-cleaning",
-  },
-  {
-    image: mimg("/images/marketing/airbnb-cleaning-cape-town-living-room.webp"),
-    alt: "Window cleaning service in a Cape Town living room",
-    title: "Window Cleaning",
-    description: "Crystal-clear shine, every time.",
-    price: "R300",
-    href: "/services",
-  },
-  {
-    image: mimg("/images/marketing/sofa-carpet-care-cape-town.webp"),
-    alt: "Laundry and ironing service in Cape Town",
-    title: "Laundry & Ironing",
-    description: "Fresh, clean and perfectly ironed.",
-    price: "R250",
-    href: "/services",
-  },
-] as const;
 
 const WHY_CHOOSE_IMG_MAIN = mimg("/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp");
 const WHY_CHOOSE_IMG_TOP = mimg("/images/marketing/cleaning-team-bright-space-cape-town.webp");
@@ -86,66 +36,20 @@ const BENEFITS = [
 
 const waHref = "https://wa.me/27825915525?text=Hi%20Shalean%20Cleaning%20Services";
 
-export function MarketingHomeServicesSection() {
+type Props = {
+  serviceCards: MarketingHomeServiceCard[];
+};
+
+export function MarketingHomeServicesSection({ serviceCards }: Props) {
   const bookHref = marketingHomeBookingHref();
 
   return (
     <>
-      {/* Cleaning services grid */}
-      <section id="our-services" className="scroll-mt-24 bg-white py-16 md:py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Our cleaning services
-          </h2>
+      <MarketingHomeServicesGrid cards={serviceCards} />
 
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {SERVICES.map(({ image, alt, title, description, price, href }) => (
-              <Link
-                key={title}
-                href={href}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:shadow-md"
-              >
-                <div className="relative aspect-[16/9] w-full overflow-hidden">
-                  <Image
-                    src={image}
-                    alt={alt}
-                    fill
-                    className="object-cover object-center transition duration-300 group-hover:scale-105"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  />
-                </div>
-                <div className="flex flex-1 flex-col p-5">
-                  <h3 className="text-base font-bold text-slate-900">{title}</h3>
-                  <p className="mt-1 flex-1 text-sm leading-relaxed text-slate-500">{description}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xs text-slate-400">
-                      From <span className="font-bold text-blue-600">{price}</span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:text-blue-600" aria-hidden />
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          <div className="mt-10 flex justify-center">
-            <Link
-              href="/services"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              View all services
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Why choose us */}
       <section id="why-choose-us" className="scroll-mt-24 bg-slate-50 py-16 md:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center lg:gap-16">
-
-            {/* Image collage */}
             <div className="grid grid-cols-[minmax(0,1.12fr)_minmax(0,1fr)] grid-rows-2 gap-3">
               <div className="relative row-span-2 min-h-[280px] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:min-h-[340px]">
                 <Image
@@ -176,7 +80,6 @@ export function MarketingHomeServicesSection() {
               </div>
             </div>
 
-            {/* Text + benefits */}
             <div className="flex flex-col gap-6">
               <div>
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">

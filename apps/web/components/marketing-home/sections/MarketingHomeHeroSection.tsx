@@ -3,18 +3,14 @@ import Link from "next/link";
 import { ShieldCheck, ThumbsUp, MousePointerClick, Star, Users } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { HOME_PAGE_HEADLINE } from "@/lib/seo/homePageMeta";
 
 const HERO_MAIN = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
 
-type HeroProps = {
-  reviewBanner: PublicReviewBannerStats | null;
-};
-
-export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
+export function MarketingHomeHeroSection() {
   const bookHref = marketingHomeBookingHref();
-  const avg = publicTrustAverageDisplay(reviewBanner);
+  const avg = publicTrustAverageDisplay(null);
 
   return (
     <section className="relative w-full bg-white py-6 md:py-8 lg:py-10">
@@ -30,11 +26,11 @@ export function MarketingHomeHeroSection({ reviewBanner }: HeroProps) {
 
           {/* Headline */}
           <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-[2.85rem] xl:text-5xl">
-            Book trusted home cleaning across Cape Town
+            {HOME_PAGE_HEADLINE}
           </h1>
 
           {/* Supporting paragraph */}
-          <p className="max-w-lg text-base leading-relaxed text-slate-600">
+          <p className="marketing-hero-lead max-w-lg text-base leading-relaxed text-slate-600">
             Professional, reliable and affordable cleaning services for homes, apartments and offices. Book in minutes online.
           </p>
 

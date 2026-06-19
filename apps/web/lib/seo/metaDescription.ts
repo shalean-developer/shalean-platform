@@ -145,6 +145,11 @@ export function resolveBlogDbMetaDescription(input: {
   return clampMetaDescription(raw);
 }
 
+/** Trim for schema.org `description` — no SERP padding or length clamp. */
+export function normalizeSchemaDescription(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
 /** Enforces 120–160 chars for meta name="description" and matching OG/Twitter copy. */
 export function clampMetaDescription(text: string): string {
   let s = text.trim().replace(/\s+/g, " ");

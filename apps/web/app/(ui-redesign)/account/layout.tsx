@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
 import { AccountShell } from "@/src/features/account/AccountShell";
 
 export const metadata = {
@@ -8,5 +9,9 @@ export const metadata = {
 };
 
 export default function AccountLayout({ children }: { children: ReactNode }) {
-  return <AccountShell>{children}</AccountShell>;
+  return (
+    <AppMonoFontScope>
+      <AccountShell>{children}</AccountShell>
+    </AppMonoFontScope>
+  );
 }

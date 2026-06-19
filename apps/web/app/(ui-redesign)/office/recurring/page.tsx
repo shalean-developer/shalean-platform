@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   Pencil,
   Trash2,
+  HelpCircle,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch, getAdminToken } from "@/hooks/useAdminData";
@@ -39,6 +41,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatCurrency } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { estimateMonthlyRevenue } from "@/lib/recurring/estimateMonthlyRevenue";
+import type { RecurringPageSummary } from "@/lib/recurring/loadRecurringPageSummary";
 
 type PlanStatus = "active" | "paused" | "cancelled";
 
@@ -92,19 +98,56 @@ type CronHealthJob = {
   errors_last_24h: number;
 };
 
-function formatCronTs(iso: string | null): string {
-  if (!iso?.trim()) return "never";
-  try {
-    return new Date(iso).toLocaleString("en-ZA", {
-      timeZone: "Africa/Johannesburg",
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 16);
-  }
+function RecurringStatCard({
+  label,
+  value,
+  icon: Icon,
+  cls,
+  tooltip,
+  hint,
+  href,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+  cls: string;
+  tooltip?: string;
+  hint?: string;
+  href?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className={cn("mb-2 flex h-9 w-9 items-center justify-center rounded-xl", cls)}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <p className="text-xl font-bold tabular-nums text-slate-900">{value}</p>
+      <div className="mt-0.5 flex items-center gap-1">
+        <p className="text-xs text-slate-500">{label}</p>
+        {tooltip ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full text-slate-400 transition hover:text-slate-600"
+                aria-label={`About ${label}`}
+              >
+                <HelpCircle className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-left">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
+      {hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p> : null}
+      {href ? (
+        <Link href={href} className="mt-1 inline-block text-[11px] font-semibold text-blue-600 hover:underline">
+          View invoices
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 function generatorCronWarning(jobs: CronHealthJob[] | undefined): {
@@ -154,17 +197,19 @@ function displayCustomer(plan: RecurringPlan): { primary: string; secondary: str
   return { primary: `${plan.customer_id.slice(0, 8)}…`, secondary: null };
 }
 
-function estimateMonthlyRevenue(plan: RecurringPlan): number {
-  if (plan.status.toLowerCase() !== "active") return 0;
-  const price = plan.price ?? 0;
-  const days = Math.max(1, plan.days_of_week?.length ?? 1);
-  const f = plan.frequency.toLowerCase();
-  let visitsPerMonth: number;
-  if (f === "weekly") visitsPerMonth = (52 / 12) * days;
-  else if (f === "biweekly" || f === "fortnightly") visitsPerMonth = (26 / 12) * days;
-  else if (f === "monthly") visitsPerMonth = days;
-  else visitsPerMonth = (52 / 12) * days;
-  return Math.round(price * visitsPerMonth);
+function formatCronTs(iso: string | null): string {
+  if (!iso?.trim()) return "never";
+  try {
+    return new Date(iso).toLocaleString("en-ZA", {
+      timeZone: "Africa/Johannesburg",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso.slice(0, 16);
+  }
 }
 
 function previewText(plan: RecurringPlan): string {
@@ -186,6 +231,7 @@ function RecurringPlanActionsMenu({
   onEdit,
   onDelete,
   onBackfill,
+  onReconcile,
   onPause,
   onResume,
   onCancel,
@@ -198,6 +244,7 @@ function RecurringPlanActionsMenu({
   onEdit: () => void;
   onDelete: () => void;
   onBackfill: () => void;
+  onReconcile: () => void;
   onPause: () => void;
   onResume: () => void;
   onCancel: () => void;
@@ -225,6 +272,10 @@ function RecurringPlanActionsMenu({
         <DropdownMenuSeparator />
         {canPause && (
           <>
+            <DropdownMenuItem onClick={onReconcile} className="gap-2">
+              <Calendar className="h-4 w-4 text-violet-600" />
+              Reconcile schedule
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onBackfill} className="gap-2">
               <RotateCcw className="h-4 w-4 text-slate-500" />
               Backfill visits
@@ -236,10 +287,16 @@ function RecurringPlanActionsMenu({
           </>
         )}
         {canResume && (
-          <DropdownMenuItem onClick={onResume} className="gap-2 text-emerald-700 focus:text-emerald-700">
-            <PlayCircle className="h-4 w-4" />
-            Resume plan
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem onClick={onReconcile} className="gap-2">
+              <Calendar className="h-4 w-4 text-violet-600" />
+              Reconcile schedule
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onResume} className="gap-2 text-emerald-700 focus:text-emerald-700">
+              <PlayCircle className="h-4 w-4" />
+              Resume plan
+            </DropdownMenuItem>
+          </>
         )}
         {canCancel && (
           <DropdownMenuItem onClick={onCancel} className="gap-2 text-red-600 focus:text-red-600">
@@ -291,7 +348,9 @@ export default function RecurringPage() {
     return () => globalThis.clearTimeout(timer);
   }, [debouncedSearch, statusFilter]);
 
-  const { data, loading, error, refetch } = useAdminData<{ recurring: RecurringPlan[] }>("/api/admin/recurring");
+  const { data, loading, error, refetch } = useAdminData<{ recurring: RecurringPlan[]; summary?: RecurringPageSummary }>(
+    "/api/admin/recurring",
+  );
   const { data: cronHealth, refetch: refetchCronHealth } = useAdminData<{ jobs?: CronHealthJob[] }>(
     "/api/admin/cron-health",
   );
@@ -322,7 +381,11 @@ export default function RecurringPage() {
   const activeCount = plans.filter((p) => p.status.toLowerCase() === "active").length;
   const pausedCount = plans.filter((p) => p.status.toLowerCase() === "paused").length;
   const cancelledCount = plans.filter((p) => p.status.toLowerCase() === "cancelled").length;
-  const monthlyRevenue = plans.reduce((s, p) => s + estimateMonthlyRevenue(p), 0);
+  const summary = data?.summary;
+  const monthlyRevenue = summary?.estimated_monthly_revenue_zar ?? plans.reduce((s, p) => s + estimateMonthlyRevenue(p), 0);
+  const draftMonthLabel = summary?.month_label ?? "This month";
+  const draftTotalCents = summary?.current_month_draft_total_cents ?? 0;
+  const draftInvoiceCount = summary?.current_month_draft_invoice_count ?? 0;
   const confirmPlan = confirmDialog ? (plans.find((p) => p.id === confirmDialog.planId) ?? null) : null;
 
   function showToast(msg: string, ok: boolean) {
@@ -339,6 +402,77 @@ export default function RecurringPage() {
       void refetch();
     } else {
       showToast(res.error ?? `Failed to ${action}`, false);
+    }
+  }
+
+  async function handleReconcile(id: string) {
+    setActionLoading(id);
+    try {
+      const token = await getAdminToken();
+      if (!token) {
+        showToast("Not authenticated", false);
+        return;
+      }
+      const res = await globalThis.fetch(
+        `/api/admin/recurring/${encodeURIComponent(id)}/reconcile-schedule`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const json = (await res.json()) as {
+        error?: string;
+        propagation?: {
+          bookings_cancelled?: number;
+          bookings_created?: number;
+          bookings_updated?: number;
+          bookings_cancel_skipped?: number;
+          bookings_cancel_skipped_locked_invoice?: number;
+          bookings_cancel_skipped_locked_payout?: number;
+          invoices_recomputed?: number;
+          earnings_recomputed?: number;
+          errors?: string[];
+        };
+      };
+      if (!res.ok) {
+        showToast(json.error ?? "Reconcile failed", false);
+        return;
+      }
+      const p = json.propagation;
+      const parts: string[] = [];
+      if (p?.bookings_cancelled) parts.push(`${p.bookings_cancelled} removed`);
+      if (p?.bookings_created) parts.push(`${p.bookings_created} added`);
+      if (p?.bookings_updated) parts.push(`${p.bookings_updated} repriced`);
+      if (p?.invoices_recomputed) parts.push(`${p.invoices_recomputed} invoice(s) updated`);
+      showToast(
+        parts.length > 0 ? `Reconciled: ${parts.join(", ")}` : "Schedule already aligned",
+        true,
+      );
+      if (p?.bookings_cancel_skipped_locked_invoice) {
+        showToast(
+          `${p.bookings_cancel_skipped_locked_invoice} visit(s) on sent/paid invoices were not removed`,
+          false,
+        );
+      }
+      if (p?.bookings_cancel_skipped_locked_payout) {
+        showToast(
+          `${p.bookings_cancel_skipped_locked_payout} visit(s) could not be removed (cleaner payout already locked)`,
+          false,
+        );
+      }
+      if (
+        p?.bookings_cancel_skipped &&
+        !p.bookings_cancel_skipped_locked_invoice &&
+        !p.bookings_cancel_skipped_locked_payout
+      ) {
+        showToast(`${p.bookings_cancel_skipped} visit(s) could not be removed`, false);
+      }
+      if (p?.errors?.length) {
+        showToast(p.errors[0] ?? "Some rows could not be updated", false);
+      }
+      void refetch();
+    } finally {
+      setActionLoading(null);
     }
   }
 
@@ -391,6 +525,8 @@ export default function RecurringPage() {
       await handleAction(planId, "cancel");
     } else if (variant === "delete") {
       await handleDelete(planId);
+    } else if (variant === "reconcile") {
+      await handleReconcile(planId);
     } else {
       await handleBackfill(planId);
     }
@@ -482,27 +618,44 @@ export default function RecurringPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Active plans", value: loading ? "—" : activeCount, icon: Repeat, cls: "bg-emerald-50 text-emerald-700" },
-          { label: "Paused", value: loading ? "—" : pausedCount, icon: Pause, cls: "bg-orange-50 text-orange-700" },
-          { label: "Cancelled", value: loading ? "—" : cancelledCount, icon: XCircle, cls: "bg-slate-50 text-slate-600" },
-          {
-            label: "Est. monthly revenue",
-            value: loading ? "—" : `R ${monthlyRevenue.toLocaleString("en-ZA")}`,
-            icon: DollarSign,
-            cls: "bg-violet-50 text-violet-700",
-          },
-        ].map(({ label, value, icon: Icon, cls }) => (
-          <div key={label} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-            <div className={cn("mb-2 flex h-9 w-9 items-center justify-center rounded-xl", cls)}>
-              <Icon className="h-4 w-4" />
-            </div>
-            <p className="text-xl font-bold tabular-nums text-slate-900">{value}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{label}</p>
-          </div>
-        ))}
-      </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <RecurringStatCard
+            label="Active plans"
+            value={loading ? "—" : String(activeCount)}
+            icon={Repeat}
+            cls="bg-emerald-50 text-emerald-700"
+          />
+          <RecurringStatCard
+            label="Paused"
+            value={loading ? "—" : String(pausedCount)}
+            icon={Pause}
+            cls="bg-orange-50 text-orange-700"
+          />
+          <RecurringStatCard
+            label="Cancelled"
+            value={loading ? "—" : String(cancelledCount)}
+            icon={XCircle}
+            cls="bg-slate-50 text-slate-600"
+          />
+          <RecurringStatCard
+            label="Est. monthly revenue"
+            value={loading ? "—" : `R ${monthlyRevenue.toLocaleString("en-ZA")}`}
+            icon={DollarSign}
+            cls="bg-violet-50 text-violet-700"
+            tooltip="Forward-looking estimate from active plans: visit price × (52÷12 × weekdays). Uses an average month length, not actual calendar visits."
+          />
+          <RecurringStatCard
+            label={`${draftMonthLabel} draft`}
+            value={loading ? "—" : formatCurrency(draftTotalCents, "ZAR")}
+            icon={FileText}
+            cls="bg-blue-50 text-blue-700"
+            tooltip="Total on current-month draft invoices for active recurring customers. Compare with Outstanding on /office/invoices when all drafts are unpaid."
+            hint={loading || draftInvoiceCount === 0 ? undefined : `${draftInvoiceCount} draft invoice${draftInvoiceCount === 1 ? "" : "s"}`}
+            href="/office/invoices"
+          />
+        </div>
+      </TooltipProvider>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-48 flex-1">
@@ -629,6 +782,7 @@ export default function RecurringPage() {
                             onEdit={() => setEditTarget(plan)}
                             onDelete={() => setConfirmDialog({ variant: "delete", planId: plan.id })}
                             onBackfill={() => setConfirmDialog({ variant: "backfill", planId: plan.id })}
+                            onReconcile={() => setConfirmDialog({ variant: "reconcile", planId: plan.id })}
                             onPause={() => void handleAction(plan.id, "pause")}
                             onResume={() => void handleAction(plan.id, "resume")}
                             onCancel={() => setConfirmDialog({ variant: "cancel", planId: plan.id })}

@@ -150,22 +150,26 @@ function normPath(u: string): string {
   }
 }
 
+function isBookingFunnelPath(p: string): boolean {
+  return p === "/book" || p.startsWith("/book/") || p === "/booking" || p.startsWith("/booking/");
+}
+
 function hasBookingPath(blocks: BlogContentBlock[]): boolean {
   for (const b of blocks) {
     if (b.type === "cta") {
       const p = normPath(b.link);
-      if (p === "/booking" || p.startsWith("/booking")) return true;
+      if (isBookingFunnelPath(p)) return true;
     }
     if (b.type === "internal_links" && Array.isArray(b.links)) {
       for (const l of b.links) {
         const p = normPath(String(l?.url ?? ""));
-        if (p === "/booking" || p.startsWith("/booking")) return true;
+        if (isBookingFunnelPath(p)) return true;
       }
     }
     if (b.type === "rich_text") {
       for (const h of extractHrefsFromHtml(b.html)) {
         const p = normPath(h);
-        if (p === "/booking" || p.startsWith("/booking")) return true;
+        if (isBookingFunnelPath(p)) return true;
       }
     }
   }
@@ -235,7 +239,7 @@ export function validateBlogPublish(
     issues.push({ code: "faq", message: "Add an FAQ block with at least one Q&A pair." });
   }
   if (!hasCta) {
-    issues.push({ code: "cta", message: "Add a CTA block (e.g. Book a cleaner → /booking)." });
+    issues.push({ code: "cta", message: "Add a CTA block (e.g. Book a cleaner → /book)." });
   }
   if (!hasInternalLinks) {
     issues.push({
@@ -246,7 +250,7 @@ export function validateBlogPublish(
   if (!hasBookingLink) {
     issues.push({
       code: "booking_link",
-      message: "Include a booking link (/booking) in a CTA or internal_links block.",
+      message: "Include a booking link (/book) in a CTA or internal_links block.",
     });
   }
 

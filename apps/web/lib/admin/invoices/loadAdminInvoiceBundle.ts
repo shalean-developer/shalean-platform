@@ -45,6 +45,48 @@ async function loadAdjustmentCreatorEmails(
   return out;
 }
 
+/** Applied lines + draft-month pending lines (legacy rows before applied_to_invoice_id stamp). */
+export async function loadInvoiceAdjustmentsForAdmin(
+  admin: SupabaseClient,
+  invoiceId: string,
+  customerId: string,
+  month: string,
+  invoiceStatus: string,
+): Promise<Record<string, unknown>[]> {
+  const { data: applied, error: appliedErr } = await admin
+    .from("invoice_adjustments")
+    .select("*")
+    .eq("applied_to_invoice_id", invoiceId)
+    .order("created_at", { ascending: true });
+
+  if (appliedErr) throw appliedErr;
+
+  const status = invoiceStatus.trim().toLowerCase();
+  if (status !== "draft" || !customerId || !/^\d{4}-\d{2}$/.test(month)) {
+    return (applied ?? []) as Record<string, unknown>[];
+  }
+
+  const { data: pending, error: pendingErr } = await admin
+    .from("invoice_adjustments")
+    .select("*")
+    .eq("customer_id", customerId)
+    .eq("month_applied", month)
+    .is("applied_to_invoice_id", null)
+    .order("created_at", { ascending: true });
+
+  if (pendingErr) throw pendingErr;
+
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const row of [...(applied ?? []), ...(pending ?? [])]) {
+    const id = String((row as { id?: string }).id ?? "");
+    if (id) byId.set(id, row as Record<string, unknown>);
+  }
+
+  return [...byId.values()].sort((a, b) =>
+    String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
+  );
+}
+
 async function loadCleanersById(admin: SupabaseClient, bookings: Record<string, unknown>[]) {
   const ids = new Set<string>();
   for (const b of bookings) {
@@ -70,21 +112,32 @@ export async function loadAdminInvoiceBundle(
   admin: SupabaseClient,
   invoiceId: string,
 ): Promise<{ ok: true; data: AdminInvoiceBundle } | { ok: false; error: "not_found" | "load_failed"; message?: string }> {
-  const [invRes, bookRes, adjRes, evRes] = await Promise.all([
+  const [invRes, bookRes, evRes] = await Promise.all([
     admin.from("monthly_invoices").select("*").eq("id", invoiceId).maybeSingle(),
     admin.from("bookings").select("*").eq("monthly_invoice_id", invoiceId).order("date", { ascending: true }),
-    admin.from("invoice_adjustments").select("*").eq("applied_to_invoice_id", invoiceId).order("created_at", { ascending: true }),
     admin.from("monthly_invoice_events").select("created_at, payload").eq("invoice_id", invoiceId).order("created_at"),
   ]);
 
   if (invRes.error) return { ok: false, error: "load_failed", message: invRes.error.message };
   if (!invRes.data) return { ok: false, error: "not_found" };
   if (bookRes.error) return { ok: false, error: "load_failed", message: bookRes.error.message };
-  if (adjRes.error) return { ok: false, error: "load_failed", message: adjRes.error.message };
   if (evRes.error) return { ok: false, error: "load_failed", message: evRes.error.message };
 
   const invoice = invRes.data as Record<string, unknown>;
   const customerId = String(invoice.customer_id ?? "");
+  const month = String(invoice.month ?? "");
+  const status = String(invoice.status ?? "draft");
+
+  let adjustments: Record<string, unknown>[];
+  try {
+    adjustments = await loadInvoiceAdjustmentsForAdmin(admin, invoiceId, customerId, month, status);
+  } catch (e) {
+    return {
+      ok: false,
+      error: "load_failed",
+      message: e instanceof Error ? e.message : "Failed to load adjustments.",
+    };
+  }
 
   const [profileRes, cleanersById] = await Promise.all([
     customerId
@@ -109,7 +162,6 @@ export async function loadAdminInvoiceBundle(
     }
   }
 
-  const adjustments = (adjRes.data ?? []) as Record<string, unknown>[];
   const adjustmentCreatorEmails = await loadAdjustmentCreatorEmails(admin, adjustments);
 
   return {

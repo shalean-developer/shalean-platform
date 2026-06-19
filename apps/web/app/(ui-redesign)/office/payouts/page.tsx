@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Download,
@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   Sparkles,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
 import { cn } from "@/lib/utils";
@@ -60,6 +62,9 @@ type GenerateResponse = {
 };
 
 const STATUS_FILTERS = ["all", "pending", "frozen", "approved", "paid", "cancelled"] as const;
+
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   pending: { label: "Pending", cls: "bg-orange-100 text-orange-700" },
@@ -121,8 +126,15 @@ export default function PayoutsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  useEffect(() => {
+    const timer = globalThis.setTimeout(() => setPage(1), 0);
+    return () => globalThis.clearTimeout(timer);
+  }, [search, statusFilter, pageSize]);
 
   const { data, loading, error, refetch } = useAdminData<PayoutsResponse>("/api/admin/payouts");
   const {
@@ -144,14 +156,30 @@ export default function PayoutsPage() {
     return { cleanerCount: eligibleGroups.length, bookingCount, totalCents };
   }, [eligibleGroups]);
 
-  const filtered = payouts.filter((p) => {
-    const s =
-      !search ||
-      (p.cleaner_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (p.id ?? "").toLowerCase().includes(search.toLowerCase());
-    const sf = statusFilter === "all" || (p.status ?? "").toLowerCase() === statusFilter;
-    return s && sf;
-  });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return payouts.filter((p) => {
+      const matchSearch =
+        !q ||
+        (p.cleaner_name ?? "").toLowerCase().includes(q) ||
+        (p.id ?? "").toLowerCase().includes(q);
+      const matchStatus = statusFilter === "all" || (p.status ?? "").toLowerCase() === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [payouts, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageFrom = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageTo = Math.min(safePage * pageSize, filtered.length);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      const timer = globalThis.setTimeout(() => setPage(Math.max(1, totalPages)), 0);
+      return () => globalThis.clearTimeout(timer);
+    }
+  }, [page, totalPages]);
 
   const pendingCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending").length;
   const paidCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "paid").length;
@@ -430,7 +458,7 @@ export default function PayoutsPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((p) => {
+                pageRows.map((p) => {
                   const statusKey = (p.status ?? "pending").toLowerCase();
                   const s = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
                   const isPending = statusKey === "pending";
@@ -493,13 +521,56 @@ export default function PayoutsPage() {
           </table>
         </div>
 
-        <div className="flex items-center border-t border-slate-100 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
           <p className="text-xs text-slate-400">
-            {loading ? "Loading…" : `${filtered.length} of ${payouts.length} payout batches`}
-            {!eligibleLoading && eligibleSummary.bookingCount > 0
+            {loading
+              ? "Loading…"
+              : filtered.length === 0
+                ? payouts.length === 0
+                  ? "No payout batches"
+                  : "No payouts match your filters"
+                : `Showing ${pageFrom}–${pageTo} of ${filtered.length} payout batch${filtered.length === 1 ? "" : "es"}${search || statusFilter !== "all" ? ` (from ${payouts.length} total)` : ""}`}
+            {!loading && !eligibleLoading && eligibleSummary.bookingCount > 0
               ? ` · ${eligibleSummary.bookingCount} eligible booking${eligibleSummary.bookingCount === 1 ? "" : "s"} unbatched`
               : ""}
           </p>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              Rows per page
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="text-xs font-medium text-slate-500">
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={loading || safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </button>
+            <button
+              type="button"
+              disabled={loading || safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

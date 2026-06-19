@@ -17,10 +17,10 @@ const widgetDraftBody = {
 };
 
 test.describe("booking smoke", () => {
-  test("booking entry redirects to a checkout route under /booking", async ({ page }) => {
+  test("booking entry redirects to /book", async ({ page }) => {
     const response = await page.goto("/booking", { waitUntil: "domcontentloaded" });
     expect(response?.status(), `navigation status was ${response?.status()}`).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/booking\/(details|schedule|cleaner|payment|extras)/);
+    await expect(page).toHaveURL(/\/book(\/|$|\?)/);
   });
 
   test("widget quote API returns 200 with total_paid_zar", async ({ request }) => {

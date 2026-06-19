@@ -4,6 +4,11 @@ import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate } from "@/lib/recurring/calculateNextRunDate";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
 import { recurringAdminPatchFromBody } from "@/lib/recurring/recurringAdminPatchFromBody";
+import { propagateRecurringPlanToGeneratedBookings } from "@/lib/recurring/propagateRecurringPlanToGeneratedBookings";
+import {
+  recurringPlanScheduleChanged,
+  recurringPlanScheduleRowFromDb,
+} from "@/lib/recurring/reconcileRecurringPlanOccurrences";
 import { scheduleFromMergedRow } from "@/lib/recurring/recurringPatchFromBody";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -105,14 +110,25 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { error } = await admin.from("recurring_bookings").update(patch).eq("id", id.trim());
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const propagation = await propagateRecurringPlanToGeneratedBookings(
+    admin,
+    recurringPlanScheduleRowFromDb(merged),
+    { reconcileSchedule: recurringPlanScheduleChanged(patch) },
+  );
+
   await logSystemEvent({
     level: "info",
     source: "admin/recurring/patch",
     message: "recurring_schedule_updated",
-    context: { recurring_id: id.trim(), admin_id: auth.user.id, fields: Object.keys(patch) },
+    context: {
+      recurring_id: id.trim(),
+      admin_id: auth.user.id,
+      fields: Object.keys(patch),
+      propagation,
+    },
   });
 
-  return NextResponse.json({ ok: true, id: id.trim(), ...patch });
+  return NextResponse.json({ ok: true, id: id.trim(), ...patch, propagation });
 }
 
 export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {

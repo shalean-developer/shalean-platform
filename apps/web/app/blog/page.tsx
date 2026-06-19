@@ -341,7 +341,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <SafeInternalLink
-              href="/booking/details"
+              href="/book"
               className="inline-flex min-h-[48px] min-w-[200px] items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               Get instant quote

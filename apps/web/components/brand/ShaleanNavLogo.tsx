@@ -10,12 +10,14 @@ type ShaleanNavLogoProps = {
   className?: string;
   /** Pixel height passed to `next/image` (keep ≥ rendered height for sharpness) */
   intrinsicHeight?: number;
+  /** LCP hint — enable only when the wordmark is above-the-fold on the route. */
+  priority?: boolean;
 };
 
 /**
  * Full wordmark (`public/images/shalean-logo.png`). Transparent PNG; use `h-* w-auto` in `className`.
  */
-export function ShaleanNavLogo({ className, intrinsicHeight = 204 }: ShaleanNavLogoProps) {
+export function ShaleanNavLogo({ className, intrinsicHeight = 204, priority = false }: ShaleanNavLogoProps) {
   const intrinsicWidth = Math.round(intrinsicHeight * (SHALEAN_LOGO_WIDTH / SHALEAN_LOGO_HEIGHT));
 
   return (
@@ -27,7 +29,7 @@ export function ShaleanNavLogo({ className, intrinsicHeight = 204 }: ShaleanNavL
       height={intrinsicHeight}
       className={cn("h-auto w-auto shrink-0 object-contain object-left", className)}
       sizes="(max-width: 640px) 140px, 200px"
-      priority
+      priority={priority}
     />
   );
 }

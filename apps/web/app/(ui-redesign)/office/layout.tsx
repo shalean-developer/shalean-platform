@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { OfficeShell } from "@/src/features/office/OfficeShell";
+import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
 
 export const metadata = {
   title: "Office | Shalean Admin",
@@ -8,5 +9,9 @@ export const metadata = {
 };
 
 export default function OfficeLayout({ children }: { children: ReactNode }) {
-  return <OfficeShell>{children}</OfficeShell>;
+  return (
+    <AppMonoFontScope>
+      <OfficeShell>{children}</OfficeShell>
+    </AppMonoFontScope>
+  );
 }

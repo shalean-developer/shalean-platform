@@ -119,7 +119,7 @@ export default async function CityLocationCleaningPage({ params }: Props) {
         <p className="text-sm text-zinc-600 dark:text-zinc-300">Trusted local cleaners. Book in 60 seconds.</p>
         <div className="pt-2">
           <GrowthCtaLink
-            href="/booking/details"
+            href="/book"
             source="seo_city_location_hero"
             className="inline-flex min-h-12 items-center rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white"
           >

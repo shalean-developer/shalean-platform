@@ -10,7 +10,7 @@ const V = BLOG_CONTENT_JSON_SCHEMA_VERSION;
 
 /** Shared cross-hub paragraph — natural internal linking loop (Blog → Hub → Booking). */
 const HUB_MESH =
-  "Neighbourhood hubs spell out what cleaners expect on the ground—compare [cleaning services in Claremont](/locations/claremont-cleaning-services), [Sea Point](/locations/sea-point-cleaning-services), [Green Point](/locations/green-point-cleaning-services), [Gardens](/locations/gardens-cleaning-services), [Rondebosch](/locations/rondebosch-cleaning-services), [Wynberg](/locations/wynberg-cleaning-services), and [Durbanville](/locations/durbanville-cleaning-services), then lock scope in [booking](/booking).";
+  "Neighbourhood hubs spell out what cleaners expect on the ground—compare [cleaning services in Claremont](/locations/claremont-cleaning-services), [Sea Point](/locations/sea-point-cleaning-services), [Green Point](/locations/green-point-cleaning-services), [Gardens](/locations/gardens-cleaning-services), [Rondebosch](/locations/rondebosch-cleaning-services), [Wynberg](/locations/wynberg-cleaning-services), and [Durbanville](/locations/durbanville-cleaning-services), then lock scope in [booking](/book).";
 
 function img(url: string, alt: string): BlogContentBlock {
   return {
@@ -32,7 +32,7 @@ function cta(title: string): BlogContentBlock {
     title,
     description: "See upfront pricing for your bedrooms, bathrooms, and add-ons—then pick a slot that fits your calendar.",
     button_text: "Get instant quote",
-    link: "/booking",
+    link: "/book",
     variant: "primary",
   };
 }
@@ -115,7 +115,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Enter bedrooms, bathrooms, tier, and add-ons—your total updates before you pay, with vetted teams across Claremont, Gardens, Rondebosch, and the Atlantic Seaboard.",
           button_text: "Get instant quote",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
         {
@@ -175,7 +175,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Preview standard vs deep vs move-out totals side by side—scope stays on the job sheet for crews in Cape Town.",
           button_text: "Continue to booking",
-          link: "/booking",
+          link: "/book",
           variant: "secondary",
         },
         {
@@ -230,7 +230,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
           { label: "Cleaning services in Durbanville", url: "/locations/durbanville-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/deep-cleaning-cape-town-kitchen.webp", "Deep cleaning kitchen Cape Town professional service"),
         {
@@ -239,7 +239,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Secure online checkout, vetted teams, and totals tied to the rooms you selected—no vague SMS estimates.",
           button_text: "Get instant quote now",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
       ],
@@ -289,7 +289,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Instant totals for your Cape Town address pattern—bedrooms, baths, add-ons—before secure checkout.",
           button_text: "Get instant quote",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
         {
@@ -367,7 +367,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Switch standard vs deep vs move-out in checkout—watch how baths and extras move your total in real time.",
           button_text: "Continue to booking",
-          link: "/booking",
+          link: "/book",
           variant: "secondary",
         },
         {
@@ -405,7 +405,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Airbnb cleaning Cape Town", url: SERVICE_AIRBNB },
           { label: "Cleaning services in Wynberg", url: "/locations/wynberg-cleaning-services" },
           { label: "Cleaning services in Rondebosch", url: "/locations/rondebosch-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/blog/deep-vs-standard-cleaning-cape-town.webp", "Choosing cleaning tier Cape Town deep vs standard"),
         {
@@ -414,7 +414,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Secure checkout, vetted cleaners near me routing, and job sheets mirroring the rooms you paid for.",
           button_text: "Get instant quote now",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
       ],
@@ -531,7 +531,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Green Point", url: "/locations/green-point-cleaning-services" },
           { label: "Cleaning services in Gardens", url: "/locations/gardens-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/bright-living-room-after-cleaning-cape-town.webp", "Bright living room after home cleaning Cape Town"),
         cta("Book a professional cleaner"),
@@ -655,7 +655,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Move-out cleaning Cape Town", url: SERVICE_MOVE },
           { label: "Cleaning services in Claremont", url: "/locations/claremont-cleaning-services" },
           { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/standard-cleaning-cape-town-kitchen.webp", "Standard cleaning scope Cape Town kitchen maintenance quote"),
         cta("Book a professional cleaner"),
@@ -869,14 +869,14 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Green Point", url: "/locations/green-point-cleaning-services" },
           { label: "Cleaning services in Durbanville", url: "/locations/durbanville-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         {
           type: "cta",
           title: "Get your cleaning quote in Cape Town",
           description: "See exact pricing and book online in minutes.",
           button_text: "Get instant quote",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
       ],
@@ -999,7 +999,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
           { label: "Cleaning services in Green Point", url: "/locations/green-point-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/move-out-cleaning-cape-town-handover.webp", "Rental handover cleaning Cape Town comparison context"),
         cta("Book a professional cleaner"),
@@ -1119,7 +1119,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Gardens", url: "/locations/gardens-cleaning-services" },
           { label: "Cleaning services in Wynberg", url: "/locations/wynberg-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/bathroom-kitchen-deep-clean-cape-town.webp", "Bathroom kitchen fast clean Cape Town"),
         cta("Book a professional cleaner"),
@@ -1170,7 +1170,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Match Shalean’s move-out tier to your inventory PDF—ovens, cupboards, and baths declared upfront.",
           button_text: "Get instant quote",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
         {
@@ -1217,7 +1217,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Secure your slot before Claremont or CBD calendars compress around month-end—paste agent bullets into booking notes.",
           button_text: "Continue to booking",
-          link: "/booking",
+          link: "/book",
           variant: "secondary",
         },
         {
@@ -1291,7 +1291,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Rondebosch", url: "/locations/rondebosch-cleaning-services" },
           { label: "Cleaning services in Durbanville", url: "/locations/durbanville-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/house-deep-cleaning-cape-town.webp", "End of lease deep clean Cape Town house"),
         {
@@ -1300,7 +1300,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           description:
             "Transparent move-out scope, vetted cleaners, and checkout totals you can email straight to your agent.",
           button_text: "Get instant quote now",
-          link: "/booking",
+          link: "/book",
           variant: "primary",
         },
       ],
@@ -1418,7 +1418,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Claremont", url: "/locations/claremont-cleaning-services" },
           { label: "Cleaning services in Rondebosch", url: "/locations/rondebosch-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/cape-town-house-cleaning-kitchen.webp", "Kitchen prepared for Cape Town house cleaning visit"),
         cta("Book a professional cleaner"),
@@ -1535,7 +1535,7 @@ const SEO_TRAFFIC_BLOG_POSTS_RAW: SeoTrafficBlogPostSeed[] = [
           { label: "Deep cleaning Cape Town", url: SERVICE_DEEP },
           { label: "Cleaning services in Sea Point", url: "/locations/sea-point-cleaning-services" },
           { label: "Cleaning services in Wynberg", url: "/locations/wynberg-cleaning-services" },
-          { label: "Get instant quote", url: "/booking" },
+          { label: "Get instant quote", url: "/book" },
         ]),
         img("/images/marketing/cleaning-team-bright-space-cape-town.webp", "Home cleaning frequency Cape Town family routine"),
         cta("Book a professional cleaner"),

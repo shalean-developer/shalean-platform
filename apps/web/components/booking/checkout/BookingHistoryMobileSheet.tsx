@@ -23,7 +23,7 @@ export function BookingHistoryMobileSheet() {
   const { user, loading: userLoading } = useUser();
   const { bookings, loading, error } = useBookings();
 
-  const path = pathname?.startsWith("/") ? pathname : "/booking/details";
+  const path = pathname?.startsWith("/") ? pathname : "/book";
   const redirectPath = `${path}${searchParams?.toString() ? `?${searchParams.toString()}` : ""}`;
   const authRedirect = encodeURIComponent(redirectPath);
 

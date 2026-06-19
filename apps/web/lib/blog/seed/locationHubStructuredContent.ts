@@ -113,7 +113,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `[Get an exact quote for your home](/booking/details)`,
+      content: `[Get an exact quote for your home](/book)`,
     },
     {
       type: "paragraph",
@@ -143,7 +143,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
         },
         {
           question: `How do I book a cleaner in Claremont?`,
-          answer: `Choose your service on our guides (standard, deep, move-out, or window cleaning), enter your Claremont address and room counts in [booking](/booking/details), review your total, then confirm online. You can also start from the [Claremont location hub](/locations/claremont-cleaning-services) for suburb-specific context.`,
+          answer: `Choose your service on our guides (standard, deep, move-out, or window cleaning), enter your Claremont address and room counts in [booking](/book), review your total, then confirm online. You can also start from the [Claremont location hub](/locations/claremont-cleaning-services) for suburb-specific context.`,
         },
         {
           question: `How quickly can I book a cleaner in Claremont?`,
@@ -167,14 +167,14 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `[Check availability now](/booking/details)`,
+      content: `[Check availability now](/book)`,
     },
     {
       type: "cta",
       title: `Book a cleaner in Claremont`,
       description: `Get instant pricing and confirm your booking online in minutes.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -186,7 +186,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaning services in Sea Point mean salty film on glass, tight Airbnb gaps, and lifts that eat daylight if you brief them wrong. Shalean pairs upfront pricing with live availability—pull an [instant quote](/booking), lock a slot online, and skip WhatsApp roulette. Same-day opens when calendars allow; most Seaboard bookings confirm within a few days once bedrooms and bathrooms are honest.`,
+      content: `Cleaning services in Sea Point mean salty film on glass, tight Airbnb gaps, and lifts that eat daylight if you brief them wrong. Shalean pairs upfront pricing with live availability—pull an [instant quote](/book), lock a slot online, and skip WhatsApp roulette. Same-day opens when calendars allow; most Seaboard bookings confirm within a few days once bedrooms and bathrooms are honest.`,
     },
     {
       type: "heading",
@@ -199,7 +199,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Quotes widen when humid weeks bake grease onto cooktops, windy stretches plaster balconies in salt, or move-out scopes demand inventory-grade ovens. Basement carries and lift waits don’t magically shrink scrub time—accurate bathroom counts matter more than ocean views. Compare [standard cleaning](/services/standard-cleaning-cape-town) with [deep cleaning](/services/deep-cleaning-cape-town), then confirm line items in [booking](/booking).`,
+      content: `Quotes widen when humid weeks bake grease onto cooktops, windy stretches plaster balconies in salt, or move-out scopes demand inventory-grade ovens. Basement carries and lift waits don’t magically shrink scrub time—accurate bathroom counts matter more than ocean views. Compare [standard cleaning](/services/standard-cleaning-cape-town) with [deep cleaning](/services/deep-cleaning-cape-town), then confirm line items in [booking](/book).`,
     },
     {
       type: "heading",
@@ -270,7 +270,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaners near you in Sea Point should understand Atlantic Seaboard logistics—not generic “cleaning services in Cape Town” vans hunting basement ramps for twenty minutes. Shalean routes pros already running Green Point and Bantry Bay-adjacent towers, so “near me” actually means shorter waits after windy weekends. Start from [booking](/booking), note scratch-card or bay rules once, and pricing stays transparent before you pay.`,
+      content: `Cleaners near you in Sea Point should understand Atlantic Seaboard logistics—not generic “cleaning services in Cape Town” vans hunting basement ramps for twenty minutes. Shalean routes pros already running Green Point and Bantry Bay-adjacent towers, so “near me” actually means shorter waits after windy weekends. Start from [booking](/book), note scratch-card or bay rules once, and pricing stays transparent before you pay.`,
     },
     {
       type: "heading",
@@ -279,7 +279,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Use the [instant booking tool](/booking), then walk through the steps below—your building brief travels with the job.`,
+      content: `Use the [instant booking tool](/book), then walk through the steps below—your building brief travels with the job.`,
     },
     {
       type: "numbered_list",
@@ -335,7 +335,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book a cleaner in Sea Point`,
       description: `Coastal-apartment pricing with live availability.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -347,7 +347,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaning services in Rondebosch sit where duplex stairs, shared drives, and campus-adjacent rentals collide—brief gate remotes once, then book online with upfront pricing and visible availability. Compare [standard cleaning](/services/standard-cleaning-cape-town) with heavier resets via [instant quote](/booking) before exams-week chaos eats your weekend. Most Southern Suburb slots confirm within several days; same-day appears only when calendars briefly open.`,
+      content: `Cleaning services in Rondebosch sit where duplex stairs, shared drives, and campus-adjacent rentals collide—brief gate remotes once, then book online with upfront pricing and visible availability. Compare [standard cleaning](/services/standard-cleaning-cape-town) with heavier resets via [instant quote](/book) before exams-week chaos eats your weekend. Most Southern Suburb slots confirm within several days; same-day appears only when calendars briefly open.`,
     },
     {
       type: "heading",
@@ -431,7 +431,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaners near you in Rondebosch should navigate shared drives—not burn daylight hunting remotes. Shalean maps cleaning services in Rondebosch to crews already rotating Newlands, Observatory, and Rosebank-adjacent streets, so near-me searches translate into realistic ETAs. Open [booking](/booking), flag stairs or tandem bays, and totals appear before you commit.`,
+      content: `Cleaners near you in Rondebosch should navigate shared drives—not burn daylight hunting remotes. Shalean maps cleaning services in Rondebosch to crews already rotating Newlands, Observatory, and Rosebank-adjacent streets, so near-me searches translate into realistic ETAs. Open [booking](/book), flag stairs or tandem bays, and totals appear before you commit.`,
     },
     {
       type: "heading",
@@ -440,7 +440,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Start with the [instant booking tool](/booking), then follow each step—your stair count and gate notes ride with the job.`,
+      content: `Start with the [instant booking tool](/book), then follow each step—your stair count and gate notes ride with the job.`,
     },
     {
       type: "numbered_list",
@@ -496,7 +496,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book a cleaner in Rondebosch`,
       description: `Transparent quotes for beds, baths & stairs.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -508,7 +508,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaning services in the Gardens thread heritage walk-ups, festival-week footfall, and Bowl kitchens tighter than Southern Suburb spreads—book online with upfront pricing and calendars that respect buzzers, scratch-card parking, and stair-only access. Compare [deep cleaning](/services/deep-cleaning-cape-town) with lighter upkeep, then lock numbers through [instant quote](/booking). Mid-week slots usually open faster than post-event Mondays when hosts race identical turnovers.`,
+      content: `Cleaning services in the Gardens thread heritage walk-ups, festival-week footfall, and Bowl kitchens tighter than Southern Suburb spreads—book online with upfront pricing and calendars that respect buzzers, scratch-card parking, and stair-only access. Compare [deep cleaning](/services/deep-cleaning-cape-town) with lighter upkeep, then lock numbers through [instant quote](/book). Mid-week slots usually open faster than post-event Mondays when hosts race identical turnovers.`,
     },
     {
       type: "heading",
@@ -592,7 +592,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaners near me in the Gardens should survive buzzer ballet—not bail at loading bays. Shalean routes cleaning services in the Gardens through teams already rotating City Bowl logistics, so near-me searches land on realistic ETAs. Open [booking](/booking), note stairs and scratch-card quirks, and cleaning prices in the Gardens appear before you commit.`,
+      content: `Cleaners near me in the Gardens should survive buzzer ballet—not bail at loading bays. Shalean routes cleaning services in the Gardens through teams already rotating City Bowl logistics, so near-me searches land on realistic ETAs. Open [booking](/book), note stairs and scratch-card quirks, and cleaning prices in the Gardens appear before you commit.`,
     },
     {
       type: "heading",
@@ -601,7 +601,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Use the [instant booking tool](/booking)—your sectional notes and stair count travel with the job.`,
+      content: `Use the [instant booking tool](/book)—your sectional notes and stair count travel with the job.`,
     },
     {
       type: "numbered_list",
@@ -657,7 +657,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book a cleaner in Gardens`,
       description: `Walk-up–aware quotes with instant totals.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -669,7 +669,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaning services in Wynberg bridge leaf litter, pet traffic, and school-week kitchens that barely cool—book online with bedrooms-accurate pricing and calendars that respect side gates, estate decals, and mudrooms. Families weigh cadence via [standard cleaning](/services/standard-cleaning-cape-town); hosts align [Airbnb cleaning](/services/airbnb-cleaning-cape-town) before syncing calendars—then confirm totals in [instant quote](/booking). Saturday sport windows tighten slots; mid-week visits recover faster after muddy weekends.`,
+      content: `Cleaning services in Wynberg bridge leaf litter, pet traffic, and school-week kitchens that barely cool—book online with bedrooms-accurate pricing and calendars that respect side gates, estate decals, and mudrooms. Families weigh cadence via [standard cleaning](/services/standard-cleaning-cape-town); hosts align [Airbnb cleaning](/services/airbnb-cleaning-cape-town) before syncing calendars—then confirm totals in [instant quote](/book). Saturday sport windows tighten slots; mid-week visits recover faster after muddy weekends.`,
     },
     {
       type: "heading",
@@ -753,7 +753,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaners near me in Wynberg should expect bougainvillea debris and rugby-boot mud—not guess suburban driveway widths. Shalean maps cleaning services in Wynberg across Kenilworth and Plumstead loops, so near-me searches surface realistic ETAs. Open [booking](/booking), declare every bedroom study doubling as a spare room, and cleaning prices in Wynberg render before checkout.`,
+      content: `Cleaners near me in Wynberg should expect bougainvillea debris and rugby-boot mud—not guess suburban driveway widths. Shalean maps cleaning services in Wynberg across Kenilworth and Plumstead loops, so near-me searches surface realistic ETAs. Open [booking](/book), declare every bedroom study doubling as a spare room, and cleaning prices in Wynberg render before checkout.`,
     },
     {
       type: "heading",
@@ -762,7 +762,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Head to [instant quote](/booking)—pet notes and estate gate codes stick with the dispatch brief.`,
+      content: `Head to [instant quote](/book)—pet notes and estate gate codes stick with the dispatch brief.`,
     },
     {
       type: "numbered_list",
@@ -818,7 +818,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book a cleaner in Wynberg`,
       description: `Garden-home quotes without guesswork.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -830,7 +830,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaning services in Green Point stack stadium-adjacent energy with Seaboard humidity—book online with upfront pricing and calendars tuned for concierge choreography, lift queues, and humid grease that bonds overnight. Layer [Airbnb cleaning](/services/airbnb-cleaning-cape-town) beside [standard cleaning](/services/standard-cleaning-cape-town), then confirm totals via [instant quote](/booking) before guests WhatsApp Monday resets. Event weekends steal slots fastest; quiet Tuesdays often reopen mid-week sparkle.`,
+      content: `Cleaning services in Green Point stack stadium-adjacent energy with Seaboard humidity—book online with upfront pricing and calendars tuned for concierge choreography, lift queues, and humid grease that bonds overnight. Layer [Airbnb cleaning](/services/airbnb-cleaning-cape-town) beside [standard cleaning](/services/standard-cleaning-cape-town), then confirm totals via [instant quote](/book) before guests WhatsApp Monday resets. Event weekends steal slots fastest; quiet Tuesdays often reopen mid-week sparkle.`,
     },
     {
       type: "heading",
@@ -843,7 +843,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Humidity lengthens oven degrease dwell time; concert grit coats rails faster than weekday dust. Move-out scopes spike when sectional councils photograph grout under harsh LEDs—pick [move-out cleaning](/services/move-out-cleaning-cape-town) deliberately, not as renamed standard. Compare cadence via [standard cleaning](/services/standard-cleaning-cape-town) versus [deep cleaning](/services/deep-cleaning-cape-town), then confirm totals in [booking](/booking).`,
+      content: `Humidity lengthens oven degrease dwell time; concert grit coats rails faster than weekday dust. Move-out scopes spike when sectional councils photograph grout under harsh LEDs—pick [move-out cleaning](/services/move-out-cleaning-cape-town) deliberately, not as renamed standard. Compare cadence via [standard cleaning](/services/standard-cleaning-cape-town) versus [deep cleaning](/services/deep-cleaning-cape-town), then confirm totals in [booking](/book).`,
     },
     {
       type: "heading",
@@ -914,7 +914,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaners near me in Green Point should decode basement directions—not tour in from Paarl guessing loading bays. Shalean ties cleaning services in Green Point to Seaboard routing shared with Sea Point edges, so near-me searches surface realistic ETAs around stadium peaks. Pin your building in [booking](/booking), flag humid-week grease honestly, and cleaning prices in Green Point appear before you swipe.`,
+      content: `Cleaners near me in Green Point should decode basement directions—not tour in from Paarl guessing loading bays. Shalean ties cleaning services in Green Point to Seaboard routing shared with Sea Point edges, so near-me searches surface realistic ETAs around stadium peaks. Pin your building in [booking](/book), flag humid-week grease honestly, and cleaning prices in Green Point appear before you swipe.`,
     },
     {
       type: "heading",
@@ -923,7 +923,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Open [booking](/booking)—concierge notes and lift quirks travel with the job sheet.`,
+      content: `Open [booking](/book)—concierge notes and lift quirks travel with the job sheet.`,
     },
     {
       type: "numbered_list",
@@ -979,7 +979,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book a cleaner in Green Point`,
       description: `Host-ready quotes with Seaboard savvy.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1054,7 +1054,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `[Get an exact quote](/booking/details)`,
+      content: `[Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -1071,7 +1071,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `[Check availability now](/booking/details)`,
+      content: `[Check availability now](/book)`,
     },
     {
       type: "paragraph",
@@ -1109,7 +1109,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book Airbnb cleaning in Green Point`,
       description: `Get instant pricing and confirm your booking online.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1176,7 +1176,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -1193,7 +1193,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -1255,7 +1255,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book move-out cleaning in Rondebosch`,
       description: `Get inspection-ready results with upfront pricing online.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1327,7 +1327,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -1344,7 +1344,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -1406,7 +1406,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book deep cleaning in Gardens`,
       description: `Once-off resets and family-home deep cleans with upfront pricing online.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1478,7 +1478,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -1495,7 +1495,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -1557,7 +1557,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book luxury cleaning in Camps Bay`,
       description: `Premium-home quotes with clear scope and reliable crews.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1637,7 +1637,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -1654,7 +1654,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -1716,7 +1716,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book regular cleaning in Wynberg`,
       description: `Weekly and bi-weekly plans with upfront pricing—built for busy households.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1788,7 +1788,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "heading",
@@ -1801,7 +1801,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -1859,7 +1859,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book affordable cleaning in Observatory`,
       description: `Flexible scheduling for shares and student flats—clear scope before checkout.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -1931,7 +1931,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -1948,7 +1948,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -2010,7 +2010,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book home cleaning in Plumstead`,
       description: `Maintenance-focused visits for quiet suburban homes—scope locked before checkout.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -2078,7 +2078,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Get an exact quote](/booking/details)`,
+      content: `👉 [Get an exact quote](/book)`,
     },
     {
       type: "paragraph",
@@ -2095,7 +2095,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `👉 [Check availability now](/booking/details)`,
+      content: `👉 [Check availability now](/book)`,
     },
     {
       type: "heading",
@@ -2157,7 +2157,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book home cleaning in Constantia`,
       description: `Large-home and estate visits with clear scope—priced before checkout.`,
       button_text: `Get instant quote`,
-      link: `/booking/details`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),
@@ -2169,7 +2169,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaning services in Durbanville favour braai patios, estate gatehouses, and mudrooms that swallow winter boots—book online with square-metre honesty, not studio defaults. Heavy resets route through [deep cleaning](/services/deep-cleaning-cape-town); steady cadence locks via [standard cleaning](/services/standard-cleaning-cape-town)—both resolve in [instant quote](/booking) once every bathroom is counted. School-holiday Saturdays vanish early; weekday visits while kids sit in class stay easier to secure.`,
+      content: `Cleaning services in Durbanville favour braai patios, estate gatehouses, and mudrooms that swallow winter boots—book online with square-metre honesty, not studio defaults. Heavy resets route through [deep cleaning](/services/deep-cleaning-cape-town); steady cadence locks via [standard cleaning](/services/standard-cleaning-cape-town)—both resolve in [instant quote](/book) once every bathroom is counted. School-holiday Saturdays vanish early; weekday visits while kids sit in class stay easier to secure.`,
     },
     {
       type: "heading",
@@ -2253,7 +2253,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Cleaners near me in Durbanville should size multi-wing houses—not flatten six rooms into coastal averages. Shalean routes cleaning services in Durbanville alongside Bellville and Brackenfell loops, so near-me searches surface trailer-aware ETAs. Plug your estate into [booking](/booking), declare every bathroom including the pool shower, and cleaning prices in Durbanville render before you pay.`,
+      content: `Cleaners near me in Durbanville should size multi-wing houses—not flatten six rooms into coastal averages. Shalean routes cleaning services in Durbanville alongside Bellville and Brackenfell loops, so near-me searches surface trailer-aware ETAs. Plug your estate into [booking](/book), declare every bathroom including the pool shower, and cleaning prices in Durbanville render before you pay.`,
     },
     {
       type: "heading",
@@ -2262,7 +2262,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
     },
     {
       type: "paragraph",
-      content: `Use [instant quote](/booking)—gatehouse rules and double-volume notes stay attached to dispatch.`,
+      content: `Use [instant quote](/book)—gatehouse rules and double-volume notes stay attached to dispatch.`,
     },
     {
       type: "numbered_list",
@@ -2318,7 +2318,7 @@ export const LOCATION_HUB_STRUCTURED_PAGES: LocationHubSeed[] = [
       title: `Book a cleaner in Durbanville`,
       description: `Large-home quotes grounded in bed/bath reality.`,
       button_text: `Get instant quote`,
-      link: `/booking`,
+      link: `/book`,
       variant: `primary`,
     },
   ]),

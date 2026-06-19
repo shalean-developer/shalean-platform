@@ -8,6 +8,7 @@ import { Menu, X } from "lucide-react";
 import { signOut } from "@/lib/auth/authClient";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { AdminToastHost } from "@/components/admin/AdminToastHost";
+import { geistMono } from "@/lib/fonts/appFonts";
 import { cn } from "@/lib/utils";
 
 type NavItem = { label: string; href: string };
@@ -214,7 +215,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <main className="flex min-h-[45vh] items-center justify-center px-4">
+      <main className={cn(geistMono.variable, "flex min-h-[45vh] items-center justify-center px-4")}>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">Checking admin access…</p>
       </main>
     );
@@ -222,7 +223,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (!isAllowed) {
     return (
-      <main className="flex min-h-[55vh] items-center justify-center px-4">
+      <main className={cn(geistMono.variable, "flex min-h-[55vh] items-center justify-center px-4")}>
         <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Admin access required</h1>
           {adminMeFetchError ? (
@@ -277,7 +278,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-100 dark:bg-zinc-950">
+    <div className={cn(geistMono.variable, "flex min-h-screen bg-zinc-100 dark:bg-zinc-950")}>
       <aside
         className={cn(
           "hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900",

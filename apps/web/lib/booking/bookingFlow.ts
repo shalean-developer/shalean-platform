@@ -124,29 +124,39 @@ export function getBookingStepGateRedirect(step: BookingFlowStep): BookingFlowSt
 }
 
 export const BOOKING_FLOW_STEP_PATH: Record<BookingFlowStep, string> = {
-  entry: "/booking/details",
-  quote: "/booking/details",
-  details: "/booking/details",
-  when: "/booking/schedule",
-  checkout: "/booking/payment",
+  entry: "/book",
+  quote: "/book",
+  details: "/book",
+  when: "/book",
+  checkout: "/book",
+};
+
+const BOOKING_FLOW_V2_STEP: Record<BookingFlowStep, number> = {
+  entry: 1,
+  quote: 1,
+  details: 1,
+  when: 2,
+  checkout: 4,
 };
 
 /**
  * Map legacy `?step=` values (including aliases) to the path-based checkout route.
- * Used by `/booking` index redirect.
+ * @deprecated Prefer {@link legacyFlowStepQueryToBookHref} — legacy paths redirect to `/book`.
  */
 export function legacyFlowStepQueryToCheckoutPath(stepRaw: string | null | undefined): string {
   const s = stepRaw?.trim().toLowerCase() ?? "";
-  if (s === "cleaner") return "/booking/cleaner";
-  if (s === "payment") return "/booking/payment";
+  if (s === "cleaner") return "/book?step=3";
+  if (s === "payment") return "/book?step=4";
   const normalized = normalizeBookingStepParam(stepRaw ?? null);
-  return BOOKING_FLOW_STEP_PATH[normalized];
+  const step = BOOKING_FLOW_V2_STEP[normalized];
+  return step === 1 ? "/book" : `/book?step=${step}`;
 }
 
-/** Canonical path-based booking URLs (no `?step=`). Extra keys are filtered to allowed booking query params. */
+/** Canonical booking-v2 URLs under `/book`. Extra keys are filtered to allowed booking query params. */
 export function bookingFlowHref(step: BookingFlowStep, extra?: Record<string, string>): string {
   const path = BOOKING_FLOW_STEP_PATH[step];
   const merged = new URLSearchParams();
+  merged.set("step", String(BOOKING_FLOW_V2_STEP[step]));
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
       if (v) merged.set(k, v);

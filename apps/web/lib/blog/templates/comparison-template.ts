@@ -58,7 +58,7 @@ export function buildComparisonTemplate(vars: ComparisonTemplateVars): BlogConte
         title: "Ready to book?",
         description: `See scope and pricing for ${city} before you confirm.`,
         button_text: "Book a cleaner",
-        link: "/booking",
+        link: "/book",
         variant: "primary",
       },
     ],

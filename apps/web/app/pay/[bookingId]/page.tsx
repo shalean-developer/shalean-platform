@@ -41,7 +41,7 @@ export default async function PayBookingPage({
       <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col justify-center gap-4 px-4 py-16 text-center">
         <h1 className="text-xl font-semibold text-neutral-900">Unable to open checkout</h1>
         <p className="text-sm text-neutral-600">{land.error}</p>
-        <Link href="/booking/details" className="text-sm font-medium text-blue-600 hover:underline">
+        <Link href="/book" className="text-sm font-medium text-blue-600 hover:underline">
           Start a new booking
         </Link>
       </main>
