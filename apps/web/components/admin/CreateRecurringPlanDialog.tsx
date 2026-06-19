@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, Search } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { emitAdminToast } from "@/lib/admin/toastBus";
+import { buildAdminBookingLocationString } from "@/lib/admin/buildBookingLocationFromSavedAddress";
+import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,8 +25,18 @@ const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 type CreateFreq = "weekly" | "biweekly" | "monthly";
 type CreateSvc = "standard" | "deep" | "move";
 
+type CustomerHit = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  billing_type: string;
+  schedule_type: string;
+};
+
 function emptyCreateForm() {
   return {
+    customerQuery: "",
+    selectedCustomer: null as CustomerHit | null,
     customerEmail: "",
     customerName: "",
     customerPhone: "",
@@ -48,6 +60,70 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
   const [form, setForm] = useState(emptyCreateForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [searchHits, setSearchHits] = useState<CustomerHit[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const searchCustomers = useCallback(async (q: string) => {
+    const t = q.trim();
+    if (t.length < 2) {
+      setSearchHits([]);
+      return;
+    }
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) return;
+    setSearching(true);
+    try {
+      const digits = t.replace(/\D/g, "");
+      const looksLikePhone = digits.length >= 9 || t.startsWith("+");
+      const url = looksLikePhone
+        ? `/api/admin/bookings/customers?phone=${encodeURIComponent(t)}`
+        : `/api/admin/bookings/customers?q=${encodeURIComponent(t)}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as { customers?: CustomerHit[]; error?: string };
+      if (!res.ok) {
+        setSearchHits([]);
+        return;
+      }
+      setSearchHits(json.customers ?? []);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => void searchCustomers(form.customerQuery), 300);
+    return () => window.clearTimeout(t);
+  }, [form.customerQuery, open, searchCustomers]);
+
+  async function hydrateCustomerFields(hit: CustomerHit) {
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    let address = "";
+    if (token) {
+      const res = await fetch(
+        `/api/admin/bookings/customer-saved-addresses?user_id=${encodeURIComponent(hit.id)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const json = (await res.json().catch(() => ({}))) as { addresses?: CustomerAddressRow[] };
+      if (res.ok && json.addresses?.length) {
+        const row = json.addresses.find((a) => a.is_default) ?? json.addresses[0];
+        if (row) address = buildAdminBookingLocationString(row);
+      }
+    }
+    setForm((s) => ({
+      ...s,
+      selectedCustomer: hit,
+      customerQuery: hit.email ?? hit.full_name ?? hit.id,
+      customerEmail: hit.email ?? s.customerEmail,
+      customerName: hit.full_name ?? s.customerName,
+      address: address || s.address,
+    }));
+    setSearchHits([]);
+  }
 
   function toggleDay(day: number) {
     setForm((f) => {
@@ -125,6 +201,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
       emitAdminToast("Recurring plan created", "success");
       onOpenChange(false);
       setForm(emptyCreateForm());
+      setSearchHits([]);
       await onCreated();
     } finally {
       setSubmitting(false);
@@ -139,6 +216,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
         if (!next) {
           setFormError(null);
           setForm(emptyCreateForm());
+          setSearchHits([]);
         }
       }}
     >
@@ -151,6 +229,59 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-1">
+          <div className="space-y-2">
+            <Label htmlFor="cr-customer-search">Customer</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <Input
+                id="cr-customer-search"
+                className="pl-9"
+                placeholder="Search by name, email, or phone…"
+                value={form.customerQuery}
+                onChange={(e) => {
+                  setForm((s) => ({
+                    ...s,
+                    customerQuery: e.target.value,
+                    selectedCustomer: null,
+                    customerEmail: "",
+                    customerName: "",
+                  }));
+                }}
+                disabled={submitting}
+                autoComplete="off"
+              />
+            </div>
+            {searching ? (
+              <p className="text-xs text-zinc-500">Searching…</p>
+            ) : searchHits.length > 0 && !form.selectedCustomer ? (
+              <ul className="max-h-48 overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                {searchHits.map((h) => (
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      className="flex w-full flex-col items-start gap-0.5 border-b border-zinc-100 px-3 py-2 text-left text-sm last:border-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/80"
+                      onClick={() => void hydrateCustomerFields(h)}
+                    >
+                      <span className="font-medium text-zinc-900 dark:text-zinc-50">{h.full_name ?? "—"}</span>
+                      <span className="text-xs text-zinc-500">{h.email ?? h.id}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : form.customerQuery.trim().length >= 2 && !form.selectedCustomer && !searching ? (
+              <p className="text-xs text-zinc-500">No customers found. You can still enter details manually below.</p>
+            ) : null}
+            {form.selectedCustomer ? (
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900/60">
+                <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                  {form.selectedCustomer.full_name ?? "—"}{" "}
+                  <span className="font-normal text-zinc-500">
+                    ({form.selectedCustomer.email ?? form.selectedCustomer.id})
+                  </span>
+                </p>
+              </div>
+            ) : null}
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="cr-email">Customer email</Label>
@@ -159,7 +290,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
                 type="email"
                 autoComplete="email"
                 value={form.customerEmail}
-                onChange={(e) => setForm((s) => ({ ...s, customerEmail: e.target.value }))}
+                onChange={(e) => setForm((s) => ({ ...s, customerEmail: e.target.value, selectedCustomer: null }))}
                 disabled={submitting}
               />
             </div>
@@ -169,7 +300,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
                 id="cr-name"
                 autoComplete="name"
                 value={form.customerName}
-                onChange={(e) => setForm((s) => ({ ...s, customerName: e.target.value }))}
+                onChange={(e) => setForm((s) => ({ ...s, customerName: e.target.value, selectedCustomer: null }))}
                 disabled={submitting}
               />
             </div>
