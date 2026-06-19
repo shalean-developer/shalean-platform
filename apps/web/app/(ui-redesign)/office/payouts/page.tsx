@@ -13,42 +13,17 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  CalendarRange,
 } from "lucide-react";
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
+import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import type {
+  OfficePayoutBatchRow,
+  OfficePayoutCleanerRow,
+  OfficePayoutPeriodReport,
+} from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch, getAdminToken } from "@/hooks/useAdminData";
-
-type PayoutRow = {
-  id: string;
-  cleaner_id: string;
-  cleaner_name: string;
-  booking_count: number;
-  total_amount_cents: number;
-  status: string;
-  payment_status: string | null;
-  payment_reference: string | null;
-  period_start: string;
-  period_end: string;
-  created_at: string;
-  approved_at: string | null;
-  paid_at: string | null;
-};
-
-type PayoutsResponse = {
-  payouts: PayoutRow[];
-};
-
-type EligibleGroup = {
-  cleaner_id: string;
-  cleaner_name: string;
-  cleaner_phone: string;
-  total_cents: number;
-  bookings: Array<{ booking_id: string; date: string | null; amount_cents: number }>;
-};
-
-type EligibleResponse = {
-  groups: EligibleGroup[];
-};
 
 type GenerateResponse = {
   skipped?: boolean;
@@ -84,6 +59,16 @@ function formatPeriod(start: string, end: string): string {
   return `${s} – ${e}`;
 }
 
+function formatRangeLabel(from: string, to: string): string {
+  const f = new Date(`${from}T12:00:00`).toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+  const t = new Date(`${to}T12:00:00`).toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `${f} – ${t}`;
+}
+
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
@@ -99,7 +84,7 @@ function downloadCsv(filename: string, csv: string): void {
   URL.revokeObjectURL(url);
 }
 
-function buildPayoutsListCsv(rows: PayoutRow[]): string {
+function buildPayoutsListCsv(rows: OfficePayoutBatchRow[]): string {
   const header = ["Cleaner", "Period start", "Period end", "Jobs", "Net payout (ZAR)", "Status", "Payment status", "Payout ID"];
   const lines = [header.join(",")];
   for (const p of rows) {
@@ -119,42 +104,79 @@ function buildPayoutsListCsv(rows: PayoutRow[]): string {
   return lines.join("\n");
 }
 
+function buildCleanerSummaryCsv(rows: OfficePayoutCleanerRow[], from: string, to: string): string {
+  const header = [
+    "Cleaner",
+    "Visits",
+    "Earned (ZAR)",
+    "Pending visits",
+    "Pending (ZAR)",
+    "Eligible visits",
+    "Eligible (ZAR)",
+    "Batched visits",
+    "Batched (ZAR)",
+    "Paid visits",
+    "Paid (ZAR)",
+  ];
+  const lines = [`Period,${from},${to}`, header.join(",")];
+  for (const c of rows) {
+    lines.push(
+      [
+        csvEscape(c.cleaner_name),
+        String(c.visit_count),
+        String(Math.round(c.earned_cents / 100)),
+        String(c.pending_visits),
+        String(Math.round(c.pending_cents / 100)),
+        String(c.eligible_visits),
+        String(Math.round(c.eligible_cents / 100)),
+        String(c.batched_open_visits),
+        String(Math.round(c.batched_open_cents / 100)),
+        String(c.paid_visits),
+        String(Math.round(c.paid_cents / 100)),
+      ].join(","),
+    );
+  }
+  return lines.join("\n");
+}
+
 export default function PayoutsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedPayoutId = searchParams.get("payout")?.trim() || null;
 
+  const defaultRange = defaultOfficePayoutPeriodRange();
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [cleanerPage, setCleanerPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  useEffect(() => {
-    const timer = globalThis.setTimeout(() => setPage(1), 0);
-    return () => globalThis.clearTimeout(timer);
-  }, [search, statusFilter, pageSize]);
+  const reportParams = useMemo(
+    () => ({ from: fromDate, to: toDate }),
+    [fromDate, toDate],
+  );
 
-  const { data, loading, error, refetch } = useAdminData<PayoutsResponse>("/api/admin/payouts");
-  const {
-    data: eligibleData,
-    loading: eligibleLoading,
-    refetch: refetchEligible,
-  } = useAdminData<EligibleResponse>("/api/admin/payouts/eligible");
+  const { data, loading, error, refetch } = useAdminData<OfficePayoutPeriodReport>(
+    "/api/admin/payouts/period-report",
+    { params: reportParams },
+  );
 
   const payouts = data?.payouts ?? [];
-  const eligibleGroups = eligibleData?.groups ?? [];
+  const cleaners = data?.cleaners ?? [];
+  const totals = data?.totals;
+  const range = data?.range ?? { from: fromDate, to: toDate };
 
-  const eligibleSummary = useMemo(() => {
-    let bookingCount = 0;
-    let totalCents = 0;
-    for (const g of eligibleGroups) {
-      bookingCount += g.bookings.length;
-      totalCents += g.total_cents;
-    }
-    return { cleanerCount: eligibleGroups.length, bookingCount, totalCents };
-  }, [eligibleGroups]);
+  useEffect(() => {
+    const timer = globalThis.setTimeout(() => {
+      setPage(1);
+      setCleanerPage(1);
+    }, 0);
+    return () => globalThis.clearTimeout(timer);
+  }, [search, statusFilter, pageSize, fromDate, toDate]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -168,11 +190,24 @@ export default function PayoutsPage() {
     });
   }, [payouts, search, statusFilter]);
 
+  const filteredCleaners = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return cleaners;
+    return cleaners.filter((c) => (c.cleaner_name ?? "").toLowerCase().includes(q));
+  }, [cleaners, search]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageFrom = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageTo = Math.min(safePage * pageSize, filtered.length);
   const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const cleanerTotalPages = Math.max(1, Math.ceil(filteredCleaners.length / pageSize));
+  const safeCleanerPage = Math.min(cleanerPage, cleanerTotalPages);
+  const cleanerPageFrom =
+    filteredCleaners.length === 0 ? 0 : (safeCleanerPage - 1) * pageSize + 1;
+  const cleanerPageTo = Math.min(safeCleanerPage * pageSize, filteredCleaners.length);
+  const cleanerPageRows = filteredCleaners.slice((safeCleanerPage - 1) * pageSize, safeCleanerPage * pageSize);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -181,9 +216,16 @@ export default function PayoutsPage() {
     }
   }, [page, totalPages]);
 
-  const pendingCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending").length;
-  const paidCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "paid").length;
-  const totalPendingCents = payouts
+  useEffect(() => {
+    if (cleanerPage > cleanerTotalPages) {
+      const timer = globalThis.setTimeout(() => setCleanerPage(Math.max(1, cleanerTotalPages)), 0);
+      return () => globalThis.clearTimeout(timer);
+    }
+  }, [cleanerPage, cleanerTotalPages]);
+
+  const pendingBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending").length;
+  const paidBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "paid").length;
+  const totalPendingBatchCents = payouts
     .filter((p) => (p.status ?? "").toLowerCase() === "pending")
     .reduce((s, p) => s + (p.total_amount_cents ?? 0), 0);
 
@@ -193,7 +235,13 @@ export default function PayoutsPage() {
   }
 
   async function refreshAll() {
-    await Promise.all([refetch(), refetchEligible()]);
+    await refetch();
+  }
+
+  function resetToThisMonth() {
+    const d = defaultOfficePayoutPeriodRange();
+    setFromDate(d.from);
+    setToDate(d.to);
   }
 
   async function handleApprove(id: string) {
@@ -235,13 +283,25 @@ export default function PayoutsPage() {
     await refreshAll();
   }
 
-  function handleExportList() {
+  function handleExportBatches() {
     if (filtered.length === 0) {
       showToast("Nothing to export — adjust filters or generate payout batches first.", false);
       return;
     }
-    downloadCsv(`cleaner-payouts-${new Date().toISOString().slice(0, 10)}.csv`, buildPayoutsListCsv(filtered));
-    showToast(`Exported ${filtered.length} payout${filtered.length === 1 ? "" : "s"}.`, true);
+    downloadCsv(`cleaner-payout-batches-${range.from}-to-${range.to}.csv`, buildPayoutsListCsv(filtered));
+    showToast(`Exported ${filtered.length} payout batch${filtered.length === 1 ? "" : "es"}.`, true);
+  }
+
+  function handleExportCleaners() {
+    if (filteredCleaners.length === 0) {
+      showToast("No cleaner rows in this period.", false);
+      return;
+    }
+    downloadCsv(
+      `cleaner-payout-summary-${range.from}-to-${range.to}.csv`,
+      buildCleanerSummaryCsv(filteredCleaners, range.from, range.to),
+    );
+    showToast(`Exported ${filteredCleaners.length} cleaner${filteredCleaners.length === 1 ? "" : "s"}.`, true);
   }
 
   async function handleExportOne(id: string) {
@@ -275,7 +335,8 @@ export default function PayoutsPage() {
     }
   }
 
-  const showEligibleBanner = !loading && !eligibleLoading && payouts.length === 0 && eligibleSummary.bookingCount > 0;
+  const showEligibleBanner =
+    !loading && (totals?.eligible_visits ?? 0) > 0;
 
   function closePayoutDetail() {
     router.push("/office/payouts");
@@ -298,7 +359,7 @@ export default function PayoutsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Cleaner Payouts</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Weekly payout batches plus eligible earnings waiting to be grouped.
+            Visit earnings and weekly batches for a date range (Johannesburg calendar).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -307,7 +368,7 @@ export default function PayoutsPage() {
             onClick={() => void refreshAll()}
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
           >
-            <RefreshCw className={cn("h-4 w-4", (loading || eligibleLoading) && "animate-spin")} />
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </button>
           <button
             type="button"
@@ -320,11 +381,19 @@ export default function PayoutsPage() {
           </button>
           <button
             type="button"
-            disabled={filtered.length === 0}
-            onClick={handleExportList}
+            disabled={filteredCleaners.length === 0}
+            onClick={handleExportCleaners}
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> Export
+            <Download className="h-4 w-4" /> Summary CSV
+          </button>
+          <button
+            type="button"
+            disabled={filtered.length === 0}
+            onClick={handleExportBatches}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" /> Batches CSV
           </button>
           <Link
             href="/admin/payouts"
@@ -334,6 +403,41 @@ export default function PayoutsPage() {
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <CalendarRange className="h-4 w-4 text-slate-400" />
+          Period
+        </div>
+        <label className="text-xs font-semibold text-slate-500">
+          From
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="mt-1 block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+          />
+        </label>
+        <label className="text-xs font-semibold text-slate-500">
+          To
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="mt-1 block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={resetToThisMonth}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          This month
+        </button>
+        <p className="text-xs text-slate-400 sm:ml-auto">
+          {loading ? "Loading…" : `Showing ${formatRangeLabel(range.from, range.to)}`}
+        </p>
       </div>
 
       {error && (
@@ -349,11 +453,10 @@ export default function PayoutsPage() {
       {showEligibleBanner && (
         <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold text-amber-950">Eligible earnings not yet batched</p>
+            <p className="font-semibold text-amber-950">Eligible earnings in this period</p>
             <p className="mt-1 text-sm text-amber-900/90">
-              {eligibleSummary.bookingCount} completed booking{eligibleSummary.bookingCount === 1 ? "" : "s"} across{" "}
-              {eligibleSummary.cleanerCount} cleaner{eligibleSummary.cleanerCount === 1 ? "" : "s"} (
-              {formatZar(eligibleSummary.totalCents)} total) are ready to batch by completion week.
+              {totals?.eligible_visits ?? 0} visit{(totals?.eligible_visits ?? 0) === 1 ? "" : "s"} (
+              {formatZar(totals?.eligible_cents ?? 0)}) are paid-invoice ready but not yet in a weekly batch.
             </p>
           </div>
           <button
@@ -376,38 +479,154 @@ export default function PayoutsPage() {
         />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          { label: "Payout batches", value: loading ? "—" : payouts.length, color: "text-slate-800" },
-          { label: "Pending batches", value: loading ? "—" : pendingCount, color: "text-orange-600" },
-          { label: "Paid batches", value: loading ? "—" : paidCount, color: "text-emerald-600" },
-          { label: "Pending amount", value: loading ? "—" : formatZar(totalPendingCents), color: "text-blue-600" },
+          { label: "Visits", value: loading ? "—" : String(totals?.visit_count ?? 0), color: "text-slate-800" },
+          { label: "Earned", value: loading ? "—" : formatZar(totals?.earned_cents ?? 0), color: "text-slate-800" },
           {
-            label: "Eligible (unbatched)",
-            value: eligibleLoading ? "—" : eligibleSummary.bookingCount,
-            sub: eligibleLoading ? undefined : formatZar(eligibleSummary.totalCents),
+            label: "Pending invoice",
+            value: loading ? "—" : formatZar(totals?.pending_cents ?? 0),
+            sub: loading ? undefined : `${totals?.pending_visits ?? 0} visits`,
+            color: "text-amber-700",
+          },
+          {
+            label: "Eligible",
+            value: loading ? "—" : formatZar(totals?.eligible_cents ?? 0),
+            sub: loading ? undefined : `${totals?.eligible_visits ?? 0} visits`,
             color: "text-violet-700",
+          },
+          {
+            label: "Batched (open)",
+            value: loading ? "—" : formatZar(totals?.batched_open_cents ?? 0),
+            sub: loading ? undefined : `${totals?.batched_open_visits ?? 0} visits`,
+            color: "text-blue-700",
+          },
+          {
+            label: "Paid out",
+            value: loading ? "—" : formatZar(totals?.paid_cents ?? 0),
+            sub: loading ? undefined : `${totals?.paid_visits ?? 0} visits`,
+            color: "text-emerald-600",
           },
         ].map((k) => (
           <div key={k.label} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
-            <p className={cn("mt-1 text-2xl font-bold tabular-nums", k.color)}>{k.value}</p>
+            <p className={cn("mt-1 text-xl font-bold tabular-nums", k.color)}>{k.value}</p>
             {"sub" in k && k.sub ? <p className="mt-0.5 text-xs font-medium text-slate-500">{k.sub}</p> : null}
           </div>
         ))}
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
-          <div className="relative min-w-[200px] flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">By cleaner</h2>
+            <p className="text-xs text-slate-500">Completed visits by booking date — includes roster partners on paired jobs</p>
+          </div>
+          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search payouts…"
+              placeholder="Search cleaners…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
             />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                {["Cleaner", "Visits", "Earned", "Pending", "Eligible", "Batched", "Paid"].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={7} className="px-4 py-3">
+                      <div className="h-5 animate-pulse rounded-lg bg-slate-100" />
+                    </td>
+                  </tr>
+                ))
+              ) : cleanerPageRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-10 text-center text-sm text-slate-400">
+                    No completed visits in this period.
+                  </td>
+                </tr>
+              ) : (
+                cleanerPageRows.map((c) => (
+                  <tr key={c.cleaner_id} className="hover:bg-slate-50/50">
+                    <td className="px-4 py-3 font-semibold text-slate-800">{c.cleaner_name}</td>
+                    <td className="px-4 py-3 tabular-nums text-slate-700">{c.visit_count}</td>
+                    <td className="px-4 py-3 font-semibold tabular-nums text-slate-800">{formatZar(c.earned_cents)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-800">
+                      {c.pending_visits > 0 ? `${c.pending_visits} · ${formatZar(c.pending_cents)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-violet-800">
+                      {c.eligible_visits > 0 ? `${c.eligible_visits} · ${formatZar(c.eligible_cents)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-blue-800">
+                      {c.batched_open_visits > 0 ? `${c.batched_open_visits} · ${formatZar(c.batched_open_cents)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-emerald-800">
+                      {c.paid_visits > 0 ? `${c.paid_visits} · ${formatZar(c.paid_cents)}` : "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
+          <p className="text-xs text-slate-400">
+            {loading
+              ? "Loading…"
+              : filteredCleaners.length === 0
+                ? "No cleaners"
+                : `Showing ${cleanerPageFrom}–${cleanerPageTo} of ${filteredCleaners.length} cleaner${filteredCleaners.length === 1 ? "" : "s"}`}
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-500">
+              Page {safeCleanerPage} of {cleanerTotalPages}
+            </span>
+            <button
+              type="button"
+              disabled={loading || safeCleanerPage <= 1}
+              onClick={() => setCleanerPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </button>
+            <button
+              type="button"
+              disabled={loading || safeCleanerPage >= cleanerTotalPages}
+              onClick={() => setCleanerPage((p) => Math.min(cleanerTotalPages, p + 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Weekly payout batches</h2>
+            <p className="text-xs text-slate-500">
+              Batches whose week overlaps the period ({loading ? "…" : `${pendingBatchCount} pending · ${paidBatchCount} paid · ${formatZar(totalPendingBatchCents)} pending amount`})
+            </p>
           </div>
           <div className="flex flex-wrap gap-1">
             {STATUS_FILTERS.map((s) => (
@@ -452,9 +671,9 @@ export default function PayoutsPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
-                    {payouts.length === 0 && eligibleSummary.bookingCount > 0
-                      ? "No payout batches yet — use Generate weekly payouts to create them from eligible earnings."
-                      : "No payouts found."}
+                    {(totals?.eligible_visits ?? 0) > 0
+                      ? "No weekly batches overlap this period — eligible visits may still need Generate weekly payouts."
+                      : "No payout batches overlap this period."}
                   </td>
                 </tr>
               ) : (
@@ -526,17 +745,12 @@ export default function PayoutsPage() {
             {loading
               ? "Loading…"
               : filtered.length === 0
-                ? payouts.length === 0
-                  ? "No payout batches"
-                  : "No payouts match your filters"
-                : `Showing ${pageFrom}–${pageTo} of ${filtered.length} payout batch${filtered.length === 1 ? "" : "es"}${search || statusFilter !== "all" ? ` (from ${payouts.length} total)` : ""}`}
-            {!loading && !eligibleLoading && eligibleSummary.bookingCount > 0
-              ? ` · ${eligibleSummary.bookingCount} eligible booking${eligibleSummary.bookingCount === 1 ? "" : "s"} unbatched`
-              : ""}
+                ? "No batches in period"
+                : `Showing ${pageFrom}–${pageTo} of ${filtered.length} batch${filtered.length === 1 ? "" : "es"}`}
           </p>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-500">
-              Rows per page
+              Rows
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
@@ -556,7 +770,7 @@ export default function PayoutsPage() {
               type="button"
               disabled={loading || safePage <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Prev
@@ -565,7 +779,7 @@ export default function PayoutsPage() {
               type="button"
               disabled={loading || safePage >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
             >
               Next
               <ChevronRight className="h-3.5 w-3.5" />

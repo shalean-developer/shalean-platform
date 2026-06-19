@@ -29,6 +29,13 @@ import {
   resolveTeamPayoutParticipantIds,
 } from "@/lib/payout/teamRosterPayoutAllocation";
 import {
+  isPairedRosterSoloJob,
+  leadEarningsRowFromSummary,
+  loadBookingRosterRows,
+  resolvePairedRosterLeaderId,
+} from "@/lib/payout/pairedRosterPayout";
+import { syncBookingRosterMemberPayouts } from "@/lib/payout/persistBookingRosterMemberPayouts";
+import {
   perCleanerTotalFromCanonical,
   resolveBookingCanonicalPayout,
   type BookingRowForCanonicalPayout,
@@ -602,6 +609,18 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
   }
 
   if (!isTeamJob) {
+    const rosterRows = await loadBookingRosterRows(admin, bookingId);
+    if (isPairedRosterSoloJob({ isTeamJob: false, rosterRows })) {
+      const canonical = await resolveBookingCanonicalPayout(admin, {
+        bookingId,
+        row: r as BookingRowForCanonicalPayout,
+        expectedCleanerId: cleanerId,
+      });
+      const cents = perCleanerTotalFromCanonical(canonical, cleanerId);
+      if (cents != null) {
+        return { ok: true, amountCents: cents, source: "persist_engine", missingReason: null };
+      }
+    }
     const cents = Math.max(0, Math.floor(Number(earned.earnings.display_earnings_cents) || 0));
     return { ok: true, amountCents: cents, source: "persist_engine", missingReason: null };
   }
@@ -1007,6 +1026,9 @@ async function persistCleanerPayoutIfUnsetCore(
     return { ok: true, skipped: false };
   }
 
+  const rosterRowsForSolo = await loadBookingRosterRows(admin, bookingId);
+  const pairedRosterSolo = isPairedRosterSoloJob({ isTeamJob: false, rosterRows: rosterRowsForSolo });
+
   const soloEligibleCents = usedLineItemBasis
     ? sumEligibleLineItemsSubtotalCents(lineItemRows)
     : payoutBaseCents;
@@ -1018,6 +1040,120 @@ async function persistCleanerPayoutIfUnsetCore(
     computedAtIso: new Date().toISOString(),
   });
   const soloSummary = soloCanonical.earningsSummary;
+
+  if (pairedRosterSolo && soloSummary) {
+    const participantIds = soloSummary.per_cleaner_earnings.map((row) => row.cleaner_id);
+    const leaderId = resolvePairedRosterLeaderId({
+      rosterRows: rosterRowsForSolo,
+      participantIds,
+      payoutOwnerCleanerId: r.payout_owner_cleaner_id,
+      bookingCleanerId: r.cleaner_id,
+    });
+    const leadRow = leadEarningsRowFromSummary(soloSummary, leaderId);
+    const leadPayoutCents = Math.max(0, Math.round(leadRow?.base_earning_cents ?? 0));
+    const leadBonusCents = Math.max(0, Math.round(leadRow?.bonus_cents ?? 0));
+
+    const capRow = {
+      billing_type: r.billing_type,
+      is_monthly_billing_booking: r.is_monthly_billing_booking,
+      payment_status: r.payment_status,
+      monthly_invoice_id: r.monthly_invoice_id,
+      total_paid_cents: r.total_paid_cents,
+      amount_paid_cents: r.amount_paid_cents,
+      total_paid_zar: r.total_paid_zar,
+    };
+    const finDiag = bookingFinancialDiagnostics(capRow);
+    const capOk = assertHybridPayoutWithinFinancialCap({
+      row: capRow,
+      payoutCents: soloCanonical.internalEarningsCents,
+      bonusCents: 0,
+    });
+    if (!capOk.ok) {
+      await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", "Paired roster payout exceeds financial cap", {
+        bookingId,
+        cleanerId: expectedCleanerId,
+        cap: capOk.cap,
+        hybrid: capOk.hybrid,
+        ...finDiag,
+      });
+      return {
+        ok: false,
+        code: "payout_exceeds_financial_cap",
+        error:
+          "Cleaner payout exceeds the allowed financial cap for this billing mode (payout_exceeds_financial_cap).",
+      };
+    }
+
+    let pairedUp = admin
+      .from("bookings")
+      .update({
+        cleaner_payout_cents: leadPayoutCents,
+        cleaner_bonus_cents: leadBonusCents,
+        company_revenue_cents: soloCanonical.companyRevenueFromServiceCents,
+        payout_percentage: soloCanonical.payoutPercentage ?? null,
+        payout_type: soloCanonical.payoutType,
+        display_earnings_cents: soloCanonical.displayEarningsCents,
+        payout_earnings_cents: soloCanonical.payoutEarningsCents,
+        internal_earnings_cents: soloCanonical.internalEarningsCents,
+        earnings_model_version: soloCanonical.earningsModelVersion,
+        earnings_percentage_applied: soloCanonical.earningsPercentageApplied ?? null,
+        earnings_cap_cents_applied: soloCanonical.earningsCapCentsApplied ?? null,
+        earnings_tenure_months_at_assignment: soloCanonical.tenureMonths ?? null,
+        earnings_summary: soloSummary,
+      })
+      .eq("id", bookingId)
+      .or("is_team_job.eq.false,is_team_job.is.null");
+    pairedUp = forceDisplay
+      ? pairedUp
+      : recomputeZeroDisplay
+        ? pairedUp.eq("display_earnings_cents", 0)
+        : pairedUp.is("display_earnings_cents", null);
+    const { data: pairedUpdated, error: pairedUpErr } = await pairedUp.select("id");
+    if (pairedUpErr) {
+      await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", pairedUpErr.message, {
+        bookingId,
+        error_id: newPayoutMoneyPathErrorId(),
+      });
+      return { ok: false, error: pairedUpErr.message };
+    }
+    if (!pairedUpdated?.length) {
+      return { ok: true, skipped: true, skipReason: "paired_roster_display_update_noop" };
+    }
+
+    const rosterSync = await syncBookingRosterMemberPayouts({
+      admin,
+      bookingId,
+      summary: soloSummary,
+      leaderId,
+    });
+    if (!rosterSync.ok) {
+      const missingTable = rosterSync.error.toLowerCase().includes("booking_roster_member_payouts");
+      if (missingTable) {
+        void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", rosterSync.error, {
+          bookingId,
+          hint: "Apply migration 20260958_booking_roster_member_payouts.sql",
+        });
+      } else {
+        return { ok: false, error: rosterSync.error };
+      }
+    }
+
+    void logSystemEvent({
+      level: "info",
+      source: "persistCleanerPayoutIfUnset",
+      message: "canonical_paired_roster_payout_persisted",
+      context: {
+        bookingId,
+        cleanerId: expectedCleanerId,
+        leaderId,
+        roster_member_rows: rosterSync.upserted,
+        internal_earnings_cents: soloCanonical.internalEarningsCents,
+        per_cleaner_count: soloSummary.per_cleaner_earnings.length,
+      },
+    });
+    return { ok: true, skipped: false };
+  }
+
   const payout: CleanerPayoutResult = {
     payoutCents: soloCanonical.cleanerPayoutCents,
     bonusCents: soloCanonical.cleanerBonusCents,

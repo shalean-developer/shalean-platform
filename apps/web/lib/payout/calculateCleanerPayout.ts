@@ -26,7 +26,8 @@ export type CleanerPayoutResult = {
     | "team_pool"
     | "team_per_cleaner_fixed"
     | "team_fixed_with_leader"
-    | "team_percentage_parity";
+    | "team_percentage_parity"
+    | "paired_roster_pool_split";
   /** Decimal rate for percentage model; null for fixed specials. */
   payoutPercentage: number | null;
   /** Subtotal cleaner payout was computed from (excludes platform service fee). */

@@ -20,6 +20,10 @@ import { bookingUsesAccrualPayoutCap } from "@/lib/payout/bookingPayoutCapCents"
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { completionDayYmd, getPreviousWeekDateBoundsUtc, getUtcWeekBoundsContainingYmd, isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import {
+  listRosterMemberWeeklyPayoutCandidates,
+  rosterMemberWeeklyPayoutTotalCents,
+} from "@/lib/payout/rosterMemberWeeklyPayoutCandidates";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -318,15 +322,24 @@ async function generateWeeklyPayoutsForPeriod(
       bookings.push(booking);
     }
 
-    if (!bookings.length) continue;
+    const rosterMemberCandidates = await listRosterMemberWeeklyPayoutCandidates({
+      admin,
+      cleanerId,
+      periodStart,
+      periodEnd,
+      invoiceStatusById: invoiceMap,
+    });
 
-    const total = bookings.reduce(
-      (sum, b) =>
-        sum +
-        Math.max(0, Math.floor(Number(b.cleaner_payout_cents) || 0)) +
-        Math.max(0, Math.floor(Number(b.cleaner_bonus_cents) || 0)),
-      0,
-    );
+    if (!bookings.length && !rosterMemberCandidates.length) continue;
+
+    const total =
+      bookings.reduce(
+        (sum, b) =>
+          sum +
+          Math.max(0, Math.floor(Number(b.cleaner_payout_cents) || 0)) +
+          Math.max(0, Math.floor(Number(b.cleaner_bonus_cents) || 0)),
+        0,
+      ) + rosterMemberWeeklyPayoutTotalCents(rosterMemberCandidates);
     if (total <= 0) continue;
 
     const { data: payout, error: insErr } = await admin
@@ -389,34 +402,61 @@ async function generateWeeklyPayoutsForPeriod(
 
     const payoutId = String((payout as { id: string }).id);
     const ids = bookings.map((b) => b.id);
+    let linkedCount = 0;
 
-    const { data: updated, error: upErr } = await admin
-      .from("bookings")
-      .update({ payout_id: payoutId })
-      .in("id", ids)
-      .eq("cleaner_id", cleanerId)
-      .is("payout_id", null)
-      .select("id");
+    if (ids.length > 0) {
+      const { data: updated, error: upErr } = await admin
+        .from("bookings")
+        .update({ payout_id: payoutId })
+        .in("id", ids)
+        .eq("cleaner_id", cleanerId)
+        .is("payout_id", null)
+        .select("id");
 
-    if (upErr) {
-      await reportOperationalIssue("error", "generateWeeklyPayouts", `link bookings failed: ${upErr.message}`, {
-        cleanerId,
-        payoutId,
-      });
-      await admin.from("cleaner_payouts").delete().eq("id", payoutId);
-      skippedCleaners += 1;
-      continue;
+      if (upErr) {
+        await reportOperationalIssue("error", "generateWeeklyPayouts", `link bookings failed: ${upErr.message}`, {
+          cleanerId,
+          payoutId,
+        });
+        await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        skippedCleaners += 1;
+        continue;
+      }
+      linkedCount += updated?.length ?? 0;
     }
 
-    const n = updated?.length ?? 0;
-    if (n === 0) {
+    if (rosterMemberCandidates.length > 0) {
+      const memberIds = rosterMemberCandidates.map((row) => row.id);
+      const { data: linkedMembers, error: memberUpErr } = await admin
+        .from("booking_roster_member_payouts")
+        .update({ cleaner_payout_id: payoutId, status: "batched" })
+        .in("id", memberIds)
+        .eq("cleaner_id", cleanerId)
+        .is("cleaner_payout_id", null)
+        .eq("status", "pending")
+        .select("id");
+      if (memberUpErr) {
+        await reportOperationalIssue("error", "generateWeeklyPayouts", `link roster member payouts failed: ${memberUpErr.message}`, {
+          cleanerId,
+          payoutId,
+        });
+        if (linkedCount === 0) {
+          await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        }
+        skippedCleaners += 1;
+        continue;
+      }
+      linkedCount += linkedMembers?.length ?? 0;
+    }
+
+    if (linkedCount === 0) {
       await admin.from("cleaner_payouts").delete().eq("id", payoutId);
       skippedCleaners += 1;
       continue;
     }
 
     payoutsCreated += 1;
-    bookingsLinked += n;
+    bookingsLinked += linkedCount;
 
     void logSystemEvent({
       level: "info",
@@ -425,7 +465,9 @@ async function generateWeeklyPayoutsForPeriod(
       context: {
         cleanerId,
         payoutId,
-        bookings: n,
+        bookings: ids.length,
+        roster_member_payouts: rosterMemberCandidates.length,
+        linked_rows: linkedCount,
         total_amount_cents: total,
         period_start: periodStart,
         period_end: periodEnd,

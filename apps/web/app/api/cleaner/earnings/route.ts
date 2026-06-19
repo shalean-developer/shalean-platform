@@ -265,8 +265,8 @@ export async function GET(request: Request) {
     if ((rawPs === "eligible" || rawPs === "paid") && b.payout_frozen_cents == null) {
       enqueuePayoutIntegrityAnomalyLog(admin, "eligible_or_paid_without_frozen", b.id, { payout_status: rawPs });
     }
-    const cents = amountCentsForRow(b);
     const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), cleanerId);
+    const cents = facing?.total_cents ?? amountCentsForRow(b);
     const bonusCents = facing?.bonus_cents ?? 0;
     bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);

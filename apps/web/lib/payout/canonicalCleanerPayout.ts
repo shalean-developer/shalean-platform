@@ -105,7 +105,8 @@ export type CanonicalPayoutDiagnostics = {
     | "solo_fixed_special"
     | "team_percentage_parity"
     | "team_fixed_with_leader"
-    | "team_per_cleaner_fixed";
+    | "team_per_cleaner_fixed"
+    | "paired_roster_pool_split";
   team_cleaner_count?: number;
   booking_total_team_payout_cents?: number;
   payout_per_cleaner_cents?: number;
@@ -133,7 +134,8 @@ export type CanonicalPayoutResult = {
     | "team_per_cleaner_fixed"
     | "team_fixed_with_leader"
     | "team_percentage_parity"
-    | "team_pool";
+    | "team_pool"
+    | "paired_roster_pool_split";
   tenureMonths: number;
   fixedServiceOverride: boolean;
   earningsPercentageApplied: number | null;

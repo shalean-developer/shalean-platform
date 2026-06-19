@@ -16,6 +16,13 @@ import {
   fetchActiveTeamMemberIdsAtAppointment,
   resolveTeamPayoutParticipantIds,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import {
+  buildPairedRosterCanonicalInput,
+  isPairedRosterSoloJob,
+  loadBookingRosterRows,
+  resolvePairedRosterCanonicalPayout,
+  resolvePairedRosterLeaderId,
+} from "@/lib/payout/pairedRosterPayout";
 
 export type BookingRowForCanonicalPayout = {
   id?: string | null;
@@ -106,6 +113,39 @@ export async function resolveBookingCanonicalPayout(
   const adjustments = await loadAdjustments(admin, bookingId);
 
   if (!isTeamJob) {
+    const rosterRows = await loadBookingRosterRows(admin, bookingId);
+    if (isPairedRosterSoloJob({ isTeamJob: false, rosterRows })) {
+      const participantIds = resolveTeamPayoutParticipantIds({
+        rosterRows,
+        activeTeamMemberIds: [],
+      });
+      const teamLeaderId = resolvePairedRosterLeaderId({
+        rosterRows,
+        participantIds,
+        payoutOwnerCleanerId: r.payout_owner_cleaner_id,
+        bookingCleanerId: r.cleaner_id,
+      });
+      const leadJoinedAt = teamLeaderId ? await loadCleanerJoinedAt(admin, teamLeaderId) : null;
+
+      return resolvePairedRosterCanonicalPayout(
+        buildPairedRosterCanonicalInput({
+          bookingId,
+          serviceId,
+          serviceLabel: r.service ?? null,
+          bookingAppointmentIsoUtc: apptIso,
+          bookingValueCents: eligibleAmountCents,
+          customerTotalCents: customerTotal,
+          serviceFeeCents,
+          rosterRows,
+          participantIds,
+          teamLeaderId,
+          teamLeaderJoinedAtIso: leadJoinedAt,
+          adjustments,
+          computedAtIso: params.computedAtIso,
+        }),
+      );
+    }
+
     const soloCleanerId =
       String(params.expectedCleanerId ?? r.cleaner_id ?? r.payout_owner_cleaner_id ?? "").trim() || null;
     const joinedAt = soloCleanerId ? await loadCleanerJoinedAt(admin, soloCleanerId) : null;
