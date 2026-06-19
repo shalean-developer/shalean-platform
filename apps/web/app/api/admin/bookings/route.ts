@@ -174,6 +174,7 @@ function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
     date: r.date,
     time: r.time,
     cleaner_id: r.cleaner_id,
+    team_id: r.team_id,
     dispatch_status: r.dispatch_status,
     became_pending_at: r.became_pending_at,
     created_at: r.created_at,
@@ -223,6 +224,7 @@ function escapeIlike(raw: string): string {
 function applyAdminBookingDbFilters(params: {
   query: AdminBookingQuery;
   cityId: string | null;
+  serviceSlug: string | null;
   recurringIdFilter: string | null;
   recurringListScope: boolean;
   bookingStatus: string | null;
@@ -236,6 +238,7 @@ function applyAdminBookingDbFilters(params: {
 }): AdminBookingQuery {
   let q = params.query;
   if (params.cityId && !params.recurringListScope) q = q.eq("city_id", params.cityId);
+  if (params.serviceSlug && !params.recurringListScope) q = q.eq("service_slug", params.serviceSlug);
   if (params.recurringIdFilter) q = q.eq("recurring_id", params.recurringIdFilter);
   if (params.includeBookingStatus !== false && params.bookingStatus && params.bookingStatus !== "all") {
     q = q.eq("status", params.bookingStatus);
@@ -257,6 +260,24 @@ function applyAdminBookingDbFilters(params: {
       q = q.or(`status.in.(completed,cancelled,failed,payment_expired),date.lt.${params.today}`);
     } else if (params.filter === "sla") {
       q = q.eq("status", "pending").is("cleaner_id", null).in("dispatch_status", ["searching", "offered"]);
+    } else if (params.filter === "unassigned") {
+      q = q
+        .is("cleaner_id", null)
+        .is("team_id", null)
+        .not("status", "in", "(completed,cancelled,failed,payment_expired,pending_payment)")
+        .not("dispatch_status", "in", "(unassignable,no_cleaner)");
+    } else if (params.filter === "unassignable") {
+      q = q
+        .in("dispatch_status", ["unassignable", "no_cleaner"])
+        .is("cleaner_id", null)
+        .is("team_id", null)
+        .not("status", "in", "(completed,cancelled,failed,payment_expired,pending_payment)");
+    } else if (params.filter === "starting-soon") {
+      q = q
+        .is("cleaner_id", null)
+        .is("team_id", null)
+        .not("status", "in", "(completed,cancelled,failed,payment_expired,pending_payment)")
+        .gte("date", params.today);
     }
 
     if (params.opsQuick === "awaiting_payment") {
@@ -396,6 +417,8 @@ export async function GET(request: Request) {
   const rangeFrom = (requestedPage - 1) * pageSize;
   const rangeTo = rangeFrom + pageSize - 1;
   const opsQuick = (searchParams.get("opsQuick") ?? "").trim().toLowerCase();
+  const serviceSlugRaw = (searchParams.get("serviceSlug") ?? searchParams.get("service") ?? "").trim().toLowerCase();
+  const serviceSlug = serviceSlugRaw && serviceSlugRaw !== "all" ? serviceSlugRaw : null;
   const recurringIdRaw = (searchParams.get("recurring_id") ?? searchParams.get("recurringId") ?? "").trim();
   const recurringIdFilter = /^[0-9a-f-]{36}$/i.test(recurringIdRaw) ? recurringIdRaw : null;
   /** Drill-down from `/admin/recurring` — ignore ops/date quick filters so future visits are not hidden. */
@@ -411,6 +434,7 @@ export async function GET(request: Request) {
   bookingQuery = applyAdminBookingDbFilters({
     query: bookingQuery,
     cityId,
+    serviceSlug,
     recurringIdFilter,
     recurringListScope,
     bookingStatus,
@@ -497,6 +521,33 @@ export async function GET(request: Request) {
           lastActionMinutesAgo: act?.lastActionMinutesAgo ?? null,
         };
       });
+    } else if (filter === "unassigned") {
+      const slaM = getDispatchSlaBreachMinutes();
+      const nowMs = Date.now();
+      filtered = sortRowsForAttentionQueue(
+        rows.filter((r) => rowMatchesAttentionFilter(toOpsSnapshotRow(r), "unassigned", nowMs, slaM)),
+        "unassigned",
+        nowMs,
+        slaM,
+      );
+    } else if (filter === "unassignable") {
+      const slaM = getDispatchSlaBreachMinutes();
+      const nowMs = Date.now();
+      filtered = sortRowsForAttentionQueue(
+        rows.filter((r) => rowMatchesAttentionFilter(toOpsSnapshotRow(r), "unassignable", nowMs, slaM)),
+        "unassignable",
+        nowMs,
+        slaM,
+      );
+    } else if (filter === "starting-soon") {
+      const slaM = getDispatchSlaBreachMinutes();
+      const nowMs = Date.now();
+      filtered = sortRowsForAttentionQueue(
+        rows.filter((r) => rowMatchesAttentionFilter(toOpsSnapshotRow(r), "starting-soon", nowMs, slaM)),
+        "starting-soon",
+        nowMs,
+        slaM,
+      );
     }
   }
 
@@ -579,6 +630,7 @@ export async function GET(request: Request) {
     applyAdminBookingDbFilters({
       query: admin.from("bookings").select("id", { count: "exact", head: true }),
       cityId,
+      serviceSlug,
       recurringIdFilter,
       recurringListScope,
       bookingStatus: status,
@@ -597,6 +649,7 @@ export async function GET(request: Request) {
         applyAdminBookingDbFilters({
           query: admin.from("bookings").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "completed"),
           cityId,
+          serviceSlug,
           recurringIdFilter,
           recurringListScope,
           bookingStatus: null,
@@ -624,10 +677,11 @@ export async function GET(request: Request) {
   const { data: attentionRows } = await applyAdminBookingDbFilters({
     query: admin
       .from("bookings")
-      .select("id,status,date,time,cleaner_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents")
+      .select("id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents")
       .not("status", "in", "(completed,cancelled,failed,payment_expired)")
       .limit(3500),
     cityId,
+    serviceSlug,
     recurringIdFilter,
     recurringListScope,
     bookingStatus: null,
@@ -639,7 +693,7 @@ export async function GET(request: Request) {
     today,
     includeBookingStatus: false,
   });
-  const attention = computeOpsSnapshotFromRows((attentionRows ?? []) as OpsSnapshotRow[]);
+  const attention = computeOpsSnapshotFromRows((attentionRows ?? []).map((r) => toOpsSnapshotRow(r as Row)));
 
   const profileUserIds = [...new Set(filtered.map((r) => r.user_id).filter(Boolean))] as string[];
   const profileById = new Map<string, { billing_type: string; schedule_type: string }>();
@@ -731,7 +785,7 @@ export async function GET(request: Request) {
     failedJobs: failedJobs ?? [],
     cities: cityRows ?? [],
     selectedCityId: cityId || null,
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 const ADMIN_BOOKING_SERVICE_IDS = new Set<string>(["standard", "airbnb", "deep", "move", "carpet"]);

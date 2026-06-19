@@ -24,9 +24,15 @@ import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarnin
 import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
+  buildTeamJobMemberPayoutRowsFromEarningsSummary,
   fetchActiveTeamMemberIdsAtAppointment,
   resolveTeamPayoutParticipantIds,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import {
+  perCleanerTotalFromCanonical,
+  resolveBookingCanonicalPayout,
+  type BookingRowForCanonicalPayout,
+} from "@/lib/payout/resolveBookingCanonicalPayout";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
@@ -469,6 +475,8 @@ async function previewTeamMemberAllocatedCents(params: {
   cleanerId: string;
   earnings: ComputeBookingEarningsOutput;
   bookingDateIso: string;
+  eligibleAmountCents: number;
+  bookingRow: BookingRowForCanonicalPayout;
 }): Promise<number | null> {
   const { admin, bookingId, cleanerId, earnings } = params;
 
@@ -494,7 +502,13 @@ async function previewTeamMemberAllocatedCents(params: {
   if (!participantIds.includes(exp)) return null;
 
   if (!useLegacyPayoutEngine()) {
-    return FIXED_SPECIAL_PAYOUT_CENTS;
+    const canonical = await resolveBookingCanonicalPayout(admin, {
+      bookingId,
+      row: params.bookingRow,
+      expectedCleanerId: cleanerId,
+      eligibleAmountCents: params.eligibleAmountCents,
+    });
+    return perCleanerTotalFromCanonical(canonical, exp);
   }
 
   const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
@@ -608,6 +622,8 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
     cleanerId,
     earnings: earned.earnings,
     bookingDateIso: earned.bookingDateIso,
+    eligibleAmountCents: earned.payoutBaseCents,
+    bookingRow: r as BookingRowForCanonicalPayout,
   });
   if (allocated == null) {
     return {
@@ -824,6 +840,19 @@ async function persistCleanerPayoutIfUnsetCore(
 
     const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
     const legacyTeamPool = useLegacyPayoutEngine();
+    const teamEligibleCents = usedLineItemBasis
+      ? sumEligibleLineItemsSubtotalCents(lineItemRows)
+      : payoutBaseCents;
+    const teamCanonical = legacyTeamPool
+      ? null
+      : await resolveBookingCanonicalPayout(admin, {
+          bookingId,
+          row: r as BookingRowForCanonicalPayout,
+          expectedCleanerId,
+          eligibleAmountCents: teamEligibleCents > 0 ? teamEligibleCents : payoutBaseCents,
+          computedAtIso: new Date().toISOString(),
+        });
+    const teamSummary = teamCanonical?.earningsSummary ?? null;
 
     const ownership = resolveTeamPayoutOwnershipInvariant({
       expectedCleanerId,
@@ -855,12 +884,18 @@ async function persistCleanerPayoutIfUnsetCore(
             rosterRows: rosterRows ?? [],
             fallbackCleanerIds: participantIds,
           })
-        : buildTeamJobMemberFixedPerCleanerPayoutRows({
-            bookingId,
-            teamId,
-            rosterRows: rosterRows ?? [],
-            fallbackCleanerIds: participantIds,
-          });
+        : teamSummary
+          ? buildTeamJobMemberPayoutRowsFromEarningsSummary({
+              bookingId,
+              teamId,
+              summary: teamSummary,
+            })
+          : buildTeamJobMemberFixedPerCleanerPayoutRows({
+              bookingId,
+              teamId,
+              rosterRows: rosterRows ?? [],
+              fallbackCleanerIds: participantIds,
+            });
 
       if (payoutRows.length > 0) {
         const { error: insErr } = await admin.from("team_job_member_payouts").insert(payoutRows);
@@ -880,7 +915,16 @@ async function persistCleanerPayoutIfUnsetCore(
         ? participantIds.length > 0
           ? Math.max(0, Math.floor(poolCents / participantIds.length))
           : 0
-        : FIXED_SPECIAL_PAYOUT_CENTS;
+        : teamSummary
+          ? Math.max(
+              0,
+              Math.floor(
+                (teamSummary.per_cleaner_earnings.find((row) => row.cleaner_id === participantIds[0])?.total_cents ??
+                  teamCanonical?.displayEarningsCents ??
+                  FIXED_SPECIAL_PAYOUT_CENTS) || 0,
+              ),
+            )
+          : FIXED_SPECIAL_PAYOUT_CENTS;
       const inserts = participantIds
         .filter((cid) => cid && !existingCleanerIds.has(cid))
         .map((cid) => ({
@@ -901,16 +945,28 @@ async function persistCleanerPayoutIfUnsetCore(
       .update({
         cleaner_payout_cents: 0,
         cleaner_bonus_cents: 0,
-        company_revenue_cents: Math.max(0, payoutBaseCents + serviceFeeCents),
-        payout_percentage: null,
-        payout_type: legacyTeamPool ? "team_fixed" : "team_per_cleaner_fixed",
-        display_earnings_cents: earnings.display_earnings_cents,
-        payout_earnings_cents: earnings.payout_earnings_cents,
-        internal_earnings_cents: earnings.internal_earnings_cents,
-        earnings_model_version: earnings.earnings_model_version,
-        earnings_percentage_applied: earnings.earnings_percentage_applied ?? null,
-        earnings_cap_cents_applied: earnings.earnings_cap_cents_applied ?? null,
-        earnings_tenure_months_at_assignment: earnings.earnings_tenure_months_at_assignment ?? null,
+        company_revenue_cents:
+          teamSummary?.company_revenue_cents ??
+          teamCanonical?.companyRevenueFromServiceCents ??
+          Math.max(0, payoutBaseCents + serviceFeeCents - (teamCanonical?.internalEarningsCents ?? 0)),
+        payout_percentage: teamCanonical?.payoutPercentage ?? null,
+        payout_type: legacyTeamPool
+          ? "team_fixed"
+          : (teamCanonical?.payoutType ?? "team_per_cleaner_fixed"),
+        display_earnings_cents: teamCanonical?.displayEarningsCents ?? earnings.display_earnings_cents,
+        payout_earnings_cents: teamCanonical?.payoutEarningsCents ?? earnings.payout_earnings_cents,
+        internal_earnings_cents:
+          teamSummary?.total_cleaner_earnings_cents ??
+          teamCanonical?.internalEarningsCents ??
+          earnings.internal_earnings_cents,
+        earnings_model_version: teamCanonical?.earningsModelVersion ?? earnings.earnings_model_version,
+        earnings_percentage_applied:
+          teamCanonical?.earningsPercentageApplied ?? earnings.earnings_percentage_applied ?? null,
+        earnings_cap_cents_applied:
+          teamCanonical?.earningsCapCentsApplied ?? earnings.earnings_cap_cents_applied ?? null,
+        earnings_tenure_months_at_assignment:
+          teamCanonical?.tenureMonths ?? earnings.earnings_tenure_months_at_assignment ?? null,
+        earnings_summary: teamSummary,
       })
       .eq("id", bookingId)
       .eq("team_id", teamId);
@@ -934,17 +990,6 @@ async function persistCleanerPayoutIfUnsetCore(
     if (!teamVerify.ok) {
       return { ok: false, error: teamVerify.error };
     }
-    const teamCount = Math.max(1, participantIds.length);
-    const teamCanon = resolveCanonicalCleanerPayout({
-      bookingId,
-      serviceId: resolveServiceIdForPersist(r.booking_snapshot ?? null, r.service ?? null),
-      bookingValueCents: payoutBaseCents,
-      isTeamJob: true,
-      cleanerJoinedAtIso: null,
-      bookingAppointmentIsoUtc: bookingDateIso.trim().length > 0 ? bookingDateIso : null,
-      teamCleanerCount: teamCount,
-      serviceFeeCents,
-    });
     void logSystemEvent({
       level: "info",
       source: "persistCleanerPayoutIfUnset",
@@ -955,41 +1000,33 @@ async function persistCleanerPayoutIfUnsetCore(
         cleanerId: expectedCleanerId,
         used_fallback: usedFallback,
         legacy_team_pool: legacyTeamPool,
-        ...teamCanon.diagnostics,
+        ...(teamCanonical?.diagnostics ?? {}),
+        earnings_summary_model: teamSummary?.model_version ?? null,
       },
     });
     return { ok: true, skipped: false };
   }
 
-  const { data: cleaner, error: cErr } = await admin
-    .from("cleaners")
-    .select("joined_at, created_at")
-    .eq("id", expectedCleanerId)
-    .maybeSingle();
-
-  if (cErr || !cleaner) {
-    await reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `cleaner not found: ${cErr?.message ?? ""}`, {
-      bookingId,
-      cleanerId: expectedCleanerId,
-    });
-    return { ok: false, error: "Cleaner not found" };
-  }
-
-  const rowCl = cleaner as { joined_at?: string | null; created_at?: string | null };
-  const joinedAt = String(rowCl.joined_at ?? rowCl.created_at ?? "").trim();
-
-  const payout = calculateCleanerPayoutFromBookingRow({
-    totalPaidZar: r.total_paid_zar,
-    amountPaidCents: r.total_paid_cents ?? r.amount_paid_cents,
-    baseAmountCents: r.base_amount_cents,
-    serviceFeeCents: r.service_fee_cents,
-    serviceLabel: r.service ?? null,
-    bookingSnapshot: r.booking_snapshot ?? null,
-    cleanerJoinedAtIso: joinedAt || null,
-    bookingDate: r.date ?? undefined,
-    bookingTime: r.time ?? undefined,
+  const soloEligibleCents = usedLineItemBasis
+    ? sumEligibleLineItemsSubtotalCents(lineItemRows)
+    : payoutBaseCents;
+  const soloCanonical = await resolveBookingCanonicalPayout(admin, {
     bookingId,
+    row: r as BookingRowForCanonicalPayout,
+    expectedCleanerId,
+    eligibleAmountCents: soloEligibleCents > 0 ? soloEligibleCents : payoutBaseCents,
+    computedAtIso: new Date().toISOString(),
   });
+  const soloSummary = soloCanonical.earningsSummary;
+  const payout: CleanerPayoutResult = {
+    payoutCents: soloCanonical.cleanerPayoutCents,
+    bonusCents: soloCanonical.cleanerBonusCents,
+    companyRevenueCents: soloCanonical.companyRevenueFromServiceCents,
+    payoutType: soloCanonical.payoutType,
+    payoutPercentage: soloCanonical.payoutPercentage,
+    payoutBaseCents: soloEligibleCents > 0 ? soloEligibleCents : payoutBaseCents,
+    serviceFeeCents,
+  };
 
   const capRow = {
     billing_type: r.billing_type,
@@ -1047,13 +1084,14 @@ async function persistCleanerPayoutIfUnsetCore(
       company_revenue_cents: payout.companyRevenueCents,
       payout_percentage: payout.payoutPercentage ?? null,
       payout_type: payout.payoutType,
-      display_earnings_cents: earnings.display_earnings_cents,
-      payout_earnings_cents: earnings.payout_earnings_cents,
-      internal_earnings_cents: earnings.internal_earnings_cents,
-      earnings_model_version: earnings.earnings_model_version,
-      earnings_percentage_applied: earnings.earnings_percentage_applied ?? null,
-      earnings_cap_cents_applied: earnings.earnings_cap_cents_applied ?? null,
-      earnings_tenure_months_at_assignment: earnings.earnings_tenure_months_at_assignment ?? null,
+      display_earnings_cents: soloCanonical.displayEarningsCents,
+      payout_earnings_cents: soloCanonical.payoutEarningsCents,
+      internal_earnings_cents: soloCanonical.internalEarningsCents,
+      earnings_model_version: soloCanonical.earningsModelVersion,
+      earnings_percentage_applied: soloCanonical.earningsPercentageApplied ?? null,
+      earnings_cap_cents_applied: soloCanonical.earningsCapCentsApplied ?? null,
+      earnings_tenure_months_at_assignment: soloCanonical.tenureMonths ?? null,
+      earnings_summary: soloSummary,
     })
     .eq("id", bookingId)
     .or("is_team_job.eq.false,is_team_job.is.null");
@@ -1085,7 +1123,7 @@ async function persistCleanerPayoutIfUnsetCore(
     admin,
     bookingId,
     cleanerId: expectedCleanerId,
-    canonicalDisplayCents: earnings.display_earnings_cents,
+    canonicalDisplayCents: soloCanonical.displayEarningsCents,
   });
   if (!lineEarn.ok) {
     void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `computeCleanerEarningsForBooking: ${lineEarn.error}`, {
@@ -1104,8 +1142,8 @@ async function persistCleanerPayoutIfUnsetCore(
       service_id: resolveServiceIdForPersist(r.booking_snapshot ?? null, r.service ?? null),
       tenure_months: earnings.earnings_tenure_months_at_assignment ?? null,
       payout_percentage: earnings.earnings_percentage_applied ?? null,
-      fixed_service_override: payout.payoutType === "fixed_special",
-      final_display_cents: earnings.display_earnings_cents,
+      fixed_service_override: soloCanonical.fixedServiceOverride,
+      final_display_cents: soloCanonical.displayEarningsCents,
       cleaner_payout_cents: payout.payoutCents,
       cleaner_bonus_cents: payout.bonusCents,
       used_fallback: usedFallback,
@@ -1225,12 +1263,13 @@ export async function persistCleanerPayoutIfUnset(
       .eq("id", params.bookingId)
       .maybeSingle();
     if (idemRow && (idemRow as { is_team_job?: boolean | null }).is_team_job !== true) {
+      const forceDisplay = params.forceDisplayRecompute === true;
       const finRaw = (idemRow as { cleaner_line_earnings_finalized_at?: string | null }).cleaner_line_earnings_finalized_at;
       const lineFinalized = finRaw != null && String(finRaw).trim() !== "";
       const totalRaw = (idemRow as { cleaner_earnings_total_cents?: number | null }).cleaner_earnings_total_cents;
       const totalSet = totalRaw != null && Number.isFinite(Number(totalRaw));
       const displayOk = hasPersistedDisplayEarningsBasis((idemRow as { display_earnings_cents?: unknown }).display_earnings_cents);
-      if (lineFinalized && totalSet && displayOk) {
+      if (!forceDisplay && lineFinalized && totalSet && displayOk) {
         const { count, error: ctErr } = await params.admin
           .from("cleaner_earnings")
           .select("id", { count: "exact", head: true })

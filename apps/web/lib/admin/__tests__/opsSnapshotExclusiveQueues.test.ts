@@ -18,6 +18,7 @@ function row(overrides: Partial<OpsSnapshotRow>): OpsSnapshotRow {
     date: overrides.date ?? "2026-05-14",
     time: overrides.time ?? "11:00",
     cleaner_id: overrides.cleaner_id ?? null,
+    team_id: overrides.team_id ?? null,
     dispatch_status: overrides.dispatch_status ?? null,
     became_pending_at: overrides.became_pending_at ?? null,
     created_at: overrides.created_at ?? "2026-05-14T07:50:00.000Z",
@@ -75,6 +76,27 @@ describe("exclusive admin attention queue classification", () => {
 
     expect(classifyAttentionQueue(r, NOW_MS, SLA_MINUTES)).toBe("unassigned");
     expect(matchingQueues(r)).toEqual(["unassigned"]);
+  });
+
+  it("does not count assigned booking as unassignable when dispatch_status is stale", () => {
+    const r = row({
+      dispatch_status: "unassignable",
+      team_id: "team-1",
+      amount_paid_cents: 50_000,
+    });
+
+    expect(classifyAttentionQueue(r, NOW_MS, SLA_MINUTES)).toBe(null);
+    expect(matchingQueues(r)).toEqual([]);
+  });
+
+  it("team assignment clears unassignable queue", () => {
+    const r = row({
+      dispatch_status: "unassignable",
+      cleaner_id: "cleaner-1",
+      amount_paid_cents: 50_000,
+    });
+
+    expect(classifyAttentionQueue(r, NOW_MS, SLA_MINUTES)).toBe(null);
   });
 
   it("counts match exclusive classification", () => {

@@ -8,6 +8,11 @@ import { useAdminData } from "@/hooks/useAdminData";
 import type { OpsSnapshot } from "@/lib/admin/opsSnapshot";
 import { deriveCleanerAvailabilityState } from "@/lib/cleaner/cleanerAvailabilityState";
 import {
+  computeOfficeTodayScheduleStats,
+  officeScheduleStatusPresentation,
+  type OfficeTodayScheduleStats,
+} from "@/lib/admin/officeTodayScheduleStats";
+import {
   AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
@@ -179,6 +184,18 @@ function severityDot(severity: string): string {
   return "bg-blue-500";
 }
 
+type SystemCheckStatus = "operational" | "degraded" | "down" | "warning";
+
+function resolveSystemCheckStatus(
+  value: SystemCheckStatus | undefined,
+  loading: boolean,
+  hasStats: boolean,
+): SystemCheckStatus | null {
+  if (loading && !hasStats) return null;
+  if (value) return value;
+  return "warning";
+}
+
 function johannesburgTodayYmd(): string {
   const parts = new Intl.DateTimeFormat("en-ZA", {
     timeZone: "Africa/Johannesburg",
@@ -229,7 +246,10 @@ export default function OfficeDashboardPage() {
       location: string | null;
       status: string | null;
       cleaner_id: string | null;
+      selected_cleaner_id?: string | null;
+      team_id?: string | null;
     }>;
+    summary?: OfficeTodayScheduleStats;
     cleaners: Array<{
       id: string;
       full_name: string | null;
@@ -240,24 +260,22 @@ export default function OfficeDashboardPage() {
   }>("/api/admin/schedule/day", { params: { date: todayYmd } });
 
   const todayBookings = scheduleData?.bookings ?? [];
-  const todayStats = {
-    total: todayBookings.length,
-    completed: todayBookings.filter((b) => b.status === "completed").length,
-    inProgress: todayBookings.filter((b) => b.status === "in_progress").length,
-    upcoming: todayBookings.filter((b) => b.status === "assigned" || b.status === "confirmed").length,
-    unassigned: todayBookings.filter((b) => !b.cleaner_id && b.status !== "cancelled" && b.status !== "completed").length,
-  };
+  const todayStats = scheduleData?.summary ?? computeOfficeTodayScheduleStats(todayBookings);
   const activeCleanerIds = new Set(
     todayBookings
-      .filter((b) => b.status === "in_progress" || b.status === "en_route")
-      .map((b) => b.cleaner_id)
-      .filter(Boolean),
+      .filter((b) => {
+        const st = String(b.status ?? "").toLowerCase();
+        return st === "in_progress" || st === "en_route";
+      })
+      .flatMap((b) => [b.cleaner_id, b.selected_cleaner_id].filter(Boolean) as string[]),
   );
   const bookedCleanerIds = new Set(
     todayBookings
-      .filter((b) => b.status === "assigned" || b.status === "confirmed")
-      .map((b) => b.cleaner_id)
-      .filter(Boolean),
+      .filter((b) => {
+        const st = String(b.status ?? "").toLowerCase();
+        return (st === "assigned" || st === "confirmed") && (b.cleaner_id || b.selected_cleaner_id);
+      })
+      .flatMap((b) => [b.cleaner_id, b.selected_cleaner_id].filter(Boolean) as string[]),
   );
   const weekday = weekdayIndexForYmd(todayYmd);
   const cleanerStates = (scheduleData?.cleaners ?? []).map((cleaner) =>
@@ -330,6 +348,33 @@ export default function OfficeDashboardPage() {
   const smsSent = stats?.notificationsToday?.sms.sent ?? 0;
   const smsFailed = stats?.notificationsToday?.sms.failed ?? 0;
 
+  const systemChecks: Array<{
+    name: string;
+    status: SystemCheckStatus | null;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
+    {
+      name: "Website",
+      status: resolveSystemCheckStatus(systemStatus?.website, loading, stats != null),
+      icon: CircleDot,
+    },
+    {
+      name: "Booking engine",
+      status: resolveSystemCheckStatus(systemStatus?.bookingEngine, loading, stats != null),
+      icon: Calendar,
+    },
+    {
+      name: "Payment gateway",
+      status: resolveSystemCheckStatus(systemStatus?.paymentGateway, loading, stats != null),
+      icon: CreditCard,
+    },
+  ];
+  const allSystemsOperational =
+    stats != null &&
+    systemStatus?.website === "operational" &&
+    systemStatus?.bookingEngine === "operational" &&
+    systemStatus?.paymentGateway === "operational";
+
   return (
     <div className="space-y-6">
       {/* ── Page Header ────────────────────────────────────────────────── */}
@@ -376,13 +421,10 @@ export default function OfficeDashboardPage() {
             <p className={cn("mt-1 text-xs font-medium", slaBreachCount > 0 ? "text-red-600" : "text-emerald-600")}>
               {formatOldestBreach(oldestBreachMinutes)}
             </p>
-            <div className="mt-2 h-1 w-full rounded-full bg-red-100">
-              <div className={cn("h-1 rounded-full", slaBreachCount > 0 ? "bg-red-500 w-full" : "bg-emerald-400 w-0")} />
-            </div>
           </Link>
 
           {/* Unassigned */}
-          <Link href="/office/bookings" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
+          <Link href="/office/bookings?filter=unassigned" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", unassignedCount > 0 ? "bg-orange-100" : "bg-emerald-100")}>
                 <Users className={cn("h-4 w-4", unassignedCount > 0 ? "text-orange-600" : "text-emerald-600")} />
@@ -394,13 +436,10 @@ export default function OfficeDashboardPage() {
             <p className={cn("mt-1 text-xs font-medium", unassignedCount > 0 ? "text-orange-600" : "text-emerald-600")}>
               {unassignedCount > 0 ? "Needs attention" : "All clear"}
             </p>
-            <div className="mt-2 h-1 w-full rounded-full bg-orange-100">
-              <div className={cn("h-1 rounded-full", unassignedCount > 0 ? "bg-orange-400 w-4/5" : "bg-emerald-400 w-0")} />
-            </div>
           </Link>
 
           {/* Starting soon */}
-          <Link href="/office/schedule" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
+          <Link href="/office/bookings?filter=starting-soon" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", startingSoonCount > 0 ? "bg-blue-100" : "bg-emerald-100")}>
                 <Clock className={cn("h-4 w-4", startingSoonCount > 0 ? "text-blue-600" : "text-emerald-600")} />
@@ -412,13 +451,10 @@ export default function OfficeDashboardPage() {
             <p className={cn("mt-1 text-xs font-medium", startingSoonCount > 0 ? "text-blue-600" : "text-emerald-600")}>
               {startingSoonCount > 0 ? "Assign now" : "All clear"}
             </p>
-            <div className="mt-2 h-1 w-full rounded-full bg-emerald-100">
-              <div className={cn("h-1 rounded-full", startingSoonCount > 0 ? "bg-blue-500 w-3/5" : "bg-emerald-400 w-0")} />
-            </div>
           </Link>
 
           {/* Unassignable */}
-          <Link href="/office/bookings" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
+          <Link href="/office/bookings?filter=unassignable" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", unassignableCount > 0 ? "bg-red-100" : "bg-emerald-100")}>
                 <CheckCircle2 className={cn("h-4 w-4", unassignableCount > 0 ? "text-red-600" : "text-emerald-600")} />
@@ -430,9 +466,6 @@ export default function OfficeDashboardPage() {
             <p className={cn("mt-1 text-xs font-medium", unassignableCount > 0 ? "text-red-600" : "text-emerald-600")}>
               {unassignableCount > 0 ? "Review dispatch" : "All clear"}
             </p>
-            <div className="mt-2 h-1 w-full rounded-full bg-emerald-100">
-              <div className={cn("h-1 rounded-full", unassignableCount > 0 ? "bg-red-500 w-full" : "bg-emerald-400 w-0")} />
-            </div>
           </Link>
         </div>
       </section>
@@ -464,11 +497,11 @@ export default function OfficeDashboardPage() {
             <Send className="h-4 w-4 text-blue-600" />
             Send notification
           </Link>
-          <button type="button"
+          <Link href="/admin/bookings/create"
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors shadow-sm">
             <TrendingUp className="h-4 w-4" />
             Create booking
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -480,21 +513,21 @@ export default function OfficeDashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             label="Revenue today"
-            value={revenueToday > 0 ? zar(revenueToday) : "—"}
+            value={stats != null ? zar(revenueToday) : loading ? "…" : "—"}
             sub={`Paid bookings: ${stats?.paidBookingsToday ?? 0}`}
             icon={DollarSign}
             iconColor="bg-emerald-50 text-emerald-600"
           />
           <KpiCard
             label="Bookings (30d window)"
-            value={bookings30d > 0 ? bookings30d : "—"}
+            value={stats != null ? bookings30d : loading ? "…" : "—"}
             sub="Revenue-eligible paid bookings"
             icon={BarChart3}
             iconColor="bg-violet-50 text-violet-600"
           />
           <KpiCard
             label="Avg booking value"
-            value={avgBooking > 0 ? zar(avgBooking) : "—"}
+            value={stats != null ? zar(avgBooking) : loading ? "…" : "—"}
             sub="Among paid bookings in window"
             icon={Zap}
             iconColor="bg-orange-50 text-orange-600"
@@ -545,9 +578,13 @@ export default function OfficeDashboardPage() {
                 <p className="text-center text-xs text-slate-400 py-4">No bookings for today.</p>
               ) : (
                 todayBookings.slice(0, 4).map((b) => {
-                  const isUnassigned = !b.cleaner_id && b.status !== "cancelled" && b.status !== "completed";
-                  const statusLabel = isUnassigned ? "Unassigned" : b.status === "completed" ? "Done" : b.status === "in_progress" ? "In progress" : "Assigned";
-                  const statusColor = isUnassigned ? "bg-orange-100 text-orange-700" : b.status === "completed" ? "bg-emerald-100 text-emerald-700" : b.status === "in_progress" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700";
+                  const { label: statusLabel, tone } = officeScheduleStatusPresentation(b);
+                  const statusColor =
+                    tone === "unassigned" ? "bg-orange-100 text-orange-700" :
+                    tone === "completed" ? "bg-emerald-100 text-emerald-700" :
+                    tone === "in_progress" ? "bg-violet-100 text-violet-700" :
+                    tone === "assigned" ? "bg-blue-100 text-blue-700" :
+                    "bg-slate-100 text-slate-700";
                   return (
                     <div key={b.id} className="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5">
                       <span className="w-12 shrink-0 text-xs font-bold text-slate-600">{b.time?.slice(0, 5) ?? "—"}</span>
@@ -702,9 +739,9 @@ export default function OfficeDashboardPage() {
         <section className="lg:col-span-2 rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">Recent activity</h3>
-            <button type="button" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
+            <Link href="/office/notification-logs" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
               View all activity <ChevronRight className="h-3 w-3" />
-            </button>
+            </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -745,18 +782,18 @@ export default function OfficeDashboardPage() {
         <section className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
           <h3 className="mb-4 text-sm font-bold text-slate-800">System status</h3>
           <div className="space-y-2.5">
-            {[
-              { name: "Website", status: systemStatus?.website ?? "operational", icon: CircleDot },
-              { name: "Booking engine", status: systemStatus?.bookingEngine ?? "degraded", icon: Calendar },
-              { name: "Payment gateway", status: systemStatus?.paymentGateway ?? "degraded", icon: CreditCard },
-            ].map((s) => (
+            {systemChecks.map((s) => (
               <div key={s.name} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <s.icon className="h-4 w-4 text-slate-400" />
                   <span className="text-sm font-medium text-slate-700">{s.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <StatusBadge status={s.status as "operational" | "degraded" | "down" | "warning"} />
+                  {s.status ? (
+                    <StatusBadge status={s.status} />
+                  ) : (
+                    <span className="text-xs font-medium text-slate-400">Checking…</span>
+                  )}
                   <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
                 </div>
               </div>
@@ -772,15 +809,18 @@ export default function OfficeDashboardPage() {
           ) : null}
           <div className={cn(
             "mt-4 flex items-center justify-center gap-1.5 rounded-xl border py-2.5",
-            systemStatus?.website === "operational" &&
-              systemStatus?.bookingEngine === "operational" &&
-              systemStatus?.paymentGateway === "operational"
-              ? "bg-emerald-50 border-emerald-100"
-              : "bg-orange-50 border-orange-100",
+            loading && !stats
+              ? "bg-slate-50 border-slate-100"
+              : allSystemsOperational
+                ? "bg-emerald-50 border-emerald-100"
+                : "bg-orange-50 border-orange-100",
           )}>
-            {systemStatus?.website === "operational" &&
-            systemStatus?.bookingEngine === "operational" &&
-            systemStatus?.paymentGateway === "operational" ? (
+            {loading && !stats ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin text-slate-400" />
+                <span className="text-xs font-semibold text-slate-500">Loading system status…</span>
+              </>
+            ) : allSystemsOperational ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 <span className="text-xs font-semibold text-emerald-700">All systems operational</span>
@@ -794,24 +834,6 @@ export default function OfficeDashboardPage() {
           </div>
         </section>
       </div>
-
-      {/* ── Help Footer ─────────────────────────────────────────────────── */}
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm">
-            6.3
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800">Need help or support?</p>
-            <p className="text-xs text-slate-500">Our ops team is here to help you 24/7.</p>
-          </div>
-        </div>
-        <a href="https://wa.me/27825915525" target="_blank" rel="noreferrer"
-          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 transition-colors shadow-sm">
-          <MessageSquare className="h-4 w-4" />
-          Chat on WhatsApp · 082 591 5525
-        </a>
-      </section>
     </div>
   );
 }

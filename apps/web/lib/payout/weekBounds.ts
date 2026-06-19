@@ -29,3 +29,16 @@ export function completionDayYmd(booking: { completed_at?: string | null; date?:
 export function isYmdInInclusiveRange(ymd: string, start: string, end: string): boolean {
   return ymd >= start && ymd <= end;
 }
+
+/** UTC Mon–Sun window containing `ymd` (YYYY-MM-DD). */
+export function getUtcWeekBoundsContainingYmd(ymd: string): { periodStart: string; periodEnd: string } {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  const dow = d.getUTCDay();
+  const daysSinceMonday = (dow + 6) % 7;
+  const monday = new Date(d);
+  monday.setUTCDate(monday.getUTCDate() - daysSinceMonday);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  const fmt = (x: Date) => x.toISOString().slice(0, 10);
+  return { periodStart: fmt(monday), periodEnd: fmt(sunday) };
+}

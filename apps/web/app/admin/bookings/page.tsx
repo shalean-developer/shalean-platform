@@ -1152,25 +1152,35 @@ export default function AdminBookingsPage() {
                       booking={r}
                       bookingId={r.id}
                       cleaners={cleaners}
-                      onDone={({ cleanerId: _assignedCleanerId, assignAttempts }) => {
+                      onDone={({ cleanerId: assignedCleanerId, assignAttempts, direct }) => {
                         setRows((cur) =>
                           cur.map((row) =>
                             row.id === r.id
-                              ? {
-                                  ...row,
-                                  cleaner_id: null,
-                                  status: "pending",
-                                  dispatch_status: "offered",
-                                  assigned_at: null,
-                                }
+                              ? direct
+                                ? {
+                                    ...row,
+                                    cleaner_id: assignedCleanerId,
+                                    status: "assigned",
+                                    dispatch_status: "assigned",
+                                    assigned_at: new Date().toISOString(),
+                                  }
+                                : {
+                                    ...row,
+                                    cleaner_id: null,
+                                    status: "pending",
+                                    dispatch_status: "offered",
+                                    assigned_at: null,
+                                  }
                               : row,
                           ),
                         );
                         setAssignBookingId(null);
                         emitAdminToast(
-                          typeof assignAttempts === "number" && assignAttempts > 1
-                            ? `Offer sent ✓ (after ${assignAttempts} tries)`
-                            : "Offer sent ✓",
+                          direct
+                            ? "Cleaner assigned ✓"
+                            : typeof assignAttempts === "number" && assignAttempts > 1
+                              ? `Offer sent ✓ (after ${assignAttempts} tries)`
+                              : "Offer sent ✓",
                           "success",
                         );
                       }}

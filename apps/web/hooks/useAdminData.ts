@@ -45,6 +45,7 @@ export function useAdminData<T>(
 
       const res = await globalThis.fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
 
       if (!res.ok) {

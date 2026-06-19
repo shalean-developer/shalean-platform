@@ -1,5 +1,5 @@
 /**
- * Single source of truth for Shalean cleaner job payout rules (solo + team per-cleaner fixed).
+ * Single source of truth for Shalean cleaner job payout rules (v3).
  * Pure functions only — no Supabase, no Date.now() for tenure or appointment math.
  *
  * **Rollback:** set `USE_LEGACY_PAYOUT_ENGINE=true` to restore v1 `computeBookingEarnings` (DB caps)
@@ -8,21 +8,27 @@
 
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
+import {
+  buildBookingEarningsSummary,
+  type BookingEarningsSummary,
+} from "@/lib/payout/bookingEarningsSummary";
 
-export const CANONICAL_EARNINGS_MODEL_VERSION = "v2_2026_canonical";
+export const CANONICAL_EARNINGS_MODEL_VERSION = "v3_2026_earnings_rules";
 
 /**
- * @deprecated Use {@link FIXED_SPECIAL_PAYOUT_CENTS} / team per-cleaner semantics; kept for legacy tests imports.
+ * @deprecated Use {@link TEAM_MEMBER_FIXED_PAYOUT_CENTS}; kept for legacy tests imports.
  */
 export const CANONICAL_TEAM_POOL_DISPLAY_CENTS = 25_000;
 
 /** Fixed-price specialised services (catalog ids). */
 const FIXED_CATALOG_IDS = new Set<BookingServiceId>(["deep", "move", "carpet"]);
 
-/** R250 fixed (cents) — solo fixed specials and **each** cleaner on a team job. */
+/** R250 fixed — solo fixed specials and team members on fixed-service jobs. */
 export const FIXED_SPECIAL_PAYOUT_CENTS = 25_000;
+export const TEAM_MEMBER_FIXED_PAYOUT_CENTS = 25_000;
+export const TEAM_LEADER_FIXED_PAYOUT_CENTS = 27_000;
 export const MIN_STANDARD_BASE_PAYOUT_CENTS = 25_000;
-export const MAX_STANDARD_BASE_PAYOUT_CENTS = 35_000;
+export const MAX_STANDARD_BASE_PAYOUT_CENTS = 30_000;
 
 const NEW_CLEANER_RATE = 0.6;
 const EXPERIENCED_CLEANER_RATE = 0.7;
@@ -35,6 +41,13 @@ export type CanonicalPayoutBillingType =
   | "pay_later"
   | (string & {});
 
+export type CanonicalEarningsAdjustment = {
+  cleaner_id: string;
+  amount_cents: number;
+  reason?: string;
+  type?: string;
+};
+
 /**
  * Explicit inputs — callers resolve DB / booking row fields before invoking the engine.
  */
@@ -43,24 +56,36 @@ export type CanonicalPayoutInput = {
   /** Normalised catalog service id (see {@link normalizeBookingServiceIdForPayout}). */
   serviceId: string;
   serviceLabel?: string | null;
-  /** `cleaners.joined_at` preferred; null / empty → junior tenure (0 months). */
+  /** Solo / lead tenure: `cleaners.joined_at` preferred; null → junior (0 months). */
   cleanerJoinedAtIso: string | null;
+  /** Team % jobs: lead cleaner joined_at (falls back to cleanerJoinedAtIso). */
+  teamLeaderJoinedAtIso?: string | null;
   /**
    * Booking appointment instant as ISO-8601 UTC (e.g. `2026-04-20T10:00:00.000Z`).
    * Null / invalid → tenure treated as **0 months** (junior rate) for safety.
    */
   bookingAppointmentIsoUtc: string | null;
-  /** Payout basis in minor units (ZAR cents), already resolved for prepaid vs quoted accrual. */
+  /** Eligible payout basis in minor units (ZAR cents), excludes platform service fee. */
   bookingValueCents: number;
+  /** Full customer total in cents (for company revenue). */
+  customerTotalCents?: number | null;
   billingType?: CanonicalPayoutBillingType | null;
   isTeamJob: boolean;
+  teamId?: string | null;
+  teamLeaderId?: string | null;
+  participantCleanerIds?: string[] | null;
+  rosterRoles?: Array<{ cleaner_id: string; role?: string | null }> | null;
   /**
    * Active cleaners on the team job at appointment time (roster / membership count).
-   * When `isTeamJob`, defaults to **1** if missing or zero so totals stay finite.
+   * When `isTeamJob`, defaults to participant count or **1** if missing.
    */
   teamCleanerCount?: number | null;
-  /** Platform service fee (cents) added to company revenue only. */
+  /** Platform service fee (cents) — included in customer total, not cleaner eligible amount. */
   serviceFeeCents?: number | null;
+  adjustments?: CanonicalEarningsAdjustment[] | null;
+  computedAtIso?: string;
+  /** Solo job assigned cleaner (for earnings_summary participant list). */
+  soloCleanerId?: string | null;
 };
 
 export type CanonicalPayoutDiagnostics = {
@@ -75,41 +100,71 @@ export type CanonicalPayoutDiagnostics = {
   bonus_cents: number;
   final_display_cents: number;
   is_team_job: boolean;
-  payout_mode?: "solo_percentage" | "solo_fixed_special" | "team_per_cleaner_fixed";
+  payout_mode?:
+    | "solo_percentage"
+    | "solo_fixed_special"
+    | "team_percentage_parity"
+    | "team_fixed_with_leader"
+    | "team_per_cleaner_fixed";
   team_cleaner_count?: number;
   booking_total_team_payout_cents?: number;
   payout_per_cleaner_cents?: number;
+  team_leader_payout_cents?: number;
   team_rule_applied?: boolean;
 };
 
 export type CanonicalPayoutResult = {
   /**
-   * Per-cleaner earnings shown on job UIs. Solo: full job earnings. Team: **R250 each** (not N×250).
+   * Per-cleaner earnings shown on job UIs. Solo: full job earnings. Team: per-cleaner base (before explicit bonus).
    */
   displayEarningsCents: number;
   payoutEarningsCents: number;
-  /** Solo: raw % or fixed. Team: **N × R250** total cleaner obligation for reporting / caps. */
+  /** Total cleaner obligation across all participants (incl. explicit bonuses in summary). */
   internalEarningsCents: number;
-  /** Hybrid ledger: capped base paid as `cleaner_payout_cents`. */
+  /** Hybrid ledger: base paid as `cleaner_payout_cents` (solo). */
   cleanerPayoutCents: number;
+  /** Explicit bonuses only — no automatic overflow above cap. */
   cleanerBonusCents: number;
-  /** Excludes service fee; persist adds fee to company column. */
   companyRevenueFromServiceCents: number;
   payoutPercentage: number | null;
-  payoutType: "percentage" | "fixed_special" | "team_per_cleaner_fixed" | "team_pool";
+  payoutType:
+    | "percentage"
+    | "fixed_special"
+    | "team_per_cleaner_fixed"
+    | "team_fixed_with_leader"
+    | "team_percentage_parity"
+    | "team_pool";
   tenureMonths: number;
   fixedServiceOverride: boolean;
   earningsPercentageApplied: number | null;
-  /**
-   * Semantic cap: standard max base; fixed solo / **per-cleaner team** use {@link FIXED_SPECIAL_PAYOUT_CENTS}.
-   */
   earningsCapCentsApplied: number | null;
   earningsModelVersion: string;
   diagnostics: CanonicalPayoutDiagnostics;
+  earningsSummary: BookingEarningsSummary | null;
+  perCleanerBaseCents: Map<string, number>;
 };
 
 export function useLegacyPayoutEngine(): boolean {
   return process.env.USE_LEGACY_PAYOUT_ENGINE === "true";
+}
+
+export function clampStandardEarningCents(rawCents: number): number {
+  const raw = Math.max(0, Math.round(rawCents));
+  return Math.min(Math.max(raw, MIN_STANDARD_BASE_PAYOUT_CENTS), MAX_STANDARD_BASE_PAYOUT_CENTS);
+}
+
+export function resolveTenurePercentage(tenureMonths: number): number {
+  return tenureMonths < TENURE_MONTHS_THRESHOLD ? NEW_CLEANER_RATE : EXPERIENCED_CLEANER_RATE;
+}
+
+export function resolveTenureMonths(
+  cleanerJoinedAtIso: string | null | undefined,
+  bookingAppointmentIsoUtc: string | null | undefined,
+): number {
+  const joined = String(cleanerJoinedAtIso ?? "").trim();
+  const appt = String(bookingAppointmentIsoUtc ?? "").trim();
+  if (!joined || !appt) return 0;
+  return calendarMonthsBetweenCleanerJoinedAndAppointment(joined, appt);
 }
 
 /**
@@ -183,178 +238,309 @@ export function isFixedPayoutSpecial(serviceId: BookingServiceId | null, service
   return false;
 }
 
-/**
- * Team jobs (any service, including deep/move/carpet): **each** active cleaner earns exactly R250.
- * Overrides % / tenure / clamps / roster weights. See {@link FIXED_SPECIAL_PAYOUT_CENTS}.
- */
-export function resolveCanonicalCleanerPayout(input: CanonicalPayoutInput): CanonicalPayoutResult {
-  const serviceId = String(input.serviceId ?? "").trim() || "standard";
-  const total = Math.max(0, Math.floor(Number(input.bookingValueCents) || 0));
-  const fee = Math.max(0, Math.floor(Number(input.serviceFeeCents ?? 0) || 0));
+function uuidClean(id: string | null | undefined): string {
+  const s = String(id ?? "").trim();
+  return /^[0-9a-f-]{36}$/i.test(s) ? s : "";
+}
 
-  if (input.isTeamJob) {
-    const teamCountRaw = Math.floor(Number(input.teamCleanerCount ?? 0) || 0);
-    const teamCount = Math.max(1, teamCountRaw);
-    const per = FIXED_SPECIAL_PAYOUT_CENTS;
-    const totalTeamPayout = per * teamCount;
-    const diag: CanonicalPayoutDiagnostics = {
-      payout_source: "canonical",
-      booking_id: input.bookingId ?? null,
-      service_id: serviceId,
-      tenure_months: 0,
-      payout_percentage: null,
-      fixed_service_override: false,
-      payout_before_clamp_cents: null,
-      payout_after_clamp_cents: null,
-      bonus_cents: 0,
-      final_display_cents: per,
-      is_team_job: true,
-      payout_mode: "team_per_cleaner_fixed",
-      team_cleaner_count: teamCount,
-      booking_total_team_payout_cents: totalTeamPayout,
-      payout_per_cleaner_cents: per,
-      team_rule_applied: true,
-    };
-    return {
-      displayEarningsCents: per,
-      payoutEarningsCents: per,
-      internalEarningsCents: totalTeamPayout,
-      cleanerPayoutCents: 0,
-      cleanerBonusCents: 0,
-      companyRevenueFromServiceCents: Math.max(0, total + fee),
-      payoutPercentage: null,
-      payoutType: "team_per_cleaner_fixed",
-      tenureMonths: 0,
-      fixedServiceOverride: false,
-      earningsPercentageApplied: null,
-      earningsCapCentsApplied: per,
-      earningsModelVersion: CANONICAL_EARNINGS_MODEL_VERSION,
-      diagnostics: diag,
-    };
+function resolveParticipantIds(input: CanonicalPayoutInput): string[] {
+  const fromInput = (input.participantCleanerIds ?? [])
+    .map((id) => uuidClean(id))
+    .filter(Boolean);
+  if (fromInput.length > 0) return [...new Set(fromInput)];
+  if (!input.isTeamJob) {
+    const solo = uuidClean(input.soloCleanerId);
+    return solo ? [solo] : [];
   }
+  const count = Math.max(1, Math.floor(Number(input.teamCleanerCount ?? 0) || 0) || 1);
+  return Array.from({ length: count }, (_, i) => `placeholder-${i}`);
+}
 
-  const sid = serviceId as BookingServiceId | "standard";
-  const fixed = isFixedPayoutSpecialFromNormalizedId(sid);
-  if (fixed) {
-    const payout = FIXED_SPECIAL_PAYOUT_CENTS;
-    const bonus = 0;
-    const display = payout + bonus;
-    const company = Math.max(0, total - payout - bonus);
-    const diag: CanonicalPayoutDiagnostics = {
-      payout_source: "canonical",
-      booking_id: input.bookingId ?? null,
-      service_id: serviceId,
-      tenure_months: 0,
-      payout_percentage: null,
-      fixed_service_override: true,
-      payout_before_clamp_cents: payout,
-      payout_after_clamp_cents: payout,
-      bonus_cents: bonus,
-      final_display_cents: display,
-      is_team_job: false,
-      payout_mode: "solo_fixed_special",
-    };
-    return {
-      displayEarningsCents: display,
-      payoutEarningsCents: display,
-      internalEarningsCents: display,
-      cleanerPayoutCents: payout,
-      cleanerBonusCents: bonus,
-      companyRevenueFromServiceCents: company,
-      payoutPercentage: null,
-      payoutType: "fixed_special",
-      tenureMonths: 0,
-      fixedServiceOverride: true,
-      earningsPercentageApplied: null,
-      earningsCapCentsApplied: FIXED_SPECIAL_PAYOUT_CENTS,
-      earningsModelVersion: CANONICAL_EARNINGS_MODEL_VERSION,
-      diagnostics: diag,
-    };
-  }
+function resolveTeamLeaderId(
+  input: CanonicalPayoutInput,
+  participantIds: string[],
+): string | null {
+  const explicit = uuidClean(input.teamLeaderId);
+  if (explicit && participantIds.includes(explicit)) return explicit;
+  const fromRoster = input.rosterRoles?.find((r) => String(r.role ?? "").toLowerCase() === "lead");
+  const rosterLead = uuidClean(fromRoster?.cleaner_id);
+  if (rosterLead && participantIds.includes(rosterLead)) return rosterLead;
+  return participantIds[0] ?? null;
+}
 
-  const joined = String(input.cleanerJoinedAtIso ?? "").trim();
-  const appt = String(input.bookingAppointmentIsoUtc ?? "").trim();
-  const tenureMonths =
-    joined && appt ? calendarMonthsBetweenCleanerJoinedAndAppointment(joined, appt) : 0;
-  const percentage = tenureMonths < TENURE_MONTHS_THRESHOLD ? NEW_CLEANER_RATE : EXPERIENCED_CLEANER_RATE;
+function computeStandardPercentageEarning(eligibleCents: number, percentage: number): {
+  rawCents: number;
+  clampedCents: number;
+} {
+  const raw = Math.round(Math.max(0, eligibleCents) * percentage);
+  const clamped = eligibleCents <= 0 ? 0 : clampStandardEarningCents(raw);
+  return { rawCents: raw, clampedCents: clamped };
+}
 
-  if (total === 0) {
-    const diag: CanonicalPayoutDiagnostics = {
-      payout_source: "canonical",
-      booking_id: input.bookingId ?? null,
-      service_id: serviceId,
-      tenure_months: tenureMonths,
-      payout_percentage: percentage,
-      fixed_service_override: false,
-      payout_before_clamp_cents: 0,
-      payout_after_clamp_cents: 0,
-      bonus_cents: 0,
-      final_display_cents: 0,
-      is_team_job: false,
-      payout_mode: "solo_percentage",
-    };
-    return {
-      displayEarningsCents: 0,
-      payoutEarningsCents: 0,
-      internalEarningsCents: 0,
-      cleanerPayoutCents: 0,
-      cleanerBonusCents: 0,
-      companyRevenueFromServiceCents: Math.max(0, total + fee),
-      payoutPercentage: percentage,
-      payoutType: "percentage",
-      tenureMonths,
-      fixedServiceOverride: false,
-      earningsPercentageApplied: percentage,
-      earningsCapCentsApplied: MAX_STANDARD_BASE_PAYOUT_CENTS,
-      earningsModelVersion: CANONICAL_EARNINGS_MODEL_VERSION,
-      diagnostics: diag,
-    };
-  }
+function buildResult(params: {
+  input: CanonicalPayoutInput;
+  serviceId: string;
+  eligibleCents: number;
+  customerTotalCents: number;
+  isTeamJob: boolean;
+  fixedService: boolean;
+  tenureMonths: number;
+  percentage: number | null;
+  perCleanerBase: Map<string, number>;
+  payoutMode: CanonicalPayoutDiagnostics["payout_mode"];
+  payoutType: CanonicalPayoutResult["payoutType"];
+  displayCents: number;
+  soloPayoutCents: number;
+  soloBonusCents: number;
+  rawBeforeClamp: number | null;
+  rawAfterClamp: number | null;
+}): CanonicalPayoutResult {
+  const participantIds = [...params.perCleanerBase.keys()].filter((id) => !id.startsWith("placeholder-"));
+  const effectiveParticipants =
+    participantIds.length > 0 ? participantIds : Array.from(params.perCleanerBase.keys());
 
-  /**
-   * Standard: raw % of booking value → clamp [R250, R350] on **base** → payout = min(clampedBase, total);
-   * excess above R350 base becomes bonus (capped by remaining total after base).
-   */
-  const rawPercentageCents = Math.round(total * percentage);
-  const baseBeforeTotalCap = Math.min(
-    Math.max(rawPercentageCents, MIN_STANDARD_BASE_PAYOUT_CENTS),
-    MAX_STANDARD_BASE_PAYOUT_CENTS,
-  );
-  const cleanerPayoutCents = Math.min(baseBeforeTotalCap, total);
-  const rawBonusCents = Math.max(0, rawPercentageCents - MAX_STANDARD_BASE_PAYOUT_CENTS);
-  const cleanerBonusCents = Math.min(rawBonusCents, Math.max(0, total - cleanerPayoutCents));
-  const displayEarningsCents = cleanerPayoutCents + cleanerBonusCents;
-  const companyRevenueFromServiceCents = Math.max(0, total - cleanerPayoutCents - cleanerBonusCents);
+  const teamLeaderId = params.isTeamJob ? resolveTeamLeaderId(params.input, effectiveParticipants) : null;
+
+  const summary = buildBookingEarningsSummary({
+    serviceType: params.serviceId,
+    customerTotalCents: params.customerTotalCents,
+    eligibleAmountCents: params.eligibleCents,
+    isTeamJob: params.isTeamJob,
+    teamId: params.input.teamId,
+    teamLeaderId,
+    participantCleanerIds: effectiveParticipants,
+    rosterRoles: params.input.rosterRoles,
+    perCleanerBaseCents: params.perCleanerBase,
+    adjustments: params.input.adjustments,
+    tenureMonths: params.fixedService && !params.isTeamJob ? null : params.tenureMonths,
+    cleanerPercentage: params.percentage,
+    fixedServicePayoutApplied: params.fixedService,
+    minimumEarningCents: MIN_STANDARD_BASE_PAYOUT_CENTS,
+    maximumEarningCents: MAX_STANDARD_BASE_PAYOUT_CENTS,
+    costsCents: 0,
+    computedAtIso: params.input.computedAtIso,
+  });
+
+  const explicitBonusTotal = summary.bonus.total_cents;
+  const soloRow = !params.isTeamJob ? summary.per_cleaner_earnings[0] : null;
 
   const diag: CanonicalPayoutDiagnostics = {
     payout_source: "canonical",
-    booking_id: input.bookingId ?? null,
-    service_id: serviceId,
-    tenure_months: tenureMonths,
-    payout_percentage: percentage,
-    fixed_service_override: false,
-    payout_before_clamp_cents: rawPercentageCents,
-    payout_after_clamp_cents: cleanerPayoutCents,
-    bonus_cents: cleanerBonusCents,
-    final_display_cents: displayEarningsCents,
-    is_team_job: false,
-    payout_mode: "solo_percentage",
+    booking_id: params.input.bookingId ?? null,
+    service_id: params.serviceId,
+    tenure_months: params.tenureMonths,
+    payout_percentage: params.percentage,
+    fixed_service_override: params.fixedService,
+    payout_before_clamp_cents: params.rawBeforeClamp,
+    payout_after_clamp_cents: params.rawAfterClamp,
+    bonus_cents: explicitBonusTotal,
+    final_display_cents: params.displayCents,
+    is_team_job: params.isTeamJob,
+    payout_mode: params.payoutMode,
+    team_cleaner_count: params.isTeamJob ? effectiveParticipants.length : undefined,
+    booking_total_team_payout_cents: params.isTeamJob ? summary.total_cleaner_earnings_cents : undefined,
+    payout_per_cleaner_cents: params.isTeamJob ? params.displayCents : undefined,
+    team_leader_payout_cents:
+      params.isTeamJob && teamLeaderId
+        ? (params.perCleanerBase.get(teamLeaderId) ?? null)
+        : undefined,
+    team_rule_applied: params.isTeamJob,
   };
 
+  const displayCents = soloRow?.total_cents ?? params.displayCents;
+  const soloPayoutCents = soloRow?.base_earning_cents ?? params.soloPayoutCents;
+  const soloBonusCents = soloRow?.bonus_cents ?? params.soloBonusCents;
+
   return {
-    displayEarningsCents,
-    payoutEarningsCents: displayEarningsCents,
-    internalEarningsCents: rawPercentageCents,
-    cleanerPayoutCents,
-    cleanerBonusCents,
-    companyRevenueFromServiceCents,
-    payoutPercentage: percentage,
-    payoutType: "percentage",
-    tenureMonths,
-    fixedServiceOverride: false,
-    earningsPercentageApplied: percentage,
-    earningsCapCentsApplied: MAX_STANDARD_BASE_PAYOUT_CENTS,
+    displayEarningsCents: displayCents,
+    payoutEarningsCents: displayCents,
+    internalEarningsCents: summary.total_cleaner_earnings_cents,
+    cleanerPayoutCents: params.isTeamJob ? 0 : soloPayoutCents,
+    cleanerBonusCents: params.isTeamJob ? 0 : soloBonusCents,
+    companyRevenueFromServiceCents: summary.company_revenue_cents,
+    payoutPercentage: params.percentage,
+    payoutType: params.payoutType,
+    tenureMonths: params.tenureMonths,
+    fixedServiceOverride: params.fixedService,
+    earningsPercentageApplied: params.percentage,
+    earningsCapCentsApplied: params.fixedService
+      ? TEAM_MEMBER_FIXED_PAYOUT_CENTS
+      : MAX_STANDARD_BASE_PAYOUT_CENTS,
     earningsModelVersion: CANONICAL_EARNINGS_MODEL_VERSION,
     diagnostics: diag,
+    earningsSummary: summary,
+    perCleanerBaseCents: params.perCleanerBase,
   };
+}
+
+/**
+ * v3 Shalean cleaner earnings rules — solo, team fixed-service (leader uplift), team % parity.
+ */
+export function resolveCanonicalCleanerPayout(input: CanonicalPayoutInput): CanonicalPayoutResult {
+  const serviceId = String(input.serviceId ?? "").trim() || "standard";
+  const eligibleCents = Math.max(0, Math.floor(Number(input.bookingValueCents) || 0));
+  const fee = Math.max(0, Math.floor(Number(input.serviceFeeCents ?? 0) || 0));
+  const customerTotalCents = Math.max(
+    0,
+    Math.floor(Number(input.customerTotalCents ?? 0) || eligibleCents + fee),
+  );
+  const sid = serviceId as BookingServiceId | "standard";
+  const fixedService = isFixedPayoutSpecialFromNormalizedId(sid);
+  const participantIds = resolveParticipantIds(input);
+  const teamLeaderId = input.isTeamJob ? resolveTeamLeaderId(input, participantIds) : null;
+
+  if (input.isTeamJob) {
+    const realIds = participantIds.filter((id) => !id.startsWith("placeholder-"));
+    const effectiveIds =
+      realIds.length > 0
+        ? realIds
+        : Array.from({ length: Math.max(1, Math.floor(Number(input.teamCleanerCount ?? 0) || 0) || 1) }, (_, i) =>
+            `placeholder-${i}`,
+          );
+    const leaderId = resolveTeamLeaderId(input, effectiveIds.filter((id) => !id.startsWith("placeholder-"))) ?? teamLeaderId;
+    const perCleanerBase = new Map<string, number>();
+
+    if (fixedService) {
+      for (const cid of effectiveIds) {
+        if (cid.startsWith("placeholder-")) continue;
+        const isLead = leaderId != null && cid === leaderId;
+        perCleanerBase.set(cid, isLead ? TEAM_LEADER_FIXED_PAYOUT_CENTS : TEAM_MEMBER_FIXED_PAYOUT_CENTS);
+      }
+      if (perCleanerBase.size === 0) {
+        const count = Math.max(1, effectiveIds.length);
+        for (let i = 0; i < count; i++) {
+          perCleanerBase.set(`placeholder-${i}`, i === 0 ? TEAM_LEADER_FIXED_PAYOUT_CENTS : TEAM_MEMBER_FIXED_PAYOUT_CENTS);
+        }
+      }
+      const displayCents = TEAM_MEMBER_FIXED_PAYOUT_CENTS;
+      return buildResult({
+        input,
+        serviceId,
+        eligibleCents,
+        customerTotalCents,
+        isTeamJob: true,
+        fixedService: true,
+        tenureMonths: 0,
+        percentage: null,
+        perCleanerBase,
+        payoutMode: "team_fixed_with_leader",
+        payoutType: "team_fixed_with_leader",
+        displayCents,
+        soloPayoutCents: 0,
+        soloBonusCents: 0,
+        rawBeforeClamp: null,
+        rawAfterClamp: null,
+      });
+    }
+
+    const leadJoined =
+      String(input.teamLeaderJoinedAtIso ?? input.cleanerJoinedAtIso ?? "").trim() || null;
+    const tenureMonths = resolveTenureMonths(leadJoined, input.bookingAppointmentIsoUtc);
+    const percentage = resolveTenurePercentage(tenureMonths);
+    const { rawCents, clampedCents } = computeStandardPercentageEarning(eligibleCents, percentage);
+
+    for (const cid of effectiveIds) {
+      if (!cid.startsWith("placeholder-")) {
+        perCleanerBase.set(cid, clampedCents);
+      }
+    }
+    if (perCleanerBase.size === 0) {
+      const count = Math.max(1, effectiveIds.length);
+      for (let i = 0; i < count; i++) {
+        perCleanerBase.set(`placeholder-${i}`, clampedCents);
+      }
+    }
+
+    return buildResult({
+      input,
+      serviceId,
+      eligibleCents,
+      customerTotalCents,
+      isTeamJob: true,
+      fixedService: false,
+      tenureMonths,
+      percentage,
+      perCleanerBase,
+      payoutMode: "team_percentage_parity",
+      payoutType: "team_percentage_parity",
+      displayCents: clampedCents,
+      soloPayoutCents: 0,
+      soloBonusCents: 0,
+      rawBeforeClamp: rawCents,
+      rawAfterClamp: clampedCents,
+    });
+  }
+
+  if (fixedService) {
+    const soloId = uuidClean(input.soloCleanerId) || "solo";
+    const perCleanerBase = new Map<string, number>([[soloId, FIXED_SPECIAL_PAYOUT_CENTS]]);
+    return buildResult({
+      input,
+      serviceId,
+      eligibleCents,
+      customerTotalCents,
+      isTeamJob: false,
+      fixedService: true,
+      tenureMonths: 0,
+      percentage: null,
+      perCleanerBase,
+      payoutMode: "solo_fixed_special",
+      payoutType: "fixed_special",
+      displayCents: FIXED_SPECIAL_PAYOUT_CENTS,
+      soloPayoutCents: FIXED_SPECIAL_PAYOUT_CENTS,
+      soloBonusCents: 0,
+      rawBeforeClamp: FIXED_SPECIAL_PAYOUT_CENTS,
+      rawAfterClamp: FIXED_SPECIAL_PAYOUT_CENTS,
+    });
+  }
+
+  const tenureMonths = resolveTenureMonths(input.cleanerJoinedAtIso, input.bookingAppointmentIsoUtc);
+  const percentage = resolveTenurePercentage(tenureMonths);
+
+  if (eligibleCents === 0) {
+    const soloId = uuidClean(input.soloCleanerId) || "solo";
+    const perCleanerBase = new Map<string, number>([[soloId, 0]]);
+    return buildResult({
+      input,
+      serviceId,
+      eligibleCents,
+      customerTotalCents,
+      isTeamJob: false,
+      fixedService: false,
+      tenureMonths,
+      percentage,
+      perCleanerBase,
+      payoutMode: "solo_percentage",
+      payoutType: "percentage",
+      displayCents: 0,
+      soloPayoutCents: 0,
+      soloBonusCents: 0,
+      rawBeforeClamp: 0,
+      rawAfterClamp: 0,
+    });
+  }
+
+  const { rawCents, clampedCents } = computeStandardPercentageEarning(eligibleCents, percentage);
+  const soloPayout = Math.min(clampedCents, eligibleCents);
+  const soloId = uuidClean(input.soloCleanerId) || "solo";
+  const perCleanerBase = new Map<string, number>([[soloId, soloPayout]]);
+
+  return buildResult({
+    input,
+    serviceId,
+    eligibleCents,
+    customerTotalCents,
+    isTeamJob: false,
+    fixedService: false,
+    tenureMonths,
+    percentage,
+    perCleanerBase,
+    payoutMode: "solo_percentage",
+    payoutType: "percentage",
+    displayCents: soloPayout,
+    soloPayoutCents: soloPayout,
+    soloBonusCents: 0,
+    rawBeforeClamp: rawCents,
+    rawAfterClamp: soloPayout,
+  });
 }

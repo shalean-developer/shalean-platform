@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -26,8 +27,9 @@ type OfficeDeleteBookingDialogProps = {
   open: boolean;
   booking: OfficeDeleteBookingTarget | null;
   busy?: boolean;
+  errorMessage?: string | null;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: () => boolean | Promise<boolean>;
 };
 
 const BLOCKED_REASONS = [
@@ -41,9 +43,12 @@ export function OfficeDeleteBookingDialog({
   open,
   booking,
   busy = false,
+  errorMessage = null,
   onOpenChange,
   onConfirm,
 }: OfficeDeleteBookingDialogProps) {
+  const [confirming, setConfirming] = useState(false);
+  const isBusy = busy || confirming;
   const customer = booking?.customer_name ?? booking?.customer_email ?? "Unknown customer";
   const service = (booking?.service_slug ?? booking?.service ?? "service").replace(/-/g, " ");
   const when =
@@ -51,8 +56,19 @@ export function OfficeDeleteBookingDialog({
       ? `${booking.date}${booking.time ? ` · ${booking.time.slice(0, 5)}` : ""}`
       : "Date not set";
 
+  async function handleConfirm() {
+    if (!booking || isBusy) return;
+    setConfirming(true);
+    try {
+      const ok = await onConfirm();
+      if (ok) onOpenChange(false);
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !isBusy && onOpenChange(next)}>
       <DialogContent hideClose className="max-w-md border-slate-200 p-0 dark:border-slate-800">
         <div className="border-b border-slate-100 px-6 py-5 dark:border-slate-800">
           <DialogHeader className="space-y-3 text-left">
@@ -84,6 +100,13 @@ export function OfficeDeleteBookingDialog({
               ) : null}
             </div>
 
+            {errorMessage ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+                <p className="text-sm font-semibold text-red-800 dark:text-red-200">Cannot delete this booking</p>
+                <p className="mt-1 text-xs leading-relaxed text-red-700 dark:text-red-300">{errorMessage}</p>
+              </div>
+            ) : null}
+
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
               <div className="flex gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
@@ -103,7 +126,7 @@ export function OfficeDeleteBookingDialog({
         <DialogFooter className="gap-2 border-t border-slate-100 px-6 py-4 sm:justify-end dark:border-slate-800">
           <button
             type="button"
-            disabled={busy}
+            disabled={isBusy}
             onClick={() => onOpenChange(false)}
             className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           >
@@ -111,14 +134,14 @@ export function OfficeDeleteBookingDialog({
           </button>
           <button
             type="button"
-            disabled={busy || !booking}
-            onClick={onConfirm}
+            disabled={isBusy || !booking}
+            onClick={() => void handleConfirm()}
             className={cn(
               "inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50",
             )}
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
-            {busy ? "Deleting…" : "Delete permanently"}
+            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+            {isBusy ? "Deleting…" : "Delete permanently"}
           </button>
         </DialogFooter>
       </DialogContent>

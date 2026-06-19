@@ -25,6 +25,7 @@ export type OpsSnapshotRow = {
   date: string | null;
   time: string | null;
   cleaner_id: string | null;
+  team_id?: string | null;
   dispatch_status: string | null;
   became_pending_at?: string | null;
   created_at: string | null;
@@ -68,6 +69,12 @@ function isPaid(r: OpsSnapshotRow): boolean {
   return zar(r) > 0;
 }
 
+function hasAssignment(r: OpsSnapshotRow): boolean {
+  if (String(r.cleaner_id ?? "").trim()) return true;
+  if (String(r.team_id ?? "").trim()) return true;
+  return false;
+}
+
 function isClosedStatus(status: string | null): boolean {
   const st = String(status ?? "").toLowerCase();
   return st === "completed" || st === "cancelled" || st === "failed" || st === "payment_expired";
@@ -89,7 +96,7 @@ function startsInMinutesFromNow(date: string | null, time: string | null, nowMs:
 function isSlaBreachRow(r: OpsSnapshotRow, nowMs: number, slaMinutes: number): boolean {
   const st = String(r.status ?? "").toLowerCase();
   if (st !== "pending") return false;
-  if (r.cleaner_id) return false;
+  if (hasAssignment(r)) return false;
   const ds = String(r.dispatch_status ?? "").toLowerCase();
   if (ds !== "searching" && ds !== "offered") return false;
   const eff = effectivePendingClockIso(r);
@@ -112,10 +119,10 @@ export function classifyAttentionQueue(
   if (st === "pending_payment") return null;
 
   const ds = String(r.dispatch_status ?? "").toLowerCase();
-  const noCleaner = !r.cleaner_id;
+  const noCleaner = !hasAssignment(r);
 
   if (isSlaBreachRow(r, nowMs, slaMinutes)) return "sla";
-  if (ds === "unassignable") return "unassignable";
+  if (ds === "unassignable" && noCleaner) return "unassignable";
   if (noCleaner && isPaid(r)) return "unassigned";
   if (noCleaner) {
     const startsIn = startsInMinutesFromNow(r.date, r.time, nowMs);

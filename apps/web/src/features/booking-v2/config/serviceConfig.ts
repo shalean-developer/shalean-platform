@@ -763,4 +763,4 @@ export const TEAMS = [
   { id: "team-3", name: "Team 3" },
 ] as const;
 
-export const MAX_TEAM_BOOKINGS_PER_DAY = 3;
+export { MAX_TEAM_BOOKINGS_PER_DAY } from "@/lib/dispatch/teamJobsPerDay";

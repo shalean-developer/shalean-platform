@@ -15,10 +15,17 @@ function baseBooking(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: bookingId,
     date: "2026-06-01",
+    time: "09:00",
     service: "deep cleaning",
+    booking_snapshot: { locked: { service: "deep" } },
+    base_amount_cents: 90_000,
+    service_fee_cents: 0,
+    total_paid_cents: 90_000,
+    amount_paid_cents: 90_000,
     team_id: null as string | null,
     is_team_job: false,
     status: "pending",
+    payout_owner_cleaner_id: null as string | null,
     ...overrides,
   };
 }
@@ -57,9 +64,17 @@ function createMockAdmin(opts: {
   team?: ReturnType<typeof baseTeam>;
   members?: Array<{ cleaner_id: string; active_from: string; active_to: string | null }>;
   slotCount?: number;
+  slotUsageCount?: number;
   oldTeamCapacityRow?: { capacity_per_day: number };
 }) {
-  const { booking, team = baseTeam(), members = twoMembers, slotCount = 0, oldTeamCapacityRow } = opts;
+  const {
+    booking,
+    team = baseTeam(),
+    members = twoMembers,
+    slotCount = 0,
+    slotUsageCount = 0,
+    oldTeamCapacityRow,
+  } = opts;
   let bookingsFrom = 0;
   let teamsFrom = 0;
 
@@ -68,6 +83,9 @@ function createMockAdmin(opts: {
       return { data: true, error: null };
     }
     if (name === "assign_team_and_sync_roster") {
+      (booking as Record<string, unknown>).team_id = newTeamId;
+      (booking as Record<string, unknown>).is_team_job = true;
+      (booking as Record<string, unknown>).payout_owner_cleaner_id = members[0]!.cleaner_id;
       bookingUpdates.push({ rpc: name, args: args ?? {} });
       return { data: { ok: true, variant: (args as { p_variant?: string })?.p_variant ?? "admin" }, error: null };
     }
@@ -85,43 +103,34 @@ function createMockAdmin(opts: {
     from: vi.fn((table: string) => {
       if (table === "bookings") {
         bookingsFrom += 1;
+        const withUpdate = (client: Record<string, unknown>) => ({
+          ...client,
+          update: () => ({
+            eq: () => Promise.resolve({ error: null }),
+          }),
+        });
         if (bookingsFrom === 1) {
-          return {
+          return withUpdate({
             select: () => ({
               eq: () => ({
                 maybeSingle: () => Promise.resolve({ data: booking, error: null }),
               }),
             }),
-          };
+          });
         }
         if (bookingsFrom === 2) {
-          return countChain(slotCount);
+          return withUpdate(countChain(0) as Record<string, unknown>);
         }
-        // M-8: `performAdminAssignTeam` calls
-        // `triggerAssignmentEarningsSnapshotForBooking` after the team
-        // mutation has been persisted (see `performAdminAssignTeam.ts`
-        // line 310). That helper fans out into BOTH:
-        //   1) `triggerPersistCleanerPayoutIfCompleted` — selects
-        //      `status, cleaner_id, payout_owner_cleaner_id, is_team_job`;
-        //      no-ops unless `status === 'completed'`.
-        //   2) `triggerPersistMonthlyAssignedDisplayEarnings` — selects
-        //      `status, cleaner_id, payout_owner_cleaner_id, is_team_job,
-        //      billing_type, is_monthly_billing_booking, monthly_invoice_id`;
-        //      no-ops unless `status` is `assigned` / `in_progress` AND the
-        //      booking is monthly-managed.
-        // The base test booking has `status: "pending"` (and no monthly
-        // markers), so returning the same row makes both triggers fall
-        // straight through to their early-return guard without performing
-        // any additional DB work — preserving M-8 semantics (the trigger
-        // STILL fires) without forcing this unit test to model the entire
-        // earnings-snapshot pipeline.
-        return {
+        if (bookingsFrom === 3) {
+          return withUpdate(countChain(slotCount) as Record<string, unknown>);
+        }
+        return withUpdate({
           select: () => ({
             eq: () => ({
               maybeSingle: () => Promise.resolve({ data: booking, error: null }),
             }),
           }),
-        };
+        });
       }
       if (table === "teams") {
         teamsFrom += 1;
@@ -166,6 +175,13 @@ function createMockAdmin(opts: {
                 })),
                 error: null,
               }),
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({
+                  data: { joined_at: "2025-01-01T00:00:00.000Z", created_at: "2025-01-01T00:00:00.000Z" },
+                  error: null,
+                }),
+            }),
           }),
         };
       }
@@ -212,6 +228,26 @@ function createMockAdmin(opts: {
             assignmentInserts.push(row);
             return Promise.resolve({ error: null });
           },
+        };
+      }
+      if (table === "cleaner_earnings_adjustments") {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: [], error: null }),
+          }),
+        };
+      }
+      if (table === "team_daily_capacity_usage") {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: (_col: string, ids: string[]) =>
+                Promise.resolve({
+                  data: ids.map((team_id) => ({ team_id, used_slots: slotUsageCount })),
+                  error: null,
+                }),
+            }),
+          }),
         };
       }
       throw new Error("unexpected table " + table);
@@ -262,9 +298,11 @@ describe("performAdminAssignTeam", () => {
     const rows = payoutInserts[0] as Array<{ cleaner_id: string; payout_cents: number; team_id: string }>;
     expect(rows).toHaveLength(2);
     const sum = rows.reduce((s, r) => s + r.payout_cents, 0);
-    expect(sum).toBe(50_000);
+    expect(sum).toBe(52_000);
     expect(rows.every((r) => r.team_id === newTeamId)).toBe(true);
-    expect(rows.every((r) => r.payout_cents === 25_000)).toBe(true);
+    const byCleaner = new Map(rows.map((r) => [r.cleaner_id, r.payout_cents]));
+    expect(byCleaner.get(twoMembers[0]!.cleaner_id)).toBe(27_000);
+    expect(byCleaner.get(twoMembers[1]!.cleaner_id)).toBe(25_000);
     expect(vi.mocked(logSystemEvent)).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "ADMIN_TEAM_OVERRIDE",
@@ -324,7 +362,7 @@ describe("performAdminAssignTeam", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.httpStatus).toBe(400);
-      expect(res.error).toMatch(/no active members/i);
+      expect(res.error).toMatch(/at least 2 active members/i);
     }
   });
 

@@ -3,6 +3,7 @@ import { assignDispatchTeamAndSyncRoster } from "@/lib/booking/teamAssignmentBoo
 import { loadCleanerCapabilityColumnsById } from "@/lib/booking/cleanerServiceCapabilityDb";
 import type { ServiceCapabilityGate } from "@/lib/booking/serviceCapabilityEligibility";
 import {
+  countCleanersPassingServiceCapabilityGate,
   activeRosterHasServiceQualifiedMember,
   cleanerPassesServiceCapabilityGate,
   serviceCapabilityGateFromTeamServiceType,
@@ -10,6 +11,7 @@ import {
 import { countActiveTeamMembersOnDate, isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
+import { teamJobSlotsPerTeamPerDay, countPlatformTeamJobsOnDate, MAX_TEAM_BOOKINGS_PER_DAY, TEAM_MIN_ROSTER_MEMBERS } from "@/lib/dispatch/teamJobsPerDay";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
@@ -30,9 +32,9 @@ type TeamRow = {
   capacity_per_day: number;
 };
 
-/** Hard floor for `capacity_per_day` when scoring or comparing load (avoids divide-by-zero / NaN). */
-function teamDayCapacitySlots(team: Pick<TeamRow, "capacity_per_day">): number {
-  return Math.max(1, Number(team.capacity_per_day ?? 0) || 0);
+/** Fixed per-team job slot limit (see {@link teamJobSlotsPerTeamPerDay}). */
+function teamDayJobSlots(_team?: Pick<TeamRow, "capacity_per_day">): number {
+  return teamJobSlotsPerTeamPerDay();
 }
 
 export type TeamAssignResult =
@@ -123,7 +125,7 @@ function buildCandidateSample(candidates: TeamCandidate[]) {
   return candidates.slice(0, 5).map((c) => ({
     id: c.id,
     load: c.assignedJobsToday,
-    remaining: teamDayCapacitySlots(c) - c.slotLoadForCapacity,
+    remaining: teamDayJobSlots(c) - c.slotLoadForCapacity,
     roster: c.rosterSnapshot,
   }));
 }
@@ -283,8 +285,15 @@ async function fetchTeamRosterSnapshots(
   const out = new Map<string, number>();
   for (const tid of teamIds) {
     const ids = activeIdsByTeam.get(tid) ?? [];
+    const qualifiedCount =
+      ids.length > 0 && capabilityGate
+        ? countCleanersPassingServiceCapabilityGate(ids, capMap, capabilityGate)
+        : ids.length;
     const n =
-      ids.length > 0 && activeRosterHasServiceQualifiedMember(ids, capMap, capabilityGate) ? ids.length : 0;
+      qualifiedCount >= TEAM_MIN_ROSTER_MEMBERS &&
+      activeRosterHasServiceQualifiedMember(ids, capMap, capabilityGate)
+        ? qualifiedCount
+        : 0;
     out.set(tid, n);
   }
   return out;
@@ -301,7 +310,7 @@ function sortTeamCandidates(
   slotLoadWeight: number,
   slotLoadNormalizeByCapacity: boolean,
 ): TeamCandidate[] {
-  const cap = (t: TeamRow) => teamDayCapacitySlots(t);
+  const cap = (t: TeamRow) => teamDayJobSlots(t);
   const rows: TeamCandidate[] = [];
   for (const t of teams) {
     const rosterSnapshot = roster.get(t.id) ?? 0;
@@ -343,7 +352,7 @@ function tieBucketHashSeed(bookingId: string, dateYmd: string, bucketKey: string
 }
 
 function applyDeterministicTieSpread(candidates: TeamCandidate[], bookingId: string, dateYmd: string): TeamCandidate[] {
-  const cap = (t: TeamRow) => teamDayCapacitySlots(t);
+  const cap = (t: TeamRow) => teamDayJobSlots(t);
   const rem = (c: TeamCandidate) => cap(c) - c.slotLoadForCapacity;
   const out: TeamCandidate[] = [];
   let i = 0;
@@ -380,7 +389,7 @@ async function finalizeBookingTeamAssignment(
   selected: TeamCandidate,
   serviceType: string,
 ): Promise<TeamFinalizeResult> {
-  const capacity = teamDayCapacitySlots(selected);
+  const capacity = teamDayJobSlots(selected);
   let claimRpcCallCount = 0;
   let capacityBackoffCount = 0;
   let claimedOk = false;
@@ -607,6 +616,18 @@ export async function assignTeamToBooking(
     return { ok: false, error: "db_error", message: "Booking date missing for team capacity check." };
   }
 
+  const { count: platformUsed, error: platformErr } = await countPlatformTeamJobsOnDate(supabase, dateYmd);
+  if (platformErr) return { ok: false, error: "db_error", message: platformErr.message };
+  if (platformUsed >= MAX_TEAM_BOOKINGS_PER_DAY) {
+    void logSystemEvent({
+      level: "warn",
+      source: "TEAM_ASSIGNMENT_NO_CANDIDATES",
+      message: "Daily platform team booking limit reached",
+      context: { bookingId: booking.id, bookingDate: dateYmd, platformUsed, limit: MAX_TEAM_BOOKINGS_PER_DAY },
+    });
+    return { ok: false, error: "no_candidate", message: "Daily team booking limit reached." };
+  }
+
   const tAllocStart = performance.now();
 
   const { data: teamsRaw, error: tErr } = await supabase
@@ -654,7 +675,7 @@ export async function assignTeamToBooking(
   const teamsWithRoster = teamRows.filter((t) => (roster.get(t.id) ?? 0) > 0);
   const atCapacityTeamCount = teamsWithRoster.filter((t) => {
     const slot = agg.slotLoadByTeam.get(t.id) ?? 0;
-    return slot >= teamDayCapacitySlots(t);
+    return slot >= teamDayJobSlots(t);
   }).length;
 
   if (teamsWithRoster.length > 0 && atCapacityTeamCount === teamsWithRoster.length) {
@@ -906,7 +927,7 @@ export async function assignSpecificTeamToPendingBooking(
 
   const candidate: TeamCandidate = {
     id: String((teamRow as { id: string }).id),
-    capacity_per_day: Number((teamRow as { capacity_per_day?: number | null }).capacity_per_day ?? 1) || 1,
+    capacity_per_day: teamJobSlotsPerTeamPerDay(),
     rosterSnapshot,
     assignedJobsToday: 0,
     slotLoadForCapacity: 0,

@@ -40,15 +40,19 @@ function buildRecordingSupabase(opts: {
         };
       }
       if (table === "bookings") {
+        const activeData = Array.from({ length: opts.activeBookings }, (_, i) => ({ id: `b-${i}` }));
+        const chain = {
+          eq: () => chain,
+          in: () => chain,
+          limit: async () => ({ data: activeData, error: null }),
+        };
+        return { select: () => chain };
+      }
+      if (table === "booking_cleaners") {
         return {
           select: () => ({
             eq: () => ({
-              in: () => ({
-                limit: async () => ({
-                  data: Array.from({ length: opts.activeBookings }, (_, i) => ({ id: `b-${i}` })),
-                  error: null,
-                }),
-              }),
+              limit: async () => ({ data: [], error: null }),
             }),
           }),
         };

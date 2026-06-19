@@ -24,17 +24,35 @@ export async function GET(request: Request) {
   const hasDiscountLines = ["1", "true", "yes"].includes((searchParams.get("has_discounts") ?? "").toLowerCase());
   const hasMissedVisitLines = ["1", "true", "yes"].includes((searchParams.get("has_service_issues") ?? "").toLowerCase());
 
+  const pageParam = searchParams.get("page");
+  const monthsPerPageParam = searchParams.get("monthsPerPage") ?? searchParams.get("pageSize");
+  const page =
+    pageParam != null && pageParam !== ""
+      ? Math.max(1, Number.parseInt(pageParam, 10) || 1)
+      : undefined;
+  const monthsPerPage =
+    page != null
+      ? Math.max(1, Math.min(12, Number.parseInt(monthsPerPageParam ?? "3", 10) || 3))
+      : undefined;
+
   const list = await loadAdminInvoiceList(admin, {
     search,
     statusFilter,
     balanceGt0Only,
     hasDiscountLines: hasDiscountLines || undefined,
     hasMissedVisitLines: hasMissedVisitLines || undefined,
+    page,
+    monthsPerPage,
   });
   if (!list.ok) return NextResponse.json({ error: list.error }, { status: 500 });
 
   return NextResponse.json(
-    { invoices: list.rows },
+    {
+      invoices: list.rows,
+      ...(list.monthGroups ? { monthGroups: list.monthGroups } : {}),
+      ...(list.pagination ? { pagination: list.pagination } : {}),
+      ...(list.summary ? { summary: list.summary } : {}),
+    },
     { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
   );
 }

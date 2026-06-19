@@ -44,7 +44,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, service, service_slug, booking_snapshot")
+    .select("id, date, service, service_slug, booking_snapshot, is_team_job")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
@@ -70,6 +70,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       service: string | null;
       service_slug?: string | null;
       booking_snapshot?: unknown;
+      is_team_job?: boolean | null;
     },
   );
   if (error) return NextResponse.json({ error }, { status: 400 });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -11,16 +11,25 @@ import {
   Download,
   Eye,
   UserCheck,
+  Users,
   XCircle,
   RefreshCw,
   Loader2,
   AlertCircle,
   Trash2,
+  X,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 import { AdminDashboardActionError, deleteBookingAdmin } from "@/lib/admin/dashboard";
+import {
+  canHardDeleteBooking,
+  hardDeleteBlockReason,
+} from "@/lib/admin/bookingHardDeleteClient";
 import { OfficeDeleteBookingDialog } from "@/components/admin/office/OfficeDeleteBookingDialog";
+import { OfficeAssignTeamDialog } from "@/components/admin/office/OfficeAssignTeamDialog";
+import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   confirmed:       { label: "Confirmed",       className: "bg-blue-100 text-blue-700" },
@@ -47,6 +56,13 @@ type BookingRow = {
   cleaner_id: string | null;
   team_id: string | null;
   payment_status: string | null;
+  payment_completed_at?: string | null;
+  paid_at?: string | null;
+  monthly_invoice_id?: string | null;
+  payout_id?: string | null;
+  payout_status?: string | null;
+  payout_frozen_cents?: number | null;
+  display_earnings_cents?: number | null;
   team?: { id: string; name: string | null } | null;
   booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
 };
@@ -80,6 +96,63 @@ type AdminBookingsResponse = {
 
 const ALL_STATUSES = ["confirmed", "assigned", "in_progress", "completed", "cancelled", "pending_payment", "pending"] as const;
 
+type DateScope = "all" | "today" | "upcoming" | "completed";
+type OpsQuick = "" | "monthly_only" | "awaiting_payment" | "today" | "tomorrow";
+type AttentionFilter = "all" | "sla" | "follow_up" | "unassigned" | "unassignable" | "starting_soon";
+type ServiceFilter = "all" | "standard" | "deep" | "move" | "airbnb" | "carpet";
+
+type CityOption = { id: string; name: string };
+
+const DATE_SCOPE_OPTIONS: { key: DateScope; label: string }[] = [
+  { key: "all", label: "All dates" },
+  { key: "today", label: "Today" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "completed", label: "Past / done" },
+];
+
+const OPS_QUICK_OPTIONS: { key: Exclude<OpsQuick, "">; label: string }[] = [
+  { key: "awaiting_payment", label: "Awaiting payment" },
+  { key: "monthly_only", label: "Monthly billing" },
+  { key: "today", label: "Today (visit date)" },
+  { key: "tomorrow", label: "Tomorrow" },
+];
+
+const SERVICE_OPTIONS: { key: ServiceFilter; label: string }[] = [
+  { key: "all", label: "All services" },
+  { key: "standard", label: "Standard" },
+  { key: "deep", label: "Deep clean" },
+  { key: "move", label: "Move in/out" },
+  { key: "airbnb", label: "Airbnb" },
+  { key: "carpet", label: "Carpet" },
+];
+
+function buildListFilter(dateScope: DateScope, attentionFilter: AttentionFilter): string {
+  if (attentionFilter === "sla") return "sla";
+  if (attentionFilter === "follow_up") return "follow-up";
+  if (attentionFilter === "unassigned") return "unassigned";
+  if (attentionFilter === "unassignable") return "unassignable";
+  if (attentionFilter === "starting_soon") return "starting-soon";
+  if (dateScope !== "all") return dateScope;
+  return "all";
+}
+
+function scrollToBookingsTable() {
+  globalThis.requestAnimationFrame(() => {
+    document.getElementById("bookings-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+      {label}
+      <button type="button" onClick={onClear} className="rounded-full p-0.5 hover:bg-blue-100" aria-label={`Clear ${label}`}>
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
 function formatZar(cents: number | null, zar: number | null): string {
   const val = zar ?? (cents != null ? cents / 100 : null);
   if (val == null) return "—";
@@ -88,10 +161,17 @@ function formatZar(cents: number | null, zar: number | null): string {
 
 function getAssignment(row: BookingRow): string {
   if (row.team?.name) return row.team.name;
+  if (row.team_id) return "Team assigned";
   if ((row.booking_cleaners ?? []).length > 0) {
     return row.booking_cleaners!.map((c) => c.full_name ?? "Cleaner").join(", ");
   }
   return "—";
+}
+
+function bookingSupportsTeamAssign(row: BookingRow): boolean {
+  if (!isTeamService({ service: row.service, service_slug: row.service_slug })) return false;
+  const st = (row.status ?? "").toLowerCase();
+  return st !== "cancelled" && st !== "pending_payment" && st !== "payment_expired";
 }
 
 function LoadingRows() {
@@ -115,11 +195,36 @@ export default function BookingsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [dateScope, setDateScope] = useState<DateScope>("all");
+  const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>("all");
+  const [opsQuick, setOpsQuick] = useState<OpsQuick>("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [serviceFilter, setServiceFilter] = useState<ServiceFilter>("all");
+  const [cityId, setCityId] = useState("all");
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [actionLoading, setActionLoading] = useState<{ id: string; action: "cancel" | "delete" } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BookingRow | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [pendingRemovals, setPendingRemovals] = useState<BookingRow[]>([]);
+  const [teamAssignTarget, setTeamAssignTarget] = useState<BookingRow | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  useEffect(() => {
+    const f = (searchParams.get("filter") ?? "").trim().toLowerCase();
+    if (!f) return;
+    if (f === "unassignable") setAttentionFilter("unassignable");
+    else if (f === "starting-soon") setAttentionFilter("starting_soon");
+    else if (f === "sla") setAttentionFilter("sla");
+    else if (f === "unassigned") setAttentionFilter("unassigned");
+    else if (f === "follow-up") setAttentionFilter("follow_up");
+    else if (f === "today") setDateScope("today");
+    else if (f === "upcoming") setDateScope("upcoming");
+    else if (f === "completed") setDateScope("completed");
+  }, [searchParams]);
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => {
@@ -131,23 +236,174 @@ export default function BookingsPage() {
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setPage(1), 0);
     return () => globalThis.clearTimeout(timer);
-  }, [debouncedSearch, activeFilter, pageSize, recurringIdFilter]);
+  }, [
+    debouncedSearch,
+    activeFilter,
+    pageSize,
+    recurringIdFilter,
+    dateScope,
+    attentionFilter,
+    opsQuick,
+    dateFrom,
+    dateTo,
+    serviceFilter,
+    cityId,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void globalThis.fetch("/api/cities")
+      .then((r) => r.json())
+      .then((j: { cities?: CityOption[] }) => {
+        if (!cancelled) setCities((j.cities ?? []).filter((c) => c.id && c.name));
+      })
+      .catch(() => {
+        if (!cancelled) setCities([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const listFilter = buildListFilter(dateScope, attentionFilter);
+  const hasExtraFilters =
+    !recurringIdFilter &&
+    (dateScope !== "all" ||
+      attentionFilter !== "all" ||
+      opsQuick !== "" ||
+      dateFrom !== "" ||
+      dateTo !== "" ||
+      serviceFilter !== "all" ||
+      cityId !== "all");
+
+  const activeFilterChips = useMemo(() => {
+    if (recurringIdFilter) return [];
+    const chips: { key: string; label: string; clear: () => void }[] = [];
+    if (attentionFilter === "sla") {
+      chips.push({ key: "sla", label: "SLA breaches", clear: () => setAttentionFilter("all") });
+    } else if (attentionFilter === "follow_up") {
+      chips.push({ key: "follow_up", label: "Payment follow-up", clear: () => setAttentionFilter("all") });
+    } else if (attentionFilter === "unassigned") {
+      chips.push({ key: "unassigned", label: "Unassigned", clear: () => setAttentionFilter("all") });
+    } else if (attentionFilter === "unassignable") {
+      chips.push({ key: "unassignable", label: "Unassignable", clear: () => setAttentionFilter("all") });
+    } else if (attentionFilter === "starting_soon") {
+      chips.push({ key: "starting_soon", label: "Starting soon", clear: () => setAttentionFilter("all") });
+    } else if (dateScope !== "all") {
+      const label = DATE_SCOPE_OPTIONS.find((o) => o.key === dateScope)?.label ?? dateScope;
+      chips.push({ key: "dateScope", label, clear: () => setDateScope("all") });
+    }
+    if (opsQuick) {
+      const label = OPS_QUICK_OPTIONS.find((o) => o.key === opsQuick)?.label ?? opsQuick;
+      chips.push({ key: "opsQuick", label, clear: () => setOpsQuick("") });
+    }
+    if (dateFrom) chips.push({ key: "from", label: `From ${dateFrom}`, clear: () => setDateFrom("") });
+    if (dateTo) chips.push({ key: "to", label: `To ${dateTo}`, clear: () => setDateTo("") });
+    if (serviceFilter !== "all") {
+      const label = SERVICE_OPTIONS.find((o) => o.key === serviceFilter)?.label ?? serviceFilter;
+      chips.push({ key: "service", label, clear: () => setServiceFilter("all") });
+    }
+    if (cityId !== "all") {
+      const label = cities.find((c) => c.id === cityId)?.name ?? "City";
+      chips.push({ key: "city", label, clear: () => setCityId("all") });
+    }
+    return chips;
+  }, [attentionFilter, cities, cityId, dateFrom, dateScope, dateTo, opsQuick, recurringIdFilter, serviceFilter]);
+
+  function clearAllFilters() {
+    setDateScope("all");
+    setAttentionFilter("all");
+    setOpsQuick("");
+    setDateFrom("");
+    setDateTo("");
+    setServiceFilter("all");
+    setCityId("all");
+    setActiveFilter("all");
+    setSearch("");
+  }
+
+  function selectDateScope(next: DateScope) {
+    setDateScope(next);
+    setAttentionFilter("all");
+  }
+
+  function selectAttentionFilter(next: AttentionFilter) {
+    setAttentionFilter(next);
+    if (next !== "all") setDateScope("all");
+  }
+
+  function applyTotalBookingsView() {
+    if (hasExtraFilters || activeFilter !== "all" || debouncedSearch) {
+      clearAllFilters();
+    }
+    scrollToBookingsTable();
+  }
+
+  function applyUnassignedView() {
+    if (attentionFilter === "unassigned") {
+      setAttentionFilter("all");
+    } else {
+      setAttentionFilter("unassigned");
+      setDateScope("all");
+      setOpsQuick("");
+      setActiveFilter("all");
+    }
+    scrollToBookingsTable();
+  }
+
+  function applySlaView() {
+    if (attentionFilter === "sla") {
+      setAttentionFilter("all");
+    } else {
+      setAttentionFilter("sla");
+      setDateScope("all");
+      setOpsQuick("");
+      setActiveFilter("all");
+    }
+    scrollToBookingsTable();
+  }
+
+  function applyCompletedTodayView() {
+    if (dateScope === "today" && activeFilter === "completed" && attentionFilter === "all" && opsQuick === "") {
+      setDateScope("all");
+      setActiveFilter("all");
+    } else {
+      setAttentionFilter("all");
+      setDateScope("today");
+      setActiveFilter("completed");
+      setOpsQuick("");
+    }
+    scrollToBookingsTable();
+  }
+
+  const totalBookingsActive =
+    !recurringIdFilter && !hasExtraFilters && activeFilter === "all" && !debouncedSearch;
 
   const { data, loading, error, refetch } = useAdminData<AdminBookingsResponse>(
     "/api/admin/bookings",
     {
       params: {
-        filter: "all",
+        filter: recurringIdFilter ? "all" : listFilter,
         page: String(page),
         pageSize: String(pageSize),
         ...(activeFilter !== "all" ? { bookingStatus: activeFilter } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(recurringIdFilter ? { recurring_id: recurringIdFilter } : {}),
+        ...(!recurringIdFilter && opsQuick ? { opsQuick } : {}),
+        ...(!recurringIdFilter && dateFrom ? { from: dateFrom } : {}),
+        ...(!recurringIdFilter && dateTo ? { to: dateTo } : {}),
+        ...(!recurringIdFilter && serviceFilter !== "all" ? { serviceSlug: serviceFilter } : {}),
+        ...(!recurringIdFilter && cityId !== "all" ? { cityId } : {}),
       },
     },
   );
 
-  const bookings = data?.bookings ?? [];
+  const serverBookings = data?.bookings ?? [];
+  const removedIds = useMemo(() => new Set(pendingRemovals.map((b) => b.id)), [pendingRemovals]);
+  const bookings = useMemo(
+    () => serverBookings.filter((b) => !removedIds.has(b.id)),
+    [removedIds, serverBookings],
+  );
   const pagination = data?.pagination ?? {
     page,
     pageSize,
@@ -158,8 +414,37 @@ export default function BookingsPage() {
     hasNextPage: false,
     hasPreviousPage: false,
   };
-  const counts: Record<string, number> = { all: data?.statusCounts?.all ?? pagination.total };
-  for (const s of ALL_STATUSES) counts[s] = data?.statusCounts?.[s] ?? 0;
+  const adjustedPagination = useMemo(() => {
+    const removed = pendingRemovals.length;
+    if (removed === 0) return pagination;
+    const total = Math.max(0, pagination.total - removed);
+    const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize));
+    const from = total === 0 ? 0 : Math.min(pagination.from, total);
+    const to = total === 0 ? 0 : Math.min(Math.max(from, pagination.to - removed), total);
+    return {
+      ...pagination,
+      total,
+      totalPages,
+      from,
+      to,
+      hasNextPage: pagination.page < totalPages,
+      hasPreviousPage: pagination.page > 1,
+    };
+  }, [pagination, pendingRemovals.length]);
+  const counts: Record<string, number> = useMemo(() => {
+    const base = data?.statusCounts;
+    const next: Record<string, number> = {
+      all: base?.all ?? adjustedPagination.total,
+    };
+    for (const s of ALL_STATUSES) next[s] = base?.[s] ?? 0;
+    for (const removed of pendingRemovals) {
+      next.all = Math.max(0, next.all - 1);
+      const st = (removed.status ?? "pending").toLowerCase();
+      if (st in next) next[st] = Math.max(0, next[st] - 1);
+    }
+    if (base?.completedToday != null) next.completedToday = base.completedToday;
+    return next;
+  }, [adjustedPagination.total, data?.statusCounts, pendingRemovals]);
 
   useEffect(() => {
     if (data?.pagination && page > data.pagination.totalPages) {
@@ -192,29 +477,61 @@ export default function BookingsPage() {
     }
   }
 
-  async function confirmDeleteBooking() {
-    if (!deleteTarget) return;
+  async function confirmDeleteBooking(): Promise<boolean> {
+    if (!deleteTarget) return false;
 
-    setActionLoading({ id: deleteTarget.id, action: "delete" });
+    const target = deleteTarget;
+    const blockReason = hardDeleteBlockReason(target);
+    if (blockReason) {
+      setDeleteError(blockReason);
+      showToast(blockReason, false);
+      return false;
+    }
+
+    setDeleteError(null);
+    setActionLoading({ id: target.id, action: "delete" });
     try {
-      await deleteBookingAdmin(deleteTarget.id);
+      await deleteBookingAdmin(target.id);
+      setPendingRemovals((prev) => [...prev, target]);
+      setDeleteDialogOpen(false);
       setDeleteTarget(null);
       showToast("Booking deleted", true);
-      if (bookings.length === 1 && page > 1) {
+
+      const wasLastOnPage = serverBookings.length === 1;
+      if (wasLastOnPage && page > 1) {
         setPage((p) => Math.max(1, p - 1));
-      } else {
-        void refetch();
       }
+      await refetch();
+      setPendingRemovals((prev) => prev.filter((b) => b.id !== target.id));
+      return true;
     } catch (e) {
-      showToast(
+      const message =
         e instanceof AdminDashboardActionError || e instanceof Error
           ? e.message
-          : "Failed to delete booking",
-        false,
-      );
+          : "Failed to delete booking";
+      setDeleteError(message);
+      showToast(message, false);
+      return false;
     } finally {
       setActionLoading(null);
     }
+  }
+
+  function openDeleteDialog(booking: BookingRow) {
+    const blockReason = hardDeleteBlockReason(booking);
+    if (blockReason) {
+      showToast(blockReason, false);
+      return;
+    }
+    setDeleteTarget(booking);
+    setDeleteError(null);
+    setDeleteDialogOpen(true);
+  }
+
+  function closeDeleteDialog() {
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
+    setDeleteError(null);
   }
 
   const unassignedCount = data?.attention?.unassigned ?? 0;
@@ -224,15 +541,30 @@ export default function BookingsPage() {
   return (
     <div className="space-y-5">
       <OfficeDeleteBookingDialog
-        open={deleteTarget != null}
+        open={deleteDialogOpen}
         booking={deleteTarget}
+        errorMessage={deleteError}
         busy={deleteTarget != null && actionLoading?.id === deleteTarget.id && actionLoading.action === "delete"}
         onOpenChange={(open) => {
-          if (!open && !(deleteTarget && actionLoading?.id === deleteTarget.id && actionLoading.action === "delete")) {
-            setDeleteTarget(null);
-          }
+          if (!open) closeDeleteDialog();
+          else setDeleteDialogOpen(true);
         }}
-        onConfirm={() => void confirmDeleteBooking()}
+        onConfirm={confirmDeleteBooking}
+      />
+
+      <OfficeAssignTeamDialog
+        open={teamAssignTarget != null}
+        bookingId={teamAssignTarget?.id ?? null}
+        bookingLabel={
+          teamAssignTarget
+            ? `${teamAssignTarget.id.slice(0, 8).toUpperCase()} · ${teamAssignTarget.customer_name ?? teamAssignTarget.customer_email ?? "Booking"}`
+            : null
+        }
+        currentTeamId={teamAssignTarget?.team_id ?? null}
+        onOpenChange={(open) => {
+          if (!open) setTeamAssignTarget(null);
+        }}
+        onAssigned={() => void refetch()}
       />
 
       {/* Toast */}
@@ -315,56 +647,186 @@ export default function BookingsPage() {
           {
             label: "Total bookings",
             value: loading ? "—" : counts.all,
-            sub: "All bookings",
+            sub: "Matching filters",
             color: "text-slate-800",
+            onClick: applyTotalBookingsView,
+            active: totalBookingsActive,
           },
           {
             label: "Unassigned",
             value: loading ? "—" : unassignedCount,
             sub: "Need attention",
             color: "text-orange-600",
+            onClick: applyUnassignedView,
+            active: attentionFilter === "unassigned",
           },
           {
             label: "SLA breaches",
             value: loading ? "—" : overdueCount,
             sub: "Overdue dispatch",
             color: overdueCount > 0 ? "text-red-600" : "text-slate-400",
+            onClick: applySlaView,
+            active: attentionFilter === "sla",
           },
           {
             label: "Completed (today)",
             value: loading ? "—" : completedTodayCount,
             sub: "Successfully done",
             color: "text-emerald-600",
+            onClick: applyCompletedTodayView,
+            active: dateScope === "today" && activeFilter === "completed" && attentionFilter === "all",
           },
         ].map((k) => (
-          <div key={k.label} className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
+          <button
+            key={k.label}
+            type="button"
+            onClick={k.onClick}
+            className={cn(
+              "rounded-2xl border bg-white p-4 text-left shadow-sm transition cursor-pointer",
+              "hover:border-blue-200 hover:bg-blue-50/30",
+              k.active ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-100",
+            )}
+          >
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
             <p className={cn("mt-1 text-2xl font-bold tabular-nums", k.color)}>{k.value}</p>
             <p className="text-xs text-slate-400">{k.sub}</p>
-          </div>
+          </button>
         ))}
       </div>
 
       {/* Table card */}
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm">
+      <div id="bookings-table" className="rounded-2xl bg-white border border-slate-100 shadow-sm scroll-mt-4">
         {/* Search + filters */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by ID, customer, address…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            />
+        <div className="space-y-3 border-b border-slate-100 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by ID, customer, address…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="hidden h-4 w-4 text-slate-400 sm:block" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                disabled={Boolean(recurringIdFilter)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                aria-label="From date"
+              />
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                disabled={Boolean(recurringIdFilter)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                aria-label="To date"
+              />
+            </div>
           </div>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            <Calendar className="h-4 w-4" /> Date range
-          </button>
+
+          {!recurringIdFilter && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  <Filter className="h-3.5 w-3.5" /> When
+                </span>
+                {DATE_SCOPE_OPTIONS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => selectDateScope(key)}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                      dateScope === key && attentionFilter === "all"
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-500 hover:bg-slate-100",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Quick</span>
+                {OPS_QUICK_OPTIONS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setOpsQuick((cur) => (cur === key ? "" : key))}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                      opsQuick === key ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-slate-100",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => selectAttentionFilter(attentionFilter === "follow_up" ? "all" : "follow_up")}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                    attentionFilter === "follow_up" ? "bg-amber-600 text-white" : "text-slate-500 hover:bg-slate-100",
+                  )}
+                >
+                  Payment follow-up
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={serviceFilter}
+                  onChange={(e) => setServiceFilter(e.target.value as ServiceFilter)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                  aria-label="Service type"
+                >
+                  {SERVICE_OPTIONS.map(({ key, label }) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={cityId}
+                  onChange={(e) => setCityId(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                  aria-label="City"
+                >
+                  <option value="all">All cities</option>
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+                {hasExtraFilters ? (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
+              </div>
+
+              {activeFilterChips.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeFilterChips.map((chip) => (
+                    <FilterChip key={chip.key} label={chip.label} onClear={chip.clear} />
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
 
         {/* Status tabs */}
@@ -428,6 +890,7 @@ export default function BookingsPage() {
                   const isActing = actionLoading?.id === b.id;
                   const isCancelling = isActing && actionLoading?.action === "cancel";
                   const isDeleting = isActing && actionLoading?.action === "delete";
+                  const teamAssignable = bookingSupportsTeamAssign(b);
 
                   return (
                     <tr key={b.id} className="group hover:bg-slate-50/50 transition-colors">
@@ -455,15 +918,26 @@ export default function BookingsPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <span
-                          className={cn(
-                            "block max-w-[150px] truncate text-xs font-medium",
-                            assignment === "—" ? "text-orange-500" : "text-slate-700",
-                          )}
-                          title={assignment}
-                        >
-                          {assignment}
-                        </span>
+                        <div className="flex max-w-[180px] flex-col gap-1">
+                          <span
+                            className={cn(
+                              "block truncate text-xs font-medium",
+                              assignment === "—" ? "text-orange-500" : "text-slate-700",
+                            )}
+                            title={assignment}
+                          >
+                            {assignment}
+                          </span>
+                          {teamAssignable ? (
+                            <button
+                              type="button"
+                              onClick={() => setTeamAssignTarget(b)}
+                              className="w-fit text-left text-[11px] font-semibold text-blue-600 hover:underline"
+                            >
+                              {b.team_id || b.team?.name ? "Change team" : "Assign team"}
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm font-semibold text-slate-800">
@@ -489,13 +963,24 @@ export default function BookingsPage() {
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </a>
-                          <a
-                            href={`/office/bookings/${b.id}?action=assign`}
-                            title="Assign cleaner"
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
-                          >
-                            <UserCheck className="h-3.5 w-3.5" />
-                          </a>
+                          {teamAssignable ? (
+                            <button
+                              type="button"
+                              title={b.team_id || b.team?.name ? "Change team" : "Assign team"}
+                              onClick={() => setTeamAssignTarget(b)}
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                            >
+                              <Users className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <a
+                              href={`/office/bookings/${b.id}?action=assign`}
+                              title="Assign cleaner"
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                            >
+                              <UserCheck className="h-3.5 w-3.5" />
+                            </a>
+                          )}
                           <button
                             type="button"
                             title="Cancel"
@@ -509,19 +994,21 @@ export default function BookingsPage() {
                               <XCircle className="h-3.5 w-3.5" />
                             )}
                           </button>
-                          <button
-                            type="button"
-                            title="Delete permanently"
-                            disabled={isActing}
-                            onClick={() => setDeleteTarget(b)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-30"
-                          >
-                            {isDeleting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                          {canHardDeleteBooking(b) ? (
+                            <button
+                              type="button"
+                              title="Delete permanently (draft / unpaid only)"
+                              disabled={isActing}
+                              onClick={() => openDeleteDialog(b)}
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-30"
+                            >
+                              {isDeleting ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -537,7 +1024,7 @@ export default function BookingsPage() {
           <p className="text-xs text-slate-400">
             {loading
               ? "Loading…"
-              : `Showing ${pagination.from}-${pagination.to} of ${pagination.total} bookings`}
+              : `Showing ${adjustedPagination.from}-${adjustedPagination.to} of ${adjustedPagination.total} bookings`}
           </p>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-500">
@@ -553,11 +1040,11 @@ export default function BookingsPage() {
               </select>
             </label>
             <span className="text-xs font-medium text-slate-500">
-              Page {pagination.page} of {pagination.totalPages}
+              Page {adjustedPagination.page} of {adjustedPagination.totalPages}
             </span>
             <button
               type="button"
-              disabled={loading || !pagination.hasPreviousPage}
+              disabled={loading || !adjustedPagination.hasPreviousPage}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -566,7 +1053,7 @@ export default function BookingsPage() {
             </button>
             <button
               type="button"
-              disabled={loading || !pagination.hasNextPage}
+              disabled={loading || !adjustedPagination.hasNextPage}
               onClick={() => setPage((p) => p + 1)}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >

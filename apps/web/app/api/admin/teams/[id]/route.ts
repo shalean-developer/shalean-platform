@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { clampTeamRosterCapacity } from "@/lib/dispatch/teamJobsPerDay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -30,19 +31,34 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  let body: { is_active?: boolean };
+  let body: { is_active?: boolean; capacity_per_day?: number; name?: string };
   try {
-    body = (await request.json()) as { is_active?: boolean };
+    body = (await request.json()) as { is_active?: boolean; capacity_per_day?: number; name?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
-  if (typeof body.is_active !== "boolean") {
-    return NextResponse.json({ error: "is_active boolean required." }, { status: 400 });
+
+  const patch: { is_active?: boolean; capacity_per_day?: number; name?: string } = {};
+  if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+  if (body.name != null) {
+    const name = String(body.name).trim();
+    if (!name) return NextResponse.json({ error: "name cannot be empty." }, { status: 400 });
+    patch.name = name;
+  }
+  if (body.capacity_per_day != null) {
+    const capRaw = Math.floor(Number(body.capacity_per_day));
+    if (!Number.isFinite(capRaw) || capRaw <= 0) {
+      return NextResponse.json({ error: "capacity_per_day must be between 2 and 15." }, { status: 400 });
+    }
+    patch.capacity_per_day = clampTeamRosterCapacity(capRaw);
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "Provide name, is_active, and/or capacity_per_day." }, { status: 400 });
   }
 
   const { data, error } = await admin
     .from("teams")
-    .update({ is_active: body.is_active })
+    .update(patch)
     .eq("id", teamId)
     .select("id, name, service_type, capacity_per_day, is_active, created_at")
     .maybeSingle();

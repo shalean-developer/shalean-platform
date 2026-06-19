@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
-import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
+import { PayoutGenerationBlockedError } from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
+import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Admin manual trigger for weekly payout generation.
+ * Admin manual trigger for weekly payout generation (catch-up: all unbatched completion weeks).
  *
  * M-18: shares the same H-15 cron lease (`CRON_LOCK_KEYS.generatePayouts`) as
  * `/api/cron/generate-payouts`, so an admin replay cannot race the scheduled
@@ -25,13 +26,27 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const lockResult = await withCronLock(
-    admin,
-    { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
-    () => generateWeeklyPayouts(admin),
-  );
-  if (lockResult.skipped) {
-    return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+  try {
+    const lockResult = await withCronLock(
+      admin,
+      { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
+      () => generateCatchUpWeeklyPayouts(admin),
+    );
+    if (lockResult.skipped) {
+      return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+    }
+    return NextResponse.json({ ok: true, ...lockResult.ranIt });
+  } catch (e) {
+    if (e instanceof PayoutGenerationBlockedError) {
+      return NextResponse.json(
+        {
+          error: e.message,
+          remaining: e.remaining,
+          bookingIds: e.bookingIds,
+        },
+        { status: 409 },
+      );
+    }
+    throw e;
   }
-  return NextResponse.json({ ok: true, ...lockResult.ranIt });
 }

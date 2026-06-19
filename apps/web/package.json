@@ -28,6 +28,7 @@
     "repair:zero-earning-assigned": "tsx --env-file=.env.local --conditions=react-server scripts/repairZeroEarningAssignedBookings.ts",
     "repair:production-health-critical": "tsx --env-file=.env.local --conditions=react-server scripts/repairProductionHealthCritical.ts",
     "repair:dispatch-offer-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairMissingDispatchOfferEarningsSnapshot.ts",
+    "recalculate:cleaner-earnings-v3": "tsx --env-file=.env.local --conditions=react-server scripts/recalculateAllCleanerEarningsV3.ts",
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
     "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",
     "process-favicons": "node scripts/process-favicons-transparent.mjs",

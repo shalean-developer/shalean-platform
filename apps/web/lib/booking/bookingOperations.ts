@@ -49,6 +49,7 @@ import {
   type AdminRetryDispatchSuccessBody,
 } from "@/lib/admin/performAdminRetryDispatchBooking";
 import { performAdminAssignToCleaner } from "@/lib/admin/performAdminAssignToCleaner";
+import { performAdminDirectAssignToCleaner } from "@/lib/admin/performAdminDirectAssignToCleaner";
 import { runAdminAssignSmart, type RunAdminAssignSmartParams } from "@/lib/admin/runAdminAssignSmart";
 import {
   adminMarkBookingPaid,
@@ -561,6 +562,52 @@ export async function adminAssignCleanerToBooking(
       cleanerId: inner.cleanerId,
       offerId: inner.offerId,
       gateway: "performAdminAssignToCleaner",
+    },
+    externalRef: inner.cleanerId,
+  });
+  return { ok: true, bookingId: args.bookingId, data, event };
+}
+
+export type AdminDirectAssignCleanerToBookingSuccessBody = {
+  ok: true;
+  cleanerId: string;
+  alreadyAssigned?: boolean;
+  warnings?: AdminWarning[];
+};
+
+/** Admin immediate assign (no dispatch offer); notifies cleaner via assigned flow. */
+export async function adminDirectAssignCleanerToBooking(
+  args: AdminAssignCleanerToBookingArgs,
+): Promise<BookingOperationResult<AdminDirectAssignCleanerToBookingSuccessBody>> {
+  const inner = await performAdminDirectAssignToCleaner(args.admin, {
+    bookingId: args.bookingId,
+    cleanerId: args.cleanerId,
+    force: args.force,
+  });
+  if (!inner.ok) {
+    return {
+      ok: false,
+      bookingId: args.bookingId,
+      code: `admin_direct_assign_http_${inner.httpStatus}`,
+      message: inner.error,
+      cause: { error: inner.error, ...(inner.warnings ? { warnings: inner.warnings } : {}) },
+      httpStatus: inner.httpStatus,
+    };
+  }
+  const data: AdminDirectAssignCleanerToBookingSuccessBody = {
+    ok: true,
+    cleanerId: inner.cleanerId,
+    ...(inner.alreadyAssigned ? { alreadyAssigned: true } : {}),
+    ...(inner.warnings ? { warnings: inner.warnings } : {}),
+  };
+  const event = buildBookingEvent({
+    type: "booking.assigned",
+    bookingId: args.bookingId,
+    actor: "admin",
+    metadata: {
+      cleanerId: inner.cleanerId,
+      gateway: "performAdminDirectAssignToCleaner",
+      direct: true,
     },
     externalRef: inner.cleanerId,
   });

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { clampTeamRosterCapacity, TEAM_MAX_ROSTER_MEMBERS } from "@/lib/dispatch/teamJobsPerDay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -71,13 +72,14 @@ export async function POST(request: Request) {
   }
   const name = String(body.name ?? "").trim();
   const serviceType = String(body.service_type ?? "").trim();
-  const capacity = Number(body.capacity_per_day ?? 0);
+  const capacityRaw = body.capacity_per_day != null ? Number(body.capacity_per_day) : TEAM_MAX_ROSTER_MEMBERS;
+  const capacity = clampTeamRosterCapacity(capacityRaw);
   if (!name) return NextResponse.json({ error: "name required." }, { status: 400 });
   if (!["deep_cleaning", "move_cleaning"].includes(serviceType)) {
     return NextResponse.json({ error: "service_type must be deep_cleaning or move_cleaning." }, { status: 400 });
   }
-  if (!Number.isFinite(capacity) || capacity <= 0) {
-    return NextResponse.json({ error: "capacity_per_day must be > 0." }, { status: 400 });
+  if (body.capacity_per_day != null && (!Number.isFinite(capacityRaw) || capacityRaw <= 0)) {
+    return NextResponse.json({ error: "capacity_per_day must be between 2 and 15." }, { status: 400 });
   }
 
   const { data, error } = await admin
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
     .insert({
       name,
       service_type: serviceType,
-      capacity_per_day: Math.floor(capacity),
+      capacity_per_day: capacity,
       is_active: body.is_active !== false,
     })
     .select("id, name, service_type, capacity_per_day, is_active, created_at")

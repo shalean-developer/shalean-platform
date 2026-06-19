@@ -1,20 +1,18 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { bookingCleanerShareOrFallback } from "@/lib/payout/cleanerLineEarningsConfig";
-import { resolveEffectiveLineCleanerSharePercentageForBooking } from "@/lib/payout/tenureBasedCleanerLineShare";
+import { buildAdminEarningsDisplayForBooking, computeLiveBookingEarningsSummary } from "@/lib/admin/adminBookingEarningsDisplay";
+import type { AdminEarningsDisplay } from "@/lib/payout/bookingEarningsSummary";
+import { parseBookingEarningsSummary, type BookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
 
 export type BookingEarningsPreview = {
   current: {
     display_earnings_cents: number | null;
     cleaner_earnings_total_cents: number | null;
-    line_items_count: number;
+    earnings_summary: BookingEarningsSummary | null;
   };
-  computed_preview: {
-    cleaner_earnings_total_cents: number;
-    diff_cents: number;
-  } | null;
-  /** When set, `computed_preview` is omitted (e.g. team jobs). */
+  computed_preview: BookingEarningsSummary | null;
+  earnings_display: AdminEarningsDisplay | null;
   preview_unavailable_reason?: string;
 };
 
@@ -25,8 +23,8 @@ function roundCents(n: unknown): number | null {
 }
 
 /**
- * Read-only line-ledger total (same formula as {@link computeCleanerEarningsForBooking}) for solo bookings.
- * Does not mutate `booking_line_items` or `bookings`.
+ * Read-only v3 earnings preview from the canonical engine.
+ * Does not mutate bookings or payout rows.
  */
 export async function buildBookingEarningsPreview(
   admin: SupabaseClient,
@@ -39,104 +37,38 @@ export async function buildBookingEarningsPreview(
 
   const { data: b, error: bErr } = await admin
     .from("bookings")
-    .select("id, is_team_job, display_earnings_cents, cleaner_earnings_total_cents, cleaner_share_percentage, cleaner_id, date, time")
+    .select(
+      "id, is_team_job, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, team_id, base_amount_cents, service_fee_cents, total_paid_zar, total_paid_cents, amount_paid_cents, service, booking_snapshot, date, time, price_snapshot, earnings_summary",
+    )
     .eq("id", bid)
     .maybeSingle();
   if (bErr || !b) {
     return { ok: false, error: bErr?.message ?? "Booking not found." };
   }
 
-  const isTeam = (b as { is_team_job?: boolean | null }).is_team_job === true;
-  const display = roundCents((b as { display_earnings_cents?: unknown }).display_earnings_cents);
-  const lineTotalStored = roundCents((b as { cleaner_earnings_total_cents?: unknown }).cleaner_earnings_total_cents);
+  const storedSummary = parseBookingEarningsSummary((b as { earnings_summary?: unknown }).earnings_summary);
+  const earningsDisplay = await buildAdminEarningsDisplayForBooking(admin, b);
 
-  const { data: lines, error: liErr } = await admin
-    .from("booking_line_items")
-    .select("id, earns_cleaner, total_price_cents")
-    .eq("booking_id", bid);
-  if (liErr) {
-    return { ok: false, error: liErr.message };
+  let computedPreview: BookingEarningsSummary | null = null;
+  try {
+    computedPreview = await computeLiveBookingEarningsSummary(admin, bid, b);
+  } catch {
+    computedPreview = null;
   }
-  const items = lines ?? [];
-  const line_items_count = items.length;
-
-  if (isTeam) {
-    return {
-      ok: true,
-      preview: {
-        current: {
-          display_earnings_cents: display,
-          cleaner_earnings_total_cents: lineTotalStored,
-          line_items_count,
-        },
-        computed_preview: null,
-        preview_unavailable_reason: "team_job",
-      },
-    };
-  }
-
-  if (items.length === 0) {
-    return {
-      ok: true,
-      preview: {
-        current: {
-          display_earnings_cents: display,
-          cleaner_earnings_total_cents: lineTotalStored,
-          line_items_count: 0,
-        },
-        computed_preview: null,
-        preview_unavailable_reason: "no_line_items",
-      },
-    };
-  }
-
-  const soloCleanerId = String((b as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
-  const share =
-    /^[0-9a-f-]{36}$/i.test(soloCleanerId)
-      ? await resolveEffectiveLineCleanerSharePercentageForBooking(admin, {
-          bookingId: bid,
-          cleanerId: soloCleanerId,
-          row: b as {
-            cleaner_share_percentage?: unknown;
-            date?: string | null;
-            time?: string | null;
-          },
-          logSource: "buildBookingEarningsPreview",
-        })
-      : bookingCleanerShareOrFallback((b as { cleaner_share_percentage?: unknown }).cleaner_share_percentage, {
-          bookingId: bid,
-          logSource: "buildBookingEarningsPreview",
-        });
-  let previewTotal = 0;
-  for (const raw of items) {
-    const li = raw as { id?: string; earns_cleaner?: boolean | null; total_price_cents?: number | null };
-    const id = String(li.id ?? "");
-    if (!/^[0-9a-f-]{36}$/i.test(id)) continue;
-    const earns = li.earns_cleaner !== false;
-    const cents = Math.max(0, Math.round(Number(li.total_price_cents) || 0));
-    previewTotal += earns ? Math.round(cents * share) : 0;
-  }
-
-  const baseline =
-    lineTotalStored != null && lineTotalStored >= 0
-      ? lineTotalStored
-      : display != null && display >= 0
-        ? display
-        : 0;
-  const diff_cents = previewTotal - baseline;
 
   return {
     ok: true,
     preview: {
       current: {
-        display_earnings_cents: display,
-        cleaner_earnings_total_cents: lineTotalStored,
-        line_items_count,
+        display_earnings_cents: roundCents((b as { display_earnings_cents?: unknown }).display_earnings_cents),
+        cleaner_earnings_total_cents: roundCents(
+          (b as { cleaner_earnings_total_cents?: unknown }).cleaner_earnings_total_cents,
+        ),
+        earnings_summary: storedSummary,
       },
-      computed_preview: {
-        cleaner_earnings_total_cents: previewTotal,
-        diff_cents,
-      },
+      computed_preview: computedPreview,
+      earnings_display: earningsDisplay,
+      preview_unavailable_reason: computedPreview ? undefined : "compute_failed",
     },
   };
 }

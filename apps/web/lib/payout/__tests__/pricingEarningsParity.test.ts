@@ -9,7 +9,7 @@ import { calculateCleanerPayoutFromBookingRow } from "@/lib/payout/calculateClea
 import { bookingPayableForWeeklyBatch } from "@/lib/payout/bookingPayableForWeeklyBatch";
 import { bookingAppointmentIsoUtc, resolveCanonicalCleanerPayout } from "@/lib/payout/canonicalCleanerPayout";
 import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
-import { buildTeamJobMemberFixedPerCleanerPayoutRows } from "@/lib/payout/teamRosterPayoutAllocation";
+import { buildTeamJobMemberPayoutRowsFromEarningsSummary } from "@/lib/payout/teamRosterPayoutAllocation";
 
 const CLEANER_JOINED_AT = "2025-01-01T00:00:00.000Z";
 const BOOKING_DATE = "2026-01-20";
@@ -105,7 +105,7 @@ describe("pricing / earnings parity matrix", () => {
 
     expect(lineSubtotalCents).toBe(45_000);
     expect(lineItems.some((item) => item.item_type === "extra")).toBe(true);
-    expect(display.displayEarningsCents).toBe(31_500);
+    expect(display.displayEarningsCents).toBe(30_000);
     expect(lineAllocations.reduce((sum, row) => sum + row.allocated_display_earnings_cents, 0)).toBe(
       display.displayEarningsCents,
     );
@@ -146,14 +146,14 @@ describe("pricing / earnings parity matrix", () => {
 
     expect(lineItems.find((item) => item.item_type === "adjustment")?.total_price_cents).toBe(5_000);
     expect(lineSubtotalCents).toBe(45_000);
-    expect(display.displayEarningsCents).toBe(31_500);
+    expect(display.displayEarningsCents).toBe(30_000);
 
     // Phase 2A: generic adjustments no longer silently inflate display/frozen earnings.
     // Weekly payout columns are still based on the existing legacy booking payout fields.
-    expect(legacy.payoutCents + legacy.bonusCents).toBe(31_500);
+    expect(legacy.payoutCents + legacy.bonusCents).toBe(30_000);
     expect(frozen).toBe(display.displayEarningsCents);
     expect(bookingPayableForWeeklyBatch(weeklyRow, new Map())).toEqual({ payable: true });
-    expect(weeklyBasisCents(weeklyRow)).toBe(31_500);
+    expect(weeklyBasisCents(weeklyRow)).toBe(30_000);
     expect(weeklyBasisCents(weeklyRow)).toBe(display.displayEarningsCents);
   });
 
@@ -191,42 +191,42 @@ describe("pricing / earnings parity matrix", () => {
 
     expect(lineSubtotalCents).toBe(70_000);
     expect(lineItems.filter((item) => item.item_type === "extra")).toHaveLength(2);
-    expect(display.displayEarningsCents).toBe(49_000);
+    expect(display.displayEarningsCents).toBe(30_000);
     expect(legacy.payoutCents + legacy.bonusCents).toBe(display.displayEarningsCents);
     expect(frozen).toBe(display.displayEarningsCents);
     expect(bookingPayableForWeeklyBatch(weeklyRow, new Map([["invoice-1", "paid"]]))).toEqual({ payable: true });
     expect(weeklyBasisCents(weeklyRow)).toBe(display.displayEarningsCents);
   });
 
-  it("documents the intentional team-job split between booking display, member payouts, and weekly solo payout columns", () => {
-    const lineItems = withIds(
-      buildCheckoutVisitLineItems({
-        serviceTypeSlug: "standard",
-        job: { serviceBaseZar: 300, roomsZar: 400, extrasZar: 200 },
-        subtotalZar: 900,
-        visitTotalZar: 900,
-      }),
-    );
-
-    const lineSubtotalCents = sumEligibleLineItemsSubtotalCents(lineItems);
-    const display = displayFromLineSubtotal({
-      lineSubtotalCents,
+  it("documents team fixed-service payouts: leader R270 and members R250", () => {
+    const lineSubtotalCents = 90_000;
+    const leader = "11111111-1111-4111-8111-111111111111";
+    const member2 = "22222222-2222-4222-8222-222222222222";
+    const member3 = "33333333-3333-4333-8333-333333333333";
+    const display = resolveCanonicalCleanerPayout({
+      serviceId: "deep",
+      cleanerJoinedAtIso: CLEANER_JOINED_AT,
+      bookingAppointmentIsoUtc: BOOKING_APPOINTMENT,
+      bookingValueCents: lineSubtotalCents,
+      customerTotalCents: lineSubtotalCents,
       isTeamJob: true,
-      teamCleanerCount: 3,
+      teamLeaderId: leader,
+      participantCleanerIds: [leader, member2, member3],
+      rosterRoles: [
+        { cleaner_id: leader, role: "lead" },
+        { cleaner_id: member2, role: "member" },
+        { cleaner_id: member3, role: "member" },
+      ],
+      computedAtIso: BOOKING_APPOINTMENT,
     });
-    const memberRows = buildTeamJobMemberFixedPerCleanerPayoutRows({
+    const memberRows = buildTeamJobMemberPayoutRowsFromEarningsSummary({
       bookingId: "booking-1",
       teamId: "team-1",
-      rosterRows: [
-        { cleaner_id: "11111111-1111-4111-8111-111111111111" },
-        { cleaner_id: "22222222-2222-4222-8222-222222222222" },
-        { cleaner_id: "33333333-3333-4333-8333-333333333333" },
-      ],
-      fallbackCleanerIds: [],
+      summary: display.earningsSummary!,
     });
     const bookingColumns = {
       status: "completed",
-      cleaner_id: "11111111-1111-4111-8111-111111111111",
+      cleaner_id: leader,
       cleaner_payout_cents: display.cleanerPayoutCents,
       cleaner_bonus_cents: display.cleanerBonusCents,
       payment_status: "success",
@@ -238,8 +238,8 @@ describe("pricing / earnings parity matrix", () => {
 
     expect(lineSubtotalCents).toBe(90_000);
     expect(display.displayEarningsCents).toBe(25_000);
-    expect(display.internalEarningsCents).toBe(75_000);
-    expect(memberRows.map((row) => row.payout_cents)).toEqual([25_000, 25_000, 25_000]);
+    expect(display.internalEarningsCents).toBe(77_000);
+    expect(memberRows.map((row) => row.payout_cents)).toEqual([27_000, 25_000, 25_000]);
     expect(memberRows.reduce((sum, row) => sum + row.payout_cents, 0)).toBe(display.internalEarningsCents);
 
     // Intentional current divergence: team jobs persist per-cleaner display and team member rows;

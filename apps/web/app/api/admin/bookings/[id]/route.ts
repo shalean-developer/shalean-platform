@@ -40,6 +40,7 @@ import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/b
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
 import { buildAdminWarningPayload } from "@/lib/admin/adminWarningPayload";
+import { buildAdminEarningsDisplayForBooking } from "@/lib/admin/adminBookingEarningsDisplay";
 import {
   readCustomerNameFromBookingSnapshot,
   resolveAdminBookingCustomerPhone,
@@ -48,7 +49,9 @@ import {
 } from "@/lib/admin/adminBookingCustomerContact";
 import {
   isBookingTerminalForCleanerWorkloadSync,
+  loadCleanerIdsLinkedToBooking,
   syncCleanersBusyAfterBookingTerminalChange,
+  syncCleanersBusyAfterBookingTerminalByBookingId,
 } from "@/lib/cleaner/syncCleanerStatus";
 
 export const runtime = "nodejs";
@@ -309,8 +312,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     );
   }
 
+  const earnings_display = await buildAdminEarningsDisplayForBooking(admin, b);
+
   return NextResponse.json({
     booking,
+    earnings_display,
     dashboardLifecycle,
     booking_line_items: booking_line_items ?? [],
     cleaner_earnings: cleaner_earnings ?? [],
@@ -995,6 +1001,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       await reportOperationalIssue("error", "admin_bookings_patch", "INTEGRITY: completed booking missing display_earnings_cents after PATCH", {
         bookingId: id,
       });
+      await syncCleanersBusyAfterBookingTerminalByBookingId(admin, id, {
+        cleaner_id: (intr0 as { cleaner_id?: string | null }).cleaner_id,
+        payout_owner_cleaner_id: (intr0 as { payout_owner_cleaner_id?: string | null }).payout_owner_cleaner_id,
+      });
       return NextResponse.json(
         {
           error: "Completed booking has missing earnings — integrity violation.",
@@ -1036,12 +1046,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       (typeof updates.status === "string" ? updates.status : beforeStatus),
   );
   if (isBookingTerminalForCleanerWorkloadSync(patchedStatus) && beforeRow) {
-    await syncCleanersBusyAfterBookingTerminalChange(admin, [
-      beforeRow.cleaner_id,
-      (beforeRow as { payout_owner_cleaner_id?: string | null }).payout_owner_cleaner_id,
-      newCleaner,
-      oldCleaner,
-    ]);
+    const linkedIds = await loadCleanerIdsLinkedToBooking(admin, id, {
+      cleaner_id: beforeRow.cleaner_id,
+      payout_owner_cleaner_id: (beforeRow as { payout_owner_cleaner_id?: string | null }).payout_owner_cleaner_id,
+    });
+    await syncCleanersBusyAfterBookingTerminalChange(admin, [...linkedIds, newCleaner, oldCleaner]);
   }
 
   return NextResponse.json({

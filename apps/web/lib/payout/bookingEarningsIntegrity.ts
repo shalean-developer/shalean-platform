@@ -36,7 +36,7 @@ export function bookingsPersistFullFinancialSelectSuffix(): string {
 /** Column list for `persistCleanerPayoutIfUnset` and stuck-zero repair scans. */
 export function bookingsPersistSelectListForPersist(): string {
   return (
-    "id, status, completed_at, cleaner_id, payout_id, payout_owner_cleaner_id, team_id, team_member_count_snapshot, is_team_job, date, time, billing_type, is_monthly_billing_booking, monthly_invoice_id, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, price_snapshot, service, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, display_earnings_cents, payment_status, payment_needs_follow_up, dispatch_status" +
+    "id, status, completed_at, cleaner_id, payout_id, payout_owner_cleaner_id, team_id, team_member_count_snapshot, is_team_job, date, time, billing_type, is_monthly_billing_booking, monthly_invoice_id, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, price_snapshot, service, booking_snapshot, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, display_earnings_cents, earnings_summary, payment_status, payment_needs_follow_up, dispatch_status" +
     bookingsPersistFullFinancialSelectSuffix()
   );
 }

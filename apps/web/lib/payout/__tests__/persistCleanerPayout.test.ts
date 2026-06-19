@@ -215,7 +215,7 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     expect(booking.payout_earnings_cents).toBe(30_000);
     expect(booking.internal_earnings_cents).toBe(30_000);
     expect(booking.earnings_percentage_applied).toBe(0.6);
-    expect(booking.earnings_cap_cents_applied).toBe(35_000);
+    expect(booking.earnings_cap_cents_applied).toBe(30_000);
     expect(Number(booking.earnings_tenure_months_at_assignment)).toBeGreaterThanOrEqual(0);
 
     expect(booking.cleaner_payout_cents).toBe(30_000);
@@ -277,17 +277,17 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     const booking = admin.tables.bookings[0]!;
     expect(booking.display_earnings_cents).toBe(25_000);
     expect(booking.payout_earnings_cents).toBe(25_000);
-    expect(booking.internal_earnings_cents).toBe(75_000);
+    expect(booking.internal_earnings_cents).toBe(77_000);
     expect(booking.cleaner_payout_cents).toBe(0);
     expect(booking.cleaner_bonus_cents).toBe(0);
-    expect(booking.payout_type).toBe("team_per_cleaner_fixed");
+    expect(booking.payout_type).toBe("team_fixed_with_leader");
 
     const payouts = admin.tables.team_job_member_payouts;
     expect(payouts).toHaveLength(3);
     const sum = payouts.reduce((s, row) => s + Number((row as { payout_cents?: number }).payout_cents ?? 0), 0);
-    expect(sum).toBe(75_000);
+    expect(sum).toBe(77_000);
     const byId = new Map(payouts.map((row) => [(row as { cleaner_id: string }).cleaner_id, row as { payout_cents: number }]));
-    expect(byId.get(cLead)!.payout_cents).toBe(25_000);
+    expect(byId.get(cLead)!.payout_cents).toBe(27_000);
     expect(byId.get(cMem2)!.payout_cents).toBe(25_000);
     expect(byId.get(cMem3)!.payout_cents).toBe(25_000);
   });
@@ -562,7 +562,7 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     expect(result.ok).toBe(true);
     const booking = admin.tables.bookings[0]!;
     expect(booking.display_earnings_cents).toBe(20_000);
-    expect(Number(booking.earnings_cap_cents_applied)).toBe(35_000);
+    expect(Number(booking.earnings_cap_cents_applied)).toBe(30_000);
     expect(Number(booking.display_earnings_cents)).toBeGreaterThanOrEqual(0);
     expect(Number(booking.payout_earnings_cents)).toBe(Number(booking.display_earnings_cents));
   });
@@ -604,8 +604,8 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     const booking = admin.tables.bookings[0]!;
     expect(booking.display_earnings_cents).toBe(25_000);
     expect(booking.payout_earnings_cents).toBe(25_000);
-    expect(booking.internal_earnings_cents).toBe(24_000);
-    expect(booking.earnings_cap_cents_applied).toBe(35_000);
+    expect(booking.internal_earnings_cents).toBe(25_000);
+    expect(booking.earnings_cap_cents_applied).toBe(30_000);
   });
 
   it("recomputes solo display when stuck at 0 but customer payment columns show paid amount", async () => {

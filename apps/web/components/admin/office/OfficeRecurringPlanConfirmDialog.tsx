@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Loader2, RotateCcw, XCircle } from "lucide-react";
+import { AlertTriangle, Loader2, RotateCcw, Trash2, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ export type OfficeRecurringPlanConfirmTarget = {
   price: number;
 };
 
-export type RecurringPlanConfirmVariant = "cancel" | "backfill";
+export type RecurringPlanConfirmVariant = "cancel" | "backfill" | "delete";
 
 type OfficeRecurringPlanConfirmDialogProps = {
   open: boolean;
@@ -72,6 +72,22 @@ const VARIANT_CONFIG = {
     confirmLabel: "Backfill visits",
     confirmBusyLabel: "Backfilling…",
     confirmCls: "bg-blue-600 hover:bg-blue-700",
+  },
+  delete: {
+    icon: Trash2,
+    iconCls: "bg-red-100 text-red-700",
+    title: "Delete recurring plan?",
+    description: "Permanently removes this schedule from the system. Generated bookings stay on the calendar but are no longer linked to this plan.",
+    warningTitle: "This cannot be undone",
+    warningItems: [
+      "The plan row is deleted from recurring schedules",
+      "Existing bookings are kept; their recurring link is cleared",
+      "Use Cancel plan instead if you only want to stop future visits",
+    ],
+    dismissLabel: "Keep plan",
+    confirmLabel: "Delete plan",
+    confirmBusyLabel: "Deleting…",
+    confirmCls: "bg-red-600 hover:bg-red-700",
   },
 } as const;
 
@@ -125,7 +141,7 @@ export function OfficeRecurringPlanConfirmDialog({
                 <div
                   className={cn(
                     "rounded-xl border px-4 py-3",
-                    variant === "cancel"
+                    variant === "cancel" || variant === "delete"
                       ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30"
                       : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50",
                   )}
@@ -134,7 +150,9 @@ export function OfficeRecurringPlanConfirmDialog({
                     <AlertTriangle
                       className={cn(
                         "mt-0.5 h-4 w-4 shrink-0",
-                        variant === "cancel" ? "text-amber-700 dark:text-amber-400" : "text-slate-500",
+                        variant === "cancel" || variant === "delete"
+                          ? "text-amber-700 dark:text-amber-400"
+                          : "text-slate-500",
                       )}
                       aria-hidden
                     />
@@ -142,7 +160,7 @@ export function OfficeRecurringPlanConfirmDialog({
                       <p
                         className={cn(
                           "text-sm font-semibold",
-                          variant === "cancel"
+                          variant === "cancel" || variant === "delete"
                             ? "text-amber-950 dark:text-amber-100"
                             : "text-slate-800 dark:text-slate-100",
                         )}
@@ -152,7 +170,7 @@ export function OfficeRecurringPlanConfirmDialog({
                       <ul
                         className={cn(
                           "mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed",
-                          variant === "cancel"
+                          variant === "cancel" || variant === "delete"
                             ? "text-amber-900/90 dark:text-amber-100/90"
                             : "text-slate-600 dark:text-slate-400",
                         )}

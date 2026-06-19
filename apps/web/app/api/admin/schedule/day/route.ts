@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { computeOfficeTodayScheduleStats } from "@/lib/admin/officeTodayScheduleStats";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -8,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_SELECT =
-  "id, date, time, status, cleaner_id, selected_cleaner_id, customer_name, service, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status";
+  "id, date, time, status, cleaner_id, selected_cleaner_id, team_id, is_team_job, customer_name, service, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status";
 
 /**
  * Admin: bookings for a single calendar day (schedule board).
@@ -79,5 +80,6 @@ export async function GET(request: Request) {
     date,
     bookings: bookings ?? [],
     cleaners: cleanerRows ?? [],
+    summary: computeOfficeTodayScheduleStats(bookings ?? []),
   });
 }

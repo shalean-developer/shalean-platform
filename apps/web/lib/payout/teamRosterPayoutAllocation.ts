@@ -58,6 +58,8 @@ export function resolveTeamPayoutParticipantIds(params: {
   return [...new Set(params.activeTeamMemberIds.map((c) => String(c ?? "").trim()).filter(uuid))];
 }
 
+import type { BookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
+
 /** Canonical per-cleaner payout for team bookings (ZAR minor units). Same as fixed-special solo rate. */
 export const TEAM_PER_CLEANER_PAYOUT_CENTS = 25_000;
 
@@ -230,8 +232,29 @@ export function buildTeamJobMemberPayoutInsertRows(params: {
 }
 
 /**
+ * v3 team policy: per-cleaner totals from persisted {@link BookingEarningsSummary}.
+ */
+export function buildTeamJobMemberPayoutRowsFromEarningsSummary(params: {
+  bookingId: string;
+  teamId: string;
+  summary: BookingEarningsSummary;
+}): Array<{ booking_id: string; team_id: string; cleaner_id: string; payout_cents: number; status: string }> {
+  const uuid = (s: string) => /^[0-9a-f-]{36}$/i.test(String(s ?? "").trim());
+  return params.summary.per_cleaner_earnings
+    .filter((row) => uuid(row.cleaner_id))
+    .map((row) => ({
+      booking_id: params.bookingId,
+      team_id: params.teamId,
+      cleaner_id: row.cleaner_id,
+      payout_cents: Math.max(0, Math.floor(row.total_cents)),
+      status: "pending",
+    }));
+}
+
+/**
  * Canonical team policy: **each** roster cleaner (or fallback active team members) receives
  * {@link TEAM_PER_CLEANER_PAYOUT_CENTS} — no weighting, no shared pool.
+ * @deprecated Prefer {@link buildTeamJobMemberPayoutRowsFromEarningsSummary} for v3 rules.
  */
 export function buildTeamJobMemberFixedPerCleanerPayoutRows(params: {
   bookingId: string;

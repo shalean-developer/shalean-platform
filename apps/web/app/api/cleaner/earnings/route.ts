@@ -10,6 +10,10 @@ import {
 } from "@/lib/cleaner/cleanerDashboardTodayCents";
 import { earningsPeriodCentsFromRows } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import {
+  parseBookingEarningsSummary,
+  resolveCleanerFacingEarnings,
+} from "@/lib/payout/bookingEarningsSummary";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { normalizeCleanerPayoutSummaryRow } from "@/lib/cleaner/normalizeCleanerPayoutSummaryRow";
@@ -49,6 +53,7 @@ type BookingEarningsRow = {
   admin_recurring_unpaid_completion_override_at?: string | null;
   total_paid_zar?: unknown;
   amount_paid_cents?: unknown;
+  earnings_summary?: unknown;
 };
 
 type PaymentDetailsRow = {
@@ -183,7 +188,7 @@ export async function GET(request: Request) {
     await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
-          "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, admin_recurring_unpaid_completion_override_at",
+          "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at",
         perBranchLimit: 300,
         applyEachBranch: (q) =>
           q
@@ -250,6 +255,7 @@ export async function GET(request: Request) {
   let paid_cents = 0;
   let invalid_cents = 0;
   let frozen_batch_cents = 0;
+  let bonus_total_cents = 0;
 
   const out = rows.map((b) => {
     const rawPs = String(b.payout_status ?? "")
@@ -259,6 +265,9 @@ export async function GET(request: Request) {
       enqueuePayoutIntegrityAnomalyLog(admin, "eligible_or_paid_without_frozen", b.id, { payout_status: rawPs });
     }
     const cents = amountCentsForRow(b);
+    const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), session.cleanerId);
+    const bonusCents = facing?.bonus_cents ?? 0;
+    bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);
     const platformFee =
       customerPaid != null
@@ -309,6 +318,8 @@ export async function GET(request: Request) {
       payout_status: normalized.payout_status,
       payout_frozen_cents: normalized.payout_frozen_cents,
       amount_cents: normalized.amount_cents,
+      bonus_cents: bonusCents,
+      job_earning_cents: facing?.job_earning_cents ?? normalized.amount_cents,
       payout_paid_at: normalized.payout_paid_at,
       payout_run_id: normalized.payout_run_id,
       in_frozen_batch: inLockedWeeklyBatch,
@@ -541,6 +552,7 @@ export async function GET(request: Request) {
     month_cents,
     /** Same 7-day JHB logic as `GET /api/cleaner/dashboard` — single source for goal UI. */
     suggested_daily_goal_cents,
+    bonus_total_cents,
   };
 
   return NextResponse.json({

@@ -7,13 +7,19 @@ import {
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
 import {
+  backfillLegacyWeeklyPayoutColumnsFromEarnings,
+  countCompletedBlockingMissingLegacyPayout,
+  PayoutGenerationBlockedError,
+} from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
+import {
   BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY,
   bookingPayableForWeeklyBatch,
   type BookingRowForWeeklyBatchEligibility,
 } from "@/lib/payout/bookingPayableForWeeklyBatch";
 import { bookingUsesAccrualPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
+import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
-import { completionDayYmd, getPreviousWeekDateBoundsUtc, isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
+import { completionDayYmd, getPreviousWeekDateBoundsUtc, getUtcWeekBoundsContainingYmd, isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -21,6 +27,15 @@ export type GenerateWeeklyPayoutsResult = {
   bookingsLinked: number;
   payoutsBackfilled: number;
   skippedCleaners: number;
+};
+
+export type GenerateCatchUpWeeklyPayoutsResult = {
+  weeksProcessed: number;
+  payoutsCreated: number;
+  bookingsLinked: number;
+  payoutsBackfilled: number;
+  skippedCleaners: number;
+  periods: Array<{ start: string; end: string; payoutsCreated: number; bookingsLinked: number }>;
 };
 
 type BookingPayoutRow = BookingRowForWeeklyBatchEligibility & {
@@ -53,13 +68,14 @@ async function loadMonthlyInvoiceStatusMap(
 async function ensureNoMissingCompletedPayouts(
   admin: SupabaseClient,
 ): Promise<{ backfilled: number; remaining: number }> {
+  const legacyBackfill = await backfillLegacyWeeklyPayoutColumnsFromEarnings(admin, 1000);
+
   const { data: missingRows, error } = await admin
     .from("bookings")
-    .select("id, cleaner_id")
+    .select("id, cleaner_id, payout_owner_cleaner_id, is_team_job")
     .eq("status", "completed")
     .eq("is_test", false)
     .is("cleaner_payout_cents", null)
-    .not("cleaner_id", "is", null)
     .limit(1000);
 
   if (error) {
@@ -67,10 +83,12 @@ async function ensureNoMissingCompletedPayouts(
     throw new Error("Cannot generate payout batch: missing payout preflight failed");
   }
 
-  let backfilled = 0;
+  let backfilled = legacyBackfill.fixed;
   for (const row of missingRows ?? []) {
     const bookingId = String((row as { id?: string }).id ?? "");
-    const cleanerId = String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
+    const cleanerId = resolvePersistCleanerIdForBooking(
+      row as { cleaner_id?: string | null; payout_owner_cleaner_id?: string | null; is_team_job?: boolean | null },
+    );
     if (!bookingId || !cleanerId) continue;
     let result: Awaited<ReturnType<typeof persistCleanerPayoutIfUnset>>;
     try {
@@ -94,28 +112,10 @@ async function ensureNoMissingCompletedPayouts(
     if (!result.skipped) backfilled += 1;
   }
 
-  const { count, error: countErr } = await admin
-    .from("bookings")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .is("cleaner_payout_cents", null);
-
-  if (countErr) {
-    await reportOperationalIssue("error", "generateWeeklyPayouts", `missing payout recount failed: ${countErr.message}`);
-    throw new Error("Cannot generate payout batch: missing payout recount failed");
-  }
-
-  const remaining = count ?? 0;
+  const blocking = await countCompletedBlockingMissingLegacyPayout(admin);
+  const remaining = blocking.count;
   if (remaining > 0) {
-    const { data: remainingRows } = await admin
-      .from("bookings")
-      .select("id")
-      .eq("status", "completed")
-      .eq("is_test", false)
-      .is("cleaner_payout_cents", null)
-      .limit(50);
-    const bookingIds = (remainingRows ?? []).map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
+    const bookingIds = blocking.bookingIds;
     void logSystemEvent({
       level: "error",
       source: "payout_generation_blocked",
@@ -125,6 +125,7 @@ async function ensureNoMissingCompletedPayouts(
         totalMissingCount: remaining,
         bookingIds,
         backfilled,
+        legacyBackfillScanned: legacyBackfill.scanned,
       },
     });
     await reportOperationalIssue("error", "generateWeeklyPayouts", "missing payouts detected after preflight", {
@@ -133,39 +134,61 @@ async function ensureNoMissingCompletedPayouts(
       bookingIds,
       backfilled,
     });
-    throw new Error("Cannot generate payout batch: missing payouts detected");
+    throw new PayoutGenerationBlockedError(
+      "Cannot generate payout batch: completed bookings still missing legacy payout columns after backfill.",
+      { remaining, bookingIds },
+    );
   }
 
-  return { backfilled, remaining };
+  return { backfilled, remaining: 0 };
 }
 
-/**
- * Aggregates **completed**, non-test jobs with stored cleaner payout + bonus and no `payout_id`,
- * for the **previous UTC Mon–Sun** week (by completion day). Does not recalculate cents.
- *
- * Phase 12: each booking must satisfy {@link bookingPayableForWeeklyBatch} (invoice-settled accrual vs prepaid
- * customer-settled) before linking into a weekly batch.
- */
-export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<GenerateWeeklyPayoutsResult> {
-  const asOf = new Date();
-  const { periodStart, periodEnd } = getPreviousWeekDateBoundsUtc(asOf);
+async function listUnbatchedCompletionWeeks(admin: SupabaseClient): Promise<Array<{ periodStart: string; periodEnd: string }>> {
+  const { data, error } = await admin
+    .from("bookings")
+    .select("completed_at, date")
+    .eq("status", "completed")
+    .eq("is_test", false)
+    .is("payout_id", null)
+    .not("cleaner_payout_cents", "is", null)
+    .gt("cleaner_payout_cents", 0);
+
+  if (error) throw new Error(error.message);
+
+  const weekStarts = new Set<string>();
+  for (const row of data ?? []) {
+    const ymd = completionDayYmd(row as { completed_at?: string | null; date?: string | null });
+    if (!ymd) continue;
+    weekStarts.add(getUtcWeekBoundsContainingYmd(ymd).periodStart);
+  }
+
+  return [...weekStarts]
+    .sort()
+    .map((periodStart) => getUtcWeekBoundsContainingYmd(periodStart));
+}
+
+type GeneratePeriodResult = Omit<GenerateWeeklyPayoutsResult, "period">;
+
+async function generateWeeklyPayoutsForPeriod(
+  admin: SupabaseClient,
+  periodStart: string,
+  periodEnd: string,
+  opts?: { asOfForCutoffProbe?: Date },
+): Promise<GeneratePeriodResult> {
+  const asOf = opts?.asOfForCutoffProbe ?? new Date();
   const batchPayFridayJhb = computeCutoffAssignmentProbe(asOf).batch_pay_friday_jhb_ymd;
   let payoutsCreated = 0;
   let bookingsLinked = 0;
   let payoutsBackfilled = 0;
   let skippedCleaners = 0;
 
-  const preflight = await ensureNoMissingCompletedPayouts(admin);
-  payoutsBackfilled += preflight.backfilled;
-
   let jhbCutoffEdgeCaseBookings = 0;
-  /** Per booking: UI JHB payout-target Friday at completion vs batch pay Friday for this UTC-week run. */
   let batchCutoffUiVsBatchFridayMismatches = 0;
 
   const { data: cleaners, error: cErr } = await admin.from("cleaners").select("id");
   if (cErr || !cleaners?.length) {
     await reportOperationalIssue("warn", "generateWeeklyPayouts", cErr?.message ?? "no cleaners", {});
-    return { period: { start: periodStart, end: periodEnd }, payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
+    return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
   }
 
   for (const row of cleaners) {
@@ -431,10 +454,73 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
   }
 
   return {
-    period: { start: periodStart, end: periodEnd },
     payoutsCreated,
     bookingsLinked,
     payoutsBackfilled,
     skippedCleaners,
+  };
+}
+
+/**
+ * Aggregates **completed**, non-test jobs with stored cleaner payout + bonus and no `payout_id`,
+ * for the **previous UTC Mon–Sun** week (by completion day). Does not recalculate cents.
+ *
+ * Phase 12: each booking must satisfy {@link bookingPayableForWeeklyBatch} (invoice-settled accrual vs prepaid
+ * customer-settled) before linking into a weekly batch.
+ */
+export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<GenerateWeeklyPayoutsResult> {
+  const asOf = new Date();
+  const { periodStart, periodEnd } = getPreviousWeekDateBoundsUtc(asOf);
+
+  const preflight = await ensureNoMissingCompletedPayouts(admin);
+  const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, { asOfForCutoffProbe: asOf });
+
+  return {
+    period: { start: periodStart, end: periodEnd },
+    payoutsCreated: periodResult.payoutsCreated,
+    bookingsLinked: periodResult.bookingsLinked,
+    payoutsBackfilled: preflight.backfilled + periodResult.payoutsBackfilled,
+    skippedCleaners: periodResult.skippedCleaners,
+  };
+}
+
+/**
+ * Admin catch-up: batch every UTC completion week that still has unlinked payable bookings.
+ * Cron continues to use {@link generateWeeklyPayouts} for the previous week only.
+ */
+export async function generateCatchUpWeeklyPayouts(admin: SupabaseClient): Promise<GenerateCatchUpWeeklyPayoutsResult> {
+  const preflight = await ensureNoMissingCompletedPayouts(admin);
+  const weeks = await listUnbatchedCompletionWeeks(admin);
+
+  let payoutsCreated = 0;
+  let bookingsLinked = 0;
+  let payoutsBackfilled = preflight.backfilled;
+  let skippedCleaners = 0;
+  const periods: GenerateCatchUpWeeklyPayoutsResult["periods"] = [];
+
+  for (const { periodStart, periodEnd } of weeks) {
+    const asOfForCutoffProbe = new Date(`${periodEnd}T12:00:00Z`);
+    const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, { asOfForCutoffProbe });
+    payoutsCreated += periodResult.payoutsCreated;
+    bookingsLinked += periodResult.bookingsLinked;
+    payoutsBackfilled += periodResult.payoutsBackfilled;
+    skippedCleaners += periodResult.skippedCleaners;
+    if (periodResult.payoutsCreated > 0 || periodResult.bookingsLinked > 0) {
+      periods.push({
+        start: periodStart,
+        end: periodEnd,
+        payoutsCreated: periodResult.payoutsCreated,
+        bookingsLinked: periodResult.bookingsLinked,
+      });
+    }
+  }
+
+  return {
+    weeksProcessed: weeks.length,
+    payoutsCreated,
+    bookingsLinked,
+    payoutsBackfilled,
+    skippedCleaners,
+    periods,
   };
 }

@@ -1,5 +1,83 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const CLEANER_ACTIVE_BOOKING_STATUSES = ["assigned", "in_progress"] as const;
+
+function collectUuid(id: unknown): string | null {
+  const s = typeof id === "string" ? id.trim() : "";
+  return /^[0-9a-f-]{36}$/i.test(s) ? s : null;
+}
+
+/** All cleaner ids tied to a booking row (assignee, payout owner, roster). */
+export async function loadCleanerIdsLinkedToBooking(
+  supabase: SupabaseClient,
+  bookingId: string,
+  seed?: { cleaner_id?: string | null; payout_owner_cleaner_id?: string | null },
+): Promise<string[]> {
+  const out = new Set<string>();
+  const add = (id: unknown) => {
+    const u = collectUuid(id);
+    if (u) out.add(u);
+  };
+
+  add(seed?.cleaner_id);
+  add(seed?.payout_owner_cleaner_id);
+
+  const { data: roster } = await supabase.from("booking_cleaners").select("cleaner_id").eq("booking_id", bookingId);
+  for (const row of roster ?? []) {
+    add((row as { cleaner_id?: string | null }).cleaner_id);
+  }
+
+  if (!seed?.cleaner_id && !seed?.payout_owner_cleaner_id) {
+    const { data: booking } = await supabase
+      .from("bookings")
+      .select("cleaner_id, payout_owner_cleaner_id")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (booking && typeof booking === "object") {
+      add((booking as { cleaner_id?: string | null }).cleaner_id);
+      add((booking as { payout_owner_cleaner_id?: string | null }).payout_owner_cleaner_id);
+    }
+  }
+
+  return [...out];
+}
+
+async function cleanerHasActiveWorkloadBookings(supabase: SupabaseClient, cleanerId: string): Promise<boolean> {
+  const { data: asAssignee } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("cleaner_id", cleanerId)
+    .in("status", [...CLEANER_ACTIVE_BOOKING_STATUSES])
+    .limit(1);
+  if ((asAssignee?.length ?? 0) > 0) return true;
+
+  const { data: asPayoutOwner } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("payout_owner_cleaner_id", cleanerId)
+    .in("status", [...CLEANER_ACTIVE_BOOKING_STATUSES])
+    .limit(1);
+  if ((asPayoutOwner?.length ?? 0) > 0) return true;
+
+  const { data: rosterRows } = await supabase
+    .from("booking_cleaners")
+    .select("booking_id")
+    .eq("cleaner_id", cleanerId)
+    .limit(100);
+  const bookingIds = (rosterRows ?? [])
+    .map((r) => collectUuid((r as { booking_id?: string | null }).booking_id))
+    .filter((id): id is string => id != null);
+  if (bookingIds.length === 0) return false;
+
+  const { data: rosterActive } = await supabase
+    .from("bookings")
+    .select("id")
+    .in("id", bookingIds)
+    .in("status", [...CLEANER_ACTIVE_BOOKING_STATUSES])
+    .limit(1);
+  return (rosterActive?.length ?? 0) > 0;
+}
+
 /**
  * Workload sync. Recomputes `cleaners.status` from live booking rows so the
  * dashboard / dispatch eligibility filter reflect actual workload after an
@@ -31,14 +109,7 @@ export async function syncCleanerBusyFromBookings(
   // when the cleaner went offline mid-shift must NOT bring them back online.
   if (st === "offline") return;
 
-  const { data: active } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("cleaner_id", cleanerId)
-    .in("status", ["assigned", "in_progress"])
-    .limit(10);
-
-  const busy = (active?.length ?? 0) > 0;
+  const busy = await cleanerHasActiveWorkloadBookings(supabase, cleanerId);
   const next = busy ? "busy" : "available";
   if (st === next) return;
 
@@ -71,4 +142,14 @@ export async function syncCleanersBusyAfterBookingTerminalChange(
 ): Promise<void> {
   const ids = collectCleanerIdsForWorkloadSync(cleanerIds);
   await Promise.all(ids.map((id) => syncCleanerBusyFromBookings(supabase, id)));
+}
+
+/** After a booking reaches a terminal status, sync every cleaner linked to that booking. */
+export async function syncCleanersBusyAfterBookingTerminalByBookingId(
+  supabase: SupabaseClient,
+  bookingId: string,
+  seed?: { cleaner_id?: string | null; payout_owner_cleaner_id?: string | null },
+): Promise<void> {
+  const ids = await loadCleanerIdsLinkedToBooking(supabase, bookingId, seed);
+  await syncCleanersBusyAfterBookingTerminalChange(supabase, ids);
 }

@@ -13,13 +13,23 @@ import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailab
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
+import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
+import {
+  countPlatformTeamJobsOnDate,
+  fetchTeamCapacityUsageSlotsByTeam,
+  MAX_TEAM_BOOKINGS_PER_DAY,
+  TEAM_MIN_ROSTER_MEMBERS,
+  teamJobSlotsPerTeamPerDay,
+} from "@/lib/dispatch/teamJobsPerDay";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, useLegacyPayoutEngine } from "@/lib/payout/canonicalCleanerPayout";
 import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
+  buildTeamJobMemberPayoutRowsFromEarningsSummary,
   resolveTeamCleanerPoolCents,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import { resolveBookingCanonicalPayout } from "@/lib/payout/resolveBookingCanonicalPayout";
 
 type BookingRow = {
   id: string;
@@ -30,10 +40,23 @@ type BookingRow = {
   team_id: string | null;
   is_team_job: boolean | null;
   status: string | null;
+  cleaner_line_earnings_finalized_at?: string | null;
 };
 
-function teamDayCapacitySlots(capacityPerDay: number | null | undefined): number {
-  return Math.max(1, Number(capacityPerDay ?? 0) || 0);
+function teamDayJobSlots(): number {
+  return teamJobSlotsPerTeamPerDay();
+}
+
+function earningsFinalizedAt(raw: unknown): boolean {
+  return raw != null && String(raw).trim() !== "";
+}
+
+async function releaseTeamCapacityClaim(
+  admin: SupabaseClient,
+  teamId: string,
+  dateYmd: string,
+): Promise<void> {
+  await admin.rpc("release_team_capacity_slot", { p_team_id: teamId, p_booking_date: dateYmd });
 }
 
 export async function countTeamJobSlotsUsedOnDate(
@@ -78,7 +101,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, service, booking_snapshot, team_id, is_team_job, status")
+    .select("id, date, service, booking_snapshot, team_id, is_team_job, status, cleaner_line_earnings_finalized_at")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return { ok: false, httpStatus: 500, error: bErr.message };
@@ -139,8 +162,12 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   ].sort();
 
   const rosterCount = activeCleanerIds.length;
-  if (rosterCount <= 0) {
-    return { ok: false, httpStatus: 400, error: "Team has no active members on the booking date." };
+  if (rosterCount < TEAM_MIN_ROSTER_MEMBERS) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      error: `Team needs at least ${TEAM_MIN_ROSTER_MEMBERS} active members on the booking date.`,
+    };
   }
 
   const capGate = serviceCapabilityGateFromTeamServiceType(expectedService);
@@ -157,21 +184,38 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     };
   }
 
-  const cap = teamDayCapacitySlots((team as { capacity_per_day?: number }).capacity_per_day);
+  const cap = teamDayJobSlots();
+  const excludeFromPlatform = b.is_team_job === true ? bookingId : undefined;
+  const { count: platformUsedExcl, error: platformErr } = await countPlatformTeamJobsOnDate(
+    admin,
+    dateYmd,
+    excludeFromPlatform,
+  );
+  if (platformErr) return { ok: false, httpStatus: 500, error: platformErr };
+  if (platformUsedExcl >= MAX_TEAM_BOOKINGS_PER_DAY) {
+    return {
+      ok: false,
+      httpStatus: 409,
+      error: `Daily team booking limit reached (${MAX_TEAM_BOOKINGS_PER_DAY} per day across all teams).`,
+    };
+  }
+
   const { count: usedExcludingThis, error: slotErr } = await countTeamJobSlotsUsedOnDate(admin, tid, dateYmd, bookingId);
   if (slotErr) return { ok: false, httpStatus: 500, error: slotErr };
-  if (usedExcludingThis >= cap) {
+  const usageLoaded = await fetchTeamCapacityUsageSlotsByTeam(admin, dateYmd, [tid]);
+  if (usageLoaded.error) return { ok: false, httpStatus: 500, error: usageLoaded.error };
+  const usageUsed = usageLoaded.map.get(tid) ?? 0;
+  const effectiveUsed = Math.max(usedExcludingThis, usageUsed);
+  if (effectiveUsed >= cap) {
     return { ok: false, httpStatus: 409, error: "Team is at capacity for this booking date." };
   }
 
   const oldTeamId = typeof b.team_id === "string" && b.team_id.trim() ? b.team_id.trim() : null;
   const sameTeam = oldTeamId === tid && b.is_team_job === true;
+  const rosterLocked = earningsFinalizedAt(b.cleaner_line_earnings_finalized_at);
 
-  let oldTeamCapacity = 1;
-  if (oldTeamId) {
-    const { data: oldT } = await admin.from("teams").select("capacity_per_day").eq("id", oldTeamId).maybeSingle();
-    oldTeamCapacity = teamDayCapacitySlots((oldT as { capacity_per_day?: number } | null)?.capacity_per_day);
-  }
+  const oldTeamCapacity = teamDayJobSlots();
+  let claimedTeamId: string | null = null;
 
   if (!sameTeam) {
     if (oldTeamId && oldTeamId !== tid) {
@@ -211,12 +255,14 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
         }
         return { ok: false, httpStatus: 409, error: "Team at capacity (claim rejected)." };
       }
+      claimedTeamId = tid;
     }
   }
 
   const payoutOwnerCleanerId =
     activeCleanerIds.find((id) => cleanerPassesServiceCapabilityGate(capsLoaded.map.get(id) ?? {}, capGate)) ?? null;
   if (!payoutOwnerCleanerId) {
+    if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
     return {
       ok: false,
       httpStatus: 400,
@@ -224,64 +270,145 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     };
   }
 
-  const atomic = await assignAdminTeamAndSyncRoster({
-    admin,
-    bookingId,
-    teamId: tid,
-    payoutOwnerCleanerId,
-    teamMemberCountSnapshot: rosterCount,
-  });
-  if (!atomic.ok) {
-    const locked = /finalized|roster locked|cleaner line earnings finalized/i.test(atomic.message);
-    return { ok: false, httpStatus: locked ? 409 : 500, error: atomic.message };
+  const nowIso = new Date().toISOString();
+
+  if (rosterLocked) {
+    const { count: rosterCountCheck } = await admin
+      .from("booking_cleaners")
+      .select("cleaner_id", { count: "exact", head: true })
+      .eq("booking_id", bookingId);
+    if ((rosterCountCheck ?? 0) < 1) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return {
+        ok: false,
+        httpStatus: 409,
+        error: BOOKING_ROSTER_LOCKED_HINT,
+      };
+    }
+
+    const st = String(b.status ?? "").toLowerCase();
+    const headerPatch: Record<string, unknown> = {
+      team_id: tid,
+      is_team_job: true,
+      cleaner_id: payoutOwnerCleanerId,
+      payout_owner_cleaner_id: payoutOwnerCleanerId,
+      team_member_count_snapshot: rosterCount,
+    };
+    if (st === "pending" || st === "pending_assignment" || st === "offered") {
+      headerPatch.status = "assigned";
+      headerPatch.dispatch_status = "assigned";
+      headerPatch.assigned_at = nowIso;
+    }
+    const { error: headerErr } = await admin.from("bookings").update(headerPatch).eq("id", bookingId);
+    if (headerErr) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return { ok: false, httpStatus: 500, error: headerErr.message };
+    }
+  } else {
+    const atomic = await assignAdminTeamAndSyncRoster({
+      admin,
+      bookingId,
+      teamId: tid,
+      payoutOwnerCleanerId,
+      teamMemberCountSnapshot: rosterCount,
+    });
+    if (!atomic.ok) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      const locked = /finalized|roster locked|cleaner line earnings finalized/i.test(atomic.message);
+      return {
+        ok: false,
+        httpStatus: locked ? 409 : 500,
+        error: locked ? BOOKING_ROSTER_LOCKED_HINT : atomic.message,
+      };
+    }
   }
 
-  const { error: delPayErr } = await admin.from("team_job_member_payouts").delete().eq("booking_id", bookingId);
-  if (delPayErr) {
-    return { ok: false, httpStatus: 500, error: `Failed clearing payouts: ${delPayErr.message}` };
+  if (!rosterLocked) {
+    const { error: delPayErr } = await admin.from("team_job_member_payouts").delete().eq("booking_id", bookingId);
+    if (delPayErr) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return { ok: false, httpStatus: 500, error: `Failed clearing payouts: ${delPayErr.message}` };
+    }
+
+    const { data: rosterRows, error: rosterErr } = await admin
+      .from("booking_cleaners")
+      .select("cleaner_id, role, payout_weight, lead_bonus_cents")
+      .eq("booking_id", bookingId)
+      .order("cleaner_id", { ascending: true });
+    if (rosterErr) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return { ok: false, httpStatus: 500, error: `Failed loading roster for payout split: ${rosterErr.message}` };
+    }
+
+    let payoutRows: ReturnType<typeof buildTeamJobMemberFixedPerCleanerPayoutRows>;
+    if (useLegacyPayoutEngine()) {
+      let poolCents = await resolveTeamCleanerPoolCents(admin, bookingId);
+      if (poolCents <= 0) poolCents = CANONICAL_TEAM_POOL_DISPLAY_CENTS;
+      payoutRows = buildTeamJobMemberPayoutInsertRows({
+        bookingId,
+        teamId: tid,
+        poolCents,
+        rosterRows: rosterRows ?? [],
+        fallbackCleanerIds: activeCleanerIds,
+      });
+    } else {
+      const { data: bookingFinancial, error: finErr } = await admin
+        .from("bookings")
+        .select(
+          "id, is_team_job, team_id, payout_owner_cleaner_id, base_amount_cents, service_fee_cents, total_paid_zar, total_paid_cents, amount_paid_cents, service, booking_snapshot, date, time, price_snapshot",
+        )
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (finErr || !bookingFinancial) {
+        if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+        return { ok: false, httpStatus: 500, error: `Failed loading booking for payout: ${finErr?.message ?? "not found"}` };
+      }
+      const canonical = await resolveBookingCanonicalPayout(admin, {
+        bookingId,
+        row: bookingFinancial,
+        expectedCleanerId: payoutOwnerCleanerId,
+        computedAtIso: nowIso,
+      });
+      if (canonical.earningsSummary) {
+        payoutRows = buildTeamJobMemberPayoutRowsFromEarningsSummary({
+          bookingId,
+          teamId: tid,
+          summary: canonical.earningsSummary,
+        });
+        await admin
+          .from("bookings")
+          .update({
+            earnings_summary: canonical.earningsSummary,
+            company_revenue_cents: canonical.earningsSummary.company_revenue_cents,
+            display_earnings_cents: canonical.displayEarningsCents,
+            internal_earnings_cents: canonical.earningsSummary.total_cleaner_earnings_cents,
+            earnings_model_version: canonical.earningsModelVersion,
+          })
+          .eq("id", bookingId);
+      } else {
+        payoutRows = buildTeamJobMemberFixedPerCleanerPayoutRows({
+          bookingId,
+          teamId: tid,
+          rosterRows: rosterRows ?? [],
+          fallbackCleanerIds: activeCleanerIds,
+        });
+      }
+    }
+    if (payoutRows.length > 0) {
+      const { error: insPayErr } = await admin.from("team_job_member_payouts").insert(payoutRows);
+      if (insPayErr) {
+        if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+        return { ok: false, httpStatus: 500, error: `Failed inserting payouts: ${insPayErr.message}` };
+      }
+    }
   }
 
   const { error: delAssignErr } = await admin.from("booking_team_assignments").delete().eq("booking_id", bookingId);
   if (delAssignErr) {
+    if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
     return { ok: false, httpStatus: 500, error: `Failed clearing team assignment rows: ${delAssignErr.message}` };
   }
 
-  const { data: rosterRows, error: rosterErr } = await admin
-    .from("booking_cleaners")
-    .select("cleaner_id, role, payout_weight, lead_bonus_cents")
-    .eq("booking_id", bookingId)
-    .order("cleaner_id", { ascending: true });
-  if (rosterErr) {
-    return { ok: false, httpStatus: 500, error: `Failed loading roster for payout split: ${rosterErr.message}` };
-  }
-
-  let payoutRows: ReturnType<typeof buildTeamJobMemberFixedPerCleanerPayoutRows>;
-  if (useLegacyPayoutEngine()) {
-    let poolCents = await resolveTeamCleanerPoolCents(admin, bookingId);
-    if (poolCents <= 0) poolCents = CANONICAL_TEAM_POOL_DISPLAY_CENTS;
-    payoutRows = buildTeamJobMemberPayoutInsertRows({
-      bookingId,
-      teamId: tid,
-      poolCents,
-      rosterRows: rosterRows ?? [],
-      fallbackCleanerIds: activeCleanerIds,
-    });
-  } else {
-    payoutRows = buildTeamJobMemberFixedPerCleanerPayoutRows({
-      bookingId,
-      teamId: tid,
-      rosterRows: rosterRows ?? [],
-      fallbackCleanerIds: activeCleanerIds,
-    });
-  }
-  if (payoutRows.length > 0) {
-    const { error: insPayErr } = await admin.from("team_job_member_payouts").insert(payoutRows);
-    if (insPayErr) {
-      return { ok: false, httpStatus: 500, error: `Failed inserting payouts: ${insPayErr.message}` };
-    }
-  }
-
-  const nowIso = new Date().toISOString();
   const { error: insAssignErr } = await admin.from("booking_team_assignments").insert({
     booking_id: bookingId,
     team_id: tid,
@@ -289,6 +416,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     assigned_at: nowIso,
   });
   if (insAssignErr) {
+    if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
     return { ok: false, httpStatus: 500, error: `Failed recording team assignment: ${insAssignErr.message}` };
   }
 
@@ -361,7 +489,7 @@ export type ListTeamAssignCandidatesResult = {
 
 export async function listTeamAssignCandidatesForBooking(
   admin: SupabaseClient,
-  booking: Pick<BookingRow, "service" | "booking_snapshot" | "date" | "id" | "service_slug">,
+  booking: Pick<BookingRow, "service" | "booking_snapshot" | "date" | "id" | "service_slug" | "is_team_job">,
 ): Promise<ListTeamAssignCandidatesResult> {
   if (!isTeamService(booking as BookingRow)) {
     return { teams: [], error: null, qualified_for_label: "" };
@@ -417,17 +545,36 @@ export async function listTeamAssignCandidatesForBooking(
   const capsLoaded = await loadCleanerCapabilityColumnsById(admin, [...allActiveCleanerIds]);
   if (!capsLoaded.ok) return { teams: [], error: capsLoaded.error, qualified_for_label: qualifiedLabel };
 
+  const excludeFromPlatform = (booking as BookingRow).is_team_job === true ? booking.id : undefined;
+  const { count: platformUsedExcl, error: platformErr } = await countPlatformTeamJobsOnDate(
+    admin,
+    dateYmd,
+    excludeFromPlatform,
+  );
+  if (platformErr) return { teams: [], error: platformErr, qualified_for_label: qualifiedLabel };
+  const platformAtCapacity = platformUsedExcl >= MAX_TEAM_BOOKINGS_PER_DAY;
+
+  const usageLoaded = await fetchTeamCapacityUsageSlotsByTeam(admin, dateYmd, teamIds);
+  if (usageLoaded.error) return { teams: [], error: usageLoaded.error, qualified_for_label: qualifiedLabel };
+
   const out: TeamAssignCandidateRow[] = [];
   for (const row of teamRows) {
     const members = membersByTeam.get(row.id) ?? [];
     const activeCleanerIds = activeCleanerIdsSortedOnDate(members, dateYmd);
     const activeCount = activeCleanerIds.length;
     const qualifiedCount = countCleanersPassingServiceCapabilityGate(activeCleanerIds, capsLoaded.map, capGate);
-    const { count: usedFull } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd);
-    const { count: usedExcl } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd, booking.id);
-    const cap = teamDayCapacitySlots(row.capacity_per_day);
+    const { count: usedFromBookings } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd);
+    const usageUsed = usageLoaded.map.get(row.id) ?? 0;
+    const usedFull = Math.max(usedFromBookings, usageUsed);
+    const { count: usedExclBookings } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd, booking.id);
+    const usedExcl = Math.max(usedExclBookings, usageUsed);
+    const cap = teamDayJobSlots();
     const teamActive = row.is_active !== false;
-    const assignable = teamActive && qualifiedCount > 0 && usedExcl < cap;
+    const assignable =
+      teamActive &&
+      !platformAtCapacity &&
+      qualifiedCount >= TEAM_MIN_ROSTER_MEMBERS &&
+      usedExcl < cap;
     out.push({
       id: row.id,
       name: row.name,

@@ -105,11 +105,12 @@ export function AdminAssignForm({
   slaBreachMinutes?: number | null;
   /** Fired after smart assign exhausts all ranked cleaners (client 400s only), not on auth/server errors. */
   onCascadeExhausted?: () => void | Promise<void>;
-  onDone: (args: { cleanerId: string; assignAttempts?: number }) => void;
+  onDone: (args: { cleanerId: string; assignAttempts?: number; direct?: boolean }) => void;
   onError: (message: string) => void;
 }) {
   const [cleanerId, setCleanerId] = useState("");
   const [force, setForce] = useState(false);
+  const [directAssign, setDirectAssign] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [submitWarnings, setSubmitWarnings] = useState<AdminWarning[]>([]);
@@ -126,6 +127,7 @@ export function AdminAssignForm({
   useEffect(() => {
     setCleanerId("");
     setForce(false);
+    setDirectAssign(false);
     setMsg(null);
     setSubmitWarnings([]);
     setExtremeSlaEscalateConfirm(false);
@@ -262,23 +264,24 @@ export function AdminAssignForm({
         setBusy(false);
         return;
       }
-      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/offer`, {
+      const endpoint = directAssign ? "assign-direct" : "offer";
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/${endpoint}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ cleanerId: cleanerId.trim(), force }),
       });
-      let j: { error?: string; warnings?: AdminWarning[] };
+      let j: { error?: string; warnings?: AdminWarning[]; alreadyAssigned?: boolean };
       try {
-        j = (await res.json()) as { error?: string; warnings?: AdminWarning[] };
+        j = (await res.json()) as { error?: string; warnings?: AdminWarning[]; alreadyAssigned?: boolean };
       } catch {
-        const err = "Failed to send job offer";
+        const err = directAssign ? "Failed to assign cleaner" : "Failed to send job offer";
         setMsg(err);
         onError(err);
         setBusy(false);
         return;
       }
       if (!res.ok) {
-        const err = j.error ?? "Failed to send job offer";
+        const err = j.error ?? (directAssign ? "Failed to assign cleaner" : "Failed to send job offer");
         setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
         if (res.status === 400) recordAssignFailure(bookingId, cleanerId.trim());
         setMsg(err);
@@ -288,9 +291,11 @@ export function AdminAssignForm({
       }
       setSubmitWarnings(Array.isArray(j.warnings) ? j.warnings : []);
       clearAssignFailuresForBooking(bookingId);
-      onDone({ cleanerId: cleanerId.trim() });
+      onDone({ cleanerId: cleanerId.trim(), direct: directAssign });
     } catch {
-      const err = "Network error — could not send job offer.";
+      const err = directAssign
+        ? "Network error — could not assign cleaner."
+        : "Network error — could not send job offer.";
       setMsg(err);
       onError(err);
     } finally {
@@ -514,6 +519,18 @@ export function AdminAssignForm({
         <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
         Override slot checks (calendar, overlapping jobs, offline)
       </label>
+      <label className="flex items-start gap-2 text-[11px] text-zinc-700 dark:text-zinc-300">
+        <input
+          type="checkbox"
+          checked={directAssign}
+          onChange={(e) => setDirectAssign(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="font-semibold">Assign directly</span> — skip the job offer; booking is marked assigned and the
+          cleaner is notified (WhatsApp / SMS / email).
+        </span>
+      </label>
       {force ? (
         <p className="text-[11px] font-medium text-rose-800 dark:text-rose-200">
           ⚠️ Override can double-book a cleaner or send them outside their calendar. Only use when you accept that
@@ -540,7 +557,7 @@ export function AdminAssignForm({
         disabled={busy}
         className="w-full rounded-md bg-emerald-600 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
       >
-        {busy ? "Saving…" : "Send job offer"}
+        {busy ? "Saving…" : directAssign ? "Assign & notify cleaner" : "Send job offer"}
       </button>
       <button
         type="button"

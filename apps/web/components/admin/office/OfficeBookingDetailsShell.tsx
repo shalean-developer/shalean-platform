@@ -260,7 +260,9 @@ export function OfficeBookingDetailsShell(props: OfficeBookingDetailsShellProps)
               <span
                 className={[
                   SUMMARY_META_CLASS,
-                  props.cleanerStatusLabel === "Assigned" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800",
+                  props.cleanerStatusLabel === "Assigned" || props.cleanerStatusLabel === "Available"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-800",
                 ].join(" ")}
               >
                 {props.cleanerStatusLabel}
@@ -339,7 +341,7 @@ export function OfficeBookingDetailsShell(props: OfficeBookingDetailsShellProps)
                       <p className="break-words font-semibold text-slate-950">{props.cleanerDisplayName ?? "Unassigned"}</p>
                       {props.cleanerRatingLine ? <p className="text-sm text-slate-500">{props.cleanerRatingLine}</p> : null}
                     </div>
-                    <Badge variant={props.cleanerStatusLabel === "Assigned" ? "success" : "warning"} className="shrink-0 normal-case">
+                    <Badge variant={props.cleanerStatusLabel === "Assigned" || props.cleanerStatusLabel === "Available" ? "success" : "warning"} className="shrink-0 normal-case">
                       {props.cleanerStatusLabel}
                     </Badge>
                   </div>

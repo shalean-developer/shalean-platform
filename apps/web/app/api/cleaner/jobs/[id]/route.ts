@@ -22,6 +22,10 @@ import {
 } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import {
+  parseBookingEarningsSummary,
+  resolveCleanerFacingEarnings,
+} from "@/lib/payout/bookingEarningsSummary";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import {
@@ -123,7 +127,7 @@ function markBookingCompletedOpToLifecycleResult(
 }
 
 const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email, user_id, extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
+  "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email, user_id, extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -374,6 +378,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     serviceLabel: typeof record.service === "string" ? record.service : null,
   });
 
+  const earningsSummary = parseBookingEarningsSummary(record.earnings_summary);
+  const cleanerFacing = resolveCleanerFacingEarnings(earningsSummary, session.cleanerId);
+  const jobEarningCents = cleanerFacing?.job_earning_cents ?? displayEarningsCents;
+  const bonusCents = cleanerFacing?.bonus_cents ?? 0;
+
   return NextResponse.json({
     job: {
       ...safe,
@@ -388,9 +397,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       access_detail_lines,
       scope_lines,
       lineItems: lineItems && lineItems.length > 0 ? lineItems : null,
-      displayEarningsCents,
+      displayEarningsCents: jobEarningCents,
       displayEarningsIsEstimate,
-      earnings_cents: displayEarningsCents,
+      earnings_cents: jobEarningCents,
+      job_earning_cents: jobEarningCents,
+      bonus_cents: bonusCents,
       earnings_estimated: displayEarningsIsEstimate,
       earnings_is_estimate: displayEarningsIsEstimate,
       teamMemberCount,

@@ -20,10 +20,13 @@ import {
   RotateCcw,
   MoreHorizontal,
   AlertTriangle,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch, getAdminToken } from "@/hooks/useAdminData";
 import { CreateRecurringPlanDialog } from "@/components/admin/CreateRecurringPlanDialog";
+import { EditRecurringPlanDialog, type EditRecurringPlanTarget } from "@/components/admin/EditRecurringPlanDialog";
 import {
   OfficeRecurringPlanConfirmDialog,
   type RecurringPlanConfirmVariant,
@@ -180,6 +183,8 @@ function RecurringPlanActionsMenu({
   canPause,
   canResume,
   canCancel,
+  onEdit,
+  onDelete,
   onBackfill,
   onPause,
   onResume,
@@ -190,6 +195,8 @@ function RecurringPlanActionsMenu({
   canPause: boolean;
   canResume: boolean;
   canCancel: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
   onBackfill: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -211,6 +218,11 @@ function RecurringPlanActionsMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={onEdit} className="gap-2">
+          <Pencil className="h-4 w-4 text-slate-500" />
+          Edit plan
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {canPause && (
           <>
             <DropdownMenuItem onClick={onBackfill} className="gap-2">
@@ -236,6 +248,11 @@ function RecurringPlanActionsMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onDelete} className="gap-2 text-red-600 focus:text-red-600">
+          <Trash2 className="h-4 w-4" />
+          Delete plan
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link
             href={`/office/bookings?recurring_id=${encodeURIComponent(planId)}`}
@@ -258,6 +275,7 @@ export default function RecurringPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditRecurringPlanTarget | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     variant: RecurringPlanConfirmVariant;
     planId: string;
@@ -354,11 +372,25 @@ export default function RecurringPage() {
     }
   }
 
+  async function handleDelete(id: string) {
+    setActionLoading(id);
+    const res = await adminFetch(`/api/admin/recurring/${encodeURIComponent(id)}`, { method: "DELETE" });
+    setActionLoading(null);
+    if (res.ok) {
+      showToast("Plan deleted", true);
+      void refetch();
+    } else {
+      showToast(res.error ?? "Failed to delete plan", false);
+    }
+  }
+
   async function handleConfirmDialogAction() {
     if (!confirmDialog) return;
     const { variant, planId } = confirmDialog;
     if (variant === "cancel") {
       await handleAction(planId, "cancel");
+    } else if (variant === "delete") {
+      await handleDelete(planId);
     } else {
       await handleBackfill(planId);
     }
@@ -594,6 +626,8 @@ export default function RecurringPage() {
                             canPause={canPause}
                             canResume={canResume}
                             canCancel={canCancel}
+                            onEdit={() => setEditTarget(plan)}
+                            onDelete={() => setConfirmDialog({ variant: "delete", planId: plan.id })}
                             onBackfill={() => setConfirmDialog({ variant: "backfill", planId: plan.id })}
                             onPause={() => void handleAction(plan.id, "pause")}
                             onResume={() => void handleAction(plan.id, "resume")}
@@ -641,6 +675,18 @@ export default function RecurringPage() {
       </div>
 
       <CreateRecurringPlanDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void refetch()} />
+
+      <EditRecurringPlanDialog
+        open={editTarget != null}
+        plan={editTarget}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+        onUpdated={() => {
+          showToast("Plan updated", true);
+          void refetch();
+        }}
+      />
 
       <OfficeRecurringPlanConfirmDialog
         open={confirmDialog != null}

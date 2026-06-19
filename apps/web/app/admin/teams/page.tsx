@@ -67,7 +67,7 @@ export default function AdminTeamsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
-  const [createCapacity, setCreateCapacity] = useState("3");
+  const [createCapacity, setCreateCapacity] = useState("15");
   const [createService, setCreateService] = useState<"deep_cleaning" | "move_cleaning">("deep_cleaning");
   const [createBusy, setCreateBusy] = useState(false);
 
@@ -127,8 +127,8 @@ export default function AdminTeamsPage() {
         emitAdminToast("Team name is required.", "error");
         return;
       }
-      if (!Number.isFinite(cap) || cap <= 0) {
-        emitAdminToast("Capacity per day must be a positive number.", "error");
+      if (!Number.isFinite(cap) || cap < 2 || cap > 15) {
+        emitAdminToast("Max roster members must be between 2 and 15.", "error");
         return;
       }
       await createAdminTeam({
@@ -138,7 +138,7 @@ export default function AdminTeamsPage() {
       });
       setCreateOpen(false);
       setCreateName("");
-      setCreateCapacity("3");
+      setCreateCapacity("15");
       setCreateService("deep_cleaning");
       emitAdminToast("Team created.", "success");
       await load();
@@ -171,7 +171,10 @@ export default function AdminTeamsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Teams</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Manage cleaning teams for dispatch</p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Manage cleaning teams for dispatch. Each team takes 1 job per day; up to 3 team bookings per day across the
+          platform.
+        </p>
       </div>
 
       {error ? (
@@ -211,7 +214,7 @@ export default function AdminTeamsPage() {
               <tr>
                 <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">Name</th>
                 <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">Service</th>
-                <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">Members / capacity</th>
+                <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">Members / roster max</th>
                 <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">Active</th>
                 <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-100">Actions</th>
               </tr>
@@ -229,7 +232,7 @@ export default function AdminTeamsPage() {
                     <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{serviceLabel(row.service_type)}</td>
                     <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                       <span className="tabular-nums">{mc}</span> members{" "}
-                      <span className="text-zinc-400">/</span> capacity{" "}
+                      <span className="text-zinc-400">/</span> max{" "}
                       <span className="tabular-nums">{cap}</span>
                       <span className={cn("ml-2 inline-flex items-center gap-1 text-xs font-semibold", health.className)}>
                         <span aria-hidden>{healthIcon}</span>
@@ -288,16 +291,21 @@ export default function AdminTeamsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="team-cap">Capacity per day</Label>
+              <Label htmlFor="team-cap">Max roster members (2–15)</Label>
               <Input
                 id="team-cap"
                 type="number"
-                min={1}
+                min={2}
+                max={15}
                 step={1}
                 value={createCapacity}
                 onChange={(e) => setCreateCapacity(e.target.value)}
                 className="rounded-lg"
               />
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Teams need at least 2 members to take a job. Each team handles 1 booking per day; 3 team bookings max
+                per day in total.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="team-service">Service type</Label>

@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   bookingAppointmentIsoUtc,
   calendarMonthsBetweenCleanerJoinedAndAppointment,
+  clampStandardEarningCents,
   isFixedPayoutSpecial,
+  MAX_STANDARD_BASE_PAYOUT_CENTS,
+  MIN_STANDARD_BASE_PAYOUT_CENTS,
   normalizeBookingServiceIdForPayout,
   resolveCanonicalCleanerPayout,
+  TEAM_LEADER_FIXED_PAYOUT_CENTS,
+  TEAM_MEMBER_FIXED_PAYOUT_CENTS,
 } from "@/lib/payout/canonicalCleanerPayout";
 
 describe("normalizeBookingServiceIdForPayout", () => {
@@ -60,15 +65,26 @@ describe("bookingAppointmentIsoUtc", () => {
   });
 });
 
+describe("clampStandardEarningCents", () => {
+  it("clamps to R250 minimum and R300 maximum", () => {
+    expect(clampStandardEarningCents(10_000)).toBe(MIN_STANDARD_BASE_PAYOUT_CENTS);
+    expect(clampStandardEarningCents(280_00)).toBe(28_000);
+    expect(clampStandardEarningCents(500_00)).toBe(MAX_STANDARD_BASE_PAYOUT_CENTS);
+  });
+});
+
 describe("resolveCanonicalCleanerPayout", () => {
   const base = {
     bookingValueCents: 50_000,
+    customerTotalCents: 50_000,
     billingType: "prepaid" as const,
     isTeamJob: false,
     serviceFeeCents: 0,
+    soloCleanerId: "11111111-1111-1111-1111-111111111111",
+    computedAtIso: "2026-04-20T10:00:00.000Z",
   };
 
-  it("fixed deep cleaning: always R250, no tenure", () => {
+  it("fixed deep cleaning solo: always R250", () => {
     const r = resolveCanonicalCleanerPayout({
       ...base,
       serviceId: "deep",
@@ -80,11 +96,9 @@ describe("resolveCanonicalCleanerPayout", () => {
     expect(r.cleanerPayoutCents).toBe(25_000);
     expect(r.cleanerBonusCents).toBe(0);
     expect(r.payoutType).toBe("fixed_special");
-    expect(r.tenureMonths).toBe(0);
-    expect(r.companyRevenueFromServiceCents).toBe(25_000);
   });
 
-  it("junior standard: 60% then min/max; display = payout + bonus", () => {
+  it("junior standard: 60% clamped", () => {
     const r = resolveCanonicalCleanerPayout({
       ...base,
       serviceId: "standard",
@@ -93,12 +107,12 @@ describe("resolveCanonicalCleanerPayout", () => {
     });
     expect(r.tenureMonths).toBeLessThan(4);
     expect(r.payoutPercentage).toBe(0.6);
-    expect(r.internalEarningsCents).toBe(30_000);
     expect(r.cleanerPayoutCents).toBe(30_000);
+    expect(r.cleanerBonusCents).toBe(0);
     expect(r.displayEarningsCents).toBe(30_000);
   });
 
-  it("senior standard: 70%", () => {
+  it("senior standard: 70% capped at R300", () => {
     const r = resolveCanonicalCleanerPayout({
       ...base,
       serviceId: "standard",
@@ -107,40 +121,73 @@ describe("resolveCanonicalCleanerPayout", () => {
     });
     expect(r.tenureMonths).toBeGreaterThanOrEqual(4);
     expect(r.payoutPercentage).toBe(0.7);
-    expect(r.cleanerPayoutCents).toBe(35_000);
+    expect(r.cleanerPayoutCents).toBe(30_000);
     expect(r.cleanerBonusCents).toBe(0);
-    expect(r.displayEarningsCents).toBe(35_000);
+    expect(r.displayEarningsCents).toBe(30_000);
   });
 
-  it("bonus when raw % exceeds R350 cap base", () => {
+  it("does not auto-bonus when raw % exceeds R300 cap", () => {
     const r = resolveCanonicalCleanerPayout({
       serviceId: "standard",
       cleanerJoinedAtIso: "2025-01-01T00:00:00.000Z",
       bookingAppointmentIsoUtc: "2026-04-20T10:00:00.000Z",
       bookingValueCents: 100_000,
+      customerTotalCents: 100_000,
       isTeamJob: false,
+      soloCleanerId: base.soloCleanerId,
+      computedAtIso: base.computedAtIso,
     });
-    expect(r.cleanerPayoutCents).toBe(35_000);
-    expect(r.cleanerBonusCents).toBe(35_000);
-    expect(r.displayEarningsCents).toBe(70_000);
+    expect(r.cleanerPayoutCents).toBe(30_000);
+    expect(r.cleanerBonusCents).toBe(0);
+    expect(r.displayEarningsCents).toBe(30_000);
   });
 
-  it("team job: R250 per cleaner; internal = N × R250 (any service incl. deep/move/carpet)", () => {
+  it("fixed team deep: leader R270, member R250", () => {
+    const leader = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const member = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
     const r = resolveCanonicalCleanerPayout({
       serviceId: "deep",
-      cleanerJoinedAtIso: "2026-01-01T00:00:00.000Z",
-      bookingAppointmentIsoUtc: "2026-06-01T12:00:00.000Z",
       bookingValueCents: 90_000,
+      customerTotalCents: 90_000,
       isTeamJob: true,
-      teamCleanerCount: 3,
+      teamLeaderId: leader,
+      participantCleanerIds: [leader, member],
+      rosterRoles: [
+        { cleaner_id: leader, role: "lead" },
+        { cleaner_id: member, role: "member" },
+      ],
+      bookingAppointmentIsoUtc: "2026-06-01T12:00:00.000Z",
+      cleanerJoinedAtIso: null,
+      computedAtIso: base.computedAtIso,
     });
-    expect(r.payoutType).toBe("team_per_cleaner_fixed");
-    expect(r.displayEarningsCents).toBe(25_000);
-    expect(r.internalEarningsCents).toBe(75_000);
-    expect(r.diagnostics.payout_mode).toBe("team_per_cleaner_fixed");
-    expect(r.diagnostics.team_rule_applied).toBe(true);
-    expect(r.diagnostics.booking_total_team_payout_cents).toBe(75_000);
-    expect(r.cleanerPayoutCents).toBe(0);
+    expect(r.payoutType).toBe("team_fixed_with_leader");
+    expect(r.earningsSummary?.total_cleaner_earnings_cents).toBe(
+      TEAM_LEADER_FIXED_PAYOUT_CENTS + TEAM_MEMBER_FIXED_PAYOUT_CENTS,
+    );
+    const leadRow = r.earningsSummary?.per_cleaner_earnings.find((x) => x.cleaner_id === leader);
+    const memberRow = r.earningsSummary?.per_cleaner_earnings.find((x) => x.cleaner_id === member);
+    expect(leadRow?.base_earning_cents).toBe(TEAM_LEADER_FIXED_PAYOUT_CENTS);
+    expect(memberRow?.base_earning_cents).toBe(TEAM_MEMBER_FIXED_PAYOUT_CENTS);
+  });
+
+  it("standard team: same percentage earning for every member", () => {
+    const lead = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+    const member = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    const r = resolveCanonicalCleanerPayout({
+      serviceId: "standard",
+      bookingValueCents: 50_000,
+      customerTotalCents: 50_000,
+      isTeamJob: true,
+      teamLeaderId: lead,
+      teamLeaderJoinedAtIso: "2025-01-01T00:00:00.000Z",
+      participantCleanerIds: [lead, member],
+      bookingAppointmentIsoUtc: "2026-06-01T12:00:00.000Z",
+      cleanerJoinedAtIso: "2025-01-01T00:00:00.000Z",
+      computedAtIso: base.computedAtIso,
+    });
+    expect(r.payoutType).toBe("team_percentage_parity");
+    const amounts = r.earningsSummary?.per_cleaner_earnings.map((x) => x.base_earning_cents) ?? [];
+    expect(amounts).toEqual([30_000, 30_000]);
   });
 
   it("null appointment → junior tenure (0 months)", () => {
@@ -149,7 +196,10 @@ describe("resolveCanonicalCleanerPayout", () => {
       cleanerJoinedAtIso: "2010-01-01T00:00:00.000Z",
       bookingAppointmentIsoUtc: null,
       bookingValueCents: 50_000,
+      customerTotalCents: 50_000,
       isTeamJob: false,
+      soloCleanerId: base.soloCleanerId,
+      computedAtIso: base.computedAtIso,
     });
     expect(r.tenureMonths).toBe(0);
     expect(r.payoutPercentage).toBe(0.6);

@@ -341,12 +341,28 @@ export async function removeAdminTeamMember(teamId: string, cleanerId: string): 
   if (!res.ok) throw new Error(json.error ?? "Failed to remove team member.");
 }
 
-export async function patchAdminTeamIsActive(teamId: string, is_active: boolean): Promise<AdminTeamRow> {
+export async function deleteAdminTeam(teamId: string): Promise<void> {
+  const token = await getAdminToken();
+  const res = await fetch("/api/admin/teams", {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ teamId }),
+  });
+  const json = (await res.json()) as { ok?: boolean; error?: string };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to delete team.");
+}
+
+export async function patchAdminTeam(
+  teamId: string,
+  patch: { name?: string; is_active?: boolean; capacity_per_day?: number },
+): Promise<AdminTeamRow> {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}`, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ is_active }),
+    body: JSON.stringify(patch),
   });
   const json = (await res.json()) as { ok?: boolean; team?: AdminTeamRow; error?: string };
   if (res.status === 401) throw new Error("Please login.");
@@ -354,6 +370,11 @@ export async function patchAdminTeamIsActive(teamId: string, is_active: boolean)
   if (!res.ok) throw new Error(json.error ?? "Failed to update team.");
   if (!json.team) throw new Error("Update response incomplete.");
   return json.team;
+}
+
+/** @deprecated Use {@link patchAdminTeam} */
+export async function patchAdminTeamIsActive(teamId: string, is_active: boolean): Promise<AdminTeamRow> {
+  return patchAdminTeam(teamId, { is_active });
 }
 
 export async function fetchCustomers() {
@@ -373,6 +394,44 @@ export async function assignCleaner(bookingId: string, cleanerId: string, force 
   });
   const json = (await res.json()) as AdminActionErrorJson;
   if (!res.ok) throw adminActionError(json, "Failed to assign cleaner.");
+}
+
+export type AdminTeamAssignCandidate = {
+  id: string;
+  name: string;
+  capacity_per_day: number;
+  member_count: number;
+  active_member_count?: number;
+  qualified_member_count?: number;
+  used_slots_today: number;
+  remaining_slots_today: number;
+  assignable: boolean;
+  team_active?: boolean;
+};
+
+export async function fetchTeamAssignCandidates(bookingId: string): Promise<{
+  teams: AdminTeamAssignCandidate[];
+  qualified_for_label: string;
+  supports_team_assignment: boolean;
+}> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await res.json()) as {
+    teams?: AdminTeamAssignCandidate[];
+    qualified_for_label?: string;
+    supports_team_assignment?: boolean;
+    error?: string;
+  };
+  if (res.status === 401) throw new Error("Please login.");
+  if (res.status === 403) throw new Error("Admin access required.");
+  if (!res.ok) throw new Error(json.error ?? "Failed to load teams.");
+  return {
+    teams: json.teams ?? [],
+    qualified_for_label: json.qualified_for_label ?? "",
+    supports_team_assignment: json.supports_team_assignment === true,
+  };
 }
 
 export async function assignTeamToBookingAdmin(bookingId: string, teamId: string) {

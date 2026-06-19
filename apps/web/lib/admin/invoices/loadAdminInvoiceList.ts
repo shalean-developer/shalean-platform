@@ -28,9 +28,64 @@ export type AdminInvoiceListRow = {
   has_missed_visit_lines: boolean;
 };
 
+export type AdminInvoiceMonthGroup = {
+  month: string;
+  invoices: AdminInvoiceListRow[];
+};
+
+export type AdminInvoiceListSummary = {
+  total_invoices: number;
+  paid_count: number;
+  overdue_count: number;
+  total_outstanding_cents: number;
+};
+
+export type AdminInvoiceListPagination = {
+  page: number;
+  /** Calendar months shown per page (each month is kept intact). */
+  pageSize: number;
+  total: number;
+  totalMonths: number;
+  totalPages: number;
+  from: number;
+  to: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
 function num(v: unknown, fallback = 0): number {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? n : fallback;
+}
+
+function buildInvoiceSummary(rows: AdminInvoiceListRow[]): AdminInvoiceListSummary {
+  let paid_count = 0;
+  let overdue_count = 0;
+  let total_outstanding_cents = 0;
+  for (const inv of rows) {
+    if (inv.status.toLowerCase() === "paid") paid_count += 1;
+    if (inv.is_overdue || inv.status.toLowerCase() === "overdue") overdue_count += 1;
+    total_outstanding_cents += Math.max(0, inv.balance_cents);
+  }
+  return {
+    total_invoices: rows.length,
+    paid_count,
+    overdue_count,
+    total_outstanding_cents,
+  };
+}
+
+function groupInvoicesByMonth(rows: AdminInvoiceListRow[]): AdminInvoiceMonthGroup[] {
+  const byMonth = new Map<string, AdminInvoiceListRow[]>();
+  for (const row of rows) {
+    const month = row.month || "unknown";
+    const list = byMonth.get(month);
+    if (list) list.push(row);
+    else byMonth.set(month, [row]);
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([month, invoices]) => ({ month, invoices }));
 }
 
 export async function loadAdminInvoiceList(
@@ -41,8 +96,19 @@ export async function loadAdminInvoiceList(
     balanceGt0Only: boolean;
     hasDiscountLines?: boolean;
     hasMissedVisitLines?: boolean;
+    page?: number;
+    monthsPerPage?: number;
   },
-): Promise<{ ok: true; rows: AdminInvoiceListRow[] } | { ok: false; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      rows: AdminInvoiceListRow[];
+      monthGroups?: AdminInvoiceMonthGroup[];
+      pagination?: AdminInvoiceListPagination;
+      summary?: AdminInvoiceListSummary;
+    }
+  | { ok: false; error: string }
+> {
   const { data: invs, error } = await admin
     .from("monthly_invoices")
     .select(
@@ -190,5 +256,42 @@ export async function loadAdminInvoiceList(
 
   rows = rows.map((r) => ({ ...r, last_activity_at: lastById.get(r.id) ?? null }));
 
-  return { ok: true, rows };
+  const summary = buildInvoiceSummary(rows);
+
+  if (params.page != null && params.monthsPerPage != null) {
+    const monthsPerPage = Math.max(1, Math.min(12, Math.round(params.monthsPerPage)));
+    const allGroups = groupInvoicesByMonth(rows);
+    const totalMonths = allGroups.length;
+    const totalPages = Math.max(1, Math.ceil(totalMonths / monthsPerPage));
+    const page = Math.min(Math.max(1, Math.round(params.page)), totalPages);
+    const startIdx = (page - 1) * monthsPerPage;
+    const monthGroups = allGroups.slice(startIdx, startIdx + monthsPerPage);
+    const pageRows = monthGroups.flatMap((g) => g.invoices);
+
+    let invoiceOffset = 0;
+    for (let i = 0; i < startIdx; i += 1) {
+      invoiceOffset += allGroups[i]?.invoices.length ?? 0;
+    }
+    const pageInvoiceCount = pageRows.length;
+
+    return {
+      ok: true,
+      rows: pageRows,
+      monthGroups,
+      summary,
+      pagination: {
+        page,
+        pageSize: monthsPerPage,
+        total: rows.length,
+        totalMonths,
+        totalPages,
+        from: pageInvoiceCount > 0 ? invoiceOffset + 1 : 0,
+        to: pageInvoiceCount > 0 ? invoiceOffset + pageInvoiceCount : 0,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  return { ok: true, rows, summary };
 }

@@ -105,6 +105,8 @@ export function BookingCard({
     cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
     cleaner_payout_cents: r.cleaner_payout_cents,
     cleaner_bonus_cents: r.cleaner_bonus_cents,
+    company_revenue_cents: r.company_revenue_cents,
+    earnings_summary: r.earnings_summary,
     total_paid_zar: r.total_paid_zar,
     amount_paid_cents: r.amount_paid_cents,
     total_price: r.total_price,
@@ -116,11 +118,11 @@ export function BookingCard({
   const cleanerPayoutZar = payoutCard.payoutZar;
   const cleanerBonusZar = payoutCard.bonusZar;
   const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
-  const companyRevenueZar = centsToZar(r.company_revenue_cents);
-  const companyLineZar =
-    payoutCard.projected === true && payoutCard.projectedCompanyZar != null
+  const companyRevenueZar =
+    payoutCard.projectedCompanyZar != null
       ? payoutCard.projectedCompanyZar
-      : companyRevenueZar;
+      : centsToZar(r.company_revenue_cents);
+  const companyLineZar = companyRevenueZar;
   const locationLabel = r.location?.trim() || "Location TBC";
   const rosterTip = rosterTooltipNames(roster);
   const missingLead = roster.length > 0 && !lead;

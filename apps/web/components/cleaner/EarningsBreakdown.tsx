@@ -26,6 +26,7 @@ type EarningsBreakdownProps = {
   goalLabel?: string;
   pendingPayout?: string;
   paidPayout?: string;
+  bonusTotal?: string;
   payouts?: PayoutItem[];
   onViewPayout?: () => void;
   className?: string;
@@ -39,6 +40,7 @@ export function EarningsBreakdown({
   goalLabel,
   pendingPayout,
   paidPayout,
+  bonusTotal,
   payouts = [],
   onViewPayout,
   className,
@@ -137,13 +139,19 @@ export function EarningsBreakdown({
         </div>
       ) : null}
 
-      {/* Bonus/tips placeholder */}
-      <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3.5 text-center">
-        <p className="text-xs font-medium text-slate-400">Bonuses & tips coming soon</p>
-        <p className="mt-0.5 text-[10px] text-slate-300">
-          Tips and performance bonuses will appear here.
-        </p>
-      </div>
+      {/* Bonuses */}
+      {bonusTotal ? (
+        <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-700">Bonuses</p>
+            <span className="text-sm font-bold tabular-nums text-emerald-600">{bonusTotal}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3.5 text-center">
+          <p className="text-xs font-medium text-slate-400">No bonuses on recent jobs</p>
+        </div>
+      )}
     </div>
   );
 }

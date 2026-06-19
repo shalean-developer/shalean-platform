@@ -20,7 +20,13 @@ export type CleanerPayoutResult = {
   payoutCents: number;
   bonusCents: number;
   companyRevenueCents: number;
-  payoutType: "percentage" | "fixed_special" | "team_pool" | "team_per_cleaner_fixed";
+  payoutType:
+    | "percentage"
+    | "fixed_special"
+    | "team_pool"
+    | "team_per_cleaner_fixed"
+    | "team_fixed_with_leader"
+    | "team_percentage_parity";
   /** Decimal rate for percentage model; null for fixed specials. */
   payoutPercentage: number | null;
   /** Subtotal cleaner payout was computed from (excludes platform service fee). */
@@ -149,6 +155,7 @@ export function calculateCleanerPayoutFromBookingRow(params: {
       return null;
     })();
 
+  const customerTotalCents = resolveTotalPaidCents(params.totalPaidZar, params.amountPaidCents);
   const canonical = resolveCanonicalCleanerPayout({
     bookingId: params.bookingId ?? null,
     serviceId: sid,
@@ -156,6 +163,7 @@ export function calculateCleanerPayoutFromBookingRow(params: {
     cleanerJoinedAtIso: joinedRaw || null,
     bookingAppointmentIsoUtc: appt,
     bookingValueCents: payoutBaseCents,
+    customerTotalCents: customerTotalCents > 0 ? customerTotalCents : payoutBaseCents + serviceFeeCents,
     isTeamJob: false,
     serviceFeeCents,
   });
@@ -163,7 +171,7 @@ export function calculateCleanerPayoutFromBookingRow(params: {
   return {
     payoutCents: canonical.cleanerPayoutCents,
     bonusCents: canonical.cleanerBonusCents,
-    companyRevenueCents: Math.max(0, canonical.companyRevenueFromServiceCents + serviceFeeCents),
+    companyRevenueCents: canonical.companyRevenueFromServiceCents,
     payoutType: canonical.payoutType,
     payoutPercentage: canonical.payoutPercentage,
     payoutBaseCents: payoutBaseCents,

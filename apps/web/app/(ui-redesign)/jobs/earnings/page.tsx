@@ -17,6 +17,7 @@ type EarningsJson = {
     month_cents?: number;
     pending_cents?: number;
     paid_cents?: number;
+    bonus_total_cents?: number;
     suggested_daily_goal_cents?: number;
   };
   rows?: Array<{
@@ -86,6 +87,7 @@ function EarningsPageContent() {
   const goalCents = payload?.summary?.suggested_daily_goal_cents ?? 40_000;
   const pendingCents = payload?.summary?.pending_cents ?? 0;
   const paidCents = payload?.summary?.paid_cents ?? 0;
+  const bonusTotalCents = payload?.summary?.bonus_total_cents ?? 0;
 
   const goalProgress =
     goalCents > 0
@@ -159,6 +161,7 @@ function EarningsPageContent() {
         goalLabel={`${goalProgress}% of ${formatZarFromCents(goalCents)} daily goal`}
         pendingPayout={pendingCents > 0 ? formatZarFromCents(pendingCents) : undefined}
         paidPayout={paidCents > 0 ? formatZarFromCents(paidCents) : undefined}
+        bonusTotal={bonusTotalCents > 0 ? formatZarFromCents(bonusTotalCents) : undefined}
       />
 
       {/* Expense claim CTA */}

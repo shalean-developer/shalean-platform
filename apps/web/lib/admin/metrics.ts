@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
+import { teamJobSlotsPerTeamPerDay } from "@/lib/dispatch/teamJobsPerDay";
 
 export type DispatchMetricsWindow = "24h" | "7d";
 
@@ -436,7 +437,7 @@ export async function loadDispatchMetricsSnapshot(
   const staffingMismatches: StaffingMismatchRow[] = [];
 
   for (const t of teams) {
-    const cap = Number(t.capacity_per_day);
+    const cap = teamJobSlotsPerTeamPerDay();
     const jobsToday = jobsByTeam.get(t.id) ?? 0;
     const roster = membersByTeam.get(t.id) ?? [];
     const activeMembersToday = countActiveTeamMembersOnDate(roster, todayYmdJohannesburg);

@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const { data, error } = await admin
     .from("bookings")
     .select(
-      "id,status,date,time,cleaner_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents",
+      "id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents",
     )
     .not("status", "in", "(completed,cancelled,failed)")
     .limit(3500);

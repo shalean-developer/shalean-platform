@@ -3,6 +3,7 @@ import {
   calculateCleanerPayoutFromBookingRow,
   resolveTotalPaidCents,
 } from "@/lib/payout/calculateCleanerPayout";
+import { parseBookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
 
 /** Minimal booking fields for admin payout summary (list card + details). */
 export type AdminBookingCleanerPayoutInput = {
@@ -14,6 +15,8 @@ export type AdminBookingCleanerPayoutInput = {
   cleaner_earnings_total_cents?: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
+  company_revenue_cents?: number | null;
+  earnings_summary?: unknown;
   /** Paid / recorded total (ZAR major units). */
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
@@ -84,6 +87,21 @@ function tryProjectSoloAdminPayout(b: AdminBookingCleanerPayoutInput): AdminBook
 export function computeAdminBookingCleanerPayoutDisplay(
   booking: AdminBookingCleanerPayoutInput,
 ): AdminBookingCleanerPayoutDisplay {
+  const summary = parseBookingEarningsSummary(booking.earnings_summary);
+  if (summary) {
+    const totalCleanerZar = (summary.total_cleaner_earnings_cents ?? 0) / 100;
+    const bonusZar = (summary.bonus.total_cents ?? 0) / 100;
+    const baseZar = Math.max(0, totalCleanerZar - bonusZar);
+    return {
+      payoutLabel: summary.payout_mode === "team" ? "Team cleaner payout (total)" : "Cleaner payout",
+      payoutZar: baseZar,
+      bonusZar,
+      pending: false,
+      teamPool: summary.payout_mode === "team",
+      projectedCompanyZar: (summary.company_revenue_cents ?? 0) / 100,
+    };
+  }
+
   const payoutType = String(booking.payout_type ?? "").trim().toLowerCase();
   const teamPerCleanerFixed = payoutType === "team_per_cleaner_fixed";
   const teamFixedLegacy = payoutType === "team_fixed";

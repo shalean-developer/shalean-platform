@@ -65,6 +65,7 @@ import { parseStoredPriceBreakdown } from "@/lib/dashboard/storedPriceBreakdown"
 import { adminLinesFromPricingSummary } from "@/lib/booking-v2/adminPricingDisplay";
 import { adminBookingDispatchAttemptId } from "@/lib/admin/adminBookingAssignmentLabels";
 import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
+import type { AdminEarningsDisplay } from "@/lib/payout/bookingEarningsSummary";
 import {
   describeBookingOperationalState,
   operationalDisplayBadgeClassName,
@@ -109,6 +110,7 @@ type BookingDetails = {
   /** Ledger total when synced (fallback when display basis is missing). */
   cleaner_earnings_total_cents?: number | null;
   company_revenue_cents?: number | null;
+  earnings_summary?: unknown;
   payout_percentage?: number | null;
   payout_type?: string | null;
   is_test?: boolean | null;
@@ -811,17 +813,21 @@ export default function BookingDetailsView({
   onClose,
   onBookingDeleted,
   basePath = "/admin/bookings",
+  initialAction,
 }: {
   booking: BookingSeed;
   onClose?: () => void;
   onBookingDeleted?: (id: string) => void;
   basePath?: "/admin/bookings" | "/office/bookings";
+  /** When set to `assign` or `assign-team`, opens the team picker once after load (deep/move only). */
+  initialAction?: string | null;
 }) {
   const router = useRouter();
   const bookingId = booking.id;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fullBooking, setFullBooking] = useState<BookingDetails | null>(null);
+  const [earningsDisplay, setEarningsDisplay] = useState<AdminEarningsDisplay | null>(null);
   const [cleaner, setCleaner] = useState<Cleaner | null>(null);
   /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
   const [selectedCleaner, setSelectedCleaner] = useState<Cleaner | null>(null);
@@ -859,6 +865,7 @@ export default function BookingDetailsView({
   const [emergencyRosterOpen, setEmergencyRosterOpen] = useState(false);
   const [repairRosterBusy, setRepairRosterBusy] = useState(false);
   const [detailRefresh, setDetailRefresh] = useState(0);
+  const initialAssignActionHandled = useRef(false);
   const [resetDispatchBusy, setResetDispatchBusy] = useState(false);
   const [fixEarningsBusy, setFixEarningsBusy] = useState(false);
   const [resetEarningsBusy, setResetEarningsBusy] = useState(false);
@@ -1052,6 +1059,11 @@ export default function BookingDetailsView({
           return;
         }
         setFullBooking(json.booking ?? null);
+        setEarningsDisplay(
+          json.earnings_display && typeof json.earnings_display === "object"
+            ? (json.earnings_display as AdminEarningsDisplay)
+            : null,
+        );
         setDetailDashboardLifecycle(
           json.dashboardLifecycle && typeof json.dashboardLifecycle === "object"
             ? json.dashboardLifecycle
@@ -1466,6 +1478,77 @@ export default function BookingDetailsView({
     editPricePreviewRetry,
   ]);
 
+  const loadTeamsForTeamModal = async () => {
+    if (!bookingId) return;
+    setTeamModalLoading(true);
+    setTeamModalError(null);
+    const sb = getSupabaseBrowser();
+    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    if (!token) {
+      setTeamModalLoading(false);
+      const msg = "Please sign in as an admin.";
+      setTeamModalError(msg);
+      setToast({ kind: "error", text: msg });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const raw = await res.text();
+      let j: {
+        teams?: TeamAssignCandidate[];
+        qualified_for_label?: string;
+        error?: string;
+        supports_team_assignment?: boolean;
+      } = {};
+      if (raw.trim()) {
+        try {
+          j = JSON.parse(raw) as typeof j;
+        } catch {
+          throw new Error(`Invalid response from server (${res.status}).`);
+        }
+      }
+      if (!res.ok) throw new Error(j.error ?? `Could not load teams (${res.status}).`);
+      if (j.supports_team_assignment === false) {
+        setTeamAssignQualifiedLabel("");
+        setTeamCandidates([]);
+        setTeamModalError(
+          "Team assignment is not available for this booking from the server. Refresh the page if this surprises you.",
+        );
+        return;
+      }
+      setTeamAssignQualifiedLabel(typeof j.qualified_for_label === "string" ? j.qualified_for_label : "");
+      setTeamCandidates(Array.isArray(j.teams) ? j.teams : []);
+    } catch (e) {
+      setTeamModalError(e instanceof Error ? e.message : "Could not load teams.");
+    } finally {
+      setTeamModalLoading(false);
+    }
+  };
+
+  const openTeamModal = () => {
+    if (!bookingId) {
+      setToast({ kind: "error", text: "Missing booking ID." });
+      return;
+    }
+    setTeamModalOpen(true);
+    setTeamPickId(null);
+    setTeamCandidates([]);
+    setTeamAssignQualifiedLabel("");
+    setTeamModalError(null);
+    void loadTeamsForTeamModal();
+  };
+
+  useEffect(() => {
+    if (initialAssignActionHandled.current || loading || !fullBooking) return;
+    const action = (initialAction ?? "").trim().toLowerCase();
+    if (action !== "assign" && action !== "assign-team") return;
+    if (!supportsTeamAssignment) return;
+    initialAssignActionHandled.current = true;
+    openTeamModal();
+  }, [loading, fullBooking, supportsTeamAssignment, initialAction]);
+
   const handleEditDetailsConfirm = async () => {
     if (!fullBooking?.id) return;
     const inFieldwork = adminOperational?.operationalPhase === "active";
@@ -1633,13 +1716,18 @@ export default function BookingDetailsView({
   const serviceExtrasForAdmin = extrasPayloadForAdminServiceCard(fullBooking);
   const { basePrice, extrasPrice } = adminBookingVisitPricingSplit(fullBooking);
   const cleanerPayoutCard = computeAdminBookingCleanerPayoutDisplay(fullBooking);
-  const cleanerPayoutZar = cleanerPayoutCard.payoutZar;
-  const cleanerBonusZar = cleanerPayoutCard.bonusZar;
-  const cleanerTotalZar = cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar;
+  const cleanerPayoutZar = earningsDisplay
+    ? earningsDisplay.per_cleaner.length === 1
+      ? earningsDisplay.per_cleaner[0]!.base_earning_zar
+      : earningsDisplay.total_cleaner_earnings_zar - earningsDisplay.bonus_total_zar
+    : cleanerPayoutCard.payoutZar;
+  const cleanerBonusZar = earningsDisplay?.bonus_total_zar ?? cleanerPayoutCard.bonusZar;
+  const cleanerTotalZar = earningsDisplay?.total_cleaner_earnings_zar ?? (cleanerPayoutZar == null ? null : cleanerPayoutZar + cleanerBonusZar);
   const companyRevenueZar =
-    cleanerPayoutCard.projected === true && cleanerPayoutCard.projectedCompanyZar != null
+    earningsDisplay?.company_revenue_zar ??
+    (cleanerPayoutCard.projected === true && cleanerPayoutCard.projectedCompanyZar != null
       ? cleanerPayoutCard.projectedCompanyZar
-      : centsToZar(fullBooking.company_revenue_cents);
+      : centsToZar(fullBooking.company_revenue_cents));
   const v2PricingLines = adminLinesFromPricingSummary(fullBooking.pricing_summary);
   const isAssigned = !!fullBooking.cleaner_id;
   const jobRosterLocked =
@@ -2047,68 +2135,6 @@ export default function BookingDetailsView({
     }
   };
 
-  const loadTeamsForTeamModal = async () => {
-    if (!bookingId) return;
-    setTeamModalLoading(true);
-    setTeamModalError(null);
-    const sb = getSupabaseBrowser();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
-    if (!token) {
-      setTeamModalLoading(false);
-      const msg = "Please sign in as an admin.";
-      setTeamModalError(msg);
-      setToast({ kind: "error", text: msg });
-      return;
-    }
-    try {
-      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const raw = await res.text();
-      let j: {
-        teams?: TeamAssignCandidate[];
-        qualified_for_label?: string;
-        error?: string;
-        supports_team_assignment?: boolean;
-      } = {};
-      if (raw.trim()) {
-        try {
-          j = JSON.parse(raw) as typeof j;
-        } catch {
-          throw new Error(`Invalid response from server (${res.status}).`);
-        }
-      }
-      if (!res.ok) throw new Error(j.error ?? `Could not load teams (${res.status}).`);
-      if (j.supports_team_assignment === false) {
-        setTeamAssignQualifiedLabel("");
-        setTeamCandidates([]);
-        setTeamModalError(
-          "Team assignment is not available for this booking from the server. Refresh the page if this surprises you.",
-        );
-        return;
-      }
-      setTeamAssignQualifiedLabel(typeof j.qualified_for_label === "string" ? j.qualified_for_label : "");
-      setTeamCandidates(Array.isArray(j.teams) ? j.teams : []);
-    } catch (e) {
-      setTeamModalError(e instanceof Error ? e.message : "Could not load teams.");
-    } finally {
-      setTeamModalLoading(false);
-    }
-  };
-
-  const openTeamModal = () => {
-    if (!bookingId) {
-      setToast({ kind: "error", text: "Missing booking ID." });
-      return;
-    }
-    setTeamModalOpen(true);
-    setTeamPickId(null);
-    setTeamCandidates([]);
-    setTeamAssignQualifiedLabel("");
-    setTeamModalError(null);
-    void loadTeamsForTeamModal();
-  };
-
   const handleAssignTeam = async () => {
     if (!fullBooking?.id || !teamPickId) {
       setToast({ kind: "error", text: "Select a team." });
@@ -2162,11 +2188,14 @@ export default function BookingDetailsView({
     }
   };
 
-  const onAssignOfferDone = () => {
+  const onAssignOfferDone = ({ direct }: { cleanerId: string; assignAttempts?: number; direct?: boolean }) => {
     setAssignModalOpen(false);
     setEditingCleanerInline(false);
     setAdminActionWarnings([]);
-    setToast({ kind: "success", text: "Job offer sent" });
+    setToast({
+      kind: "success",
+      text: direct ? "Cleaner assigned and notified" : "Job offer sent",
+    });
     setDetailRefresh((n) => n + 1);
   };
 
@@ -2260,7 +2289,17 @@ export default function BookingDetailsView({
   const cleanerEntityLabel = supportsTeamAssignment ? "Cleaner / Team" : "Cleaner";
   const cleanerDisplayName =
     cleaner?.full_name?.trim() || teamSummary?.name?.trim() || (fullBooking.cleaner_id ? "Assigned cleaner" : null);
-  const cleanerStatusLabel = fullBooking.cleaner_id || fullBooking.team_id ? "Assigned" : "Unassigned";
+  const cleanerStatusLabel = (() => {
+    const bookingSt = String(fullBooking.status ?? "").toLowerCase();
+    if (bookingSt === "completed" || bookingSt === "cancelled" || bookingSt === "failed") {
+      const cs = String(cleaner?.status ?? "").toLowerCase();
+      if (cs === "available") return "Available";
+      if (cs === "busy") return "Busy";
+      if (cs === "offline") return "Offline";
+      return "Released";
+    }
+    return fullBooking.cleaner_id || fullBooking.team_id ? "Assigned" : "Unassigned";
+  })();
   const cleanerRatingLine =
     typeof cleaner?.rating === "number"
       ? `${cleaner.rating.toFixed(1)} rating · ${cleaner.jobs_completed ?? 0} jobs completed`
@@ -3572,6 +3611,26 @@ export default function BookingDetailsView({
                     <code className="text-[11px]">cleaner_payout_cents</code> stays 0 for this model.
                   </p>
                 ) : null}
+                {earningsDisplay && earningsDisplay.per_cleaner.length > 0 ? (
+                  <div className="mt-4 space-y-2 border-t border-zinc-100 pt-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Per-cleaner payout</p>
+                    {earningsDisplay.per_cleaner.map((row) => (
+                      <DetailRow
+                        key={row.cleaner_id}
+                        label={`${row.cleaner_name ?? row.cleaner_id.slice(0, 8)}${row.role === "lead" ? " (lead)" : ""}`}
+                        value={`R ${row.total_zar.toLocaleString("en-ZA")}${
+                          row.bonus_zar > 0 ? ` incl. R ${row.bonus_zar.toLocaleString("en-ZA")} bonus` : ""
+                        }`}
+                      />
+                    ))}
+                    {earningsDisplay.deductions_total_zar > 0 ? (
+                      <DetailRow
+                        label="Deductions"
+                        value={`R ${earningsDisplay.deductions_total_zar.toLocaleString("en-ZA")}`}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </>
             )}
           </DetailCard>
@@ -4143,8 +4202,8 @@ export default function BookingDetailsView({
                 </p>
                 {!teamModalLoading && !teamModalError ? (
                   <p className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-200">
-                    Deep and move bookings use the <span className="font-semibold">same team list</span> (every team
-                    tagged Deep cleaning or Move cleaning under Admin → Teams). Row counts still reflect members active on
+                    Deep and move bookings use the <span className="font-semibold">same team list</span> (manage teams under{" "}
+                {basePath.startsWith("/office") ? "Office → Teams" : "Admin → Teams"}). Row counts still reflect members active on
                     the job date who pass this visit&apos;s capability gate
                     {teamAssignQualifiedLabel.trim() ? (
                       <>
@@ -4267,7 +4326,8 @@ export default function BookingDetailsView({
           <div className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-zinc-900">Assign cleaner</h3>
             <p className="mt-2 text-sm text-zinc-600">
-              Sends a job offer to the cleaner. Slot checks run before sending; use override only when you accept the risk.
+              Send a job offer for the cleaner to accept, or assign directly to skip the offer and notify them immediately.
+              Slot checks run before assigning; use override only when you accept the risk.
             </p>
             {cleanerOptions.length === 0 ? (
               <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500">Loading cleaners…</p>
