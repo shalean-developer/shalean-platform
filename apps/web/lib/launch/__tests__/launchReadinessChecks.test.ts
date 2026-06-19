@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { isLaunchBookingReference } from "@/lib/launch/launchReadinessChecks";
-import { auditMockDashboardData, OFFICE_PLACEHOLDER_PAGES } from "@/lib/launch/mockDataAudit";
+import { auditMockDashboardData } from "@/lib/launch/mockDataAudit";
 import { buildLaunchCheckConfirmPayload } from "@/lib/launch/launchCheckSeed";
 import { dashboardRouteForRole, safePostLoginRedirect } from "@/lib/auth/userRole";
 import { isLaunchCheckEnabled } from "@/lib/launch/launchCheckConfig";
@@ -30,10 +30,10 @@ describe("buildLaunchCheckConfirmPayload", () => {
 });
 
 describe("auditMockDashboardData", () => {
-  it("lists placeholder office pages as warnings", () => {
+  it("reports no placeholder office pages when all are wired to APIs", () => {
     const audit = auditMockDashboardData();
     expect(audit.passed).toBe(true);
-    expect(audit.details.placeholderCount).toBe(OFFICE_PLACEHOLDER_PAGES.length);
+    expect(audit.details.placeholderCount).toBe(0);
     expect(audit.details.coreDashboardApis).toContain("/api/customer/bookings");
   });
 });

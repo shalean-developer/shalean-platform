@@ -26,3 +26,24 @@ export type LaunchCheckConfig = {
   adminUserId: string | null;
   adminEmail: string | null;
 };
+
+export type LaunchCheckConfigSource = "env" | "discovered" | "session" | "missing";
+
+export type LaunchCheckConfigResolved = LaunchCheckConfig & {
+  sources: {
+    customerUserId: LaunchCheckConfigSource;
+    cleanerId: LaunchCheckConfigSource;
+    cleanerUserId: LaunchCheckConfigSource;
+    adminUserId: LaunchCheckConfigSource;
+  };
+};
+
+export type OfficeLaunchCheckStatus = {
+  enabled: boolean;
+  fetchedAt: string;
+  config: LaunchCheckConfigResolved;
+  configReady: boolean;
+  placeholderPages: { path: string; constant: string }[];
+  placeholderCount: number;
+  setupHints: string[];
+};

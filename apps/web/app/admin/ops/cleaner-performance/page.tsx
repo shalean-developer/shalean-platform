@@ -140,7 +140,9 @@ export default function AdminCleanerPerformancePage() {
                 />
               </div>
               <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">{d.day.slice(5)}</p>
-              <p className="text-xs font-bold tabular-nums text-zinc-800 dark:text-zinc-200">{d.onTimePct}%</p>
+              <p className="text-xs font-bold tabular-nums text-zinc-800 dark:text-zinc-200">
+                {d.onTimePct != null ? `${d.onTimePct}%` : "—"}
+              </p>
             </div>
           ))}
         </div>

@@ -34,7 +34,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
       { label: "Notifications", href: "/admin/notifications" },
       { label: "Delivery logs", href: "/admin/notification-logs" },
       { label: "Ops Health", href: "/admin/ops-health" },
-      { label: "Templates", href: "/admin/templates" },
+      { label: "Templates", href: "/office/templates" },
       { label: "SLA Breaches", href: "/admin/ops/sla-breaches" },
       { label: "Cleaner Performance", href: "/admin/ops/cleaner-performance" },
       { label: "Earnings disputes", href: "/admin/disputes" },

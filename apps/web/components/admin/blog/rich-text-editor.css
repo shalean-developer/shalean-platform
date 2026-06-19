@@ -1,5 +1,16 @@
 /* TipTap / ProseMirror — editorial reading rhythm + heading hierarchy (scoped under .rich-text-editor-root) */
 
+.rich-text-editor-root.variant-document .ProseMirror,
+.rich-text-editor-root.variant-wordpress .ProseMirror {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.rich-text-editor-root.variant-wordpress .ProseMirror {
+  min-height: 520px;
+}
+
 .rich-text-editor-root .ProseMirror {
   outline: none;
   min-height: 200px;

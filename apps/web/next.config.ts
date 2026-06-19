@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 import path from "path";
 import { fileURLToPath } from "url";
+import { loadLocationSeoFeedbackJsonForNextEnv } from "./lib/seo/load-location-seo-feedback-env";
 import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
 
 const turbopackRoot = path.dirname(fileURLToPath(import.meta.url));
+const locationSeoFeedbackJson = loadLocationSeoFeedbackJsonForNextEnv(turbopackRoot);
 
 function supabaseImageHost(): string | null {
   try {
@@ -66,6 +68,13 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  ...(locationSeoFeedbackJson
+    ? {
+        env: {
+          LOCATION_SEO_FEEDBACK_JSON: locationSeoFeedbackJson,
+        },
+      }
+    : {}),
   async redirects() {
     return [
       {

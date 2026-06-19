@@ -15,7 +15,10 @@ export const TEAM_MAX_ROSTER_MEMBERS = 15;
 /** @deprecated Use {@link TEAM_JOBS_PER_TEAM_PER_DAY}. */
 export const TEAM_JOBS_PER_DAY = TEAM_JOBS_PER_TEAM_PER_DAY;
 
-const CAPACITY_CONSUMING_STATUSES = ["pending", "assigned", "in_progress"] as const;
+/** Statuses that consume a team-day slot — keep aligned with `assignTeamToBooking` / `claim_team_capacity_slot`. */
+export const TEAM_CAPACITY_CONSUMING_STATUSES = ["pending", "assigned", "in_progress"] as const;
+
+const CAPACITY_CONSUMING_STATUSES = TEAM_CAPACITY_CONSUMING_STATUSES;
 
 export function teamJobSlotsPerTeamPerDay(): number {
   return TEAM_JOBS_PER_TEAM_PER_DAY;
@@ -53,6 +56,44 @@ export async function fetchTeamCapacityUsageSlotsByTeam(
     map.set(tid, Number.isFinite(n) && n > 0 ? n : 0);
   }
   return { map, error: null };
+}
+
+export function aggregateTeamJobsByTeamId(rows: { team_id?: string | null }[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const tid = String(row.team_id ?? "").trim();
+    if (!tid) continue;
+    map.set(tid, (map.get(tid) ?? 0) + 1);
+  }
+  return map;
+}
+
+/** Team jobs scheduled on `dateYmd` that still consume capacity (pending / assigned / in_progress). */
+export async function countTeamJobsScheduledOnDateByTeam(
+  admin: SupabaseClient,
+  dateYmd: string,
+  teamIds: string[],
+): Promise<{ map: Map<string, number>; error: string | null }> {
+  if (teamIds.length === 0) return { map: new Map(), error: null };
+  const { data, error } = await admin
+    .from("bookings")
+    .select("team_id")
+    .eq("date", dateYmd)
+    .eq("is_team_job", true)
+    .in("team_id", teamIds)
+    .in("status", [...CAPACITY_CONSUMING_STATUSES])
+    .not("team_id", "is", null);
+  if (error) return { map: new Map(), error: error.message };
+  return { map: aggregateTeamJobsByTeamId((data ?? []) as { team_id?: string | null }[]), error: null };
+}
+
+/** Prefer the higher of scheduled jobs vs claimed usage slots (guards allocator / RPC drift). */
+export function teamDayJobsForMetrics(
+  scheduledByTeam: Map<string, number>,
+  usageByTeam: Map<string, number>,
+  teamId: string,
+): number {
+  return Math.max(scheduledByTeam.get(teamId) ?? 0, usageByTeam.get(teamId) ?? 0);
 }
 
 export async function countPlatformTeamJobsOnDate(

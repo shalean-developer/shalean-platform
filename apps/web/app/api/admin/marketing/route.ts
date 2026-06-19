@@ -1,13 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { aggregateMarketingData } from "@/lib/admin/marketingAggregation";
+import { MARKETING_CHANNELS, type MarketingChannel } from "@/lib/admin/marketingAttribution";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type Channel = "google_ads" | "facebook_ads" | "organic_seo" | "direct";
-const CHANNELS: Channel[] = ["google_ads", "facebook_ads", "organic_seo", "direct"];
 
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -35,16 +34,6 @@ async function assertAdmin(request: Request): Promise<{ ok: true } | { ok: false
   } = await pub.auth.getUser(token);
   if (userErr || !user?.email || !isAdmin(user.email)) return { ok: false, status: 403, error: "Forbidden." };
   return { ok: true };
-}
-
-function inferChannel(payload: Record<string, unknown>): Channel {
-  const source = String(payload.source ?? "").toLowerCase();
-  const pathname = String(payload.pathname ?? "").toLowerCase();
-  const pageType = String(payload.page_type ?? "").toLowerCase();
-  if (source.includes("ads_lp") || pageType === "google_ads_lp" || pathname.startsWith("/lp/cleaning")) return "google_ads";
-  if (source.includes("facebook")) return "facebook_ads";
-  if (pathname.startsWith("/locations/") || pathname.startsWith("/cleaning-services/")) return "organic_seo";
-  return "direct";
 }
 
 export async function GET(request: Request) {
@@ -99,104 +88,15 @@ export async function GET(request: Request) {
     bookingRevenue.set(String(row.id), Number.isFinite(amount) ? amount : 0);
   }
 
-  const funnel = { visitors: 0, started: 0, viewedPrice: 0, selectedTime: 0, completed: 0 };
-  const sessionsByChannel = new Map<string, Channel>();
-  const channels = new Map<Channel, { spend: number; bookings: number; revenue: number }>();
-  for (const ch of CHANNELS) channels.set(ch, { spend: 0, bookings: 0, revenue: 0 });
-
-  const trend = new Map<string, { spend: number; revenue: number }>();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(since);
-    d.setDate(since.getDate() + i);
-    trend.set(ymd(d), { spend: 0, revenue: 0 });
-  }
-
-  for (const ev of events) {
-    const type = String(ev.event_type ?? "");
-    const payload = (ev.payload ?? {}) as Record<string, unknown>;
-    const sid = String(payload.session_id ?? "");
-    const date = String(ev.created_at ?? "").slice(0, 10);
-
-    if (type === "page_view") funnel.visitors += 1;
-    if (type === "start_booking") funnel.started += 1;
-    if (type === "view_price") funnel.viewedPrice += 1;
-    if (type === "select_time") funnel.selectedTime += 1;
-    if (type === "complete_booking") funnel.completed += 1;
-
-    if (sid) {
-      if (!sessionsByChannel.has(sid)) sessionsByChannel.set(sid, inferChannel(payload));
-    }
-
-    if (type === "complete_booking") {
-      const channel = sid && sessionsByChannel.has(sid) ? sessionsByChannel.get(sid)! : inferChannel(payload);
-      const row = channels.get(channel)!;
-      row.bookings += 1;
-      const revenue = ev.booking_id ? bookingRevenue.get(ev.booking_id) ?? 0 : 0;
-      row.revenue += revenue;
-      const day = trend.get(date);
-      if (day) day.revenue += revenue;
-    }
-  }
-
-  for (const row of spendRes.data ?? []) {
-    const channel = String(row.channel) as Channel;
-    const amount = Number(row.amount ?? 0);
-    if (!channels.has(channel) || !Number.isFinite(amount)) continue;
-    channels.get(channel)!.spend += amount;
-    const day = trend.get(String(row.date));
-    if (day) day.spend += amount;
-  }
-
-  const channelRows = CHANNELS.map((channel) => {
-    const row = channels.get(channel)!;
-    const cpa = row.bookings > 0 ? row.spend / row.bookings : 0;
-    const roas = row.spend > 0 ? row.revenue / row.spend : 0;
-    return { channel, ...row, cpa, roas };
+  const summary = aggregateMarketingData({
+    events,
+    spendRows: spendRes.data ?? [],
+    bookingRevenue,
+    days,
+    since,
   });
 
-  const adChannels = channelRows.filter((c) => c.channel === "google_ads" || c.channel === "facebook_ads");
-  const totalAdSpend = adChannels.reduce((s, c) => s + c.spend, 0);
-  const totalBookingsFromAds = adChannels.reduce((s, c) => s + c.bookings, 0);
-  const revenueFromAds = adChannels.reduce((s, c) => s + c.revenue, 0);
-  const cpa = totalBookingsFromAds > 0 ? totalAdSpend / totalBookingsFromAds : 0;
-  const roas = totalAdSpend > 0 ? revenueFromAds / totalAdSpend : 0;
-  const profit = revenueFromAds - totalAdSpend;
-
-  const nonZero = channelRows.filter((c) => c.bookings > 0 || c.spend > 0 || c.revenue > 0);
-  const best = [...nonZero].sort((a, b) => b.roas - a.roas)[0] ?? null;
-  const worst = [...nonZero].sort((a, b) => a.roas - b.roas)[0] ?? null;
-
-  const insights: string[] = [];
-  if (best) insights.push(`${best.channel.replace("_", " ")} has highest ROI`);
-  const fb = channelRows.find((c) => c.channel === "facebook_ads");
-  if (fb && fb.cpa > 0 && fb.cpa > (channelRows.find((c) => c.channel === "google_ads")?.cpa ?? fb.cpa)) {
-    insights.push("Facebook CPA too high");
-  }
-  const organic = channelRows.find((c) => c.channel === "organic_seo");
-  if (organic && organic.bookings > 0) insights.push("Organic traffic growing");
-
-  return NextResponse.json({
-    range: days === 1 ? "today" : days === 30 ? "30d" : "7d",
-    kpis: { totalAdSpend, totalBookingsFromAds, revenueFromAds, cpa, roas },
-    channels: channelRows,
-    funnel,
-    funnelConversion: {
-      visitToStartPct: funnel.visitors > 0 ? (funnel.started / funnel.visitors) * 100 : 0,
-      startToPricePct: funnel.started > 0 ? (funnel.viewedPrice / funnel.started) * 100 : 0,
-      priceToTimePct: funnel.viewedPrice > 0 ? (funnel.selectedTime / funnel.viewedPrice) * 100 : 0,
-      timeToCompletePct: funnel.selectedTime > 0 ? (funnel.completed / funnel.selectedTime) * 100 : 0,
-    },
-    roi: {
-      profit,
-      bestChannel: best?.channel ?? null,
-      worstChannel: worst?.channel ?? null,
-    },
-    charts: {
-      revenueVsSpend: [...trend.entries()].map(([date, v]) => ({ date, ...v })),
-      bookingsPerChannel: channelRows.map((c) => ({ channel: c.channel, bookings: c.bookings })),
-    },
-    insights,
-  });
+  return NextResponse.json(summary);
 }
 
 export async function POST(request: Request) {
@@ -212,10 +112,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const channel = String(body.channel ?? "") as Channel;
+  const channel = String(body.channel ?? "") as MarketingChannel;
   const amount = Number(body.amount ?? 0);
   const date = String(body.date ?? "").slice(0, 10);
-  if (!CHANNELS.includes(channel)) return NextResponse.json({ error: "Invalid channel." }, { status: 400 });
+  if (!MARKETING_CHANNELS.includes(channel)) return NextResponse.json({ error: "Invalid channel." }, { status: 400 });
   if (!Number.isFinite(amount) || amount < 0) return NextResponse.json({ error: "Invalid amount." }, { status: 400 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: "Invalid date." }, { status: 400 });
 

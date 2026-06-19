@@ -9,11 +9,13 @@ import { Step2Schedule } from "@/src/features/booking-v2/steps/Step2Schedule";
 import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
 import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import { useBookingV2GrowthAnalytics } from "@/src/features/booking-v2/hooks/useBookingV2GrowthAnalytics";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 
 function BookingV2Inner() {
   const { currentStep, goToStep, goNext, goBack, serviceSlug } = useBookingV2();
   useBookingV2Pricing();
+  useBookingV2GrowthAnalytics(currentStep, serviceSlug);
 
   const stepContent = {
     1: <Step1Details />,

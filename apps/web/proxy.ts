@@ -99,6 +99,19 @@ async function runProxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
+  /** Blog editor moved to office shell — keep legacy admin URLs working. */
+  if (pathname === "/admin/blog/new" || pathname === "/admin/blog/new/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/office/blog/new";
+    return NextResponse.redirect(url, 308);
+  }
+  const adminBlogEdit = pathname.match(/^\/admin\/blog\/([^/]+)\/?$/);
+  if (adminBlogEdit) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/office/blog/${adminBlogEdit[1]}`;
+    return NextResponse.redirect(url, 308);
+  }
+
   const res = await updateSession(request);
   if (shouldNoIndexEntireDeployment()) {
     res.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);

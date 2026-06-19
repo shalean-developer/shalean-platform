@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_SELECT =
-  "id, date, time, status, cleaner_id, selected_cleaner_id, team_id, is_team_job, customer_name, service, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status";
+  "id, date, time, status, cleaner_id, selected_cleaner_id, team_id, is_team_job, customer_name, service, service_slug, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status";
 
 /**
  * Admin: bookings for a single calendar day (schedule board).

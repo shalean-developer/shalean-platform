@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminRequest } from "@/lib/api/admin-auth-request";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buildBlogDraftPreviewQuery, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,5 +26,13 @@ export async function GET(request: Request, ctx: Ctx) {
 
   const tag_ids = (tagRows ?? []).map((r) => String((r as { tag_id: string }).tag_id));
 
-  return NextResponse.json({ post: { ...data, tag_ids } });
+  const postStatus = String(data.status ?? "draft") as "draft" | "published" | "scheduled";
+  const draftPreviewQuery = buildBlogDraftPreviewQuery();
+  const view_url = buildBlogPostViewPath(String(data.slug ?? ""), postStatus, draftPreviewQuery);
+
+  return NextResponse.json({
+    post: { ...data, tag_ids },
+    view_url,
+    draft_preview_query: draftPreviewQuery,
+  });
 }

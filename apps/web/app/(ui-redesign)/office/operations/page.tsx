@@ -1,60 +1,64 @@
 "use client";
 
-import { useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Users, Calendar, MessageSquare, Plus, Edit2, Save } from "lucide-react";
+import Link from "next/link";
+import { Activity, AlertTriangle, Users, Calendar, RefreshCw, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const OPEN_ISSUES = [
-  { id: 1, title: "BK-4587 overdue 11h", priority: "critical", assigned: "Ops Manager", age: "2h" },
-  { id: 2, title: "3 unassigned bookings today", priority: "high", assigned: "Dispatch", age: "45m" },
-  { id: 3, title: "Team 3 short-staffed tomorrow", priority: "medium", assigned: "HR", age: "1d" },
-  { id: 4, title: "Notification failures > 5%", priority: "low", assigned: "Tech", age: "3h" },
-];
+import { useAdminData } from "@/hooks/useAdminData";
+import type { OfficeOperationsSummary } from "@/lib/admin/officeOperations";
 
 const PRIORITY_MAP: Record<string, { cls: string; label: string }> = {
-  critical: { cls: "bg-red-100 text-red-700",    label: "Critical" },
-  high:     { cls: "bg-orange-100 text-orange-700", label: "High" },
-  medium:   { cls: "bg-yellow-100 text-yellow-700", label: "Medium" },
-  low:      { cls: "bg-slate-100 text-slate-600",   label: "Low" },
+  critical: { cls: "bg-red-100 text-red-700", label: "Critical" },
+  high: { cls: "bg-orange-100 text-orange-700", label: "High" },
+  medium: { cls: "bg-yellow-100 text-yellow-700", label: "Medium" },
+  low: { cls: "bg-slate-100 text-slate-600", label: "Low" },
 };
 
 export default function OperationsPage() {
-  const [adminNote, setAdminNote] = useState("");
-  const [noteSaved, setNoteSaved] = useState(false);
+  const { data, loading, error, refetch } = useAdminData<OfficeOperationsSummary>("/api/admin/office-operations");
 
-  function saveNote() {
-    setNoteSaved(true);
-    setTimeout(() => setNoteSaved(false), 2000);
-  }
+  const kpis = data?.kpis;
+  const issues = data?.issues ?? [];
+  const supplyDemand = data?.supplyDemand ?? [];
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Operations</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Daily operational control center — summary, issues and team supply.</p>
+          <p className="mt-0.5 text-sm text-slate-500">Daily operational control center — live bookings, issues and supply.</p>
         </div>
-        <button type="button" className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 shadow-sm">
-          <Plus className="h-4 w-4" /> Log issue
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm hover:bg-slate-50"
+        >
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
         </button>
       </div>
 
-      {/* Daily summary */}
+      {error ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Bookings today", value: "12", icon: Calendar, color: "bg-blue-50 text-blue-600" },
-          { label: "Open issues", value: OPEN_ISSUES.length, icon: AlertTriangle, color: "bg-red-50 text-red-600" },
-          { label: "Available cleaners", value: "10", icon: Users, color: "bg-emerald-50 text-emerald-600" },
-          { label: "Cleaner demand", value: "8", icon: Activity, color: "bg-violet-50 text-violet-600" },
+          { label: "Bookings today", value: kpis?.bookingsToday ?? "—", sub: "Scheduled for today", icon: Calendar, color: "bg-blue-50 text-blue-600" },
+          { label: "Open issues", value: kpis?.openIssues ?? "—", sub: "Dispatch + health alerts", icon: AlertTriangle, color: "bg-red-50 text-red-600" },
+          { label: "Available cleaners", value: kpis?.availableCleaners ?? "—", sub: "Idle + rostered today", icon: Users, color: "bg-emerald-50 text-emerald-600" },
+          { label: "Unassigned paid jobs", value: kpis?.unassignedPaid ?? "—", sub: "Paid, no cleaner yet", icon: Activity, color: "bg-violet-50 text-violet-600" },
         ].map((k) => {
           const KIcon = k.icon;
           const [iconBg, iconColor] = k.color.split(" ");
           return (
-            <div key={k.label} className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
+            <div key={k.label} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
-                  <p className="mt-1 text-3xl font-bold text-slate-800">{k.value}</p>
+                  <p className="mt-1 text-3xl font-bold text-slate-800 tabular-nums">{loading ? "—" : k.value}</p>
+                  {"sub" in k && k.sub ? <p className="mt-0.5 text-[11px] text-slate-400">{k.sub}</p> : null}
                 </div>
                 <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", iconBg)}>
                   <KIcon className={cn("h-5 w-5", iconColor)} />
@@ -65,81 +69,104 @@ export default function OperationsPage() {
         })}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Open issues */}
-        <div className="lg:col-span-2 rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-bold text-slate-800">Open issues</h3>
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <h3 className="mb-4 text-sm font-bold text-slate-800">Open issues</h3>
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        ) : issues.length === 0 ? (
+          <p className="text-sm text-emerald-600">No open operational issues detected.</p>
+        ) : (
           <div className="space-y-2">
-            {OPEN_ISSUES.map((issue) => {
-              const p = PRIORITY_MAP[issue.priority]!;
+            {issues.map((issue) => {
+              const p = PRIORITY_MAP[issue.priority] ?? PRIORITY_MAP.medium!;
               return (
                 <div key={issue.id} className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
                   <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold", p.cls)}>{p.label}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-800">{issue.title}</p>
-                    <p className="text-xs text-slate-400">Assigned to: {issue.assigned} · {issue.age} ago</p>
+                    <p className="text-xs text-slate-400">
+                      {issue.assigned} · {issue.ageLabel}
+                    </p>
                   </div>
-                  <button type="button" className="shrink-0 rounded-lg bg-emerald-100 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-200 transition-colors flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
-                  </button>
+                  {issue.id === "sla-breaches" || issue.id === "unassigned" ? (
+                    <Link href="/office/sla-breaches" className="text-xs font-bold text-blue-600 hover:underline">
+                      View queue
+                    </Link>
+                  ) : issue.id.startsWith("health-") ? (
+                    <Link href="/office/ops-health" className="text-xs font-bold text-blue-600 hover:underline">
+                      Ops health
+                    </Link>
+                  ) : null}
                 </div>
               );
             })}
           </div>
-        </div>
-
-        {/* Admin notes */}
-        <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <h3 className="mb-3 text-sm font-bold text-slate-800">Admin notes</h3>
-          <p className="mb-2 text-xs text-slate-400">Internal ops notes — visible to admins only.</p>
-          <textarea
-            value={adminNote}
-            onChange={e => setAdminNote(e.target.value)}
-            placeholder="Add a note for today's operations…"
-            rows={6}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
-          />
-          <button type="button" onClick={saveNote}
-            className={cn("mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-bold transition-colors",
-              noteSaved ? "bg-emerald-100 text-emerald-700" : "bg-blue-600 text-white hover:bg-blue-700")}>
-            {noteSaved ? <><CheckCircle2 className="h-4 w-4" /> Saved!</> : <><Save className="h-4 w-4" /> Save note</>}
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Cleaner supply vs demand */}
-      <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-        <h3 className="mb-4 text-sm font-bold text-slate-800">Cleaner supply vs booking demand — next 7 days</h3>
-        <div className="space-y-2">
-          {["Mon 19 May", "Tue 20 May", "Wed 21 May", "Thu 22 May", "Fri 23 May", "Sat 24 May", "Sun 25 May"].map((day, i) => {
-            const supply = [10, 9, 11, 8, 10, 6, 4][i]!;
-            const demand = [8, 9, 7, 10, 9, 5, 2][i]!;
-            const gap = supply - demand;
-            return (
-              <div key={day} className="flex items-center gap-3">
-                <div className="w-28 shrink-0 text-xs font-medium text-slate-600">{day}</div>
-                <div className="flex-1 flex items-center gap-2">
-                  <div className="flex flex-1 gap-1">
-                    <div title={`Supply: ${supply}`} className="h-2 rounded-full bg-emerald-400" style={{ width: `${(supply / 12) * 50}%` }} />
-                    <div title={`Demand: ${demand}`} className="h-2 rounded-full bg-blue-400" style={{ width: `${(demand / 12) * 50}%` }} />
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <h3 className="mb-1 text-sm font-bold text-slate-800">Cleaner supply vs booking demand — next 7 days</h3>
+        <p className="mb-4 text-xs text-slate-500">
+          Supply = cleaners online, rostered, and idle for that day. Demand = scheduled bookings (excl. cancelled).
+        </p>
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : (
+          <div className="space-y-2">
+            {supplyDemand.map((day) => {
+              const gap = day.supply - day.demand;
+              const max = Math.max(day.supply, day.demand, 1);
+              return (
+                <div key={day.date} className="flex items-center gap-3">
+                  <div className="w-28 shrink-0 text-xs font-medium text-slate-600">{day.label}</div>
+                  <div className="flex flex-1 items-center gap-2">
+                    <div className="flex flex-1 gap-1">
+                      <div
+                        title={`Supply: ${day.supply}`}
+                        className="h-2 rounded-full bg-emerald-400"
+                        style={{ width: `${(day.supply / max) * 50}%` }}
+                      />
+                      <div
+                        title={`Demand: ${day.demand}`}
+                        className="h-2 rounded-full bg-blue-400"
+                        style={{ width: `${(day.demand / max) * 50}%` }}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "w-16 text-right text-[11px] font-bold",
+                        gap < 0 ? "text-red-600" : gap === 0 ? "text-orange-600" : "text-emerald-600",
+                      )}
+                    >
+                      {gap > 0 ? `+${gap} spare` : gap === 0 ? "Exact" : `${gap} short`}
+                    </span>
                   </div>
-                  <span className={cn("text-[11px] font-bold w-16 text-right",
-                    gap < 0 ? "text-red-600" : gap === 0 ? "text-orange-600" : "text-emerald-600")}>
-                    {gap > 0 ? `+${gap} spare` : gap === 0 ? "Exact" : `${gap} short`}
-                  </span>
                 </div>
+              );
+            })}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="w-28" />
+              <div className="flex items-center gap-4 text-[10px] text-slate-400">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-3 rounded bg-emerald-400" /> Supply (idle + rostered)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-3 rounded bg-blue-400" /> Demand (scheduled bookings)
+                </span>
               </div>
-            );
-          })}
-          <div className="flex items-center gap-3 pt-1">
-            <div className="w-28" />
-            <div className="flex items-center gap-4 text-[10px] text-slate-400">
-              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-emerald-400 inline-block" /> Supply</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-blue-400 inline-block" /> Demand</span>
             </div>
           </div>
-        </div>
+        )}
       </div>
+
+      <p className="text-xs text-slate-400">
+        Issues are derived from dispatch SLA snapshot and production health scans.{" "}
+        <Link href="/office/schedule" className="text-blue-600 hover:underline">
+          Open schedule
+        </Link>
+      </p>
     </div>
   );
 }

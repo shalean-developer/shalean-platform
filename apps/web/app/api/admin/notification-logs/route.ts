@@ -1,9 +1,32 @@
 import { NextResponse } from "next/server";
+import {
+  applyOfficeNotificationLogFilters,
+  buildOfficeNotificationLogsListResponse,
+  parseOfficeNotificationLogsLimit,
+  parseOfficeNotificationLogsOffset,
+  type OfficeNotificationLogFilters,
+  type OfficeNotificationLogRow,
+} from "@/lib/admin/officeNotificationLogs";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const LOG_SELECT =
+  "id, booking_id, channel, template_key, recipient, status, error, provider, role, event_type, payload, created_at";
+
+function filtersFromUrl(url: URL): OfficeNotificationLogFilters {
+  return {
+    booking_id: url.searchParams.get("booking_id"),
+    status: url.searchParams.get("status"),
+    channel: url.searchParams.get("channel"),
+    template_key: url.searchParams.get("template_key"),
+    role: url.searchParams.get("role"),
+    event_type: url.searchParams.get("event_type"),
+    search: url.searchParams.get("search"),
+  };
+}
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
@@ -13,41 +36,46 @@ export async function GET(request: Request) {
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const url = new URL(request.url);
-  const booking_id = url.searchParams.get("booking_id")?.trim() || null;
-  const status = url.searchParams.get("status")?.trim() || null;
-  const channel = url.searchParams.get("channel")?.trim() || null;
-  const template_key = url.searchParams.get("template_key")?.trim() || null;
-  const role = url.searchParams.get("role")?.trim() || null;
-  const event_type = url.searchParams.get("event_type")?.trim() || null;
+  const filters = filtersFromUrl(url);
+  const limit = parseOfficeNotificationLogsLimit(url.searchParams.get("limit"));
+  const offset = parseOfficeNotificationLogsOffset(url.searchParams.get("offset"));
 
-  const limitRaw = parseInt(url.searchParams.get("limit") ?? "80", 10);
-  const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 80;
-  const offsetRaw = parseInt(url.searchParams.get("offset") ?? "0", 10);
-  const offset = Number.isFinite(offsetRaw) ? Math.max(0, offsetRaw) : 0;
-  const end = offset + limit - 1;
+  const base = () => admin.from("notification_logs");
+  const filtered = (select: string, options?: { count?: "exact"; head?: boolean }) => {
+    let q = base().select(select, options);
+    q = applyOfficeNotificationLogFilters(q, filters);
+    return q;
+  };
 
-  let q = admin
-    .from("notification_logs")
-    .select(
-      "id, booking_id, channel, template_key, recipient, status, error, provider, role, event_type, payload, created_at",
-    )
-    .order("created_at", { ascending: false })
-    .range(offset, end);
+  const [logsRes, totalRes, sentRes, failedRes] = await Promise.all([
+    applyOfficeNotificationLogFilters(
+      base().select(LOG_SELECT).order("created_at", { ascending: false }),
+      filters,
+    ).range(offset, offset + limit - 1),
+    filtered("id", { count: "exact", head: true }),
+    applyOfficeNotificationLogFilters(base().select("id", { count: "exact", head: true }), {
+      ...filters,
+      status: "sent",
+    }),
+    applyOfficeNotificationLogFilters(base().select("id", { count: "exact", head: true }), {
+      ...filters,
+      status: "failed",
+    }),
+  ]);
 
-  if (booking_id) q = q.eq("booking_id", booking_id);
-  if (status === "sent" || status === "failed") q = q.eq("status", status);
-  if (channel === "email" || channel === "whatsapp" || channel === "sms") q = q.eq("channel", channel);
-  if (template_key) q = q.eq("template_key", template_key);
-  if (role) q = q.eq("role", role);
-  if (event_type) q = q.eq("event_type", event_type);
+  if (logsRes.error) return NextResponse.json({ error: logsRes.error.message }, { status: 500 });
+  if (totalRes.error) return NextResponse.json({ error: totalRes.error.message }, { status: 500 });
+  if (sentRes.error) return NextResponse.json({ error: sentRes.error.message }, { status: 500 });
+  if (failedRes.error) return NextResponse.json({ error: failedRes.error.message }, { status: 500 });
 
-  const { data, error } = await q;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({
-    logs: data ?? [],
+  const payload = buildOfficeNotificationLogsListResponse({
+    logs: (logsRes.data ?? []) as OfficeNotificationLogRow[],
     limit,
     offset,
-    hasMore: (data?.length ?? 0) === limit,
+    total: totalRes.count ?? 0,
+    sent: sentRes.count ?? 0,
+    failed: failedRes.count ?? 0,
   });
+
+  return NextResponse.json(payload);
 }

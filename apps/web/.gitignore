@@ -41,6 +41,9 @@ repair-*.log
 .env*
 !.env.example
 
+# Local GSC / SEO feedback (copy from config/location-seo-feedback.example.json)
+/config/location-seo-feedback.json
+
 # vercel
 .vercel
 

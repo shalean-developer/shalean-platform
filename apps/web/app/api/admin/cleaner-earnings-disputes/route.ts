@@ -13,7 +13,12 @@ export async function GET(request: Request) {
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const statusFilter = new URL(request.url).searchParams.get("status")?.trim().toLowerCase() ?? "";
-  const limit = Math.min(200, Math.max(10, Number(new URL(request.url).searchParams.get("limit")) || 80));
+  const limit = Math.min(500, Math.max(10, Number(new URL(request.url).searchParams.get("limit")) || 200));
+
+  const statusKeys = ["open", "reviewing", "resolved", "rejected"] as const;
+  const countQueries = statusKeys.map((status) =>
+    admin.from("cleaner_earnings_disputes").select("id", { count: "exact", head: true }).eq("status", status),
+  );
 
   let q = admin
     .from("cleaner_earnings_disputes")
@@ -27,8 +32,12 @@ export async function GET(request: Request) {
     q = q.eq("status", statusFilter);
   }
 
-  const { data: rows, error } = await q;
+  const [{ data: rows, error }, ...countResults] = await Promise.all([q, ...countQueries]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const statusCounts = Object.fromEntries(
+    statusKeys.map((status, i) => [status, countResults[i]?.count ?? 0]),
+  ) as Record<(typeof statusKeys)[number], number>;
 
   const list = rows ?? [];
   const cleanerIds = [...new Set(list.map((r) => String((r as { cleaner_id?: string }).cleaner_id ?? "")).filter(Boolean))];
@@ -75,5 +84,9 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({ disputes: enriched });
+  return NextResponse.json({
+    disputes: enriched,
+    statusCounts,
+    meta: { limit, returned: enriched.length },
+  });
 }

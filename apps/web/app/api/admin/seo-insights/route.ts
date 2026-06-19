@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
-import { listLocationGscMetricEntries } from "@/lib/seo/location-seo-feedback";
+import {
+  resolveLocationGscMetricEntries,
+  toGscImportSnapshot,
+} from "@/lib/gsc/resolve-location-gsc-metrics";
 import {
   aggregateSeoUserEvents,
   fetchSeoInsightUserEventsWindow,
@@ -134,6 +137,8 @@ export async function GET(request: Request) {
     .slice(0, 120)
     .map(([slug, booking_starts]) => ({ slug, booking_starts }));
 
+  const untilIso = new Date().toISOString();
+
   const page_health_table = optimization.pageHealth.slice(0, 80).map((row) => ({
     slug: row.slug,
     health_score: row.score,
@@ -144,7 +149,24 @@ export async function GET(request: Request) {
     hero_swap_applied: hubPatchMap.get(row.slug)?.swap_hero_book_ctas ?? false,
   }));
 
-  const untilIso = new Date().toISOString();
+  const dbRecommendations = recRes.error ? [] : recRes.data ?? [];
+  const engineRecommendations = optimization.recommendations.map((rec, index) => ({
+    id: `engine-${rec.slug}-${rec.kind}-${index}`,
+    slug: rec.slug,
+    kind: rec.kind,
+    severity: rec.severity === "warn" ? "warning" : rec.severity,
+    title: rec.title,
+    detail: rec.detail,
+    confidence: rec.confidence,
+    applied_at: null as string | null,
+    created_at: untilIso,
+  }));
+  const dbRecKeys = new Set(dbRecommendations.map((r) => `${String(r.slug)}|${String(r.kind)}`));
+  const mergedRecommendations = [
+    ...dbRecommendations,
+    ...engineRecommendations.filter((r) => !dbRecKeys.has(`${String(r.slug)}|${String(r.kind)}`)),
+  ];
+
   const health_score_by_slug_current = optimization.pageHealth.slice(0, 80).map((p) => ({
     slug: p.slug,
     health_score: p.score,
@@ -164,16 +186,8 @@ export async function GET(request: Request) {
     previous_30d: previous_period,
   };
 
-  const gscImported = listLocationGscMetricEntries()
-    .map(({ slug, metrics }) => ({
-      slug,
-      impressions: metrics.impressions ?? null,
-      clicks: metrics.clicks ?? null,
-      ctr: metrics.ctr ?? null,
-      avg_position: metrics.avg_position ?? null,
-      ctr_pct_display: metrics.ctr != null ? Math.round(metrics.ctr * 10_000) / 100 : null,
-    }))
-    .sort((a, b) => (b.ctr ?? 0) - (a.ctr ?? 0));
+  const gscResolved = await resolveLocationGscMetricEntries(admin);
+  const gscImported = toGscImportSnapshot(gscResolved.entries);
 
   return NextResponse.json({
     since: currentSinceIso,
@@ -194,16 +208,18 @@ export async function GET(request: Request) {
     scroll_depth_by_slug,
     booking_starts_by_slug,
     gsc_import_snapshot: gscImported.slice(0, 40),
+    gsc_import_count: gscImported.length,
+    gsc_config_source: gscResolved.source,
+    gsc_synced_at: gscResolved.syncedAt,
     optimization: {
       page_health_table,
-      recommendations: recRes.error ? [] : recRes.data ?? [],
+      recommendations: mergedRecommendations,
     },
     notes: [
       "`periods.current_30d` / `periods.previous_30d` mirror the flat fields and `previous_period` (additive shape for charts and future 7d/90d windows).",
       "Current metrics use the last 30 days of events; when `previous_period` is present, it is the prior non-overlapping 30 days (days 31–60) for scroll, booking-start proxy, and recomputed health scores.",
-      "GSC snapshot is a static manual import — it has no period-over-period delta until you store time-series GSC.",
-      "Suburbs and scroll metrics require migration `20260887_seo_location_analytics_events.sql` and hub instrumentation.",
-      "GSC rows come from `LOCATION_SEO_FEEDBACK_JSON.gscMetrics` (manual import). CTR on snapshot is `ctr` as a 0–1 fraction.",
+      "GSC snapshot: DB sync (location_gsc_metrics) when present, else LOCATION_SEO_FEEDBACK_JSON / file fallback. CTR is a 0–1 fraction.",
+      "Manual sync: POST /api/admin/seo/gsc-sync (admin). Scheduled: GET /api/cron/gsc-sync (CRON_SECRET).",
       "Booking proxy: share of distinct sessions with a given `cta_kind`+`cta_location` that also fired `start_booking` within the window.",
       "Automation: POST `/api/cron/seo-optimization` (CRON_SECRET). Env: `SEO_OPTIMIZATION_AUTO_APPLY_TITLE`, `SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI`.",
     ],

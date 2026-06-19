@@ -19,7 +19,12 @@ export type GscLocationMetaRow = {
 };
 
 /** Merge rows into the JSON shape consumed by {@link mergeLocationMetaTitle} / {@link mergeLocationMetaDescription}. */
-export function rowsToLocationSeoFeedbackJson(rows: readonly GscLocationMetaRow[]): string {
+export function rowsToLocationSeoFeedbackConfig(rows: readonly GscLocationMetaRow[]): {
+  titles: Record<string, string>;
+  descriptions: Record<string, string>;
+  titleVariant?: Record<string, "A" | "B" | "C">;
+  gscMetrics?: Record<string, Record<string, number>>;
+} {
   const titles: Record<string, string> = {};
   const descriptions: Record<string, string> = {};
   const titleVariant: Record<string, "A" | "B" | "C"> = {};
@@ -41,8 +46,18 @@ export function rowsToLocationSeoFeedbackJson(rows: readonly GscLocationMetaRow[
     if (typeof r.avg_position === "number" && Number.isFinite(r.avg_position)) snap.avg_position = r.avg_position;
     if (Object.keys(snap).length > 0) gscMetrics[slug] = snap;
   }
-  const payload: Record<string, unknown> = { titles, descriptions };
+  const payload: {
+    titles: Record<string, string>;
+    descriptions: Record<string, string>;
+    titleVariant?: Record<string, "A" | "B" | "C">;
+    gscMetrics?: Record<string, Record<string, number>>;
+  } = { titles, descriptions };
   if (Object.keys(titleVariant).length > 0) payload.titleVariant = titleVariant;
   if (Object.keys(gscMetrics).length > 0) payload.gscMetrics = gscMetrics;
-  return JSON.stringify(payload);
+  return payload;
+}
+
+/** Merge rows into the JSON shape consumed by {@link mergeLocationMetaTitle} / {@link mergeLocationMetaDescription}. */
+export function rowsToLocationSeoFeedbackJson(rows: readonly GscLocationMetaRow[]): string {
+  return JSON.stringify(rowsToLocationSeoFeedbackConfig(rows));
 }

@@ -1,60 +1,34 @@
 /**
  * Search Console → deploy feedback loop (no live API in-request).
  *
- * Set `LOCATION_SEO_FEEDBACK_JSON` to a JSON object shaped like:
- * `{ "titles": { … }, "descriptions": { … }, "titleVariant": { … }, "gscMetrics": { "sea-point-cleaning-services": { "impressions": 1200, "clicks": 48, "ctr": 0.04, "avg_position": 5.2 } } }`
- *
- * Values replace programmatic defaults after `buildLocationPageMetaTitle` /
- * `buildLocationPageMetaDescription`. Ship updates from GSC exports or scripts.
- *
- * **Ingest workflow:** Export queries/pages from GSC, pick winning title/description variants per hub slug,
- * build a JSON array `{ slug, meta_title?, meta_description? }[]`, then run:
- * `npx tsx scripts/gsc-rows-to-location-feedback-json.ts ./tmp/gsc-location-rows.json`
- * and paste the output into your deployment env (or merge with `rowsToLocationSeoFeedbackJson` in CI).
- *
- * **CTR-oriented examples** (merge into your JSON object):
- * - Title format: `Cleaning Services {Area} (From R300) | Trusted Local Cleaners` — match “From R…” to each hub band (see meta price hints).
- * - Description: price signal + trust (background-checked / insured) + action CTA, e.g.
- *   `Book trusted cleaners in Sea Point from ~R450. Background-checked teams, same-day when routing allows—see your exact price before you pay.`
+ * Config is read from `process.env.LOCATION_SEO_FEEDBACK_JSON` only (client-safe).
+ * Local file paths (`LOCATION_SEO_FEEDBACK_JSON_FILE`) are resolved at Next boot in `next.config.ts`.
  */
 
 import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
+import type { LocationGscMetricSnapshot, LocationSeoFeedbackConfig } from "@/lib/seo/location-seo-feedback.types";
 
-/**
- * Optional Search Console snapshot per hub slug (manual import — not fetched live).
- * Use decimals: `ctr` as 0–1 fraction (e.g. 0.048), `avg_position` as mean position.
- */
-export type LocationGscMetricSnapshot = {
-  impressions?: number;
-  clicks?: number;
-  ctr?: number;
-  avg_position?: number;
-};
+export type { LocationGscMetricSnapshot, LocationSeoFeedbackConfig } from "@/lib/seo/location-seo-feedback.types";
 
-export type LocationSeoFeedbackConfig = {
-  titles?: Record<string, string>;
-  descriptions?: Record<string, string>;
-  /** Per-slug A/B/C template (`buildLocationPageMetaTitleForVariant`). Ignored when `titles[slug]` is set. */
-  titleVariant?: Record<string, LocationTitleVariantId>;
-  /** When a slug has no `titleVariant`, use this template (default **A**). */
-  defaultTitleVariant?: LocationTitleVariantId;
-  /** GSC performance rows keyed by programmatic hub slug — merge from exports / scripts. */
-  gscMetrics?: Record<string, LocationGscMetricSnapshot>;
-  /**
-   * Optional per-variant GSC snapshots for sequential title tests (same slug, different calendar windows).
-   * Used by the SEO optimizer to pick a winner when impressions + CTR lift thresholds are met.
-   */
-  gscVariantMetrics?: Record<string, Partial<Record<LocationTitleVariantId, LocationGscMetricSnapshot>>>;
-};
+function readFeedbackJsonRaw(): string | null {
+  const inline = process.env.LOCATION_SEO_FEEDBACK_JSON?.trim();
+  return inline || null;
+}
 
 function parseFeedback(): LocationSeoFeedbackConfig {
-  const raw = process.env.LOCATION_SEO_FEEDBACK_JSON?.trim();
+  const raw = readFeedbackJsonRaw();
   if (!raw) return {};
   try {
     const v = JSON.parse(raw) as unknown;
     if (!v || typeof v !== "object") return {};
     return v as LocationSeoFeedbackConfig;
-  } catch {
+  } catch (err) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[location-seo-feedback] Invalid LOCATION_SEO_FEEDBACK_JSON — must be valid JSON.",
+        err instanceof Error ? err.message : err,
+      );
+    }
     return {};
   }
 }

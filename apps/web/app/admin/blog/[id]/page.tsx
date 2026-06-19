@@ -1,15 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams } from "next/navigation";
-import { PostEditorForm } from "@/components/admin/blog/PostEditorForm";
+type Props = {
+  params: Promise<{ id: string }>;
+};
 
-export default function AdminBlogEditPage() {
-  const params = useParams();
-  const id = typeof params?.id === "string" ? params.id : "";
-
-  return (
-    <div className="w-full min-w-0 py-2 md:py-0">
-      {id ? <PostEditorForm mode="edit" postId={id} /> : <p className="text-sm text-zinc-600">Missing post id.</p>}
-    </div>
-  );
+/** Legacy admin edit URL — editor lives under the office shell. */
+export default async function AdminBlogEditPage({ params }: Props) {
+  const { id } = await params;
+  if (!id?.trim()) {
+    redirect("/office/blog");
+  }
+  redirect(`/office/blog/${encodeURIComponent(id.trim())}`);
 }

@@ -368,11 +368,11 @@ export default function AdminDispatchMetricsPage() {
           <section className="space-y-3">
             <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Team utilization</h3>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Jobs = team bookings with <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">is_team_job</code>{" "}
-              and <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">created_at</code> on calendar date{" "}
-              <span className="font-mono text-xs">{data?.todayYmdJohannesburg}</span> in{" "}
-              <span className="font-mono text-xs">{DISPATCH_METRICS_UTILIZATION_TIMEZONE}</span>. Utilization = jobs ÷
-              capacity.
+              Jobs = team bookings scheduled for{" "}
+              <span className="font-mono text-xs">{data?.todayYmdJohannesburg}</span> (
+              <span className="font-mono text-xs">{DISPATCH_METRICS_UTILIZATION_TIMEZONE}</span>) with status pending,
+              assigned, or in progress — merged with <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">team_daily_capacity_usage</code>{" "}
+              so counts match dispatch capacity. Utilization = jobs ÷ capacity.
             </p>
 
             {!data?.teams.length ? (

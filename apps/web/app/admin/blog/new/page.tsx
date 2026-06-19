@@ -1,11 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { PostEditorForm } from "@/components/admin/blog/PostEditorForm";
-
+/** Legacy admin new-post URL — editor lives under the office shell. */
 export default function AdminBlogNewPage() {
-  return (
-    <div className="w-full min-w-0 py-2 md:py-0">
-      <PostEditorForm mode="create" />
-    </div>
-  );
+  redirect("/office/blog/new");
 }

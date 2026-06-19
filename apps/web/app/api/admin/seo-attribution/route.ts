@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
+import {
+  DIRECT_BOOKING_FLOW_LANDING,
+  resolveSessionLanding,
+} from "@/lib/admin/landingPageAttribution";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -30,16 +34,7 @@ function correlationSessionId(payload: Record<string, unknown>): string | null {
 }
 
 function landingKey(payload: Record<string, unknown>): string {
-  const slug = stringValue(payload.landing_page_slug);
-  if (slug) return slug.slice(0, 240);
-  const ft = payload.acquisition_first_touch;
-  if (ft && typeof ft === "object" && !Array.isArray(ft)) {
-    const lp = (ft as Record<string, unknown>).landing_pathname;
-    if (typeof lp === "string" && lp.trim()) return lp.trim().slice(0, 240);
-  }
-  const path = stringValue(payload.pathname);
-  if (path) return path.slice(0, 240);
-  return "(no landing captured)";
+  return resolveSessionLanding(null, payload);
 }
 
 function pct(part: number, total: number): number {
@@ -47,12 +42,27 @@ function pct(part: number, total: number): number {
   return Math.round((part / total) * 1000) / 10;
 }
 
-type Bucket = { quoted: Set<string>; completed: Set<string> };
+type Bucket = { sessions: Set<string>; quoted: Set<string>; completed: Set<string> };
+type SourceBucket = Bucket & { source: string; medium: string };
 
 function ensureBucket(map: Map<string, Bucket>, key: string): Bucket {
   let b = map.get(key);
   if (!b) {
-    b = { quoted: new Set(), completed: new Set() };
+    b = { sessions: new Set(), quoted: new Set(), completed: new Set() };
+    map.set(key, b);
+  }
+  return b;
+}
+
+function ensureSourceBucket(
+  map: Map<string, SourceBucket>,
+  key: string,
+  source: string,
+  medium: string,
+): SourceBucket {
+  let b = map.get(key);
+  if (!b) {
+    b = { sessions: new Set(), quoted: new Set(), completed: new Set(), source, medium };
     map.set(key, b);
   }
   return b;
@@ -86,7 +96,9 @@ export async function GET(request: Request) {
 
   const eventTypes = [
     ANALYTICS_EVENTS.PAGE_VIEW,
+    ANALYTICS_EVENTS.START_BOOKING,
     ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED,
+    ANALYTICS_EVENTS.COMPLETE_BOOKING,
     ANALYTICS_EVENTS.BOOKING_COMPLETED,
   ];
 
@@ -115,17 +127,8 @@ export async function GET(request: Request) {
 
   const rows = (data ?? []) as UserEventRow[];
 
-  type SessionMeta = {
-    landing: string;
-    utm_source: string | null;
-    utm_medium: string | null;
-    utm_campaign: string | null;
-    gbp_attribution: string | null;
-  };
-
-  const sessionMeta = new Map<string, SessionMeta>();
   const landingBuckets = new Map<string, Bucket>();
-  const sourceBuckets = new Map<string, Bucket & { source: string; medium: string }>();
+  const sourceBuckets = new Map<string, SourceBucket>();
   const serviceBuckets = new Map<string, Bucket>();
 
   let sessionsWithUtm = 0;
@@ -134,78 +137,98 @@ export async function GET(request: Request) {
   const allQuoted = new Set<string>();
   const allCompleted = new Set<string>();
 
+  function isQuoteEvent(et: string | null | undefined): boolean {
+    return et === ANALYTICS_EVENTS.START_BOOKING || et === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED;
+  }
+
+  function isCompleteEvent(et: string | null | undefined): boolean {
+    return et === ANALYTICS_EVENTS.BOOKING_COMPLETED || et === ANALYTICS_EVENTS.COMPLETE_BOOKING;
+  }
+
+  type SessionEvents = {
+    landing: string;
+    utm_source: string | null;
+    utm_medium: string | null;
+    utm_campaign: string | null;
+    gbp_attribution: string | null;
+    hadPageView: boolean;
+    hadQuote: boolean;
+    hadComplete: boolean;
+    service_type: string | null;
+  };
+
+  const sessions = new Map<string, SessionEvents>();
+
   for (const row of rows) {
     const payload = safePayload(row);
     const sid = correlationSessionId(payload);
     if (!sid) continue;
 
-    if (!sessionMeta.has(sid)) {
-      const landing = landingKey(payload);
-      const utm_source = stringValue(payload.utm_source);
-      const utm_medium = stringValue(payload.utm_medium);
-      const utm_campaign = stringValue(payload.utm_campaign);
-      const gbp_attribution = stringValue(payload.gbp_attribution);
-      sessionMeta.set(sid, {
-        landing,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        gbp_attribution,
-      });
-      if (utm_source || utm_medium) sessionsWithUtm += 1;
-      if (landing !== "(no landing captured)") sessionsWithLandingCapture += 1;
+    let session = sessions.get(sid);
+    if (!session) {
+      session = {
+        landing: landingKey(payload),
+        utm_source: stringValue(payload.utm_source),
+        utm_medium: stringValue(payload.utm_medium),
+        utm_campaign: stringValue(payload.utm_campaign),
+        gbp_attribution: stringValue(payload.gbp_attribution),
+        hadPageView: false,
+        hadQuote: false,
+        hadComplete: false,
+        service_type: null,
+      };
+      sessions.set(sid, session);
+    } else {
+      session.landing = resolveSessionLanding(session.landing, payload, row.event_type);
+      session.utm_source ??= stringValue(payload.utm_source);
+      session.utm_medium ??= stringValue(payload.utm_medium);
+      session.utm_campaign ??= stringValue(payload.utm_campaign);
+      session.gbp_attribution ??= stringValue(payload.gbp_attribution);
     }
 
-    const meta = sessionMeta.get(sid)!;
-    const hasAttributionSignal = Boolean(meta.utm_source || meta.utm_medium || meta.gbp_attribution);
+    const et = row.event_type;
+    if (et === ANALYTICS_EVENTS.PAGE_VIEW) session.hadPageView = true;
+    if (isQuoteEvent(et)) {
+      session.hadQuote = true;
+      session.service_type = stringValue(payload.service_type) ?? session.service_type;
+    }
+    if (isCompleteEvent(et)) {
+      session.hadComplete = true;
+      session.service_type = stringValue(payload.service_type) ?? session.service_type;
+    }
+  }
+
+  for (const [sid, session] of sessions) {
+    if (session.utm_source || session.utm_medium) sessionsWithUtm += 1;
+    if (session.landing !== DIRECT_BOOKING_FLOW_LANDING) sessionsWithLandingCapture += 1;
+
+    const hasAttributionSignal = Boolean(session.utm_source || session.utm_medium || session.gbp_attribution);
     const sourceKey = hasAttributionSignal
-      ? `${meta.utm_source ?? (meta.gbp_attribution ? `gbp:${meta.gbp_attribution}` : "—")}|${meta.utm_medium ?? "—"}`
+      ? `${session.utm_source ?? (session.gbp_attribution ? `gbp:${session.gbp_attribution}` : "—")}|${session.utm_medium ?? "—"}`
       : "(organic / no UTM)";
 
-    const et = row.event_type;
-    if (et === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED) {
+    if (session.hadPageView) {
+      ensureBucket(landingBuckets, session.landing).sessions.add(sid);
+    }
+
+    const srcLabel = hasAttributionSignal
+      ? session.utm_source ?? (session.gbp_attribution ? `gbp:${session.gbp_attribution}` : "—")
+      : "(organic / no UTM)";
+    const medLabel = hasAttributionSignal ? session.utm_medium ?? "—" : "—";
+
+    if (session.hadQuote) {
       allQuoted.add(sid);
-      const lb = ensureBucket(landingBuckets, meta.landing);
-      lb.quoted.add(sid);
-      let sb = sourceBuckets.get(sourceKey);
-      if (!sb) {
-        const srcLabel = hasAttributionSignal
-          ? meta.utm_source ?? (meta.gbp_attribution ? `gbp:${meta.gbp_attribution}` : "—")
-          : "(organic / no UTM)";
-        const medLabel = hasAttributionSignal ? meta.utm_medium ?? "—" : "—";
-        sb = {
-          quoted: new Set(),
-          completed: new Set(),
-          source: srcLabel,
-          medium: medLabel,
-        };
-        sourceBuckets.set(sourceKey, sb);
-      }
-      sb.quoted.add(sid);
-      const svc = stringValue(payload.service_type) ?? "Unknown";
+      ensureBucket(landingBuckets, session.landing).quoted.add(sid);
+      ensureSourceBucket(sourceBuckets, sourceKey, srcLabel, medLabel).quoted.add(sid);
+      const svc = session.service_type ?? "Unknown";
       ensureBucket(serviceBuckets, svc).quoted.add(sid);
     }
 
-    if (et === ANALYTICS_EVENTS.BOOKING_COMPLETED) {
+    if (session.hadComplete) {
       allCompleted.add(sid);
-      const lb = ensureBucket(landingBuckets, meta.landing);
-      lb.completed.add(sid);
-      let sb = sourceBuckets.get(sourceKey);
-      if (!sb) {
-        const srcLabel = hasAttributionSignal
-          ? meta.utm_source ?? (meta.gbp_attribution ? `gbp:${meta.gbp_attribution}` : "—")
-          : "(organic / no UTM)";
-        const medLabel = hasAttributionSignal ? meta.utm_medium ?? "—" : "—";
-        sb = {
-          quoted: new Set(),
-          completed: new Set(),
-          source: srcLabel,
-          medium: medLabel,
-        };
-        sourceBuckets.set(sourceKey, sb);
-      }
-      sb.completed.add(sid);
-      const svc = stringValue(payload.service_type) ?? "Unknown";
+      ensureBucket(landingBuckets, session.landing).completed.add(sid);
+      ensureSourceBucket(sourceBuckets, sourceKey, srcLabel, medLabel).completed.add(sid);
+      const svc = session.service_type ?? "Unknown";
       ensureBucket(serviceBuckets, svc).completed.add(sid);
     }
   }
@@ -216,13 +239,17 @@ export async function GET(request: Request) {
   const byLanding = [...landingBuckets.entries()]
     .map(([landing, b]) => ({
       landing,
+      sessions: b.sessions.size,
       quoted: b.quoted.size,
       completed: [...b.completed].filter((s) => b.quoted.has(s)).length,
       conversionPct: pct([...b.completed].filter((s) => b.quoted.has(s)).length, b.quoted.size),
     }))
-    .filter((r) => r.quoted > 0)
-    .sort((a, b) => b.quoted - a.quoted)
-    .slice(0, 25);
+    .filter((r) => r.sessions > 0 || r.quoted > 0)
+    .sort((a, b) => {
+      if (a.landing === DIRECT_BOOKING_FLOW_LANDING) return 1;
+      if (b.landing === DIRECT_BOOKING_FLOW_LANDING) return -1;
+      return b.quoted - a.quoted || b.sessions - a.sessions;
+    });
 
   const bySource = [...sourceBuckets.entries()]
     .map(([, b]) => ({
@@ -255,7 +282,7 @@ export async function GET(request: Request) {
       distinctSessionsQuoted: quotedCount,
       distinctSessionsCompleted: completedCount,
       overallConversionPct: pct(completedCount, quotedCount),
-      sessionsTracked: sessionMeta.size,
+      sessionsTracked: sessions.size,
       sessionsWithUtm,
       sessionsWithLandingCapture,
     },

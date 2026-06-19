@@ -26,6 +26,14 @@ import {
   type BlogTemplateId,
 } from "@/lib/blog/templates";
 import { legacyParagraphToRichHtml } from "@/lib/blog/legacy-paragraph-to-rich-html";
+import {
+  mergeDocumentModeToBlocks,
+  splitBlocksForDocumentMode,
+} from "@/lib/blog/blogDocumentMode";
+import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
+import { DocumentBodySection } from "./DocumentBodySection";
+import { WordPressPostEditorLayout, WpLabeledField, WpTextareaField } from "./WordPressPostEditorLayout";
+import { WpMetabox } from "./WpMetabox";
 import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
 import { BlogContent } from "@/components/blog/engine/BlogContent";
 import { RichTextBlockEditor } from "./RichTextBlockEditor";
@@ -184,6 +192,10 @@ function PublishSidebarPanel({
   resolvedClusterKey,
   preview,
   clusterPeerCount,
+  postsListPath,
+  compact = false,
+  viewPostUrl,
+  viewPostLabel,
 }: {
   saving: boolean;
   onSave: () => void;
@@ -201,6 +213,10 @@ function PublishSidebarPanel({
   resolvedClusterKey: string | null;
   preview: PublishValidationResult;
   clusterPeerCount: number;
+  postsListPath: string;
+  compact?: boolean;
+  viewPostUrl?: string | null;
+  viewPostLabel?: string;
 }) {
   const fieldId = useId();
   const statusVariant =
@@ -210,14 +226,29 @@ function PublishSidebarPanel({
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
-        <Button type="button" className="w-full" size="lg" onClick={onSave} disabled={saving}>
-          {saving ? "Saving…" : "Save changes"}
-        </Button>
+      {!compact ? (
+        <div className="space-y-2">
+          <Button type="button" className="w-full" size="lg" onClick={onSave} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+          {viewPostUrl ? (
+            <Button type="button" variant="outline" className="w-full" asChild>
+              <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
+                {viewPostLabel ?? "View post"}
+              </Link>
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" className="w-full" asChild>
+            <Link href={postsListPath}>Back to posts</Link>
+          </Button>
+        </div>
+      ) : viewPostUrl ? (
         <Button type="button" variant="outline" className="w-full" asChild>
-          <Link href="/admin/blog">Back to posts</Link>
+          <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
+            {viewPostLabel ?? "View post"}
+          </Link>
         </Button>
-      </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant}>{status}</Badge>
@@ -390,9 +421,14 @@ function PublishSidebarPanel({
   );
 }
 
-type Props = { mode: "create" | "edit"; postId?: string };
+type Props = { mode: "create" | "edit"; postId?: string; postsListPath?: string; layout?: "document" | "blocks" };
 
-export function PostEditorForm({ mode, postId }: Props) {
+export function PostEditorForm({
+  mode,
+  postId,
+  postsListPath = "/admin/blog",
+  layout = "document",
+}: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
@@ -412,6 +448,8 @@ export function PostEditorForm({ mode, postId }: Props) {
   const [featuredAlt, setFeaturedAlt] = useState("");
   const [noindex, setNoindex] = useState(false);
   const [blocks, setBlocks] = useState<BlogContentBlock[]>([]);
+  const [documentHtml, setDocumentHtml] = useState("<p></p>");
+  const [advancedBlocks, setAdvancedBlocks] = useState<BlogContentBlock[]>([]);
   const [addType, setAddType] = useState<AddableType>("rich_text");
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
@@ -434,10 +472,25 @@ export function PostEditorForm({ mode, postId }: Props) {
   const [tplA, setTplA] = useState("Standard cleaning");
   const [tplB, setTplB] = useState("Deep cleaning");
   const [tplTopic, setTplTopic] = useState("home cleaning");
+  const [draftPreviewQuery, setDraftPreviewQuery] = useState<string | null>(null);
+
+  const viewPostUrl = useMemo(
+    () => buildBlogPostViewPath(slug, status, draftPreviewQuery),
+    [slug, status, draftPreviewQuery],
+  );
+  const viewPostLabelText = blogPostViewLabel(status);
+
+  const effectiveBlocks = useMemo(
+    () =>
+      layout === "document"
+        ? mergeDocumentModeToBlocks(documentHtml, advancedBlocks)
+        : blocks,
+    [layout, documentHtml, advancedBlocks, blocks],
+  );
 
   const contentJson: BlogContentJson = useMemo(
-    () => ({ schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks }),
-    [blocks],
+    () => ({ schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks: effectiveBlocks }),
+    [effectiveBlocks],
   );
 
   const selectedTagSlugs = useMemo(
@@ -510,10 +563,14 @@ export function PostEditorForm({ mode, postId }: Props) {
       const json = (await res.json().catch(() => ({}))) as {
         categories?: { id: string; slug: string; name: string }[];
         tags?: { id: string; slug: string; name: string }[];
+        draft_preview_query?: string | null;
       };
       if (cancelled || !res.ok) return;
       setCategories(json.categories ?? []);
       setTags(json.tags ?? []);
+      if (json.draft_preview_query) {
+        setDraftPreviewQuery((prev) => prev ?? json.draft_preview_query ?? null);
+      }
     })();
     return () => {
       cancelled = true;
@@ -535,7 +592,11 @@ export function PostEditorForm({ mode, postId }: Props) {
       const res = await fetch(`/api/admin/blog/posts/${postId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const json = (await res.json().catch(() => ({}))) as { post?: Record<string, unknown>; error?: string };
+      const json = (await res.json().catch(() => ({}))) as {
+        post?: Record<string, unknown>;
+        error?: string;
+        draft_preview_query?: string | null;
+      };
       if (cancelled) return;
       if (!res.ok) {
         setLoadError(json.error ?? "Failed to load post.");
@@ -576,17 +637,25 @@ export function PostEditorForm({ mode, postId }: Props) {
       setRelatedGuideOverrideText(Array.isArray(rg) ? rg.join("\n") : "");
       const tids = (p as { tag_ids?: string[] }).tag_ids;
       setTagIds(Array.isArray(tids) ? tids : []);
+      setDraftPreviewQuery(json.draft_preview_query ?? null);
       const raw = p.content_json;
       const parsed = safeParseBlogContentJson(raw);
-      setBlocks(
-        parsed.success ? parsed.data.blocks.map((b) => normalizeBlockForEditor(withBlockId(b))) : [],
-      );
+      const parsedBlocks = parsed.success
+        ? parsed.data.blocks.map((b) => normalizeBlockForEditor(withBlockId(b)))
+        : [];
+      if (layout === "document") {
+        const split = splitBlocksForDocumentMode(parsedBlocks);
+        setDocumentHtml(split.documentHtml);
+        setAdvancedBlocks(split.advancedBlocks);
+      } else {
+        setBlocks(parsedBlocks);
+      }
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [mode, postId]);
+  }, [mode, postId, layout]);
 
   /** Slug follows title only while "Auto-generate" is on; any manual slug edit sets `slugAuto` false. */
   useEffect(() => {
@@ -625,7 +694,7 @@ export function PostEditorForm({ mode, postId }: Props) {
     if (status === "scheduled" && !publishedAtLocal.trim()) {
       errs.push("Scheduled posts need a publish date/time.");
     }
-    blocks.forEach((b, bi) => {
+    contentJson.blocks.forEach((b, bi) => {
       if (b.type !== "faq") return;
       b.items.forEach((it, qi) => {
         if (!it.question.trim() || !it.answer.trim()) {
@@ -711,7 +780,7 @@ export function PostEditorForm({ mode, postId }: Props) {
     }
     setFieldErrors([]);
     if (mode === "create" && json.post?.id) {
-      router.push(`/admin/blog/${json.post.id}`);
+      router.push(`${postsListPath}/${json.post.id}`);
       router.refresh();
       return;
     }
@@ -737,7 +806,14 @@ export function PostEditorForm({ mode, postId }: Props) {
         vars: { topic: tplTopic, cityName: tplCity },
       });
     }
-    setBlocks(json.blocks.map((b) => withBlockId(b)));
+    const mapped = json.blocks.map((b) => withBlockId(b));
+    if (layout === "document") {
+      const split = splitBlocksForDocumentMode(mapped);
+      setDocumentHtml(split.documentHtml);
+      setAdvancedBlocks(split.advancedBlocks);
+    } else {
+      setBlocks(mapped);
+    }
   };
 
   if (loading) {
@@ -747,7 +823,7 @@ export function PostEditorForm({ mode, postId }: Props) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
         {loadError}{" "}
-        <Link href="/admin/blog" className="font-medium underline">
+        <Link href={postsListPath} className="font-medium underline">
           Back to list
         </Link>
       </div>
@@ -771,7 +847,257 @@ export function PostEditorForm({ mode, postId }: Props) {
     resolvedClusterKey: resolvedSemanticClusterKey,
     preview: publishPreview,
     clusterPeerCount: clusterPeers.length,
+    postsListPath,
+    viewPostUrl,
+    viewPostLabel: viewPostLabelText,
   };
+
+  if (layout === "document") {
+    const documentSidebar = (
+      <>
+        <WpMetabox title="Publish">
+          <PublishSidebarPanel {...publishSidebarProps} compact />
+        </WpMetabox>
+
+        <WpMetabox title="Excerpt">
+          <WpTextareaField
+            label="Excerpt"
+            id="wp-excerpt"
+            value={excerpt}
+            onChange={setExcerpt}
+            rows={4}
+            placeholder="Short summary for cards and meta fallback"
+          />
+        </WpMetabox>
+
+        <WpMetabox title="Featured image">
+          <WpLabeledField label="Image URL" htmlFor="wp-feat">
+            <Input
+              id="wp-feat"
+              className="font-mono text-xs"
+              value={featuredUrl}
+              onChange={(e) => setFeaturedUrl(e.target.value)}
+            />
+          </WpLabeledField>
+          <WpLabeledField label="Alt text" htmlFor="wp-feata">
+            <Input id="wp-feata" value={featuredAlt} onChange={(e) => setFeaturedAlt(e.target.value)} />
+          </WpLabeledField>
+        </WpMetabox>
+
+        <WpMetabox title="Categories">
+          <WpLabeledField label="Category" htmlFor="wp-cat">
+            <select
+              id="wp-cat"
+              className="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </WpLabeledField>
+        </WpMetabox>
+
+        <WpMetabox title="Tags">
+          <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+            {tags.map((t) => {
+              const on = tagIds.includes(t.id);
+              return (
+                <label
+                  key={t.id}
+                  className="flex cursor-pointer items-center gap-1.5 rounded border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => setTagIds((prev) => (on ? prev.filter((id) => id !== t.id) : [...prev, t.id]))}
+                  />
+                  {t.name}
+                </label>
+              );
+            })}
+          </div>
+        </WpMetabox>
+
+        <WpMetabox title="SEO" defaultOpen={false}>
+          <div className="space-y-3">
+            <WpLabeledField label="Meta title" htmlFor="wp-mt">
+              <Input id="wp-mt" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} />
+            </WpLabeledField>
+            <WpTextareaField
+              label="Meta description"
+              id="wp-md"
+              value={metaDescription}
+              onChange={setMetaDescription}
+              rows={3}
+            />
+            <WpLabeledField label="H1 override (optional)" htmlFor="wp-h1">
+              <Input id="wp-h1" value={h1} onChange={(e) => setH1(e.target.value)} placeholder="Visible H1 if different from title" />
+            </WpLabeledField>
+            <WpLabeledField label="Canonical URL" htmlFor="wp-can">
+              <Input
+                id="wp-can"
+                className="font-mono text-xs"
+                value={canonicalUrl}
+                onChange={(e) => setCanonicalUrl(e.target.value)}
+                placeholder="/blog/slug"
+              />
+            </WpLabeledField>
+            <label className="flex items-center gap-2 text-xs text-zinc-600">
+              <input id="wp-noi" type="checkbox" checked={noindex} onChange={(e) => setNoindex(e.target.checked)} />
+              Noindex
+            </label>
+            <WpLabeledField label="Primary keyword" htmlFor="wp-pk">
+              <Input id="wp-pk" value={primaryKeyword} onChange={(e) => setPrimaryKeyword(e.target.value)} />
+            </WpLabeledField>
+            <WpTextareaField
+              label="Secondary keywords"
+              id="wp-sk"
+              value={secondaryKwText}
+              onChange={setSecondaryKwText}
+              rows={3}
+              hint="One per line"
+            />
+            <WpLabeledField label="Search intent" htmlFor="wp-intent">
+              <select
+                id="wp-intent"
+                className="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                value={searchIntent}
+                onChange={(e) => setSearchIntent(e.target.value)}
+              >
+                <option value="">—</option>
+                <option value="informational">informational</option>
+                <option value="transactional">transactional</option>
+                <option value="commercial">commercial</option>
+                <option value="navigational">navigational</option>
+              </select>
+            </WpLabeledField>
+            <label className="flex items-center gap-2 text-xs text-zinc-600">
+              <input type="checkbox" checked={seoGenSlug} onChange={(e) => setSeoGenSlug(e.target.checked)} />
+              Generate slug from primary keyword on save
+            </label>
+            <label className="flex items-center gap-2 text-xs text-zinc-600">
+              <input type="checkbox" checked={seoApplySuggestions} onChange={(e) => setSeoApplySuggestions(e.target.checked)} />
+              Apply meta/H1 suggestions where empty
+            </label>
+          </div>
+        </WpMetabox>
+
+        <WpMetabox title="Cluster" defaultOpen={false}>
+          <div className="space-y-3">
+            <WpLabeledField label="Semantic cluster" htmlFor="wp-cluster">
+              <select
+                id="wp-cluster"
+                className="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                value={semanticCluster}
+                onChange={(e) => setSemanticCluster(e.target.value)}
+              >
+                <option value="">— Unset —</option>
+                {SEMANTIC_CLUSTER_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))}
+              </select>
+            </WpLabeledField>
+            <WpTextareaField
+              label="Related guide overrides"
+              id="wp-related"
+              value={relatedGuideOverrideText}
+              onChange={setRelatedGuideOverrideText}
+              rows={3}
+              hint="One slug per line"
+            />
+          </div>
+        </WpMetabox>
+      </>
+    );
+
+    const createTemplateExtras =
+      mode === "create" ? (
+        <WpMetabox title="Start from template">
+          <div className="space-y-3">
+            <WpLabeledField label="Template">
+              <select
+                className="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                value={templateChoice}
+                onChange={(e) => setTemplateChoice(e.target.value as BlogTemplateId | "")}
+              >
+                <option value="">— None —</option>
+                {BLOG_TEMPLATE_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </WpLabeledField>
+            {templateChoice === "location" ? (
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Input placeholder="Area" value={tplArea} onChange={(e) => setTplArea(e.target.value)} />
+                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+                <Input placeholder="Service" value={tplService} onChange={(e) => setTplService(e.target.value)} />
+              </div>
+            ) : null}
+            {templateChoice === "comparison" ? (
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Input placeholder="Option A" value={tplA} onChange={(e) => setTplA(e.target.value)} />
+                <Input placeholder="Option B" value={tplB} onChange={(e) => setTplB(e.target.value)} />
+                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+              </div>
+            ) : null}
+            {templateChoice === "guide" ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input placeholder="Topic" value={tplTopic} onChange={(e) => setTplTopic(e.target.value)} />
+                <Input placeholder="City" value={tplCity} onChange={(e) => setTplCity(e.target.value)} />
+              </div>
+            ) : null}
+            <Button type="button" variant="secondary" size="sm" onClick={applyTemplate} disabled={!templateChoice}>
+              Apply template
+            </Button>
+          </div>
+        </WpMetabox>
+      ) : null;
+
+    return (
+      <WordPressPostEditorLayout
+        mode={mode}
+        postsListPath={postsListPath}
+        saving={saving}
+        onSave={save}
+        formError={formError}
+        fieldErrors={fieldErrors}
+        title={title}
+        onTitleChange={setTitle}
+        slug={slug}
+        onSlugChange={(v) => {
+          setSlugAuto(false);
+          setSlug(v);
+        }}
+        slugAuto={slugAuto}
+        onSlugAutoChange={setSlugAuto}
+        permalinkPreview={`/blog/${slug.trim() || "your-slug"}`}
+        viewPostUrl={viewPostUrl}
+        viewPostLabel={viewPostLabelText}
+        sidebar={documentSidebar}
+        createExtras={createTemplateExtras}
+        body={
+          <DocumentBodySection
+            variant="wordpress"
+            documentHtml={documentHtml}
+            onDocumentHtmlChange={setDocumentHtml}
+            advancedBlocks={advancedBlocks}
+            onAdvancedBlocksChange={setAdvancedBlocks}
+            renderAdvancedBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} />}
+            newAdvancedBlock={(type) => newBlock(type)}
+          />
+        }
+      />
+    );
+  }
 
   return (
     <div className="w-full min-w-0 pb-28 md:pb-16">
@@ -798,9 +1124,18 @@ export function PostEditorForm({ mode, postId }: Props) {
             Long-form workspace — content, SEO, and cluster governance stay separate so you can focus on the draft.
           </p>
         </div>
-        <Button type="button" variant="outline" className="shrink-0 self-start sm:self-auto" asChild>
-          <Link href="/admin/blog">← All posts</Link>
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2 self-start sm:self-auto">
+          {viewPostUrl ? (
+            <Button type="button" variant="outline" asChild>
+              <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
+                {viewPostLabelText}
+              </Link>
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" asChild>
+            <Link href={postsListPath}>← All posts</Link>
+          </Button>
+        </div>
       </header>
 
       <div className="mb-6 xl:hidden">

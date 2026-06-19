@@ -23,9 +23,13 @@ type Props = {
   html: string;
   onChange: (html: string) => void;
   disabled?: boolean;
+  variant?: "default" | "document" | "wordpress";
 };
 
-export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
+export function RichTextBlockEditor({ html, onChange, disabled, variant = "default" }: Props) {
+  const isWordPress = variant === "wordpress";
+  const isDocument = variant === "document" || isWordPress;
+
   const editor = useEditor(
     {
       immediatelyRender: false,
@@ -50,7 +54,11 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
       editorProps: {
         attributes: {
           class:
-            "px-4 py-4 text-[1.0625rem] leading-[1.7] text-zinc-800 focus:outline-none min-h-[220px] dark:text-zinc-100",
+            isWordPress
+              ? "px-4 py-4 text-[1.0625rem] leading-[1.75] text-zinc-800 focus:outline-none min-h-[520px] dark:text-zinc-100"
+              : variant === "document"
+              ? "px-5 py-5 text-[1.0625rem] leading-[1.75] text-zinc-800 focus:outline-none min-h-[480px] dark:text-zinc-100"
+              : "px-4 py-4 text-[1.0625rem] leading-[1.7] text-zinc-800 focus:outline-none min-h-[220px] dark:text-zinc-100",
         },
       },
       onUpdate: ({ editor: ed }) => {
@@ -109,9 +117,21 @@ export function RichTextBlockEditor({ html, onChange, disabled }: Props) {
   };
 
   return (
-    <div className="rich-text-editor-root overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/30 dark:border-zinc-700 dark:bg-zinc-950/80">
+    <div
+      className={cn(
+        "rich-text-editor-root overflow-hidden",
+        isWordPress
+          ? "border-0 bg-white dark:bg-zinc-950"
+          : "rounded-xl border border-zinc-200/90 bg-zinc-50/30 dark:border-zinc-700 dark:bg-zinc-950/80",
+        isDocument && "variant-document",
+        isWordPress && "variant-wordpress",
+      )}
+    >
       <div
-        className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 px-1 py-1 dark:border-zinc-700"
+        className={cn(
+          "sticky top-[52px] z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-200 bg-zinc-50/95 px-1 py-1 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95",
+          isWordPress && "top-0",
+        )}
         role="toolbar"
         aria-label="Rich text"
       >

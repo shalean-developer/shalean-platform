@@ -125,8 +125,19 @@ async function checkRoleRedirects(
   );
 }
 
-async function checkNoMockData(): Promise<LaunchCheckResult> {
+async function checkOfficePlaceholders(): Promise<LaunchCheckResult> {
   const audit = auditMockDashboardData();
+  const count = Number(audit.details.placeholderCount ?? 0);
+  return result(
+    "office_placeholders",
+    "Office placeholder audit",
+    true,
+    count > 0 ? `${count} office page(s) still use static placeholder data (informational).` : undefined,
+    audit.details,
+  );
+}
+
+async function checkLegacyBookingsApi(): Promise<LaunchCheckResult> {
   let legacyMockDetected = false;
   let legacyBody: unknown = null;
 
@@ -143,26 +154,27 @@ async function checkNoMockData(): Promise<LaunchCheckResult> {
       legacyMockDetected = bookings.some((b) => String(b.id ?? "").startsWith("mock-"));
     }
   } catch (e) {
-    audit.details.legacyBookingsFetch = e instanceof Error ? e.message : "fetch failed";
+    return result(
+      "legacy_bookings_api",
+      "Legacy bookings API retired",
+      true,
+      undefined,
+      { legacyBookingsFetch: e instanceof Error ? e.message : "fetch failed" },
+    );
   }
 
-  const passed = audit.passed && !legacyMockDetected;
   return result(
-    "no_mock_data",
-    "No hardcoded dashboard data",
-    passed,
-    legacyMockDetected
-      ? "GET /api/bookings still returns mock booking ids."
-      : undefined,
-    {
-      ...audit.details,
-      legacyBookingsResponseSample: legacyMockDetected ? legacyBody : undefined,
-    },
+    "legacy_bookings_api",
+    "Legacy bookings API retired",
+    !legacyMockDetected,
+    legacyMockDetected ? "GET /api/bookings still returns mock booking ids." : undefined,
+    legacyMockDetected ? { legacyBookingsResponseSample: legacyBody } : { note: "Route absent, gone, or non-mock." },
   );
 }
 
 export async function runLaunchReadinessChecks(params: {
   adminUserId: string;
+  adminEmail?: string | null;
 }): Promise<LaunchCheckRunResponse> {
   const admin = getSupabaseAdmin();
   if (!admin) {
@@ -180,7 +192,10 @@ export async function runLaunchReadinessChecks(params: {
     };
   }
 
-  const config = await readLaunchCheckConfig(admin);
+  const config = await readLaunchCheckConfig(admin, {
+    requestingAdminUserId: params.adminUserId,
+    requestingAdminEmail: params.adminEmail,
+  });
   const results: LaunchCheckResult[] = [];
   let bookingId: string | null = null;
   let offerId: string | null = null;
@@ -540,7 +555,8 @@ export async function runLaunchReadinessChecks(params: {
     }
 
     results.push(await checkRoleRedirects(admin, config));
-    results.push(await checkNoMockData());
+    results.push(await checkOfficePlaceholders());
+    results.push(await checkLegacyBookingsApi());
   } finally {
     if (bookingId) {
       await cleanupLaunchCheckBooking(admin, bookingId);

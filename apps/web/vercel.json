@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/analytics-warehouse",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/gsc-sync",
+      "schedule": "15 5 * * *"
     }
   ]
 }

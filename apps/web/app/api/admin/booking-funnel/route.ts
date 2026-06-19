@@ -17,6 +17,7 @@ type BookingEventRow = Row & { created_at?: string | null; metadata?: Record<str
 type UserEventRow = { event_type?: string | null; created_at?: string | null; payload?: Record<string, unknown> | null };
 type BookingRow = {
   created_at?: string | null;
+  payment_completed_at?: string | null;
   status?: string | null;
   payment_status?: string | null;
   total_paid_zar?: number | null;
@@ -39,8 +40,29 @@ const BOOKING_ANALYTICS_EVENTS = [
   ANALYTICS_EVENTS.BOOKING_CLEANER_SELECTED,
   ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED,
   ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED,
+  ANALYTICS_EVENTS.PAYMENT_COMPLETED,
   ANALYTICS_EVENTS.BOOKING_COMPLETED,
 ] as const;
+
+const TERMINAL_UNPAID_STATUSES = new Set(["cancelled", "failed", "payment_expired"]);
+
+function normStatus(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function hasPaidTimestamp(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isFunnelPaidBooking(row: BookingRow): boolean {
+  if (TERMINAL_UNPAID_STATUSES.has(normStatus(row.status))) return false;
+  const paymentStatus = normStatus(row.payment_status);
+  const paid = safeRevenue(row) > 0;
+  if (paymentStatus === "success" || paymentStatus === "paid") {
+    return paid || hasPaidTimestamp(row.payment_completed_at);
+  }
+  return paid && hasPaidTimestamp(row.payment_completed_at);
+}
 
 function ymd(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -192,8 +214,10 @@ export async function GET(request: Request) {
       .limit(50_000),
     admin
       .from("bookings")
-      .select("created_at, status, payment_status, total_paid_zar, amount_paid_cents, service, service_slug, location, date, time, city_id")
-      .gte("created_at", sinceIso)
+      .select(
+        "created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, service, service_slug, location, date, time, city_id",
+      )
+      .or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`)
       .order("created_at", { ascending: false })
       .limit(15_000),
   ]);
@@ -309,7 +333,8 @@ export async function GET(request: Request) {
         paystackOpenedSessions.add(sessionId);
         if (Number.isFinite(createdAtMs)) t.paystackOpenedAt = createdAtMs;
         break;
-      case "booking_completed":
+      case ANALYTICS_EVENTS.PAYMENT_COMPLETED:
+      case ANALYTICS_EVENTS.BOOKING_COMPLETED:
         completedSessions.add(sessionId);
         if (Number.isFinite(createdAtMs)) t.completedAt = createdAtMs;
         break;
@@ -402,6 +427,18 @@ export async function GET(request: Request) {
     durations.length > 0 ? Math.round(durations.reduce((sum, n) => sum + n, 0) / durations.length) : null;
   const medianTimeToCompleteSeconds = durations.length > 0 ? durations[Math.floor(durations.length / 2)]! : null;
 
+  const paidBookings = bookings.filter(isFunnelPaidBooking);
+  const paidBookingsInWindow = paidBookings.filter((booking) => {
+    const paidAt = booking.payment_completed_at ?? booking.created_at;
+    if (!paidAt) return false;
+    return new Date(paidAt).getTime() >= since.getTime();
+  });
+  const paidCompletedByDay = new Map<string, number>();
+  for (const booking of paidBookingsInWindow) {
+    const day = ymd(booking.payment_completed_at ?? booking.created_at);
+    if (day) paidCompletedByDay.set(day, (paidCompletedByDay.get(day) ?? 0) + 1);
+  }
+
   const dayMap = initDayMap(since);
   for (const sid of startedQuote) {
     const day = ymd(
@@ -414,7 +451,8 @@ export async function GET(request: Request) {
     if (day && dayMap.has(day)) dayMap.get(day)!.reachedPayment += 1;
   }
   for (const event of userEvents) {
-    if (event.event_type !== "booking_completed") continue;
+    const t = String(event.event_type ?? "");
+    if (t !== ANALYTICS_EVENTS.BOOKING_COMPLETED && t !== ANALYTICS_EVENTS.PAYMENT_COMPLETED) continue;
     const day = ymd(event.created_at);
     if (day && dayMap.has(day)) dayMap.get(day)!.completed += 1;
   }
@@ -426,6 +464,10 @@ export async function GET(request: Request) {
     if (completedSessions.has(sid)) continue;
     const day = ymd(userEvents.find((e) => e.event_type === "booking_paystack_opened" && correlationSessionId(e) === sid)?.created_at);
     if (day && dayMap.has(day)) dayMap.get(day)!.paystackAbandons += 1;
+  }
+  for (const [day, paidCount] of paidCompletedByDay) {
+    const bucket = dayMap.get(day);
+    if (bucket) bucket.completed = Math.max(bucket.completed, paidCount);
   }
   const dailyTrends = [...dayMap.values()].map((d) => ({
     ...d,
@@ -473,11 +515,12 @@ export async function GET(request: Request) {
 
   const paystackOpened = paystackOpenedSessions.size;
   const paystackCompleted = [...paystackOpenedSessions].filter((sid) => completedSessions.has(sid)).length;
-  const paidBookings = bookings.filter((b) => {
-    const status = String(b.status ?? "").toLowerCase();
-    const paymentStatus = String(b.payment_status ?? "").toLowerCase();
-    return safeRevenue(b) > 0 || status === "paid" || paymentStatus === "paid";
-  });
+  const analyticsCompletedSessions = completedSessions.size;
+  const completedPaymentSessions = Math.max(
+    analyticsCompletedSessions,
+    paystackCompleted,
+    paidBookingsInWindow.length,
+  );
 
   type DemandBucket = {
     label: string;
@@ -693,6 +736,9 @@ export async function GET(request: Request) {
     sessionsWithFunnelView,
     funnelStartSessions: funnelStart,
     reachedPaymentSessions: paidOrCheckout,
+    completedPaymentSessions,
+    analyticsCompletedSessions,
+    paidBookingsCount: paidBookingsInWindow.length,
     conversionRatePct,
     dropOffByStep,
     viewsByStep,
@@ -704,7 +750,7 @@ export async function GET(request: Request) {
     intelligence: {
       stepConversion,
       timeToComplete: {
-        completedSessions: durations.length,
+        completedSessions: analyticsCompletedSessions,
         avgSeconds: avgTimeToCompleteSeconds,
         medianSeconds: medianTimeToCompleteSeconds,
       },
@@ -721,8 +767,8 @@ export async function GET(request: Request) {
       dailyTrends,
       cohortAnalysis,
       revenue: {
-        paidBookings: paidBookings.length,
-        totalZar: paidBookings.reduce((sum, booking) => sum + safeRevenue(booking), 0),
+        paidBookings: paidBookingsInWindow.length,
+        totalZar: paidBookingsInWindow.reduce((sum, booking) => sum + safeRevenue(booking), 0),
       },
       operational: {
         cleanerDemandForecast: {

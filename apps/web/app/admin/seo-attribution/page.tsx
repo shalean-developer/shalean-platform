@@ -79,6 +79,7 @@ export default function SeoAttributionAdminPage() {
           First-touch fields merged from the browser (<code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">landing_page_slug</code>,{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">utm_*</code>, GBP hints) correlated by{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">analytics_session_id</code>. Funnel start ={" "}
+          <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">start_booking</code> or{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">booking_service_selected</code>; conversion = same session also reaches{" "}
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">booking_completed</code>. Rolling ~30 days. See also{" "}
           <Link href="/admin/seo-insights" className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">

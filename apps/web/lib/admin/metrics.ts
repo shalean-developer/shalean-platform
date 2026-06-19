@@ -1,6 +1,11 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
-import { teamJobSlotsPerTeamPerDay } from "@/lib/dispatch/teamJobsPerDay";
+import {
+  countTeamJobsScheduledOnDateByTeam,
+  fetchTeamCapacityUsageSlotsByTeam,
+  teamDayJobsForMetrics,
+  teamJobSlotsPerTeamPerDay,
+} from "@/lib/dispatch/teamJobsPerDay";
 
 export type DispatchMetricsWindow = "24h" | "7d";
 
@@ -379,7 +384,6 @@ export async function loadDispatchMetricsSnapshot(
   const prevSinceIso = new Date(sinceMs - hours * 3600_000).toISOString();
 
   const todayYmdJohannesburg = calendarDateYmdInTimeZone(new Date(), DISPATCH_METRICS_UTILIZATION_TIMEZONE);
-  const { startIso: dayStart, endExclusiveIso: dayEndExclusive } = johannesburgDayUtcBounds(todayYmdJohannesburg);
 
   const [current, previous] = await Promise.all([
     loadLogBand(admin, sinceIso, untilIso, { includeAllocationFetch: true }),
@@ -396,22 +400,14 @@ export async function loadDispatchMetricsSnapshot(
   if (teamErr) throw new Error(teamErr.message);
 
   const teams = (teamRows ?? []) as { id: string; name: string; capacity_per_day: number }[];
+  const teamIds = teams.map((t) => t.id);
 
-  const { data: bookingRows, error: bookErr } = await admin
-    .from("bookings")
-    .select("team_id")
-    .eq("is_team_job", true)
-    .gte("created_at", dayStart)
-    .lt("created_at", dayEndExclusive)
-    .not("team_id", "is", null);
-  if (bookErr) throw new Error(bookErr.message);
-
-  const jobsByTeam = new Map<string, number>();
-  for (const row of bookingRows ?? []) {
-    const tid = String((row as { team_id?: string | null }).team_id ?? "").trim();
-    if (!tid) continue;
-    jobsByTeam.set(tid, (jobsByTeam.get(tid) ?? 0) + 1);
-  }
+  const [scheduledJobsLoaded, capacityUsageLoaded] = await Promise.all([
+    countTeamJobsScheduledOnDateByTeam(admin, todayYmdJohannesburg, teamIds),
+    fetchTeamCapacityUsageSlotsByTeam(admin, todayYmdJohannesburg, teamIds),
+  ]);
+  if (scheduledJobsLoaded.error) throw new Error(scheduledJobsLoaded.error);
+  if (capacityUsageLoaded.error) throw new Error(capacityUsageLoaded.error);
 
   const { data: memberRows, error: memErr } = await admin
     .from("team_members")
@@ -438,7 +434,11 @@ export async function loadDispatchMetricsSnapshot(
 
   for (const t of teams) {
     const cap = teamJobSlotsPerTeamPerDay();
-    const jobsToday = jobsByTeam.get(t.id) ?? 0;
+    const jobsToday = teamDayJobsForMetrics(
+      scheduledJobsLoaded.map,
+      capacityUsageLoaded.map,
+      t.id,
+    );
     const roster = membersByTeam.get(t.id) ?? [];
     const activeMembersToday = countActiveTeamMembersOnDate(roster, todayYmdJohannesburg);
     const utilization = cap > 0 ? jobsToday / cap : null;

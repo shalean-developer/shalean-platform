@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminRequest } from "@/lib/api/admin-auth-request";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buildBlogDraftPreviewQuery } from "@/lib/blog/build-blog-post-view-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,5 +23,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     categories: cats.data ?? [],
     tags: tags.data ?? [],
+    draft_preview_query: buildBlogDraftPreviewQuery(),
   });
 }

@@ -1,3 +1,4 @@
+import { formatIsoInJohannesburgYmd, todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { bookingScheduledStartUtcMs } from "@/lib/admin/opsSnapshot";
 
 export type BookingPerfInput = {
@@ -25,9 +26,13 @@ export type CleanerPerfRow = {
 
 export type FleetDayTrend = {
   day: string;
-  onTimePct: number;
+  /** Null when no completed jobs had a valid on-time sample that day. */
+  onTimePct: number | null;
   completedJobs: number;
 };
+
+/** Ignore punctuality rows with implausible lateness (bad timestamps / backfills). */
+export const MAX_PUNCTUALITY_LATE_MINUTES = 180;
 
 function parseTs(iso: string | null | undefined): number | null {
   if (!iso || !String(iso).trim()) return null;
@@ -39,6 +44,17 @@ function st(s: string | null | undefined): string {
   return String(s ?? "").toLowerCase().trim();
 }
 
+function bookingYmd(date: string | null | undefined): string | null {
+  const d = String(date ?? "").trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T12:00:00+02:00`);
+  d.setDate(d.getDate() + days);
+  return formatIsoInJohannesburgYmd(d.toISOString());
+}
+
 const TERMINAL = new Set(["completed", "cancelled", "failed"]);
 
 type Acc = {
@@ -47,9 +63,7 @@ type Acc = {
   completedTerminal: number;
   punctualityJobs: number;
   onTimeJobs: number;
-  /** Sum of max(0, late minutes) across punctuality jobs (on-time contributes 0). */
   sumPositiveLateMinutes: number;
-  /** Among late jobs only — for lateness penalty in score. */
   sumLateAmongLate: number;
   lateCount: number;
   durationCount: number;
@@ -71,6 +85,45 @@ function emptyAcc(): Acc {
   };
 }
 
+export type PunctualitySample = {
+  onTime: boolean;
+  lateMinutes: number;
+};
+
+/**
+ * Punctuality only when the cleaner started on the booking's scheduled calendar day (Johannesburg)
+ * and lateness vs the slot is within {@link MAX_PUNCTUALITY_LATE_MINUTES}.
+ */
+export function punctualitySampleForBooking(b: BookingPerfInput): PunctualitySample | null {
+  const ymd = bookingYmd(b.date);
+  const sched = bookingScheduledStartUtcMs(b.date, b.time);
+  const startedIso = b.started_at?.trim();
+  const started = parseTs(startedIso);
+  if (!ymd || sched == null || !startedIso || started == null) return null;
+
+  if (formatIsoInJohannesburgYmd(startedIso) !== ymd) return null;
+
+  const rawLateMin = (started - sched) / 60_000;
+  if (rawLateMin > MAX_PUNCTUALITY_LATE_MINUTES) return null;
+
+  const lateMinutes = Math.max(0, rawLateMin);
+  return {
+    onTime: started <= sched,
+    lateMinutes,
+  };
+}
+
+function applyPunctuality(acc: Acc, sample: PunctualitySample): void {
+  acc.punctualityJobs++;
+  acc.sumPositiveLateMinutes += sample.lateMinutes;
+  if (sample.onTime) {
+    acc.onTimeJobs++;
+  } else {
+    acc.sumLateAmongLate += sample.lateMinutes;
+    acc.lateCount++;
+  }
+}
+
 /**
  * Reliability score (0–100):
  * (on_time_rate × 0.4) + (completion_rate × 0.4) + (lateness_penalty × 0.2),
@@ -79,16 +132,16 @@ function emptyAcc(): Acc {
 export function aggregateCleanerPerformance(
   bookings: BookingPerfInput[],
   cleanerNames: Map<string, string>,
+  now = new Date(),
 ): { cleaners: CleanerPerfRow[]; fleetTrend7d: FleetDayTrend[] } {
   const acc = new Map<string, Acc>();
 
-  const now = Date.now();
-  const dayMs = 86_400_000;
+  const anchorYmd = todayYmdJohannesburg(now);
   const trendBuckets = new Map<string, { onTime: number; eligible: number; completed: number }>();
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(now - (6 - i) * dayMs);
-    trendBuckets.set(d.toISOString().slice(0, 10), { onTime: 0, eligible: 0, completed: 0 });
+    const dayKey = addDaysYmd(anchorYmd, i - 6);
+    trendBuckets.set(dayKey, { onTime: 0, eligible: 0, completed: 0 });
   }
 
   for (const b of bookings) {
@@ -102,11 +155,13 @@ export function aggregateCleanerPerformance(
       acc.set(cid, a);
     }
 
+    const punctuality = punctualitySampleForBooking(b);
+
     if (status === "completed") {
       a.jobsCompleted++;
       const cAt = parseTs(b.completed_at);
       if (cAt != null) {
-        const dayKey = new Date(cAt).toISOString().slice(0, 10);
+        const dayKey = formatIsoInJohannesburgYmd(b.completed_at!);
         const tb = trendBuckets.get(dayKey);
         if (tb) tb.completed++;
       }
@@ -117,37 +172,28 @@ export function aggregateCleanerPerformance(
       if (status === "completed") a.completedTerminal++;
     }
 
-    const sched = bookingScheduledStartUtcMs(b.date, b.time);
-    const started = parseTs(b.started_at);
-    if (sched != null && started != null) {
-      a.punctualityJobs++;
-      const lateMin = Math.max(0, (started - sched) / 60_000);
-      a.sumPositiveLateMinutes += lateMin;
-      if (started <= sched) {
-        a.onTimeJobs++;
-      } else {
-        a.sumLateAmongLate += lateMin;
-        a.lateCount++;
-      }
+    if (punctuality) {
+      applyPunctuality(a, punctuality);
 
-      if (status === "completed") {
-        const cAt = parseTs(b.completed_at);
-        if (cAt != null) {
-          const dayKey = new Date(cAt).toISOString().slice(0, 10);
-          const tb = trendBuckets.get(dayKey);
-          if (tb) {
-            tb.eligible++;
-            if (started <= sched) tb.onTime++;
-          }
+      if (status === "completed" && b.completed_at) {
+        const dayKey = formatIsoInJohannesburgYmd(b.completed_at);
+        const tb = trendBuckets.get(dayKey);
+        if (tb) {
+          tb.eligible++;
+          if (punctuality.onTime) tb.onTime++;
         }
       }
     }
 
+    const started = parseTs(b.started_at);
     if (status === "completed" && started != null) {
       const completedAt = parseTs(b.completed_at);
       if (completedAt != null && completedAt > started) {
-        a.durationCount++;
-        a.sumDurationMinutes += (completedAt - started) / 60_000;
+        const durationMin = (completedAt - started) / 60_000;
+        if (durationMin > 0 && durationMin <= 24 * 60) {
+          a.durationCount++;
+          a.sumDurationMinutes += durationMin;
+        }
       }
     }
   }
@@ -196,7 +242,7 @@ export function aggregateCleanerPerformance(
     .sort(([da], [db]) => da.localeCompare(db))
     .map(([day, v]) => ({
       day,
-      onTimePct: v.eligible > 0 ? Math.round((100 * v.onTime) / v.eligible) : 0,
+      onTimePct: v.eligible > 0 ? Math.round((100 * v.onTime) / v.eligible) : null,
       completedJobs: v.completed,
     }));
 
