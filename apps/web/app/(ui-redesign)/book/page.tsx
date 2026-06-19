@@ -4,28 +4,14 @@ import { ArrowRight } from "lucide-react";
 import { BookIndexHeader } from "@/components/booking/BookIndexHeader";
 import { buildBookHubHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
+import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_CONFIG, SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
-import type { ServicesCatalog } from "@/app/api/booking-v2/services/route";
+
+export const dynamic = "force-dynamic";
 
 type BookIndexPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-async function fetchServicesCatalog(): Promise<ServicesCatalog | null> {
-  try {
-    // Use absolute URL during SSR with a fallback for dev vs prod
-    const base = process.env.NEXT_PUBLIC_APP_URL ??
-      (process.env.NODE_ENV === "production" ? "https://shalean.co.za" : "http://localhost:3000");
-    const res = await fetch(`${base}/api/booking-v2/services`, {
-      next: { revalidate: 300 }, // cache for 5 minutes
-    });
-    if (!res.ok) return null;
-    const json = await res.json() as { catalog?: ServicesCatalog };
-    return json.catalog ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export default async function BookIndexPage({ searchParams }: BookIndexPageProps) {
   const sp = await searchParams;
@@ -34,7 +20,7 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
     redirect(buildBookHubHrefFromLegacySearchParams(params));
   }
 
-  const catalog = await fetchServicesCatalog();
+  const { catalog } = await loadBookingV2Catalog();
 
   return (
     <div className="min-h-dvh bg-slate-50">
@@ -56,8 +42,8 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
           {SERVICE_SLUGS.map((slug) => {
             const config = SERVICE_CONFIG[slug];
             // Use DB price if available, fall back to static config
-            const basePrice = catalog?.[slug]?.basePrice ?? config.basePrice;
-            const hasRoomPricing = (catalog?.[slug]?.pricePerBedroom ?? 0) > 0;
+            const basePrice = catalog[slug].basePrice;
+            const hasRoomPricing = catalog[slug].pricePerBedroom > 0;
 
             return (
               <Link
