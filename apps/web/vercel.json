@@ -14,6 +14,14 @@
       "schedule": "15 4 * * *"
     },
     {
+      "path": "/api/cron/booking-lifecycle",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/retry-failed-jobs",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/extend-cleaner-availability",
       "schedule": "30 2 * * *"
     },

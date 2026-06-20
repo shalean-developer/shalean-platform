@@ -3,6 +3,7 @@ import { addDaysToYmd, johannesburgNineAmIso } from "@/lib/booking/dateYmdAddDay
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
+import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
@@ -209,16 +210,13 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
 }
 
 /**
- * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
+ * Vercel Cron / pg_net: GET or POST with Bearer or x-cron-secret.
  * Processes pending lifecycle emails due now (status=pending, scheduled_for <= now).
  */
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) {
-    return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
-  }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const auth = verifyCronSecret(request);
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status });
   }
 
   const supabase = getSupabaseAdmin();

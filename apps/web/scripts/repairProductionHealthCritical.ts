@@ -14,7 +14,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { markDispatchOfferCapUnassignable } from "../lib/booking/assignmentBookingStateCommands";
 import { processDispatchRetryQueue } from "../lib/dispatch/dispatchRetryQueue";
-import { logCronRun } from "../lib/logging/systemLog";
 import { repairPaidMonthlyInvoiceChildSettlementDrift } from "../lib/monthlyInvoice/repairPaidMonthlyInvoiceChildSettlementDrift";
 import {
   detectStaleUnassignedDispatch,
@@ -102,9 +101,8 @@ async function repairMonthlyChildren(): Promise<number> {
   return totalRepaired;
 }
 
-async function repairBookingEngineSignals(): Promise<{ dispatchTerminal: number; cronLogged: number }> {
+async function repairBookingEngineSignals(): Promise<{ dispatchTerminal: number }> {
   let dispatchTerminal = 0;
-  let cronLogged = 0;
 
   if (!dryRun) {
     await processDispatchRetryQueue(admin);
@@ -128,18 +126,7 @@ async function repairBookingEngineSignals(): Promise<{ dispatchTerminal: number;
     dispatchTerminal++;
   }
 
-  const cronJobs = ["booking-lifecycle", "retry-failed-jobs", "payout-integrity-daily"] as const;
-  for (const jobName of cronJobs) {
-    if (dryRun) {
-      console.log(`[dry-run] Would log cron success: ${jobName}`);
-      cronLogged++;
-      continue;
-    }
-    await logCronRun({ jobName, status: "success", message: "repair_production_health_critical_backfill" });
-    cronLogged++;
-  }
-
-  return { dispatchTerminal, cronLogged };
+  return { dispatchTerminal };
 }
 
 async function printHealthSummary(label: string): Promise<void> {
@@ -163,7 +150,7 @@ async function main(): Promise<void> {
   const bookingEngine = await repairBookingEngineSignals();
 
   console.log(
-    `\nSummary: deletedJobs=${deletedJobs} repairedChildren=${repairedChildren} dispatchTerminal=${bookingEngine.dispatchTerminal} cronLogged=${bookingEngine.cronLogged}`,
+    `\nSummary: deletedJobs=${deletedJobs} repairedChildren=${repairedChildren} dispatchTerminal=${bookingEngine.dispatchTerminal}`,
   );
   await printHealthSummary("After");
 }

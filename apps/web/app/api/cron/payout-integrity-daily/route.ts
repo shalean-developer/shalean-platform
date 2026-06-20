@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
+import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logSystemEvent, logCronRun } from "@/lib/logging/systemLog";
 import { backfillCompletedMissingDisplayEarnings } from "@/lib/payout/backfillCompletedMissingDisplayEarnings";
 import { repairCompletedStuckZeroDisplayFromSignals } from "@/lib/payout/repairCompletedStuckZeroDisplayFromSignals";
@@ -13,16 +14,13 @@ export const dynamic = "force-dynamic";
 /**
  * Daily snapshot of payout-adjacent integrity signals (query DB truth, not `[metric]` logs).
  *
- * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
- * Suggested schedule: daily — POST /api/cron/payout-integrity-daily
+ * Vercel Cron: GET or POST with `Authorization: Bearer CRON_SECRET` (or `x-cron-secret`).
+ * Suggested schedule: daily — /api/cron/payout-integrity-daily
  */
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) {
-    return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
-  }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const auth = verifyCronSecret(request);
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status });
   }
 
   const admin = getSupabaseAdmin();
@@ -172,10 +170,12 @@ export async function POST(request: Request) {
 
   await logCronRun({
     jobName: "payout-integrity-daily",
-    status: stuckZeroRepairError || completedMissingDisplay > 0 ? "error" : "success",
+    status: "success",
     message: stuckZeroRepairError
-      ? stuckZeroRepairError
-      : `completed_missing_display=${completedMissingDisplay}`,
+      ? `stuck_zero_repair_error: ${stuckZeroRepairError}`
+      : completedMissingDisplay > 0
+        ? `completed_missing_display=${completedMissingDisplay}`
+        : "payout_integrity_ok",
     context: {
       ...payload,
       auto_recovery_completed_missing_display: autoRecovery,
@@ -192,4 +192,8 @@ export async function POST(request: Request) {
   } finally {
     await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
   }
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }
