@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
+import { buildDashboardSystemStatusFromOfficeOps } from "@/lib/admin/dashboardSystemStatus";
 import { fetchAdminDashboardConversionSummary } from "@/lib/admin/dashboardConversion";
 import { fetchAdminDashboardRevenueSummary } from "@/lib/admin/dashboardRevenue";
+import { buildOfficeOpsHealthSummary } from "@/lib/admin/officeOpsHealth";
+import { collectOfficeOpsHealthSignals } from "@/lib/admin/collectOfficeOpsHealthSignals";
 import { requireAdminFromRequest } from "@/lib/admin/requireAdmin";
 import { startOfTodayJohannesburgUtcIso } from "@/lib/booking/dateInJohannesburg";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { bucketSmsFailure, bucketWhatsappFailure } from "@/lib/notifications/notificationFailureBuckets";
 import { NOTIFICATION_COST_CURRENCY } from "@/lib/notifications/notificationCostEstimates";
-import { runProductionHealthScan } from "@/lib/observability/productionHealthMetrics";
-import {
-  applyOpsHealthAcknowledgements,
-  listOpsHealthAcknowledgements,
-} from "@/lib/observability/opsHealthAcknowledgements";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -43,8 +41,6 @@ export async function GET(request: Request) {
     recentNotificationsRes,
     recentSystemLogsRes,
     recentCronRunsRes,
-    productionHealthRes,
-    opsHealthAcknowledgements,
   ] = await Promise.all([
     fetchAdminDashboardRevenueSummary(admin),
     fetchAdminDashboardConversionSummary(admin, since.toISOString()),
@@ -98,11 +94,6 @@ export async function GET(request: Request) {
       .gte("created_at", new Date(Date.now() - 24 * 3600_000).toISOString())
       .order("created_at", { ascending: false })
       .limit(80),
-    runProductionHealthScan(admin, { scanLimit: 250 }).then(
-      (summary) => ({ ok: true as const, summary }),
-      (error) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
-    ),
-    listOpsHealthAcknowledgements(admin),
   ]);
 
   const notificationsAvailable = !notifyRes.error;
@@ -406,29 +397,25 @@ export async function GET(request: Request) {
     .sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt))
     .slice(0, 6);
 
-  const productionHealthSummaryRaw = productionHealthRes.ok ? productionHealthRes.summary : null;
-  const productionHealthSummary = productionHealthSummaryRaw
-    ? applyOpsHealthAcknowledgements(productionHealthSummaryRaw, opsHealthAcknowledgements).visibleSummary
-    : null;
-  const productionFindings = productionHealthSummary?.findings ?? [];
-  const hasCritical = (productionHealthSummary?.totals.critical ?? 0) > 0;
-  const hasBookingEngineHighFindings = productionFindings.some((f) => {
-    if (f.severity !== "critical" && f.severity !== "high") return false;
-    return (
-      f.code.includes("dispatch") ||
-      f.code.includes("cron") ||
-      f.code.includes("recurring") ||
-      f.code.includes("duration") ||
-      f.code.includes("workload")
-    );
+  const opsSignals = await collectOfficeOpsHealthSignals(admin, 250, fetchedAt);
+  const officeOpsSummary = buildOfficeOpsHealthSummary({
+    fetchedAt: opsSignals.fetchedAt,
+    productionHealth: opsSignals.productionHealth,
+    productionHealthError: opsSignals.productionHealthError,
+    dbLatencyMs: opsSignals.dbLatencyMs,
+    dbOk: opsSignals.dbOk,
+    systemErrorRows: opsSignals.systemErrorRows,
+    cronErrorRows: opsSignals.cronErrorRows,
+    notificationRows: opsSignals.notificationRows,
+    whatsappPausedUntil: opsSignals.whatsappPausedUntil,
+    customerOutboundPausedUntil: opsSignals.customerOutboundPausedUntil,
+    notificationsQueryOk: opsSignals.notificationsQueryOk,
   });
-  const hasPaymentHighFindings = productionFindings.some((f) => {
-    if (f.severity !== "critical" && f.severity !== "high") return false;
-    return f.code.includes("payment") || f.code.includes("invoice") || f.code.includes("payout");
-  });
-  const cronErrorsLast24h = (recentCronRunsRes.error ? [] : (recentCronRunsRes.data ?? [])).filter(
-    (row) => String((row as { status?: string | null }).status ?? "").toLowerCase() === "error",
-  ).length;
+  const cronErrorsLast24h = opsSignals.cronErrorRows.filter((row) => {
+    const t = Date.parse(row.created_at ?? "");
+    return Number.isFinite(t) && t >= Date.parse(fetchedAt) - 24 * 3_600_000;
+  }).length;
+  const systemStatus = buildDashboardSystemStatusFromOfficeOps(officeOpsSummary, cronErrorsLast24h);
 
   return NextResponse.json({
     fetchedAt,
@@ -503,36 +490,6 @@ export async function GET(request: Request) {
       refunds30dCount: refundRows.length,
     },
     recentActivity,
-    systemStatus: {
-      website: recentSystemLogsRes.error ? "degraded" : "operational",
-      bookingEngine:
-        productionHealthRes.ok === false || hasCritical
-          ? "down"
-          : recentBookingsRes.error || hasBookingEngineHighFindings || cronErrorsLast24h > 0
-            ? "degraded"
-            : "operational",
-      paymentGateway:
-        pendingPaymentsRes.error || refundsRes.error || hasCritical
-          ? "down"
-          : hasPaymentHighFindings
-            ? "degraded"
-            : "operational",
-      productionHealth: productionHealthSummary
-        ? {
-            generatedAt: productionHealthSummary.generatedAt,
-            totals: productionHealthSummary.totals,
-            totalFindings: productionFindings.reduce((sum, finding) => sum + finding.count, 0),
-            topFindings: productionFindings.slice(0, 3).map((finding) => ({
-              code: finding.code,
-              severity: finding.severity,
-              count: finding.count,
-              message: finding.message,
-            })),
-          }
-        : {
-            error: productionHealthRes.ok === false ? productionHealthRes.error : "Production health unavailable.",
-          },
-      cronErrorsLast24h,
-    },
+    systemStatus,
   });
 }
