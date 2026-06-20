@@ -1,5 +1,5 @@
 /**
- * Quick production cron health check (reads apps/web/.env.local).
+ * Production cron health check (reads apps/web/.env.local).
  * Usage: node scripts/check-cron-health.mjs
  */
 import { createClient } from "@supabase/supabase-js";
@@ -28,12 +28,18 @@ if (!url || !key) {
 }
 
 const admin = createClient(url, key, { auth: { persistSession: false } });
+
+/** job_name values written by routes into cron_runs (may differ from pg_cron jobname). */
 const monitored = [
   { job: "generate-recurring-bookings", maxAgeMin: 30 },
+  { job: "charge-recurring-bookings", maxAgeMin: 30 },
   { job: "booking-lifecycle", maxAgeMin: 90 },
+  { job: "payment-recovery", maxAgeMin: 90 },
   { job: "retry-failed-jobs", maxAgeMin: 90 },
+  { job: "dispatch-timeouts", maxAgeMin: 90 },
   { job: "charge-monthly-invoices", maxAgeMin: 26 * 60 },
   { job: "payout-integrity-daily", maxAgeMin: 26 * 60 },
+  { job: "send-invoice-reminders", maxAgeMin: 26 * 60 },
 ];
 
 const now = Date.now();
@@ -66,9 +72,34 @@ for (const { job, maxAgeMin } of monitored) {
 
 console.log(`\nStale/missing for health scan: ${stale.length ? stale.join(", ") : "none"}`);
 
+console.log("\n=== pg_cron targets (Supabase scheduler) ===\n");
+const { data: targets, error: targetsErr } = await admin
+  .from("cron_http_targets")
+  .select("app_base_url,cron_secret,updated_at")
+  .eq("singleton", true)
+  .maybeSingle();
+if (targetsErr) {
+  console.log(`cron_http_targets: ERROR ${targetsErr.message} (apply migration 20261005?)`);
+} else if (!targets) {
+  console.log("cron_http_targets: missing row");
+} else {
+  const placeholder =
+    targets.app_base_url.includes("YOUR_DOMAIN") || targets.cron_secret === "YOUR_CRON_SECRET";
+  console.log(
+    placeholder
+      ? "cron_http_targets: PLACEHOLDER — update app_base_url + cron_secret in SQL Editor"
+      : `cron_http_targets: configured (${targets.app_base_url}, updated ${targets.updated_at})`,
+  );
+}
+
 if (secret) {
   console.log("\n=== production auth probe (GET) ===\n");
-  for (const path of ["/api/cron/booking-lifecycle", "/api/cron/retry-failed-jobs", "/api/cron/payout-integrity-daily"]) {
+  for (const path of [
+    "/api/cron/booking-lifecycle",
+    "/api/cron/retry-failed-jobs",
+    "/api/cron/payment-recovery",
+    "/api/cron/payout-integrity-daily",
+  ]) {
     const r = await fetch(`${host}${path}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${secret}`, "x-cron-secret": secret },

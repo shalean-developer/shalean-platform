@@ -1,5 +1,5 @@
 /**
- * Shared auth for `/api/cron/*` invoked by Vercel Cron (Bearer), Supabase pg_net (x-cron-secret), or manual curl.
+ * Shared auth for `/api/cron/*` invoked by Supabase pg_cron + pg_net (Bearer / x-cron-secret) or manual curl.
  */
 export type CronAuthFailure = { ok: false; status: 401 | 503; body: { error: string } };
 
