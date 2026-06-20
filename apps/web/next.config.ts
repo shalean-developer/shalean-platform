@@ -68,6 +68,7 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["googleapis", "google-auth-library"],
   ...(locationSeoFeedbackJson
     ? {
         env: {
