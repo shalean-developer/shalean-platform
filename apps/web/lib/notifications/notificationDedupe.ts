@@ -13,7 +13,9 @@ export type NotificationDedupeSource =
   /** One auto-dispatch wave per booking after admin mark-paid (retries must not re-run assign/notify). */
   | "dispatch_admin_mark_paid"
   /** Reserved for edit-details side-effect waves (claim before notify/dispatch when wired). */
-  | "dispatch_edit_details";
+  | "dispatch_edit_details"
+  /** One cancellation notification wave per booking (customer + admin + cleaner). */
+  | "cancelled_sent";
 
 /**
  * Inserts a claim row guarded by partial unique index `idx_notification_dedupe`.

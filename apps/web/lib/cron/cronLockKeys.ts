@@ -27,6 +27,7 @@ export const CRON_LOCK_KEYS = {
   // Customer payment lifecycle
   expirePendingPayments: "cron:expire-pending-payments",
   paymentLinkReminders: "cron:payment-link-reminders",
+  paymentRecovery: "cron:payment-recovery",
 
   // Booking / assignment / dispatch state
   bookingLifecycle: "cron:booking-lifecycle",

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { evaluateRebookEligibility } from "@/lib/booking/lifecycleEmailGuards";
 import { computeLifecycleScheduledIso } from "@/lib/booking/lifecycleSchedule";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
@@ -43,15 +45,33 @@ export async function scheduleBookingLifecycleJobs(
     return { ok: true };
   }
 
-  const jobs = [
-    { job_type: "reminder_24h" as const, scheduled_for: times.reminder24h },
-    { job_type: "review_request" as const, scheduled_for: times.reviewRequest },
-    { job_type: "rebook_offer" as const, scheduled_for: times.rebookOffer },
+  const jobs: Array<{ job_type: "reminder_24h" | "review_request" | "rebook_offer"; scheduled_for: string }> = [
+    { job_type: "reminder_24h", scheduled_for: times.reminder24h },
+    { job_type: "review_request", scheduled_for: times.reviewRequest },
+    { job_type: "rebook_offer", scheduled_for: times.rebookOffer },
   ];
+
+  const { data: bookingMeta } = await supabase
+    .from("bookings")
+    .select("recurring_id, is_recurring_generated, user_id, booking_snapshot")
+    .eq("id", params.bookingId)
+    .maybeSingle();
+
+  const rebookEligible = await evaluateRebookEligibility({
+    supabase,
+    userId: params.userId ?? (typeof bookingMeta?.user_id === "string" ? bookingMeta.user_id : null),
+    customerEmail: email,
+    excludeBookingId: params.bookingId,
+    recurringId: typeof bookingMeta?.recurring_id === "string" ? bookingMeta.recurring_id : null,
+    isRecurringGenerated: bookingMeta?.is_recurring_generated,
+    bookingSnapshot: bookingMeta?.booking_snapshot as BookingSnapshotV1 | null,
+  });
+
+  const jobsToSchedule = rebookEligible.eligible ? jobs : jobs.filter((j) => j.job_type !== "rebook_offer");
 
   let ok = true;
   try {
-    for (const j of jobs) {
+    for (const j of jobsToSchedule) {
       try {
         const { error: jobErr } = await supabase.from("booking_lifecycle_jobs").insert({
           booking_id: params.bookingId,

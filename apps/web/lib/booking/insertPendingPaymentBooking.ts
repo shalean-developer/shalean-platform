@@ -14,6 +14,7 @@ import {
 } from "@/lib/booking/durationMinutesIntegrity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
 
 export { provisionalPriceSnapshotFromLocked };
@@ -144,6 +145,14 @@ export async function insertPendingPaymentBookingRow(
   }
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };
+
+  const createdAt = new Date().toISOString();
+  void scheduleBookingPaymentRecoveryJobs(admin, {
+    bookingId: id,
+    customerEmail: email,
+    createdAt,
+  });
+
   return { ok: true, id };
 }
 

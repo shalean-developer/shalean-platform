@@ -1,7 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { clearAuthIntent } from "@/lib/auth/authRoleIntent";
 import { clearCachedUserRole } from "@/lib/auth/userRole";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 
 function client() {
@@ -11,10 +11,7 @@ function client() {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const sb = getSupabaseBrowser();
-  if (!sb) return null;
-  const { data } = await sb.auth.getSession();
-  return data.session ?? null;
+  return getSupabaseSession();
 }
 
 export async function getUser(): Promise<User | null> {

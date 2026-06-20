@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useCallback, useRef } from "react";
 import {
   Activity,
   CheckCircle2,
@@ -16,6 +16,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OpsHealthFullPanel } from "@/components/admin/OpsHealthFullPanel";
 import { useAdminData } from "@/hooks/useAdminData";
 import {
   OFFICE_OPS_SERVICE_ICONS,
@@ -53,9 +54,17 @@ function StatusPill({ label, status }: { label: string; status: OfficeOpsService
 
 export default function OpsHealthPage() {
   const { data, loading, error, refetch } = useAdminData<OfficeOpsHealthSummary>("/api/admin/office-ops-health");
+  const serviceRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const allOkNow = data?.allOperationalNow ?? false;
-  const allOk30d = data?.overallPeriodStatus === "operational";
+  const scrollToService = useCallback((serviceId: string) => {
+    const node = serviceRefs.current[serviceId];
+    if (node) node.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  const unifiedHealthy = data?.unified.status === "healthy";
+  const allOkNow = unifiedHealthy && (data?.allOperationalNow ?? false);
+  const allOk30d = unifiedHealthy && data?.overallPeriodStatus === "operational";
+  const issueBreakdown = data?.unified.issueBreakdown;
 
   return (
     <div className="space-y-5">
@@ -65,6 +74,12 @@ export default function OpsHealthPage() {
           <p className="mt-0.5 text-sm text-slate-500">
             Live service status from production scans, cron runs, system logs, and notification delivery.
           </p>
+          {issueBreakdown && (data?.kpis.issuesNow ?? 0) > 0 ? (
+            <p className="mt-2 text-xs font-semibold text-slate-600">
+              Issue breakdown: {issueBreakdown.high} High · {issueBreakdown.medium} Medium · {issueBreakdown.low} Low
+              {issueBreakdown.critical > 0 ? ` · ${issueBreakdown.critical} Critical` : ""}
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -111,8 +126,10 @@ export default function OpsHealthPage() {
               allOkNow && allOk30d ? "text-emerald-800" : data?.overallStatus === "down" ? "text-red-800" : "text-orange-800",
             )}
           >
-            {allOkNow && allOk30d
-              ? "All systems operational"
+            {          allOkNow && allOk30d
+            ? "All systems operational"
+            : data?.unified.status === "down" || data?.unified.status === "critical"
+              ? "Critical production issues detected"
               : !allOkNow && !allOk30d
                 ? "Current and 30-day issues detected"
                 : !allOkNow
@@ -121,9 +138,12 @@ export default function OpsHealthPage() {
           </p>
           <p className={cn("text-xs", allOkNow && allOk30d ? "text-emerald-600" : data?.overallStatus === "down" ? "text-red-600" : "text-orange-600")}>
             {data
-              ? `Now: ${OFFICE_OPS_STATUS_CONFIG[data.overallCurrentStatus].label} · 30d: ${OFFICE_OPS_STATUS_CONFIG[data.overallPeriodStatus].label}`
+              ? `Ops health: ${data.unified.status.toUpperCase()} · Now: ${OFFICE_OPS_STATUS_CONFIG[data.overallCurrentStatus].label} · 30d: ${OFFICE_OPS_STATUS_CONFIG[data.overallPeriodStatus].label}`
               : "Checking services…"}
           </p>
+          {data && !data.unified.consistencyValid ? (
+            <p className="mt-1 text-xs font-medium text-amber-700">Consistency check flagged a mismatch — unified scanner has been reconciled.</p>
+          ) : null}
           {data?.error ? <p className="mt-1 text-xs text-slate-600">Scanner note: {data.error}</p> : null}
         </div>
         <div className="ml-auto flex items-center gap-1 text-xs text-slate-500">
@@ -159,7 +179,13 @@ export default function OpsHealthPage() {
           const periodCfg = OFFICE_OPS_STATUS_CONFIG[service.periodStatus];
           const statusMismatch = service.currentStatus !== service.periodStatus;
           return (
-            <div key={service.id} className={cn("rounded-2xl border p-4 shadow-sm", periodCfg.bg)}>
+            <div
+              key={service.id}
+              ref={(node) => {
+                serviceRefs.current[service.id] = node;
+              }}
+              className={cn("rounded-2xl border p-4 shadow-sm", periodCfg.bg)}
+            >
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
                   <ServiceIcon service={service} />
@@ -178,6 +204,11 @@ export default function OpsHealthPage() {
                     <p className="text-xs text-slate-600">
                       <span className="font-semibold">30d:</span> {service.periodDetail}
                     </p>
+                    {service.currentStatus !== "operational" && service.currentDetail ? (
+                      <p className="text-[11px] font-medium text-orange-800">
+                        Last failure: {service.currentDetail}
+                      </p>
+                    ) : null}
                     {statusMismatch ? (
                       <p className="text-[11px] font-medium text-orange-700">Current status differs from 30-day history.</p>
                     ) : null}
@@ -212,45 +243,13 @@ export default function OpsHealthPage() {
         })}
       </div>
 
-      {data && data.productionHealth.findings.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800">Production health findings</h3>
-              <p className="text-xs text-slate-500">
-                {data.productionHealth.totalFindings} issue(s) from scan · {data.productionHealth.status}
-              </p>
-            </div>
-            <Link href="/admin/ops-health" className="text-xs font-semibold text-blue-600 hover:underline">
-              Full ops dashboard
-            </Link>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {data.productionHealth.findings.slice(0, 8).map((finding) => (
-              <div key={finding.code} className="flex items-start gap-3 px-5 py-3">
-                <span
-                  className={cn(
-                    "mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
-                    finding.severity === "critical"
-                      ? "bg-red-100 text-red-700"
-                      : finding.severity === "high"
-                        ? "bg-orange-100 text-orange-700"
-                        : "bg-slate-100 text-slate-600",
-                  )}
-                >
-                  {finding.severity}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-800">
-                    {finding.code.replace(/_/g, " ")} · {finding.count}
-                  </p>
-                  <p className="text-xs text-slate-500">{finding.message}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <OpsHealthFullPanel
+          initialData={data?.scanner ?? null}
+          onRefreshAll={refetch}
+          onViewService={scrollToService}
+        />
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { remapAdminPathToOffice } from "@/lib/admin/remapAdminPathToOffice";
 import { getLocation } from "@/lib/locations";
 import { resolveLegacyGrowthLocal, resolveLegacySingularLocation } from "@/lib/seo/legacyPhase1EdgeRedirects";
 import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
@@ -99,16 +100,29 @@ async function runProxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  /** Blog editor moved to office shell — keep legacy admin URLs working. */
-  if (pathname === "/admin/blog/new" || pathname === "/admin/blog/new/") {
+  /** Admin console cutover — all `/admin/*` pages live under `/office/*`. */
+  if (pathname === "/admin" || pathname === "/admin/" || pathname.startsWith("/admin/")) {
+    if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("role", "admin");
+      const redirectTo = url.searchParams.get("redirect");
+      if (!redirectTo || !redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
+        url.searchParams.set("redirect", "/office");
+      } else {
+        const [pathPart, ...queryParts] = redirectTo.split("?");
+        const remappedPath = remapAdminPathToOffice(pathPart ?? redirectTo);
+        const query = queryParts.length > 0 ? `?${queryParts.join("?")}` : "";
+        url.searchParams.set("redirect", `${remappedPath}${query}`);
+      }
+      return NextResponse.redirect(url, 308);
+    }
+
     const url = request.nextUrl.clone();
-    url.pathname = "/office/blog/new";
-    return NextResponse.redirect(url, 308);
-  }
-  const adminBlogEdit = pathname.match(/^\/admin\/blog\/([^/]+)\/?$/);
-  if (adminBlogEdit) {
-    const url = request.nextUrl.clone();
-    url.pathname = `/office/blog/${adminBlogEdit[1]}`;
+    url.pathname = remapAdminPathToOffice(pathname);
+    if (pathname === "/admin/payout-runs" || pathname.startsWith("/admin/payout-runs/")) {
+      url.searchParams.set("tab", "disbursements");
+    }
     return NextResponse.redirect(url, 308);
   }
 

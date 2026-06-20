@@ -1,5 +1,14 @@
 import { formatIsoInJohannesburgYmd, todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import type { ProductionHealthFinding, ProductionHealthSummary } from "@/lib/observability/productionHealthMetrics";
+import {
+  deriveServiceHealthFindings,
+  evaluateUnifiedPlatformStatus,
+  mergeUnifiedHealthFindings,
+  unifiedStatusDescription,
+  validateHealthConsistency,
+  type UnifiedIssueBreakdown,
+  type UnifiedOpsHealthStatus,
+} from "@/lib/observability/unifiedOpsHealth";
 
 export type OfficeOpsServiceStatus = "operational" | "degraded" | "down" | "maintenance";
 export type OfficeOpsUptimeBar = "ok" | "warn" | "down";
@@ -54,6 +63,42 @@ export type OfficeOpsHealthSummary = {
     totalFindings: number;
   };
   error?: string;
+  unified: {
+    status: UnifiedOpsHealthStatus;
+    issueBreakdown: UnifiedIssueBreakdown;
+    consistencyValid: boolean;
+    statusDescription: string;
+  };
+  scanner: {
+    ok: true;
+    status: "healthy" | "degraded" | "critical" | "down";
+    degraded: boolean;
+    error?: string;
+    generatedAt: string;
+    lastScan: {
+      source: "unified_ops_health";
+      scanLimit: number;
+      metricsRecorded: boolean;
+      degraded: boolean;
+    };
+    counts: ProductionHealthSummary["totals"] & {
+      totalFindings: number;
+      acknowledgedHidden: number;
+    };
+    summaries: ProductionHealthFinding[];
+    acknowledgedSummaries: ProductionHealthFinding[];
+    acknowledgements: Array<{
+      key: string;
+      code: string;
+      sampleIds: string[];
+      status: "acknowledged" | "resolved";
+      note?: string;
+      operatorId?: string;
+      operatorEmail?: string;
+      createdAt: string;
+    }>;
+    sampleIds: Record<string, string[]>;
+  };
 };
 
 const UPTIME_DAYS = 30;
@@ -146,13 +191,6 @@ export function formatOfficeOpsRelativeTime(iso: string | null | undefined, now 
   if (diffMs < 3_600_000) return `${Math.max(1, Math.round(diffMs / 60_000))}m ago`;
   if (diffMs < 86_400_000) return `${Math.max(1, Math.round(diffMs / 3_600_000))}h ago`;
   return new Date(t).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
-function mapProductionStatus(summary: ProductionHealthSummary | null): OfficeOpsHealthSummary["productionHealth"]["status"] {
-  if (!summary) return "degraded";
-  if (summary.totals.critical > 0) return "critical";
-  if (summary.totals.high > 0 || summary.totals.medium > 0 || summary.degraded) return "degraded";
-  return "healthy";
 }
 
 function hasFindingCode(findings: ProductionHealthFinding[], matcher: (code: string) => boolean): boolean {
@@ -253,14 +291,14 @@ export function buildOfficeOpsHealthSummary(params: {
       ? "degraded"
       : "operational";
   const notificationCurrent: OfficeOpsServiceStatus = !params.notificationsQueryOk
-    ? "degraded"
+    ? "down"
     : whatsappPaused
       ? "maintenance"
       : recentNotificationAttempts === 0
         ? "operational"
-        : recentNotificationSuccessRate != null && recentNotificationSuccessRate < 85
-          ? "degraded"
-          : recentNotificationFailed > 0 && recentNotificationSuccessRate != null && recentNotificationSuccessRate < 95
+        : recentNotificationSuccessRate != null && recentNotificationSuccessRate < 20
+          ? "down"
+          : recentNotificationSuccessRate != null && recentNotificationSuccessRate < 95
             ? "degraded"
             : "operational";
 
@@ -379,15 +417,34 @@ export function buildOfficeOpsHealthSummary(params: {
   const overallPeriodStatus = mergeOfficeOpsStatus(...services.map((service) => service.periodStatus));
   const overallStatus = mergeOfficeOpsStatus(overallCurrentStatus, overallPeriodStatus);
 
-  const productionStatus = mapProductionStatus(params.productionHealth);
+  const serviceFindings = deriveServiceHealthFindings(services);
+  const mergedHealth = mergeUnifiedHealthFindings({
+    scanSummary: params.productionHealth,
+    serviceFindings,
+    fetchedAt: params.fetchedAt,
+    scanLimit: params.productionHealth?.scanLimit ?? 0,
+    scanDegraded: Boolean(params.productionHealthError),
+    scanError: params.productionHealthError,
+  });
+  const unifiedStatus = evaluateUnifiedPlatformStatus(services, mergedHealth);
+  const issueBreakdown = mergedHealth.totals;
+  const consistencyValid = validateHealthConsistency({
+    services,
+    issuesNow,
+    mergedSummary: mergedHealth,
+    unifiedStatus,
+  });
+
+  const scannerStatus: OfficeOpsHealthSummary["scanner"]["status"] =
+    unifiedStatus === "down" ? "down" : unifiedStatus;
 
   return {
     fetchedAt: params.fetchedAt,
     overallStatus,
     overallCurrentStatus,
     overallPeriodStatus,
-    allOperational: overallStatus === "operational",
-    allOperationalNow: overallCurrentStatus === "operational",
+    allOperational: overallStatus === "operational" && unifiedStatus === "healthy",
+    allOperationalNow: overallCurrentStatus === "operational" && unifiedStatus === "healthy",
     services,
     kpis: {
       monitored: services.length,
@@ -398,18 +455,51 @@ export function buildOfficeOpsHealthSummary(params: {
       avgUptimePct,
     },
     productionHealth: {
-      status: productionStatus,
-      generatedAt: params.productionHealth?.generatedAt ?? params.fetchedAt,
-      scanLimit: params.productionHealth?.scanLimit ?? 0,
-      findings: findings.map((finding) => ({
+      status:
+        unifiedStatus === "critical"
+          ? "critical"
+          : unifiedStatus === "healthy"
+            ? "healthy"
+            : "degraded",
+      generatedAt: mergedHealth.generatedAt,
+      scanLimit: mergedHealth.scanLimit,
+      findings: mergedHealth.findings.map((finding) => ({
         code: finding.code,
         severity: finding.severity,
         count: finding.count,
         message: finding.message,
         sampleIds: finding.sampleIds,
       })),
-      totals: params.productionHealth?.totals ?? { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
-      totalFindings: findings.reduce((sum, finding) => sum + finding.count, 0),
+      totals: mergedHealth.totals,
+      totalFindings: mergedHealth.findings.reduce((sum, finding) => sum + finding.count, 0),
+    },
+    unified: {
+      status: unifiedStatus,
+      issueBreakdown,
+      consistencyValid,
+      statusDescription: unifiedStatusDescription(unifiedStatus),
+    },
+    scanner: {
+      ok: true,
+      status: scannerStatus,
+      degraded: mergedHealth.degraded === true,
+      ...(params.productionHealthError ? { error: params.productionHealthError } : {}),
+      generatedAt: mergedHealth.generatedAt,
+      lastScan: {
+        source: "unified_ops_health",
+        scanLimit: mergedHealth.scanLimit,
+        metricsRecorded: false,
+        degraded: mergedHealth.degraded === true,
+      },
+      counts: {
+        ...mergedHealth.totals,
+        totalFindings: mergedHealth.findings.reduce((sum, finding) => sum + finding.count, 0),
+        acknowledgedHidden: 0,
+      },
+      summaries: mergedHealth.findings,
+      acknowledgedSummaries: [],
+      acknowledgements: [],
+      sampleIds: Object.fromEntries(mergedHealth.findings.map((finding) => [finding.code, finding.sampleIds])),
     },
     ...(params.productionHealthError ? { error: params.productionHealthError } : {}),
   };

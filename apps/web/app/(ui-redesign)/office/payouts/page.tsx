@@ -396,7 +396,7 @@ export default function PayoutsPage() {
             <Download className="h-4 w-4" /> Batches CSV
           </button>
           <Link
-            href="/admin/payouts"
+            href="/office/payouts/phase15a-diagnostics"
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 shadow-sm"
           >
             Full hub

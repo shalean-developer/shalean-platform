@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
+import { collectOfficeOpsHealthSignals } from "@/lib/admin/collectOfficeOpsHealthSignals";
+import { buildOfficeOpsHealthSummary } from "@/lib/admin/officeOpsHealth";
 import { requireAdminSession } from "@/lib/admin/requireAdminSession";
+import {
+  applyOpsHealthAcknowledgements,
+  recordOpsHealthAcknowledgement,
+} from "@/lib/observability/opsHealthAcknowledgements";
 import {
   buildProductionHealthSummary,
   recordProductionHealthSummaryMetrics,
-  runProductionHealthScan,
-  type ProductionHealthFinding,
-  type ProductionHealthSummary,
 } from "@/lib/observability/productionHealthMetrics";
-import {
-  applyOpsHealthAcknowledgements,
-  listOpsHealthAcknowledgements,
-  recordOpsHealthAcknowledgement,
-  type OpsHealthAcknowledgement,
-} from "@/lib/observability/opsHealthAcknowledgements";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -21,29 +18,9 @@ export const dynamic = "force-dynamic";
 const DEFAULT_SCAN_LIMIT = 500;
 const MAX_SCAN_LIMIT = 5_000;
 
-export type AdminOpsHealthStatus = "healthy" | "degraded" | "critical";
+export type AdminOpsHealthStatus = "healthy" | "degraded" | "critical" | "down";
 
-export type AdminOpsHealthResponse = {
-  ok: true;
-  status: AdminOpsHealthStatus;
-  degraded: boolean;
-  error?: string;
-  generatedAt: string;
-  lastScan: {
-    source: "production_health";
-    scanLimit: number;
-    metricsRecorded: boolean;
-    degraded: boolean;
-  };
-  counts: ProductionHealthSummary["totals"] & {
-    totalFindings: number;
-    acknowledgedHidden: number;
-  };
-  summaries: ProductionHealthFinding[];
-  acknowledgedSummaries: ProductionHealthFinding[];
-  acknowledgements: OpsHealthAcknowledgement[];
-  sampleIds: Record<string, string[]>;
-};
+export type AdminOpsHealthResponse = ReturnType<typeof buildOfficeOpsHealthSummary>["scanner"];
 
 function clampScanLimit(raw: string | null): number {
   const n = Number(raw);
@@ -63,44 +40,20 @@ function shouldIncludeAcknowledged(url: URL): boolean {
   return param === "1" || param === "true";
 }
 
-function statusFromSummary(summary: ProductionHealthSummary, degraded: boolean): AdminOpsHealthStatus {
-  if (summary.totals.critical > 0) return "critical";
-  if (degraded || summary.totals.high > 0 || summary.totals.medium > 0) return "degraded";
-  return "healthy";
-}
-
-function responseFromSummary(params: {
-  summary: ProductionHealthSummary;
-  degraded: boolean;
-  metricsRecorded: boolean;
-  acknowledgedSummaries?: ProductionHealthFinding[];
-  acknowledgements?: OpsHealthAcknowledgement[];
-  error?: string;
-}): AdminOpsHealthResponse {
-  const { summary, degraded, metricsRecorded, acknowledgedSummaries = [], acknowledgements = [], error } = params;
-  const isDegraded = degraded || summary.degraded === true;
-  return {
-    ok: true,
-    status: statusFromSummary(summary, isDegraded),
-    degraded: isDegraded,
-    ...(error ? { error } : {}),
-    generatedAt: summary.generatedAt,
-    lastScan: {
-      source: "production_health",
-      scanLimit: summary.scanLimit,
-      metricsRecorded,
-      degraded: isDegraded,
-    },
-    counts: {
-      ...summary.totals,
-      totalFindings: summary.findings.reduce((acc, finding) => acc + finding.count, 0),
-      acknowledgedHidden: acknowledgedSummaries.reduce((acc, finding) => acc + finding.count, 0),
-    },
-    summaries: summary.findings,
-    acknowledgedSummaries,
-    acknowledgements,
-    sampleIds: Object.fromEntries(summary.findings.map((finding) => [finding.code, finding.sampleIds])),
-  };
+function fallbackScannerResponse(scanLimit: number, error?: string): AdminOpsHealthResponse {
+  const summary = buildOfficeOpsHealthSummary({
+    fetchedAt: new Date().toISOString(),
+    productionHealth: buildProductionHealthSummary({ scanLimit }),
+    productionHealthError: error,
+    dbLatencyMs: null,
+    dbOk: false,
+    systemErrorRows: [],
+    cronErrorRows: [],
+    notificationRows: [],
+    whatsappPausedUntil: null,
+    notificationsQueryOk: false,
+  });
+  return summary.scanner;
 }
 
 export async function GET(request: Request) {
@@ -114,48 +67,58 @@ export async function GET(request: Request) {
 
   const admin = getSupabaseAdmin();
   if (!admin) {
-    const summary = buildProductionHealthSummary({ scanLimit });
-    return NextResponse.json(
-      responseFromSummary({
-        summary,
-        degraded: true,
-        metricsRecorded: false,
-        error: "Server configuration error.",
-      }),
-      { status: 200 },
-    );
+    return NextResponse.json(fallbackScannerResponse(scanLimit, "Server configuration error."), { status: 200 });
   }
 
   try {
-    const rawSummary = await runProductionHealthScan(admin, {
-      scanLimit,
-      recordMetrics: metricsRequested,
+    const signals = await collectOfficeOpsHealthSignals(admin, scanLimit);
+    const ackView = signals.rawProductionHealth
+      ? applyOpsHealthAcknowledgements(signals.rawProductionHealth, signals.acknowledgements, { includeAcknowledged })
+      : null;
+
+    const officeSummary = buildOfficeOpsHealthSummary({
+      fetchedAt: signals.fetchedAt,
+      productionHealth: includeAcknowledged ? signals.rawProductionHealth : signals.productionHealth,
+      productionHealthError: signals.productionHealthError,
+      dbLatencyMs: signals.dbLatencyMs,
+      dbOk: signals.dbOk,
+      systemErrorRows: signals.systemErrorRows,
+      cronErrorRows: signals.cronErrorRows,
+      notificationRows: signals.notificationRows,
+      whatsappPausedUntil: signals.whatsappPausedUntil,
+      notificationsQueryOk: signals.notificationsQueryOk,
     });
-    const acknowledgements = await listOpsHealthAcknowledgements(admin);
-    const { visibleSummary, acknowledgedFindings } = applyOpsHealthAcknowledgements(rawSummary, acknowledgements, {
-      includeAcknowledged,
-    });
-    return NextResponse.json(
-      responseFromSummary({
-        summary: visibleSummary,
-        degraded: false,
+
+    if (metricsRequested && signals.rawProductionHealth) {
+      await recordProductionHealthSummaryMetrics(signals.rawProductionHealth).catch(() => undefined);
+    }
+
+    const acknowledgedHidden = ackView?.acknowledgedFindings.reduce((sum, finding) => sum + finding.count, 0) ?? 0;
+
+    return NextResponse.json({
+      ...officeSummary.scanner,
+      lastScan: {
+        ...officeSummary.scanner.lastScan,
         metricsRecorded: metricsRequested,
-        acknowledgedSummaries: acknowledgedFindings,
-        acknowledgements,
-      }),
-    );
+      },
+      counts: {
+        ...officeSummary.scanner.counts,
+        acknowledgedHidden,
+      },
+      acknowledgedSummaries: ackView?.acknowledgedFindings ?? [],
+      acknowledgements: signals.acknowledgements,
+    } satisfies AdminOpsHealthResponse);
   } catch (err) {
-    const summary = buildProductionHealthSummary({ scanLimit });
+    const error = err instanceof Error ? err.message : String(err);
+    const fallback = fallbackScannerResponse(scanLimit, error);
     if (metricsRequested) {
-      await recordProductionHealthSummaryMetrics(summary).catch(() => undefined);
+      await recordProductionHealthSummaryMetrics(buildProductionHealthSummary({ scanLimit })).catch(() => undefined);
     }
     return NextResponse.json(
-      responseFromSummary({
-        summary,
-        degraded: true,
-        metricsRecorded: metricsRequested,
-        error: err instanceof Error ? err.message : String(err),
-      }),
+      {
+        ...fallback,
+        lastScan: { ...fallback.lastScan, metricsRecorded: metricsRequested },
+      },
       { status: 200 },
     );
   }

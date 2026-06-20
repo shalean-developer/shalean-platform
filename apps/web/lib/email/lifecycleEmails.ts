@@ -72,8 +72,7 @@ async function sendLifecycle(
   }
 }
 
-/** ~24h before appointment */
-export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+function buildReminderHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
   const bookUrl = `${base}/book`;
@@ -97,11 +96,21 @@ export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Prom
     After your clean: <a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;">Leave a review</a>
   </p>`;
 
-  return sendLifecycle("reminder_email", "Reminder: your clean is coming up", brandShell(inner), ctx.to, ctx.bookingId);
+  return brandShell(inner);
 }
 
-/** A few hours after appointment */
-export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+/** ~24h before appointment */
+export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+  return sendLifecycle(
+    "reminder_email",
+    "Reminder: your clean is coming up",
+    buildReminderHtml(ctx),
+    ctx.to,
+    ctx.bookingId,
+  );
+}
+
+function buildReviewHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
   const bookUrl = `${base}/book`;
@@ -124,11 +133,15 @@ export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promis
     ${externalReview ? ` &nbsp;|&nbsp; <a href="${escapeAttr(externalReview)}" style="color:#2563eb;">Google review</a>` : ""}
   </p>`;
 
-  return sendLifecycle("review_email", "How was your cleaning?", brandShell(inner), ctx.to, ctx.bookingId);
+  return brandShell(inner);
 }
 
-/** ~24h after appointment */
-export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+/** A few hours after appointment */
+export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+  return sendLifecycle("review_email", "How was your cleaning?", buildReviewHtml(ctx), ctx.to, ctx.bookingId);
+}
+
+function buildRebookHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
   const bookUrl = `${base}/book`;
@@ -150,13 +163,15 @@ export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promis
     <a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;">Leave a review</a>
   </p>`;
 
-  return sendLifecycle("rebook_email", "Book your next clean", brandShell(inner), ctx.to, ctx.bookingId);
+  return brandShell(inner);
 }
 
-/** ~14 days after appointment (retention nudge — same CTA as rebook_offer) */
-export async function sendRebookReminderEmail(
-  ctx: LifecycleEmailBookingContext,
-): Promise<{ sent: boolean; error?: string }> {
+/** ~24h after appointment */
+export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+  return sendLifecycle("rebook_email", "Book your next clean", buildRebookHtml(ctx), ctx.to, ctx.bookingId);
+}
+
+function buildRebookReminderHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
   const accountUrl = `${base}/dashboard/bookings`;
   const bookUrl = `${base}/book`;
@@ -175,11 +190,81 @@ export async function sendRebookReminderEmail(
     <a href="${escapeAttr(accountUrl)}" style="color:#2563eb;">Your bookings</a>
   </p>`;
 
+  return brandShell(inner);
+}
+
+/** ~14 days after appointment (retention nudge — same CTA as rebook_offer) */
+export async function sendRebookReminderEmail(
+  ctx: LifecycleEmailBookingContext,
+): Promise<{ sent: boolean; error?: string }> {
   return sendLifecycle(
     "rebook_reminder_email",
     "Time for your next clean",
-    brandShell(inner),
+    buildRebookReminderHtml(ctx),
     ctx.to,
     ctx.bookingId,
   );
+}
+
+const LIFECYCLE_PREVIEW_SUBJECTS: Record<string, string> = {
+  reminder_24h: "Reminder: your clean is coming up",
+  review_request: "How was your cleaning?",
+  rebook_offer: "Book your next clean",
+  rebook_reminder: "Time for your next clean",
+};
+
+export function buildLifecycleEmailPreview(
+  jobType: string,
+  ctx: LifecycleEmailBookingContext,
+): { subject: string; html: string } {
+  let html = "";
+  switch (jobType) {
+    case "reminder_24h":
+      html = buildReminderHtml(ctx);
+      break;
+    case "review_request":
+      html = buildReviewHtml(ctx);
+      break;
+    case "rebook_offer":
+      html = buildRebookHtml(ctx);
+      break;
+    case "rebook_reminder":
+      html = buildRebookReminderHtml(ctx);
+      break;
+    default:
+      html = buildReminderHtml(ctx);
+      break;
+  }
+  return {
+    subject: LIFECYCLE_PREVIEW_SUBJECTS[jobType] ?? "Lifecycle email preview",
+    html,
+  };
+}
+
+/** Admin test send — uses real Resend, does not touch booking_lifecycle_jobs. */
+export async function sendTestLifecycleEmail(
+  jobType: string,
+  to: string,
+): Promise<{ sent: boolean; error?: string }> {
+  const ctx: LifecycleEmailBookingContext = {
+    bookingId: "00000000-0000-4000-8000-000000000001",
+    to,
+    serviceLabel: "Standard cleaning (preview)",
+    dateLabel: "Monday, 1 Jan",
+    timeLabel: "09:00",
+    location: "Cape Town (preview)",
+  };
+
+  switch (jobType) {
+    case "reminder_24h":
+      return sendReminderEmail(ctx);
+    case "review_request":
+      return sendReviewEmail(ctx);
+    case "rebook_offer":
+      return sendRebookEmail(ctx);
+    case "rebook_reminder":
+      return sendRebookReminderEmail(ctx);
+    default:
+      return { sent: false, error: `Unknown job_type: ${jobType}` };
+  }
 }

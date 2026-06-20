@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { fetchUserRoleClient } from "@/lib/auth/resolvePostAuthDestination";
 import type { AppUserRole } from "@/lib/auth/userRole";
 import { readCachedUserRole } from "@/lib/auth/userRole";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
 
 export type RoleRouteGuardState =
   | { status: "checking" }
@@ -50,8 +50,7 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true }: Options):
         return;
       }
 
-      const { data } = await sb.auth.getSession();
-      const token = data.session?.access_token?.trim();
+      const token = (await getSupabaseAccessToken())?.trim();
       if (!token) {
         if (runId.current === id) setState({ status: "unauthenticated" });
         return;

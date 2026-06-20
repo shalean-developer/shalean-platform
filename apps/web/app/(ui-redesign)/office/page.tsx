@@ -497,7 +497,7 @@ export default function OfficeDashboardPage() {
             <Send className="h-4 w-4 text-blue-600" />
             Send notification
           </Link>
-          <Link href="/admin/bookings/create"
+          <Link href="/office/bookings/create"
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors shadow-sm">
             <TrendingUp className="h-4 w-4" />
             Create booking

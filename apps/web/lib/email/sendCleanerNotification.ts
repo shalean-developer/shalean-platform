@@ -95,3 +95,53 @@ export async function sendCleanerNewJobEmail(params: {
 
   return { sent: true };
 }
+
+export async function sendCleanerBookingCancelledEmail(params: {
+  cleanerEmail: string;
+  cleanerName: string;
+  bookingId: string;
+  service: string;
+  dateLabel: string;
+  timeLabel: string;
+  location: string;
+}): Promise<{ sent: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    await reportOperationalIssue("warn", "sendCleanerBookingCancelledEmail", "RESEND_API_KEY not set", {
+      bookingId: params.bookingId,
+    });
+    return { sent: false, error: "Email not configured" };
+  }
+
+  const to = normalizeEmail(params.cleanerEmail);
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return { sent: false, error: "Invalid cleaner email" };
+  }
+
+  const html = `
+    <p>Hi ${escapeHtml(params.cleanerName)},</p>
+    <p><strong>This booking has been cancelled.</strong> Please do not travel to this job.</p>
+    <ul>
+      <li><strong>Service:</strong> ${escapeHtml(params.service)}</li>
+      <li><strong>When:</strong> ${escapeHtml(params.dateLabel)} ${escapeHtml(params.timeLabel)}</li>
+      <li><strong>Area:</strong> ${escapeHtml(params.location || "—")}</li>
+    </ul>
+    <p style="color:#666;font-size:12px">Booking ID: ${escapeHtml(params.bookingId)}</p>
+  `;
+
+  const { error } = await resend.emails.send({
+    from: getDefaultFromAddress(),
+    to: [to],
+    subject: `Cancelled — do not attend (${params.dateLabel})`,
+    html,
+  });
+
+  if (error) {
+    await reportOperationalIssue("warn", "sendCleanerBookingCancelledEmail", error.message, {
+      bookingId: params.bookingId,
+    });
+    return { sent: false, error: error.message };
+  }
+
+  return { sent: true };
+}

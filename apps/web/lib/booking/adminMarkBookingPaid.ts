@@ -14,6 +14,7 @@ import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestClea
 import { metrics } from "@/lib/metrics/counters";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { markBookingPaidFromAdminSettlement } from "@/lib/booking/paymentFinalizationBookingCommands";
+import { cancelUnsentBookingPaymentRecoveryJobs } from "@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -418,6 +419,7 @@ export async function adminMarkBookingPaid(
       : undefined;
 
   try {
+    await cancelUnsentBookingPaymentRecoveryJobs(admin, bookingId);
     await recordBookingSideEffects({
       supabase: admin,
       bookingId,

@@ -1,3 +1,4 @@
+import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { sendCleanerNewJobEmail } from "@/lib/email/sendCleanerNotification";
@@ -8,7 +9,6 @@ import {
   sendAdminHtmlEmail,
   sendBookingConfirmationEmail,
   sendCustomerBookingAssignedEmail,
-  sendCustomerBookingCancelledEmail,
   sendCustomerJobCompletedEmail,
   sendCustomerRescheduledEmail,
   sendCustomerTwoHourReminderEmail,
@@ -37,7 +37,7 @@ import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmail
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
 import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
-import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
+import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
@@ -58,10 +58,12 @@ export type NotifyBookingEventInput =
       type: "cancelled";
       supabase: SupabaseClient;
       bookingId: string;
-      customerEmail: string;
-      serviceLabel: string | null;
-      dateYmd: string | null;
-      timeHm: string | null;
+      /** Legacy optional fields — booking row is loaded inside dispatch. */
+      customerEmail?: string;
+      serviceLabel?: string | null;
+      dateYmd?: string | null;
+      timeHm?: string | null;
+      cancellationReason?: string | null;
     }
   | {
       type: "rescheduled";
@@ -812,41 +814,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   }
 
   if (event.type === "cancelled") {
-    const em = event.customerEmail.trim() ? normalizeEmail(event.customerEmail) : "";
-    if (em.length > 3) {
-      const r = await sendCustomerBookingCancelledEmail({
-        customerEmail: em,
-        serviceLabel: event.serviceLabel ?? "Cleaning",
-        dateYmd: event.dateYmd,
-        timeHm: event.timeHm,
-        bookingId: event.bookingId,
-      });
-      if (!r.sent && r.error) {
-        await reportOperationalIssue("warn", "notifyBookingEvent/cancelled/customer_email", r.error, {
-          bookingId: event.bookingId,
-        });
-      }
-      await logPipelineEmailTelemetry({
-        role: "customer",
-        channel: "booking_cancelled",
-        sent: r.sent,
-        error: r.error,
-        bookingId: event.bookingId,
-      });
-    }
-    await sendAdminIfConfigured("cancelled", { bookingId: event.bookingId }, async () => {
-      await sendAdminHtmlEmail({
-        subject: `[CANCELLED] ${event.serviceLabel ?? "Booking"} — ${event.bookingId.slice(0, 8)}…`,
-        html: `<h2>Booking cancelled</h2>${adminBaseBlock({
-          bookingId: event.bookingId,
-          service: event.serviceLabel ?? "Cleaning",
-          date: event.dateYmd ?? "—",
-          time: event.timeHm ?? "—",
-          location: "—",
-          customerEmail: em || undefined,
-        })}`,
-        context: { bookingId: event.bookingId, type: "cancelled" },
-      });
+    await dispatchBookingCancelledNotifications(supabase, {
+      bookingId: event.bookingId,
+      cancellationReason: event.cancellationReason ?? null,
     });
     return;
   }

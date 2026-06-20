@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { signOut } from "@/lib/auth/authClient";
 import { RoleGuardRetryBanner, useRoleRouteGuard } from "@/lib/auth/useRoleRouteGuard";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 import { AdminToastHost } from "@/components/admin/AdminToastHost";
 import {
   OfficeSidebarContent,
@@ -108,14 +108,13 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (roleState.status !== "ready") return;
-    const sb = getSupabaseBrowser();
-    if (!sb) {
+    if (!getSupabaseBrowser()) {
       setNoSupabase(true);
       setGate("denied");
       return;
     }
-    void sb.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email?.trim();
+    void getSupabaseSession().then((session) => {
+      const email = session?.user?.email?.trim();
       if (email) setUserLabel(email);
       setGate("ready");
       setErrorMessage(null);

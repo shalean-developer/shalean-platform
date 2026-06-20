@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCustomerBookingCancelled } from "@/lib/notifications/customerUserNotifications";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
@@ -102,12 +102,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     message: "Expired pending dispatch offers on customer cancel",
     context: { bookingId, expiredCount },
   });
-
-  await admin
-    .from("booking_lifecycle_jobs")
-    .update({ status: "cancelled", last_error: null })
-    .eq("booking_id", bookingId)
-    .is("sent_at", null);
 
   void logSystemEvent({
     level: "info",

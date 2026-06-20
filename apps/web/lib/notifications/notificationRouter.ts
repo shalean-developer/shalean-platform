@@ -10,6 +10,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CanonicalBookingEvent } from "@/lib/booking/bookingEvents";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 
 export type RouteBookingNotificationEventContext = {
   admin: SupabaseClient;
@@ -49,6 +50,7 @@ export function isBookingCompletedRouterEnabled(): boolean {
  * - `booking.payment_succeeded` is intentionally a **no-op** — `finalizePaystackChargeSuccess` already notifies.
  * - `booking.completed` (when {@link isBookingCompletedRouterEnabled}) delegates to {@link notifyBookingEvent}
  *   (`type: "completed"`) using `ctx.admin`. Without `ctx.admin`, routing fails closed (`ok: false`).
+ * - `booking.cancelled` (when {@link isBookingNotificationRouterEnabled}) delegates to cancellation dispatch.
  */
 export async function routeBookingNotificationEvent(
   event: CanonicalBookingEvent,
@@ -68,6 +70,48 @@ export async function routeBookingNotificationEvent(
         routedTo: [],
         skippedReason: "existing_finalize_flow_already_notifies",
       };
+    case "booking.cancelled":
+      if (!isBookingNotificationRouterEnabled()) {
+        return {
+          ok: true,
+          ...base,
+          routed: false,
+          routedTo: [],
+          skippedReason: "booking_notification_router_disabled",
+        };
+      }
+      if (!ctx?.admin) {
+        return {
+          ok: false,
+          ...base,
+          code: "booking_cancelled_router_missing_admin_client",
+          message: "routeBookingNotificationEvent(booking.cancelled) requires ctx.admin.",
+        };
+      }
+      try {
+        const reason =
+          typeof event.metadata?.cancellationReason === "string" ? event.metadata.cancellationReason : null;
+        const result = await dispatchBookingCancelledNotifications(ctx.admin, {
+          bookingId: event.bookingId,
+          cancellationReason: reason,
+        });
+        return {
+          ok: true,
+          ...base,
+          routed: result.dispatched,
+          routedTo: result.dispatched ? ["dispatchBookingCancelledNotifications"] : [],
+          skippedReason: result.skippedReason,
+        };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        return {
+          ok: false,
+          ...base,
+          code: "dispatch_booking_cancelled_threw",
+          message,
+          cause,
+        };
+      }
     case "booking.completed":
       if (!isBookingCompletedRouterEnabled()) {
         return {

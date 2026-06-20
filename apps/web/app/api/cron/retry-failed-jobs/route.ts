@@ -10,6 +10,7 @@ import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/li
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
+import { maybeRollupYesterdayLifecycleMetrics } from "@/lib/booking/lifecycleEmailMetrics";
 import { retryLifecycleJobsForBooking } from "@/lib/booking/bookingLifecycleJobs";
 import { emitSqlExpiredOfferTimeoutMetrics } from "@/lib/dispatch/offerTimeoutMetric";
 import { reportPendingBookingSlaBreaches } from "@/lib/dispatch/dispatchSlaWatchdog";
@@ -388,7 +389,7 @@ export async function POST(request: Request) {
   const { data: lifeJobs, error: lifeErr } = await supabase
     .from("booking_lifecycle_jobs")
     .select("id, job_type, customer_email, booking_id, attempts")
-    .eq("status", "failed")
+    .eq("status", "failed_retryable")
     .lt("attempts", 5)
     .order("scheduled_for", { ascending: true })
     .limit(MAX_LIFECYCLE_RETRY);
@@ -468,6 +469,13 @@ export async function POST(request: Request) {
     }
   }
 
+  let lifecycleMetricsRollup: { rolled: boolean; date?: string } = { rolled: false };
+  try {
+    lifecycleMetricsRollup = await maybeRollupYesterdayLifecycleMetrics(supabase);
+  } catch {
+    /* best-effort */
+  }
+
   const resultPayload = {
     ok: true as const,
     bookingInsertRetried,
@@ -476,6 +484,7 @@ export async function POST(request: Request) {
     lifecycleSent,
     lifecycleTerminal,
     lifecycleIssueRepairs,
+    lifecycleMetricsRollup,
     dispatchRetry,
     offerExpiryMaintenance,
     dispatchSla,

@@ -19,6 +19,7 @@ import {
   bookingPaystackMetadataDebugEnabled,
 } from "@/lib/logging/bookingPaymentDebug";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { cancelUnsentBookingPaymentRecoveryJobs } from "@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import {
@@ -1143,6 +1144,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         ? String((inserted as { created_at?: string }).created_at ?? "")
         : "";
     try {
+      await cancelUnsentBookingPaymentRecoveryJobs(supabase, id);
       const locked = input.snapshot?.locked;
       await recordBookingSideEffects({
         supabase,

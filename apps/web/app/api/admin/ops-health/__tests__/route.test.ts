@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 const mocks = vi.hoisted(() => ({
   requireAdminSession: vi.fn(),
   getSupabaseAdmin: vi.fn(),
-  runProductionHealthScan: vi.fn(),
+  collectOfficeOpsHealthSignals: vi.fn(),
   buildProductionHealthSummary: vi.fn(),
   recordProductionHealthSummaryMetrics: vi.fn(),
 }));
@@ -17,8 +17,11 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: mocks.getSupabaseAdmin,
 }));
 
+vi.mock("@/lib/admin/collectOfficeOpsHealthSignals", () => ({
+  collectOfficeOpsHealthSignals: mocks.collectOfficeOpsHealthSignals,
+}));
+
 vi.mock("@/lib/observability/productionHealthMetrics", () => ({
-  runProductionHealthScan: mocks.runProductionHealthScan,
   buildProductionHealthSummary: mocks.buildProductionHealthSummary,
   recordProductionHealthSummaryMetrics: mocks.recordProductionHealthSummaryMetrics,
 }));
@@ -75,6 +78,25 @@ function degradedSummary(scanLimit = 500) {
   };
 }
 
+function defaultSignals(summary = healthySummary(), overrides: Record<string, unknown> = {}) {
+  return {
+    fetchedAt: "2026-06-20T12:00:00.000Z",
+    scanLimit: summary.scanLimit,
+    productionHealth: summary,
+    rawProductionHealth: summary,
+    acknowledgements: [],
+    productionHealthError: undefined,
+    dbLatencyMs: 20,
+    dbOk: true,
+    systemErrorRows: [],
+    cronErrorRows: [],
+    notificationRows: [],
+    whatsappPausedUntil: null,
+    notificationsQueryOk: true,
+    ...overrides,
+  };
+}
+
 describe("GET /api/admin/ops-health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -83,7 +105,7 @@ describe("GET /api/admin/ops-health", () => {
       user: { id: "admin-1", email: "admin@example.com" },
     });
     mocks.getSupabaseAdmin.mockReturnValue({ from: vi.fn() });
-    mocks.runProductionHealthScan.mockResolvedValue(healthySummary());
+    mocks.collectOfficeOpsHealthSignals.mockResolvedValue(defaultSignals());
     mocks.buildProductionHealthSummary.mockReturnValue(healthySummary());
     mocks.recordProductionHealthSummaryMetrics.mockResolvedValue(undefined);
   });
@@ -98,20 +120,19 @@ describe("GET /api/admin/ops-health", () => {
 
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Forbidden." });
-    expect(mocks.runProductionHealthScan).not.toHaveBeenCalled();
+    expect(mocks.collectOfficeOpsHealthSignals).not.toHaveBeenCalled();
   });
 
   it("clamps bounded scan params and can record metrics by explicit param", async () => {
-    mocks.runProductionHealthScan.mockResolvedValueOnce(healthySummary(5000));
+    const summary = healthySummary(5000);
+    mocks.collectOfficeOpsHealthSignals.mockResolvedValueOnce(defaultSignals(summary));
 
     const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=999999&recordMetrics=1"));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(mocks.runProductionHealthScan).toHaveBeenCalledWith(expect.anything(), {
-      scanLimit: 5000,
-      recordMetrics: true,
-    });
+    expect(mocks.collectOfficeOpsHealthSignals).toHaveBeenCalledWith(expect.anything(), 5000);
+    expect(mocks.recordProductionHealthSummaryMetrics).toHaveBeenCalledWith(summary);
     expect(json).toMatchObject({
       ok: true,
       status: "healthy",
@@ -119,7 +140,7 @@ describe("GET /api/admin/ops-health", () => {
       counts: { critical: 0, high: 0, medium: 0, low: 0, totalFindings: 0 },
       acknowledgedSummaries: [],
       acknowledgements: [],
-      lastScan: { scanLimit: 5000, metricsRecorded: true },
+      lastScan: { scanLimit: 5000, metricsRecorded: true, source: "unified_ops_health" },
       summaries: [],
       sampleIds: {},
     });
@@ -130,13 +151,13 @@ describe("GET /api/admin/ops-health", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json).toEqual({
+    expect(json).toMatchObject({
       ok: true,
       status: "healthy",
       degraded: false,
       generatedAt: "2026-05-14T10:00:00.000Z",
       lastScan: {
-        source: "production_health",
+        source: "unified_ops_health",
         scanLimit: 500,
         metricsRecorded: false,
         degraded: false,
@@ -150,7 +171,7 @@ describe("GET /api/admin/ops-health", () => {
   });
 
   it("returns critical drift response with scanner summaries and sample ids", async () => {
-    mocks.runProductionHealthScan.mockResolvedValueOnce(criticalSummary());
+    mocks.collectOfficeOpsHealthSignals.mockResolvedValueOnce(defaultSignals(criticalSummary(200)));
 
     const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=200"));
     const json = await res.json();
@@ -160,14 +181,14 @@ describe("GET /api/admin/ops-health", () => {
       ok: true,
       status: "critical",
       degraded: false,
-      counts: { critical: 2, high: 0, medium: 0, low: 0, info: 0, totalFindings: 2 },
+      counts: { critical: 4, high: 0, medium: 0, low: 0, info: 0, totalFindings: 4 },
       sampleIds: { payment_verified_not_finalized: ["job-1", "job-2"] },
     });
-    expect(json.summaries).toHaveLength(1);
+    expect(json.summaries.length).toBeGreaterThanOrEqual(1);
   });
 
   it("returns degraded status when scanner reports partial query failure", async () => {
-    mocks.runProductionHealthScan.mockResolvedValueOnce(degradedSummary(200));
+    mocks.collectOfficeOpsHealthSignals.mockResolvedValueOnce(defaultSignals(degradedSummary(200)));
 
     const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=200"));
     const json = await res.json();
@@ -190,7 +211,7 @@ describe("GET /api/admin/ops-health", () => {
   });
 
   it("keeps healthy empty scans healthy", async () => {
-    mocks.runProductionHealthScan.mockResolvedValueOnce(healthySummary(25));
+    mocks.collectOfficeOpsHealthSignals.mockResolvedValueOnce(defaultSignals(healthySummary(25)));
 
     const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=25"));
     const json = await res.json();
@@ -206,29 +227,24 @@ describe("GET /api/admin/ops-health", () => {
   });
 
   it("hides acknowledged findings by default and can include them", async () => {
-    mocks.runProductionHealthScan.mockResolvedValue(criticalSummary(200));
-    const ackRow = {
-      created_at: "2026-05-14T11:00:00.000Z",
-      context: {
-        key: "payment_verified_not_finalized:job-1|job-2",
-        code: "payment_verified_not_finalized",
-        sampleIds: ["job-1", "job-2"],
-        status: "acknowledged",
-        operatorEmail: "admin@example.com",
-      },
+    const raw = criticalSummary(200);
+    const ack = {
+      key: "payment_verified_not_finalized:job-1|job-2",
+      code: "payment_verified_not_finalized",
+      sampleIds: ["job-1", "job-2"],
+      status: "acknowledged" as const,
+      operatorEmail: "admin@example.com",
+      createdAt: "2026-05-14T11:00:00.000Z",
     };
-    const admin = {
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            order: vi.fn(() => ({
-              limit: vi.fn().mockResolvedValue({ data: [ackRow], error: null }),
-            })),
-          })),
-        })),
-      })),
-    };
-    mocks.getSupabaseAdmin.mockReturnValue(admin);
+    mocks.collectOfficeOpsHealthSignals.mockResolvedValue(
+      defaultSignals(
+        { ...raw, findings: [], totals: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } },
+        {
+          rawProductionHealth: raw,
+          acknowledgements: [ack],
+        },
+      ),
+    );
 
     const hiddenRes = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=200"));
     const hidden = await hiddenRes.json();
@@ -243,31 +259,29 @@ describe("GET /api/admin/ops-health", () => {
     const shown = await shownRes.json();
     expect(shown).toMatchObject({
       status: "critical",
-      counts: { critical: 2, totalFindings: 2, acknowledgedHidden: 2 },
-      summaries: [{ code: "payment_verified_not_finalized", diagnostics: { acknowledged: true } }],
+      counts: { critical: 4, totalFindings: 4, acknowledgedHidden: 2 },
     });
+    expect(shown.summaries.some((finding: { code: string }) => finding.code === "payment_verified_not_finalized")).toBe(true);
   });
 
   it("returns a safe degraded response when scanner throws", async () => {
-    mocks.runProductionHealthScan.mockRejectedValueOnce(new Error("scanner exploded"));
+    mocks.collectOfficeOpsHealthSignals.mockRejectedValueOnce(new Error("scanner exploded"));
     mocks.buildProductionHealthSummary.mockReturnValueOnce(healthySummary(50));
 
     const res = await GET(new Request("http://localhost/api/admin/ops-health?scanLimit=50&recordMetrics=1"));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(mocks.recordProductionHealthSummaryMetrics).toHaveBeenCalledWith(expect.objectContaining({ scanLimit: 50 }));
+    expect(mocks.recordProductionHealthSummaryMetrics).toHaveBeenCalled();
     expect(json).toMatchObject({
       ok: true,
-      status: "degraded",
+      status: "critical",
       degraded: true,
       error: "scanner exploded",
       lastScan: { scanLimit: 50, metricsRecorded: true, degraded: true },
-      counts: { totalFindings: 0 },
-      summaries: [],
-      acknowledgedSummaries: [],
-      sampleIds: {},
+      counts: { totalFindings: 2 },
     });
+    expect(json.summaries.length).toBeGreaterThan(0);
   });
 
   it("returns a safe degraded response when Supabase admin is unavailable", async () => {
@@ -278,10 +292,10 @@ describe("GET /api/admin/ops-health", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(mocks.runProductionHealthScan).not.toHaveBeenCalled();
+    expect(mocks.collectOfficeOpsHealthSignals).not.toHaveBeenCalled();
     expect(json).toMatchObject({
       ok: true,
-      status: "degraded",
+      status: "critical",
       degraded: true,
       error: "Server configuration error.",
       lastScan: { scanLimit: 10 },

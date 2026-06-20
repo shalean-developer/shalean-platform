@@ -1,59 +1,68 @@
 import { processLock } from "@supabase/auth-js";
 import { createBrowserClient } from "@supabase/ssr";
+import type { Session } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 let cached: SupabaseClient | null | undefined;
 
 /** Short-lived cache so parallel admin fetches share one `getSession` lock acquisition. */
-const ACCESS_TOKEN_CACHE_MS = 5_000;
-let accessTokenCache: { token: string | null; at: number } | null = null;
-let accessTokenInflight: Promise<string | null> | null = null;
+const SESSION_CACHE_MS = 5_000;
+let sessionCache: { session: Session | null; at: number } | null = null;
+let sessionInflight: Promise<Session | null> | null = null;
 let authListenerAttached = false;
 
-function clearAccessTokenCache(): void {
-  accessTokenCache = null;
+function clearSessionCache(): void {
+  sessionCache = null;
 }
 
 function attachAuthListener(sb: SupabaseClient): void {
   if (authListenerAttached) return;
   authListenerAttached = true;
   sb.auth.onAuthStateChange(() => {
-    clearAccessTokenCache();
+    clearSessionCache();
   });
 }
 
 /**
- * Coalesced browser access token read. Prefer this over calling `auth.getSession()` directly
+ * Coalesced browser session read. Prefer this over calling `auth.getSession()` directly
  * from many components/effects — parallel calls queue on Supabase's auth lock and can throw
  * `Acquiring process lock … timed out` in dev (especially on admin pages with many fetches).
  */
-export async function getSupabaseAccessToken(): Promise<string | null> {
+export async function getSupabaseSession(): Promise<Session | null> {
   const sb = getSupabaseBrowser();
   if (!sb) return null;
   attachAuthListener(sb);
 
   const now = Date.now();
-  if (accessTokenCache && now - accessTokenCache.at < ACCESS_TOKEN_CACHE_MS) {
-    return accessTokenCache.token;
+  if (sessionCache && now - sessionCache.at < SESSION_CACHE_MS) {
+    return sessionCache.session;
   }
 
-  if (accessTokenInflight) return accessTokenInflight;
+  if (sessionInflight) return sessionInflight;
 
-  accessTokenInflight = (async () => {
+  sessionInflight = (async () => {
     try {
       const { data } = await sb.auth.getSession();
-      const token = data.session?.access_token ?? null;
-      accessTokenCache = { token, at: Date.now() };
-      return token;
+      const session = data.session ?? null;
+      sessionCache = { session, at: Date.now() };
+      return session;
     } catch {
-      clearAccessTokenCache();
+      clearSessionCache();
       return null;
     } finally {
-      accessTokenInflight = null;
+      sessionInflight = null;
     }
   })();
 
-  return accessTokenInflight;
+  return sessionInflight;
+}
+
+/**
+ * Coalesced browser access token read (uses {@link getSupabaseSession}).
+ */
+export async function getSupabaseAccessToken(): Promise<string | null> {
+  const session = await getSupabaseSession();
+  return session?.access_token ?? null;
 }
 
 /**
@@ -79,9 +88,8 @@ export function getSupabaseBrowser(): SupabaseClient | null {
   const isDev = process.env.NODE_ENV === "development";
   cached = createBrowserClient(url, key, {
     auth: {
-      // Dev: no acquire timeout — processLock queues serialize; timeout surfaced when many
-      // components called getSession in parallel (fixed via getSupabaseAccessToken coalescing).
-      lockAcquireTimeout: isDev ? -1 : 15_000,
+      // Serialize auth storage access; avoid default 10s acquire timeout in dev-heavy pages.
+      lockAcquireTimeout: isDev ? -1 : 30_000,
       ...(isDev ? { lock: processLock } : {}),
     },
   });

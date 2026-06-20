@@ -4,7 +4,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
  * Customer / admin Resend outcomes for `notification_system_logs_summary` (email_sent / email_failed).
  */
 export async function logPipelineEmailTelemetry(params: {
-  role: "customer" | "admin";
+  role: "customer" | "admin" | "cleaner";
   channel: string;
   sent: boolean;
   error?: string;

@@ -4,9 +4,14 @@ vi.mock("@/lib/notifications/notifyBookingEvent", () => ({
   notifyBookingEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/notifications/bookingCancelledNotifications", () => ({
+  dispatchBookingCancelledNotifications: vi.fn().mockResolvedValue({ dispatched: true }),
+}));
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildBookingEvent } from "@/lib/booking/bookingEvents";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
+import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 import { routeBookingNotificationEvent } from "@/lib/notifications/notificationRouter";
 
 const fakeAdmin = {} as SupabaseClient;
@@ -14,10 +19,13 @@ const fakeAdmin = {} as SupabaseClient;
 describe("routeBookingNotificationEvent", () => {
   beforeEach(() => {
     delete process.env.BOOKING_COMPLETED_ROUTER_ENABLED;
+    delete process.env.BOOKING_NOTIFICATION_ROUTER_ENABLED;
     vi.mocked(notifyBookingEvent).mockClear();
+    vi.mocked(dispatchBookingCancelledNotifications).mockClear();
   });
   afterEach(() => {
     delete process.env.BOOKING_COMPLETED_ROUTER_ENABLED;
+    delete process.env.BOOKING_NOTIFICATION_ROUTER_ENABLED;
   });
 
   it("no-ops payment_succeeded without routing to channels (finalize flow already notifies)", async () => {
@@ -36,18 +44,32 @@ describe("routeBookingNotificationEvent", () => {
     expect(vi.mocked(notifyBookingEvent)).not.toHaveBeenCalled();
   });
 
-  it("returns unsupported skip for other canonical types (scaffolding)", async () => {
+  it("booking.cancelled is skipped when BOOKING_NOTIFICATION_ROUTER_ENABLED is off", async () => {
     const event = buildBookingEvent({
       type: "booking.cancelled",
       bookingId: "b2",
       actor: "admin",
     });
-    const r = await routeBookingNotificationEvent(event);
+    const r = await routeBookingNotificationEvent(event, { admin: fakeAdmin });
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected ok");
     expect(r.routed).toBe(false);
-    expect(r.skippedReason).toBe("unsupported_booking_event_type");
-    expect(vi.mocked(notifyBookingEvent)).not.toHaveBeenCalled();
+    expect(r.skippedReason).toBe("booking_notification_router_disabled");
+    expect(vi.mocked(dispatchBookingCancelledNotifications)).not.toHaveBeenCalled();
+  });
+
+  it("booking.cancelled when BOOKING_NOTIFICATION_ROUTER_ENABLED=1 delegates to dispatch", async () => {
+    process.env.BOOKING_NOTIFICATION_ROUTER_ENABLED = "1";
+    const event = buildBookingEvent({
+      type: "booking.cancelled",
+      bookingId: "b-cancel",
+      actor: "admin",
+    });
+    const r = await routeBookingNotificationEvent(event, { admin: fakeAdmin });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.routed).toBe(true);
+    expect(vi.mocked(dispatchBookingCancelledNotifications)).toHaveBeenCalledTimes(1);
   });
 
   it("booking.completed is skipped when BOOKING_COMPLETED_ROUTER_ENABLED is off (no duplicate notify path)", async () => {

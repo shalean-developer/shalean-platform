@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import {
   generateMonthlyRecurringOccurrenceBooking,
@@ -204,6 +205,11 @@ async function cancelReconcileOrphanBooking(
   if (ceErr) {
     return { ok: false, reason: "cancel_failed", message: ceErr.message };
   }
+
+  void dispatchBookingCancelledNotifications(admin, {
+    bookingId: booking.id,
+    cancellationReason: "Recurring plan occurrence reconciled (orphan cancelled)",
+  });
 
   return { ok: true };
 }

@@ -18,6 +18,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/payment-recovery",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/retry-failed-jobs",
       "schedule": "*/10 * * * *"
     },

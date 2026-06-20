@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 
 export type ApplyAdminBookingLifecycleStatusOverrideParams = {
   admin: SupabaseClient;
@@ -14,5 +15,12 @@ export async function applyAdminBookingLifecycleStatusOverride(
   params: ApplyAdminBookingLifecycleStatusOverrideParams,
 ): Promise<{ error: { message: string } | null }> {
   const { error } = await params.admin.from("bookings").update(params.updates).eq("id", params.bookingId);
-  return { error };
+  if (error) return { error };
+
+  const nextStatus = String(params.updates.status ?? "").trim().toLowerCase();
+  if (nextStatus === "cancelled") {
+    void dispatchBookingCancelledNotifications(params.admin, { bookingId: params.bookingId });
+  }
+
+  return { error: null };
 }

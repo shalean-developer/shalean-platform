@@ -1069,36 +1069,119 @@ export async function sendSavedQuoteRecoveryEmail(params: {
 
 export async function sendCustomerBookingCancelledEmail(params: {
   customerEmail: string;
+  customerName?: string | null;
   serviceLabel: string;
-  dateYmd: string | null;
-  timeHm: string | null;
+  dateLabel: string;
+  timeLabel: string;
   bookingId: string;
 }): Promise<{ sent: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
-  const when =
-    params.dateYmd && params.timeHm
-      ? `${escapeHtml(params.dateYmd)} ${escapeHtml(params.timeHm.slice(0, 5))}`
-      : "your scheduled time";
+  const name =
+    params.customerName?.trim() ||
+    (params.customerEmail.includes("@") ? params.customerEmail.split("@")[0]?.replace(/[.+_]/g, " ").trim() : "") ||
+    "there";
+  const appUrl = getPublicAppUrlBase();
+  const bookUrl = `${appUrl}/book`;
   const html = `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
-  <h1 style="font-size: 20px;">Booking cancelled</h1>
-  <p>Your <strong>${escapeHtml(params.serviceLabel)}</strong> for <strong>${when}</strong> has been cancelled.</p>
+  <h1 style="font-size: 22px; margin: 0 0 12px;">Your booking has been cancelled</h1>
+  <p style="color:#6b7280; margin-bottom: 16px;">Hi ${escapeHtml(name)}, this confirms your booking cancellation.</p>
+  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px;">
+    <p><strong>Service:</strong> ${escapeHtml(params.serviceLabel)}</p>
+    <p><strong>Date:</strong> ${escapeHtml(params.dateLabel)}</p>
+    <p><strong>Time:</strong> ${escapeHtml(params.timeLabel)}</p>
+  </div>
+  <p style="color:#374151; margin-bottom: 12px;">If you did not request this cancellation, contact us right away.</p>
+  <p style="font-size: 14px; color: #374151;">
+    <strong>Phone:</strong> <a href="tel:0871535250" style="color:#2563eb;">087 153 5250</a><br/>
+    <strong>WhatsApp:</strong> <a href="https://wa.me/27825915525" style="color:#2563eb;">082 591 5525</a>
+  </p>
+  <p style="margin: 16px 0;">
+    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
+  </p>
   <p style="font-size:12px;color:#6b7280;">Booking ID: <span style="font-family:monospace;">${escapeHtml(params.bookingId)}</span></p>
 </div>`;
   try {
     const { error } = await resend.emails.send({
       from,
       to: params.customerEmail,
-      subject: `Cancelled — ${params.serviceLabel}`,
+      subject: `Booking cancelled — ${params.serviceLabel}`,
       html,
     });
-    if (error) return { sent: false, error: error.message };
+    if (error) {
+      await writeNotificationLog({
+        booking_id: params.bookingId,
+        channel: "email",
+        template_key: "customer_booking_cancelled",
+        recipient: params.customerEmail,
+        status: "failed",
+        error: error.message.slice(0, 500),
+        provider: "resend",
+        role: "customer",
+        event_type: "booking_cancelled",
+        payload: { step: "customer_booking_cancelled" },
+      });
+      return { sent: false, error: error.message };
+    }
+    await writeNotificationLog({
+      booking_id: params.bookingId,
+      channel: "email",
+      template_key: "customer_booking_cancelled",
+      recipient: params.customerEmail,
+      status: "sent",
+      provider: "resend",
+      role: "customer",
+      event_type: "booking_cancelled",
+      payload: { step: "customer_booking_cancelled" },
+    });
     return { sent: true };
   } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { sent: false, error: msg };
+  }
+}
+
+export async function sendAdminBookingCancelledEmail(params: {
+  bookingId: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  serviceLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  location: string;
+  cancellationReason?: string | null;
+  paystackReference?: string | null;
+}): Promise<{ sent: boolean; error?: string }> {
+  const reasonBlock = params.cancellationReason
+    ? `<p><strong>Reason:</strong> ${escapeHtml(params.cancellationReason)}</p>`
+    : "";
+  const html = `<h2 style="font-family:system-ui">Booking cancelled</h2>
+${reasonBlock}
+<div style="font-family:system-ui,sans-serif;font-size:14px;color:#111">
+  <p><strong>Booking ID:</strong> <code>${escapeHtml(params.bookingId)}</code></p>
+  <p><strong>Service:</strong> ${escapeHtml(params.serviceLabel)}</p>
+  <p><strong>Date / time:</strong> ${escapeHtml(params.dateLabel)} ${escapeHtml(params.timeLabel)}</p>
+  <p><strong>Address:</strong> ${escapeHtml(params.location || "—")}</p>
+  ${params.customerEmail ? `<p><strong>Customer email:</strong> ${escapeHtml(params.customerEmail)}</p>` : ""}
+  ${params.paystackReference ? `<p><strong>Payment ref:</strong> <code>${escapeHtml(params.paystackReference)}</code></p>` : ""}
+</div>
+<p><strong>Customer name:</strong> ${escapeHtml(params.customerName?.trim() || "—")}</p>
+<p><strong>Customer phone:</strong> ${escapeHtml(params.customerPhone?.trim() || "—")}</p>`;
+
+  try {
+    await sendAdminHtmlEmail({
+      subject: `[CANCELLED] ${params.serviceLabel} — ${params.bookingId.slice(0, 8)}…`,
+      html,
+      context: { bookingId: params.bookingId, type: "admin_booking_cancelled" },
+    });
+    return { sent: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { sent: false, error: msg };
   }
 }
 

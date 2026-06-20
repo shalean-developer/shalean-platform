@@ -5,7 +5,9 @@ import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { evaluateRebookEligibility } from "@/lib/booking/lifecycleEmailGuards";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
+import { evaluateLifecycleEmailAlerts } from "@/lib/admin/lifecycleEmailMonitoring";
 import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
 import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -35,7 +37,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
   const today = todayYmdJohannesburg();
   const { data: past, error } = await admin
     .from("bookings")
-    .select("id, user_id, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email, dispatch_status")
+    .select("id, user_id, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email, dispatch_status, recurring_id, is_recurring_generated")
     .in("status", ["pending", "assigned", "in_progress"])
     .not("date", "is", null)
     .lt("date", today)
@@ -183,23 +185,44 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
     await syncCleanersBusyAfterBookingTerminalChange(admin, [cleanerId, persistCleanerId]);
 
     if (dateYmd && rawEmail.trim().length >= 3) {
-      const reminderDay = addDaysToYmd(dateYmd, 14);
-      const scheduledFor = johannesburgNineAmIso(reminderDay);
-      const em = normalizeEmail(rawEmail);
-      const { error: rebookErr } = await admin.from("booking_lifecycle_jobs").insert({
-        booking_id: id,
-        user_id: uid,
-        customer_email: em,
-        job_type: "rebook_reminder",
-        scheduled_for: scheduledFor,
-        status: "pending",
-        attempts: 0,
-        payload: { source: "post_completion", anchor_date: dateYmd },
+      const recurringRow = b as {
+        recurring_id?: string | null;
+        is_recurring_generated?: boolean | null;
+      };
+      const rebookEligible = await evaluateRebookEligibility({
+        supabase: admin,
+        userId: uid,
+        customerEmail: rawEmail,
+        excludeBookingId: id,
+        recurringId: typeof recurringRow.recurring_id === "string" ? recurringRow.recurring_id : null,
+        isRecurringGenerated: recurringRow.is_recurring_generated,
       });
-      if (rebookErr && rebookErr.code !== "23505") {
-        await reportOperationalIssue("warn", "cron/booking-lifecycle", `rebook_reminder insert: ${rebookErr.message}`, {
-          bookingId: id,
+      if (!rebookEligible.eligible) {
+        void logSystemEvent({
+          level: "info",
+          source: "cron/booking-lifecycle",
+          message: "lifecycle.rebook_reminder.not_scheduled",
+          context: { bookingId: id, userId: uid, skipReason: rebookEligible.reason },
         });
+      } else {
+        const reminderDay = addDaysToYmd(dateYmd, 14);
+        const scheduledFor = johannesburgNineAmIso(reminderDay);
+        const em = normalizeEmail(rawEmail);
+        const { error: rebookErr } = await admin.from("booking_lifecycle_jobs").insert({
+          booking_id: id,
+          user_id: uid,
+          customer_email: em,
+          job_type: "rebook_reminder",
+          scheduled_for: scheduledFor,
+          status: "pending",
+          attempts: 0,
+          payload: { source: "post_completion", anchor_date: dateYmd },
+        });
+        if (rebookErr && rebookErr.code !== "23505") {
+          await reportOperationalIssue("warn", "cron/booking-lifecycle", `rebook_reminder insert: ${rebookErr.message}`, {
+            bookingId: id,
+          });
+        }
       }
     }
 
@@ -307,6 +330,12 @@ export async function POST(request: Request) {
       processed: jobs?.length ?? 0,
     },
   });
+
+  try {
+    await evaluateLifecycleEmailAlerts(supabase);
+  } catch {
+    /* best-effort monitoring */
+  }
 
   return NextResponse.json({
     ok: true,

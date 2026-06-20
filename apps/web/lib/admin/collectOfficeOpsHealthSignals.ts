@@ -1,0 +1,105 @@
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  applyOpsHealthAcknowledgements,
+  listOpsHealthAcknowledgements,
+  type OpsHealthAcknowledgement,
+} from "@/lib/observability/opsHealthAcknowledgements";
+import { runProductionHealthScan, type ProductionHealthSummary } from "@/lib/observability/productionHealthMetrics";
+
+export const OFFICE_OPS_HISTORY_DAYS_MS = 30 * 86_400_000;
+
+export type OfficeOpsHealthSignals = {
+  fetchedAt: string;
+  scanLimit: number;
+  productionHealth: ProductionHealthSummary | null;
+  rawProductionHealth: ProductionHealthSummary | null;
+  acknowledgements: OpsHealthAcknowledgement[];
+  productionHealthError?: string;
+  dbLatencyMs: number | null;
+  dbOk: boolean;
+  systemErrorRows: Array<{ created_at: string | null }>;
+  cronErrorRows: Array<{ created_at: string | null }>;
+  notificationRows: Array<{ created_at: string | null; status: string | null }>;
+  whatsappPausedUntil: string | null;
+  notificationsQueryOk: boolean;
+};
+
+function filterCronAuthNoise(
+  rows: Array<{ created_at: string | null; message?: string | null }>,
+): Array<{ created_at: string | null }> {
+  return rows.filter((row) => {
+    const message = String(row.message ?? "").trim();
+    return message !== "Unauthorized." && message !== "[auth] Unauthorized." && !message.startsWith("[auth] Unauthorized");
+  }) as Array<{ created_at: string | null }>;
+}
+
+export async function collectOfficeOpsHealthSignals(
+  admin: SupabaseClient,
+  scanLimit: number,
+  fetchedAt = new Date().toISOString(),
+): Promise<OfficeOpsHealthSignals> {
+  const sinceIso = new Date(Date.parse(fetchedAt) - OFFICE_OPS_HISTORY_DAYS_MS).toISOString();
+  const dbStarted = performance.now();
+
+  const [
+    dbRes,
+    productionHealthResult,
+    acknowledgements,
+    systemLogsRes,
+    cronRunsRes,
+    notificationLogsRes,
+    flagsRes,
+  ] = await Promise.all([
+    admin.from("cleaners").select("id").limit(1),
+    runProductionHealthScan(admin, { scanLimit }).then(
+      (summary) => ({ ok: true as const, summary }),
+      (error) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
+    ),
+    listOpsHealthAcknowledgements(admin),
+    admin
+      .from("system_logs")
+      .select("created_at, level")
+      .eq("level", "error")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(5000),
+    admin
+      .from("cron_runs")
+      .select("created_at, status, message")
+      .eq("status", "error")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(5000),
+    admin
+      .from("notification_logs")
+      .select("created_at, status")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(10000),
+    admin.from("notification_runtime_flags").select("whatsapp_disabled_until").eq("id", 1).maybeSingle(),
+  ]);
+
+  const productionHealth =
+    productionHealthResult.ok
+      ? applyOpsHealthAcknowledgements(productionHealthResult.summary, acknowledgements).visibleSummary
+      : null;
+
+  return {
+    fetchedAt,
+    scanLimit,
+    productionHealth,
+    rawProductionHealth: productionHealthResult.ok ? productionHealthResult.summary : null,
+    acknowledgements,
+    productionHealthError: productionHealthResult.ok ? undefined : productionHealthResult.error,
+    dbLatencyMs: !dbRes.error ? Math.round(performance.now() - dbStarted) : null,
+    dbOk: !dbRes.error,
+    systemErrorRows: (systemLogsRes.data ?? []) as Array<{ created_at: string | null }>,
+    cronErrorRows: filterCronAuthNoise((cronRunsRes.data ?? []) as Array<{ created_at: string | null; message?: string | null }>),
+    notificationRows: (notificationLogsRes.data ?? []) as Array<{ created_at: string | null; status: string | null }>,
+    whatsappPausedUntil:
+      typeof flagsRes.data?.whatsapp_disabled_until === "string" ? flagsRes.data.whatsapp_disabled_until : null,
+    notificationsQueryOk: !notificationLogsRes.error,
+  };
+}
