@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { PaymentRecoveryJobType } from "@/lib/booking/paymentRecoverySkipReasons";
@@ -81,6 +82,8 @@ async function sendPaymentRecovery(
   html: string,
   ctx: PaymentRecoveryEmailContext,
 ): Promise<{ sent: boolean; error?: string }> {
+  const { paused } = await isCustomerOutboundPaused();
+  if (paused) return { sent: false, error: "customer_outbound_paused" };
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", source, "RESEND_API_KEY not set", { bookingId: ctx.bookingId });

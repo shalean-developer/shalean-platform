@@ -15,6 +15,8 @@ async function logRuntimeFlagsIssue(message: string, context: Record<string, unk
 export type NotificationRuntimeFlagsRow = {
   whatsapp_disabled_until: string | null;
   whatsapp_paused_at: string | null;
+  customer_outbound_paused_until: string | null;
+  customer_outbound_paused_at: string | null;
 };
 
 export async function getNotificationRuntimeFlags(): Promise<NotificationRuntimeFlagsRow | null> {
@@ -22,7 +24,7 @@ export async function getNotificationRuntimeFlags(): Promise<NotificationRuntime
   if (!admin) return null;
   const { data, error } = await admin
     .from("notification_runtime_flags")
-    .select("whatsapp_disabled_until, whatsapp_paused_at")
+    .select("whatsapp_disabled_until, whatsapp_paused_at, customer_outbound_paused_until, customer_outbound_paused_at")
     .eq("id", ROW_ID)
     .maybeSingle();
   if (error) {
@@ -33,6 +35,8 @@ export async function getNotificationRuntimeFlags(): Promise<NotificationRuntime
   const row = data as {
     whatsapp_disabled_until?: string | null;
     whatsapp_paused_at?: string | null;
+    customer_outbound_paused_until?: string | null;
+    customer_outbound_paused_at?: string | null;
   };
   const until =
     typeof row.whatsapp_disabled_until === "string" && row.whatsapp_disabled_until.trim()
@@ -42,7 +46,20 @@ export async function getNotificationRuntimeFlags(): Promise<NotificationRuntime
     typeof row.whatsapp_paused_at === "string" && row.whatsapp_paused_at.trim()
       ? row.whatsapp_paused_at.trim()
       : null;
-  return { whatsapp_disabled_until: until, whatsapp_paused_at: pausedAt };
+  const customerUntil =
+    typeof row.customer_outbound_paused_until === "string" && row.customer_outbound_paused_until.trim()
+      ? row.customer_outbound_paused_until.trim()
+      : null;
+  const customerPausedAt =
+    typeof row.customer_outbound_paused_at === "string" && row.customer_outbound_paused_at.trim()
+      ? row.customer_outbound_paused_at.trim()
+      : null;
+  return {
+    whatsapp_disabled_until: until,
+    whatsapp_paused_at: pausedAt,
+    customer_outbound_paused_until: customerUntil,
+    customer_outbound_paused_at: customerPausedAt,
+  };
 }
 
 export async function getWhatsappDisabledUntilIso(): Promise<string | null> {

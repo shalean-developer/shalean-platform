@@ -197,6 +197,34 @@ function hasFindingCode(findings: ProductionHealthFinding[], matcher: (code: str
   return findings.some((finding) => matcher(finding.code) && (finding.severity === "critical" || finding.severity === "high"));
 }
 
+type NotificationHealthRow = { created_at: string | null; status: string | null; error?: string | null };
+
+/** Provider misconfiguration — not counted as a live delivery failure once keys are fixed. */
+export function isNotificationProviderConfigError(error: string | null | undefined): boolean {
+  const e = String(error ?? "").toLowerCase();
+  if (!e) return false;
+  return (
+    e.includes("api key is invalid") ||
+    e.includes("resend_not_configured") ||
+    e.includes("twilio_not_configured") ||
+    e.includes("twilio_401") ||
+    e.includes("twilio_auth_failed") ||
+    e.includes('"code":20003') ||
+    e.includes("authenticate")
+  );
+}
+
+function isNotificationDeliveryAttempt(row: NotificationHealthRow): boolean {
+  const status = String(row.status ?? "").toLowerCase();
+  if (status === "sent") return true;
+  if (status === "failed") return !isNotificationProviderConfigError(row.error);
+  return false;
+}
+
+function notificationDeliveryRows(rows: readonly NotificationHealthRow[]): NotificationHealthRow[] {
+  return rows.filter(isNotificationDeliveryAttempt);
+}
+
 export function buildOfficeOpsHealthSummary(params: {
   fetchedAt: string;
   productionHealth: ProductionHealthSummary | null;
@@ -205,18 +233,20 @@ export function buildOfficeOpsHealthSummary(params: {
   dbOk: boolean;
   systemErrorRows: Array<{ created_at: string | null }>;
   cronErrorRows: Array<{ created_at: string | null }>;
-  notificationRows: Array<{ created_at: string | null; status: string | null }>;
+  notificationRows: NotificationHealthRow[];
   whatsappPausedUntil: string | null;
+  customerOutboundPausedUntil?: string | null;
   notificationsQueryOk: boolean;
 }): OfficeOpsHealthSummary {
   const days = lastJohannesburgYmds(UPTIME_DAYS, new Date(params.fetchedAt));
   const systemErrorsByDay = countByJohannesburgDay(params.systemErrorRows);
   const cronErrorsByDay = countByJohannesburgDay(params.cronErrorRows);
+  const deliveryNotificationRows = notificationDeliveryRows(params.notificationRows);
 
   const notificationFailuresByDay = countByJohannesburgDay(
-    params.notificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed"),
+    deliveryNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed"),
   );
-  const notificationAttemptsByDay = countByJohannesburgDay(params.notificationRows);
+  const notificationAttemptsByDay = countByJohannesburgDay(deliveryNotificationRows);
 
   const findings = params.productionHealth?.findings ?? [];
   const bookingFinding = hasFindingCode(findings, (code) =>
@@ -236,22 +266,25 @@ export function buildOfficeOpsHealthSummary(params: {
     return Number.isFinite(t) && t >= Date.parse(params.fetchedAt) - 24 * 3_600_000;
   }).length;
 
-  const notificationFailed = params.notificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed").length;
-  const notificationSent = params.notificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "sent").length;
+  const notificationFailed = deliveryNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed").length;
+  const notificationSent = deliveryNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "sent").length;
   const notificationAttempts = notificationSent + notificationFailed;
   const notificationSuccessRate = notificationAttempts > 0 ? (notificationSent / notificationAttempts) * 100 : null;
 
-  const recentNotificationRows = params.notificationRows.filter((row) => {
+  const currentNotificationRows = deliveryNotificationRows.filter((row) => {
     const t = Date.parse(row.created_at ?? "");
-    return Number.isFinite(t) && t >= Date.parse(params.fetchedAt) - 24 * 3_600_000;
+    return Number.isFinite(t) && t >= Date.parse(params.fetchedAt) - 3_600_000;
   });
-  const recentNotificationFailed = recentNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed").length;
-  const recentNotificationSent = recentNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "sent").length;
-  const recentNotificationAttempts = recentNotificationFailed + recentNotificationSent;
-  const recentNotificationSuccessRate =
-    recentNotificationAttempts > 0 ? (recentNotificationSent / recentNotificationAttempts) * 100 : null;
+  const currentNotificationFailed = currentNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed").length;
+  const currentNotificationSent = currentNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "sent").length;
+  const currentNotificationAttempts = currentNotificationFailed + currentNotificationSent;
+  const currentNotificationSuccessRate =
+    currentNotificationAttempts > 0 ? (currentNotificationSent / currentNotificationAttempts) * 100 : null;
   const whatsappPaused =
     typeof params.whatsappPausedUntil === "string" && Date.parse(params.whatsappPausedUntil) > Date.parse(params.fetchedAt);
+  const customerOutboundPaused =
+    typeof params.customerOutboundPausedUntil === "string" &&
+    Date.parse(params.customerOutboundPausedUntil) > Date.parse(params.fetchedAt);
 
   const websiteBars = barsFromDailyCounts(days, systemErrorsByDay, { warn: 1, down: 5 });
   const bookingBars = barsFromDailyCounts(days, cronErrorsByDay, { warn: 1, down: 3 });
@@ -292,21 +325,23 @@ export function buildOfficeOpsHealthSummary(params: {
       : "operational";
   const notificationCurrent: OfficeOpsServiceStatus = !params.notificationsQueryOk
     ? "down"
-    : whatsappPaused
+    : customerOutboundPaused
       ? "maintenance"
-      : recentNotificationAttempts === 0
-        ? "operational"
-        : recentNotificationSuccessRate != null && recentNotificationSuccessRate < 20
-          ? "down"
-          : recentNotificationSuccessRate != null && recentNotificationSuccessRate < 95
-            ? "degraded"
-            : "operational";
+      : whatsappPaused
+        ? "maintenance"
+        : currentNotificationAttempts === 0
+          ? "operational"
+          : currentNotificationSuccessRate != null && currentNotificationSuccessRate < 20
+            ? "down"
+            : currentNotificationSuccessRate != null && currentNotificationSuccessRate < 95
+              ? "degraded"
+              : "operational";
 
   const websitePeriod = statusFromUptimeBars(websiteBars);
   const bookingPeriod = mergeOfficeOpsStatus(statusFromUptimeBars(bookingBars), bookingFinding ? "degraded" : "operational");
   const paymentPeriod = mergeOfficeOpsStatus(statusFromUptimeBars(paymentBars), paymentFinding ? "degraded" : "operational");
   const databasePeriod = statusFromUptimeBars(dbBars);
-  const notificationPeriod = statusFromUptimeBars(notificationBars);
+  const notificationPeriod = customerOutboundPaused ? "maintenance" : statusFromUptimeBars(notificationBars);
 
   const services: OfficeOpsServiceCard[] = [
     buildServiceCard({
@@ -391,13 +426,16 @@ export function buildOfficeOpsHealthSummary(params: {
       latencyLabel: null,
       lastCheckedLabel: formatOfficeOpsRelativeTime(params.fetchedAt),
       uptimeBars: notificationBars,
-      currentDetail: whatsappPaused
-        ? "WhatsApp temporarily paused"
-        : recentNotificationAttempts > 0 && recentNotificationSuccessRate != null
-          ? `${Math.round(recentNotificationSuccessRate)}% delivery success in the last 24 hours`
-          : "No delivery attempts in the last 24 hours",
-      periodDetail:
-        notificationAttempts > 0 && notificationSuccessRate != null
+      currentDetail: customerOutboundPaused
+        ? "Customer outbound paused — email and SMS not sending"
+        : whatsappPaused
+          ? "WhatsApp temporarily paused"
+          : currentNotificationAttempts > 0 && currentNotificationSuccessRate != null
+            ? `${Math.round(currentNotificationSuccessRate)}% delivery success in the last hour`
+            : "No delivery attempts in the last hour",
+      periodDetail: customerOutboundPaused
+        ? "Paused by ops — delivery metrics hidden while outbound is off"
+        : notificationAttempts > 0 && notificationSuccessRate != null
           ? `${Math.round(notificationSuccessRate)}% delivery success over 30 days`
           : notificationPeriod !== "operational"
             ? `${uptimePctFromBars(notificationBars) ?? 0}% clean delivery days in 30d`

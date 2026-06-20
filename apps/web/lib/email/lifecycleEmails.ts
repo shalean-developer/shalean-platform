@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 
@@ -46,6 +47,8 @@ async function sendLifecycle(
   to: string,
   bookingId: string,
 ): Promise<{ sent: boolean; error?: string }> {
+  const { paused } = await isCustomerOutboundPaused();
+  if (paused) return { sent: false, error: "customer_outbound_paused" };
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", source, "RESEND_API_KEY not set", { bookingId });

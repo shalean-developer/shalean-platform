@@ -5,6 +5,7 @@ import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
+import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getVariableAllowlistFromRow, renderTemplate } from "@/lib/templates/render";
 import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
@@ -42,6 +43,12 @@ const CUSTOMER_PAYMENT_STEP = "payment_confirmed";
 
 function customerPaymentPayload(extra: Record<string, unknown>): Record<string, unknown> {
   return { ...extra, step: CUSTOMER_PAYMENT_STEP };
+}
+
+async function pausedCustomerEmailResult(): Promise<{ sent: false; error: string } | null> {
+  const { paused } = await isCustomerOutboundPaused();
+  if (!paused) return null;
+  return { sent: false, error: "customer_outbound_paused" };
 }
 
 export function buildBookingConfirmedTemplateData(payload: BookingEmailPayload): Record<string, string> {
@@ -193,6 +200,8 @@ export async function sendCustomerBookingPaymentProcessingEmail(input: {
   customerEmail: string;
   paymentReference: string;
 }): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   const to = normalizeEmail(input.customerEmail.trim());
   if (!to) {
@@ -262,6 +271,8 @@ export async function sendCustomerBookingPaymentProcessingEmail(input: {
 }
 
 export async function sendBookingConfirmationEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const email = normalizeEmail(String(payload.customerEmail ?? ""));
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error("No valid email provided");
@@ -677,6 +688,8 @@ export type PaymentLinkEmailInput = {
  * URL is not passed through `renderTemplate` HTML escape (would break query strings).
  */
 export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   const to = normalizeEmail(input.customerEmail.trim());
   const bid = input.bookingId.trim() || null;
@@ -877,6 +890,8 @@ export async function sendAdminNewBookingEmail(payload: BookingEmailPayload): Pr
 }
 
 export async function sendCustomerBookingAssignedEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
@@ -912,6 +927,8 @@ export async function sendCustomerBookingAssignedEmail(payload: BookingEmailPayl
 }
 
 export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
@@ -959,6 +976,8 @@ export async function sendAbandonedCheckoutReminderEmail(params: {
   serviceLabel: string;
   whatsappUrl?: string | null;
 }): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
@@ -998,6 +1017,8 @@ export async function sendSavedQuoteRecoveryEmail(params: {
   quoteLabel?: string | null;
   whatsappUrl?: string | null;
 }): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   const to = normalizeEmail(params.customerEmail.trim());
   if (!to) return { sent: false, error: "Invalid email" };
@@ -1075,6 +1096,8 @@ export async function sendCustomerBookingCancelledEmail(params: {
   timeLabel: string;
   bookingId: string;
 }): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
@@ -1194,6 +1217,8 @@ export async function sendCustomerRescheduledEmail(params: {
   newDate: string;
   newTime: string;
 }): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
@@ -1230,6 +1255,8 @@ export async function sendCustomerTwoHourReminderEmail(params: {
   location: string;
   bookingId: string;
 }): Promise<{ sent: boolean; error?: string }> {
+  const paused = await pausedCustomerEmailResult();
+  if (paused) return paused;
   const resend = getResend();
   if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();

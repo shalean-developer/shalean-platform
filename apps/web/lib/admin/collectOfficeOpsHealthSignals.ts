@@ -21,8 +21,9 @@ export type OfficeOpsHealthSignals = {
   dbOk: boolean;
   systemErrorRows: Array<{ created_at: string | null }>;
   cronErrorRows: Array<{ created_at: string | null }>;
-  notificationRows: Array<{ created_at: string | null; status: string | null }>;
+  notificationRows: Array<{ created_at: string | null; status: string | null; error?: string | null }>;
   whatsappPausedUntil: string | null;
+  customerOutboundPausedUntil: string | null;
   notificationsQueryOk: boolean;
 };
 
@@ -41,10 +42,11 @@ export async function collectOfficeOpsHealthSignals(
   fetchedAt = new Date().toISOString(),
 ): Promise<OfficeOpsHealthSignals> {
   const sinceIso = new Date(Date.parse(fetchedAt) - OFFICE_OPS_HISTORY_DAYS_MS).toISOString();
-  const dbStarted = performance.now();
+  const dbProbeStarted = performance.now();
+  const dbRes = await admin.from("cleaners").select("id").limit(1);
+  const dbLatencyMs = !dbRes.error ? Math.round(performance.now() - dbProbeStarted) : null;
 
   const [
-    dbRes,
     productionHealthResult,
     acknowledgements,
     systemLogsRes,
@@ -52,7 +54,6 @@ export async function collectOfficeOpsHealthSignals(
     notificationLogsRes,
     flagsRes,
   ] = await Promise.all([
-    admin.from("cleaners").select("id").limit(1),
     runProductionHealthScan(admin, { scanLimit }).then(
       (summary) => ({ ok: true as const, summary }),
       (error) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
@@ -74,11 +75,11 @@ export async function collectOfficeOpsHealthSignals(
       .limit(5000),
     admin
       .from("notification_logs")
-      .select("created_at, status")
+      .select("created_at, status, error")
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(10000),
-    admin.from("notification_runtime_flags").select("whatsapp_disabled_until").eq("id", 1).maybeSingle(),
+    admin.from("notification_runtime_flags").select("whatsapp_disabled_until, customer_outbound_paused_until").eq("id", 1).maybeSingle(),
   ]);
 
   const productionHealth =
@@ -93,13 +94,21 @@ export async function collectOfficeOpsHealthSignals(
     rawProductionHealth: productionHealthResult.ok ? productionHealthResult.summary : null,
     acknowledgements,
     productionHealthError: productionHealthResult.ok ? undefined : productionHealthResult.error,
-    dbLatencyMs: !dbRes.error ? Math.round(performance.now() - dbStarted) : null,
+    dbLatencyMs,
     dbOk: !dbRes.error,
     systemErrorRows: (systemLogsRes.data ?? []) as Array<{ created_at: string | null }>,
     cronErrorRows: filterCronAuthNoise((cronRunsRes.data ?? []) as Array<{ created_at: string | null; message?: string | null }>),
-    notificationRows: (notificationLogsRes.data ?? []) as Array<{ created_at: string | null; status: string | null }>,
+    notificationRows: (notificationLogsRes.data ?? []) as Array<{
+      created_at: string | null;
+      status: string | null;
+      error?: string | null;
+    }>,
     whatsappPausedUntil:
       typeof flagsRes.data?.whatsapp_disabled_until === "string" ? flagsRes.data.whatsapp_disabled_until : null,
+    customerOutboundPausedUntil:
+      typeof flagsRes.data?.customer_outbound_paused_until === "string"
+        ? flagsRes.data.customer_outbound_paused_until
+        : null,
     notificationsQueryOk: !notificationLogsRes.error,
   };
 }

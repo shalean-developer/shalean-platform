@@ -1,4 +1,5 @@
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import type { SmsRole } from "@/lib/notifications/smsPolicy";
 
@@ -87,6 +88,23 @@ export async function sendSmsFallback(params: {
       context: { ...params.context },
     });
     return { sent: false, error: "admin_sms_disabled_by_policy", messageSid: null };
+  }
+
+  const isCustomerRecipient =
+    params.recipientKind === "customer" ||
+    params.deliveryLog?.role === "customer" ||
+    (params.recipientKind !== "cleaner" && params.deliveryLog?.role !== "cleaner");
+  if (isCustomerRecipient) {
+    const { paused } = await isCustomerOutboundPaused();
+    if (paused) {
+      await logSystemEvent({
+        level: "info",
+        source: "customer_outbound_paused",
+        message: "SMS skipped",
+        context: { ...params.context, template: params.deliveryLog?.templateKey ?? null },
+      });
+      return { sent: false, error: "customer_outbound_paused", messageSid: null };
+    }
   }
 
   const context: Record<string, unknown> = {

@@ -86,6 +86,7 @@ export async function GET(request: Request) {
       cronErrorRows: signals.cronErrorRows,
       notificationRows: signals.notificationRows,
       whatsappPausedUntil: signals.whatsappPausedUntil,
+      customerOutboundPausedUntil: signals.customerOutboundPausedUntil,
       notificationsQueryOk: signals.notificationsQueryOk,
     });
 

@@ -81,6 +81,56 @@ describe("buildOfficeOpsHealthSummary", () => {
     expect(notifications?.periodStatus).not.toBe("operational");
   });
 
+  it("ignores provider config auth failures for current notification status", () => {
+    const summary = buildOfficeOpsHealthSummary({
+      fetchedAt: "2026-06-20T15:00:00.000Z",
+      productionHealth: null,
+      dbLatencyMs: 20,
+      dbOk: true,
+      systemErrorRows: [],
+      cronErrorRows: [],
+      notificationRows: [
+        {
+          created_at: "2026-06-20T12:15:00.000Z",
+          status: "failed",
+          error: 'twilio_401: {"code":20003,"message":"Authenticate"}',
+        },
+        {
+          created_at: "2026-06-20T11:00:00.000Z",
+          status: "failed",
+          error: "API key is invalid",
+        },
+      ],
+      whatsappPausedUntil: null,
+      notificationsQueryOk: true,
+    });
+    const notifications = summary.services.find((service) => service.id === "notifications");
+    expect(notifications?.currentStatus).toBe("operational");
+    expect(notifications?.currentDetail).toContain("last hour");
+  });
+
+  it("shows maintenance for notifications when customer outbound is paused", () => {
+    const summary = buildOfficeOpsHealthSummary({
+      fetchedAt: "2026-06-19T10:00:00.000Z",
+      productionHealth: null,
+      dbLatencyMs: 20,
+      dbOk: true,
+      systemErrorRows: [],
+      cronErrorRows: [],
+      notificationRows: [
+        { created_at: "2026-06-19T09:00:00.000Z", status: "failed" },
+        { created_at: "2026-06-19T08:00:00.000Z", status: "failed" },
+      ],
+      whatsappPausedUntil: null,
+      customerOutboundPausedUntil: "2099-01-01T00:00:00.000Z",
+      notificationsQueryOk: true,
+    });
+    const notifications = summary.services.find((service) => service.id === "notifications");
+    expect(notifications?.currentStatus).toBe("maintenance");
+    expect(notifications?.periodStatus).toBe("maintenance");
+    expect(notifications?.currentDetail).toContain("paused");
+  });
+
   it("marks website 30d degraded while current stays operational without recent errors", () => {
     const summary = buildOfficeOpsHealthSummary({
       fetchedAt: "2026-06-19T10:00:00.000Z",
