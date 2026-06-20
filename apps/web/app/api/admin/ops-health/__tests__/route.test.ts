@@ -28,7 +28,25 @@ vi.mock("@/lib/observability/productionHealthMetrics", () => ({
 
 import { GET, POST } from "../route";
 
-function healthySummary(scanLimit = 500) {
+type MockProductionHealthFinding = {
+  code: string;
+  severity: string;
+  count: number;
+  message: string;
+  sampleIds: string[];
+  diagnostics?: { errors: { scanner: string; message: string }[] };
+};
+
+type MockProductionHealthSummary = {
+  ok: true;
+  generatedAt: string;
+  scanLimit: number;
+  findings: MockProductionHealthFinding[];
+  totals: { critical: number; high: number; medium: number; low: number; info: number };
+  degraded?: boolean;
+};
+
+function healthySummary(scanLimit = 500): MockProductionHealthSummary {
   return {
     ok: true as const,
     generatedAt: "2026-05-14T10:00:00.000Z",
@@ -38,7 +56,7 @@ function healthySummary(scanLimit = 500) {
   };
 }
 
-function criticalSummary(scanLimit = 500) {
+function criticalSummary(scanLimit = 500): MockProductionHealthSummary {
   return {
     ok: true as const,
     generatedAt: "2026-05-14T10:00:00.000Z",
@@ -56,7 +74,7 @@ function criticalSummary(scanLimit = 500) {
   };
 }
 
-function degradedSummary(scanLimit = 500) {
+function degradedSummary(scanLimit = 500): MockProductionHealthSummary {
   return {
     ok: true as const,
     degraded: true,
@@ -78,7 +96,7 @@ function degradedSummary(scanLimit = 500) {
   };
 }
 
-function defaultSignals(summary = healthySummary(), overrides: Record<string, unknown> = {}) {
+function defaultSignals(summary: MockProductionHealthSummary = healthySummary(), overrides: Record<string, unknown> = {}) {
   return {
     fetchedAt: "2026-06-20T12:00:00.000Z",
     scanLimit: summary.scanLimit,
