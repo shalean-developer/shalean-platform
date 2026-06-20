@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
 /**
  * Shared hook for authenticated admin API fetches.
@@ -23,10 +23,9 @@ export function useAdminData<T>(
     setLoading(true);
     setError(null);
     try {
-      const sb = getSupabaseBrowser();
       let token: string | undefined;
       try {
-        token = (await sb?.auth.getSession())?.data.session?.access_token;
+        token = (await getSupabaseAccessToken()) ?? undefined;
       } catch {
         setError("Could not read admin session. Check your connection and try again.");
         setLoading(false);
@@ -86,8 +85,7 @@ export function useAdminData<T>(
  */
 export async function getAdminToken(): Promise<string | null> {
   try {
-    const sb = getSupabaseBrowser();
-    return (await sb?.auth.getSession())?.data.session?.access_token ?? null;
+    return await getSupabaseAccessToken();
   } catch {
     return null;
   }

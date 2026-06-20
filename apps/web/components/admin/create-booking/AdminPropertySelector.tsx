@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus, Search } from "lucide-react";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getAdminToken } from "@/hooks/useAdminData";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import {
   buildAdminBookingLocationString,
@@ -70,8 +70,7 @@ export function AdminPropertySelector({
     }
     setLoading(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = await getAdminToken();
       if (!token) {
         setAddresses([]);
         onAddressesLoadedRef.current?.([]);
@@ -116,8 +115,7 @@ export function AdminPropertySelector({
     setAddError(null);
     setAddSaving(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = await getAdminToken();
       if (!token) {
         setAddError("Not signed in.");
         return;

@@ -1,3 +1,5 @@
+import { teamBookingMissingFormalAssignment } from "@/lib/admin/adminBookingAssignmentDisplay";
+
 export type AdminBookingRosterMember = {
   cleaner_id: string;
   full_name: string | null;
@@ -8,6 +10,8 @@ type Props = {
   /** When set, team template name (from `teams.name`). */
   teamId?: string | null;
   teamName?: string | null;
+  service?: string | null;
+  service_slug?: string | null;
   /** Canonical roster from `booking_cleaners` (+ cleaner names). */
   bookingCleaners: readonly AdminBookingRosterMember[];
 };
@@ -25,8 +29,19 @@ function rosterTooltip(roster: readonly AdminBookingRosterMember[]): string {
 /**
  * Admin list: team context + roster count. Roster length is source of truth; `team_id` is display context only.
  */
-export function BookingTeamSummary({ teamId, teamName, bookingCleaners }: Props) {
+export function BookingTeamSummary({ teamId, teamName, service, service_slug, bookingCleaners }: Props) {
   const count = bookingCleaners.length;
+  const needsTeam = teamBookingMissingFormalAssignment({ team_id: teamId, service, service_slug, booking_cleaners: bookingCleaners });
+
+  if (needsTeam) {
+    return (
+      <div className="flex flex-col gap-0.5" title={count > 0 ? rosterTooltip(bookingCleaners) : undefined}>
+        <span className="text-sm font-medium text-orange-700 dark:text-orange-300">Needs team</span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">Use Assign team to link roster</span>
+      </div>
+    );
+  }
+
   if (count === 0) {
     return (
       <div className="text-sm text-zinc-400 dark:text-zinc-500" title="No rows in booking_cleaners yet">

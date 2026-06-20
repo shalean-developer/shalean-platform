@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readCustomerPhoneFromAuthMetadata } from "@/lib/admin/adminBookingCustomerContact";
 import { findAuthUserIdByEmail } from "@/lib/cleaner/linkCleanerAuth";
 import { customerGeneratedLoginEmailFromAnyPhone } from "@/lib/customer/customerIdentity";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
@@ -21,6 +22,7 @@ export type AdminCustomerSearchRow = {
   id: string;
   email: string | null;
   full_name: string | null;
+  phone?: string | null;
   billing_type: string;
   schedule_type: string;
 };
@@ -172,6 +174,7 @@ export async function GET(request: Request) {
       id: idParam,
       email,
       full_name: typeof p?.full_name === "string" ? String(p.full_name) : nameFromMeta,
+      phone: readCustomerPhoneFromAuthMetadata(authData.user.user_metadata, authData.user.phone),
       billing_type: String(p?.billing_type ?? "per_booking"),
       schedule_type: String(p?.schedule_type ?? "on_demand"),
     });

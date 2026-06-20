@@ -40,6 +40,7 @@ import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
+import { effectiveBookingCleanersForList } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
 import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
@@ -351,7 +352,7 @@ async function attachTeamAndRosterToBookings(admin: SupabaseClient, bookings: Ro
     const tid = String(r.team_id ?? "").trim();
     const directCleanerId = String(r.cleaner_id ?? "").trim();
     const roster = rosterMap.get(r.id) ?? [];
-    const bookingCleaners =
+    const bookingCleanersRaw =
       roster.length > 0 || !directCleanerId
         ? roster
         : [
@@ -361,6 +362,7 @@ async function attachTeamAndRosterToBookings(admin: SupabaseClient, bookings: Ro
               role: "lead",
             },
           ];
+    const bookingCleaners = [...effectiveBookingCleanersForList(r, bookingCleanersRaw)];
     return {
       ...r,
       team: tid ? { id: tid, name: teamNameMap.get(tid) ?? null } : null,

@@ -87,6 +87,7 @@ type RecurringPlan = {
   template_visit_date: string | null;
   template_visit_time: string | null;
   template_location: string | null;
+  preferred_cleaner_id: string | null;
 };
 
 const PAGE_SIZE = 25;

@@ -7,6 +7,7 @@ import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalen
 import { firstOccurrenceOnOrAfter, type MonthlyPattern, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { buildAdminRecurringQuickSnapshot, normalizeVisitTimeHm } from "@/lib/recurring/buildAdminRecurringQuickSnapshot";
 import { loadRecurringPageSummary } from "@/lib/recurring/loadRecurringPageSummary";
+import { parsePreferredCleanerIdFromBody } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
   const { data, error } = await admin
     .from("recurring_bookings")
     .select(
-      "id, customer_id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, created_at, updated_at, booking_snapshot_template",
+      "id, customer_id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, preferred_cleaner_id, created_at, updated_at, booking_snapshot_template",
     )
     .order("updated_at", { ascending: false })
     .limit(300);
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
       skip_next_occurrence_date: row.skip_next_occurrence_date != null ? String(row.skip_next_occurrence_date) : null,
       monthly_pattern: String(row.monthly_pattern ?? ""),
       monthly_nth: row.monthly_nth != null ? Number(row.monthly_nth) : null,
+      preferred_cleaner_id: row.preferred_cleaner_id != null ? String(row.preferred_cleaner_id) : null,
       created_at: row.created_at != null ? String(row.created_at) : null,
       updated_at: row.updated_at != null ? String(row.updated_at) : null,
       customer_email: p.customerEmail,
@@ -114,8 +116,9 @@ export async function POST(request: Request) {
   }
 
   const quickCust = body.customer;
+  const quickAddress = typeof body.address === "string" ? body.address.trim() : "";
   const isQuickCreate =
-    !customer_id_input && quickCust && typeof quickCust === "object" && !Array.isArray(quickCust);
+    quickCust && typeof quickCust === "object" && !Array.isArray(quickCust) && quickAddress.length > 0;
 
   let customer_id = customer_id_input;
   let template: unknown = body.booking_snapshot_template;
@@ -135,7 +138,7 @@ export async function POST(request: Request) {
     if (nameRaw.length < 2) {
       return NextResponse.json({ error: "Customer name must be at least 2 characters." }, { status: 400 });
     }
-    const address = typeof body.address === "string" ? body.address.trim() : "";
+    const address = quickAddress;
     if (!address) {
       return NextResponse.json({ error: "address is required." }, { status: 400 });
     }
@@ -146,7 +149,15 @@ export async function POST(request: Request) {
     const adminEarly = getSupabaseAdmin();
     if (!adminEarly) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-    const uid = await findAuthUserIdByEmail(adminEarly, em);
+    let uid = customer_id_input;
+    if (uid && /^[0-9a-f-]{36}$/i.test(uid)) {
+      const { data: authData, error: authErr } = await adminEarly.auth.admin.getUserById(uid);
+      if (authErr || !authData?.user?.id) {
+        return NextResponse.json({ error: "customer_id does not match an auth user." }, { status: 404 });
+      }
+    } else {
+      uid = (await findAuthUserIdByEmail(adminEarly, em)) ?? "";
+    }
     if (!uid) {
       return NextResponse.json(
         {
@@ -236,6 +247,13 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
+  const preferredCleanerParse = await parsePreferredCleanerIdFromBody(body.preferred_cleaner_id, admin);
+  if (!preferredCleanerParse.ok) {
+    return NextResponse.json({ error: preferredCleanerParse.error }, { status: 400 });
+  }
+  const preferred_cleaner_id =
+    preferredCleanerParse.value === undefined ? null : preferredCleanerParse.value;
+
   const { data: created, error } = await admin
     .from("recurring_bookings")
     .insert({
@@ -251,6 +269,7 @@ export async function POST(request: Request) {
       booking_snapshot_template: template,
       monthly_pattern,
       monthly_nth,
+      preferred_cleaner_id,
     })
     .select("id")
     .maybeSingle();

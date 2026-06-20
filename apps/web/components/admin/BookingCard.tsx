@@ -27,6 +27,10 @@ import {
   adminBookingSelectedAtCheckoutId,
 } from "@/lib/admin/adminBookingAssignmentLabels";
 import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
+import {
+  adminBookingAssignmentDisplay,
+  effectiveBookingCleanersForList,
+} from "@/lib/admin/adminBookingAssignmentDisplay";
 import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import type { CleanerOption } from "@/lib/admin/assignRanking";
@@ -54,6 +58,8 @@ export type AdminBookingCardProps = {
 };
 
 function teamHeadline(row: AdminBookingsListRow): string {
+  const display = adminBookingAssignmentDisplay(row);
+  if (display.needsTeam) return display.label;
   const roster = row.booking_cleaners ?? [];
   if (!roster.length) return "Unassigned";
   if (row.team_id?.trim()) return row.team?.name?.trim() || "Team";
@@ -86,7 +92,7 @@ export function BookingCard({
     listAdminOp.operationalPhase !== "cancelled" &&
     listAdminOp.operationalPhase !== "failed";
 
-  const roster = r.booking_cleaners ?? [];
+  const roster = effectiveBookingCleanersForList(r, r.booking_cleaners ?? []);
   const lead = roster.find((c) => String(c.role).toLowerCase() === "lead");
   const leadName = lead?.full_name?.trim() || null;
   const startMins = startsInMinutes(r.date, r.time);

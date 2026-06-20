@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { teamRosterEditBlockedReason } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
 import {
   type RosterReplaceMemberInput,
@@ -134,11 +135,16 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, status")
+    .select("id, status, service, service_slug, team_id, booking_snapshot")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
   if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+
+  const rosterBlock = teamRosterEditBlockedReason(booking as Record<string, unknown>);
+  if (rosterBlock) {
+    return NextResponse.json({ error: rosterBlock }, { status: 400 });
+  }
 
   const st = String((booking as { status?: string | null }).status ?? "").toLowerCase();
   if (st === "pending_payment" || st === "payment_expired") {

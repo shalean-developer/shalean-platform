@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getAdminToken } from "@/hooks/useAdminData";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { buildAdminBookingLocationString } from "@/lib/admin/buildBookingLocationFromSavedAddress";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
+import { AdminPropertySelector } from "@/components/admin/create-booking/AdminPropertySelector";
+import { AdminRecurringCleanerSelect } from "@/components/admin/AdminRecurringCleanerSelect";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,9 +32,22 @@ type CustomerHit = {
   id: string;
   email: string | null;
   full_name: string | null;
+  phone?: string | null;
   billing_type: string;
   schedule_type: string;
 };
+
+function billingLabel(t: string): string {
+  const v = t.trim().toLowerCase();
+  if (v === "monthly") return "Monthly invoice";
+  return "Per booking";
+}
+
+function scheduleLabel(t: string): string {
+  const v = t.trim().toLowerCase();
+  if (v === "recurring") return "Recurring";
+  return "On demand";
+}
 
 function emptyCreateForm() {
   return {
@@ -40,6 +56,8 @@ function emptyCreateForm() {
     customerEmail: "",
     customerName: "",
     customerPhone: "",
+    savedAddressId: "",
+    useCustomAddress: false,
     frequency: "weekly" as CreateFreq,
     days: [] as number[],
     startDate: "",
@@ -47,6 +65,7 @@ function emptyCreateForm() {
     address: "",
     service: "standard" as CreateSvc,
     visitTime: "09:00",
+    preferredCleanerId: "",
   };
 }
 
@@ -62,6 +81,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
   const [submitting, setSubmitting] = useState(false);
   const [searchHits, setSearchHits] = useState<CustomerHit[]>([]);
   const [searching, setSearching] = useState(false);
+  const [lastVisitPriceZar, setLastVisitPriceZar] = useState<number | null>(null);
 
   const searchCustomers = useCallback(async (q: string) => {
     const t = q.trim();
@@ -69,8 +89,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
       setSearchHits([]);
       return;
     }
-    const sb = getSupabaseBrowser();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    const token = await getAdminToken();
     if (!token) return;
     setSearching(true);
     try {
@@ -100,30 +119,68 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
   }, [form.customerQuery, open, searchCustomers]);
 
   async function hydrateCustomerFields(hit: CustomerHit) {
-    const sb = getSupabaseBrowser();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
-    let address = "";
+    const token = await getAdminToken();
+    let enriched = hit;
     if (token) {
-      const res = await fetch(
-        `/api/admin/bookings/customer-saved-addresses?user_id=${encodeURIComponent(hit.id)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const json = (await res.json().catch(() => ({}))) as { addresses?: CustomerAddressRow[] };
-      if (res.ok && json.addresses?.length) {
-        const row = json.addresses.find((a) => a.is_default) ?? json.addresses[0];
-        if (row) address = buildAdminBookingLocationString(row);
-      }
+      const res = await fetch(`/api/admin/bookings/customers?id=${encodeURIComponent(hit.id)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as { customers?: CustomerHit[] };
+      if (res.ok && json.customers?.[0]) enriched = { ...hit, ...json.customers[0] };
     }
     setForm((s) => ({
       ...s,
-      selectedCustomer: hit,
-      customerQuery: hit.email ?? hit.full_name ?? hit.id,
-      customerEmail: hit.email ?? s.customerEmail,
-      customerName: hit.full_name ?? s.customerName,
-      address: address || s.address,
+      selectedCustomer: enriched,
+      customerQuery: enriched.email ?? enriched.full_name ?? enriched.id,
+      customerEmail: enriched.email ?? s.customerEmail,
+      customerName: enriched.full_name ?? s.customerName,
+      customerPhone: enriched.phone ?? s.customerPhone,
+      savedAddressId: "",
+      useCustomAddress: false,
+      address: "",
     }));
     setSearchHits([]);
   }
+
+  useEffect(() => {
+    const uid = form.selectedCustomer?.id;
+    if (!uid) {
+      setLastVisitPriceZar(null);
+      return;
+    }
+    const hasAddr = Boolean(form.savedAddressId && !form.useCustomAddress);
+    const loc = form.address.trim();
+    if (!hasAddr && loc.length < 3) {
+      setLastVisitPriceZar(null);
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const token = await getAdminToken();
+        if (!token || cancelled) return;
+        let url = `/api/admin/bookings/last-visit-price?user_id=${encodeURIComponent(uid)}`;
+        if (hasAddr) {
+          url += `&address_id=${encodeURIComponent(form.savedAddressId)}`;
+        } else {
+          url += `&location=${encodeURIComponent(loc)}`;
+        }
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const json = (await res.json().catch(() => ({}))) as { last_total_paid_zar?: number | null };
+        if (cancelled) return;
+        const z = json.last_total_paid_zar;
+        const ok = typeof z === "number" && Number.isFinite(z) && z > 0;
+        setLastVisitPriceZar(ok ? z : null);
+        if (ok) {
+          setForm((s) => (s.price.trim() === "" ? { ...s, price: String(Math.round(z)) } : s));
+        }
+      })();
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [form.selectedCustomer?.id, form.savedAddressId, form.useCustomAddress, form.address]);
 
   function toggleDay(day: number) {
     setForm((f) => {
@@ -166,8 +223,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
       return;
     }
 
-    const sb = getSupabaseBrowser();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    const token = await getAdminToken();
     if (!token) {
       setFormError("Not signed in.");
       return;
@@ -179,14 +235,17 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(form.selectedCustomer?.id ? { customer_id: form.selectedCustomer.id } : {}),
           customer: { email: em, name, ...(phone ? { phone } : {}) },
           frequency: form.frequency,
           days_of_week: form.days,
           start_date: start,
           price: priceN,
           address,
+          ...(form.savedAddressId && !form.useCustomAddress ? { address_id: form.savedAddressId } : {}),
           service: form.service,
           visit_time: form.visitTime || "09:00",
+          ...(form.preferredCleanerId.trim() ? { preferred_cleaner_id: form.preferredCleanerId.trim() } : {}),
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -202,6 +261,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
       onOpenChange(false);
       setForm(emptyCreateForm());
       setSearchHits([]);
+      setLastVisitPriceZar(null);
       await onCreated();
     } finally {
       setSubmitting(false);
@@ -217,6 +277,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
           setFormError(null);
           setForm(emptyCreateForm());
           setSearchHits([]);
+          setLastVisitPriceZar(null);
         }
       }}
     >
@@ -224,8 +285,8 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
         <DialogHeader>
           <DialogTitle>New recurring plan</DialogTitle>
           <DialogDescription>
-            Creates an active schedule. Visit template uses standard defaults (2 bed / 1 bath) with your address,
-            price, and time until we add full quote integration.
+            Search for an existing customer, pick their property, set the schedule and price, and optionally assign a
+            preferred cleaner for generated visits.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-1">
@@ -245,6 +306,10 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
                     selectedCustomer: null,
                     customerEmail: "",
                     customerName: "",
+                    customerPhone: "",
+                    savedAddressId: "",
+                    useCustomAddress: false,
+                    address: "",
                   }));
                 }}
                 disabled={submitting}
@@ -264,12 +329,36 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
                     >
                       <span className="font-medium text-zinc-900 dark:text-zinc-50">{h.full_name ?? "—"}</span>
                       <span className="text-xs text-zinc-500">{h.email ?? h.id}</span>
+                      <span className="text-[11px] text-zinc-400">
+                        Billing: {billingLabel(h.billing_type)} · Schedule: {scheduleLabel(h.schedule_type)}
+                      </span>
                     </button>
                   </li>
                 ))}
               </ul>
             ) : form.customerQuery.trim().length >= 2 && !form.selectedCustomer && !searching ? (
-              <p className="text-xs text-zinc-500">No customers found. You can still enter details manually below.</p>
+              <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+                <p className="text-zinc-600 dark:text-zinc-400">No customers found. You can still enter details manually below.</p>
+                {(() => {
+                  const raw = form.customerQuery.trim();
+                  const digits = raw.replace(/\D/g, "");
+                  const looksLikePhone = digits.length >= 9 || raw.startsWith("+");
+                  const href = looksLikePhone
+                    ? `/admin/customers/create?phone=${encodeURIComponent(raw)}`
+                    : `/admin/customers/create?full_name=${encodeURIComponent(raw)}`;
+                  return (
+                    <p>
+                      <Link
+                        href={href}
+                        className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                      >
+                        Create new customer
+                      </Link>
+                      <span className="text-zinc-500"> — then return here to create the plan.</span>
+                    </p>
+                  );
+                })()}
+              </div>
             ) : null}
             {form.selectedCustomer ? (
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900/60">
@@ -278,6 +367,10 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
                   <span className="font-normal text-zinc-500">
                     ({form.selectedCustomer.email ?? form.selectedCustomer.id})
                   </span>
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Billing: {billingLabel(form.selectedCustomer.billing_type)} · Schedule:{" "}
+                  {scheduleLabel(form.selectedCustomer.schedule_type)}
                 </p>
               </div>
             ) : null}
@@ -315,6 +408,44 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
               />
             </div>
           </div>
+
+          {form.selectedCustomer ? (
+            <AdminPropertySelector
+              userId={form.selectedCustomer.id}
+              value={form.savedAddressId}
+              useCustomAddress={form.useCustomAddress}
+              location={form.address}
+              disabled={submitting}
+              onUseCustomAddressChange={(useCustom) =>
+                setForm((s) => ({
+                  ...s,
+                  useCustomAddress: useCustom,
+                  savedAddressId: useCustom ? "" : s.savedAddressId,
+                }))
+              }
+              onChange={(row) =>
+                setForm((s) => ({
+                  ...s,
+                  savedAddressId: row.id,
+                  address: buildAdminBookingLocationString(row),
+                  useCustomAddress: false,
+                }))
+              }
+              onLocationChange={(v) => setForm((s) => ({ ...s, address: v }))}
+            />
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="cr-address">Address</Label>
+              <Input
+                id="cr-address"
+                autoComplete="street-address"
+                value={form.address}
+                onChange={(e) => setForm((s) => ({ ...s, address: e.target.value }))}
+                disabled={submitting}
+              />
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
               id="cr-frequency"
@@ -387,16 +518,6 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="cr-address">Address</Label>
-            <Input
-              id="cr-address"
-              autoComplete="street-address"
-              value={form.address}
-              onChange={(e) => setForm((s) => ({ ...s, address: e.target.value }))}
-              disabled={submitting}
-            />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="cr-price">Price (ZAR)</Label>
             <Input
               id="cr-price"
@@ -408,7 +529,22 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
               onChange={(e) => setForm((s) => ({ ...s, price: e.target.value }))}
               disabled={submitting}
             />
+            {lastVisitPriceZar != null && (form.savedAddressId || form.address.trim().length >= 3) ? (
+              <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200/90">
+                Last booking at this property: R {Math.round(lastVisitPriceZar).toLocaleString("en-ZA")}
+              </p>
+            ) : null}
           </div>
+
+          <AdminRecurringCleanerSelect
+            id="cr-cleaner"
+            value={form.preferredCleanerId}
+            onChange={(preferredCleanerId) => setForm((s) => ({ ...s, preferredCleanerId }))}
+            visitDate={form.startDate}
+            visitTime={form.visitTime}
+            disabled={submitting}
+          />
+
           {formError ? (
             <p className="text-sm text-red-600 dark:text-red-400" role="alert">
               {formError}

@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { AdminRecurringCleanerSelect } from "@/components/admin/AdminRecurringCleanerSelect";
 import { cn } from "@/lib/utils";
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -35,6 +36,7 @@ export type EditRecurringPlanTarget = {
   service_label: string | null;
   template_location: string | null;
   template_visit_time: string | null;
+  preferred_cleaner_id: string | null;
 };
 
 function serviceFromLabel(label: string | null): EditSvc {
@@ -64,6 +66,7 @@ function formFromPlan(plan: EditRecurringPlanTarget) {
     address: plan.template_location ?? "",
     service: serviceFromLabel(plan.service_label),
     visitTime: normalizeTimeInput(plan.template_visit_time),
+    preferredCleanerId: plan.preferred_cleaner_id ?? "",
   };
 }
 
@@ -138,6 +141,7 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
           address,
           visit_time: form.visitTime || "09:00",
           service: form.service,
+          preferred_cleaner_id: form.preferredCleanerId.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -147,6 +151,7 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
 
       const propagation = (res.data as { propagation?: {
         bookings_updated?: number;
+        bookings_cleaner_updated?: number;
         bookings_cancelled?: number;
         bookings_created?: number;
         bookings_cancel_skipped?: number;
@@ -164,6 +169,9 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
         if (propagation.bookings_cancelled) parts.push(`${propagation.bookings_cancelled} extra visit(s) removed`);
         if (propagation.bookings_created) parts.push(`${propagation.bookings_created} visit(s) added`);
         if (propagation.bookings_updated) parts.push(`${propagation.bookings_updated} visit(s) repriced`);
+        if (propagation.bookings_cleaner_updated) {
+          parts.push(`${propagation.bookings_cleaner_updated} visit(s) cleaner updated`);
+        }
         if (propagation.invoices_recomputed) parts.push(`${propagation.invoices_recomputed} invoice(s) updated`);
         if (propagation.earnings_recomputed) parts.push(`${propagation.earnings_recomputed} payout(s) refreshed`);
         if (parts.length > 0) {
@@ -350,6 +358,17 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
                 disabled={submitting}
               />
             </div>
+
+            <AdminRecurringCleanerSelect
+              id="er-cleaner"
+              value={form.preferredCleanerId}
+              onChange={(preferredCleanerId) =>
+                setForm((s) => (s ? { ...s, preferredCleanerId } : s))
+              }
+              visitDate={form.startDate}
+              visitTime={form.visitTime}
+              disabled={submitting}
+            />
 
             {formError ? (
               <p className="text-sm text-red-600" role="alert">

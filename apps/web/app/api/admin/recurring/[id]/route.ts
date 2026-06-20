@@ -4,6 +4,7 @@ import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate } from "@/lib/recurring/calculateNextRunDate";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
 import { recurringAdminPatchFromBody } from "@/lib/recurring/recurringAdminPatchFromBody";
+import { parsePreferredCleanerIdFromBody } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { propagateRecurringPlanToGeneratedBookings } from "@/lib/recurring/propagateRecurringPlanToGeneratedBookings";
 import {
   recurringPlanScheduleChanged,
@@ -34,6 +35,7 @@ function mapRecurringRow(raw: Record<string, unknown>) {
     skip_next_occurrence_date: raw.skip_next_occurrence_date != null ? String(raw.skip_next_occurrence_date) : null,
     monthly_pattern: String(raw.monthly_pattern ?? ""),
     monthly_nth: raw.monthly_nth != null ? Number(raw.monthly_nth) : null,
+    preferred_cleaner_id: raw.preferred_cleaner_id != null ? String(raw.preferred_cleaner_id) : null,
     created_at: raw.created_at != null ? String(raw.created_at) : null,
     updated_at: raw.updated_at != null ? String(raw.updated_at) : null,
     customer_email: p.customerEmail,
@@ -58,7 +60,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   const { data, error } = await admin
     .from("recurring_bookings")
     .select(
-      "id, customer_id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, created_at, updated_at, booking_snapshot_template",
+      "id, customer_id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, preferred_cleaner_id, created_at, updated_at, booking_snapshot_template",
     )
     .eq("id", id.trim())
     .maybeSingle();
@@ -97,6 +99,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (exErr || !existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   const patch = recurringAdminPatchFromBody(body, existing as Record<string, unknown>);
+
+  const preferredCleanerParse = await parsePreferredCleanerIdFromBody(body.preferred_cleaner_id, admin);
+  if (!preferredCleanerParse.ok) {
+    return NextResponse.json({ error: preferredCleanerParse.error }, { status: 400 });
+  }
+  if (preferredCleanerParse.value !== undefined) {
+    patch.preferred_cleaner_id = preferredCleanerParse.value;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });

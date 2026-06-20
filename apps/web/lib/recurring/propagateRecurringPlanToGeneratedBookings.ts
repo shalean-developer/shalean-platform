@@ -15,6 +15,8 @@ import {
   reconcileRecurringPlanOccurrences,
 } from "@/lib/recurring/reconcileRecurringPlanOccurrences";
 import { cloneSnapshotTemplate } from "@/lib/recurring/insertRecurringOccurrenceBooking";
+import { recurringOccurrenceCleanerPatch } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
+import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSnapshot";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
@@ -29,6 +31,7 @@ export type RecurringPlanPropagationResult = {
   bookings_cancel_skipped_locked_invoice: number;
   bookings_cancel_skipped_locked_payout: number;
   bookings_updated: number;
+  bookings_cleaner_updated: number;
   bookings_skipped_finalized: number;
   bookings_skipped_locked_invoice: number;
   earnings_recomputed: number;
@@ -109,6 +112,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
     bookings_cancel_skipped_locked_invoice: 0,
     bookings_cancel_skipped_locked_payout: 0,
     bookings_updated: 0,
+    bookings_cleaner_updated: 0,
     bookings_skipped_finalized: 0,
     bookings_skipped_locked_invoice: 0,
     earnings_recomputed: 0,
@@ -118,6 +122,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   };
 
   const invoiceIds = new Set<string>();
+  const preferredCleanerId = normalizeUuidCandidate(plan.preferred_cleaner_id ?? null);
 
   if (options?.reconcileSchedule) {
     const reconcile = await reconcileRecurringPlanOccurrences(admin, plan);
@@ -192,20 +197,29 @@ export async function propagateRecurringPlanToGeneratedBookings(
         ? adminBookingServiceSlug(String(locked.service))
         : "standard";
 
+    const bookingUpdate: Record<string, unknown> = {
+      booking_snapshot: snapshot,
+      total_paid_zar: priceZar,
+      price_snapshot: provisionalPriceSnapshotJson(locked),
+      location: locked.location?.trim() || null,
+      time: locked.time ?? null,
+      service: locked.service != null ? getServiceLabel(locked.service) : null,
+      service_slug: serviceSlug,
+      rooms: locked.rooms ?? null,
+      bathrooms: locked.bathrooms ?? null,
+      ...lockedDurationMinutesPatch(locked),
+    };
+
+    if (preferredCleanerId) {
+      Object.assign(
+        bookingUpdate,
+        recurringOccurrenceCleanerPatch(preferredCleanerId, { operationalStatus: booking.status }),
+      );
+    }
+
     const { error: upErr } = await admin
       .from("bookings")
-      .update({
-        booking_snapshot: snapshot,
-        total_paid_zar: priceZar,
-        price_snapshot: provisionalPriceSnapshotJson(locked),
-        location: locked.location?.trim() || null,
-        time: locked.time ?? null,
-        service: locked.service != null ? getServiceLabel(locked.service) : null,
-        service_slug: serviceSlug,
-        rooms: locked.rooms ?? null,
-        bathrooms: locked.bathrooms ?? null,
-        ...lockedDurationMinutesPatch(locked),
-      })
+      .update(bookingUpdate)
       .eq("id", booking.id);
 
     if (upErr) {
@@ -214,6 +228,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
     }
 
     result.bookings_updated++;
+    if (preferredCleanerId) result.bookings_cleaner_updated++;
 
     if (booking.monthly_invoice_id) {
       invoiceIds.add(booking.monthly_invoice_id);

@@ -29,6 +29,7 @@ import {
 } from "@/lib/admin/bookingHardDeleteClient";
 import { OfficeDeleteBookingDialog } from "@/components/admin/office/OfficeDeleteBookingDialog";
 import { OfficeAssignTeamDialog } from "@/components/admin/office/OfficeAssignTeamDialog";
+import { adminBookingAssignmentDisplay } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -159,13 +160,8 @@ function formatZar(cents: number | null, zar: number | null): string {
   return `R ${Math.round(val).toLocaleString("en-ZA")}`;
 }
 
-function getAssignment(row: BookingRow): string {
-  if (row.team?.name) return row.team.name;
-  if (row.team_id) return "Team assigned";
-  if ((row.booking_cleaners ?? []).length > 0) {
-    return row.booking_cleaners!.map((c) => c.full_name ?? "Cleaner").join(", ");
-  }
-  return "—";
+function getAssignment(row: BookingRow): { label: string; title?: string; needsTeam: boolean } {
+  return adminBookingAssignmentDisplay(row);
 }
 
 function bookingSupportsTeamAssign(row: BookingRow): boolean {
@@ -922,11 +918,13 @@ export default function BookingsPage() {
                           <span
                             className={cn(
                               "block truncate text-xs font-medium",
-                              assignment === "—" ? "text-orange-500" : "text-slate-700",
+                              assignment.needsTeam || assignment.label === "—"
+                                ? "text-orange-600"
+                                : "text-slate-700",
                             )}
-                            title={assignment}
+                            title={assignment.title ?? assignment.label}
                           >
-                            {assignment}
+                            {assignment.label}
                           </span>
                           {teamAssignable ? (
                             <button
