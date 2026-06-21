@@ -11,6 +11,7 @@ import {
   ChevronUp,
   Clock,
   HelpCircle,
+  MapPin,
   Pause,
   Play,
   Repeat,
@@ -27,23 +28,10 @@ import { HelpCard } from "@/components/account/HelpCard";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { addDaysYmd, compareYmd } from "@/lib/recurring/johannesburgCalendar";
 import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
+import { frequencyLabel, formatRecurringScheduleLine } from "@/lib/recurring/formatRecurringSchedule";
+import type { CustomerRecurringPlanOption } from "@/lib/recurring/customerRecurringPlanOptions";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
-
-const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
-
-function formatDays(days: number[]): string {
-  const uniq = [...new Set(days.filter((d) => d >= 1 && d <= 7))].sort((a, b) => a - b);
-  return uniq.map((d) => WEEKDAY_SHORT[d - 1]).join(", ");
-}
-
-function frequencyLabel(f: string): string {
-  const x = f.toLowerCase();
-  if (x === "weekly") return "Weekly";
-  if (x === "biweekly") return "Bi-weekly";
-  if (x === "monthly") return "Monthly";
-  return f || "—";
-}
 
 function formatHm(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== "string") return null;
@@ -55,6 +43,7 @@ function formatHm(raw: string | null | undefined): string | null {
 function formatPaymentStatusLabel(raw: string | null | undefined): { label: string; tone: "ok" | "wait" | "bad" | "muted" } {
   const s = (raw ?? "").trim().toLowerCase();
   if (!s || s === "pending") return { label: "Pending payment", tone: "wait" };
+  if (s === "pending_monthly") return { label: "Monthly invoice", tone: "ok" };
   if (s === "paid" || s === "success") return { label: "Paid", tone: "ok" };
   if (s === "failed" || s === "partial_failed") return { label: "Failed", tone: "bad" };
   if (s === "expired") return { label: "Link expired", tone: "muted" };
@@ -72,9 +61,12 @@ function relativeDayPart(dateYmd: string, todayYmd: string): string {
   const tomorrow = addDaysYmd(todayYmd, 1);
   if (compareYmd(dateYmd, todayYmd) === 0) return "Today";
   if (compareYmd(dateYmd, tomorrow) === 0) return "Tomorrow";
-  return new Intl.DateTimeFormat("en-ZA", { weekday: "long", day: "numeric", month: "short", timeZone: "Africa/Johannesburg" }).format(
-    new Date(`${dateYmd}T12:00:00+02:00`),
-  );
+  return new Intl.DateTimeFormat("en-ZA", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    timeZone: "Africa/Johannesburg",
+  }).format(new Date(`${dateYmd}T12:00:00+02:00`));
 }
 
 type MeRecurringVisitRow = {
@@ -115,6 +107,7 @@ type MeRecurringItem = {
   template_visit_date: string | null;
   template_visit_time: string | null;
   template_location: string | null;
+  template_service_label: string | null;
   upcoming_bookings: MeRecurringVisitRow[];
 };
 
@@ -148,8 +141,9 @@ function recurringVisitOperationalBadge(b: MeRecurringVisitRow): string {
       is_recurring_generated: b.is_recurring_generated ?? true,
       billing_type: b.billing_type ?? null,
       monthly_invoice_id: b.monthly_invoice_id ?? null,
+      payment_status: b.payment_status ?? null,
     },
-    viewer: "admin",
+    viewer: "customer",
   }).displayBadge;
 }
 
@@ -185,36 +179,24 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const POPULAR_PLANS = [
-  {
-    icon: Zap,
-    iconBg: "bg-blue-100",
-    iconColor: "text-blue-600",
-    title: "Weekly",
-    desc: "A fresh clean every 7 days. Perfect for busy households.",
-    saving: "Save 15%",
-    savingBg: "bg-blue-50 text-blue-700",
-  },
-  {
+const PLAN_ICONS: Record<
+  CustomerRecurringPlanOption["frequency"],
+  { icon: typeof Zap; iconBg: string; iconColor: string; savingBg: string }
+> = {
+  weekly: { icon: Zap, iconBg: "bg-blue-100", iconColor: "text-blue-600", savingBg: "bg-blue-50 text-blue-700" },
+  biweekly: {
     icon: Repeat,
     iconBg: "bg-violet-100",
     iconColor: "text-violet-600",
-    title: "Bi-weekly",
-    desc: "Every two weeks — the most popular choice for Cape Town families.",
-    saving: "Save 10%",
     savingBg: "bg-violet-50 text-violet-700",
-    popular: true,
   },
-  {
+  monthly: {
     icon: Calendar,
     iconBg: "bg-teal-100",
     iconColor: "text-teal-600",
-    title: "Monthly",
-    desc: "Once a month for a thorough refresh of your whole home.",
-    saving: "Save 5%",
     savingBg: "bg-teal-50 text-teal-700",
   },
-];
+};
 
 const BENEFITS = [
   { icon: Clock, title: "Save time", desc: "No need to rebook — your cleaner arrives on schedule, every time." },
@@ -255,20 +237,41 @@ export default function AccountRecurringPage() {
   const toast = useDashboardToast();
   const { user, loading: userLoading } = useUser();
   const [items, setItems] = useState<MeRecurringItem[]>([]);
+  const [planOptions, setPlanOptions] = useState<CustomerRecurringPlanOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
-    if (!silent) { setLoading(true); setError(null); }
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
-    if (!token) { setError("Sign in to view recurring plans."); setItems([]); if (!silent) setLoading(false); return; }
+    if (!token) {
+      setError("Sign in to view recurring plans.");
+      setItems([]);
+      setPlanOptions([]);
+      if (!silent) setLoading(false);
+      return;
+    }
     const res = await fetch("/api/me/recurring", { headers: { Authorization: `Bearer ${token}` } });
-    const json = (await res.json()) as { ok?: boolean; items?: MeRecurringItem[]; error?: string };
-    if (!res.ok) { setError(json.error ?? "Could not load recurring plans."); setItems([]); }
-    else setItems(json.items ?? []);
+    const json = (await res.json()) as {
+      ok?: boolean;
+      items?: MeRecurringItem[];
+      planOptions?: CustomerRecurringPlanOption[];
+      error?: string;
+    };
+    if (!res.ok) {
+      setError(json.error ?? "Could not load recurring plans.");
+      setItems([]);
+      setPlanOptions([]);
+    } else {
+      setItems(json.items ?? []);
+      setPlanOptions(json.planOptions ?? []);
+    }
     if (!silent) setLoading(false);
   }, []);
 
@@ -286,21 +289,35 @@ export default function AccountRecurringPage() {
     if (action === "skip" && !window.confirm("Skip the next scheduled visit?")) return;
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
-    if (!token) { toast("Sign in again.", "error"); return; }
+    if (!token) {
+      toast("Sign in again.", "error");
+      return;
+    }
     setBusyId(id);
     try {
-      const res = await fetch(`/api/me/recurring/${id}/${action}`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/me/recurring/${id}/${action}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const json = (await res.json()) as { error?: string };
-      if (!res.ok) { toast(json.error ?? "Something went wrong.", "error"); return; }
+      if (!res.ok) {
+        toast(json.error ?? "Something went wrong.", "error");
+        return;
+      }
       toast(
-        action === "cancel" ? "Plan cancelled."
-          : action === "pause" ? "Plan paused."
-            : action === "resume" ? "Plan resumed."
+        action === "cancel"
+          ? "Plan cancelled."
+          : action === "pause"
+            ? "Plan paused."
+            : action === "resume"
+              ? "Plan resumed."
               : "Next visit skipped.",
         "success",
       );
       await load({ silent: true });
-    } finally { setBusyId(null); }
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (loading) {
@@ -314,17 +331,18 @@ export default function AccountRecurringPage() {
   }
 
   const todayYmd = todayYmdJohannesburg();
-  const hasPlans = items.length > 0;
+  const activePlans = items.filter((i) => {
+    const st = i.status.toLowerCase();
+    return st === "active" || st === "paused";
+  });
+  const hasPlans = activePlans.length > 0;
 
   return (
     <div className="space-y-8 pb-8">
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Recurring Plans</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage your schedule, skip a visit, or pause anytime.
-          </p>
+          <p className="mt-1 text-sm text-gray-500">Manage your schedule, skip a visit, or pause anytime.</p>
         </div>
         <Button asChild className="rounded-xl bg-blue-600 px-5 text-white hover:bg-blue-700">
           <Link href="/account/book">
@@ -334,52 +352,57 @@ export default function AccountRecurringPage() {
         </Button>
       </div>
 
-      {/* Error */}
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {error}{" "}
-          <button type="button" className="font-semibold underline" onClick={() => void load()}>Retry</button>
+          <button type="button" className="font-semibold underline" onClick={() => void load()}>
+            Retry
+          </button>
         </div>
       ) : null}
 
-      {/* Active plans */}
       {hasPlans ? (
         <section>
           <h2 className="mb-4 text-base font-semibold text-gray-900">Your plans</h2>
           <ul className="space-y-4">
-            {items.map((r) => {
+            {activePlans.map((r) => {
               const st = r.status.toLowerCase();
               const canPause = st === "active";
               const canResume = st === "paused";
               const canCancel = st === "active" || st === "paused";
-              const visitHm = formatHm(r.template_visit_time);
-              const scheduleLine = [frequencyLabel(r.frequency), formatDays(r.days_of_week), visitHm ?? null].filter(Boolean).join(" · ");
+              const scheduleLine = formatRecurringScheduleLine({
+                frequency: r.frequency,
+                days_of_week: r.days_of_week,
+                monthly_pattern: r.monthly_pattern,
+                monthly_nth: r.monthly_nth,
+                start_date: r.start_date,
+                template_visit_time: r.template_visit_time,
+              });
               const skipQueued = Boolean(r.skip_next_occurrence_date?.trim());
               const canSkip = st === "active" && Boolean(r.next_run_date) && !skipQueued;
               const nextLine = nextCleaningLine(r, todayYmd);
+              const locationLine = r.template_location?.trim() || null;
 
               return (
                 <li key={r.id}>
                   <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-                    {/* Plan header */}
                     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
-                            <Repeat className="h-5 w-5 text-blue-600" strokeWidth={1.75} />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{frequencyLabel(r.frequency)} clean</p>
-                            <p className="text-xs text-gray-400 font-mono">{r.id.slice(0, 8)}…</p>
-                          </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
+                          <Repeat className="h-5 w-5 text-blue-600" strokeWidth={1.75} />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {r.template_service_label?.trim() || `${frequencyLabel(r.frequency)} clean`}
+                          </p>
+                          <p className="text-xs text-gray-500">{scheduleLine || "—"}</p>
                         </div>
                       </div>
                       <StatusBadge status={r.status} />
                     </div>
 
-                    <div className="p-5 space-y-4">
-                      {/* Next cleaning highlight */}
+                    <div className="space-y-4 p-5">
                       {nextLine ? (
                         <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
                           <CalendarClock className="h-5 w-5 shrink-0 text-blue-600" strokeWidth={1.75} />
@@ -390,32 +413,41 @@ export default function AccountRecurringPage() {
                         </div>
                       ) : null}
 
-                      {/* Details grid */}
-                      <div className="grid gap-4 sm:grid-cols-3 text-sm">
+                      {skipQueued ? (
+                        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                          Next visit skipped for {r.skip_next_occurrence_date}.
+                        </div>
+                      ) : null}
+
+                      <div className="grid gap-4 text-sm sm:grid-cols-3">
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Schedule</p>
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Schedule</p>
                           <p className="text-gray-800">{scheduleLine || "—"}</p>
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Price per visit</p>
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Price per visit</p>
                           <p className="font-semibold tabular-nums text-gray-900">
                             R {Math.round(Number(r.price) || 0).toLocaleString("en-ZA")}
                           </p>
                         </div>
                         {r.start_date ? (
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Started</p>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Started</p>
                             <p className="text-gray-800">{r.start_date}</p>
                           </div>
                         ) : null}
                       </div>
 
-                      {/* Upcoming generated visits */}
+                      {locationLine ? (
+                        <div className="flex items-start gap-2 text-sm text-gray-600">
+                          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                          <span>{locationLine}</span>
+                        </div>
+                      ) : null}
+
                       {r.upcoming_bookings.length > 0 ? (
                         <div>
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                            Upcoming visits
-                          </p>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Upcoming visits</p>
                           <div className="overflow-x-auto rounded-xl border border-gray-100">
                             <table className="w-full min-w-[300px] text-left text-xs">
                               <thead className="border-b border-gray-100 bg-gray-50">
@@ -444,14 +476,13 @@ export default function AccountRecurringPage() {
                         </div>
                       ) : null}
 
-                      {/* Actions */}
                       <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-4">
                         {canPause ? (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-xl gap-1.5"
+                            className="gap-1.5 rounded-xl"
                             disabled={busyId === r.id}
                             onClick={() => void postAction(r.id, "pause")}
                           >
@@ -464,7 +495,7 @@ export default function AccountRecurringPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-xl gap-1.5"
+                            className="gap-1.5 rounded-xl"
                             disabled={busyId === r.id}
                             onClick={() => void postAction(r.id, "resume")}
                           >
@@ -477,7 +508,7 @@ export default function AccountRecurringPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-xl gap-1.5"
+                            className="gap-1.5 rounded-xl"
                             disabled={busyId === r.id}
                             onClick={() => void postAction(r.id, "skip")}
                           >
@@ -490,7 +521,7 @@ export default function AccountRecurringPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-xl gap-1.5 text-red-600 hover:border-red-200 hover:bg-red-50"
+                            className="gap-1.5 rounded-xl text-red-600 hover:border-red-200 hover:bg-red-50"
                             disabled={busyId === r.id}
                             onClick={() => void postAction(r.id, "cancel")}
                           >
@@ -507,7 +538,6 @@ export default function AccountRecurringPage() {
           </ul>
         </section>
       ) : (
-        /* Empty state */
         <section>
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center shadow-sm">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
@@ -527,37 +557,46 @@ export default function AccountRecurringPage() {
         </section>
       )}
 
-      {/* Popular plans */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-gray-900">Popular plans</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {POPULAR_PLANS.map(({ icon: Icon, iconBg, iconColor, title, desc, saving, savingBg, popular }) => (
-            <div
-              key={title}
-              className={cn(
-                "relative rounded-2xl border bg-white p-5 shadow-sm",
-                popular ? "border-blue-200 ring-1 ring-blue-100" : "border-gray-100",
-              )}
-            >
-              {popular ? (
-                <span className="absolute -top-2.5 left-4 rounded-full bg-blue-600 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Most popular
-                </span>
-              ) : null}
-              <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl", iconBg)}>
-                <Icon className={cn("h-5 w-5", iconColor)} strokeWidth={1.75} />
-              </div>
-              <p className="mt-3 font-semibold text-gray-900">{title}</p>
-              <p className="mt-1 text-sm text-gray-500">{desc}</p>
-              <span className={cn("mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold", savingBg)}>
-                {saving}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {planOptions.length > 0 ? (
+        <section>
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Available plans</h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {planOptions.map((plan) => {
+              const visuals = PLAN_ICONS[plan.frequency];
+              const Icon = visuals.icon;
+              return (
+                <div
+                  key={plan.frequency}
+                  className={cn(
+                    "relative rounded-2xl border bg-white p-5 shadow-sm",
+                    plan.popular ? "border-blue-200 ring-1 ring-blue-100" : "border-gray-100",
+                  )}
+                >
+                  {plan.popular ? (
+                    <span className="absolute -top-2.5 left-4 rounded-full bg-blue-600 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                      Most popular
+                    </span>
+                  ) : null}
+                  <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl", visuals.iconBg)}>
+                    <Icon className={cn("h-5 w-5", visuals.iconColor)} strokeWidth={1.75} />
+                  </div>
+                  <p className="mt-3 font-semibold text-gray-900">{plan.title}</p>
+                  <p className="mt-1 text-sm text-gray-500">{plan.description}</p>
+                  {plan.savingLabel ? (
+                    <span className={cn("mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold", visuals.savingBg)}>
+                      {plan.savingLabel}
+                    </span>
+                  ) : null}
+                  <Button asChild size="sm" variant="outline" className="mt-4 w-full rounded-xl">
+                    <Link href={plan.bookHref}>Book this plan</Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
-      {/* Benefits */}
       <section>
         <h2 className="mb-4 text-base font-semibold text-gray-900">Why go recurring?</h2>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -575,10 +614,9 @@ export default function AccountRecurringPage() {
         </div>
       </section>
 
-      {/* FAQ */}
       <section>
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="mb-4 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
               <HelpCircle className="h-5 w-5 text-blue-600" strokeWidth={1.75} />
             </div>
@@ -592,7 +630,6 @@ export default function AccountRecurringPage() {
         </div>
       </section>
 
-      {/* Help card */}
       <HelpCard />
     </div>
   );

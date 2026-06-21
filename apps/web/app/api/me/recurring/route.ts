@@ -1,32 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireCustomerSession } from "@/lib/auth/customerBearer";
-import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
+import { buildCustomerRecurringPlanOptions } from "@/lib/recurring/customerRecurringPlanOptions";
+import { loadUpcomingRecurringVisitsByPlanId } from "@/lib/recurring/loadRecurringBookingsForCustomer";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
+import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const UPCOMING_PER_PLAN = 12;
-
-type BookingRow = {
-  id: string;
-  recurring_id: string | null;
-  date: string | null;
-  time: string | null;
-  status: string | null;
-  location: string | null;
-  payment_status: string | null;
-  payment_completed_at: string | null;
-  cleaner_response_status: string | null;
-  en_route_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  dispatch_status: string | null;
-  is_recurring_generated: boolean | null;
-  billing_type: string | null;
-  monthly_invoice_id: string | null;
-};
 
 /**
  * Customer: list own recurring schedules (+ template preview and recent generated bookings per plan).
@@ -40,74 +21,27 @@ export async function GET(request: Request) {
 
   const today = todayJohannesburg();
 
-  const { data, error } = await admin
-    .from("recurring_bookings")
-    .select(
-      "id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, created_at, updated_at, booking_snapshot_template",
-    )
-    .eq("customer_id", auth.session.userId)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [{ data, error }, { data: configRow }] = await Promise.all([
+    admin
+      .from("recurring_bookings")
+      .select(
+        "id, address_id, frequency, days_of_week, start_date, end_date, price, status, next_run_date, last_generated_at, skip_next_occurrence_date, monthly_pattern, monthly_nth, created_at, updated_at, booking_snapshot_template",
+      )
+      .eq("customer_id", auth.session.userId)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const rows = data ?? [];
   const ids = rows.map((r) => String((r as { id?: unknown }).id ?? "")).filter(Boolean);
+  const byRecurring = await loadUpcomingRecurringVisitsByPlanId(admin, auth.session.userId, ids, today);
 
-  const byRecurring: Record<string, BookingRow[]> = {};
-  if (ids.length > 0) {
-    const { data: bRows, error: bErr } = await admin
-      .from("bookings")
-      .select(
-        "id, recurring_id, date, time, status, location, payment_status, payment_completed_at, cleaner_response_status, en_route_at, started_at, completed_at, dispatch_status, is_recurring_generated, billing_type, monthly_invoice_id",
-      )
-      .eq("user_id", auth.session.userId)
-      .in("recurring_id", ids)
-      .order("date", { ascending: true })
-      .limit(400);
-
-    if (!bErr && Array.isArray(bRows)) {
-      const acc: Record<string, BookingRow[]> = {};
-      for (const br of bRows as Record<string, unknown>[]) {
-        const rid = br.recurring_id != null ? String(br.recurring_id) : "";
-        if (!rid) continue;
-        const dateStr = br.date != null ? String(br.date) : null;
-        if (dateStr && compareYmd(dateStr, today) < 0) continue;
-        const row: BookingRow = {
-          id: String(br.id ?? ""),
-          recurring_id: rid,
-          date: dateStr,
-          time: br.time != null ? String(br.time) : null,
-          status: br.status != null ? String(br.status) : null,
-          location: br.location != null ? String(br.location) : null,
-          payment_status: br.payment_status != null ? String(br.payment_status) : null,
-          payment_completed_at:
-            br.payment_completed_at != null && String(br.payment_completed_at).trim()
-              ? String(br.payment_completed_at)
-              : null,
-          cleaner_response_status:
-            br.cleaner_response_status != null ? String(br.cleaner_response_status) : null,
-          en_route_at: br.en_route_at != null ? String(br.en_route_at) : null,
-          started_at: br.started_at != null ? String(br.started_at) : null,
-          completed_at: br.completed_at != null ? String(br.completed_at) : null,
-          dispatch_status: br.dispatch_status != null ? String(br.dispatch_status) : null,
-          is_recurring_generated:
-            br.is_recurring_generated === true || br.is_recurring_generated === false
-              ? br.is_recurring_generated
-              : null,
-          billing_type: br.billing_type != null ? String(br.billing_type) : null,
-          monthly_invoice_id: br.monthly_invoice_id != null ? String(br.monthly_invoice_id) : null,
-        };
-        if (!acc[rid]) acc[rid] = [];
-        acc[rid].push(row);
-      }
-      for (const rid of Object.keys(acc)) {
-        acc[rid].sort((a, b) => compareYmd(a.date ?? "", b.date ?? ""));
-        const slice = acc[rid].slice(0, UPCOMING_PER_PLAN);
-        byRecurring[rid] = slice;
-      }
-    }
-  }
+  const planOptions = buildCustomerRecurringPlanOptions(
+    (configRow as { config?: unknown } | null)?.config ?? null,
+  );
 
   const items = rows.map((raw) => {
     const row = raw as Record<string, unknown>;
@@ -133,9 +67,15 @@ export async function GET(request: Request) {
       template_visit_date: p.visitDate,
       template_visit_time: p.visitTime,
       template_location: p.location,
+      template_service_label: p.serviceLabel,
       upcoming_bookings: byRecurring[id] ?? [],
     };
   });
 
-  return NextResponse.json({ ok: true, items });
+  const activePlanCount = items.filter((i) => {
+    const st = i.status.toLowerCase();
+    return st === "active" || st === "paused";
+  }).length;
+
+  return NextResponse.json({ ok: true, items, planOptions, activePlanCount });
 }

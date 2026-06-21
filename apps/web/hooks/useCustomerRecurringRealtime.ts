@@ -47,6 +47,26 @@ export function useCustomerRecurringRealtime(
         },
         schedule,
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookings",
+          filter: `customer_id=eq.${uid}`,
+        },
+        schedule,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookings",
+          filter: `user_id=eq.${uid}`,
+        },
+        schedule,
+      )
       .subscribe();
 
     return () => {
