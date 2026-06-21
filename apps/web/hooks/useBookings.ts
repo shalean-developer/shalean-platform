@@ -63,9 +63,14 @@ export function useBookings(): {
       }, 400);
     };
 
-    /** Realtime only tracks `user_id` — email-orphan rows (`user_id` null, matched by email merge on fetch) do not subscribe; refetch lists instead. See `lib/booking/dashboardVisibilityContract.ts`. */
+    /** Realtime tracks `customer_id` (production) and `user_id` (legacy dev); email-orphan rows do not subscribe. */
     const channel = sb
       .channel(`customer-dashboard-bookings-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `customer_id=eq.${userId}` },
+        schedule,
+      )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings", filter: `user_id=eq.${userId}` },

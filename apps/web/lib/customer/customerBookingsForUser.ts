@@ -64,7 +64,7 @@ export type LoadCustomerBookingsOptions = {
   viewerEmail?: string | null;
 };
 
-async function resolveBookingOwnershipColumn(admin: SupabaseClient): Promise<BookingCustomerOwnershipColumn> {
+export async function resolveBookingOwnershipColumn(admin: SupabaseClient): Promise<BookingCustomerOwnershipColumn> {
   const probe = await admin.from("bookings").select("customer_id").limit(1);
   if (probe.error && isUnknownColumnError(probe.error, "customer_id")) {
     return "user_id";

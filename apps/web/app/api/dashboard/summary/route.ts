@@ -8,6 +8,8 @@ import { johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { loadCustomerBookingRowsForUser } from "@/lib/customer/customerBookingsForUser";
 import type { CustomerMonthlyInvoiceRow } from "@/lib/dashboard/monthlyInvoiceTypes";
+import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
+import { isPaidPerBookingInvoice, perBookingInvoicesFromBookings } from "@/lib/dashboard/perBookingInvoice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +33,17 @@ const INVOICE_SELECT = [
   "created_at",
   "updated_at",
 ].join(",");
+
+function paidPerVisitCentsThisMonth(bookings: DashboardBooking[], ym: string): number {
+  return bookings.reduce((sum, b) => {
+    if (typeof b.date !== "string" || !b.date.startsWith(ym) || !isPaidPerBookingInvoice(b)) return sum;
+    const cents =
+      typeof b.raw.amount_paid_cents === "number" && Number.isFinite(b.raw.amount_paid_cents) && b.raw.amount_paid_cents > 0
+        ? b.raw.amount_paid_cents
+        : Math.round(b.priceZar * 100);
+    return sum + cents;
+  }, 0);
+}
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -87,14 +100,19 @@ export async function GET(request: Request) {
   const hoursBookedThisMonth = Math.round(
     thisMonthBookings.reduce((sum, b) => sum + ((b.durationHours ?? 0) > 0 ? b.durationHours : 0), 0),
   );
+  const completedThisMonthCount = thisMonthBookings.filter(isDashboardBookingAuthoritativelyCompleted).length;
 
   const recentBookings = [...mapped]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 3);
 
+  const perVisitInvoices = perBookingInvoicesFromBookings(mapped).slice(0, 3);
+
   const invoices = (invRes.data ?? []) as unknown as CustomerMonthlyInvoiceRow[];
   const hasAnyInvoices = invoices.length > 0;
   const invoiceThisMonth = invoices.find((i) => i.month === ym) ?? null;
+  const totalSpentThisMonthCents =
+    (invoiceThisMonth?.amount_paid_cents ?? 0) + paidPerVisitCentsThisMonth(mapped, ym);
 
   const hasOverdueInvoice = invoices.some((i) => i.is_overdue && i.status !== "paid");
 
@@ -116,8 +134,11 @@ export async function GET(request: Request) {
     ym,
     bookingsThisMonthCount,
     hoursBookedThisMonth,
+    completedThisMonthCount,
+    totalSpentThisMonthCents,
     nextBooking,
     recentBookings,
+    perVisitInvoices,
     invoiceThisMonth,
     hasAnyInvoices,
     isOverdue,

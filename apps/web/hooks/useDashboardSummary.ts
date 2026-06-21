@@ -4,14 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { DashboardBooking } from "@/lib/dashboard/types";
 import type { CustomerMonthlyInvoiceRow } from "@/lib/dashboard/monthlyInvoiceTypes";
+import type { PerBookingInvoice } from "@/lib/dashboard/perBookingInvoice";
 import { useUser } from "@/hooks/useUser";
 
 export type DashboardSummaryPayload = {
   ym: string;
   bookingsThisMonthCount: number;
   hoursBookedThisMonth: number;
+  completedThisMonthCount: number;
+  totalSpentThisMonthCents: number;
   nextBooking: DashboardBooking | null;
   recentBookings: DashboardBooking[];
+  perVisitInvoices: PerBookingInvoice[];
   invoiceThisMonth: CustomerMonthlyInvoiceRow | null;
   hasAnyInvoices: boolean;
   /** Current month’s invoice is overdue (balance + due date / flag). */
@@ -48,6 +52,15 @@ export function useDashboardSummary(): {
       const d = out.data;
       setSummary({
         ...d,
+        completedThisMonthCount:
+          typeof d.completedThisMonthCount === "number" && Number.isFinite(d.completedThisMonthCount)
+            ? d.completedThisMonthCount
+            : 0,
+        totalSpentThisMonthCents:
+          typeof d.totalSpentThisMonthCents === "number" && Number.isFinite(d.totalSpentThisMonthCents)
+            ? d.totalSpentThisMonthCents
+            : 0,
+        perVisitInvoices: Array.isArray(d.perVisitInvoices) ? d.perVisitInvoices : [],
         isOverdue: d.isOverdue ?? false,
         daysOverdue: typeof d.daysOverdue === "number" && Number.isFinite(d.daysOverdue) ? d.daysOverdue : 0,
         hasOverdueInvoice: d.hasOverdueInvoice ?? d.isOverdue ?? false,

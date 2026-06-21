@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import {
+  loadCustomerBookingRowForUser,
+  resolveBookingOwnershipColumn,
+} from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCustomerBookingCancelled } from "@/lib/notifications/customerUserNotifications";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
@@ -35,30 +40,24 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  const { data: row, error: fetchErr } = await admin
-    .from("bookings")
-    .select("id, user_id, status, started_at, service, date, time, customer_email, monthly_invoice_id")
-    .eq("id", bookingId)
-    .maybeSingle();
-
-  if (fetchErr || !row) {
-    return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+  const userId = userData.user.id;
+  const viewerEmail = userData.user.email ?? null;
+  const load = await loadCustomerBookingRowForUser(admin, userId, bookingId, { viewerEmail });
+  if (!load.ok) {
+    return NextResponse.json({ error: load.error }, { status: load.status });
   }
 
-  if (String((row as { user_id?: string }).user_id) !== userData.user.id) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
-
-  const status = String((row as { status?: string }).status ?? "").toLowerCase();
+  const row = load.booking;
+  const status = String(row.status ?? "").toLowerCase();
   if (!isCustomerCancellableBookingStatus(status)) {
     return NextResponse.json({ error: "This booking cannot be cancelled." }, { status: 400 });
   }
 
-  if ((row as { started_at?: string | null }).started_at) {
+  if (row.started_at) {
     return NextResponse.json({ error: "Cannot cancel after the clean has started." }, { status: 400 });
   }
 
-  const invId = (row as { monthly_invoice_id?: string | null }).monthly_invoice_id;
+  const invId = row.monthly_invoice_id;
   if (invId) {
     const { data: inv } = await admin.from("monthly_invoices").select("is_closed").eq("id", invId).maybeSingle();
     const closed = Boolean(inv && typeof inv === "object" && (inv as { is_closed?: boolean }).is_closed);
@@ -78,6 +77,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: offerExpireErr }, { status: 500 });
   }
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { error: upErr } = await admin
     .from("bookings")
     .update({
@@ -90,7 +90,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       payout_type: "cancelled_zero",
     })
     .eq("id", bookingId)
-    .eq("user_id", userData.user.id);
+    .eq(ownershipColumn, userId);
 
   if (upErr) {
     return NextResponse.json({ error: upErr.message }, { status: 500 });
@@ -110,25 +110,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     context: { bookingId },
   });
 
-  const custEmail = String((row as { customer_email?: string | null }).customer_email ?? "").trim();
+  const custEmail = String(row.customer_email ?? "").trim();
   void notifyBookingEvent({
     type: "cancelled",
     supabase: admin,
     bookingId,
     customerEmail: custEmail,
-    serviceLabel: (row as { service?: string | null }).service ?? null,
-    dateYmd: (row as { date?: string | null }).date ?? null,
-    timeHm: (row as { time?: string | null }).time ?? null,
+    serviceLabel: row.service ?? null,
+    dateYmd: row.date ?? null,
+    timeHm: row.time ?? null,
   });
 
-  const uid = String((row as { user_id?: string }).user_id ?? "");
-  if (uid) {
+  const ownerId = bookingCustomerKey(row);
+  if (ownerId) {
     void notifyCustomerBookingCancelled(admin, {
       bookingId,
-      userId: uid,
-      serviceLabel: (row as { service?: string | null }).service ?? null,
-      dateYmd: (row as { date?: string | null }).date ?? null,
-      timeHm: (row as { time?: string | null }).time ?? null,
+      userId: ownerId,
+      serviceLabel: row.service ?? null,
+      dateYmd: row.date ?? null,
+      timeHm: row.time ?? null,
     });
   }
 

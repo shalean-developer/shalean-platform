@@ -21,7 +21,6 @@ import { TrustBar } from "@/components/account/TrustBar";
 import { HelpCard } from "@/components/account/HelpCard";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useAddresses } from "@/hooks/useAddresses";
-import { perBookingInvoicesFromBookings } from "@/lib/dashboard/perBookingInvoice";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
 import { invoiceOverdueEscalationText } from "@/lib/dashboard/invoiceOverdueEscalation";
@@ -120,13 +119,16 @@ function formatAddress(addressLine: string | null | undefined, suburb: string | 
 
 export default function AccountHomePage() {
   const { summary, loading, error, refetch } = useDashboardSummary();
-  const { addresses, loading: addrLoading } = useAddresses();
+  const { addresses, loading: addrLoading, error: addrError } = useAddresses();
 
   const ym = summary?.ym ?? "";
   const nextBooking = summary?.nextBooking ?? null;
   const recent = useMemo(() => summary?.recentBookings ?? [], [summary]);
   const bookingsThisMonthCount = summary?.bookingsThisMonthCount ?? 0;
   const hoursBookedThisMonth = summary?.hoursBookedThisMonth ?? 0;
+  const completedCount = summary?.completedThisMonthCount ?? 0;
+  const totalSpentCents = summary?.totalSpentThisMonthCents ?? 0;
+  const perVisitInvoices = useMemo(() => summary?.perVisitInvoices ?? [], [summary]);
   const invoiceThisMonth = summary?.invoiceThisMonth ?? null;
   const hasAnyInvoices = summary?.hasAnyInvoices ?? false;
   const isOverdue = summary?.isOverdue ?? false;
@@ -142,16 +144,7 @@ export default function AccountHomePage() {
         ? Math.max(0, invoiceThisMonth.total_amount_cents - invoiceThisMonth.amount_paid_cents)
         : 0;
 
-  const totalSpentCents = invoiceThisMonth?.amount_paid_cents ?? 0;
-
-  const completedCount = useMemo(
-    () => recent.filter((b) => b.status?.toLowerCase().includes("complet")).length,
-    [recent],
-  );
-
   const defaultAddr = useMemo(() => addresses.find((a) => a.is_default) ?? addresses[0], [addresses]);
-
-  const perVisitInvoices = useMemo(() => perBookingInvoicesFromBookings(recent).slice(0, 3), [recent]);
 
   /* ── Skeleton ── */
   if (loading) {
@@ -361,7 +354,7 @@ export default function AccountHomePage() {
               </div>
             ) : (
               <ul className="space-y-3">
-                {recent.slice(0, 1).map((b) => (
+                {recent.map((b) => (
                   <li key={b.id}>
                     <BookingCard booking={b} showActions={false} />
                   </li>
@@ -474,7 +467,9 @@ export default function AccountHomePage() {
               </Link>
             </div>
             <div className="p-5">
-              {addrLoading ? (
+              {addrError ? (
+                <p className="text-sm text-red-700">{addrError}</p>
+              ) : addrLoading ? (
                 <div className="h-20 animate-pulse rounded-xl bg-gray-100" />
               ) : defaultAddr ? (
                 <>
