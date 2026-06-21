@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { isLaunchBookingReference } from "@/lib/launch/launchReadinessChecks";
 import { auditMockDashboardData } from "@/lib/launch/mockDataAudit";
 import { buildLaunchCheckConfirmPayload } from "@/lib/launch/launchCheckSeed";
+import { isValidContactPhone } from "@/lib/booking/contactPhoneValidation";
 import { dashboardRouteForRole, safePostLoginRedirect } from "@/lib/auth/userRole";
 import { isLaunchCheckEnabled } from "@/lib/launch/launchCheckConfig";
 
@@ -25,7 +26,7 @@ describe("buildLaunchCheckConfirmPayload", () => {
     expect(payload.bookingType).toBe("once_off");
     expect(payload.pricingSummary.total).toBe(450);
     expect(/^\d{4}-\d{2}-\d{2}$/.test(payload.date)).toBe(true);
-    expect(payload.contactPhone).toMatch(/^0\d{9}$/);
+    expect(isValidContactPhone(payload.contactPhone)).toBe(true);
   });
 });
 

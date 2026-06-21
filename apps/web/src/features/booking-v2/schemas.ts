@@ -4,6 +4,21 @@ import {
   filterCustomerOnlineBookingTimeSlots,
   isCustomerOnlineBookingTimeSlot,
 } from "@/lib/booking-v2/customerBookingTimeSlots";
+import {
+  CONTACT_PHONE_VALIDATION_MESSAGE,
+  isValidContactPhone,
+} from "@/lib/booking/contactPhoneValidation";
+
+const contactPhoneField = z
+  .string()
+  .min(1, "Enter a contact phone number")
+  .refine(isValidContactPhone, { message: CONTACT_PHONE_VALIDATION_MESSAGE });
+
+const optionalContactPhoneField = z
+  .string()
+  .optional()
+  .or(z.literal(""))
+  .refine((v) => !v || isValidContactPhone(v), { message: CONTACT_PHONE_VALIDATION_MESSAGE });
 
 // ─── Step 1: Details ───────────────────────────────────────────────────────────
 
@@ -16,9 +31,7 @@ export const step1Schema = z.object({
   accessInstructions: z.string().optional().default(""),
   parkingInstructions: z.string().optional().default(""),
   gateCode: z.string().optional().default(""),
-  contactPhone: z
-    .string()
-    .regex(/^0\d{9}$/, "Enter a valid 10-digit SA phone number (e.g. 0821234567)"),
+  contactPhone: contactPhoneField,
   selectedExtras: z.array(z.string()).default([]),
 });
 
@@ -86,11 +99,7 @@ export const signInSchema = z.object({
 export const signUpSchema = z.object({
   fullName: z.string().min(2, "Enter your full name"),
   email: z.string().email("Enter a valid email address"),
-  phone: z
-    .string()
-    .regex(/^0\d{9}$/, "Enter a valid 10-digit SA phone number (e.g. 0821234567)")
-    .optional()
-    .or(z.literal("")),
+  phone: optionalContactPhoneField,
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
@@ -109,9 +118,7 @@ export const bookingV2ConfirmSchema = z.object({
   accessInstructions: z.string().optional().default(""),
   parkingInstructions: z.string().optional().default(""),
   gateCode: z.string().optional().default(""),
-  contactPhone: z
-    .string()
-    .regex(/^0\d{9}$/, "Enter a valid 10-digit SA phone number (e.g. 0821234567)"),
+  contactPhone: contactPhoneField,
   selectedExtras: z.array(z.string()).default([]),
   bookingType: z.enum(["once_off", "recurring"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

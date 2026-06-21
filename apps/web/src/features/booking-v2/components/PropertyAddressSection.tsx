@@ -9,6 +9,15 @@ import { useUser } from "@/hooks/useUser";
 import { useAddresses } from "@/hooks/useAddresses";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
+import {
+  CONTACT_PHONE_VALIDATION_MESSAGE,
+  isValidContactPhone,
+} from "@/lib/booking/contactPhoneValidation";
+
+const contactPhoneRules = {
+  required: "Enter a contact phone number",
+  validate: (value: string) => isValidContactPhone(value) || CONTACT_PHONE_VALIDATION_MESSAGE,
+} as const;
 
 const CAPE_TOWN_SUBURBS = [
   "Bloubergstrand",
@@ -200,13 +209,6 @@ function formatSavedAddressLine(addr: CustomerAddressRow): string {
   return parts.join(", ");
 }
 
-function normalizeSaPhoneForForm(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("27") && digits.length === 11) return `0${digits.slice(2)}`;
-  if (digits.startsWith("0") && digits.length === 10) return digits;
-  return raw.trim();
-}
-
 export function PropertyAddressSection() {
   const { user, loading: userLoading } = useUser();
   const { addresses, loading: addressesLoading } = useAddresses();
@@ -274,8 +276,8 @@ export function PropertyAddressSection() {
       if (cancelled || !authUser) return;
       if (getValues("contactPhone")?.trim()) return;
       const meta = authUser.user_metadata as { phone?: string; whatsapp?: string } | undefined;
-      const fromMeta = normalizeSaPhoneForForm(meta?.phone?.trim() || meta?.whatsapp?.trim() || "");
-      if (/^0\d{9}$/.test(fromMeta)) setValue("contactPhone", fromMeta, { shouldDirty: false });
+      const fromMeta = meta?.phone?.trim() || meta?.whatsapp?.trim() || "";
+      if (isValidContactPhone(fromMeta)) setValue("contactPhone", fromMeta, { shouldDirty: false });
     });
     return () => {
       cancelled = true;
@@ -389,14 +391,8 @@ export function PropertyAddressSection() {
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
-                placeholder="0821234567"
-                {...register("contactPhone", {
-                  required: "Enter a contact phone number",
-                  pattern: {
-                    value: /^0\d{9}$/,
-                    message: "Enter a valid 10-digit SA phone number (e.g. 0821234567)",
-                  },
-                })}
+                placeholder="+27 82 123 4567 or 0821234567"
+                {...register("contactPhone", contactPhoneRules)}
                 className="block w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
@@ -492,14 +488,8 @@ export function PropertyAddressSection() {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  placeholder="0821234567"
-                  {...register("contactPhone", {
-                    required: "Enter a contact phone number",
-                    pattern: {
-                      value: /^0\d{9}$/,
-                      message: "Enter a valid 10-digit SA phone number (e.g. 0821234567)",
-                    },
-                  })}
+                  placeholder="+27 82 123 4567 or 0821234567"
+                  {...register("contactPhone", contactPhoneRules)}
                   className="block w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
