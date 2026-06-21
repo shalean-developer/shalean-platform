@@ -35,7 +35,7 @@ function ForgotPasswordForm() {
         );
         return;
       }
-      if (result.noAccount) {
+      if ("noAccount" in result) {
         setNoAccount(true);
         return;
       }
