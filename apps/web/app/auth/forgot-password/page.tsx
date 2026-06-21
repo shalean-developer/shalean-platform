@@ -14,6 +14,7 @@ function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [noAccount, setNoAccount] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -24,22 +25,28 @@ function ForgotPasswordForm() {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    setNoAccount(false);
     setSubmitting(true);
     try {
-      const { error: err } = await requestPasswordReset(email);
-      if (err) {
-        setError(err.message);
+      const result = await requestPasswordReset(email);
+      if (result.ok) {
+        setInfo(
+          "We sent a password reset link to your email. Check your inbox and spam folder — it may take a few minutes.",
+        );
         return;
       }
-      setInfo(
-        "If an account exists for that email, we sent a link to reset your password. Check your inbox and spam folder — it may take a few minutes.",
-      );
+      if (result.noAccount) {
+        setNoAccount(true);
+        return;
+      }
+      setError(result.error.message);
     } finally {
       setSubmitting(false);
     }
   }
 
   const loginHref = `/auth/login?redirect=${encodeURIComponent(redirect)}`;
+  const signupHref = `/auth/signup?redirect=${encodeURIComponent(redirect)}&intent=customer`;
 
   return (
     <>
@@ -63,13 +70,32 @@ function ForgotPasswordForm() {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setNoAccount(false);
+                  setError(null);
+                  setInfo(null);
+                }}
                 className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
                 placeholder="you@example.com"
               />
             </div>
           </div>
 
+          {noAccount ? (
+            <div
+              className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-100"
+              role="alert"
+            >
+              <p>No Shalean account exists for this email address.</p>
+              <p className="mt-2">
+                <Link href={signupHref} className="font-semibold text-primary hover:underline">
+                  Create an account
+                </Link>{" "}
+                to book with Shalean, then you can sign in anytime.
+              </p>
+            </div>
+          ) : null}
           {error ? (
             <div
               className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300"

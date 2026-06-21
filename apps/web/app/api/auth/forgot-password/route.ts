@@ -13,10 +13,9 @@ export const dynamic = "force-dynamic";
 
 type Body = { email?: string };
 
-/** Always returns generic success to avoid account enumeration. */
 export async function POST(request: Request) {
   if (!allowPasswordResetRequest(passwordResetRateLimitKey(request))) {
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ error: "Too many requests. Try again in a minute." }, { status: 429 });
   }
 
   const admin = getSupabaseAdmin();
@@ -38,14 +37,22 @@ export async function POST(request: Request) {
 
   const result = await sendPasswordResetEmail(admin, email);
 
-  if (!result.ok && result.reason !== "no_user") {
+  if (!result.ok && result.reason === "no_user") {
+    return NextResponse.json({ sent: false, code: "no_account" });
+  }
+
+  if (!result.ok) {
     void logSystemEvent({
       level: "warn",
       source: "auth/password_reset",
       message: "password_reset_delivery_failed",
       context: { email, reason: result.reason },
     });
+    return NextResponse.json(
+      { error: "We could not send the reset email. Try again in a few minutes." },
+      { status: 502 },
+    );
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ sent: true });
 }
