@@ -16,16 +16,30 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { createZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "../lib/zoho/zohoBooksService";
+import { createZohoInvoice, markZohoInvoicePaid, todayYmdJhb, zohoInvoiceExists } from "../lib/zoho/zohoBooksService";
+import {
+  isShaleanSystemLoginEmail,
+} from "../lib/zoho/shaleanBillingContactEmail";
+import { resolveZohoCustomerContactForBooking } from "../lib/zoho/resolveZohoCustomerContact";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
 const apply = process.argv.includes("--apply");
+const repairMislinked = process.argv.includes("--repair-mislinked");
+const repairAllContacts = process.argv.includes("--repair-all-contacts");
+const repairStale = process.argv.includes("--repair-stale") || repairAllContacts;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const ZOHO_THROTTLE_MS = 400;
 
 type Row = {
   id: string;
+  user_id: string | null;
   customer_email: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  booking_snapshot: unknown;
   service: string | null;
   date: string | null;
   location: string | null;
@@ -39,12 +53,75 @@ type Row = {
 };
 
 function isPaidPerVisit(r: Row): boolean {
-  if (r.zoho_invoice_id) return false;
-  if (!r.customer_email) return false;
   if (r.is_monthly_billing_booking === true) return false;
   if (String(r.payment_status ?? "").toLowerCase() === "pending_monthly") return false;
   const totalZar = r.total_paid_zar ?? (r.amount_paid_cents ?? 0) / 100;
-  return totalZar > 0;
+  if (totalZar <= 0) return false;
+  return Boolean(String(r.user_id ?? "").trim() || String(r.customer_email ?? "").trim());
+}
+
+async function repairStaleBookingZohoIds(admin: SupabaseClient): Promise<number> {
+  const { data, error } = await admin
+    .from("bookings")
+    .select("id, zoho_invoice_id")
+    .not("zoho_invoice_id", "is", null);
+
+  if (error) {
+    console.error("repair stale: list failed —", error.message);
+    return 0;
+  }
+
+  let cleared = 0;
+  for (const row of data ?? []) {
+    const zid = String((row as { zoho_invoice_id?: string }).zoho_invoice_id ?? "").trim();
+    if (!zid) continue;
+    const exists = await zohoInvoiceExists(zid);
+    if (exists === "unknown" || exists) continue;
+
+    const { error: upErr } = await admin.from("bookings").update({ zoho_invoice_id: null }).eq("id", row.id);
+    if (upErr) {
+      console.error(`booking ${row.id}: clear stale zoho id failed — ${upErr.message}`);
+      continue;
+    }
+    cleared += 1;
+    console.log(`booking ${row.id.slice(0, 8)}: cleared stale zoho_invoice_id ${zid}`);
+  }
+  return cleared;
+}
+
+/** Re-sync rows previously linked under wrong Zoho contacts (strict lookup bug / synthetic emails). */
+async function repairMislinkedBookingZohoIds(admin: SupabaseClient): Promise<number> {
+  const { data, error } = await admin
+    .from("bookings")
+    .select("id, customer_email, zoho_invoice_id")
+    .not("zoho_invoice_id", "is", null);
+
+  if (error) {
+    console.error("repair mislinked: list failed —", error.message);
+    return 0;
+  }
+
+  let cleared = 0;
+  for (const row of data ?? []) {
+    const email = String((row as { customer_email?: string }).customer_email ?? "");
+    if (!isShaleanSystemLoginEmail(email)) continue;
+    const { error: upErr } = await admin.from("bookings").update({ zoho_invoice_id: null }).eq("id", row.id);
+    if (upErr) continue;
+    cleared += 1;
+    console.log(`booking ${String(row.id).slice(0, 8)}: cleared mislinked zoho_invoice_id (${email})`);
+  }
+  return cleared;
+}
+
+async function clearAllBookingZohoLinks(admin: SupabaseClient): Promise<number> {
+  const { data, error } = await admin.from("bookings").select("id").not("zoho_invoice_id", "is", null);
+  if (error) return 0;
+  let cleared = 0;
+  for (const row of data ?? []) {
+    await admin.from("bookings").update({ zoho_invoice_id: null }).eq("id", row.id);
+    cleared += 1;
+  }
+  return cleared;
 }
 
 async function main() {
@@ -61,6 +138,19 @@ async function main() {
 
   console.log(apply ? "Mode: APPLY (will write to Zoho + Supabase)" : "Mode: DRY-RUN (no writes)");
 
+  if (repairMislinked && apply) {
+    const mislinked = await repairMislinkedBookingZohoIds(admin);
+    console.log(`Mislinked booking Zoho ids cleared for re-sync: ${mislinked}`);
+  }
+  if (repairAllContacts && apply) {
+    const all = await clearAllBookingZohoLinks(admin);
+    console.log(`All booking Zoho links cleared for contact repair: ${all}`);
+  }
+  if (repairStale && apply) {
+    const cleared = await repairStaleBookingZohoIds(admin);
+    console.log(`Stale booking Zoho ids cleared: ${cleared}`);
+  }
+
   let scanned = 0;
   let eligible = 0;
   let created = 0;
@@ -72,7 +162,7 @@ async function main() {
     const { data, error } = await admin
       .from("bookings")
       .select(
-        "id, customer_email, service, date, location, suburb, total_paid_zar, amount_paid_cents, paystack_reference, payment_status, is_monthly_billing_booking, zoho_invoice_id",
+        "id, user_id, customer_email, customer_name, customer_phone, booking_snapshot, service, date, location, suburb, total_paid_zar, amount_paid_cents, paystack_reference, payment_status, is_monthly_billing_booking, zoho_invoice_id",
       )
       .is("zoho_invoice_id", null)
       .not("payment_completed_at", "is", null)
@@ -98,12 +188,22 @@ async function main() {
         continue;
       }
 
+      const contactRes = await resolveZohoCustomerContactForBooking(admin, r);
+      if (!contactRes.ok) {
+        failed += 1;
+        console.error(`booking ${r.id}: contact resolution failed — ${contactRes.error}`);
+        continue;
+      }
+      const contact = contactRes.contact;
+
       const today = todayYmdJhb();
       const locationLabel = [r.location, r.suburb].filter(Boolean).join(", ");
       const createRes = await createZohoInvoice({
         referenceId: r.id,
-        customerEmail: r.customer_email!,
-        customerName: r.customer_email!,
+        orderKind: "booking",
+        customerEmail: contact.email,
+        customerName: contact.name,
+        customerPhone: contact.phone,
         invoiceDate: today,
         dueDate: today,
         lineItems: [
@@ -129,7 +229,8 @@ async function main() {
         amountZar: totalZar,
         paymentDate: today,
         reference,
-        customerEmail: r.customer_email!,
+        customerEmail: contact.email,
+        customerName: contact.name,
       });
 
       const { error: upErr } = await admin
@@ -144,6 +245,7 @@ async function main() {
 
       created += 1;
       console.log(`booking ${r.id}: linked Zoho invoice ${createRes.invoiceNumber} (${createRes.zohoInvoiceId})`);
+      await sleep(ZOHO_THROTTLE_MS);
     }
 
     if (rows.length < pageSize) break;

@@ -3,6 +3,11 @@ import { clearAuthIntent } from "@/lib/auth/authRoleIntent";
 import { clearCachedUserRole } from "@/lib/auth/userRole";
 import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
+import {
+  billingEmailFromLoginEmail,
+  normalizeCustomerProfileContactFields,
+} from "@/lib/customer/customerProfileContactFields";
+import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 
 function client() {
   const sb = getSupabaseBrowser();
@@ -70,6 +75,12 @@ export async function signUp(email: string, password: string, fullName: string, 
 
   const user = data.user;
   if (user?.id) {
+    const phoneE164 = phoneNorm ? normalizeSouthAfricaPhone(phoneNorm) : null;
+    const contact = normalizeCustomerProfileContactFields({
+      fullName: fullName.trim(),
+      billingEmail: billingEmailFromLoginEmail(email.trim()),
+      phone: phoneE164 ?? phoneNorm ?? null,
+    });
     const { error: profileErr } = await sb.from("user_profiles").upsert(
       {
         id: user.id,
@@ -78,6 +89,10 @@ export async function signUp(email: string, password: string, fullName: string, 
         booking_count: 0,
         total_spent_cents: 0,
         updated_at: new Date().toISOString(),
+        ...(contact.full_name ? { full_name: contact.full_name } : {}),
+        ...(contact.billing_email ? { billing_email: contact.billing_email } : {}),
+        ...(contact.phone ? { phone: contact.phone } : {}),
+        ...(contact.phone_e164 ? { phone_e164: contact.phone_e164 } : {}),
       },
       { onConflict: "id" },
     );
@@ -99,5 +114,20 @@ export async function signOut(): Promise<{ error: Error | null }> {
   clearAuthIntent();
   clearCachedUserRole();
   const { error } = await sb.auth.signOut();
+  return { error: error ? new Error(error.message) : null };
+}
+
+/** Sends a Supabase password recovery email; link opens `/auth/reset-password`. */
+export async function requestPasswordReset(email: string) {
+  const sb = client();
+  const redirectTo =
+    typeof window !== "undefined" ? `${window.location.origin}/auth/reset-password` : undefined;
+  const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+  return { error: error ? new Error(error.message) : null };
+}
+
+export async function updatePassword(password: string) {
+  const sb = client();
+  const { error } = await sb.auth.updateUser({ password });
   return { error: error ? new Error(error.message) : null };
 }

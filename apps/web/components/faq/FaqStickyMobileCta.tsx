@@ -1,5 +1,6 @@
 "use client";
 
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 
 export function FaqStickyMobileCta() {
@@ -10,13 +11,7 @@ export function FaqStickyMobileCta() {
       aria-label="Book cleaning"
     >
       <div className="mx-auto flex max-w-lg gap-2">
-        <GrowthCtaLink
-          href="/book"
-          source="faq_sticky_price"
-          className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700"
-        >
-          Get instant price
-        </GrowthCtaLink>
+        <GetFreeQuoteLink source="faq_sticky" variant="primary" className="flex-1 min-h-12 bg-emerald-600 hover:bg-emerald-700 px-4" />
         <GrowthCtaLink
           href="/book"
           source="faq_sticky_book"

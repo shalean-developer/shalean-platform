@@ -1,3 +1,4 @@
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 
 export function FaqHero() {
@@ -12,13 +13,7 @@ export function FaqHero() {
           Everything you need to know about pricing, services, booking, and what to expect.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <GrowthCtaLink
-            href="/book"
-            source="faq_hero_price"
-            className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-          >
-            Get instant price
-          </GrowthCtaLink>
+          <GetFreeQuoteLink source="faq_hero" variant="primary" className="bg-emerald-600 hover:bg-emerald-700" />
           <GrowthCtaLink
             href="/book"
             source="faq_hero_book"

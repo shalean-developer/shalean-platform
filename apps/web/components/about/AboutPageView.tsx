@@ -14,6 +14,7 @@ import { ReviewCard } from "@/components/about/ReviewCard";
 import { StatCard } from "@/components/about/StatCard";
 import { StepItem } from "@/components/about/StepItem";
 import { TrustItem } from "@/components/about/TrustItem";
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import {
   ABOUT_FOUNDING_YEAR,
@@ -90,13 +91,11 @@ export function AboutPageView() {
               >
                 Book a cleaner
               </GrowthCtaLink>
-              <GrowthCtaLink
-                href="/book"
-                source="about_hero_price"
-                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-8 text-base font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50"
-              >
-                Get instant price
-              </GrowthCtaLink>
+              <GetFreeQuoteLink
+                source="about_hero"
+                variant="outline"
+                className="border-emerald-600 text-emerald-900 hover:bg-emerald-50"
+              />
             </div>
           </div>
         </section>

@@ -6,6 +6,7 @@ import {
 } from "@/lib/admin/adminInvoiceIdempotency";
 import { parseAdjustmentCategory } from "@/lib/monthlyInvoice/adjustmentCategory";
 import { insertInvoiceAdjustment } from "@/lib/monthlyInvoice/insertInvoiceAdjustment";
+import { syncDraftMonthlyInvoiceToZohoAfterRecompute } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -73,6 +74,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
 
     const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", { p_invoice_id: invoiceId });
     if (rpcErr) return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+
+    await syncDraftMonthlyInvoiceToZohoAfterRecompute(admin, invoiceId);
   }
 
   const payload = { ok: true as const, adjustmentId: ins.id };

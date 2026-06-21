@@ -8,6 +8,10 @@ import {
   routePaystackChargeForMonthlyInvoice,
   shouldShortCircuitForMonthlyInvoice,
 } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
+import {
+  routePaystackChargeForSalesDocument,
+  shouldShortCircuitForSalesDocument,
+} from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
 import { bookingPaymentTotalCents, clampTipZar, type BookingRowPaymentInput } from "@/lib/payments/bookingPaymentSummary";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -217,6 +221,32 @@ export async function POST(request: Request) {
           monthlyRouting.kind === "monthly_settled"
             ? monthlyRouting.settled
             : "already_processed",
+      });
+    }
+
+    const salesRouting = await routePaystackChargeForSalesDocument(admin, {
+      reference: paystackVerifyRef,
+      amountCents: amount,
+    });
+    if (shouldShortCircuitForSalesDocument(salesRouting)) {
+      await logSystemEvent({
+        level: "info",
+        source: "payments/verify",
+        message: "sales_document.charge.success",
+        context: {
+          reference: paystackVerifyRef,
+          routing_kind: salesRouting.kind,
+          ...(salesRouting.kind === "sales_doc_settled"
+            ? { documentId: salesRouting.documentId }
+            : { reason: salesRouting.reason }),
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        bookingId: null,
+        alreadyPaid: salesRouting.kind === "sales_doc_already_processed",
+        salesDocumentId:
+          salesRouting.kind === "sales_doc_settled" ? salesRouting.documentId : null,
       });
     }
   }

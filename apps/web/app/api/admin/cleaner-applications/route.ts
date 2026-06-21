@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await admin
     .from("cleaner_applications")
-    .select("id, name, phone, location, city_id, experience, availability, status, created_at")
+    .select("id, name, phone, location, city_id, experience, availability, working_areas, working_days, status, created_at")
     .order("created_at", { ascending: false })
     .limit(1000);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

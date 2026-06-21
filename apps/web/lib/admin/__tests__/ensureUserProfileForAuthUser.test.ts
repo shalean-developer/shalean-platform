@@ -151,13 +151,13 @@ describe("ensureUserProfileForAuthUser", () => {
     expect(state.inserts[0]?.full_name).toBe("Walk-In Customer");
   });
 
-  it("inserts with null full_name when auth metadata has no usable name", async () => {
+  it("omits full_name when auth metadata has no usable name", async () => {
     const { admin, state } = buildFakeAdmin({
       initialProfile: null,
       authMeta: {},
     });
     await ensureUserProfileForAuthUser(admin as never, ID_VALID);
-    expect(state.inserts[0]?.full_name).toBeNull();
+    expect(state.inserts[0]?.full_name).toBeUndefined();
   });
 
   it("rejects an obviously invalid user id without touching the database", async () => {

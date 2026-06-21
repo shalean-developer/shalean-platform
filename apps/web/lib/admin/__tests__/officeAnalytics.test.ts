@@ -105,4 +105,27 @@ describe("computeOfficeAnalyticsSummary", () => {
     expect(summary.revenueChart["30d"].length).toBe(4);
     expect(summary.revenueChart["90d"].length).toBe(3);
   });
+
+  it("uses customer_id when present (production bookings schema)", () => {
+    const summary = computeOfficeAnalyticsSummary(
+      [
+        row({
+          id: "current-1",
+          user_id: null,
+          customer_id: "returning-user",
+          payment_completed_at: "2026-06-10T08:00:00.000Z",
+        }),
+        row({
+          id: "current-2",
+          user_id: null,
+          customer_id: "new-user",
+          payment_completed_at: "2026-06-12T08:00:00.000Z",
+        }),
+      ],
+      ["returning-user"],
+      NOW,
+    );
+
+    expect(summary.kpis.customerRetentionPct).toBe(50);
+  });
 });

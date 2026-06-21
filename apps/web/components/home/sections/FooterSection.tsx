@@ -30,6 +30,7 @@ const FOOTER_COMPANY = [
 ];
 
 const FOOTER_SUPPORT = [
+  { label: "Get Free Quote", href: "/quote" },
   { label: "Help Centre", href: "/faq" },
   { label: "Cleaning FAQs", href: "/faq" },
   { label: "Booking & Payments", href: "/book" },
@@ -61,7 +62,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-export function FooterSection() {
+export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }) {
   return (
     <>
       <footer
@@ -206,7 +207,11 @@ export function FooterSection() {
         rel="noopener noreferrer"
         onClick={() => trackEvent("whatsapp_click")}
         aria-label="Chat on WhatsApp"
-        className="fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600"
+        className={
+          stackFloats
+            ? "fixed bottom-[calc(5.25rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600 md:bottom-[4.75rem]"
+            : "fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600"
+        }
       >
         <WhatsAppIcon className="h-7 w-7" />
       </a>

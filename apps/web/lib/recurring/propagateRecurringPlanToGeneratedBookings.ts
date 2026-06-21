@@ -20,6 +20,7 @@ import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSna
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
+import { syncDraftMonthlyInvoiceToZohoAfterRecompute } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 
 export type RecurringPlanPropagationResult = {
   ok: true;
@@ -294,6 +295,8 @@ export async function propagateRecurringPlanToGeneratedBookings(
       continue;
     }
     result.invoices_recomputed++;
+
+    await syncDraftMonthlyInvoiceToZohoAfterRecompute(admin, invoiceId);
   }
 
   return result;

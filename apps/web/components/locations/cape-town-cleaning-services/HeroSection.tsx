@@ -44,7 +44,7 @@ export function HeroSection() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button size="xl" className="rounded-xl shadow-md" asChild>
-              <Link href={quoteHref}>Get Instant Quote</Link>
+              <Link href={quoteHref}>Get Free Quote</Link>
             </Button>
             <Button size="xl" variant="outline" className="rounded-xl border-zinc-300 bg-white/80 dark:border-zinc-600 dark:bg-zinc-900/80" asChild>
               <Link href={bookHref}>Book a Cleaner</Link>

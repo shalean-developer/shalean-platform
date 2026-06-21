@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { Search, CheckCircle2, XCircle, RefreshCw, AlertCircle, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  formatCleanerApplyWorkingAreas,
+  formatCleanerApplyWorkingDays,
+} from "@/lib/cleaner/cleanerApplicationFields";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 
 type ApplicationRow = {
@@ -12,7 +16,9 @@ type ApplicationRow = {
   location: string | null;
   city_id: string | null;
   experience: string | null;
-  availability: string | null;
+  availability: string[] | null;
+  working_areas: string[] | null;
+  working_days: string[] | null;
   status: "pending" | "approved" | "rejected" | string;
   created_at: string;
 };
@@ -192,7 +198,15 @@ export default function CleanerApplicationsPage() {
                       {a.phone && <span>{a.phone}</span>}
                       {a.location && <span>📍 {a.location}</span>}
                       {a.experience && <span>Experience: {a.experience}</span>}
-                      {a.availability && <span>Available: {a.availability}</span>}
+                      {(a.availability ?? []).length > 0 && (
+                        <span>Available: {(a.availability ?? []).join(", ")}</span>
+                      )}
+                      {formatCleanerApplyWorkingAreas(a.working_areas) && (
+                        <span>Areas: {formatCleanerApplyWorkingAreas(a.working_areas)}</span>
+                      )}
+                      {formatCleanerApplyWorkingDays(a.working_days) && (
+                        <span>Days: {formatCleanerApplyWorkingDays(a.working_days)}</span>
+                      )}
                     </div>
                     <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
                       <Clock className="h-3 w-3" />

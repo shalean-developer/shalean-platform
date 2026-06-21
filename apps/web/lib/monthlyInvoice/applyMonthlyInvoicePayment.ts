@@ -6,6 +6,7 @@ import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceS
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
+import { resolveZohoCustomerContactForMonthlyInvoice } from "@/lib/zoho/resolveZohoCustomerContact";
 
 export type ApplyMonthlyInvoicePaymentResult =
   | { ok: true; skipped: true; reason: "not_found" | "already_paid" | "duplicate_charge" }
@@ -183,18 +184,22 @@ export async function applyMonthlyInvoicePayment(
         .maybeSingle();
 
       const zohoInvoiceId = (invRow as { zoho_invoice_id?: string | null } | null)?.zoho_invoice_id;
-      if (zohoInvoiceId) {
-        const userRes = await admin.auth.admin.getUserById(
-          (invRow as { customer_id?: string } | null)?.customer_id ?? "",
-        );
-        const customerEmail = String(userRes.data.user?.email ?? "").trim();
-        await markZohoInvoicePaid({
-          zohoInvoiceId,
-          amountZar: capPaid / 100,
-          paymentDate: todayYmdJhb(),
-          reference: ref,
-          customerEmail: customerEmail || undefined,
+      const customerId = (invRow as { customer_id?: string } | null)?.customer_id ?? "";
+      if (zohoInvoiceId && customerId) {
+        const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
+          invoiceId: row.id,
+          customerId,
         });
+        if (contactRes.ok) {
+          await markZohoInvoicePaid({
+            zohoInvoiceId,
+            amountZar: capPaid / 100,
+            paymentDate: todayYmdJhb(),
+            reference: ref,
+            customerEmail: contactRes.contact.email,
+            customerName: contactRes.contact.name,
+          });
+        }
       }
     }
 

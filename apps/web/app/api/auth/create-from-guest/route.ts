@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
+import { upsertCustomerProfileContact } from "@/lib/customer/upsertCustomerProfileContact";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -132,13 +133,27 @@ export async function POST(req: Request) {
         message: "user_profile_repair_failed",
         context: { auth_user_id: resolvedAuthUserId, error: ensured.error },
       });
-    } else if (ensured.created) {
-      await logSystemEvent({
-        level: "info",
-        source: "create-from-guest",
-        message: "user_profile_created",
-        context: { auth_user_id: resolvedAuthUserId },
+    } else {
+      const synced = await upsertCustomerProfileContact(admin, {
+        userId: resolvedAuthUserId,
+        contact: { fullName: name, billingEmail: rowEmail },
+        role: "customer",
       });
+      if (!synced.ok) {
+        await logSystemEvent({
+          level: "warn",
+          source: "create-from-guest",
+          message: "user_profile_contact_sync_failed",
+          context: { auth_user_id: resolvedAuthUserId, error: synced.error },
+        });
+      } else if (ensured.created || synced.created) {
+        await logSystemEvent({
+          level: "info",
+          source: "create-from-guest",
+          message: "user_profile_created",
+          context: { auth_user_id: resolvedAuthUserId },
+        });
+      }
     }
   }
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Star, RefreshCw, AlertCircle } from "lucide-react";
+import { Search, Star, RefreshCw, AlertCircle, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAdminData } from "@/hooks/useAdminData";
+import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 
 type ReviewRow = {
   id: string;
@@ -17,6 +17,7 @@ type ReviewRow = {
   created_at: string;
   service: string | null;
   is_public: boolean | null;
+  is_hidden?: boolean | null;
 };
 
 type ReviewsResponse = {
@@ -45,12 +46,30 @@ function formatDate(iso: string): string {
 export default function ReviewsPage() {
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState<number | "all">("all");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const { data, loading, error, refetch } = useAdminData<ReviewsResponse>("/api/admin/reviews", {
     params: { limit: "200" },
   });
 
   const reviews = data?.reviews ?? [];
+
+  async function toggleHidden(id: string, isHidden: boolean) {
+    setActionLoading(`${id}-hide`);
+    const res = await adminFetch("/api/admin/reviews", {
+      method: "PATCH",
+      body: JSON.stringify({ id, is_hidden: isHidden }),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      setToast(isHidden ? "Review hidden from public" : "Review visible again");
+      void refetch();
+    } else {
+      setToast(res.error ?? "Could not update review");
+    }
+    setTimeout(() => setToast(null), 3000);
+  }
 
   const filtered = reviews.filter((r) => {
     const s =
@@ -73,6 +92,11 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-5">
+      {toast ? (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-lg">
+          {toast}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Reviews</h1>
@@ -164,13 +188,33 @@ export default function ReviewsPage() {
                           {r.service.replace(/-/g, " ")}
                         </span>
                       )}
+                      {r.is_hidden ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                          <EyeOff className="h-3 w-3" aria-hidden />
+                          Hidden
+                        </span>
+                      ) : null}
                     </div>
                     <StarRating rating={r.rating} />
                     {r.comment && (
                       <p className="mt-1.5 text-sm text-slate-600 line-clamp-2">{r.comment}</p>
                     )}
                   </div>
-                  <p className="shrink-0 text-xs text-slate-400">{formatDate(r.created_at)}</p>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <p className="text-xs text-slate-400">{formatDate(r.created_at)}</p>
+                    <button
+                      type="button"
+                      disabled={actionLoading === `${r.id}-hide`}
+                      onClick={() => void toggleHidden(r.id, !r.is_hidden)}
+                      className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {actionLoading === `${r.id}-hide`
+                        ? "Saving…"
+                        : r.is_hidden
+                          ? "Unhide"
+                          : "Hide"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))

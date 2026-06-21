@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { CalendarDays, Menu, Phone, X } from "lucide-react";
+import { CalendarDays, Menu, X } from "lucide-react";
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import { HeaderLoginButton } from "@/components/nav/HeaderLoginButton";
 import { MARKETING_HEADER_NAV_LINKS } from "@/lib/marketing/marketingHomeHeaderNav";
 
 type Props = {
@@ -17,15 +17,7 @@ export function MarketingHomeMobileNav({ bookingHref }: Props) {
   return (
     <>
       <div className="flex items-center gap-2 lg:hidden">
-        <HeaderLoginButton />
-
-        <a
-          href="tel:0871535250"
-          aria-label="Call us"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm"
-        >
-          <Phone className="h-4 w-4" />
-        </a>
+        <GetFreeQuoteLink source="marketing_header_mobile" variant="navCompact" className="hidden min-[400px]:inline-flex" />
         <GrowthCtaLink
           href={bookingHref}
           source="marketing_header_mobile_book"
@@ -49,6 +41,11 @@ export function MarketingHomeMobileNav({ bookingHref }: Props) {
       {open ? (
         <div className="border-t border-blue-100 bg-white px-4 py-4 shadow-md lg:hidden">
           <div className="flex flex-col gap-1">
+            <GetFreeQuoteLink
+              source="marketing_mobile_menu"
+              variant="outline"
+              className="mb-2 w-full"
+            />
             {MARKETING_HEADER_NAV_LINKS.map(({ label, href }) => (
               <Link
                 key={label}
@@ -59,9 +56,6 @@ export function MarketingHomeMobileNav({ bookingHref }: Props) {
                 {label}
               </Link>
             ))}
-            <div className="mt-2 border-t border-blue-100 pt-3">
-              <HeaderLoginButton showLabel className="w-full justify-start" />
-            </div>
           </div>
         </div>
       ) : null}

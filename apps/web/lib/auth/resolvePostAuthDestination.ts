@@ -28,6 +28,17 @@ export async function resolvePostAuthDestination(
   accessToken: string,
   redirectParam?: string | null,
 ): Promise<ResolvePostAuthResult> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await resolvePostAuthDestinationOnce(accessToken, redirectParam);
+    if (result.kind !== "timeout" || attempt === 1) return result;
+  }
+  return { kind: "timeout" };
+}
+
+async function resolvePostAuthDestinationOnce(
+  accessToken: string,
+  redirectParam?: string | null,
+): Promise<ResolvePostAuthResult> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), ROLE_FETCH_TIMEOUT_MS);
 
@@ -74,7 +85,7 @@ export type FetchUserRoleResult =
   | { ok: true; role: AppUserRole; dashboardRoute: string }
   | { ok: false; reason: "unauthenticated" | "missing_profile" | "invalid_role" | "timeout" | "error"; message?: string };
 
-/** Client-side role fetch for route guards (3s timeout). */
+/** Client-side role fetch for route guards. */
 export async function fetchUserRoleClient(accessToken: string): Promise<FetchUserRoleResult> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), ROLE_FETCH_TIMEOUT_MS);

@@ -12,7 +12,8 @@ export const ROLE_DASHBOARD_ROUTES: Record<AppUserRole, string> = {
 export const LS_USER_ROLE_KEY = "shalean_user_role";
 export const LS_DASHBOARD_ROUTE_KEY = "shalean_dashboard_route";
 
-export const ROLE_FETCH_TIMEOUT_MS = 3_000;
+/** Post-login role lookup — allow slow dev cold-starts (Next.js route compile). */
+export const ROLE_FETCH_TIMEOUT_MS = 8_000;
 
 export function isAppUserRole(raw: string | null | undefined): raw is AppUserRole {
   return raw === "admin" || raw === "cleaner" || raw === "customer";

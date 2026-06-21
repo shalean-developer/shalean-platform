@@ -1,5 +1,6 @@
 import type React from "react";
-import { Shield, Clock, MapPin, Mail } from "lucide-react";
+import { Clock, Mail, MapPin, Phone, Shield } from "lucide-react";
+import { SiteTopBarAccount } from "@/components/nav/SiteTopBarAccount";
 
 type ContactItem = {
   icon: React.ComponentType<{ className?: string }>;
@@ -10,6 +11,7 @@ type ContactItem = {
 const CONTACT_ITEMS: ContactItem[] = [
   { icon: Shield, label: "No hidden fees, ever" },
   { icon: Clock, label: "8am – 6pm (Mon - Sat)" },
+  { icon: Phone, label: "087 153 5250", href: "tel:0871535250" },
   { icon: MapPin, label: "Cape Town, South Africa" },
   { icon: Mail, label: "hello@shalean.co.za", href: "mailto:hello@shalean.co.za" },
 ];
@@ -76,6 +78,7 @@ export function SiteTopBar() {
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
+          <SiteTopBarAccount />
           {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
             <a
               key={label}

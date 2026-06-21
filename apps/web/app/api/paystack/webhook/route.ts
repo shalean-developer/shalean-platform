@@ -20,6 +20,9 @@ import {
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import { routePaystackChargeForMonthlyInvoice } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
+import {
+  routePaystackChargeForSalesDocument,
+} from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
 import { metrics } from "@/lib/metrics/counters";
 import {
   expectedCheckoutZarFromVerify,
@@ -173,6 +176,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
     if (monthlyRouting.kind === "monthly_already_processed") {
+      return new Response("Already processed", {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
+    const salesRouting = await routePaystackChargeForSalesDocument(supabase, {
+      reference,
+      amountCents: typeof data.amount === "number" ? data.amount : 0,
+    });
+    if (salesRouting.kind === "sales_doc_settled") {
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/webhook",
+        message: "sales_document.charge.success",
+        context: { reference, documentId: salesRouting.documentId },
+      });
+      return NextResponse.json({ received: true });
+    }
+    if (salesRouting.kind === "sales_doc_already_processed") {
       return new Response("Already processed", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },

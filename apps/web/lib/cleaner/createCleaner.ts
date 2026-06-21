@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { cleanerGeneratedLoginEmailFromE164 } from "@/lib/cleaner/cleanerIdentity";
+import { syncCleanerUserProfile } from "@/lib/cleaner/syncCleanerUserProfile";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 
 type CreateCleanerInput = {
@@ -40,7 +41,13 @@ export async function createCleaner(params: CreateCleanerInput): Promise<{
     email: authEmail,
     password: params.password,
     email_confirm: true,
-    user_metadata: { role: "cleaner", source: "admin_create_cleaner", phone_e164: phoneNorm },
+    user_metadata: {
+      role: "cleaner",
+      source: "admin_create_cleaner",
+      full_name: fullName,
+      name: fullName,
+      phone_e164: phoneNorm,
+    },
   });
   if (authRes.error || !authRes.data.user?.id) {
     throw new Error(authRes.error?.message ?? "Could not create cleaner auth user.");
@@ -81,6 +88,15 @@ export async function createCleaner(params: CreateCleanerInput): Promise<{
       }
     }
     throw new Error(insertErr?.message ?? "Could not create cleaner row.");
+  }
+
+  const synced = await syncCleanerUserProfile(params.admin, authUserId, {
+    full_name: fullName,
+    phone: phoneNorm,
+    email: authEmail,
+  });
+  if (!synced.ok) {
+    throw new Error(synced.error);
   }
 
   return { cleanerId: row.id as string, phoneNumber: phoneNorm, email: authEmail };

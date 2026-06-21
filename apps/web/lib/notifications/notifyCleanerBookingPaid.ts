@@ -79,7 +79,7 @@ export async function notifyCleanerBookingPaid(params: {
     }
     const jobRef = bookingJobDisplayRef(bookingId);
     const channel =
-      method === "cash" ? "Cash" : method === "eft" ? "EFT" : "Zoho";
+      method === "cash" ? "Cash" : method === "eft" ? "EFT" : "Off-platform";
     const refLine =
       (method === "zoho" || method === "eft") &&
       externalReference != null &&

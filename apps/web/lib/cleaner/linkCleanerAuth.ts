@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { cleanerGeneratedLoginEmailFromAnyPhone } from "@/lib/cleaner/cleanerIdentity";
+import { syncCleanerUserProfileForCleanerRow } from "@/lib/cleaner/syncCleanerUserProfile";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 
 const log = (...args: unknown[]) => console.error("[cleaner-auth-link]", ...args);
@@ -81,6 +82,14 @@ async function cleanerIdClaimingAuthUser(admin: SupabaseClient, authUserId: stri
   return data?.id ?? null;
 }
 
+async function finishCleanerAuthLink(admin: SupabaseClient, cleanerRowId: string, authUserId: string): Promise<string> {
+  const synced = await syncCleanerUserProfileForCleanerRow(admin, cleanerRowId);
+  if (!synced.ok) {
+    log("profile sync failed", cleanerRowId, authUserId, synced.error);
+  }
+  return authUserId;
+}
+
 /**
  * Ensures the cleaner row has a valid `auth_user_id` pointing at a real Auth user.
  * Prefers: existing valid link → reuse by email → create user.
@@ -103,7 +112,9 @@ export async function ensureCleanerLinkedToAuth(
   const existingAuth = row.auth_user_id as string | null | undefined;
   if (existingAuth) {
     const check = await admin.auth.admin.getUserById(existingAuth);
-    if (!check.error && check.data.user) return existingAuth;
+    if (!check.error && check.data.user) {
+      return finishCleanerAuthLink(admin, cleanerRowId, existingAuth);
+    }
     log("clearing stale auth_user_id", cleanerRowId, existingAuth);
     await admin.from("cleaners").update({ auth_user_id: null }).eq("id", cleanerRowId);
   }
@@ -124,7 +135,7 @@ export async function ensureCleanerLinkedToAuth(
       log("link-by-email update failed", cleanerRowId, email, upErr.message);
       continue;
     }
-    return uid;
+    return finishCleanerAuthLink(admin, cleanerRowId, uid);
   }
 
   const generatedLogin = row.phone ? cleanerGeneratedLoginEmailFromAnyPhone(String(row.phone)) : null;
@@ -149,7 +160,7 @@ export async function ensureCleanerLinkedToAuth(
         const claimant = await cleanerIdClaimingAuthUser(admin, uid);
         if (!claimant || claimant === cleanerRowId) {
           const { error: upErr } = await admin.from("cleaners").update({ auth_user_id: uid }).eq("id", cleanerRowId);
-          if (!upErr) return uid;
+          if (!upErr) return finishCleanerAuthLink(admin, cleanerRowId, uid);
         }
       }
     }
@@ -166,7 +177,7 @@ export async function ensureCleanerLinkedToAuth(
     throw new Error(upErr.message);
   }
 
-  return newId;
+  return finishCleanerAuthLink(admin, cleanerRowId, newId);
 }
 
 /**

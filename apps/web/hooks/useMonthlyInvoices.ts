@@ -16,6 +16,7 @@ const SELECT = [
   "status",
   "due_date",
   "payment_link",
+  "paystack_reference",
   "sent_at",
   "finalized_at",
   "is_overdue",
@@ -23,7 +24,6 @@ const SELECT = [
   "currency_code",
   "created_at",
   "updated_at",
-  "zoho_invoice_id",
 ].join(",");
 
 export function useMonthlyInvoices(): {

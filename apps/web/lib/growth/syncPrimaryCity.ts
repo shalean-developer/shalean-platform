@@ -27,6 +27,7 @@ export async function syncUserPrimaryCityFromBooking(
     id: uid,
     booking_count: 0,
     total_spent_cents: 0,
+    role: "customer",
     primary_city_id: cid,
     updated_at: ts,
   });

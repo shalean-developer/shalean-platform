@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ShieldCheck, ThumbsUp, MousePointerClick, Star, Users } from "lucide-react";
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -50,6 +51,13 @@ export function MarketingHomeHeroSection() {
             ))}
           </div>
 
+          <p className="text-sm text-slate-600">
+            Are you a worker?{" "}
+            <Link href="/cleaner/apply" className="font-semibold text-blue-600 hover:underline">
+              Apply Now
+            </Link>
+          </p>
+
           {/* CTAs */}
           <div className="flex flex-wrap items-center gap-3">
             <GrowthCtaLink
@@ -60,12 +68,7 @@ export function MarketingHomeHeroSection() {
               Book a cleaning
               <span aria-hidden className="ml-0.5">→</span>
             </GrowthCtaLink>
-            <Link
-              href="/services"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              View our services
-            </Link>
+            <GetFreeQuoteLink source="marketing_hero" variant="outline" />
           </div>
 
           {/* Google rating row */}

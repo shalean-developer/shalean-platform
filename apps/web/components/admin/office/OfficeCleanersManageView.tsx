@@ -66,6 +66,7 @@ const DEFAULT_FORM: CleanerForm = {
 };
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 50;
 
 function statusLabel(row: AdminCleanerRow): string {
   const st = String(row.status ?? "").toLowerCase();
@@ -118,7 +119,7 @@ export function OfficeCleanersManageView() {
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CleanerForm>(DEFAULT_FORM);
@@ -825,7 +826,9 @@ export function OfficeCleanersManageView() {
             <p className="text-xs text-slate-400">
               {loading
                 ? "Loading…"
-                : `Showing ${pagination.from}-${pagination.to} of ${pagination.total} cleaners`}
+                : filtered.length !== rows.length
+                  ? `Showing ${pagination.from}-${pagination.to} of ${pagination.total} filtered (${rows.length} loaded from database)`
+                  : `Showing ${pagination.from}-${pagination.to} of ${pagination.total} cleaners`}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2 text-xs text-slate-500">

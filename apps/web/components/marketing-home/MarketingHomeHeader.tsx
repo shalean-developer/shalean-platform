@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { CalendarDays, ArrowRight, Phone } from "lucide-react";
+import { CalendarDays, ArrowRight } from "lucide-react";
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
-import { HeaderLoginButton } from "@/components/nav/HeaderLoginButton";
 import { SiteTopBar } from "@/components/nav/SiteTopBar";
 import { MarketingHomeMobileNav } from "@/components/marketing-home/MarketingHomeMobileNav";
 import { MarketingHomeServicesDropdown } from "@/components/marketing-home/MarketingHomeServicesDropdown";
@@ -32,17 +32,7 @@ export function MarketingHomeHeader({ bookingHref }: { bookingHref: string }) {
           </nav>
 
           <div className="hidden items-center gap-3 lg:flex">
-            <HeaderLoginButton />
-
-            <a
-              href="tel:0871535250"
-              className="flex items-center gap-2 rounded-full border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600">
-                <Phone className="h-3.5 w-3.5 text-white" />
-              </span>
-              087 153 5250
-            </a>
+            <GetFreeQuoteLink source="marketing_header" variant="nav" />
 
             <GrowthCtaLink
               href={bookingHref}

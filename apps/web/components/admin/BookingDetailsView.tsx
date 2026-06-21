@@ -355,7 +355,7 @@ function formatZar(n: number): string {
   return `R ${n.toLocaleString("en-ZA")}`;
 }
 
-/** Human label when payment was recorded off-platform (cash / Zoho / EFT). */
+/** Human label when payment was recorded off-platform (cash / external / EFT). */
 function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null {
   const pm = String(booking.payment_method ?? "").trim().toLowerCase();
   if (pm === "cash") return "Paid (Cash)";
@@ -367,9 +367,9 @@ function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null 
   }
   if (pm === "zoho") {
     const ext = String(booking.payment_reference_external ?? "").trim();
-    if (!ext) return "Paid (Zoho)";
+    if (!ext) return "Paid (external)";
     const short = ext.length > 42 ? `${ext.slice(0, 42)}…` : ext;
-    return `Paid (Zoho: ${short})`;
+    return `Paid (external: ${short})`;
   }
   const ref = String(booking.paystack_reference ?? "").trim().toLowerCase();
   if (ref.startsWith("cash_")) return "Paid (Cash)";
@@ -381,7 +381,7 @@ function adminOffPlatformPaidBadgeLabel(booking: BookingDetails): string | null 
   if (ref.startsWith("zoho_")) {
     const tail = ref.replace(/^zoho_/, "");
     const ext = tail.length > 42 ? `${tail.slice(0, 42)}…` : tail;
-    return ext ? `Paid (Zoho: ${ext})` : "Paid (Zoho)";
+    return ext ? `Paid (external: ${ext})` : "Paid (external)";
   }
   return null;
 }
@@ -3933,7 +3933,7 @@ export default function BookingDetailsView({
                 </>
               ) : (
                 <>
-                  Log cash, EFT, or Zoho as <strong className="font-medium text-zinc-700">fully paid</strong>. Amount defaults from{" "}
+                  Log cash, EFT, or off-platform payment as <strong className="font-medium text-zinc-700">fully paid</strong>. Amount defaults from{" "}
                   <code className="text-xs">total_price</code>, then <code className="text-xs">total_paid_cents</code>—enter a figure
                   below only if there’s no quote or it’s wrong.
                 </>
@@ -4002,7 +4002,7 @@ export default function BookingDetailsView({
                 >
                   <option value="cash">Cash</option>
                   <option value="eft">EFT</option>
-                  <option value="zoho">Zoho</option>
+                  <option value="zoho">External / off-platform</option>
                 </select>
               </label>
               {markPaidMethod === "zoho" || markPaidMethod === "eft" ? (
@@ -4040,7 +4040,7 @@ export default function BookingDetailsView({
                 <li>
                   Method:{" "}
                   <strong>
-                    {markPaidMethod === "zoho" ? "Zoho" : markPaidMethod === "eft" ? "EFT" : "Cash"}
+                    {markPaidMethod === "zoho" ? "External" : markPaidMethod === "eft" ? "EFT" : "Cash"}
                   </strong>
                 </li>
                 {(markPaidMethod === "zoho" || markPaidMethod === "eft") && markPaidReference.trim() ? (

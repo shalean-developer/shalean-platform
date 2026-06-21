@@ -582,7 +582,7 @@ function ActionsPanel(props: OfficeBookingDetailsShellProps) {
           {props.zohoInvoiceId ? (
             <Button variant="outline" className="w-full justify-start" asChild>
               <a href={`/api/admin/bookings/${encodeURIComponent(props.bookingId)}/invoice-pdf`} target="_blank" rel="noopener noreferrer">
-                <ReceiptText className="h-4 w-4" /> View Zoho invoice
+                <ReceiptText className="h-4 w-4" /> View invoice
               </a>
             </Button>
           ) : null}

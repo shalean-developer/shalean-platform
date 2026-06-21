@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { monthlyInvoicePaystackReferenceForInitialize } from "@/lib/monthlyInvoice/monthlyInvoiceStablePaystackReference";
+import { ensureMonthlyInvoiceLateFeeApplied } from "@/lib/monthlyInvoice/ensureMonthlyInvoiceLateFeeApplied";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -146,6 +147,16 @@ export async function initializePaystackForMonthlyInvoice(
   const statusNorm = String(row.status ?? "").toLowerCase();
   if (!PAYABLE_STATUSES.includes(statusNorm as (typeof PAYABLE_STATUSES)[number])) {
     return { ok: false, error: "invoice_not_payable" };
+  }
+
+  if (["sent", "partially_paid", "overdue"].includes(statusNorm)) {
+    const lateFee = await ensureMonthlyInvoiceLateFeeApplied(admin, params.invoiceId);
+    if (!lateFee.ok) return { ok: false, error: lateFee.error };
+    if (lateFee.applied) {
+      const reload = await loadInvoiceRow(admin, params.invoiceId);
+      if (reload.error || !reload.data) return { ok: false, error: reload.error?.message ?? "invoice_not_found" };
+      row = reload.data as InvoiceRow;
+    }
   }
 
   const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));

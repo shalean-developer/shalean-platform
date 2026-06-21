@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,10 @@ import { Label } from "@/components/ui/label";
 
 export default function AdminCreateCustomerPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const officeBase = pathname.startsWith("/office") ? "/office/customers" : "/admin/customers";
+  const bookingsCreate = pathname.startsWith("/office") ? "/office/bookings/create" : "/admin/bookings/create";
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -63,7 +66,7 @@ export default function AdminCreateCustomerPage() {
         setError("Unexpected response.");
         return;
       }
-      router.push(`/admin/customers/${uid}`);
+      router.push(`${officeBase}/${uid}`);
     } finally {
       setBusy(false);
     }
@@ -72,13 +75,10 @@ export default function AdminCreateCustomerPage() {
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <Link href="/admin/customers" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+        <Link href={officeBase} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           ← Customers
         </Link>
-        <Link
-          href="/admin/bookings/create"
-          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
+        <Link href={bookingsCreate} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           Create booking
         </Link>
       </div>

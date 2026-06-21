@@ -61,8 +61,43 @@ export type ZohoInvoiceCreateResponse = {
   invoice: ZohoInvoice;
 };
 
+export type ZohoInvoiceUpdateResponse = {
+  code: number;
+  message: string;
+  invoice: ZohoInvoice;
+};
+
 export type ZohoPaymentCreateResponse = {
   code: number;
   message: string;
   payment: { payment_id: string; amount: number };
+};
+
+export type ZohoEstimateInput = {
+  customer_id: string;
+  date: string;
+  expiry_date?: string;
+  line_items: ZohoLineItem[];
+  notes?: string;
+  currency_code?: string;
+  reference_number?: string;
+};
+
+export type ZohoEstimate = {
+  estimate_id: string;
+  estimate_number: string;
+  status: string;
+  total: number;
+};
+
+export type ZohoEstimateCreateResponse = {
+  code: number;
+  message: string;
+  estimate: ZohoEstimate;
+};
+
+export type ZohoEstimateUpdateResponse = {
+  code: number;
+  message: string;
+  estimate: ZohoEstimate;
 };

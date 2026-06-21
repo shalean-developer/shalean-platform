@@ -9,6 +9,7 @@ export type CustomerMonthlyInvoiceRow = {
   status: string;
   due_date: string;
   payment_link?: string | null;
+  paystack_reference?: string | null;
   sent_at: string | null;
   finalized_at: string | null;
   is_overdue: boolean;
@@ -16,6 +17,4 @@ export type CustomerMonthlyInvoiceRow = {
   currency_code: string;
   created_at: string;
   updated_at: string;
-  /** Zoho Books invoice id (set at finalization); enables the in-app invoice PDF link. */
-  zoho_invoice_id?: string | null;
 };

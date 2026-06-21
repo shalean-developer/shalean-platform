@@ -2,12 +2,14 @@ import "server-only";
 
 import { createNotificationConfigBreaker } from "@/lib/email/notificationConfigBreaker";
 import { buildMonthlyInvoiceSnapshot, wrapSnapshotCurrentV1 } from "@/lib/monthlyInvoice/buildMonthlyInvoiceSnapshot";
-import { createZohoInvoice, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import {
   appendMonthlyInvoiceSnapshotEvent,
   invoicePaymentLinkEmailSentExists,
 } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
-import { isInvoiceMonthReadyToFinalize, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
+import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
+import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
+import { assessMonthlyInvoiceFinalizeReadiness } from "@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
+import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice";
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -39,18 +41,17 @@ function formatDueDate(isoDate: string): string {
 }
 
 /**
- * Idempotent finalize for **closed billing periods only**:
- * draft rows pass {@link isInvoiceMonthReadyToFinalize} (today ≥ last calendar day of invoice `month`, Johannesburg).
- * SQL prefilter `month <= todayYm` avoids future buckets; the calendar predicate drops edge cases (e.g. same-month drafts).
+ * Idempotent finalize when a draft monthly invoice is ready to collect:
+ * - Every expected recurring visit for the billing month exists on the invoice, and
+ * - Today is on or after the last scheduled visit in that month (no upcoming visits left).
  *
- * **Schedule (ops):** run **daily** — recommended **23:55 Africa/Johannesburg** (**21:55 UTC** on `vercel.json` crons).
- * Not tied to recurring generation timing; missed runs still finalize the same drafts later.
+ * Ad-hoc monthly bookings (no recurring plan) finalize once the last visit date has passed.
  *
- * **Collection:** Paystack **transaction/initialize** (hosted payment link + email). This is **not** card-on-file
- * `charge_authorization`; customer completes payment in browser; webhook applies `paid`.
- * Invoice unpaid states: `sent` / `partially_paid` / `overdue` (plus `sent_at`, `balance_cents`, `reminder_count`).
+ * **Schedule (ops):** run **daily** — recommended **23:55 Africa/Johannesburg**.
  *
- * **Zero balance:** `total_amount_cents === 0` → snapshot + mark `paid` with `closure_reason: zero_amount` (no Paystack).
+ * **Collection:** Paystack hosted payment link + email. `due_date` is stamped to `today` at finalize.
+ *
+ * **Zero balance:** `total_amount_cents === 0` → snapshot + mark `paid` with `closure_reason: zero_amount`.
  */
 export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoicesResult> {
   const admin = getSupabaseAdmin();
@@ -60,6 +61,7 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
   const todayYm = today.slice(0, 7);
   const errors: string[] = [];
   let finalized = 0;
+  let skippedNotReady = 0;
 
   // M-9: per-run circuit breaker. Trips on the FIRST permanent_config send
   // outcome and short-circuits the email step for every subsequent invoice
@@ -82,12 +84,23 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
     return { ok: false, reason: error.message, today };
   }
 
-  const drafts = (draftRows ?? []).filter((r) =>
-    isInvoiceMonthReadyToFinalize(today, String((r as { month?: string }).month ?? "")),
-  );
+  const draftCandidates = draftRows ?? [];
 
-  for (const raw of drafts) {
+  for (const raw of draftCandidates) {
     const inv = raw as { id: string; customer_id: string; month: string; due_date: string; status: string };
+
+    const readiness = await assessMonthlyInvoiceFinalizeReadiness(admin, {
+      invoiceId: inv.id,
+      customerId: inv.customer_id,
+      month: inv.month,
+      todayYmd: today,
+    });
+    if (!readiness.ready) {
+      skippedNotReady += 1;
+      continue;
+    }
+
+    const paymentDueDate = readiness.paymentDueDateYmd ?? today;
     const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", { p_invoice_id: inv.id });
     if (rpcErr) {
       errors.push(`${inv.id}: ${rpcErr.message}`);
@@ -112,6 +125,12 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
 
     const f = fresh as { id: string; total_amount_cents: number | null; due_date: string; month: string };
     const cents = Math.max(0, Math.round(Number(f.total_amount_cents ?? 0)));
+
+    await admin
+      .from("monthly_invoices")
+      .update({ due_date: paymentDueDate })
+      .eq("id", f.id)
+      .eq("status", "draft");
 
     if (cents === 0) {
       const nowIso = new Date().toISOString();
@@ -244,7 +263,21 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
       continue;
     }
 
+    const brandedPayUrl = trustMonthlyInvoicePayPageUrl(f.id, pay.reference, pay.authorizationUrl);
     const balanceZar = Math.max(0, cents) / 100;
+
+    const zohoSync = await syncMonthlyInvoiceToZohoBooks(admin, {
+      invoiceId: f.id,
+      customerId: inv.customer_id,
+      month: f.month,
+      dueDate: paymentDueDate,
+      balanceZar,
+      paymentUrl: brandedPayUrl,
+      status: "draft",
+    });
+    if (!zohoSync.ok && zohoSync.error !== "zero_balance") {
+      errors.push(`${f.id}: zoho_sync:${zohoSync.error}`);
+    }
 
     if (await invoicePaymentLinkEmailSentExists(admin, f.id)) {
       finalized++;
@@ -288,8 +321,8 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
       to: email,
       monthLabel: formatMonthLabel(f.month),
       totalZar: balanceZar,
-      paymentUrl: pay.authorizationUrl,
-      dueDateLabel: formatDueDate(f.due_date),
+      paymentUrl: brandedPayUrl,
+      dueDateLabel: formatDueDate(paymentDueDate),
     });
 
     if (!mail.sent) {
@@ -327,36 +360,6 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
       continue;
     }
 
-    // Sync to Zoho Books (non-blocking — failures are logged but don't fail finalization)
-    if (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
-      const zohoResult = await createZohoInvoice({
-        referenceId: f.id,
-        customerEmail: email,
-        customerName: email,
-        invoiceDate: todayYmdJhb(),
-        dueDate: f.due_date,
-        lineItems: [
-          {
-            name: `Shalean Cleaning — ${formatMonthLabel(f.month)}`,
-            description: `Monthly cleaning invoice for ${formatMonthLabel(f.month)}`,
-            rate: balanceZar,
-            quantity: 1,
-          },
-        ],
-        notes: `Shalean monthly invoice ${f.id}. Pay via: ${pay.authorizationUrl}`,
-        currencyCode: "ZAR",
-      });
-
-      if (zohoResult.ok) {
-        await admin
-          .from("monthly_invoices")
-          .update({ zoho_invoice_id: zohoResult.zohoInvoiceId })
-          .eq("id", f.id);
-      } else {
-        errors.push(`${f.id}: zoho_sync:${zohoResult.error}`);
-      }
-    }
-
     finalized++;
   }
 
@@ -367,7 +370,8 @@ export async function finalizeDueMonthlyInvoices(): Promise<FinalizeMonthlyInvoi
     context: {
       today,
       todayYm,
-      draft_candidates: drafts.length,
+      draft_candidates: draftCandidates.length,
+      skipped_not_ready: skippedNotReady,
       finalized,
       error_count: errors.length,
       email_breaker: emailBreaker.snapshot(),

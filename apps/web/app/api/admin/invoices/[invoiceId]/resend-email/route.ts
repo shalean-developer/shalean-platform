@@ -9,6 +9,7 @@ import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
+import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
@@ -47,7 +48,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
 
   const { data: inv, error: invErr } = await admin
     .from("monthly_invoices")
-    .select("id, customer_id, month, due_date, payment_link, balance_cents, total_amount_cents, amount_paid_cents, status")
+    .select("id, customer_id, month, due_date, payment_link, paystack_reference, balance_cents, total_amount_cents, amount_paid_cents, status")
     .eq("id", invoiceId)
     .maybeSingle();
 
@@ -59,16 +60,21 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     month: string;
     due_date: string | null;
     payment_link: string | null;
+    paystack_reference: string | null;
     balance_cents: number | null;
     total_amount_cents: number | null;
     amount_paid_cents: number | null;
     status: string | null;
   };
 
-  const paymentUrl = String(row.payment_link ?? "").trim();
-  if (!paymentUrl) {
+  const paymentLink = String(row.payment_link ?? "").trim();
+  const paystackRef = String(row.paystack_reference ?? "").trim();
+  if (!paymentLink) {
     return NextResponse.json({ error: "No payment link on file. Initialize Paystack for this invoice first." }, { status: 400 });
   }
+  const paymentUrl = paystackRef
+    ? trustMonthlyInvoicePayPageUrl(row.id, paystackRef, paymentLink)
+    : paymentLink;
 
   const { data: udata, error: uerr } = await admin.auth.admin.getUserById(row.customer_id);
   if (uerr || !udata?.user?.email) {

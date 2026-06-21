@@ -12,7 +12,7 @@ const {
   appendSnapshotEventMock,
   invoicePaymentLinkEmailSentExistsMock,
   todayJhbMock,
-  isInvoiceMonthReadyMock,
+  assessFinalizeReadinessMock,
 } = vi.hoisted(() => ({
   reportOperationalIssueMock: vi.fn().mockResolvedValue(undefined),
   logSystemEventMock: vi.fn().mockResolvedValue(undefined),
@@ -25,7 +25,7 @@ const {
   appendSnapshotEventMock: vi.fn(),
   invoicePaymentLinkEmailSentExistsMock: vi.fn(),
   todayJhbMock: vi.fn(),
-  isInvoiceMonthReadyMock: vi.fn(),
+  assessFinalizeReadinessMock: vi.fn(),
 }));
 
 vi.mock("@/lib/logging/systemLog", () => ({
@@ -58,7 +58,14 @@ vi.mock("@/lib/monthlyInvoice/invoiceSnapshotEvents", () => ({
 
 vi.mock("@/lib/recurring/johannesburgCalendar", () => ({
   todayJohannesburg: todayJhbMock,
-  isInvoiceMonthReadyToFinalize: isInvoiceMonthReadyMock,
+}));
+
+vi.mock("@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize", () => ({
+  assessMonthlyInvoiceFinalizeReadiness: assessFinalizeReadinessMock,
+}));
+
+vi.mock("@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks", () => ({
+  syncMonthlyInvoiceToZohoBooks: vi.fn().mockResolvedValue({ ok: true, zohoInvoiceId: "zoho_test" }),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -278,7 +285,7 @@ beforeEach(() => {
   appendSnapshotEventMock.mockReset();
   invoicePaymentLinkEmailSentExistsMock.mockReset();
   todayJhbMock.mockReset();
-  isInvoiceMonthReadyMock.mockReset();
+  assessFinalizeReadinessMock.mockReset();
 
   captured = { updates: [], inserts: [], rpcCalls: [] };
   invoiceRowsForFinalize = [];
@@ -288,7 +295,11 @@ beforeEach(() => {
   usersById = new Map();
 
   todayJhbMock.mockReturnValue("2030-04-30");
-  isInvoiceMonthReadyMock.mockReturnValue(true);
+  assessFinalizeReadinessMock.mockResolvedValue({
+    ready: true,
+    paymentDueDateYmd: "2030-04-30",
+    lastVisitYmd: "2030-03-28",
+  });
   buildSnapshotMock.mockResolvedValue({ totals: { total_bookings: 1 } });
   wrapSnapshotMock.mockReturnValue({ v: 1 });
   appendSnapshotEventMock.mockResolvedValue({ ok: true });

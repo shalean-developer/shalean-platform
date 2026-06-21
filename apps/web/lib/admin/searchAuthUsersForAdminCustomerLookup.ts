@@ -30,6 +30,28 @@ function snapshotFromAuthUser(u: {
   };
 }
 
+/** Reliable auth lookup for a known set of user ids (used when listing all customers). */
+export async function fetchAuthUsersByIds(
+  admin: SupabaseClient,
+  userIds: readonly string[],
+): Promise<Map<string, AuthUserMatch>> {
+  const out = new Map<string, AuthUserMatch>();
+  const ids = [...new Set(userIds.map((id) => String(id ?? "").trim()).filter(Boolean))];
+  const chunkSize = 10;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map(async (id) => {
+        const { data } = await admin.auth.admin.getUserById(id);
+        if (data?.user?.id) {
+          out.set(id, snapshotFromAuthUser(data.user));
+        }
+      }),
+    );
+  }
+  return out;
+}
+
 /**
  * Single paginated `auth.admin.listUsers` scan that captures both:
  *   - users whose email / metadata display name contains `needle`

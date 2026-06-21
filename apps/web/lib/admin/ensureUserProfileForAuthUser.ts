@@ -2,6 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { inferUserProfileRole, backfillNullProfileRole } from "@/lib/admin/inferUserProfileRole";
+import { upsertCustomerProfileContact } from "@/lib/customer/upsertCustomerProfileContact";
+import {
+  billingEmailFromLoginEmail,
+  normalizeCustomerProfileContactFields,
+} from "@/lib/customer/customerProfileContactFields";
+
 export type EnsureUserProfileForAuthUserResult = {
   /** Pre-existing or newly inserted profile row. Always present on `ok`. */
   billing_type: string;
@@ -12,7 +19,6 @@ export type EnsureUserProfileForAuthUserResult = {
 
 const DEFAULT_BILLING_TYPE = "per_booking";
 const DEFAULT_SCHEDULE_TYPE = "on_demand";
-const DEFAULT_TIER = "regular";
 
 function readMetaFullName(meta: unknown): string | null {
   if (!meta || typeof meta !== "object") return null;
@@ -50,12 +56,16 @@ export async function ensureUserProfileForAuthUser(
 
   const { data: existing, error: readErr } = await admin
     .from("user_profiles")
-    .select("billing_type, schedule_type")
+    .select("billing_type, schedule_type, role")
     .eq("id", userId)
     .maybeSingle();
   if (readErr) return { error: readErr.message };
 
   if (existing) {
+    if (!String((existing as { role?: string | null }).role ?? "").trim()) {
+      const { data: authData } = await admin.auth.admin.getUserById(userId);
+      await backfillNullProfileRole(admin, userId, authData?.user?.email ?? null);
+    }
     return {
       billing_type: String(
         (existing as { billing_type?: string | null }).billing_type ?? DEFAULT_BILLING_TYPE,
@@ -73,19 +83,28 @@ export async function ensureUserProfileForAuthUser(
   }
 
   const fullName = readMetaFullName(authData.user.user_metadata);
-
-  const { error: insertErr } = await admin.from("user_profiles").insert({
-    id: userId,
-    full_name: fullName,
-    tier: DEFAULT_TIER,
-    billing_type: DEFAULT_BILLING_TYPE,
-    schedule_type: DEFAULT_SCHEDULE_TYPE,
-    booking_count: 0,
-    total_spent_cents: 0,
-    updated_at: new Date().toISOString(),
+  const loginEmail = authData.user.email ? String(authData.user.email).trim().toLowerCase() : null;
+  const metaPhone =
+    authData.user.user_metadata && typeof authData.user.user_metadata === "object"
+      ? (authData.user.user_metadata as { phone?: unknown }).phone
+      : null;
+  const normalized = normalizeCustomerProfileContactFields({
+    fullName,
+    billingEmail: billingEmailFromLoginEmail(loginEmail),
+    phone: typeof metaPhone === "string" ? metaPhone : null,
   });
+  const role = await inferUserProfileRole(admin, userId, loginEmail);
 
-  if (insertErr) {
+  const upserted = await upsertCustomerProfileContact(admin, {
+    userId,
+    contact: {
+      fullName: normalized.full_name,
+      billingEmail: normalized.billing_email,
+      phone: normalized.phone,
+    },
+    role,
+  });
+  if (!upserted.ok) {
     // Concurrent insert raced us to a row. Re-read; if still missing, surface error.
     const { data: raced } = await admin
       .from("user_profiles")
@@ -103,12 +122,12 @@ export async function ensureUserProfileForAuthUser(
         created: false,
       };
     }
-    return { error: insertErr.message };
+    return { error: upserted.error };
   }
 
   return {
     billing_type: DEFAULT_BILLING_TYPE,
     schedule_type: DEFAULT_SCHEDULE_TYPE,
-    created: true,
+    created: upserted.created,
   };
 }

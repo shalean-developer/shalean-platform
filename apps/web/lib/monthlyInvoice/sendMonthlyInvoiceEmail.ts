@@ -45,7 +45,7 @@ export async function sendMonthlyInvoiceEmail(params: {
     <p>Your consolidated cleaning invoice for <strong>${params.monthLabel}</strong> is ready.</p>
     <p><strong>Amount due:</strong> ${amount}<br/>
     <strong>Due:</strong> ${params.dueDateLabel}</p>
-    <p><a href="${params.paymentUrl}">Pay securely with Paystack</a></p>
+    <p><a href="${params.paymentUrl}">View and pay your invoice online</a></p>
     <p>Thank you for choosing Shalean.</p>
   `;
 

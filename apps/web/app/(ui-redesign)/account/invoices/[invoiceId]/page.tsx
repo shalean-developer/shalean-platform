@@ -6,6 +6,7 @@ import { useMonthlyInvoiceDetail } from "@/hooks/useMonthlyInvoices";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { daysPastDueJhb, invoiceOverdueEscalationText } from "@/lib/dashboard/invoiceOverdueEscalation";
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
+import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { CustomerInvoiceTimeline } from "@/components/dashboard/customer-invoice-timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,7 +56,12 @@ export default function AccountInvoiceDetailPage() {
       ? invoice.balance_cents
       : Math.max(0, invoice.total_amount_cents - invoice.amount_paid_cents);
 
-  const payHref = typeof invoice.payment_link === "string" ? invoice.payment_link.trim() : "";
+  const paymentLink = typeof invoice.payment_link === "string" ? invoice.payment_link.trim() : "";
+  const paystackRef = typeof invoice.paystack_reference === "string" ? invoice.paystack_reference.trim() : "";
+  const payHref =
+    paymentLink && paystackRef
+      ? trustMonthlyInvoicePayPageUrl(invoice.id, paystackRef, paymentLink)
+      : paymentLink;
   const canOfferPay = balance > 0 && invoice.status !== "paid";
 
   return (
@@ -129,17 +135,15 @@ export default function AccountInvoiceDetailPage() {
                 )}
               </div>
             ) : null}
-            {invoice.zoho_invoice_id ? (
-              <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
-                <a
-                  href={`/api/account/invoices/monthly/${invoice.id}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Download invoice (PDF)
-                </a>
-              </Button>
-            ) : null}
+            <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
+              <a
+                href={`/api/account/invoices/monthly/${invoice.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Download PDF
+              </a>
+            </Button>
             <Button type="button" variant="outline" size="sm" className="mt-4 rounded-xl" onClick={() => void refetch()}>
               Refresh
             </Button>

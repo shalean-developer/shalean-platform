@@ -1,5 +1,6 @@
 "use client";
 
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { CTAButton } from "@/components/ui/CTAButton";
 
 /** Fixed bottom bar — primary conversion path on small screens. */
@@ -11,23 +12,15 @@ export function ServicesStickyMobileCta() {
       aria-label="Book a cleaner"
     >
       <div className="mx-auto flex max-w-[1100px] gap-2 px-1">
+        <GetFreeQuoteLink source="services_sticky" variant="primary" className="min-h-12 flex-1 rounded-xl px-4" />
         <CTAButton
           href="/book"
-          variant="primary"
+          variant="secondary"
           trackSource="services_hub_sticky_book"
           seoHubCta={{ cta_location: "sticky_bar", cta_label: "Book now", cta_kind: "book_now" }}
           className="min-h-12 flex-1 rounded-xl"
         >
           Book now
-        </CTAButton>
-        <CTAButton
-          href="/book"
-          variant="secondary"
-          trackSource="services_hub_sticky_price"
-          seoHubCta={{ cta_location: "sticky_bar", cta_label: "Get price", cta_kind: "get_price" }}
-          className="min-h-12 flex-1 rounded-xl"
-        >
-          Get price
         </CTAButton>
       </div>
     </div>

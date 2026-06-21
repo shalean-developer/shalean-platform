@@ -71,6 +71,7 @@ async function request<T>(
   method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
+  attempt = 0,
 ): Promise<T> {
   const token = await getAccessToken();
   const url = booksUrl(path);
@@ -90,6 +91,15 @@ async function request<T>(
 
   const res = await fetch(url, init);
   const json = (await res.json()) as { code?: number; message?: string } & T;
+
+  const rateLimited =
+    res.status === 429 || json.code === 45 || /rate limit/i.test(String(json.message ?? ""));
+
+  if (rateLimited && attempt < 5) {
+    const waitMs = Math.min(60_000, 5_000 * 2 ** attempt);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    return request<T>(method, path, body, attempt + 1);
+  }
 
   if (!res.ok || (typeof json.code === "number" && json.code !== 0)) {
     throw new Error(

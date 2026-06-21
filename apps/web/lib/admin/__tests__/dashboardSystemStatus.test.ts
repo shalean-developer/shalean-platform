@@ -129,7 +129,7 @@ function minimalOfficeSummary(overrides: Partial<OfficeOpsHealthSummary> = {}): 
       },
       summaries: [
         {
-          code: "dispatch_retry_backlog",
+          code: "dispatch_stale_unassigned",
           severity: "high",
           count: 3,
           message: "Dispatch retries pending",

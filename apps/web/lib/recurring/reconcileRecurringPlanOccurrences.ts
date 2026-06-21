@@ -146,6 +146,24 @@ function scheduleFromPlan(plan: RecurringPlanScheduleRow): RecurringScheduleRow 
   };
 }
 
+/** Expected visit dates for a plan within a billing month (YYYY-MM). */
+export function expectedOccurrenceDatesForPlanInMonth(
+  plan: RecurringPlanScheduleRow,
+  invoiceMonthYm: string,
+): string[] {
+  const schedule = scheduleFromPlan(plan);
+  if (schedule.days_of_week.length === 0) return [];
+
+  const monthStart = `${invoiceMonthYm}-01`;
+  const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
+  const fromYmd = compareYmd(monthStart, plan.start_date) >= 0 ? monthStart : plan.start_date;
+  const throughYmd =
+    plan.end_date && compareYmd(plan.end_date, monthEnd) < 0 ? plan.end_date : monthEnd;
+  if (compareYmd(fromYmd, throughYmd) > 0) return [];
+
+  return occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
+}
+
 export type ReconcileOrphanCancelBlockReason = "already_cancelled" | "locked_invoice";
 
 /** Hard blocks only — draft-invoice orphans may still have earnings or completed status. */

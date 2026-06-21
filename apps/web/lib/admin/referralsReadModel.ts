@@ -44,12 +44,34 @@ async function fetchAuthEmailsForUserIds(admin: SupabaseClient, userIds: string[
   return out;
 }
 
+export type AdminReferralsAudience = "customer" | "cleaner";
+
+export type AdminReferralsReadModelOptions = {
+  /** When set, only referrals for this referrer audience are returned. */
+  referrerType?: AdminReferralsAudience;
+};
+
 export async function buildAdminReferralsReadModel(
   admin: SupabaseClient,
+  options?: AdminReferralsReadModelOptions,
 ): Promise<
   | { ok: true; rows: AdminReferralRow[] }
   | { ok: false; error: string }
 > {
+  const referrerTypeFilter = options?.referrerType;
+
+  let referralsQuery = admin
+    .from("referrals")
+    .select(
+      "id, referrer_id, referrer_type, referred_email_or_phone, referred_user_id, status, reward_amount, created_at, completed_at, rewarded_at, code",
+    )
+    .order("rewarded_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(2000);
+  if (referrerTypeFilter) {
+    referralsQuery = referralsQuery.eq("referrer_type", referrerTypeFilter);
+  }
+
   const [
     referralsRes,
     redemptionRollRes,
@@ -58,14 +80,7 @@ export async function buildAdminReferralsReadModel(
     conversionRollRes,
     profitabilityRollRes,
   ] = await Promise.all([
-    admin
-      .from("referrals")
-      .select(
-        "id, referrer_id, referrer_type, referred_email_or_phone, referred_user_id, status, reward_amount, created_at, completed_at, rewarded_at, code",
-      )
-      .order("rewarded_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(2000),
+    referralsQuery,
     admin.from("admin_referrer_redemption_rollups").select("referrer_type, referrer_id, redemption_count, total_discount_zar"),
     admin
       .from("admin_referrer_event_rollups")
@@ -100,7 +115,7 @@ export async function buildAdminReferralsReadModel(
   const cleanerIds = new Set<string>();
   for (const r of rawRows) {
     if (r.referrer_type === "customer") customerIds.add(r.referrer_id);
-    if (r.referrer_type === "cleaner") cleanerIds.add(r.referrer_id);
+    else if (r.referrer_type === "cleaner") cleanerIds.add(r.referrer_id);
   }
 
   const redemptionMap = new Map<

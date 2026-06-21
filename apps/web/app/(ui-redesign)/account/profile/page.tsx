@@ -16,6 +16,12 @@ import {
   User,
 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import {
+  billingEmailFromLoginEmail,
+  mapPreferredContactToNotificationChannel,
+  normalizeCustomerProfileContactFields,
+} from "@/lib/customer/customerProfileContactFields";
+import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 import { useUser } from "@/hooks/useUser";
 import { useBookings } from "@/hooks/useBookings";
 import { useAddresses } from "@/hooks/useAddresses";
@@ -95,10 +101,36 @@ export default function AccountProfilePage() {
       },
     });
     if (uErr) { toast(uErr.message, "error"); setBusy(false); return; }
+    const phoneE164 = phone.trim() ? normalizeSouthAfricaPhone(phone.trim()) : null;
+    const contact = normalizeCustomerProfileContactFields({
+      fullName: name.trim(),
+      billingEmail: billingEmailFromLoginEmail(user.email ?? email.trim()),
+      phone: phoneE164 ?? (phone.trim() || null),
+      preferredNotificationChannel: mapPreferredContactToNotificationChannel(preferredContact),
+    });
     const { data: existing } = await sb.from("user_profiles").select("id").eq("id", user.id).maybeSingle();
+    const profilePatch = {
+      updated_at: now,
+      ...(contact.full_name ? { full_name: contact.full_name } : {}),
+      ...(contact.billing_email ? { billing_email: contact.billing_email } : {}),
+      ...(contact.phone ? { phone: contact.phone } : {}),
+      ...(contact.phone_e164 ? { phone_e164: contact.phone_e164 } : {}),
+      ...(contact.preferred_notification_channel
+        ? { preferred_notification_channel: contact.preferred_notification_channel }
+        : {}),
+    };
     const pErr = existing
-      ? (await sb.from("user_profiles").update({ updated_at: now }).eq("id", user.id)).error
-      : (await sb.from("user_profiles").insert({ id: user.id, tier: "regular", booking_count: 0, total_spent_cents: 0, updated_at: now })).error;
+      ? (await sb.from("user_profiles").update(profilePatch).eq("id", user.id)).error
+      : (
+          await sb.from("user_profiles").insert({
+            id: user.id,
+            tier: "regular",
+            role: "customer",
+            booking_count: 0,
+            total_spent_cents: 0,
+            ...profilePatch,
+          })
+        ).error;
     if (pErr) { toast(pErr.message, "error"); setBusy(false); return; }
     if (pwNew.trim()) {
       if (pwNew.trim().length < 6) { toast("New password must be at least 6 characters.", "error"); setBusy(false); return; }

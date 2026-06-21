@@ -29,7 +29,7 @@ export default function ReferralsPage() {
   const { data, loading, error, refetch } = useAdminData<{
     referrals: AdminReferralRow[];
     dashboard: ReferralsDashboardExtras;
-  }>("/api/admin/referrals");
+  }>("/api/admin/referrals", { params: { referrerType: "customer" } });
 
   const referrals = data?.referrals ?? [];
   const dashboard = data?.dashboard;
@@ -59,8 +59,8 @@ export default function ReferralsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Referrals</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Track referral codes, rewards and attributed revenue.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Customer referrals</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Track customer referral codes, rewards, and attributed booking revenue.</p>
         </div>
         <button
           type="button"
@@ -99,11 +99,11 @@ export default function ReferralsPage() {
         })}
       </div>
 
-      {dashboard && dashboard.leaderboards.topByEstimatedContribution.length > 0 ? (
+      {dashboard && dashboard.leaderboards.topCustomersByContribution.length > 0 ? (
         <p className="text-xs text-slate-500">
           Top referrer:{" "}
           <span className="font-semibold text-slate-700">
-            {dashboard.leaderboards.topByEstimatedContribution[0]?.displayLabel}
+            {dashboard.leaderboards.topCustomersByContribution[0]?.displayLabel}
           </span>
         </p>
       ) : null}

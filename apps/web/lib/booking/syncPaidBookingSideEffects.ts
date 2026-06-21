@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { createZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
+import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 
 /**
@@ -21,6 +22,9 @@ import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPl
 type PaidBookingRow = {
   user_id?: string | null;
   customer_email?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  booking_snapshot?: unknown;
   service?: string | null;
   date?: string | null;
   time?: string | null;
@@ -31,6 +35,7 @@ type PaidBookingRow = {
   total_paid_zar?: number | null;
   duration_minutes?: number | null;
   zoho_invoice_id?: string | null;
+  is_monthly_billing_booking?: boolean | null;
   booking_type?: string | null;
   recurring_frequency?: string | null;
   recurring_days?: string[] | null;
@@ -50,7 +55,7 @@ export async function syncPaidBookingSideEffects(
     const { data } = await admin
       .from("bookings")
       .select(
-        "user_id, customer_email, service, date, time, location, suburb, rooms, bathrooms, total_paid_zar, duration_minutes, zoho_invoice_id, booking_type, recurring_frequency, recurring_days, recurring_start_date, recurring_end_date",
+        "user_id, customer_email, customer_name, customer_phone, booking_snapshot, service, date, time, location, suburb, rooms, bathrooms, total_paid_zar, duration_minutes, zoho_invoice_id, is_monthly_billing_booking, booking_type, recurring_frequency, recurring_days, recurring_start_date, recurring_end_date",
       )
       .eq("id", bookingId)
       .maybeSingle();
@@ -74,48 +79,63 @@ export async function syncPaidBookingSideEffects(
     process.env.ZOHO_CLIENT_ID &&
     process.env.ZOHO_REFRESH_TOKEN &&
     row.customer_email &&
+    row.is_monthly_billing_booking !== true &&
     !row.zoho_invoice_id
   ) {
     try {
-      const today = todayYmdJhb();
-      const locationLabel = [row.location, row.suburb].filter(Boolean).join(", ");
-      const zohoInvoiceRes = await createZohoInvoice({
-        referenceId: bookingId,
-        customerEmail: row.customer_email,
-        customerName: row.customer_email,
-        invoiceDate: today,
-        dueDate: today,
-        lineItems: [
-          {
-            name: row.service ?? "Shalean Cleaning Service",
-            description: [row.date, locationLabel].filter(Boolean).join(" · ") || `Booking ref: ${reference}`,
-            rate: totalZar,
-            quantity: 1,
-          },
-        ],
-        notes: `Paystack ref: ${reference}`,
-        currencyCode: "ZAR",
-      });
-
-      if (zohoInvoiceRes.ok) {
-        await markZohoInvoicePaid({
-          zohoInvoiceId: zohoInvoiceRes.zohoInvoiceId,
-          amountZar: totalZar,
-          paymentDate: today,
-          reference,
-          customerEmail: row.customer_email,
-        });
-        await admin
-          .from("bookings")
-          .update({ zoho_invoice_id: zohoInvoiceRes.zohoInvoiceId })
-          .eq("id", bookingId);
-      } else {
+      const contactRes = await resolveZohoCustomerContactForBooking(admin, row);
+      if (!contactRes.ok) {
         await logSystemEvent({
           level: "warn",
           source: "booking/side_effects",
           message: "zoho_invoice_create_failed",
-          context: { bookingId, error: zohoInvoiceRes.error },
+          context: { bookingId, error: contactRes.error },
         });
+      } else {
+        const contact = contactRes.contact;
+        const today = todayYmdJhb();
+        const locationLabel = [row.location, row.suburb].filter(Boolean).join(", ");
+        const zohoInvoiceRes = await createZohoInvoice({
+          referenceId: bookingId,
+          orderKind: "booking",
+          customerEmail: contact.email,
+          customerName: contact.name,
+          customerPhone: contact.phone,
+          invoiceDate: today,
+          dueDate: today,
+          lineItems: [
+            {
+              name: row.service ?? "Shalean Cleaning Service",
+              description: [row.date, locationLabel].filter(Boolean).join(" · ") || `Booking ref: ${reference}`,
+              rate: totalZar,
+              quantity: 1,
+            },
+          ],
+          notes: `Paystack ref: ${reference}`,
+          currencyCode: "ZAR",
+        });
+
+        if (zohoInvoiceRes.ok) {
+          await markZohoInvoicePaid({
+            zohoInvoiceId: zohoInvoiceRes.zohoInvoiceId,
+            amountZar: totalZar,
+            paymentDate: today,
+            reference,
+            customerEmail: contact.email,
+            customerName: contact.name,
+          });
+          await admin
+            .from("bookings")
+            .update({ zoho_invoice_id: zohoInvoiceRes.zohoInvoiceId })
+            .eq("id", bookingId);
+        } else {
+          await logSystemEvent({
+            level: "warn",
+            source: "booking/side_effects",
+            message: "zoho_invoice_create_failed",
+            context: { bookingId, error: zohoInvoiceRes.error },
+          });
+        }
       }
     } catch (err) {
       await logSystemEvent({

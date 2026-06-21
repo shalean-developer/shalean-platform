@@ -17,6 +17,13 @@ export function readCustomerPhoneFromBookingSnapshot(snap: unknown): string | nu
   return trimCustomerPhone(customer?.phone);
 }
 
+export function readCustomerEmailFromBookingSnapshot(snap: unknown): string | null {
+  if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
+  const customer = (snap as { customer?: { email?: unknown } }).customer;
+  const email = typeof customer?.email === "string" ? customer.email.trim() : "";
+  return email.length > 0 ? email : null;
+}
+
 export function readCustomerNameFromBookingSnapshot(snap: unknown): string | null {
   if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
   const customer = (snap as { customer?: { name?: unknown } }).customer;

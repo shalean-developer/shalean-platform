@@ -159,9 +159,16 @@ function toLeaderboardRow(
   };
 }
 
+export type AdminReferralsDashboardOptions = {
+  /** When set, leaderboards and signals are scoped to this referrer audience. */
+  referrerType?: "customer" | "cleaner";
+};
+
 export async function loadReferralsDashboardExtras(
   admin: SupabaseClient,
+  options?: AdminReferralsDashboardOptions,
 ): Promise<{ ok: true; data: ReferralsDashboardExtras } | { ok: false; error: string }> {
+  const referrerTypeFilter = options?.referrerType;
   const [prof, conv, evt, monthly, spikes, qualityBurden] = await Promise.all([
     admin.from("admin_referrer_profitability_rollups").select("*"),
     admin.from("admin_referrer_conversion_rollups").select("*"),
@@ -246,7 +253,9 @@ export async function loadReferralsDashboardExtras(
   }
 
   const list = [...merged.values()].filter(
-    (m) => m.gross > 0 || m.contribution !== 0 || m.conversions > 0 || m.attributed > 0,
+    (m) =>
+      (!referrerTypeFilter || m.referrer_type === referrerTypeFilter) &&
+      (m.gross > 0 || m.contribution !== 0 || m.conversions > 0 || m.attributed > 0),
   );
 
   const topContribution = [...list]
@@ -304,7 +313,12 @@ export async function loadReferralsDashboardExtras(
     };
   });
 
-  const spikeRows: RedemptionSpikeFlagRow[] = (spikes.data ?? []).map((row) => {
+  const spikeRows: RedemptionSpikeFlagRow[] = (spikes.data ?? [])
+    .filter((row) => {
+      if (!referrerTypeFilter) return true;
+      return String((row as { referrer_type?: string }).referrer_type ?? "") === referrerTypeFilter;
+    })
+    .map((row) => {
     const r = row as {
       referrer_type?: string;
       referrer_id?: string;
@@ -326,6 +340,10 @@ export async function loadReferralsDashboardExtras(
   });
 
   const qualityParsed = (qualityBurden.data ?? [])
+    .filter((row) => {
+      if (!referrerTypeFilter) return true;
+      return String((row as { referrer_type?: string }).referrer_type ?? "") === referrerTypeFilter;
+    })
     .map((row) => {
       const r = row as {
         referrer_type?: string;

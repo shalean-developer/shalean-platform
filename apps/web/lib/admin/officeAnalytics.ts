@@ -15,6 +15,8 @@ export type OfficeAnalyticsBookingRow = AdminDashboardRevenueRow & {
   updated_at?: string | null;
   service?: string | null;
   service_slug?: string | null;
+  /** Production bookings use `customer_id`; legacy schemas may still expose `user_id`. */
+  customer_id?: string | null;
   user_id?: string | null;
   is_recurring_generated?: boolean | null;
 };
@@ -57,6 +59,16 @@ function norm(value: unknown): string {
 
 function hasText(value: unknown): boolean {
   return typeof value === "string" ? value.trim().length > 0 : value != null;
+}
+
+/** Canonical customer auth id for retention analytics across schema variants. */
+export function bookingCustomerKey(row: {
+  customer_id?: string | null;
+  user_id?: string | null;
+}): string {
+  const customerId = typeof row.customer_id === "string" ? row.customer_id.trim() : "";
+  if (customerId) return customerId;
+  return typeof row.user_id === "string" ? row.user_id.trim() : "";
 }
 
 function parseTime(iso: string | null | undefined): number | null {
@@ -119,7 +131,7 @@ function retentionPct(
     if (!isAdminDashboardRevenueEligible(row)) continue;
     const paidAt = parseTime(row.payment_completed_at);
     if (paidAt == null || paidAt < windowStartMs || paidAt >= windowEndMs) continue;
-    const uid = typeof row.user_id === "string" ? row.user_id.trim() : "";
+    const uid = bookingCustomerKey(row);
     if (!uid) continue;
     if (customersInWindow.has(uid)) continue;
     customersInWindow.add(uid);
@@ -352,13 +364,18 @@ export function priorCustomerQueryEndIso(now = new Date()): string {
 }
 
 export function extractPriorCustomerIds(
-  rows: Array<{ user_id?: string | null; payment_completed_at?: string | null; payment_status?: string | null }>,
+  rows: Array<{
+    customer_id?: string | null;
+    user_id?: string | null;
+    payment_completed_at?: string | null;
+    payment_status?: string | null;
+  }>,
 ): string[] {
   const ids = new Set<string>();
   for (const row of rows) {
     if (norm(row.payment_status) !== "success") continue;
     if (!hasText(row.payment_completed_at)) continue;
-    const uid = typeof row.user_id === "string" ? row.user_id.trim() : "";
+    const uid = bookingCustomerKey(row);
     if (uid) ids.add(uid);
   }
   return [...ids];

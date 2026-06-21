@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminFromRequest } from "@/lib/admin/requireAdmin";
+import { loadAdminReviewsList } from "@/lib/admin/loadAdminReviewsList";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -12,14 +13,13 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const { data, error } = await admin
-    .from("reviews")
-    .select("id, booking_id, cleaner_id, user_id, rating, comment, created_at, is_hidden")
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const url = new URL(request.url);
+  const limitRaw = Number.parseInt(url.searchParams.get("limit") ?? "200", 10);
+  const limit = Number.isFinite(limitRaw) ? limitRaw : 200;
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ reviews: data ?? [] });
+  const result = await loadAdminReviewsList(admin, limit);
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 500 });
+  return NextResponse.json({ reviews: result.reviews });
 }
 
 export async function PATCH(request: Request) {

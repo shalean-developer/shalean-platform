@@ -27,6 +27,10 @@ import {
   shouldShortCircuitForMonthlyInvoice,
   type PaystackChargeMonthlyRouting,
 } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
+import {
+  routePaystackChargeForSalesDocument,
+  shouldShortCircuitForSalesDocument,
+} from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
@@ -176,6 +180,43 @@ export async function GET(request: Request) {
         skipped: monthlyRoutingGet.kind === "monthly_already_processed",
         monthlyInvoiceId:
           monthlyRoutingGet.kind === "monthly_settled" ? monthlyRoutingGet.invoiceId : null,
+      });
+    }
+
+    const salesRoutingGet = await routePaystackChargeForSalesDocument(adminGet, {
+      reference: ref,
+      amountCents: monthlyAmountGet,
+    });
+    if (shouldShortCircuitForSalesDocument(salesRoutingGet)) {
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/verify",
+        message: "sales_document.charge.success",
+        context: {
+          reference: ref,
+          routing_kind: salesRoutingGet.kind,
+          ...(salesRoutingGet.kind === "sales_doc_settled"
+            ? { documentId: salesRoutingGet.documentId }
+            : { reason: salesRoutingGet.reason }),
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        success: true,
+        status: tx.status,
+        reference: ref,
+        amount: tx.amount,
+        currency: tx.currency,
+        customerEmail: tx.customer?.email,
+        paidAt: tx.paid_at,
+        metadata: tx.metadata,
+        bookingId: null,
+        bookingInDatabase: false,
+        state: salesRoutingGet.kind === "sales_doc_settled" ? "paid" : "already_processed",
+        upsertError: null,
+        skipped: salesRoutingGet.kind === "sales_doc_already_processed",
+        salesDocumentId:
+          salesRoutingGet.kind === "sales_doc_settled" ? salesRoutingGet.documentId : null,
       });
     }
   }
@@ -435,6 +476,60 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         selectedCleanerId: null,
         monthlyInvoiceId:
           monthlyRoutingPost.kind === "monthly_settled" ? monthlyRoutingPost.invoiceId : null,
+      });
+    }
+
+    const salesRoutingPost = await routePaystackChargeForSalesDocument(adminPost, {
+      reference: ref,
+      amountCents: txAmount,
+    });
+    if (shouldShortCircuitForSalesDocument(salesRoutingPost)) {
+      await logSystemEvent({
+        level: "info",
+        source: "paystack/verify",
+        message: "sales_document.charge.success",
+        context: {
+          reference: ref,
+          routing_kind: salesRoutingPost.kind,
+          ...(salesRoutingPost.kind === "sales_doc_settled"
+            ? { documentId: salesRoutingPost.documentId }
+            : { reason: salesRoutingPost.reason }),
+        },
+      });
+      const metadataSales = normalizePaystackMetadata(tx.metadata);
+      const { snapshot: snapSales } = parseBookingSnapshot(metadataSales, { amountCents: txAmount });
+      const emailFromCustomerSales = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
+      const emailRawSales =
+        emailFromCustomerSales ||
+        (typeof metadataSales.customer_email === "string" ? metadataSales.customer_email : "") ||
+        "";
+      const emailNormSales = emailRawSales ? normalizeEmail(emailRawSales) : "";
+      const userIdSales = resolvePaystackUserId(snapSales, metadataSales);
+      return NextResponse.json({
+        success: true,
+        ok: true,
+        paymentStatus: "success",
+        reference: ref,
+        amountCents: txAmount,
+        currency: txCurrency,
+        customerEmail: emailNormSales,
+        customerName: snapSales?.customer?.name?.trim() ?? null,
+        userId: userIdSales,
+        bookingSnapshot: snapSales ?? null,
+        bookingInDatabase: false,
+        bookingId: null,
+        state: salesRoutingPost.kind === "sales_doc_settled" ? "paid" : "already_processed",
+        alreadyExists: salesRoutingPost.kind === "sales_doc_already_processed",
+        skipped: salesRoutingPost.kind === "sales_doc_already_processed",
+        upsertError: null,
+        assignmentType: null,
+        fallbackReason: null,
+        showCleanerSubstitutionNotice: false,
+        attemptedCleanerId: null,
+        assignedCleanerId: null,
+        selectedCleanerId: null,
+        salesDocumentId:
+          salesRoutingPost.kind === "sales_doc_settled" ? salesRoutingPost.documentId : null,
       });
     }
   }

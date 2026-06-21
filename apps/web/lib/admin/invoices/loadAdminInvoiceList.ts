@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { daysPastDue } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { daysOverdueForDisplay, isInvoiceOverdueForDisplay } from "@/lib/admin/invoices/invoiceAdminFormatters";
 
 export type AdminInvoiceListRow = {
   id: string;
@@ -134,19 +134,25 @@ export async function loadAdminInvoiceList(
     }
   }
 
-  const bookingCountByInvoice = new Map<string, number>();
+  const bookingStatsByInvoice = new Map<string, { count: number; lastVisitYmd: string | null }>();
   const invoiceIdsForCounts = raw.map((r) => String(r.id ?? "")).filter(Boolean);
   if (invoiceIdsForCounts.length) {
     const { data: bookingRows, error: bkErr } = await admin
       .from("bookings")
-      .select("monthly_invoice_id")
+      .select("monthly_invoice_id, date")
       .in("monthly_invoice_id", invoiceIdsForCounts)
       .neq("status", "cancelled");
     if (bkErr) return { ok: false, error: bkErr.message };
-    for (const row of (bookingRows ?? []) as { monthly_invoice_id?: string | null }[]) {
+    for (const row of (bookingRows ?? []) as { monthly_invoice_id?: string | null; date?: string }[]) {
       const invoiceId = String(row.monthly_invoice_id ?? "");
       if (!invoiceId) continue;
-      bookingCountByInvoice.set(invoiceId, (bookingCountByInvoice.get(invoiceId) ?? 0) + 1);
+      const visitYmd = String(row.date ?? "").slice(0, 10);
+      const cur = bookingStatsByInvoice.get(invoiceId) ?? { count: 0, lastVisitYmd: null };
+      cur.count += 1;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(visitYmd)) {
+        if (!cur.lastVisitYmd || visitYmd > cur.lastVisitYmd) cur.lastVisitYmd = visitYmd;
+      }
+      bookingStatsByInvoice.set(invoiceId, cur);
     }
   }
 
@@ -158,9 +164,15 @@ export async function loadAdminInvoiceList(
     const balRaw = r.balance_cents;
     const balance_cents =
       typeof balRaw === "number" && Number.isFinite(balRaw) ? Math.round(balRaw) : Math.max(0, total - paid);
-    const due = typeof r.due_date === "string" ? r.due_date : null;
-    const dpd = daysPastDue(due);
-    const overdueDays = dpd != null && dpd > 0 && balance_cents > 0 ? dpd : 0;
+    const monthYm = String(r.month ?? "");
+    const stats = bookingStatsByInvoice.get(id);
+    const statusLower = String(r.status ?? "draft").toLowerCase();
+    let due = typeof r.due_date === "string" ? r.due_date : null;
+    if (statusLower === "draft" && stats?.lastVisitYmd?.startsWith(monthYm)) {
+      due = stats.lastVisitYmd;
+    }
+    const overdueDays = daysOverdueForDisplay(due);
+    const displayOverdue = isInvoiceOverdueForDisplay(due, balance_cents);
     const prof = profiles.get(customer_id);
     const riskRaw = String(prof?.account_billing_risk ?? "ok").toLowerCase();
     const account_billing_risk: "ok" | "at_risk" = riskRaw === "at_risk" ? "at_risk" : "ok";
@@ -172,7 +184,7 @@ export async function loadAdminInvoiceList(
       total_amount_cents: total,
       amount_paid_cents: paid,
       balance_cents,
-      is_overdue: Boolean(r.is_overdue),
+      is_overdue: Boolean(r.is_overdue) || displayOverdue,
       is_closed: Boolean(r.is_closed),
       due_date: due,
       customer_name: prof?.full_name ?? null,
@@ -180,7 +192,7 @@ export async function loadAdminInvoiceList(
       account_billing_risk,
       days_overdue: overdueDays,
       last_activity_at: null,
-      booking_count: bookingCountByInvoice.get(id) ?? 0,
+      booking_count: stats?.count ?? 0,
       has_discount_lines: false,
       has_missed_visit_lines: false,
     };

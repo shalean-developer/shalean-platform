@@ -44,6 +44,7 @@ import { effectiveBookingCleanersForList } from "@/lib/admin/adminBookingAssignm
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
 import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
+import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
@@ -1023,7 +1024,13 @@ export async function POST(request: Request) {
   if (authErr || !authUser?.user?.email) {
     return bail(NextResponse.json({ error: "Select an existing customer." }, { status: 400 }));
   }
-  const customerEmail = normalizeEmail(String(authUser.user.email));
+  const customerContact = await readCustomerProfileContact(admin, userId, authUser.user);
+  if (!customerContact.bookingEmail) {
+    return bail(NextResponse.json({ error: "Customer has no contact email on file." }, { status: 400 }));
+  }
+  const customerEmail = customerContact.bookingEmail;
+  const customerName = customerContact.fullName;
+  const customerPhone = customerContact.phone;
 
   const serviceId: BookingServiceId = parseBookingServiceId(serviceRaw) ?? "standard";
   const paymentLinkTtlHours = Math.max(1, Math.round(adminPaymentLinkTtlMs() / (60 * 60 * 1000)));
@@ -1172,8 +1179,8 @@ export async function POST(request: Request) {
       rowBase: {
         paystack_reference: paystackReference,
         customer_email: customerEmail,
-        customer_name: null,
-        customer_phone: null,
+        customer_name: customerName,
+        customer_phone: customerPhone,
         user_id: userId,
         amount_paid_cents: amountPaidCents,
         currency: "ZAR",

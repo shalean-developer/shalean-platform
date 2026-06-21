@@ -1,32 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+
+import { loadAdminCleanersList } from "@/lib/admin/loadAdminCleanersList";
+import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { runAdminCreateCleaner } from "@/lib/cleaner/runAdminCreateCleaner";
-import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!token) {
-    return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  }
-
-  const pub = createClient(url, anon);
-  const {
-    data: { user },
-  } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const auth = await requireAdminApi(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   const admin = getSupabaseAdmin();
@@ -36,125 +21,35 @@ export async function GET(request: Request) {
 
   const urlObj = new URL(request.url);
   const search = urlObj.searchParams.get("search")?.trim() ?? "";
-  const escaped = search.replace(/%/g, "\\%").replace(/,/g, "");
   const excludeTeamId = urlObj.searchParams.get("excludeTeamId")?.trim() ?? "";
   const rosterFilter = urlObj.searchParams.get("filter")?.trim().toLowerCase() ?? "all";
   const limitRaw = urlObj.searchParams.get("limit");
-  const defaultLimit = excludeTeamId.length > 0 ? 20 : 80;
-  const limit = Math.min(200, Math.max(1, parseInt(limitRaw ?? String(defaultLimit), 10) || defaultLimit));
+  const defaultLimit = excludeTeamId.length > 0 ? 20 : undefined;
+  const parsedLimit = limitRaw != null ? parseInt(limitRaw, 10) : defaultLimit;
+  const limit =
+    parsedLimit != null && Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(200, parsedLimit)
+      : undefined;
 
-  const selectWithWeekdays = `
-      id,
-      full_name,
-      phone,
-      auth_user_id,
-      rating,
-      jobs_completed,
-      is_available,
-      home_lat,
-      home_lng,
-      email,
-      status,
-      city_id,
-      location,
-      availability_start,
-      availability_end,
-      availability_weekdays
-    `;
-  const selectBase = `
-      id,
-      full_name,
-      phone,
-      auth_user_id,
-      rating,
-      jobs_completed,
-      is_available,
-      home_lat,
-      home_lng,
-      email,
-      status,
-      city_id,
-      location,
-      availability_start,
-      availability_end
-    `;
-
-  let excludeIds: string[] = [];
-  if (excludeTeamId.length > 0) {
-    const { data: tm, error: tmErr } = await admin
-      .from("team_members")
-      .select("cleaner_id")
-      .eq("team_id", excludeTeamId)
-      .not("cleaner_id", "is", null);
-    if (tmErr) {
-      return NextResponse.json({ error: tmErr.message }, { status: 500 });
-    }
-    excludeIds = [
-      ...new Set(
-        (tm ?? [])
-          .map((r: { cleaner_id?: string | null }) => String(r.cleaner_id ?? "").trim())
-          .filter((id) => id.length > 0),
-      ),
-    ];
+  try {
+    const cleaners = await loadAdminCleanersList(admin, {
+      search: search || undefined,
+      excludeTeamId: excludeTeamId || undefined,
+      filter:
+        rosterFilter === "available" || rosterFilter === "high_rated" ? rosterFilter : "all",
+      limit: search || excludeTeamId ? limit : undefined,
+    });
+    return NextResponse.json({ cleaners });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const build = (columns: string) => {
-    let q = admin.from("cleaners").select(columns);
-    if (rosterFilter === "available") {
-      q = q.eq("is_available", true);
-    } else if (rosterFilter === "high_rated") {
-      q = q.gte("rating", 4);
-    }
-    if (escaped.length > 0) {
-      q = q.or(`full_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`);
-    }
-    if (excludeIds.length > 0) {
-      q = q.not("id", "in", `(${excludeIds.join(",")})`);
-    }
-    if (rosterFilter === "high_rated") {
-      q = q.order("rating", { ascending: false, nullsFirst: true }).order("full_name", { ascending: true });
-    } else {
-      q = q.order("full_name", { ascending: true });
-    }
-    if (excludeTeamId.length > 0 || escaped.length > 0) {
-      q = q.limit(limit);
-    }
-    return q;
-  };
-
-  let { data, error } = await build(selectWithWeekdays);
-  if (error && isUnknownColumnError(error, "availability_weekdays")) {
-    const r2 = await build(selectBase);
-    data = r2.data;
-    error = r2.error;
-  }
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ cleaners: data ?? [] });
 }
 
 export async function POST(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!token) {
-    return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  }
-
-  const pub = createClient(url, anon);
-  const {
-    data: { user },
-  } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const auth = await requireAdminApi(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   let body: {

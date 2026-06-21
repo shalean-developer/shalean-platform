@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_SELECT =
-  "id, created_at, updated_at, status, payment_status, payment_completed_at, total_paid_zar, amount_paid_cents, refunded_at, refund_status, billing_type, is_monthly_billing_booking, monthly_invoice_id, service, service_slug, user_id, is_recurring_generated";
+  "id, created_at, updated_at, status, payment_status, payment_completed_at, total_paid_zar, amount_paid_cents, refunded_at, refund_status, billing_type, is_monthly_billing_booking, monthly_invoice_id, service, service_slug, customer_id, is_recurring_generated";
 
 export async function GET(request: Request) {
   const auth = await requireAdminFromRequest(request);
@@ -35,10 +35,10 @@ export async function GET(request: Request) {
       .limit(15000),
     admin
       .from("bookings")
-      .select("user_id, payment_status, payment_completed_at")
+      .select("customer_id, payment_status, payment_completed_at")
       .eq("payment_status", "success")
       .not("payment_completed_at", "is", null)
-      .not("user_id", "is", null)
+      .not("customer_id", "is", null)
       .lt("payment_completed_at", priorEndIso)
       .limit(20000),
   ]);

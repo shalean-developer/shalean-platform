@@ -45,18 +45,16 @@ export function PerBookingInvoiceCard({ invoice }: PerBookingInvoiceCardProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {invoice.zohoInvoiceId ? (
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <a
-                href={`/api/account/invoices/booking/${invoice.bookingId}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Download className="mr-1.5 h-4 w-4" />
-                Invoice
-              </a>
-            </Button>
-          ) : null}
+          <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <a
+              href={`/api/account/invoices/booking/${invoice.bookingId}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              PDF
+            </a>
+          </Button>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
             <Link href={`/account/bookings/${invoice.bookingId}`}>View</Link>
           </Button>

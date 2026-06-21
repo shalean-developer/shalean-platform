@@ -1,4 +1,8 @@
 import { compareYmd, parseYmdSast, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
+import {
+  daysOverdueAfterGrace,
+  isMonthlyInvoiceOverdueWithGrace,
+} from "@/lib/monthlyInvoice/monthlyInvoiceLateFeePolicy";
 
 const JHB = "Africa/Johannesburg";
 
@@ -10,6 +14,20 @@ export function daysPastDue(dueYmd: string | null | undefined): number | null {
   const dueMs = parseYmdSast(dueYmd).getTime();
   const todayMs = parseYmdSast(today).getTime();
   return Math.max(0, Math.floor((todayMs - dueMs) / 86400000));
+}
+
+/** Overdue for admin display: past due + grace window. */
+export function isInvoiceOverdueForDisplay(
+  dueYmd: string | null | undefined,
+  balanceCents: number,
+): boolean {
+  if (balanceCents <= 0) return false;
+  return isMonthlyInvoiceOverdueWithGrace(dueYmd);
+}
+
+/** Days overdue after {@link MONTHLY_INVOICE_PAYMENT_GRACE_DAYS}. */
+export function daysOverdueForDisplay(dueYmd: string | null | undefined): number {
+  return daysOverdueAfterGrace(dueYmd);
 }
 
 /** Display date in Africa/Johannesburg (en-ZA medium). */

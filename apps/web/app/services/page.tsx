@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
@@ -487,15 +488,7 @@ export default function ServicesHubPage() {
               >
                 Book now
               </CTAButton>
-              <CTAButton
-                href="/book"
-                variant="ghostOnDark"
-                trackSource="services_hub_footer_price"
-                seoHubCta={{ cta_location: "footer", cta_label: "Get instant price", cta_kind: "get_price" }}
-                className="rounded-xl"
-              >
-                Get instant price
-              </CTAButton>
+              <GetFreeQuoteLink source="services_footer" variant="onDark" className="rounded-xl w-full sm:w-auto" />
             </div>
           </Section>
         </section>
