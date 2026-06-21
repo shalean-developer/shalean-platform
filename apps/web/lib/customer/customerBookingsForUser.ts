@@ -64,6 +64,9 @@ export type LoadCustomerBookingsOptions = {
   viewerEmail?: string | null;
 };
 
+/** Max rows returned to customer dashboard / account booking lists. */
+export const CUSTOMER_BOOKINGS_LIST_LIMIT = 500;
+
 export async function resolveBookingOwnershipColumn(admin: SupabaseClient): Promise<BookingCustomerOwnershipColumn> {
   const probe = await admin.from("bookings").select("customer_id").limit(1);
   if (probe.error && isUnknownColumnError(probe.error, "customer_id")) {
@@ -85,7 +88,7 @@ async function loadOwnedCustomerBookingRows(
     .neq("status", "pending_payment")
     .neq("status", "payment_expired")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(CUSTOMER_BOOKINGS_LIST_LIMIT);
 }
 
 async function loadOrphanCustomerBookingRows(
@@ -102,7 +105,7 @@ async function loadOrphanCustomerBookingRows(
     .neq("status", "pending_payment")
     .neq("status", "payment_expired")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(100);
 }
 
 export async function loadCustomerBookingRowsForUser(
@@ -148,7 +151,7 @@ export async function loadCustomerBookingRowsForUser(
   const rows = mergedRaw
     .map((r) => normalizeCustomerBookingRow(r))
     .filter((r) => customerCanAccessBookingRow(r, userId, viewerNorm))
-    .slice(0, 100)
+    .slice(0, CUSTOMER_BOOKINGS_LIST_LIMIT)
     .map((r) => attachCanonicalCustomerBookingLifecycle(r));
 
   // M-15: enrich team-job rows (cleaner_id null, payout_owner_cleaner_id set)

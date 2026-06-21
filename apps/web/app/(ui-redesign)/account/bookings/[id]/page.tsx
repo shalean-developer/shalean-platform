@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, CalendarDays, Clock, MapPin, MessageCircle, Phone } from "lucide-react";
 import { useBookingDetail } from "@/hooks/useBookings";
@@ -81,6 +81,7 @@ function timelineForBooking(b: DashboardBooking): TimelineStep[] {
 
 export default function AccountBookingDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = typeof params.id === "string" ? params.id : undefined;
   const { booking, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookingDetail(id);
   const toast = useDashboardToast();
@@ -111,6 +112,15 @@ export default function AccountBookingDetailPage() {
       setResTime(slots[0] ?? "09:00");
     }
   }, [rescheduleOpen, resDate, resTime, booking]);
+
+  useEffect(() => {
+    if (!booking) return;
+    const action = searchParams.get("action");
+    if (action !== "reschedule" && action !== "cancel") return;
+    if (!canCustomerModifyDashboardBooking(booking)) return;
+    if (action === "reschedule") setRescheduleOpen(true);
+    if (action === "cancel") setCancelOpen(true);
+  }, [searchParams, booking]);
 
   const wa = useMemo(() => {
     const p = booking?.cleaner?.phone?.replace(/\D/g, "") ?? "";

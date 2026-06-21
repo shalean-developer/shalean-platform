@@ -22,11 +22,18 @@ import { HelpCard } from "@/components/account/HelpCard";
 import { TrustBar } from "@/components/account/TrustBar";
 import { useBookings } from "@/hooks/useBookings";
 import { useReviews } from "@/hooks/useReviews";
+import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
-import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
+import {
+  canCustomerModifyDashboardBooking,
+} from "@/lib/dashboard/dashboardBookingOperational";
+import {
+  isBookingPendingCustomerReview,
+  leaveReviewHrefForBooking,
+} from "@/lib/dashboard/customerBookingReviewUi";
+import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { BookingCard } from "@/components/dashboard/booking-card";
 import { CustomerBookingsTable } from "@/components/dashboard/customer-bookings-table";
-import { EmptyState } from "@/components/dashboard/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -93,24 +100,21 @@ function QuickLink({ href, label, icon: Icon }: { href: string; label: string; i
 
 export default function AccountBookingsPage() {
   const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
-  const { reviews, loading: revLoading } = useReviews();
+  const { reviews, loading: revLoading, error: revError } = useReviews();
+  const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");
 
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
   const firstPendingReviewBookingId = useMemo(() => {
     if (revLoading) return null;
-    const row = bookings.find(
-      (b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id),
-    );
+    const row = bookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
     return row?.id ?? null;
   }, [bookings, reviewedIds, revLoading]);
 
   const pendingReviewCount = useMemo(() => {
     if (revLoading) return 0;
-    return bookings.filter(
-      (b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id),
-    ).length;
+    return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
   }, [bookings, reviewedIds, revLoading]);
 
   const upcoming = useMemo(
@@ -146,23 +150,23 @@ export default function AccountBookingsPage() {
     [past, safePastPage],
   );
 
-  const completedCount = useMemo(
-    () => past.filter((b) => isDashboardBookingAuthoritativelyCompleted(b)).length,
-    [past],
-  );
+  const ym = summary?.ym ?? "";
+  const bookingsThisMonthCount = summary?.bookingsThisMonthCount ?? 0;
+  const completedThisMonthCount = summary?.completedThisMonthCount ?? 0;
+  const hoursBookedThisMonth = summary?.hoursBookedThisMonth ?? 0;
+  const totalSpentThisMonthCents = summary?.totalSpentThisMonthCents ?? 0;
 
-  const hoursBooked = useMemo(
-    () => upcoming.reduce((sum, b) => sum + b.durationHours, 0),
-    [upcoming],
-  );
+  const rescheduleQuickLinkHref = useMemo(() => {
+    const modifiable = upcoming.find((b) => canCustomerModifyDashboardBooking(b));
+    if (modifiable) return `/account/bookings/${modifiable.id}?action=reschedule`;
+    return "/account/bookings";
+  }, [upcoming]);
 
-  const totalSpent = useMemo(
-    () =>
-      bookings
-        .filter((b) => b.status !== "cancelled" && b.status !== "failed")
-        .reduce((sum, b) => sum + b.priceZar, 0),
-    [bookings],
-  );
+  const tableProps = {
+    reviewedIds,
+    revLoading,
+    detailHref: (id: string) => `/account/bookings/${id}`,
+  };
 
   if (loading) {
     return (
@@ -189,7 +193,7 @@ export default function AccountBookingsPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Bookings</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Upcoming visits and past cleans on your monthly plan.
+              Upcoming visits and past cleans — per visit or on a monthly plan.
             </p>
           </div>
           <Button
@@ -211,6 +215,12 @@ export default function AccountBookingsPage() {
             >
               Retry
             </button>
+          </div>
+        ) : null}
+
+        {revError ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Could not load reviews: {revError}
           </div>
         ) : null}
 
@@ -344,7 +354,7 @@ export default function AccountBookingsPage() {
                 </>
               ) : (
                 <>
-                  <CustomerBookingsTable bookings={pagedUpcoming} />
+                  <CustomerBookingsTable bookings={pagedUpcoming} {...tableProps} />
                   <Pagination
                     page={safeUpcomingPage}
                     pageCount={upcomingPageCount}
@@ -373,14 +383,7 @@ export default function AccountBookingsPage() {
                         <BookingCard
                           booking={b}
                           detailHref={`/account/bookings/${b.id}`}
-                          leaveReviewHref={
-                            !revLoading &&
-                            isDashboardBookingAuthoritativelyCompleted(b) &&
-                            b.raw.cleaner_id &&
-                            !reviewedIds.has(b.id)
-                              ? `/review?booking=${encodeURIComponent(b.id)}`
-                              : null
-                          }
+                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, revLoading)}
                           onCancel={cancelBooking}
                           onReschedule={rescheduleBooking}
                         />
@@ -391,7 +394,7 @@ export default function AccountBookingsPage() {
                 </>
               ) : (
                 <>
-                  <CustomerBookingsTable bookings={pagedPast} />
+                  <CustomerBookingsTable bookings={pagedPast} {...tableProps} />
                   <Pagination page={safePastPage} pageCount={pastPageCount} onPage={setPastPage} />
                 </>
               )}
@@ -408,47 +411,59 @@ export default function AccountBookingsPage() {
         {/* This month overview */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-bold text-gray-900">This month overview</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <StatCard
-              compact
-              icon={CalendarDays}
-              iconBg="bg-blue-100"
-              iconColor="text-blue-600"
-              value={upcoming.length}
-              label="Upcoming bookings"
-            />
-            <StatCard
-              compact
-              icon={CheckCircle2}
-              iconBg="bg-green-100"
-              iconColor="text-green-600"
-              value={completedCount}
-              label="Completed"
-            />
-            <StatCard
-              compact
-              icon={Clock}
-              iconBg="bg-orange-100"
-              iconColor="text-orange-500"
-              value={hoursBooked > 0 ? hoursBooked : 0}
-              label="Hours booked"
-            />
-            <StatCard
-              compact
-              icon={DollarSign}
-              iconBg="bg-violet-100"
-              iconColor="text-violet-600"
-              value={`R ${totalSpent.toLocaleString("en-ZA")}`}
-              label="Total spent"
-            />
-          </div>
+          {summaryLoading ? (
+            <div className="grid grid-cols-2 gap-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <StatCard
+                compact
+                icon={CalendarDays}
+                iconBg="bg-blue-100"
+                iconColor="text-blue-600"
+                value={bookingsThisMonthCount}
+                label="Bookings"
+                sublabel={ym ? `in ${ym}` : "this month"}
+              />
+              <StatCard
+                compact
+                icon={CheckCircle2}
+                iconBg="bg-green-100"
+                iconColor="text-green-600"
+                value={completedThisMonthCount}
+                label="Completed"
+                sublabel="this month"
+              />
+              <StatCard
+                compact
+                icon={Clock}
+                iconBg="bg-orange-100"
+                iconColor="text-orange-500"
+                value={hoursBookedThisMonth}
+                label="Hours booked"
+                sublabel="this month"
+              />
+              <StatCard
+                compact
+                icon={DollarSign}
+                iconBg="bg-violet-100"
+                iconColor="text-violet-600"
+                value={formatZarFromCents(totalSpentThisMonthCents)}
+                label="Total spent"
+                sublabel="this month"
+              />
+            </div>
+          )}
         </div>
 
         {/* Quick links */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-bold text-gray-900">Quick links</h2>
           <div className="divide-y divide-gray-50">
-            <QuickLink href="/account/bookings" label="Reschedule a booking" icon={CalendarClock} />
+            <QuickLink href={rescheduleQuickLinkHref} label="Reschedule a booking" icon={CalendarClock} />
             <QuickLink href="/account/addresses" label="Add a new property" icon={Home} />
             <QuickLink href="/account/recurring" label="Manage recurring plans" icon={Repeat} />
             <QuickLink href="/account/invoices" label="View all invoices" icon={FileText} />

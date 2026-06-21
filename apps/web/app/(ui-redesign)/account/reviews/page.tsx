@@ -7,7 +7,7 @@ import { useReviews } from "@/hooks/useReviews";
 import { useBookings } from "@/hooks/useBookings";
 import { HelpCard } from "@/components/account/HelpCard";
 import { Button } from "@/components/ui/button";
-import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
+import { isBookingPendingCustomerReview } from "@/lib/dashboard/customerBookingReviewUi";
 import { cn } from "@/lib/utils";
 
 function StarDisplay({ rating }: { rating: number }) {
@@ -47,16 +47,14 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 function ReviewsContent() {
-  const { reviews, loading: revLoading } = useReviews();
+  const { reviews, loading: revLoading, error: revError } = useReviews();
   const { bookings, loading: bookLoading } = useBookings();
 
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
   const pendingReviews = useMemo(() => {
     if (bookLoading || revLoading) return [];
-    return bookings.filter(
-      (b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id),
-    );
+    return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds));
   }, [bookings, reviewedIds, bookLoading, revLoading]);
 
   const avgRating = useMemo(() => {
@@ -93,6 +91,12 @@ function ReviewsContent() {
           </div>
         ) : null}
       </div>
+
+      {revError ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Could not load reviews: {revError}
+        </div>
+      ) : null}
 
       {/* Pending reviews */}
       {pendingReviews.length > 0 ? (

@@ -5,7 +5,10 @@ import { useMemo, useState } from "react";
 import { useBookings } from "@/hooks/useBookings";
 import { useReviews } from "@/hooks/useReviews";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
-import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
+import {
+  isBookingPendingCustomerReview,
+  leaveReviewHrefForBooking,
+} from "@/lib/dashboard/customerBookingReviewUi";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { BookingCard } from "@/components/dashboard/booking-card";
 import { CustomerBookingsTable } from "@/components/dashboard/customer-bookings-table";
@@ -17,26 +20,26 @@ import { DashboardPageSkeleton } from "@/components/dashboard/dashboard-skeleton
 
 export default function DashboardBookingsPage() {
   const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
-  const { reviews, loading: revLoading } = useReviews();
+  const { reviews, loading: revLoading, error: revError } = useReviews();
   const [view, setView] = useState<"cards" | "table">("cards");
 
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
   const firstPendingReviewBookingId = useMemo(() => {
     if (revLoading) return null;
-    const row = bookings.find((b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id));
+    const row = bookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
     return row?.id ?? null;
   }, [bookings, reviewedIds, revLoading]);
 
   const pendingReviewCount = useMemo(() => {
     if (revLoading) return 0;
-    return bookings.filter((b) => isDashboardBookingAuthoritativelyCompleted(b) && b.raw.cleaner_id && !reviewedIds.has(b.id)).length;
+    return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
   }, [bookings, reviewedIds, revLoading]);
 
-  const leaveReviewHrefFor = (b: (typeof bookings)[0]) => {
-    if (revLoading) return null;
-    if (!isDashboardBookingAuthoritativelyCompleted(b) || !b.raw.cleaner_id || reviewedIds.has(b.id)) return null;
-    return `/review?booking=${encodeURIComponent(b.id)}`;
+  const tableProps = {
+    reviewedIds,
+    revLoading,
+    detailHref: (id: string) => `/dashboard/bookings/${id}`,
   };
 
   const upcoming = useMemo(
@@ -61,7 +64,7 @@ export default function DashboardBookingsPage() {
 
   return (
     <div>
-      <PageHeader title="My Bookings" description="Upcoming visits and past cleans on your monthly plan." />
+      <PageHeader title="My Bookings" description="Upcoming visits and past cleans — per visit or on a monthly plan." />
 
       {error ? (
         <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
@@ -69,6 +72,12 @@ export default function DashboardBookingsPage() {
           <button type="button" className="font-semibold underline" onClick={() => void refetch()}>
             Retry
           </button>
+        </div>
+      ) : null}
+
+      {revError ? (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          Could not load reviews: {revError}
         </div>
       ) : null}
 
@@ -125,7 +134,7 @@ export default function DashboardBookingsPage() {
               ))}
             </ul>
           ) : (
-            <CustomerBookingsTable bookings={upcoming} />
+            <CustomerBookingsTable bookings={upcoming} {...tableProps} />
           )}
         </TabsContent>
 
@@ -142,7 +151,7 @@ export default function DashboardBookingsPage() {
                 <li key={b.id}>
                   <BookingCard
                     booking={b}
-                    leaveReviewHref={leaveReviewHrefFor(b)}
+                    leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, revLoading)}
                     onCancel={cancelBooking}
                     onReschedule={rescheduleBooking}
                   />
@@ -150,7 +159,7 @@ export default function DashboardBookingsPage() {
               ))}
             </ul>
           ) : (
-            <CustomerBookingsTable bookings={past} />
+            <CustomerBookingsTable bookings={past} {...tableProps} />
           )}
         </TabsContent>
       </Tabs>
