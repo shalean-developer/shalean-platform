@@ -13,6 +13,16 @@ export function bookingCustomerKey(row: BookingCustomerIdentityRow): string {
   return typeof row.user_id === "string" ? row.user_id.trim() : "";
 }
 
+/** Insert/update patch for the active bookings ownership column (`customer_id` or `user_id`). */
+export function bookingCustomerOwnershipPatch(
+  customerAuthUserId: string,
+  column: BookingCustomerOwnershipColumn,
+): Partial<Record<BookingCustomerOwnershipColumn, string>> {
+  const id = customerAuthUserId.trim();
+  if (!id) return {};
+  return { [column]: id };
+}
+
 export function normalizeBookingCustomerIdentity<T extends BookingCustomerIdentityRow>(row: T): T {
   const key = bookingCustomerKey(row);
   if (!key) return row;

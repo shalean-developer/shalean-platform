@@ -9,6 +9,8 @@ import {
 import { buildCustomerPricingFromForm, pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { resolveCustomerPhoneFromAuthAdmin, trimCustomerPhone } from "@/lib/admin/adminBookingCustomerContact";
+import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export const runtime = "nodejs";
 
@@ -107,6 +109,8 @@ export async function POST(request: Request) {
   if (!supabase) {
     return NextResponse.json({ error: "Service temporarily unavailable." }, { status: 503 });
   }
+
+  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   // ── 4. Team availability re-check (race protection) ───────────────────────────
   if (data.cleanerMode === "team") {
@@ -239,7 +243,7 @@ export async function POST(request: Request) {
   const { data: existingBooking } = await supabase
     .from("bookings")
     .select("id, paystack_reference")
-    .eq("user_id", userId)
+    .eq(ownershipColumn, userId)
     .eq("date", data.date)
     .eq("time", data.time)
     .eq("service_slug", data.serviceSlug)
@@ -286,7 +290,7 @@ export async function POST(request: Request) {
     .from("bookings")
     .insert({
       // Core identity
-      user_id: userId,
+      ...bookingCustomerOwnershipPatch(userId, ownershipColumn),
       customer_email: email,
       customer_name: customerName,
       customer_phone: customerPhone,

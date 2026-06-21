@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildCustomerPricingFromForm, pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { filterCustomerOnlineBookingTimeSlots } from "@/lib/booking-v2/customerBookingTimeSlots";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
+import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import type { BookingV2ConfirmPayload } from "@/src/features/booking-v2/schemas";
 
 export type LaunchCheckSeedResult =
@@ -111,6 +113,7 @@ export async function seedLaunchCheckPendingPaymentBooking(
 
   const persistPricing = pricingPersistFields(serverBreakdown);
   const paystackReference = `launchcheck_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
 
   const priceSnapshot = {
     v: 1 as const,
@@ -128,7 +131,7 @@ export async function seedLaunchCheckPendingPaymentBooking(
   const { data: inserted, error: insertErr } = await admin
     .from("bookings")
     .insert({
-      user_id: params.userId,
+      ...bookingCustomerOwnershipPatch(params.userId, ownershipColumn),
       customer_email: params.customerEmail,
       customer_name: params.customerName?.trim() || "Launch Check Customer",
       customer_phone: payload.contactPhone,

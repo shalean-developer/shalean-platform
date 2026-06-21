@@ -1,14 +1,20 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
 
 export type PaymentFinalizationPersistedBookingRow = {
   id: string;
   created_at?: string;
+  customer_id?: string | null;
   user_id?: string | null;
 };
 
 type DbError = { message: string; code?: string };
+
+function paymentFinalizationSelect(ownershipColumn: BookingCustomerOwnershipColumn): string {
+  return `id, created_at, ${ownershipColumn}`;
+}
 
 export async function finalizePendingPaymentBookingFromPaystack(params: {
   supabase: SupabaseClient;
@@ -16,8 +22,17 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
   pendingFinalizeMatch: "paystack_reference" | "id";
   existingPendingPaymentId: string;
   paystackReference: string;
+  ownershipColumn: BookingCustomerOwnershipColumn;
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
-  const { supabase, row, pendingFinalizeMatch, existingPendingPaymentId, paystackReference } = params;
+  const {
+    supabase,
+    row,
+    pendingFinalizeMatch,
+    existingPendingPaymentId,
+    paystackReference,
+    ownershipColumn,
+  } = params;
+  const select = paymentFinalizationSelect(ownershipColumn);
   const result =
     pendingFinalizeMatch === "id"
       ? await supabase
@@ -25,14 +40,14 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
           .update(row)
           .eq("id", existingPendingPaymentId)
           .eq("status", "pending_payment")
-          .select("id, created_at, user_id")
+          .select(select)
           .maybeSingle()
       : await supabase
           .from("bookings")
           .update(row)
           .eq("paystack_reference", paystackReference)
           .eq("status", "pending_payment")
-          .select("id, created_at, user_id")
+          .select(select)
           .maybeSingle();
 
   return {
@@ -47,11 +62,12 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
 export async function insertFinalizedBookingFromPaystack(params: {
   supabase: SupabaseClient;
   row: Record<string, unknown>;
+  ownershipColumn: BookingCustomerOwnershipColumn;
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
   const { data, error } = await params.supabase
     .from("bookings")
     .insert(params.row)
-    .select("id, created_at, user_id")
+    .select(paymentFinalizationSelect(params.ownershipColumn))
     .maybeSingle();
 
   return {

@@ -1,4 +1,6 @@
 import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
+import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import type { CheckoutPriceSnapshotV1 } from "@/lib/booking/priceSnapshotBooking";
 import {
@@ -232,6 +234,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     });
     return { ok: false, skipped: true, bookingId: null, error: "Supabase not configured" };
   }
+
+  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
     "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type" as const;
@@ -686,7 +690,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     customer_email: emailStored,
     customer_name: cust?.name?.trim() || null,
     customer_phone: customerPhone,
-    user_id: userIdResolved,
+    ...(userIdResolved ? bookingCustomerOwnershipPatch(userIdResolved, ownershipColumn) : {}),
     amount_paid_cents: input.amountCents,
     total_paid_cents: totalPaidCents,
     base_amount_cents: baseAmountCents,
@@ -761,6 +765,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       pendingFinalizeMatch: finalizeMatch,
       existingPendingPaymentId,
       paystackReference: input.paystackReference,
+      ownershipColumn,
     });
 
     if (bookingPaystackFinalizeTraceEnabled()) {
@@ -830,6 +835,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     const { data: ins, error: insertErr } = await insertFinalizedBookingFromPaystack({
       supabase,
       row,
+      ownershipColumn,
     });
 
     if (bookingPaystackFinalizeTraceEnabled()) {
@@ -901,8 +907,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   finalizeId = id;
 
   const userIdForEffects =
-    inserted && typeof inserted === "object" && "user_id" in inserted
-      ? ((inserted as { user_id?: string | null }).user_id ?? userIdResolved)
+    inserted && typeof inserted === "object"
+      ? bookingCustomerKey(inserted as { customer_id?: string | null; user_id?: string | null }) || userIdResolved
       : userIdResolved;
 
   if (id) {
