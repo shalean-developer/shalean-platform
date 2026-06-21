@@ -1,23 +1,43 @@
 import {
   BOOKING_MIN_LEAD_MINUTES,
   johannesburgNowParts,
-} from "@/lib/dashboard/bookingSlotTimes";
+} from "@/lib/booking/johannesburgBookingClock";
+import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+
+const DEFAULT_SCHEDULING: Pick<
+  BookingV2SchedulingConfig,
+  "leadMinutes" | "slotStartHour" | "slotEndHour" | "slotIntervalMinutes"
+> = {
+  leadMinutes: BOOKING_MIN_LEAD_MINUTES,
+  slotStartHour: 8,
+  slotEndHour: 12,
+  slotIntervalMinutes: 30,
+};
+
+/** Build morning slot strings from catalog scheduling (last slot = end hour + :30). */
+export function buildCustomerBookingTimeSlots(
+  scheduling?: Partial<BookingV2SchedulingConfig>,
+): string[] {
+  const startHour = scheduling?.slotStartHour ?? DEFAULT_SCHEDULING.slotStartHour;
+  const endHour = scheduling?.slotEndHour ?? DEFAULT_SCHEDULING.slotEndHour;
+  const interval = scheduling?.slotIntervalMinutes ?? DEFAULT_SCHEDULING.slotIntervalMinutes;
+  const slots: string[] = [];
+  let minutes = startHour * 60;
+  const lastMinutes = endHour * 60 + 30;
+  while (minutes <= lastMinutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    minutes += interval;
+  }
+  return slots;
+}
 
 /** Online self-serve booking window (08:00–12:30, 30-minute steps). */
-export const CUSTOMER_ONLINE_BOOKING_TIME_SLOTS = [
-  "08:00",
-  "08:30",
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "12:30",
-] as const;
+export const CUSTOMER_ONLINE_BOOKING_TIME_SLOTS = buildCustomerBookingTimeSlots() as readonly string[];
 
-export const CUSTOMER_ONLINE_BOOKING_LAST_SLOT = "12:30";
+export const CUSTOMER_ONLINE_BOOKING_LAST_SLOT =
+  CUSTOMER_ONLINE_BOOKING_TIME_SLOTS[CUSTOMER_ONLINE_BOOKING_TIME_SLOTS.length - 1] ?? "12:30";
 
 function hmToMinutes(hm: string): number | null {
   if (!/^\d{2}:\d{2}$/.test(hm)) return null;
@@ -43,11 +63,11 @@ export function formatCustomerBookingSlotLabel(slot: string): string {
  */
 export function filterCustomerOnlineBookingTimeSlots(
   dateYmd: string,
-  opts?: { now?: Date; leadMinutes?: number },
+  opts?: { now?: Date; leadMinutes?: number; scheduling?: Partial<BookingV2SchedulingConfig> },
 ): string[] {
   const now = opts?.now ?? new Date();
-  const leadMinutes = opts?.leadMinutes ?? BOOKING_MIN_LEAD_MINUTES;
-  const all = [...CUSTOMER_ONLINE_BOOKING_TIME_SLOTS];
+  const leadMinutes = opts?.leadMinutes ?? opts?.scheduling?.leadMinutes ?? BOOKING_MIN_LEAD_MINUTES;
+  const all = buildCustomerBookingTimeSlots(opts?.scheduling);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return [];
 
   const { ymd: todayYmd, minutes: nowMin } = johannesburgNowParts(now);
@@ -61,7 +81,10 @@ export function filterCustomerOnlineBookingTimeSlots(
   });
 }
 
-export function isCustomerOnlineBookingTimeSlot(time: string): boolean {
+export function isCustomerOnlineBookingTimeSlot(
+  time: string,
+  scheduling?: Partial<BookingV2SchedulingConfig>,
+): boolean {
   const t = time.trim().slice(0, 5);
-  return (CUSTOMER_ONLINE_BOOKING_TIME_SLOTS as readonly string[]).includes(t);
+  return buildCustomerBookingTimeSlots(scheduling).includes(t);
 }

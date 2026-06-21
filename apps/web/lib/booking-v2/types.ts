@@ -91,6 +91,8 @@ export type CustomerTotalInput = {
     pricePerExtraCleaner: number;
     estimatedDurationHours: number;
     extras: Array<{ id: string; label: string; priceZar: number }>;
+    allowsExtraCleaner?: boolean;
+    showCleaningProductsQuestion?: boolean;
   };
   feesConfig: BookingV2FeesConfig;
 };

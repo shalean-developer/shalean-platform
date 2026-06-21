@@ -34,10 +34,7 @@ export function CustomerPriceBreakdown({
     return null;
   }
 
-  const visibleLines = breakdown.lineItems.filter((item) => {
-    if (item.amountZar !== 0) return true;
-    return /supplies/i.test(item.label);
-  });
+  const visibleLines = breakdown.lineItems.filter((item) => item.amountZar !== 0);
 
   if (visibleLines.length === 0) return null;
 

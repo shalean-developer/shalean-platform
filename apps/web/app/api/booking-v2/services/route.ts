@@ -13,6 +13,6 @@ export type {
 export type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 
 export async function GET() {
-  const { catalog, feesConfig } = await loadBookingV2Catalog();
-  return NextResponse.json({ catalog, feesConfig });
+  const { catalog, feesConfig, scheduling, activeServiceSlugs } = await loadBookingV2Catalog();
+  return NextResponse.json({ catalog, feesConfig, scheduling, activeServiceSlugs });
 }

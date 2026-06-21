@@ -2,7 +2,7 @@ import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import type { BookingV2FeesConfig, CustomerPricingBreakdown } from "@/lib/booking-v2/types";
-import type { LiveServiceConfig } from "@/lib/booking-v2/loadBookingV2Catalog";
+import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 
 export function buildCustomerPricingFromForm(params: {
@@ -21,33 +21,50 @@ export function buildCustomerPricingFromForm(params: {
 }): CustomerPricingBreakdown {
   const { serviceSlug, values, liveConfig, feesConfig } = params;
   const staticConfig = SERVICE_CONFIG[serviceSlug];
-  const catalog = liveConfig ?? {
-    slug: serviceSlug,
-    basePrice: staticConfig.basePrice,
-    pricePerBedroom: 0,
-    pricePerBathroom: 0,
-    pricePerExtraRoom: 0,
-    pricePerExtraCleaner: staticConfig.pricePerExtraCleaner,
-    estimatedDurationHours: staticConfig.estimatedDurationHours,
-    extras: staticConfig.extras.map((e) => ({
-      id: e.id,
-      label: e.label,
-      description: e.description,
-      priceZar: e.priceZar,
-      isPopular: false,
-    })),
-  };
+
+  const catalogSource: LiveServiceConfig =
+    liveConfig ?? {
+      slug: serviceSlug,
+      label: staticConfig.label,
+      shortLabel: staticConfig.shortLabel,
+      description: staticConfig.description,
+      cleanerMode: staticConfig.cleanerMode,
+      showCleaningProductsQuestion: serviceSlug !== "deep-cleaning" && serviceSlug !== "moving-cleaning",
+      allowsExtraCleaner:
+        serviceSlug === "regular-cleaning" ||
+        serviceSlug === "airbnb-cleaning" ||
+        serviceSlug === "office-cleaning" ||
+        serviceSlug === "carpet-cleaning",
+      step1Questions: staticConfig.step1Questions,
+      basePrice: staticConfig.basePrice,
+      pricePerBedroom: 0,
+      pricePerBathroom: 0,
+      pricePerExtraRoom: 0,
+      pricePerExtraCleaner: staticConfig.pricePerExtraCleaner,
+      estimatedDurationHours: staticConfig.estimatedDurationHours,
+      extras: [],
+    };
 
   return calculateCustomerTotal({
     serviceSlug,
-    serviceLabel: staticConfig.label,
+    serviceLabel: catalogSource.label,
     serviceDetails: values.serviceDetails ?? {},
     selectedExtras: values.selectedExtras ?? [],
     cleanerMode: values.cleanerMode,
     cleanerCount: values.cleanerCount ?? 1,
     bookingType: values.bookingType,
     recurringFrequency: values.recurringFrequency ?? "",
-    catalog,
+    catalog: {
+      basePrice: catalogSource.basePrice,
+      pricePerBedroom: catalogSource.pricePerBedroom,
+      pricePerBathroom: catalogSource.pricePerBathroom,
+      pricePerExtraRoom: catalogSource.pricePerExtraRoom,
+      pricePerExtraCleaner: catalogSource.pricePerExtraCleaner,
+      estimatedDurationHours: catalogSource.estimatedDurationHours,
+      extras: catalogSource.extras,
+      allowsExtraCleaner: catalogSource.allowsExtraCleaner,
+      showCleaningProductsQuestion: catalogSource.showCleaningProductsQuestion,
+    },
     feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
   });
 }

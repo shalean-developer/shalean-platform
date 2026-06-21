@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
+import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import {
   filterCustomerOnlineBookingTimeSlots,
   isCustomerOnlineBookingTimeSlot,
@@ -39,30 +40,36 @@ export type Step1Data = z.infer<typeof step1Schema>;
 
 // ─── Step 2: Schedule ──────────────────────────────────────────────────────────
 
-export const step2Schema = z
-  .object({
-    bookingType: z.enum(["once_off", "recurring"]),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Select a valid date"),
-    time: z.string().min(1, "Select a time"),
-    alternativeDate: z.string().optional().default(""),
-    alternativeTime: z.string().optional().default(""),
-    recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).default(""),
-    recurringDays: z.array(z.string()).default([]),
-    recurringStartDate: z.string().optional().default(""),
-    recurringEndDate: z.string().optional().default(""),
-    cleanerMode: z.enum(["team", "individual_cleaners"]),
-    assignedTeamId: z.string().optional().default(""),
-    cleanerCount: z.number().min(1).max(3).default(1),
-    selectedCleanerIds: z.array(z.string()).optional().default([]),
-  })
-  .superRefine((data, ctx) => {
-    if (!isCustomerOnlineBookingTimeSlot(data.time)) {
+const step2SchemaBase = z.object({
+  bookingType: z.enum(["once_off", "recurring"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Select a valid date"),
+  time: z.string().min(1, "Select a time"),
+  alternativeDate: z.string().optional().default(""),
+  alternativeTime: z.string().optional().default(""),
+  recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).default(""),
+  recurringDays: z.array(z.string()).default([]),
+  recurringStartDate: z.string().optional().default(""),
+  recurringEndDate: z.string().optional().default(""),
+  cleanerMode: z.enum(["team", "individual_cleaners"]),
+  assignedTeamId: z.string().optional().default(""),
+  cleanerCount: z.number().min(1).max(3).default(1),
+  selectedCleanerIds: z.array(z.string()).optional().default([]),
+});
+
+function refineStep2Schedule(
+  scheduling?: Partial<BookingV2SchedulingConfig>,
+): (data: z.infer<typeof step2SchemaBase>, ctx: z.RefinementCtx) => void {
+  return (data, ctx) => {
+    if (!isCustomerOnlineBookingTimeSlot(data.time, scheduling)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Select a valid morning time (8:00 AM – 12:30 PM) or call us for later slots",
         path: ["time"],
       });
-    } else if (data.date && !filterCustomerOnlineBookingTimeSlots(data.date).includes(data.time.trim().slice(0, 5))) {
+    } else if (
+      data.date &&
+      !filterCustomerOnlineBookingTimeSlots(data.date, { scheduling }).includes(data.time.trim().slice(0, 5))
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "This time is no longer available for the selected date",
@@ -83,7 +90,15 @@ export const step2Schema = z
         path: ["assignedTeamId"],
       });
     }
-  });
+  };
+}
+
+/** Step 2 schema with optional catalog scheduling (defaults match static morning window). */
+export function buildStep2Schema(scheduling?: Partial<BookingV2SchedulingConfig>) {
+  return step2SchemaBase.superRefine(refineStep2Schedule(scheduling));
+}
+
+export const step2Schema = buildStep2Schema();
 
 export type Step2Data = z.infer<typeof step2Schema>;
 

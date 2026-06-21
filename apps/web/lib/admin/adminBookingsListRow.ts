@@ -43,7 +43,9 @@ export type AdminBookingsListRow = {
   dispatch_status: "searching" | "offered" | "assigned" | "failed" | "no_cleaner" | "unassignable" | null;
   surge_multiplier?: number | null;
   surge_reason?: string | null;
-  user_id: string | null;
+  customer_id: string | null;
+  /** @deprecated Legacy alias — use {@link customer_id}. */
+  user_id?: string | null;
   cleaner_id: string | null;
   selected_cleaner_id?: string | null;
   assignment_type?: string | null;

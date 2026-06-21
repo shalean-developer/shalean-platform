@@ -132,11 +132,12 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "cleaningProducts",
-    label: "Do you have cleaning products?",
+    label: "Do you have cleaning products we can use?",
     type: "radio",
     required: true,
     group: "yesno",
     centered: true,
+    hint: "Supplies are included if you don't — this helps us plan.",
     options: [
       { value: "yes", label: "Yes" },
       { value: "no", label: "No" },

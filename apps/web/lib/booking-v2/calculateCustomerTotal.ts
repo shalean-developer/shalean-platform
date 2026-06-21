@@ -11,7 +11,6 @@ import {
   computePropertyFactors,
   computeSuppliesEquipmentFee,
   EXTRA_CLEANER_SERVICE_SLUGS,
-  shouldShowSuppliesLine,
 } from "@/lib/booking-v2/propertyFactorPricing";
 import { resolveCanonicalDurationWorkload } from "@/lib/pricing/cleaningDurationWorkload";
 
@@ -90,14 +89,14 @@ function computeSelectedExtras(
 }
 
 function computeExtraCleanerCost(
-  serviceSlug: ServiceSlug,
+  allowsExtraCleaner: boolean,
   cleanerMode: "team" | "individual_cleaners",
   cleanerCount: number,
   feesConfig: BookingV2FeesConfig,
   catalogFallback: number,
 ): number {
   if (cleanerMode === "team") return 0;
-  if (!EXTRA_CLEANER_SERVICE_SLUGS.has(serviceSlug)) return 0;
+  if (!allowsExtraCleaner) return 0;
   const fee = feesConfig.extraCleanerFeeZar || catalogFallback || 0;
   const extraCleaners = Math.max(0, Math.min(3, cleanerCount) - 1);
   return extraCleaners * fee;
@@ -163,10 +162,13 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     catalog.extras,
   );
 
-  const supplies_equipment_fee = computeSuppliesEquipmentFee(serviceDetails, feesConfig, serviceSlug);
+  const supplies_equipment_fee = computeSuppliesEquipmentFee(serviceDetails, feesConfig, {
+    serviceSlug,
+    showCleaningProductsQuestion: catalog.showCleaningProductsQuestion,
+  });
 
   const extra_cleaner_cost = computeExtraCleanerCost(
-    serviceSlug,
+    catalog.allowsExtraCleaner ?? EXTRA_CLEANER_SERVICE_SLUGS.has(serviceSlug),
     cleanerMode,
     cleanerCount,
     feesConfig,
@@ -281,12 +283,7 @@ export function buildCustomerPriceLineItems(
     lines.push({ label: extra.name, amountZar: extra.total });
   }
 
-  if (shouldShowSuppliesLine(input.serviceDetails, input.serviceSlug)) {
-    lines.push({
-      label: "Supplies & equipment",
-      amountZar: input.supplies_equipment_fee,
-    });
-  } else if (input.supplies_equipment_fee > 0) {
+  if (input.supplies_equipment_fee > 0) {
     lines.push({
       label: "Supplies & equipment",
       amountZar: input.supplies_equipment_fee,

@@ -21,9 +21,10 @@ import {
   type BookingV2FormData,
   type BookingStep,
 } from "@/src/features/booking-v2/types";
-import { step1Schema, step2Schema } from "@/src/features/booking-v2/schemas";
+import { step1Schema, buildStep2Schema } from "@/src/features/booking-v2/schemas";
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
+import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 
@@ -39,6 +40,7 @@ type BookingV2ContextValue = {
   serviceSlug: ServiceSlug;
   /** Live pricing catalog fetched from DB. Falls back to serviceConfig values when null. */
   liveConfig: LiveServiceConfig | null;
+  scheduling: BookingV2SchedulingConfig;
   feesConfig: BookingV2FeesConfig;
   catalogLoading: boolean;
   goToStep: (step: BookingStep) => void;
@@ -83,6 +85,14 @@ function clearStorage(): void {
   }
 }
 
+const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
+  leadMinutes: 120,
+  slotStartHour: 8,
+  slotEndHour: 12,
+  slotIntervalMinutes: 30,
+  timezone: "Africa/Johannesburg",
+};
+
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
 export function BookingV2Provider({
@@ -103,24 +113,33 @@ export function BookingV2Provider({
 
   // Live pricing catalog from DB
   const [catalog, setCatalog] = useState<ServicesCatalog | null>(null);
+  const [scheduling, setScheduling] = useState<BookingV2SchedulingConfig>(DEFAULT_SCHEDULING);
   const [feesConfig, setFeesConfig] = useState<BookingV2FeesConfig>(defaultBookingV2FeesConfig());
   const [catalogLoading, setCatalogLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/booking-v2/services")
       .then((r) => r.json())
-      .then((json: { catalog?: ServicesCatalog; feesConfig?: BookingV2FeesConfig }) => {
+      .then(
+        (json: {
+          catalog?: ServicesCatalog;
+          feesConfig?: BookingV2FeesConfig;
+          scheduling?: BookingV2SchedulingConfig;
+        }) => {
         if (json.catalog) setCatalog(json.catalog);
         if (json.feesConfig) setFeesConfig(json.feesConfig);
-      })
+        if (json.scheduling) setScheduling({ ...DEFAULT_SCHEDULING, ...json.scheduling });
+      },
+      )
       .catch(() => { /* fall back to static config */ })
       .finally(() => setCatalogLoading(false));
   }, []);
 
   const liveConfig = catalog ? (catalog[serviceSlug] ?? null) : null;
+  const cleanerMode = liveConfig?.cleanerMode ?? config.cleanerMode;
 
   // Always start from pure defaults so SSR and the first client render match.
-  const defaults = defaultBookingFormData(serviceSlug, config.cleanerMode);
+  const defaults = defaultBookingFormData(serviceSlug, cleanerMode);
 
   const form = useForm<BookingV2FormData>({
     defaultValues: defaults,
@@ -197,7 +216,7 @@ export function BookingV2Provider({
       }
       if (step === 2) {
         const values = form.getValues();
-        const result = step2Schema.safeParse(values);
+        const result = buildStep2Schema(scheduling).safeParse(values);
         if (!result.success) {
           result.error.errors.forEach((e) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -209,7 +228,7 @@ export function BookingV2Provider({
       }
       return true;
     },
-    [form],
+    [form, scheduling],
   );
 
   const goNext = useCallback(async () => {
@@ -225,8 +244,8 @@ export function BookingV2Provider({
 
   const clearBooking = useCallback(() => {
     clearStorage();
-    form.reset(defaultBookingFormData(serviceSlug, config.cleanerMode));
-  }, [form, serviceSlug, config.cleanerMode]);
+    form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
+  }, [form, serviceSlug, cleanerMode]);
 
   const value = useMemo<BookingV2ContextValue>(
     () => ({
@@ -234,6 +253,7 @@ export function BookingV2Provider({
       currentStep,
       serviceSlug,
       liveConfig,
+      scheduling,
       feesConfig,
       catalogLoading,
       goToStep,
@@ -242,7 +262,7 @@ export function BookingV2Provider({
       canGoNext,
       clearBooking,
     }),
-    [form, currentStep, serviceSlug, liveConfig, feesConfig, catalogLoading, goToStep, goNext, goBack, canGoNext, clearBooking],
+    [form, currentStep, serviceSlug, liveConfig, scheduling, feesConfig, catalogLoading, goToStep, goNext, goBack, canGoNext, clearBooking],
   );
 
   return (

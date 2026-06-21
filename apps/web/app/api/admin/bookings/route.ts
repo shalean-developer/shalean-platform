@@ -32,6 +32,8 @@ import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { reportOperationalIssue, logSystemEvent } from "@/lib/logging/systemLog";
@@ -108,7 +110,7 @@ type Row = {
   dispatch_status: string | null;
   surge_multiplier: number | null;
   surge_reason: string | null;
-  user_id: string | null;
+  customer_id: string | null;
   cleaner_id: string | null;
   selected_cleaner_id: string | null;
   assignment_type: string | null;
@@ -431,7 +433,7 @@ export async function GET(request: Request) {
   const today = todayYmdJohannesburg();
 
   const bookingSelect =
-    "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, user_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, billing_type, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
+    "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, customer_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, billing_type, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect, paginationRequested ? { count: "exact" } : undefined);
   bookingQuery = applyAdminBookingDbFilters({
@@ -584,7 +586,7 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: false })
         .limit(50);
 
-  const missingUserIdCount = rows.filter((r) => r.user_id == null).length;
+  const missingUserIdCount = rows.filter((r) => !bookingCustomerKey(r)).length;
 
   const totalRevenueZar = rows.reduce((s, r) => s + zar(r), 0);
   const revenuePerCustomerZar =
@@ -700,7 +702,7 @@ export async function GET(request: Request) {
     ((attentionRows ?? []) as Row[]).map((r) => toOpsSnapshotRow(r)),
   );
 
-  const profileUserIds = [...new Set(filtered.map((r) => r.user_id).filter(Boolean))] as string[];
+  const profileUserIds = [...new Set(filtered.map((r) => bookingCustomerKey(r)).filter(Boolean))] as string[];
   const profileById = new Map<string, { billing_type: string; schedule_type: string }>();
   if (profileUserIds.length > 0) {
     const { data: plist } = await admin
@@ -719,7 +721,8 @@ export async function GET(request: Request) {
   }
 
   let enriched: Row[] = filtered.map((r) => {
-    const pr = r.user_id ? profileById.get(r.user_id) : undefined;
+    const customerKey = bookingCustomerKey(r);
+    const pr = customerKey ? profileById.get(customerKey) : undefined;
     return {
       ...r,
       customer_billing_type: pr?.billing_type ?? null,
@@ -910,6 +913,8 @@ export async function POST(request: Request) {
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
+
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
 
   let selectedCleanerId: string | null = null;
   if (selectedCleanerRaw && /^[0-9a-f-]{36}$/i.test(selectedCleanerRaw)) {
@@ -1181,7 +1186,7 @@ export async function POST(request: Request) {
         customer_email: customerEmail,
         customer_name: customerName,
         customer_phone: customerPhone,
-        user_id: userId,
+        ...bookingCustomerOwnershipPatch(userId, ownershipColumn),
         amount_paid_cents: amountPaidCents,
         currency: "ZAR",
         service_slug: serviceSlug,

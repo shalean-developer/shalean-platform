@@ -244,7 +244,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             <Section icon={Star} label="Extras" onEdit={edit(1)}>
               <ul className="space-y-1">
                 {values.selectedExtras.map((id) => {
-                  const extra = (liveConfig?.extras ?? config.extras).find((e) => e.id === id);
+                  const extra = (liveConfig?.extras ?? []).find((e) => e.id === id);
                   return (
                     <li key={id} className="flex items-center justify-between gap-2 text-sm text-slate-700">
                       <span className="truncate">{extra?.label ?? id}</span>

@@ -1,0 +1,1029 @@
+{
+  "services": [
+    {
+      "slug": "regular-cleaning",
+      "pricingSlug": "standard",
+      "label": "Regular Cleaning",
+      "shortLabel": "Regular",
+      "description": "Keep your home fresh and comfortable with a reliable weekly or once-off clean.",
+      "cleanerMode": "individual_cleaners",
+      "extraTypes": [
+        "light",
+        "all"
+      ],
+      "showCleaningProductsQuestion": true,
+      "allowsExtraCleaner": true,
+      "step1Questions": [
+        {
+          "key": "propertyType",
+          "label": "Property type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "house",
+              "label": "House"
+            },
+            {
+              "value": "apartment",
+              "label": "Apartment / flat"
+            },
+            {
+              "value": "townhouse",
+              "label": "Townhouse"
+            }
+          ]
+        },
+        {
+          "key": "bedrooms",
+          "label": "Number of bedrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bedroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bedrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bedrooms"
+            },
+            {
+              "value": "4",
+              "label": "4 bedrooms"
+            },
+            {
+              "value": "5",
+              "label": "5+ bedrooms"
+            }
+          ]
+        },
+        {
+          "key": "bathrooms",
+          "label": "Number of bathrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bathroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bathrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bathrooms"
+            },
+            {
+              "value": "4",
+              "label": "4+ bathrooms"
+            }
+          ]
+        },
+        {
+          "key": "extraRooms",
+          "label": "Number of extra rooms",
+          "type": "select",
+          "required": false,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No extra rooms"
+            },
+            {
+              "value": "1",
+              "label": "1 extra room"
+            },
+            {
+              "value": "2",
+              "label": "2 extra rooms"
+            },
+            {
+              "value": "3",
+              "label": "3+ extra rooms"
+            }
+          ]
+        },
+        {
+          "key": "hasPets",
+          "label": "Do you have any pets?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "cleaningProducts",
+          "label": "Do you have cleaning products?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "specialInstructions",
+          "label": "Special instructions (optional)",
+          "type": "textarea",
+          "placeholder": "e.g. focus on kitchen, avoid the study..."
+        }
+      ],
+      "isActive": true,
+      "sortOrder": 10
+    },
+    {
+      "slug": "deep-cleaning",
+      "pricingSlug": "deep",
+      "label": "Deep Cleaning",
+      "shortLabel": "Deep Clean",
+      "description": "A thorough top-to-bottom clean of every surface, corner, and room.",
+      "cleanerMode": "team",
+      "extraTypes": [
+        "heavy",
+        "all"
+      ],
+      "showCleaningProductsQuestion": false,
+      "allowsExtraCleaner": false,
+      "step1Questions": [
+        {
+          "key": "propertyType",
+          "label": "Property type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "house",
+              "label": "House"
+            },
+            {
+              "value": "apartment",
+              "label": "Apartment / flat"
+            },
+            {
+              "value": "townhouse",
+              "label": "Townhouse"
+            }
+          ]
+        },
+        {
+          "key": "bedrooms",
+          "label": "Number of bedrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bedroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bedrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bedrooms"
+            },
+            {
+              "value": "4",
+              "label": "4 bedrooms"
+            },
+            {
+              "value": "5",
+              "label": "5+ bedrooms"
+            }
+          ]
+        },
+        {
+          "key": "bathrooms",
+          "label": "Number of bathrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bathroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bathrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bathrooms"
+            },
+            {
+              "value": "4",
+              "label": "4+ bathrooms"
+            }
+          ]
+        },
+        {
+          "key": "extraRooms",
+          "label": "Number of extra rooms",
+          "type": "select",
+          "required": false,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No extra rooms"
+            },
+            {
+              "value": "1",
+              "label": "1 extra room"
+            },
+            {
+              "value": "2",
+              "label": "2 extra rooms"
+            },
+            {
+              "value": "3",
+              "label": "3+ extra rooms"
+            }
+          ]
+        },
+        {
+          "key": "lastCleaned",
+          "label": "When was it last professionally cleaned?",
+          "type": "select",
+          "required": true,
+          "options": [
+            {
+              "value": "never",
+              "label": "Never / unsure"
+            },
+            {
+              "value": "6_months_plus",
+              "label": "6+ months ago"
+            },
+            {
+              "value": "3_6_months",
+              "label": "3–6 months ago"
+            },
+            {
+              "value": "1_3_months",
+              "label": "1–3 months ago"
+            }
+          ],
+          "hint": "Helps us estimate the time required."
+        },
+        {
+          "key": "hasPets",
+          "label": "Do you have any pets?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "specialInstructions",
+          "label": "Special instructions (optional)",
+          "type": "textarea",
+          "placeholder": "Any areas to focus on or avoid..."
+        }
+      ],
+      "isActive": true,
+      "sortOrder": 20
+    },
+    {
+      "slug": "moving-cleaning",
+      "pricingSlug": "move",
+      "label": "Moving Cleaning",
+      "shortLabel": "Move In/Out",
+      "description": "Move-in or move-out clean to ensure a smooth handover and full deposit return.",
+      "cleanerMode": "team",
+      "extraTypes": [
+        "heavy",
+        "all"
+      ],
+      "showCleaningProductsQuestion": false,
+      "allowsExtraCleaner": false,
+      "step1Questions": [
+        {
+          "key": "propertyType",
+          "label": "Property type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "house",
+              "label": "House"
+            },
+            {
+              "value": "apartment",
+              "label": "Apartment / flat"
+            },
+            {
+              "value": "townhouse",
+              "label": "Townhouse"
+            }
+          ]
+        },
+        {
+          "key": "moveType",
+          "label": "Move type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "move_out",
+              "label": "Moving out (end of tenancy)"
+            },
+            {
+              "value": "move_in",
+              "label": "Moving in (new property)"
+            },
+            {
+              "value": "both",
+              "label": "Both move-out and move-in"
+            }
+          ]
+        },
+        {
+          "key": "bedrooms",
+          "label": "Number of bedrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bedroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bedrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bedrooms"
+            },
+            {
+              "value": "4",
+              "label": "4 bedrooms"
+            },
+            {
+              "value": "5",
+              "label": "5+ bedrooms"
+            }
+          ]
+        },
+        {
+          "key": "bathrooms",
+          "label": "Number of bathrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bathroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bathrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bathrooms"
+            },
+            {
+              "value": "4",
+              "label": "4+ bathrooms"
+            }
+          ]
+        },
+        {
+          "key": "extraRooms",
+          "label": "Number of extra rooms",
+          "type": "select",
+          "required": false,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No extra rooms"
+            },
+            {
+              "value": "1",
+              "label": "1 extra room"
+            },
+            {
+              "value": "2",
+              "label": "2 extra rooms"
+            },
+            {
+              "value": "3",
+              "label": "3+ extra rooms"
+            }
+          ]
+        },
+        {
+          "key": "furnished",
+          "label": "Is the property furnished?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No — empty property"
+            }
+          ],
+          "hint": "Empty properties are often faster to clean."
+        },
+        {
+          "key": "depositInspection",
+          "label": "Is this for a deposit inspection?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "specialInstructions",
+          "label": "Special instructions (optional)",
+          "type": "textarea",
+          "placeholder": "Landlord requirements, key handover details..."
+        }
+      ],
+      "isActive": true,
+      "sortOrder": 30
+    },
+    {
+      "slug": "office-cleaning",
+      "pricingSlug": "standard",
+      "label": "Office Cleaning",
+      "shortLabel": "Office",
+      "description": "Professional cleaning for offices and workspaces to keep your team productive.",
+      "cleanerMode": "individual_cleaners",
+      "extraTypes": [
+        "light",
+        "all"
+      ],
+      "showCleaningProductsQuestion": true,
+      "allowsExtraCleaner": true,
+      "step1Questions": [
+        {
+          "key": "officeType",
+          "label": "Office type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "open_plan",
+              "label": "Open plan"
+            },
+            {
+              "value": "private_offices",
+              "label": "Private offices"
+            },
+            {
+              "value": "coworking",
+              "label": "Co-working space"
+            }
+          ]
+        },
+        {
+          "key": "officeSize",
+          "label": "Office size",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "small",
+              "label": "Small (1–5 desks)"
+            },
+            {
+              "value": "medium",
+              "label": "Medium (6–20 desks)"
+            },
+            {
+              "value": "large",
+              "label": "Large (21–50 desks)"
+            },
+            {
+              "value": "enterprise",
+              "label": "Enterprise (50+ desks)"
+            }
+          ]
+        },
+        {
+          "key": "bathrooms",
+          "label": "Bathrooms / kitchenettes",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1"
+            },
+            {
+              "value": "2",
+              "label": "2"
+            },
+            {
+              "value": "3",
+              "label": "3"
+            },
+            {
+              "value": "4",
+              "label": "4+"
+            }
+          ]
+        },
+        {
+          "key": "frequency",
+          "label": "Cleaning frequency",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "daily",
+              "label": "Daily (Mon–Fri)"
+            },
+            {
+              "value": "twice_week",
+              "label": "Twice a week"
+            },
+            {
+              "value": "weekly",
+              "label": "Weekly"
+            },
+            {
+              "value": "once_off",
+              "label": "Once-off"
+            }
+          ]
+        },
+        {
+          "key": "afterHours",
+          "label": "Preferred cleaning time",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "during_hours",
+              "label": "During office hours"
+            },
+            {
+              "value": "after_hours",
+              "label": "After hours / evenings"
+            },
+            {
+              "value": "weekends",
+              "label": "Weekends only"
+            }
+          ]
+        },
+        {
+          "key": "specialInstructions",
+          "label": "Special instructions (optional)",
+          "type": "textarea",
+          "placeholder": "Access code, areas to avoid, IT equipment notes..."
+        }
+      ],
+      "isActive": true,
+      "sortOrder": 40
+    },
+    {
+      "slug": "carpet-cleaning",
+      "pricingSlug": "carpet",
+      "label": "Carpet Cleaning",
+      "shortLabel": "Carpets",
+      "description": "Steam and shampoo carpets, rugs and upholstery to remove stains and odours.",
+      "cleanerMode": "individual_cleaners",
+      "extraTypes": [
+        "heavy",
+        "all"
+      ],
+      "showCleaningProductsQuestion": true,
+      "allowsExtraCleaner": true,
+      "step1Questions": [
+        {
+          "key": "propertyType",
+          "label": "Property type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "house",
+              "label": "House"
+            },
+            {
+              "value": "apartment",
+              "label": "Apartment / flat"
+            },
+            {
+              "value": "townhouse",
+              "label": "Townhouse"
+            }
+          ]
+        },
+        {
+          "key": "carpetRooms",
+          "label": "Number of carpeted rooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 room"
+            },
+            {
+              "value": "2",
+              "label": "2 rooms"
+            },
+            {
+              "value": "3",
+              "label": "3 rooms"
+            },
+            {
+              "value": "4",
+              "label": "4 rooms"
+            },
+            {
+              "value": "5",
+              "label": "5+ rooms"
+            }
+          ]
+        },
+        {
+          "key": "carpetType",
+          "label": "Carpet type",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "standard",
+              "label": "Standard pile"
+            },
+            {
+              "value": "thick_pile",
+              "label": "Thick / shag pile"
+            },
+            {
+              "value": "berber",
+              "label": "Berber / loop"
+            },
+            {
+              "value": "persian_rug",
+              "label": "Persian / area rug"
+            }
+          ]
+        },
+        {
+          "key": "sofaCount",
+          "label": "Number of sofas to clean",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No sofas"
+            },
+            {
+              "value": "1",
+              "label": "1 sofa"
+            },
+            {
+              "value": "2",
+              "label": "2 sofas"
+            },
+            {
+              "value": "3",
+              "label": "3+ sofas"
+            }
+          ]
+        },
+        {
+          "key": "stains",
+          "label": "Are there visible stains?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "hasPets",
+          "label": "Do you have any pets?",
+          "type": "radio",
+          "required": true,
+          "group": "yesno",
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "specialInstructions",
+          "label": "Special instructions (optional)",
+          "type": "textarea",
+          "placeholder": "Problem areas, delicate rugs, stain details..."
+        }
+      ],
+      "isActive": true,
+      "sortOrder": 50
+    },
+    {
+      "slug": "airbnb-cleaning",
+      "pricingSlug": "airbnb",
+      "label": "Airbnb Cleaning",
+      "shortLabel": "Airbnb",
+      "description": "Fast, reliable turnovers that keep your listing sparkling and guests happy.",
+      "cleanerMode": "individual_cleaners",
+      "extraTypes": [
+        "light",
+        "all"
+      ],
+      "showCleaningProductsQuestion": true,
+      "allowsExtraCleaner": true,
+      "step1Questions": [
+        {
+          "key": "propertyType",
+          "label": "Property type",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "house",
+              "label": "House"
+            },
+            {
+              "value": "apartment",
+              "label": "Apartment / flat"
+            },
+            {
+              "value": "townhouse",
+              "label": "Townhouse"
+            }
+          ]
+        },
+        {
+          "key": "bedrooms",
+          "label": "Number of bedrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bedroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bedrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bedrooms"
+            },
+            {
+              "value": "4",
+              "label": "4 bedrooms"
+            },
+            {
+              "value": "5",
+              "label": "5+ bedrooms"
+            }
+          ]
+        },
+        {
+          "key": "bathrooms",
+          "label": "Number of bathrooms",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 bathroom"
+            },
+            {
+              "value": "2",
+              "label": "2 bathrooms"
+            },
+            {
+              "value": "3",
+              "label": "3 bathrooms"
+            },
+            {
+              "value": "4",
+              "label": "4+ bathrooms"
+            }
+          ]
+        },
+        {
+          "key": "extraRooms",
+          "label": "Number of extra rooms",
+          "type": "select",
+          "required": false,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No extra rooms"
+            },
+            {
+              "value": "1",
+              "label": "1 extra room"
+            },
+            {
+              "value": "2",
+              "label": "2 extra rooms"
+            },
+            {
+              "value": "3",
+              "label": "3+ extra rooms"
+            }
+          ]
+        },
+        {
+          "key": "linens",
+          "label": "Linen service",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "change",
+              "label": "Change and make beds"
+            },
+            {
+              "value": "no_change",
+              "label": "No linen change needed"
+            }
+          ]
+        },
+        {
+          "key": "guestCheckout",
+          "label": "Guest checkout time",
+          "type": "select",
+          "required": true,
+          "group": "logistics",
+          "options": [
+            {
+              "value": "10am",
+              "label": "By 10:00 AM"
+            },
+            {
+              "value": "11am",
+              "label": "By 11:00 AM"
+            },
+            {
+              "value": "12pm",
+              "label": "By 12:00 PM"
+            },
+            {
+              "value": "flexible",
+              "label": "Flexible"
+            }
+          ]
+        },
+        {
+          "key": "keyAccess",
+          "label": "Key / access method",
+          "type": "select",
+          "required": true,
+          "group": "logistics",
+          "options": [
+            {
+              "value": "lockbox",
+              "label": "Lockbox"
+            },
+            {
+              "value": "smart_lock",
+              "label": "Smart lock / code"
+            },
+            {
+              "value": "in_person",
+              "label": "Meet in person"
+            },
+            {
+              "value": "managed",
+              "label": "Managed by agent"
+            }
+          ]
+        },
+        {
+          "key": "welcomeBasket",
+          "label": "Restock welcome essentials?",
+          "type": "radio",
+          "required": true,
+          "centered": true,
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes — I'll leave supplies"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "key": "specialInstructions",
+          "label": "Special host instructions (optional)",
+          "type": "textarea",
+          "placeholder": "Staging preferences, check-in checklist, fragile items..."
+        }
+      ],
+      "isActive": true,
+      "sortOrder": 60
+    }
+  ],
+  "scheduling": {
+    "leadMinutes": 120,
+    "slotStartHour": 8,
+    "slotEndHour": 12,
+    "slotIntervalMinutes": 30,
+    "timezone": "Africa/Johannesburg"
+  }
+}

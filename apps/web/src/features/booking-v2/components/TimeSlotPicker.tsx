@@ -3,10 +3,12 @@
 import { Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  buildCustomerBookingTimeSlots,
   CUSTOMER_ONLINE_BOOKING_LAST_SLOT,
   filterCustomerOnlineBookingTimeSlots,
   formatCustomerBookingSlotLabel,
 } from "@/lib/booking-v2/customerBookingTimeSlots";
+import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 
 type TimeSlotPickerProps = {
@@ -14,10 +16,13 @@ type TimeSlotPickerProps = {
   value: string;
   onChange: (slot: string) => void;
   compact?: boolean;
+  scheduling?: Partial<BookingV2SchedulingConfig>;
 };
 
-export function TimeSlotPicker({ dateYmd, value, onChange, compact }: TimeSlotPickerProps) {
-  const slots = filterCustomerOnlineBookingTimeSlots(dateYmd);
+export function TimeSlotPicker({ dateYmd, value, onChange, compact, scheduling }: TimeSlotPickerProps) {
+  const slots = filterCustomerOnlineBookingTimeSlots(dateYmd, { scheduling });
+  const lastSlot =
+    buildCustomerBookingTimeSlots(scheduling).at(-1) ?? CUSTOMER_ONLINE_BOOKING_LAST_SLOT;
   const callHref = `tel:${CUSTOMER_SUPPORT_TELEPHONE_E164.replace(/\D/g, "")}`;
 
   return (
@@ -54,7 +59,7 @@ export function TimeSlotPicker({ dateYmd, value, onChange, compact }: TimeSlotPi
         <p>
           Online booking is available until{" "}
           <span className="font-semibold text-slate-800">
-            {formatCustomerBookingSlotLabel(CUSTOMER_ONLINE_BOOKING_LAST_SLOT)}
+            {formatCustomerBookingSlotLabel(lastSlot)}
           </span>
           .
         </p>

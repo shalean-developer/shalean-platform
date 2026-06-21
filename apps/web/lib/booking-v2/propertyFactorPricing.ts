@@ -216,9 +216,12 @@ export function computePropertyFactors(
 export function computeSuppliesEquipmentFee(
   serviceDetails: Record<string, string | number | boolean>,
   feesConfig: BookingV2FeesConfig,
-  serviceSlug?: ServiceSlug,
+  options?: { serviceSlug?: ServiceSlug; showCleaningProductsQuestion?: boolean },
 ): number {
-  if (serviceSlug && !serviceShowsCleaningProductsQuestion(serviceSlug)) return 0;
+  const showQuestion =
+    options?.showCleaningProductsQuestion ??
+    (options?.serviceSlug ? serviceShowsCleaningProductsQuestion(options.serviceSlug) : true);
+  if (!showQuestion) return 0;
   const products = String(serviceDetails.cleaningProducts ?? "").trim().toLowerCase();
   if (products === "yes") return 0;
   if (products === "no") return feesConfig.suppliesEquipmentFeeZar;
@@ -227,9 +230,12 @@ export function computeSuppliesEquipmentFee(
 
 export function shouldShowSuppliesLine(
   serviceDetails: Record<string, string | number | boolean>,
-  serviceSlug?: ServiceSlug,
+  options?: { serviceSlug?: ServiceSlug; showCleaningProductsQuestion?: boolean },
 ): boolean {
-  if (serviceSlug && !serviceShowsCleaningProductsQuestion(serviceSlug)) return false;
+  const showQuestion =
+    options?.showCleaningProductsQuestion ??
+    (options?.serviceSlug ? serviceShowsCleaningProductsQuestion(options.serviceSlug) : true);
+  if (!showQuestion) return false;
   const products = String(serviceDetails.cleaningProducts ?? "").trim().toLowerCase();
   return products === "yes" || products === "no";
 }

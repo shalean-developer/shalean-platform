@@ -269,13 +269,15 @@ function groupQuestions(questions: FormQuestion[]): QuestionGroup[] {
 // ─── Step 1 ─────────────────────────────────────────────────────────────────────
 
 export function Step1Details() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const { serviceSlug, liveConfig, catalogLoading } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const { register, control, formState: { errors }, watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
 
-  // Use live extras from DB if available, else fall back to static config
-  const extras = liveConfig?.extras ?? config.extras;
+  const extras = liveConfig?.extras ?? [];
+  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const showCleaningProductsQuestion =
+    liveConfig?.showCleaningProductsQuestion ?? serviceShowsCleaningProductsQuestion(serviceSlug);
 
   function toggleExtra(id: string) {
     const current = selectedExtras;
@@ -286,8 +288,8 @@ export function Step1Details() {
   }
 
   const questionGroups = groupQuestions(
-    config.step1Questions.filter(
-      (q) => q.key !== "cleaningProducts" || serviceShowsCleaningProductsQuestion(serviceSlug),
+    step1Questions.filter(
+      (q) => q.key !== "cleaningProducts" || showCleaningProductsQuestion,
     ),
   );
 

@@ -4,7 +4,7 @@ import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
 
 function baseInput(overrides: Partial<CustomerTotalInput> = {}): CustomerTotalInput {
-  const feesConfig = defaultBookingV2FeesConfig({ suppliesKitZar: 399, extraCleanerZar: 299 });
+  const feesConfig = defaultBookingV2FeesConfig({ extraCleanerZar: 299 });
   feesConfig.serviceFeeRule = "flat";
   feesConfig.serviceFeeFlatCents = 3000;
   return {
@@ -50,13 +50,29 @@ describe("calculateCustomerTotal", () => {
     expect(r.estimated_total).toBe(574);
   });
 
-  it("adds supplies fee when customer has no products", () => {
+  it("does not charge supplies fee by default when customer has no products", () => {
     const r = calculateCustomerTotal(
       baseInput({
         serviceDetails: {
           ...baseInput().serviceDetails,
           cleaningProducts: "no",
         },
+      }),
+    );
+    expect(r.supplies_equipment_fee).toBe(0);
+    expect(r.lineItems.some((l) => /supplies/i.test(l.label))).toBe(false);
+  });
+
+  it("adds supplies fee when admin configures supplies_equipment_fee_zar", () => {
+    const feesConfig = defaultBookingV2FeesConfig({ extraCleanerZar: 299 });
+    feesConfig.suppliesEquipmentFeeZar = 399;
+    const r = calculateCustomerTotal(
+      baseInput({
+        serviceDetails: {
+          ...baseInput().serviceDetails,
+          cleaningProducts: "no",
+        },
+        feesConfig,
       }),
     );
     expect(r.supplies_equipment_fee).toBe(399);

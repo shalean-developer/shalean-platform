@@ -302,8 +302,9 @@ function EditModal({
 // ─── Details edit panel ────────────────────────────────────────────────────────
 
 function DetailsEditPanel() {
-  const { serviceSlug } = useBookingV2();
+  const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
+  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const { register, control } = useFormContext<BookingV2FormData>();
 
   return (
@@ -380,7 +381,7 @@ function DetailsEditPanel() {
           About the clean
         </p>
         <div className="space-y-4">
-          {config.step1Questions.map((q) => (
+          {step1Questions.map((q) => (
             <ModalQuestionField key={q.key} question={q} />
           ))}
         </div>
@@ -392,9 +393,9 @@ function DetailsEditPanel() {
 // ─── Schedule edit panel ───────────────────────────────────────────────────────
 
 function ScheduleEditPanel() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const { serviceSlug, liveConfig, scheduling } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
-  const isTeamMode = config.cleanerMode === "team";
+  const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
 
   const { control, watch, setValue, getValues } = useFormContext<BookingV2FormData>();
   const bookingType = watch("bookingType");
@@ -406,7 +407,9 @@ function ScheduleEditPanel() {
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
 
-  const durationMinutes = Math.round(config.estimatedDurationHours * 60);
+  const durationMinutes = Math.round(
+    (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+  );
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
@@ -491,6 +494,7 @@ function ScheduleEditPanel() {
               dateYmd={date || today}
               value={field.value ?? ""}
               onChange={field.onChange}
+              scheduling={scheduling}
             />
           )}
         />
@@ -641,12 +645,19 @@ function ScheduleEditPanel() {
 
 function ExtrasEditPanel() {
   const { serviceSlug, liveConfig } = useBookingV2();
-  const config = SERVICE_CONFIG[serviceSlug];
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
 
-  // Use DB extras if available
-  const extras = liveConfig?.extras ?? config.extras;
+  // Extras from DB catalog only (managed via /office/pricing)
+  const extras = liveConfig?.extras ?? [];
+
+  if (!extras.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        No add-ons are available for this service.
+      </p>
+    );
+  }
 
   function toggleExtra(id: string) {
     const current = selectedExtras;
@@ -787,6 +798,10 @@ type EditPanel = "details" | "schedule" | "extras" | null;
 export function Step3Review() {
   const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
+  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const serviceLabel = liveConfig?.label ?? config.label;
+  const serviceDescription = liveConfig?.description ?? config.description;
+  const estimatedDurationHours = liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours;
   const { watch, getValues, reset, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
 
@@ -803,7 +818,7 @@ export function Step3Review() {
     const params = new URLSearchParams({ serviceSlug });
     const date = getValues("date");
     const time = getValues("time");
-    const duration = Math.round(config.estimatedDurationHours * 60);
+    const duration = Math.round(estimatedDurationHours * 60);
     if (date) params.set("date", date);
     if (time) params.set("time", time);
     params.set("durationMinutes", String(duration));
@@ -846,8 +861,9 @@ export function Step3Review() {
   );
   const selectedExtras = values.selectedExtras ?? [];
   const pricingSummary = values.pricingSummary;
-  const extrasSource = liveConfig?.extras ?? config.extras;
-  const estimatedTotal = pricingSummary?.estimated_total ?? pricingSummary?.total ?? config.basePrice;
+  const extrasSource = liveConfig?.extras ?? [];
+  const estimatedTotal =
+    pricingSummary?.estimated_total ?? pricingSummary?.total ?? liveConfig?.basePrice ?? config.basePrice;
 
   return (
     <>
@@ -885,8 +901,8 @@ export function Step3Review() {
             <config.icon className="h-6 w-6 text-white" aria-hidden />
           </div>
           <div className="min-w-0">
-            <p className="text-base font-bold text-blue-900">{config.label}</p>
-            <p className="mt-0.5 truncate text-xs text-blue-700/80">{config.description}</p>
+            <p className="text-base font-bold text-blue-900">{serviceLabel}</p>
+            <p className="mt-0.5 truncate text-xs text-blue-700/80">{serviceDescription}</p>
           </div>
         </div>
 
@@ -931,7 +947,7 @@ export function Step3Review() {
           <ReviewSection number={2} title="Clean details" onEdit={() => openEdit("details")}>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {serviceDetails.map(([key, val]) => {
-                const question = config.step1Questions.find((q) => q.key === key);
+                const question = step1Questions.find((q) => q.key === key);
                 if (question?.type === "textarea") {
                   return (
                     <div key={key} className="col-span-2">
@@ -1024,7 +1040,7 @@ export function Step3Review() {
 
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
               <Clock className="h-3 w-3 text-blue-500" />
-              ~{config.estimatedDurationHours} hrs
+              ~{estimatedDurationHours} hrs
             </span>
           </div>
 

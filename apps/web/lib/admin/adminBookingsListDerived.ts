@@ -1,4 +1,5 @@
 import type { AdminBookingsListRow } from "@/lib/admin/adminBookingsListRow";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 
 export function zar(r: AdminBookingsListRow): number {
   if (typeof r.total_paid_zar === "number") return r.total_paid_zar;
@@ -97,7 +98,7 @@ export function rowHighlightClass(r: AdminBookingsListRow, today: string): strin
   const f = adminRowFlags(r, today);
   if (f.paymentMissing) return "bg-red-50/90 dark:bg-red-950/30";
   if (f.statusInconsistent) return "bg-orange-50/85 dark:bg-orange-950/25";
-  if (r.user_id == null) return "bg-amber-50/85 dark:bg-amber-950/25";
+  if (!bookingCustomerKey(r)) return "bg-amber-50/85 dark:bg-amber-950/25";
   if (f.missingEmail) return "bg-rose-50/80 dark:bg-rose-950/20";
   return "";
 }

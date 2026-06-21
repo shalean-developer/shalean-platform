@@ -54,7 +54,7 @@ function mergePropertyFactors(raw: unknown): PropertyFactorRatesConfig {
 }
 
 export function defaultBookingV2FeesConfig(
-  extrasPrices?: { suppliesKitZar?: number; extraCleanerZar?: number },
+  extrasPrices?: { extraCleanerZar?: number },
 ): BookingV2FeesConfig {
   const envRule = resolveBookingServiceFeeRule();
   let serviceFeeRule: BookingV2FeesConfig["serviceFeeRule"] = "flat";
@@ -62,7 +62,8 @@ export function defaultBookingV2FeesConfig(
   else if (envRule === "optimized") serviceFeeRule = "optimized";
 
   return {
-    suppliesEquipmentFeeZar: extrasPrices?.suppliesKitZar ?? 399,
+    /** Customer supplies surcharge — 0 means included in the service quote (see booking copy). */
+    suppliesEquipmentFeeZar: 0,
     extraCleanerFeeZar: extrasPrices?.extraCleanerZar ?? 299,
     serviceFeeRule,
     serviceFeeFlatCents: DEFAULT_BOOKING_SERVICE_FEE_CENTS,
@@ -76,18 +77,16 @@ export function defaultBookingV2FeesConfig(
 /** Parse pricing_booking_config JSONB row merged with pricing_extras slugs. */
 export function parseBookingV2FeesConfig(
   configJson: unknown,
-  extrasPrices?: { suppliesKitZar?: number; extraCleanerZar?: number },
+  extrasPrices?: { extraCleanerZar?: number },
 ): BookingV2FeesConfig {
   const base = defaultBookingV2FeesConfig(extrasPrices);
   if (!configJson || typeof configJson !== "object") return base;
 
   const c = configJson as Record<string, unknown>;
 
-  if (extrasPrices?.suppliesKitZar != null) {
-    base.suppliesEquipmentFeeZar = extrasPrices.suppliesKitZar;
-  } else {
-    const n = Number(c.supplies_equipment_fee_zar);
-    if (Number.isFinite(n) && n >= 0) base.suppliesEquipmentFeeZar = Math.round(n);
+  const suppliesFee = Number(c.supplies_equipment_fee_zar);
+  if (Number.isFinite(suppliesFee) && suppliesFee >= 0) {
+    base.suppliesEquipmentFeeZar = Math.round(suppliesFee);
   }
 
   if (extrasPrices?.extraCleanerZar != null) {

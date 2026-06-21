@@ -243,10 +243,10 @@ function CustomCalendar({
 // ─── Step 2 ─────────────────────────────────────────────────────────────────────
 
 export function Step2Schedule() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const { serviceSlug, liveConfig, scheduling } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const copy = STEP2_COPY[serviceSlug];
-  const isTeamMode = config.cleanerMode === "team";
+  const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
 
   const {
     control,
@@ -280,11 +280,11 @@ export function Step2Schedule() {
 
   useEffect(() => {
     if (!date) return;
-    const available = filterCustomerOnlineBookingTimeSlots(date);
+    const available = filterCustomerOnlineBookingTimeSlots(date, { scheduling });
     if (time && !available.includes(time)) {
       setValue("time", available[0] ?? "", { shouldValidate: true });
     }
-  }, [date, time, setValue]);
+  }, [date, time, setValue, scheduling]);
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
     const ids = selectedCleanerIds;
@@ -394,7 +394,12 @@ export function Step2Schedule() {
               rules={{ required: "Select a time" }}
               render={({ field }) =>
                 date ? (
-                  <TimeSlotPicker dateYmd={date} value={field.value ?? ""} onChange={field.onChange} />
+                  <TimeSlotPicker
+                    dateYmd={date}
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    scheduling={scheduling}
+                  />
                 ) : (
                   <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
                     Choose a date to see available times
