@@ -1,8 +1,8 @@
-/** Supabase `select` fragment for customer dashboard booking lists (keep in sync with {@link BookingRow}). */
-export const CUSTOMER_BOOKING_SELECT = [
+import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
+
+const CUSTOMER_BOOKING_SELECT_FIELDS = [
   "id",
-  /** Ownership columns for customer API access checks (same viewer as auth session). */
-  "user_id",
+  "__OWNERSHIP__",
   "customer_email",
   "service",
   "service_slug",
@@ -72,4 +72,14 @@ export const CUSTOMER_BOOKING_SELECT = [
   "zoho_invoice_id",
   /* cleaners join intentionally omitted — multiple FKs cause PostgREST ambiguity;
      cleaner name is resolved via booking_snapshot.cleaner_name in cleanerFromRow(). */
-].join(",");
+] as const;
+
+/** Supabase `select` fragment for customer dashboard booking lists (keep in sync with {@link BookingRow}). */
+export function buildCustomerBookingSelect(ownershipColumn: BookingCustomerOwnershipColumn): string {
+  return CUSTOMER_BOOKING_SELECT_FIELDS.map((field) =>
+    field === "__OWNERSHIP__" ? ownershipColumn : field,
+  ).join(",");
+}
+
+/** Default select for local/dev schemas that still expose `user_id`. */
+export const CUSTOMER_BOOKING_SELECT = buildCustomerBookingSelect("user_id");

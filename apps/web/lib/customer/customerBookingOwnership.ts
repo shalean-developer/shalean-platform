@@ -1,19 +1,19 @@
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { bookingCustomerKey, type BookingCustomerIdentityRow } from "@/lib/booking/bookingCustomerIdentity";
 
 /** Minimum normalized email length to treat as a stable ownership signal (avoids empty/"a"). */
 const MIN_EMAIL_LEN = 3;
 
-export type BookingOwnershipProbe = {
-  user_id?: string | null;
+export type BookingOwnershipProbe = BookingCustomerIdentityRow & {
   customer_email?: string | null;
 };
 
 /**
  * Whether the signed-in viewer may see this booking in customer APIs:
- * — usual case: `user_id` matches auth uid;
- * — orphan repair: `user_id` is null and `customer_email` matches the viewer's auth email (normalized).
+ * — usual case: `customer_id` / `user_id` matches auth uid;
+ * — orphan repair: ownership id is null and `customer_email` matches the viewer's auth email (normalized).
  *
- * Does **not** grant access when `user_id` points at another account (even if email matches).
+ * Does **not** grant access when ownership points at another account (even if email matches).
  */
 export function customerCanAccessBookingRow(
   row: BookingOwnershipProbe,
@@ -21,7 +21,7 @@ export function customerCanAccessBookingRow(
   viewerEmailNormalized: string,
 ): boolean {
   const uid = String(authUserId ?? "").trim();
-  const rowUid = String(row.user_id ?? "").trim();
+  const rowUid = bookingCustomerKey(row);
   if (rowUid === uid) return true;
   if (rowUid !== "") return false;
   const rowEmail = normalizeEmail(String(row.customer_email ?? ""));

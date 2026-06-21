@@ -7,8 +7,14 @@ import {
   customerCanAccessBookingRow,
   mergeCustomerBookingListsByCreatedAtDesc,
 } from "@/lib/customer/customerBookingOwnership";
+import {
+  bookingCustomerKey,
+  normalizeBookingCustomerIdentity,
+  type BookingCustomerOwnershipColumn,
+} from "@/lib/booking/bookingCustomerIdentity";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { attachCanonicalCustomerBookingLifecycle } from "@/lib/customer/attachCanonicalCustomerBookingLifecycle";
-import { CUSTOMER_BOOKING_SELECT } from "@/lib/dashboard/customerBookingSelect";
+import { buildCustomerBookingSelect } from "@/lib/dashboard/customerBookingSelect";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { normalizeCustomerBookingRow } from "@/lib/dashboard/normalizeCustomerBookingRow";
 import { metrics } from "@/lib/metrics/counters";
@@ -26,14 +32,15 @@ async function enrichCustomerBookingRowFromSavedAddress(
   admin: SupabaseClient,
   row: BookingRow,
 ): Promise<BookingRow> {
-  if (row.location?.trim() || !row.user_id) return row;
+  const ownerId = bookingCustomerKey(row);
+  if (row.location?.trim() || !ownerId) return row;
   const suburb = row.suburb?.trim();
   if (!suburb) return row;
 
   const { data, error } = await admin
     .from("customer_saved_addresses")
     .select("line1, suburb, city, created_at")
-    .eq("user_id", row.user_id)
+    .eq("user_id", ownerId)
     .eq("suburb", suburb)
     .order("created_at", { ascending: false })
     .limit(3);
@@ -53,9 +60,50 @@ async function enrichCustomerBookingRowFromSavedAddress(
 }
 
 export type LoadCustomerBookingsOptions = {
-  /** When set, also returns paid bookings with `user_id` null but matching `customer_email` (orphan repair). */
+  /** When set, also returns paid bookings with no ownership id but matching `customer_email` (orphan repair). */
   viewerEmail?: string | null;
 };
+
+async function resolveBookingOwnershipColumn(admin: SupabaseClient): Promise<BookingCustomerOwnershipColumn> {
+  const probe = await admin.from("bookings").select("customer_id").limit(1);
+  if (probe.error && isUnknownColumnError(probe.error, "customer_id")) {
+    return "user_id";
+  }
+  return "customer_id";
+}
+
+async function loadOwnedCustomerBookingRows(
+  admin: SupabaseClient,
+  userId: string,
+  ownershipColumn: BookingCustomerOwnershipColumn,
+): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
+  const select = buildCustomerBookingSelect(ownershipColumn);
+  return admin
+    .from("bookings")
+    .select(select)
+    .eq(ownershipColumn, userId)
+    .neq("status", "pending_payment")
+    .neq("status", "payment_expired")
+    .order("created_at", { ascending: false })
+    .limit(100);
+}
+
+async function loadOrphanCustomerBookingRows(
+  admin: SupabaseClient,
+  viewerNorm: string,
+  ownershipColumn: BookingCustomerOwnershipColumn,
+): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
+  const select = buildCustomerBookingSelect(ownershipColumn);
+  return admin
+    .from("bookings")
+    .select(select)
+    .eq("customer_email", viewerNorm)
+    .is(ownershipColumn, null)
+    .neq("status", "pending_payment")
+    .neq("status", "payment_expired")
+    .order("created_at", { ascending: false })
+    .limit(50);
+}
 
 export async function loadCustomerBookingRowsForUser(
   admin: SupabaseClient,
@@ -63,33 +111,25 @@ export async function loadCustomerBookingRowsForUser(
   options?: LoadCustomerBookingsOptions,
 ): Promise<{ ok: true; bookings: BookingRow[] } | { ok: false; error: string; status: number }> {
   const viewerNorm = normalizeEmail(String(options?.viewerEmail ?? ""));
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
 
-  const { data: byUserId, error } = await admin
-    .from("bookings")
-    .select(CUSTOMER_BOOKING_SELECT)
-    .eq("user_id", userId)
-    .neq("status", "pending_payment")
-    .neq("status", "payment_expired")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const { data: byUserId, error } = await loadOwnedCustomerBookingRows(admin, userId, ownershipColumn);
 
   if (error) {
-    void reportOperationalIssue("error", "customer/bookings", error.message, { userId });
+    void reportOperationalIssue("error", "customer/bookings", error.message, { userId, ownershipColumn });
     return { ok: false, error: "Could not load bookings.", status: 500 };
   }
 
-  let mergedRaw = (byUserId ?? []) as unknown as BookingRow[];
+  let mergedRaw = ((byUserId ?? []) as unknown as BookingRow[]).map((row) =>
+    normalizeBookingCustomerIdentity(row),
+  );
 
   if (viewerNorm.length >= 3) {
-    const { data: byEmailOrphan, error: orphanErr } = await admin
-      .from("bookings")
-      .select(CUSTOMER_BOOKING_SELECT)
-      .eq("customer_email", viewerNorm)
-      .is("user_id", null)
-      .neq("status", "pending_payment")
-      .neq("status", "payment_expired")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const { data: byEmailOrphan, error: orphanErr } = await loadOrphanCustomerBookingRows(
+      admin,
+      viewerNorm,
+      ownershipColumn,
+    );
 
     if (orphanErr) {
       void reportOperationalIssue("warn", "customer/bookings/email_orphan", orphanErr.message, { userId });
@@ -97,7 +137,10 @@ export async function loadCustomerBookingRowsForUser(
       metrics.increment("customer.bookings.email_orphan_merge_rows", { count: byEmailOrphan.length });
       mergedRaw = mergeCustomerBookingListsByCreatedAtDesc(
         mergedRaw as unknown as Array<{ id: string; created_at?: string | null }>,
-        byEmailOrphan as unknown as Array<{ id: string; created_at?: string | null }>,
+        (byEmailOrphan as unknown as BookingRow[]).map((row) => normalizeBookingCustomerIdentity(row)) as unknown as Array<{
+          id: string;
+          created_at?: string | null;
+        }>,
       ) as unknown as BookingRow[];
     }
   }
@@ -169,7 +212,9 @@ export async function loadCustomerBookingRowForUser(
   }
   const viewerNorm = normalizeEmail(String(options?.viewerEmail ?? ""));
 
-  const { data, error } = await admin.from("bookings").select(CUSTOMER_BOOKING_SELECT).eq("id", id).maybeSingle();
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const select = buildCustomerBookingSelect(ownershipColumn);
+  const { data, error } = await admin.from("bookings").select(select).eq("id", id).maybeSingle();
 
   if (error) {
     void reportOperationalIssue("error", "customer/bookings/detail", error.message, { userId, bookingId: id });
@@ -178,7 +223,7 @@ export async function loadCustomerBookingRowForUser(
   if (!data) {
     return { ok: false, error: "Not found.", status: 404 };
   }
-  const row = normalizeCustomerBookingRow(data as unknown as BookingRow);
+  const row = normalizeCustomerBookingRow(normalizeBookingCustomerIdentity(data as unknown as BookingRow));
   const st = String(row.status ?? "").toLowerCase();
   if (st === "pending_payment" || st === "payment_expired") {
     return { ok: false, error: "Not found.", status: 404 };

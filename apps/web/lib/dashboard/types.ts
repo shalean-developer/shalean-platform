@@ -21,6 +21,7 @@ export type CleanerEmbed = { full_name: string | null; phone: string | null } | 
 export type BookingRow = {
   id: string;
   /** Set on customer bookings API payloads; used for list/detail ownership checks. */
+  customer_id?: string | null;
   user_id?: string | null;
   customer_email?: string | null;
   service: string | null;

@@ -1,4 +1,5 @@
 import { calendarDateYmdInTimeZone } from "@/lib/admin/metrics";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import {
   adminDashboardRevenueCents,
   isAdminDashboardRevenueEligible,
@@ -59,16 +60,6 @@ function norm(value: unknown): string {
 
 function hasText(value: unknown): boolean {
   return typeof value === "string" ? value.trim().length > 0 : value != null;
-}
-
-/** Canonical customer auth id for retention analytics across schema variants. */
-export function bookingCustomerKey(row: {
-  customer_id?: string | null;
-  user_id?: string | null;
-}): string {
-  const customerId = typeof row.customer_id === "string" ? row.customer_id.trim() : "";
-  if (customerId) return customerId;
-  return typeof row.user_id === "string" ? row.user_id.trim() : "";
 }
 
 function parseTime(iso: string | null | undefined): number | null {
