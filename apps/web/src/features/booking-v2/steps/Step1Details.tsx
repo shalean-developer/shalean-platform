@@ -11,11 +11,11 @@ import {
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { PropertyAddressSection } from "@/src/features/booking-v2/components/PropertyAddressSection";
+import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
 import {
   ServiceQuestionOptionCards,
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
-import { serviceShowsCleaningProductsQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -91,6 +91,7 @@ function CustomSelect({
         id={id}
         type="button"
         onClick={() => setOpen((v) => !v)}
+        suppressHydrationWarning
         className={cn(
           "flex w-full items-center justify-between rounded-xl border bg-white px-4 py-2.5 text-sm shadow-sm transition",
           open
@@ -276,8 +277,6 @@ export function Step1Details() {
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
-  const showCleaningProductsQuestion =
-    liveConfig?.showCleaningProductsQuestion ?? serviceShowsCleaningProductsQuestion(serviceSlug);
 
   function toggleExtra(id: string) {
     const current = selectedExtras;
@@ -288,13 +287,11 @@ export function Step1Details() {
   }
 
   const questionGroups = groupQuestions(
-    step1Questions.filter(
-      (q) => q.key !== "cleaningProducts" || showCleaningProductsQuestion,
-    ),
+    step1Questions.filter((q) => q.key !== "cleaningProducts"),
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-lpignore="true" data-form-type="other">
       <div className="text-center">
         <h2 className="text-xl font-bold text-slate-900">Your details</h2>
         <p className="mt-1 text-sm text-slate-500">
@@ -336,6 +333,8 @@ export function Step1Details() {
 
       <PropertyAddressSection />
 
+      <EquipmentSection />
+
       <div className="space-y-4">
         <div>
           <FieldLabel htmlFor="accessInstructions">Access instructions (optional)</FieldLabel>
@@ -344,6 +343,8 @@ export function Step1Details() {
             type="text"
             placeholder="e.g. Ring bell, use side gate…"
             {...register("accessInstructions")}
+            autoComplete="off"
+            suppressHydrationWarning
             className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
@@ -356,6 +357,8 @@ export function Step1Details() {
               type="text"
               placeholder="Street parking, driveway…"
               {...register("parkingInstructions")}
+              autoComplete="off"
+              suppressHydrationWarning
               className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
@@ -366,6 +369,8 @@ export function Step1Details() {
               type="text"
               placeholder="e.g. #1234"
               {...register("gateCode")}
+              autoComplete="off"
+              suppressHydrationWarning
               className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>

@@ -4,6 +4,8 @@ import { Controller, useFormContext } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import type { FormQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
+import { isYesNoQuestion } from "@/src/features/booking-v2/components/serviceQuestionYesNo";
+import { YesNoToggleRow } from "@/src/features/booking-v2/components/YesNoToggleRow";
 
 function optionGridClass(count: number): string {
   if (count <= 2) return "grid-cols-2";
@@ -14,6 +16,7 @@ function optionGridClass(count: number): string {
 
 /** Radio and short ungrouped selects render as full-width horizontal option cards. */
 export function shouldUseHorizontalOptionCards(question: FormQuestion): boolean {
+  if (isYesNoQuestion(question)) return true;
   if (question.type === "radio") return true;
   if (question.type === "select" && !question.group && (question.options?.length ?? 0) <= 6) return true;
   return false;
@@ -36,6 +39,27 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
   const options = question.options ?? [];
   const gridClass = optionGridClass(options.length);
 
+  if (isYesNoQuestion(question)) {
+    return (
+      <Controller
+        name={fieldKey}
+        control={control}
+        rules={{ required: question.required ? `${question.label} is required` : false }}
+        render={({ field }) => (
+          <YesNoToggleRow
+            label={question.label}
+            hint={question.hint}
+            required={question.required}
+            checked={String(field.value ?? "") === "yes"}
+            onCheckedChange={(next) => field.onChange(next ? "yes" : "no")}
+            error={fieldError}
+            bordered={!compact}
+          />
+        )}
+      />
+    );
+  }
+
   return (
     <div className={cn("w-full", question.centered && "text-center")}>
       <p className="mb-2 text-sm font-medium text-slate-700">
@@ -55,6 +79,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                   key={opt.value}
                   type="button"
                   onClick={() => field.onChange(opt.value)}
+                  suppressHydrationWarning
                   className={cn(
                     "rounded-xl border text-center font-medium transition",
                     compact ? "px-2 py-2 text-xs" : "px-3 py-2.5 text-sm",

@@ -31,6 +31,13 @@ import { adminPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
+import {
+  buildEquipmentPricingSnapshot,
+  equipmentPersistFields,
+  quoteEquipmentForAddress,
+  type EquipmentQuoteResult,
+} from "@/lib/booking-v2/equipmentPricing";
+import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
@@ -847,6 +854,27 @@ export async function POST(request: Request) {
   const overrideReasonRaw = typeof body.override_reason === "string" ? body.override_reason.trim() : "";
   const overrideReason = overrideReasonRaw.length > 500 ? overrideReasonRaw.slice(0, 500) : overrideReasonRaw;
 
+  const equipmentRequired =
+    body.equipment_required === true ||
+    body.equipment_required === "true" ||
+    (typeof body.equipment_required === "string" && body.equipment_required.trim().toLowerCase() === "true");
+  const equipmentOverrideReasonRaw =
+    typeof body.equipment_fee_override_reason === "string" ? body.equipment_fee_override_reason.trim() : "";
+  const equipmentOverrideReason =
+    equipmentOverrideReasonRaw.length > 500 ? equipmentOverrideReasonRaw.slice(0, 500) : equipmentOverrideReasonRaw;
+  const equipmentLogisticsFeeBody =
+    typeof body.equipment_logistics_fee === "number" && Number.isFinite(body.equipment_logistics_fee)
+      ? Math.round(body.equipment_logistics_fee)
+      : null;
+  const equipmentAddress =
+    typeof body.equipment_address === "string" ? body.equipment_address.trim() : location;
+  const equipmentSuburb =
+    typeof body.equipment_suburb === "string" ? body.equipment_suburb.trim() : "Cape Town";
+  const equipmentCity =
+    typeof body.equipment_city === "string" ? body.equipment_city.trim() : "Cape Town";
+  const equipmentPostal =
+    typeof body.equipment_postal_code === "string" ? body.equipment_postal_code.trim() : "";
+
   if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) {
     return NextResponse.json({ error: "Select an existing customer." }, { status: 400 });
   }
@@ -1178,6 +1206,46 @@ export async function POST(request: Request) {
       rowStatus = "assigned";
     }
 
+    let equipmentPatch: Record<string, unknown> = {};
+    if (serviceRaw === "standard" && typeof body.equipment_required === "boolean") {
+      if (equipmentRequired) {
+        const equipConfig = await loadEquipmentPricingConfig();
+        let quote = await quoteEquipmentForAddress({
+          config: equipConfig,
+          address: equipmentAddress,
+          suburb: equipmentSuburb,
+          city: equipmentCity,
+          postalCode: equipmentPostal,
+          equipmentRequired: true,
+        });
+        if (
+          equipmentLogisticsFeeBody != null &&
+          equipmentLogisticsFeeBody !== quote.logistics_fee &&
+          equipmentOverrideReason.length < 3
+        ) {
+          return NextResponse.json(
+            { error: "equipment_fee_override_reason is required when overriding the equipment fee." },
+            { status: 400 },
+          );
+        }
+        if (equipmentLogisticsFeeBody != null && equipmentLogisticsFeeBody !== quote.logistics_fee) {
+          quote = { ...quote, logistics_fee: equipmentLogisticsFeeBody };
+        }
+        equipmentPatch = equipmentPersistFields({
+          equipmentRequired: true,
+          quote,
+          pricingSnapshot: buildEquipmentPricingSnapshot({ config: equipConfig, quote }),
+          overrideReason: equipmentOverrideReason || null,
+        });
+      } else {
+        equipmentPatch = equipmentPersistFields({
+          equipmentRequired: false,
+          quote: null,
+          pricingSnapshot: null,
+        });
+      }
+    }
+
     // created_at is DB default (now); omit from insert so clustering stays deterministic.
     const ins = await insertBookingRowUnified(admin, {
       source: "admin_monthly",
@@ -1209,6 +1277,7 @@ export async function POST(request: Request) {
         created_by: auth.userId,
         booking_source: "admin",
         created_by_admin_id: auth.userId,
+        ...equipmentPatch,
         ...(selectedCleanerId
           ? {
               selected_cleaner_id: selectedCleanerId,

@@ -179,6 +179,15 @@ type BookingDetails = {
   payment_state?: string | null;
   /** Booking-v2 structured pricing breakdown JSONB. */
   pricing_summary?: unknown;
+  equipment_required?: boolean | null;
+  equipment_distance_km?: number | null;
+  equipment_base_fee?: number | null;
+  equipment_price_per_km?: number | null;
+  equipment_distance_charge?: number | null;
+  equipment_logistics_fee?: number | null;
+  equipment_base_location?: string | null;
+  manual_quote_required?: boolean | null;
+  equipment_fee_override_reason?: string | null;
 };
 
 /** Solo-cleaner assign card: only these catalog services (deep/move use dispatch / team flows). */
@@ -3552,6 +3561,26 @@ export default function BookingDetailsView({
             ) : null}
             <DetailRow label="Base price" value={`R ${basePrice.toLocaleString("en-ZA")}`} />
             <DetailRow label="Extras total" value={`R ${extrasPrice.toLocaleString("en-ZA")}`} />
+            {fullBooking.equipment_required ? (
+              <>
+                <div className="my-2 border-t border-zinc-200" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Equipment</p>
+                <DetailRow
+                  label="Equipment delivery"
+                  value={
+                    fullBooking.manual_quote_required
+                      ? "Manual quote required"
+                      : `R ${Number(fullBooking.equipment_logistics_fee ?? 0).toLocaleString("en-ZA")}`
+                  }
+                />
+                {fullBooking.equipment_distance_km != null ? (
+                  <DetailRow label="Distance" value={`${fullBooking.equipment_distance_km} km`} />
+                ) : null}
+                {fullBooking.equipment_fee_override_reason ? (
+                  <DetailRow label="Fee override reason" value={fullBooking.equipment_fee_override_reason} />
+                ) : null}
+              </>
+            ) : null}
             {v2PricingLines ? (
               <>
                 <div className="my-2 border-t border-zinc-200" />

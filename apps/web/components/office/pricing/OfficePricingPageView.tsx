@@ -19,6 +19,7 @@ import {
   normalizeCatalogSlug,
   type BookingPricingConfig,
   type CleanerPricingTier,
+  type EquipmentPricingConfigRow,
   type PricingExtraRow,
   type PricingServiceRow,
   type RecurringDiscountRule,
@@ -39,12 +40,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { defaultEquipmentPricingConfig } from "@/lib/booking-v2/equipmentPricing";
 
-type PricingSection = "base" | "extras" | "team" | "cleaner_count" | "discounts";
+type PricingSection = "base" | "extras" | "equipment" | "team" | "cleaner_count" | "discounts";
 
 const TABS: { id: PricingSection; label: string }[] = [
   { id: "base", label: "Base Pricing" },
   { id: "extras", label: "Extras" },
+  { id: "equipment", label: "Equipment Pricing" },
   { id: "team", label: "Team Pricing" },
   { id: "cleaner_count", label: "Cleaner Count" },
   { id: "discounts", label: "Recurring Discounts" },
@@ -304,6 +307,18 @@ export function OfficePricingPageView() {
                     prev.map((e) => (e.id === row.id ? { ...e, is_active: !row.is_active } : e)),
                   );
                 }
+              }}
+            />
+          ) : null}
+
+          {!loading && tab === "equipment" ? (
+            <EquipmentPricingTab
+              config={bookingConfig.equipment_pricing ?? defaultEquipmentPricingConfig()}
+              busy={busy}
+              onSave={async (next) => {
+                setBusy(true);
+                await patchConfig({ equipment_pricing: next });
+                setBusy(false);
               }}
             />
           ) : null}
@@ -1278,5 +1293,123 @@ function TeamDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EquipmentPricingTab({
+  config,
+  busy,
+  onSave,
+}: {
+  config: EquipmentPricingConfigRow;
+  busy: boolean;
+  onSave: (next: EquipmentPricingConfigRow) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(config);
+
+  useEffect(() => {
+    setDraft(config);
+  }, [config]);
+
+  return (
+    <div className="max-w-xl space-y-4">
+      <TabHeader title="Equipment delivery and collection pricing for regular cleaning bookings." />
+
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+        <input
+          type="checkbox"
+          checked={draft.is_active}
+          onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))}
+          className="rounded border-slate-300"
+        />
+        Active
+      </label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Base fee (ZAR)</label>
+          <input
+            type="number"
+            min={0}
+            value={draft.base_fee_zar}
+            onChange={(e) => setDraft((d) => ({ ...d, base_fee_zar: Number(e.target.value) }))}
+            className={inputClassName()}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Price per km (ZAR)</label>
+          <input
+            type="number"
+            min={0}
+            value={draft.price_per_km_zar}
+            onChange={(e) => setDraft((d) => ({ ...d, price_per_km_zar: Number(e.target.value) }))}
+            className={inputClassName()}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Max auto distance (km)</label>
+          <input
+            type="number"
+            min={1}
+            value={draft.max_auto_distance_km}
+            onChange={(e) => setDraft((d) => ({ ...d, max_auto_distance_km: Number(e.target.value) }))}
+            className={inputClassName()}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-slate-500">Equipment base address</label>
+        <input
+          type="text"
+          value={draft.base_address}
+          onChange={(e) => setDraft((d) => ({ ...d, base_address: e.target.value }))}
+          className={inputClassName()}
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Base latitude</label>
+          <input
+            type="number"
+            step="any"
+            value={draft.base_latitude}
+            onChange={(e) => setDraft((d) => ({ ...d, base_latitude: Number(e.target.value) }))}
+            className={inputClassName()}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Base longitude</label>
+          <input
+            type="number"
+            step="any"
+            value={draft.base_longitude}
+            onChange={(e) => setDraft((d) => ({ ...d, base_longitude: Number(e.target.value) }))}
+            className={inputClassName()}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-slate-500">Manual quote message</label>
+        <textarea
+          rows={3}
+          value={draft.manual_quote_message}
+          onChange={(e) => setDraft((d) => ({ ...d, manual_quote_message: e.target.value }))}
+          className={inputClassName()}
+        />
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void onSave(draft)}
+        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        Save equipment pricing
+      </button>
+    </div>
   );
 }

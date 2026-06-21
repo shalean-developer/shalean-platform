@@ -54,6 +54,7 @@ function EditLink({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
+      suppressHydrationWarning
       className="flex items-center gap-1 text-sm font-medium text-blue-600 transition hover:text-blue-700"
     >
       <Pencil className="h-3.5 w-3.5" aria-hidden />
@@ -259,6 +260,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             </Section>
           ) : (
             <div className="px-5 py-3">{durationRow}</div>
+          )}
+
+          {/* Manual quote notice */}
+          {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
+            <div className="mx-5 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {values.equipmentQuote.manual_quote_message}
+            </div>
           )}
 
           {/* Price breakdown */}

@@ -16,6 +16,7 @@ const SERVICE_DETAIL_FIELD_LABELS: Record<string, string> = {
   propertyType: "Property type",
   hasPets: "Pets on site",
   cleaningProducts: "Cleaning products at home",
+  equipmentRequired: "Equipment delivery",
   specialInstructions: "Special instructions",
   carpetRooms: "Carpet rooms",
   squareMeters: "Square meters",

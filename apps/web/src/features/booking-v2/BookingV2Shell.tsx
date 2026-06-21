@@ -11,11 +11,55 @@ import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import { useBookingV2GrowthAnalytics } from "@/src/features/booking-v2/hooks/useBookingV2GrowthAnalytics";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
+import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
+
+function BookingV2LoadingShell() {
+  return (
+    <div className="min-h-dvh bg-slate-50" aria-busy="true" aria-label="Loading booking form">
+      <div className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+          <div className="h-8 w-32 animate-pulse rounded bg-slate-200" />
+          <div className="mx-auto hidden h-8 max-w-sm flex-1 animate-pulse rounded-full bg-slate-100 sm:block" />
+          <div className="h-8 w-16 animate-pulse rounded bg-slate-100" />
+        </div>
+      </div>
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+          <div className="rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+            <div className="animate-pulse space-y-6">
+              <div className="mx-auto h-7 w-40 rounded bg-slate-200" />
+              <div className="mx-auto h-4 w-72 max-w-full rounded bg-slate-100" />
+              <div className="grid grid-cols-3 gap-2 pt-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-10 rounded-xl bg-slate-100" />
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-10 rounded-xl bg-slate-100" />
+                ))}
+              </div>
+              <div className="h-10 rounded-xl bg-slate-100" />
+            </div>
+          </div>
+          <div className="hidden lg:block">
+            <div className="h-72 animate-pulse rounded-2xl border border-slate-100 bg-white shadow-sm" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function BookingV2Inner() {
+  const mounted = useClientMounted();
   const { currentStep, goToStep, goNext, goBack, serviceSlug } = useBookingV2();
   useBookingV2Pricing();
   useBookingV2GrowthAnalytics(currentStep, serviceSlug);
+
+  if (!mounted) {
+    return <BookingV2LoadingShell />;
+  }
 
   const stepContent = {
     1: <Step1Details />,
@@ -53,6 +97,7 @@ function BookingV2Inner() {
               <button
                 type="button"
                 onClick={goBack}
+                suppressHydrationWarning
                 className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 {currentStep === 1 ? "← Back to services" : "← Back"}
@@ -62,6 +107,7 @@ function BookingV2Inner() {
                 <button
                   type="button"
                   onClick={goNext}
+                  suppressHydrationWarning
                   className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                 >
                   {currentStep === 3 ? "Proceed to payment →" : "Continue →"}

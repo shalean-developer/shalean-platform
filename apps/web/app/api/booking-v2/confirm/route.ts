@@ -8,6 +8,15 @@ import {
 } from "@/src/features/booking-v2/config/serviceConfig";
 import { buildCustomerPricingFromForm, pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
+import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import {
+  buildEquipmentPricingSnapshot,
+  equipmentPersistFields,
+  quoteEquipmentForAddress,
+  type EquipmentQuoteResult,
+} from "@/lib/booking-v2/equipmentPricing";
+import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
+import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import { resolveCustomerPhoneFromAuthAdmin, trimCustomerPhone } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
@@ -169,6 +178,12 @@ export async function POST(request: Request) {
   const customerPhone = trimCustomerPhone(data.contactPhone) ?? customerPhoneFromAuth;
 
   // ── 6. Server-side price verification ────────────────────────────────────────
+  const equipmentRequiredFlag = data.equipmentRequired === "yes";
+  let liveConfig: LiveServiceConfig | null = null;
+  let feesConfig: Awaited<ReturnType<typeof loadBookingV2Catalog>>["feesConfig"] | null = null;
+  let serverEquipmentQuote: EquipmentQuoteResult | null = null;
+  let equipmentPricingSnapshot: ReturnType<typeof buildEquipmentPricingSnapshot> | null = null;
+
   let serverBreakdown = buildCustomerPricingFromForm({
     serviceSlug: data.serviceSlug,
     values: {
@@ -178,14 +193,39 @@ export async function POST(request: Request) {
       cleanerCount: data.cleanerCount ?? 1,
       bookingType: data.bookingType,
       recurringFrequency: data.recurringFrequency ?? "",
+      equipmentRequired: data.equipmentRequired ?? "",
+      equipmentQuote: (data.equipmentQuote as EquipmentQuoteResult | null) ?? null,
     },
     liveConfig: null,
     feesConfig: null,
   });
 
   try {
-    const { catalog, feesConfig } = await loadBookingV2Catalog();
-    const liveConfig = catalog[data.serviceSlug] ?? null;
+    const catalogPayload = await loadBookingV2Catalog();
+    feesConfig = catalogPayload.feesConfig;
+    liveConfig = catalogPayload.catalog[data.serviceSlug] ?? null;
+
+    const showEquipment =
+      liveConfig?.showEquipmentQuestion ??
+      liveConfig?.showCleaningProductsQuestion ??
+      serviceShowsEquipmentQuestion(data.serviceSlug);
+
+    if (showEquipment && equipmentRequiredFlag) {
+      const equipConfig = await loadEquipmentPricingConfig();
+      serverEquipmentQuote = await quoteEquipmentForAddress({
+        config: equipConfig,
+        address: data.address,
+        suburb: data.suburb,
+        city: data.city,
+        postalCode: data.postalCode,
+        equipmentRequired: true,
+      });
+      equipmentPricingSnapshot = buildEquipmentPricingSnapshot({
+        config: equipConfig,
+        quote: serverEquipmentQuote,
+      });
+    }
+
     serverBreakdown = buildCustomerPricingFromForm({
       serviceSlug: data.serviceSlug,
       values: {
@@ -195,6 +235,8 @@ export async function POST(request: Request) {
         cleanerCount: data.cleanerCount ?? 1,
         bookingType: data.bookingType,
         recurringFrequency: data.recurringFrequency ?? "",
+        equipmentRequired: equipmentRequiredFlag ? "yes" : data.equipmentRequired === "no" ? "no" : "",
+        equipmentQuote: serverEquipmentQuote,
       },
       liveConfig,
       feesConfig,
@@ -202,6 +244,12 @@ export async function POST(request: Request) {
   } catch (e) {
     console.warn("[booking-v2/confirm] server price check failed:", e);
   }
+
+  const equipmentPersist = equipmentPersistFields({
+    equipmentRequired: equipmentRequiredFlag,
+    quote: serverEquipmentQuote,
+    pricingSnapshot: equipmentPricingSnapshot,
+  });
 
   const clientTotal =
     (data.pricingSummary as { estimated_total?: number }).estimated_total ??
@@ -258,6 +306,7 @@ export async function POST(request: Request) {
         paystack_reference: paystackReference,
         customer_phone: customerPhone,
         ...persistPricing,
+        ...equipmentPersist,
         price_snapshot: priceSnapshot,
       })
       .eq("id", existingBooking.id);
@@ -343,6 +392,7 @@ export async function POST(request: Request) {
 
       // Pricing
       ...persistPricing,
+      ...equipmentPersist,
       price_snapshot: priceSnapshot,
       currency: "ZAR",
 
@@ -359,6 +409,8 @@ export async function POST(request: Request) {
         cleanerCount: data.cleanerCount,
         assignedTeamId: data.assignedTeamId,
         selectedExtras: data.selectedExtras,
+        equipmentRequired: data.equipmentRequired,
+        equipmentQuote: serverEquipmentQuote,
         pricingSummary: serverBreakdown,
         contactPhone: customerPhone,
         customer: {

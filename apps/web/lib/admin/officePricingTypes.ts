@@ -38,11 +38,23 @@ export type TeamPricingConfig = {
   notes: string;
 };
 
+export type EquipmentPricingConfigRow = {
+  is_active: boolean;
+  base_fee_zar: number;
+  price_per_km_zar: number;
+  max_auto_distance_km: number;
+  base_address: string;
+  base_latitude: number;
+  base_longitude: number;
+  manual_quote_message: string;
+};
+
 export type BookingPricingConfig = {
   recurring_discounts?: Record<string, RecurringDiscountRule>;
   extra_cleaner_fee_zar?: number;
   cleaner_pricing_tiers?: CleanerPricingTier[];
   team_pricing?: TeamPricingConfig;
+  equipment_pricing?: EquipmentPricingConfigRow;
 };
 
 export function normalizeCatalogSlug(raw: string): string {

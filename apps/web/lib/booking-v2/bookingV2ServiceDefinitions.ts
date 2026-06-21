@@ -1,7 +1,7 @@
 import {
   SERVICE_CONFIG,
   SERVICE_SLUGS,
-  serviceShowsCleaningProductsQuestion,
+  serviceShowsEquipmentQuestion,
   type ServiceSlug,
 } from "@/src/features/booking-v2/config/serviceConfig";
 import { EXTRA_CLEANER_SERVICE_SLUGS } from "@/lib/booking-v2/propertyFactorPricing";
@@ -22,7 +22,8 @@ export function buildDefaultBookingV2CatalogConfig(): BookingV2CatalogConfig {
       description: config.description,
       cleanerMode: config.cleanerMode,
       extraTypes: [...EXTRA_TYPE_MAP[slug]],
-      showCleaningProductsQuestion: serviceShowsCleaningProductsQuestion(slug),
+      showEquipmentQuestion: serviceShowsEquipmentQuestion(slug),
+      showCleaningProductsQuestion: serviceShowsEquipmentQuestion(slug),
       allowsExtraCleaner: EXTRA_CLEANER_SERVICE_SLUGS.has(slug),
       step1Questions: config.step1Questions.map((q) => ({ ...q, options: q.options?.map((o) => ({ ...o })) })),
       isActive: true,
@@ -83,10 +84,16 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
       extraSlugs: Array.isArray(row.extraSlugs)
         ? row.extraSlugs.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
         : undefined,
+      showEquipmentQuestion:
+        row.showEquipmentQuestion === true ||
+        (row.showEquipmentQuestion !== false &&
+          row.showCleaningProductsQuestion !== false &&
+          serviceShowsEquipmentQuestion(slug as ServiceSlug)),
       showCleaningProductsQuestion:
-        row.showCleaningProductsQuestion === false
-          ? false
-          : serviceShowsCleaningProductsQuestion(slug as ServiceSlug),
+        row.showEquipmentQuestion === true ||
+        (row.showEquipmentQuestion !== false &&
+          row.showCleaningProductsQuestion !== false &&
+          serviceShowsEquipmentQuestion(slug as ServiceSlug)),
       allowsExtraCleaner:
         row.allowsExtraCleaner === true || EXTRA_CLEANER_SERVICE_SLUGS.has(slug as ServiceSlug),
       step1Questions,

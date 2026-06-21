@@ -22,6 +22,7 @@ import {
   type BookingStep,
 } from "@/src/features/booking-v2/types";
 import { step1Schema, buildStep2Schema } from "@/src/features/booking-v2/schemas";
+import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
@@ -212,6 +213,17 @@ export function BookingV2Provider({
           });
           return false;
         }
+
+        const showEquipment =
+          liveConfig?.showEquipmentQuestion ??
+          liveConfig?.showCleaningProductsQuestion ??
+          serviceShowsEquipmentQuestion(serviceSlug);
+
+        if (showEquipment && !values.equipmentRequired) {
+          form.setError("equipmentRequired", { message: "Select whether you need equipment delivery." });
+          return false;
+        }
+
         return true;
       }
       if (step === 2) {
@@ -228,7 +240,7 @@ export function BookingV2Provider({
       }
       return true;
     },
-    [form, scheduling],
+    [form, scheduling, liveConfig, serviceSlug],
   );
 
   const goNext = useCallback(async () => {

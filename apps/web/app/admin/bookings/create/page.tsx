@@ -24,7 +24,14 @@ import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { buildAdminBookingLocationString } from "@/lib/admin/buildBookingLocationFromSavedAddress";
 import { extractNotesPreviewTags } from "@/lib/admin/adminCreateBookingNotesPreview";
 import { AdminPropertySelector } from "@/components/admin/create-booking/AdminPropertySelector";
+import {
+  AdminEquipmentFields,
+  resolveAdminEquipmentLogisticsFee,
+  type AdminEquipmentAddressParts,
+  type AdminEquipmentFieldsValue,
+} from "@/components/admin/create-booking/AdminEquipmentFields";
 import { AdminCustomerBillingSwitch } from "@/components/admin/create-booking/AdminCustomerBillingSwitch";
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import { fetchCleaners, type AdminCleanerRow } from "@/lib/admin/dashboard";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
@@ -106,6 +113,10 @@ type FormState = {
   selectedExtras: string[];
   /** Optional `cleaners.id` — stored as `selected_cleaner_id` for dispatch. */
   selectedCleanerId: string;
+  equipmentRequired: "yes" | "no" | "";
+  equipmentQuote: EquipmentQuoteResult | null;
+  equipmentFeeOverrideZar: string;
+  equipmentOverrideReason: string;
 };
 
 function emptyForm(): FormState {
@@ -125,6 +136,10 @@ function emptyForm(): FormState {
     allowAdminSlotOverride: false,
     selectedExtras: [],
     selectedCleanerId: "",
+    equipmentRequired: "",
+    equipmentQuote: null,
+    equipmentFeeOverrideZar: "",
+    equipmentOverrideReason: "",
   };
 }
 
@@ -279,6 +294,34 @@ export default function AdminCreateBookingPage() {
     if (form.allowAdminSlotOverride) return allStandardDaySlots();
     return filterBookableTimeSlots(form.date.trim(), { leadMinutes: BOOKING_MIN_LEAD_MINUTES });
   }, [form.date, form.allowAdminSlotOverride]);
+
+  const equipmentAddressParts = useMemo((): AdminEquipmentAddressParts | null => {
+    if (!form.location.trim()) return null;
+    if (form.savedAddressId && !form.useCustomAddress) {
+      const row = savedAddresses.find((a) => a.id === form.savedAddressId);
+      if (row) {
+        return {
+          address: row.line1,
+          suburb: row.suburb,
+          city: row.city ?? "Cape Town",
+          postalCode: row.postal_code ?? "",
+        };
+      }
+    }
+    return {
+      address: form.location.trim(),
+      suburb: "Cape Town",
+      city: "Cape Town",
+      postalCode: "",
+    };
+  }, [form.location, form.savedAddressId, form.useCustomAddress, savedAddresses]);
+
+  const adminEquipmentValue: AdminEquipmentFieldsValue = {
+    equipmentRequired: form.equipmentRequired,
+    equipmentQuote: form.equipmentQuote,
+    equipmentFeeOverrideZar: form.equipmentFeeOverrideZar,
+    equipmentOverrideReason: form.equipmentOverrideReason,
+  };
 
   const userPrefill = searchParams.get("user")?.trim() ?? "";
   useEffect(() => {
@@ -610,6 +653,19 @@ export default function AdminCreateBookingPage() {
     if (!Number.isFinite(bathrooms) || bathrooms < 1 || bathrooms > 20) {
       return "Bathrooms must be a whole number from 1 to 20.";
     }
+    if (f.service === "standard" && f.equipmentRequired) {
+      const override = Number(f.equipmentFeeOverrideZar);
+      const computed = f.equipmentQuote?.manual_quote_required
+        ? 0
+        : f.equipmentQuote?.logistics_fee ?? 0;
+      const overrideDiffers =
+        f.equipmentFeeOverrideZar.trim() !== "" &&
+        Number.isFinite(override) &&
+        override !== computed;
+      if (overrideDiffers && f.equipmentOverrideReason.trim().length < 3) {
+        return "Equipment fee override reason is required (at least 3 characters).";
+      }
+    }
     return null;
   }
 
@@ -738,6 +794,10 @@ export default function AdminCreateBookingPage() {
           allowAdminSlotOverride: o.allow_admin_slot_override === true,
           selectedExtras: extrasFromStore,
           selectedCleanerId: typeof o.selected_cleaner_id === "string" ? o.selected_cleaner_id : "",
+          equipmentRequired: "",
+          equipmentQuote: null,
+          equipmentFeeOverrideZar: "",
+          equipmentOverrideReason: "",
         });
       })();
     } catch {
@@ -861,6 +921,18 @@ export default function AdminCreateBookingPage() {
           ? {
               force: true,
               ...(trimmedOverrideReason.length > 0 ? { override_reason: trimmedOverrideReason } : {}),
+            }
+          : {}),
+        ...(form.service === "standard" && form.equipmentRequired
+          ? {
+              equipment_required: form.equipmentRequired === "yes",
+              equipment_quote: form.equipmentQuote,
+              equipment_logistics_fee: resolveAdminEquipmentLogisticsFee(adminEquipmentValue),
+              equipment_fee_override_reason: form.equipmentOverrideReason.trim() || null,
+              equipment_address: equipmentAddressParts?.address ?? form.location.trim(),
+              equipment_suburb: equipmentAddressParts?.suburb ?? "Cape Town",
+              equipment_city: equipmentAddressParts?.city ?? "Cape Town",
+              equipment_postal_code: equipmentAddressParts?.postalCode ?? "",
             }
           : {}),
       };
@@ -1608,6 +1680,29 @@ export default function AdminCreateBookingPage() {
                   onLocationChange={handleLocationInputChange}
                   onAddressesLoaded={handleAddressesLoaded}
                 />
+                {form.service === "standard" ? (
+                  <AdminEquipmentFields
+                    visible
+                    addressParts={equipmentAddressParts}
+                    value={adminEquipmentValue}
+                    onChange={(next) =>
+                      setForm((s) => ({
+                        ...s,
+                        equipmentRequired: next.equipmentRequired,
+                        equipmentQuote: next.equipmentQuote,
+                        equipmentFeeOverrideZar: next.equipmentFeeOverrideZar,
+                        equipmentOverrideReason: next.equipmentOverrideReason,
+                      }))
+                    }
+                    onSuggestedFeeChange={(fee) => {
+                      if (fee == null) return;
+                      setForm((s) => {
+                        if (s.totalPaidZar.trim() !== "") return s;
+                        return { ...s, totalPaidZar: String(fee) };
+                      });
+                    }}
+                  />
+                ) : null}
               </div>
             ) : null}
 

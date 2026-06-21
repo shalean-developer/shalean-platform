@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { CleanerCountSelector } from "@/src/features/booking-v2/components/CleanerCountSelector";
 import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
+import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ import {
   ServiceQuestionOptionCards,
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
+import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -60,18 +62,6 @@ const MONTH_NAMES = [
 ];
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const CAPE_TOWN_SUBURBS = [
-  "Bloubergstrand", "Bo-Kaap", "Camps Bay", "Century City", "Claremont",
-  "Clifton", "Constantia", "De Waterkant", "Fish Hoek", "Fresnaye",
-  "Gardens", "Green Point", "Hout Bay", "Kenilworth", "Khayelitsha",
-  "Langa", "Milnerton", "Mitchell's Plain", "Mouille Point", "Muizenberg",
-  "Newlands", "Observatory", "Oranjezicht", "Parow", "Parklands",
-  "Pinelands", "Rondebosch", "Salt River", "Sea Point", "Simon's Town",
-  "Somerset West", "Strand", "Tableview", "Tamboerskloof",
-  "Three Anchor Bay", "Tokai", "Vredehoek", "Woodstock", "Wynberg",
-  "Zonnebloem", "Cape Town CBD", "Other",
-];
 
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -334,7 +324,7 @@ function DetailsEditPanel() {
                   onChange={(e) => field.onChange(e.target.value)}
                   className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
                   <option value="">Select suburb…</option>
-                  {CAPE_TOWN_SUBURBS.map((s) => (
+                  {getBookingLocationOptions().map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
@@ -372,6 +362,8 @@ function DetailsEditPanel() {
           </div>
         </div>
       </div>
+
+      <EquipmentSection />
 
       <hr className="border-slate-100" />
 
@@ -941,6 +933,35 @@ export function Step3Review() {
             </div>
           )}
         </ReviewSection>
+
+        {(values.equipmentRequired === "yes" || values.equipmentRequired === "no") && (
+          <ReviewSection number={2} title="Equipment" onEdit={() => openEdit("details")}>
+            <div className="flex items-start gap-2.5">
+              <Package className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+              <div>
+                <p className="text-sm font-medium text-slate-800">
+                  {values.equipmentRequired === "yes"
+                    ? "Shalean to bring cleaning equipment"
+                    : "No equipment delivery needed"}
+                </p>
+                {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
+                  <p className="mt-1 text-sm text-amber-700">
+                    {values.equipmentQuote.manual_quote_message}
+                  </p>
+                )}
+                {values.equipmentRequired === "yes" &&
+                  values.equipmentQuote &&
+                  !values.equipmentQuote.manual_quote_required &&
+                  values.equipmentQuote.logistics_fee > 0 && (
+                    <p className="mt-1 text-sm text-slate-600">
+                      Logistics fee: R{values.equipmentQuote.logistics_fee.toLocaleString("en-ZA")} (
+                      {values.equipmentQuote.distance_km} km)
+                    </p>
+                  )}
+              </div>
+            </div>
+          </ReviewSection>
+        )}
 
         {/* ② Clean details */}
         {serviceDetails.length > 0 && (

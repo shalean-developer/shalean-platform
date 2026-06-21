@@ -1,4 +1,7 @@
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+
+export type { EquipmentQuoteResult };
 
 export type PricingLineItem = {
   label: string;
@@ -24,7 +27,15 @@ export type CustomerPricingBreakdown = {
   selected_extras: SelectedExtraLine[];
   selected_extras_total: number;
   supplies_equipment_fee: number;
+  /** Distance-based equipment delivery + collection fee (replaces flat supplies_equipment_fee). */
+  equipment_logistics_fee: number;
+  equipment_distance_km: number;
+  equipment_base_fee: number;
+  equipment_distance_charge: number;
+  manual_quote_required: boolean;
   extra_cleaner_cost: number;
+  /** Cleaning subtotal before equipment and service fee. */
+  cleaning_service_subtotal: number;
   subtotal_before_service_fee: number;
   service_fee: number;
   recurring_discount: number;
@@ -92,9 +103,13 @@ export type CustomerTotalInput = {
     estimatedDurationHours: number;
     extras: Array<{ id: string; label: string; priceZar: number }>;
     allowsExtraCleaner?: boolean;
+    showEquipmentQuestion?: boolean;
+    /** @deprecated use showEquipmentQuestion */
     showCleaningProductsQuestion?: boolean;
   };
   feesConfig: BookingV2FeesConfig;
+  equipmentRequired?: boolean;
+  equipmentQuote?: EquipmentQuoteResult | null;
 };
 
 export function isStructuredPricingBreakdown(
@@ -123,6 +138,12 @@ export function normalizePricingSummary(raw: unknown): CustomerPricingBreakdown 
     selected_extras: [],
     selected_extras_total: extras,
     supplies_equipment_fee: 0,
+    equipment_logistics_fee: 0,
+    equipment_distance_km: 0,
+    equipment_base_fee: 0,
+    equipment_distance_charge: 0,
+    manual_quote_required: false,
+    cleaning_service_subtotal: legacy.total,
     extra_cleaner_cost: cleaner,
     subtotal_before_service_fee: legacy.total,
     service_fee: 0,

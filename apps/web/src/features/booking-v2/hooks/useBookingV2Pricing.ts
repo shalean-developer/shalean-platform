@@ -21,6 +21,9 @@ export function useBookingV2Pricing(): void {
   const bookingType = watch("bookingType");
   const recurringFrequency = watch("recurringFrequency");
 
+  const equipmentRequired = watch("equipmentRequired");
+  const equipmentQuote = watch("equipmentQuote");
+
   useEffect(() => {
     const breakdown = buildCustomerPricingFromForm({
       serviceSlug,
@@ -31,6 +34,8 @@ export function useBookingV2Pricing(): void {
         cleanerCount: cleanerCount ?? 1,
         bookingType,
         recurringFrequency: recurringFrequency ?? "",
+        equipmentRequired: equipmentRequired ?? "",
+        equipmentQuote: equipmentQuote ?? null,
       },
       liveConfig,
       feesConfig,
@@ -44,8 +49,10 @@ export function useBookingV2Pricing(): void {
     cleanerCount,
     bookingType,
     recurringFrequency,
+    equipmentRequired,
     setValue,
     JSON.stringify(serviceDetails),
     JSON.stringify(selectedExtras),
+    JSON.stringify(equipmentQuote),
   ]);
 }

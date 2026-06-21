@@ -23,7 +23,12 @@ export function adminLinesFromPricingSummary(summary: unknown): AdminV2PricingLi
       value: `R ${breakdown.selected_extras_total.toLocaleString("en-ZA")}`,
     });
   }
-  if (breakdown.supplies_equipment_fee > 0) {
+  if (breakdown.equipment_logistics_fee > 0) {
+    lines.push({
+      label: "Equipment logistics fee",
+      value: `R ${breakdown.equipment_logistics_fee.toLocaleString("en-ZA")}`,
+    });
+  } else if (breakdown.supplies_equipment_fee > 0) {
     lines.push({
       label: "Supplies & equipment",
       value: `R ${breakdown.supplies_equipment_fee.toLocaleString("en-ZA")}`,

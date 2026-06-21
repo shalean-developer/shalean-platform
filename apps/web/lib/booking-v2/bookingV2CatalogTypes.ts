@@ -26,7 +26,10 @@ export type BookingV2ServiceDefinition = {
   extraTypes: BookingV2ExtraTypeFilter[];
   /** Optional allowlist of pricing_extras slugs; when set, only these extras are shown. */
   extraSlugs?: string[];
-  showCleaningProductsQuestion: boolean;
+  /** When true, show equipment delivery question (regular cleaning only). */
+  showEquipmentQuestion: boolean;
+  /** @deprecated use showEquipmentQuestion */
+  showCleaningProductsQuestion?: boolean;
   allowsExtraCleaner: boolean;
   step1Questions: BookingV2FormQuestion[];
   isActive?: boolean;
@@ -60,7 +63,10 @@ export type LiveServiceConfig = {
   shortLabel: string;
   description: string;
   cleanerMode: CleanerMode;
-  showCleaningProductsQuestion: boolean;
+  /** When true, show equipment delivery question (regular cleaning only). */
+  showEquipmentQuestion: boolean;
+  /** @deprecated use showEquipmentQuestion */
+  showCleaningProductsQuestion?: boolean;
   allowsExtraCleaner: boolean;
   step1Questions: BookingV2FormQuestion[];
   basePrice: number;

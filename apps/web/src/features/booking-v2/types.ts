@@ -38,6 +38,7 @@ export type {
 
 import type { CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 import { emptyCustomerPricingBreakdown } from "@/lib/booking-v2/emptyPricingBreakdown";
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 
 export type BookingV2FormData = {
   // Step 1 — Details
@@ -52,6 +53,10 @@ export type BookingV2FormData = {
   gateCode: string;
   contactPhone: string;
   selectedExtras: string[];
+
+  /** Equipment delivery (regular cleaning only). */
+  equipmentRequired: "yes" | "no" | "";
+  equipmentQuote: EquipmentQuoteResult | null;
 
   // Step 2 — Schedule
   bookingType: BookingType;
@@ -89,6 +94,8 @@ export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: Cl
     gateCode: "",
     contactPhone: "",
     selectedExtras: [],
+    equipmentRequired: "",
+    equipmentQuote: null,
     bookingType: "once_off",
     date: "",
     time: "",

@@ -23,6 +23,24 @@ const optionalContactPhoneField = z
 
 // ─── Step 1: Details ───────────────────────────────────────────────────────────
 
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+
+const equipmentQuoteSchema = z
+  .object({
+    distance_km: z.number(),
+    base_fee: z.number(),
+    price_per_km: z.number(),
+    distance_charge: z.number(),
+    logistics_fee: z.number(),
+    base_location: z.string(),
+    manual_quote_required: z.boolean(),
+    manual_quote_message: z.string(),
+    geocode_error: z.boolean().optional(),
+    customer_latitude: z.number().optional(),
+    customer_longitude: z.number().optional(),
+  })
+  .passthrough();
+
 export const step1Schema = z.object({
   serviceDetails: z.record(z.union([z.string(), z.number(), z.boolean()])),
   address: z.string().min(5, "Enter your street address"),
@@ -34,6 +52,8 @@ export const step1Schema = z.object({
   gateCode: z.string().optional().default(""),
   contactPhone: contactPhoneField,
   selectedExtras: z.array(z.string()).default([]),
+  equipmentRequired: z.enum(["yes", "no", ""]).default(""),
+  equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
 });
 
 export type Step1Data = z.infer<typeof step1Schema>;
@@ -135,6 +155,8 @@ export const bookingV2ConfirmSchema = z.object({
   gateCode: z.string().optional().default(""),
   contactPhone: contactPhoneField,
   selectedExtras: z.array(z.string()).default([]),
+  equipmentRequired: z.enum(["yes", "no", ""]).optional().default(""),
+  equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
   bookingType: z.enum(["once_off", "recurring"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().min(1),

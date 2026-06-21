@@ -13,56 +13,12 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
+import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
 
 const contactPhoneRules = {
   required: "Enter a contact phone number",
   validate: (value: string) => isValidContactPhone(value) || CONTACT_PHONE_VALIDATION_MESSAGE,
 } as const;
-
-const CAPE_TOWN_SUBURBS = [
-  "Bloubergstrand",
-  "Bo-Kaap",
-  "Camps Bay",
-  "Century City",
-  "Claremont",
-  "Clifton",
-  "Constantia",
-  "De Waterkant",
-  "Fish Hoek",
-  "Fresnaye",
-  "Gardens",
-  "Green Point",
-  "Hout Bay",
-  "Kenilworth",
-  "Khayelitsha",
-  "Langa",
-  "Milnerton",
-  "Mitchell's Plain",
-  "Mouille Point",
-  "Muizenberg",
-  "Newlands",
-  "Observatory",
-  "Oranjezicht",
-  "Parow",
-  "Parklands",
-  "Pinelands",
-  "Rondebosch",
-  "Salt River",
-  "Sea Point",
-  "Simon's Town",
-  "Somerset West",
-  "Strand",
-  "Tableview",
-  "Tamboerskloof",
-  "Three Anchor Bay",
-  "Tokai",
-  "Vredehoek",
-  "Woodstock",
-  "Wynberg",
-  "Zonnebloem",
-  "Cape Town CBD",
-  "Other",
-];
 
 type AddressMode = "saved" | "custom";
 
@@ -464,7 +420,7 @@ export function PropertyAddressSection() {
                 render={({ field }) => (
                   <SearchableSelect
                     id="suburb"
-                    options={CAPE_TOWN_SUBURBS}
+                    options={getBookingLocationOptions()}
                     value={field.value ?? ""}
                     onChange={field.onChange}
                     placeholder="Select suburb…"

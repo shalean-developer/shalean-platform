@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { calculateCustomerTotal, computeServiceFeeZar, applyRecurringDiscountZar } from "@/lib/booking-v2/calculateCustomerTotal";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 
 function baseInput(overrides: Partial<CustomerTotalInput> = {}): CustomerTotalInput {
   const feesConfig = defaultBookingV2FeesConfig({ extraCleanerZar: 299 });
@@ -14,7 +15,6 @@ function baseInput(overrides: Partial<CustomerTotalInput> = {}): CustomerTotalIn
       bedrooms: "2",
       bathrooms: "1",
       extraRooms: "0",
-      cleaningProducts: "yes",
       propertyType: "house",
     },
     selectedExtras: [],
@@ -50,33 +50,58 @@ describe("calculateCustomerTotal", () => {
     expect(r.estimated_total).toBe(574);
   });
 
-  it("does not charge supplies fee by default when customer has no products", () => {
-    const r = calculateCustomerTotal(
-      baseInput({
-        serviceDetails: {
-          ...baseInput().serviceDetails,
-          cleaningProducts: "no",
-        },
-      }),
-    );
-    expect(r.supplies_equipment_fee).toBe(0);
-    expect(r.lineItems.some((l) => /supplies/i.test(l.label))).toBe(false);
+  it("does not charge equipment fee when not requested", () => {
+    const r = calculateCustomerTotal(baseInput());
+    expect(r.equipment_logistics_fee).toBe(0);
+    expect(r.lineItems.some((l) => /equipment/i.test(l.label))).toBe(false);
   });
 
-  it("adds supplies fee when admin configures supplies_equipment_fee_zar", () => {
-    const feesConfig = defaultBookingV2FeesConfig({ extraCleanerZar: 299 });
-    feesConfig.suppliesEquipmentFeeZar = 399;
+  it("adds distance-based equipment logistics fee when required", () => {
+    const quote: EquipmentQuoteResult = {
+      distance_km: 10,
+      base_fee: 450,
+      price_per_km: 25,
+      distance_charge: 250,
+      logistics_fee: 700,
+      base_location: "Base",
+      manual_quote_required: false,
+      manual_quote_message: "Manual quote required.",
+    };
     const r = calculateCustomerTotal(
       baseInput({
-        serviceDetails: {
-          ...baseInput().serviceDetails,
-          cleaningProducts: "no",
+        catalog: {
+          ...baseInput().catalog,
+          showEquipmentQuestion: true,
         },
-        feesConfig,
+        equipmentRequired: true,
+        equipmentQuote: quote,
       }),
     );
-    expect(r.supplies_equipment_fee).toBe(399);
-    expect(r.subtotal_before_service_fee).toBe(943);
+    expect(r.equipment_logistics_fee).toBe(700);
+    expect(r.subtotal_before_service_fee).toBe(544 + 700);
+    expect(r.lineItems.some((l) => l.label === "Equipment logistics fee")).toBe(true);
+  });
+
+  it("does not add equipment fee when manual quote required", () => {
+    const quote: EquipmentQuoteResult = {
+      distance_km: 25,
+      base_fee: 450,
+      price_per_km: 25,
+      distance_charge: 0,
+      logistics_fee: 0,
+      base_location: "Base",
+      manual_quote_required: true,
+      manual_quote_message: "Manual quote required.",
+    };
+    const r = calculateCustomerTotal(
+      baseInput({
+        catalog: { ...baseInput().catalog, showEquipmentQuestion: true },
+        equipmentRequired: true,
+        equipmentQuote: quote,
+      }),
+    );
+    expect(r.equipment_logistics_fee).toBe(0);
+    expect(r.manual_quote_required).toBe(true);
   });
 
   it("charges extra cleaner cost for 2 cleaners on regular cleaning", () => {
@@ -100,7 +125,6 @@ describe("calculateCustomerTotal", () => {
           bedrooms: "3",
           bathrooms: "2",
           extraRooms: "0",
-          cleaningProducts: "yes",
           propertyType: "house",
           lastCleaned: "never",
         },

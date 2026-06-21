@@ -1,9 +1,10 @@
-import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
+import { SERVICE_CONFIG, serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import type { BookingV2FeesConfig, CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 
 export function buildCustomerPricingFromForm(params: {
   serviceSlug: BookingV2FormData["serviceSlug"];
@@ -15,12 +16,19 @@ export function buildCustomerPricingFromForm(params: {
     | "cleanerCount"
     | "bookingType"
     | "recurringFrequency"
+    | "equipmentRequired"
+    | "equipmentQuote"
   >;
   liveConfig: LiveServiceConfig | null;
   feesConfig: BookingV2FeesConfig | null;
 }): CustomerPricingBreakdown {
   const { serviceSlug, values, liveConfig, feesConfig } = params;
   const staticConfig = SERVICE_CONFIG[serviceSlug];
+
+  const showEquipmentQuestion =
+    liveConfig?.showEquipmentQuestion ??
+    liveConfig?.showCleaningProductsQuestion ??
+    serviceShowsEquipmentQuestion(serviceSlug);
 
   const catalogSource: LiveServiceConfig =
     liveConfig ?? {
@@ -29,7 +37,7 @@ export function buildCustomerPricingFromForm(params: {
       shortLabel: staticConfig.shortLabel,
       description: staticConfig.description,
       cleanerMode: staticConfig.cleanerMode,
-      showCleaningProductsQuestion: serviceSlug !== "deep-cleaning" && serviceSlug !== "moving-cleaning",
+      showEquipmentQuestion,
       allowsExtraCleaner:
         serviceSlug === "regular-cleaning" ||
         serviceSlug === "airbnb-cleaning" ||
@@ -45,6 +53,10 @@ export function buildCustomerPricingFromForm(params: {
       extras: [],
     };
 
+  const equipmentRequired = values.equipmentRequired === "yes";
+  const equipmentQuote: EquipmentQuoteResult | null =
+    equipmentRequired && values.equipmentQuote ? values.equipmentQuote : null;
+
   return calculateCustomerTotal({
     serviceSlug,
     serviceLabel: catalogSource.label,
@@ -54,6 +66,8 @@ export function buildCustomerPricingFromForm(params: {
     cleanerCount: values.cleanerCount ?? 1,
     bookingType: values.bookingType,
     recurringFrequency: values.recurringFrequency ?? "",
+    equipmentRequired,
+    equipmentQuote,
     catalog: {
       basePrice: catalogSource.basePrice,
       pricePerBedroom: catalogSource.pricePerBedroom,
@@ -63,7 +77,10 @@ export function buildCustomerPricingFromForm(params: {
       estimatedDurationHours: catalogSource.estimatedDurationHours,
       extras: catalogSource.extras,
       allowsExtraCleaner: catalogSource.allowsExtraCleaner,
-      showCleaningProductsQuestion: catalogSource.showCleaningProductsQuestion,
+      showEquipmentQuestion:
+        catalogSource.showEquipmentQuestion ??
+        catalogSource.showCleaningProductsQuestion ??
+        showEquipmentQuestion,
     },
     feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
   });

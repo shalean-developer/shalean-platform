@@ -131,19 +131,6 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     ],
   },
   {
-    key: "cleaningProducts",
-    label: "Do you have cleaning products we can use?",
-    type: "radio",
-    required: true,
-    group: "yesno",
-    centered: true,
-    hint: "Supplies are included if you don't — this helps us plan.",
-    options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No" },
-    ],
-  },
-  {
     key: "specialInstructions",
     label: "Special instructions (optional)",
     type: "textarea",
@@ -753,9 +740,14 @@ export function isValidServiceSlug(slug: string): slug is ServiceSlug {
 
 export const TEAM_SERVICES: ServiceSlug[] = ["deep-cleaning", "moving-cleaning"];
 
-/** Deep and move cleans include supplies — no customer "bring your own products?" question. */
+/** Equipment delivery question — regular cleaning only (deep/move include supplies). */
+export function serviceShowsEquipmentQuestion(slug: ServiceSlug): boolean {
+  return slug === "regular-cleaning";
+}
+
+/** @deprecated use serviceShowsEquipmentQuestion */
 export function serviceShowsCleaningProductsQuestion(slug: ServiceSlug): boolean {
-  return slug !== "deep-cleaning" && slug !== "moving-cleaning";
+  return serviceShowsEquipmentQuestion(slug);
 }
 
 export const TEAMS = [

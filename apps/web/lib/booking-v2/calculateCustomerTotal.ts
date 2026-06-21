@@ -9,9 +9,9 @@ import type {
 } from "@/lib/booking-v2/types";
 import {
   computePropertyFactors,
-  computeSuppliesEquipmentFee,
   EXTRA_CLEANER_SERVICE_SLUGS,
 } from "@/lib/booking-v2/propertyFactorPricing";
+import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { resolveCanonicalDurationWorkload } from "@/lib/pricing/cleaningDurationWorkload";
 
 const V2_TO_CANONICAL: Record<ServiceSlug, BookingServiceId> = {
@@ -162,10 +162,25 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     catalog.extras,
   );
 
-  const supplies_equipment_fee = computeSuppliesEquipmentFee(serviceDetails, feesConfig, {
-    serviceSlug,
-    showCleaningProductsQuestion: catalog.showCleaningProductsQuestion,
-  });
+  const showEquipmentQuestion =
+    catalog.showEquipmentQuestion ?? catalog.showCleaningProductsQuestion ?? false;
+
+  const equipment_logistics_fee =
+    showEquipmentQuestion && input.equipmentRequired && input.equipmentQuote
+      ? input.equipmentQuote.manual_quote_required
+        ? 0
+        : input.equipmentQuote.logistics_fee
+      : 0;
+
+  const equipment_distance_km = input.equipmentQuote?.distance_km ?? 0;
+  const equipment_base_fee = input.equipmentQuote?.base_fee ?? 0;
+  const equipment_distance_charge = input.equipmentQuote?.distance_charge ?? 0;
+  const manual_quote_required = Boolean(
+    showEquipmentQuestion && input.equipmentRequired && input.equipmentQuote?.manual_quote_required,
+  );
+
+  /** @deprecated always 0 — use equipment_logistics_fee */
+  const supplies_equipment_fee = 0;
 
   const extra_cleaner_cost = computeExtraCleanerCost(
     catalog.allowsExtraCleaner ?? EXTRA_CLEANER_SERVICE_SLUGS.has(serviceSlug),
@@ -175,12 +190,14 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     catalog.pricePerExtraCleaner,
   );
 
-  const subtotal_before_service_fee =
+  const cleaning_service_subtotal =
     base_service_price +
     factors.property_factors_total +
     selected_extras_total +
-    supplies_equipment_fee +
     extra_cleaner_cost;
+
+  const subtotal_before_service_fee =
+    cleaning_service_subtotal + equipment_logistics_fee;
 
   const service_fee = computeServiceFeeZar(subtotal_before_service_fee, feesConfig);
 
@@ -213,7 +230,11 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
       base_service_price,
       factorLines: factors.factorLines,
       selected_extras,
-      supplies_equipment_fee,
+      cleaning_service_subtotal,
+      equipmentQuote: input.equipmentQuote ?? null,
+      equipmentRequired: Boolean(input.equipmentRequired),
+      showEquipmentQuestion,
+      equipment_logistics_fee,
       extra_cleaner_cost,
       cleanerCount,
       service_fee,
@@ -235,6 +256,12 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     selected_extras,
     selected_extras_total,
     supplies_equipment_fee,
+    equipment_logistics_fee,
+    equipment_distance_km,
+    equipment_base_fee,
+    equipment_distance_charge,
+    manual_quote_required,
+    cleaning_service_subtotal,
     extra_cleaner_cost,
     subtotal_before_service_fee,
     service_fee,
@@ -255,7 +282,11 @@ type LineItemBuildInput = {
   base_service_price: number;
   factorLines: Array<{ label: string; amountZar: number }>;
   selected_extras: CustomerPricingBreakdown["selected_extras"];
-  supplies_equipment_fee: number;
+  cleaning_service_subtotal: number;
+  equipmentQuote: EquipmentQuoteResult | null;
+  equipmentRequired: boolean;
+  showEquipmentQuestion: boolean;
+  equipment_logistics_fee: number;
   extra_cleaner_cost: number;
   cleanerCount: number;
   service_fee: number;
@@ -269,33 +300,56 @@ export function buildCustomerPriceLineItems(
   input: LineItemBuildInput,
   _feesConfig?: BookingV2FeesConfig,
 ): PricingLineItem[] {
-  const lines: PricingLineItem[] = [
-    { label: `${input.serviceLabel} (base)`, amountZar: input.base_service_price },
-  ];
+  const lines: PricingLineItem[] = [];
+  const showEquipmentBreakdown =
+    input.showEquipmentQuestion && input.equipmentRequired && input.equipmentQuote;
 
-  for (const factor of input.factorLines) {
-    if (factor.amountZar > 0) {
-      lines.push({ label: factor.label, amountZar: factor.amountZar });
+  if (showEquipmentBreakdown) {
+    lines.push({
+      label: "Cleaning service total",
+      amountZar: input.cleaning_service_subtotal,
+    });
+  } else {
+    lines.push({ label: `${input.serviceLabel} (base)`, amountZar: input.base_service_price });
+
+    for (const factor of input.factorLines) {
+      if (factor.amountZar > 0) {
+        lines.push({ label: factor.label, amountZar: factor.amountZar });
+      }
+    }
+
+    for (const extra of input.selected_extras) {
+      lines.push({ label: extra.name, amountZar: extra.total });
+    }
+
+    if (input.extra_cleaner_cost > 0) {
+      const n = Math.max(0, input.cleanerCount - 1);
+      lines.push({
+        label: `${n} extra cleaner${n > 1 ? "s" : ""}`,
+        amountZar: input.extra_cleaner_cost,
+      });
     }
   }
 
-  for (const extra of input.selected_extras) {
-    lines.push({ label: extra.name, amountZar: extra.total });
-  }
-
-  if (input.supplies_equipment_fee > 0) {
-    lines.push({
-      label: "Supplies & equipment",
-      amountZar: input.supplies_equipment_fee,
-    });
-  }
-
-  if (input.extra_cleaner_cost > 0) {
-    const n = Math.max(0, input.cleanerCount - 1);
-    lines.push({
-      label: `${n} extra cleaner${n > 1 ? "s" : ""}`,
-      amountZar: input.extra_cleaner_cost,
-    });
+  if (showEquipmentBreakdown && input.equipmentQuote) {
+    if (!input.equipmentQuote.manual_quote_required && input.equipment_logistics_fee > 0) {
+      lines.push({
+        label: `Equipment distance: ${input.equipmentQuote.distance_km} km`,
+        amountZar: 0,
+      });
+      lines.push({
+        label: `Equipment base fee: R${input.equipmentQuote.base_fee}`,
+        amountZar: input.equipmentQuote.base_fee,
+      });
+      lines.push({
+        label: `Distance charge: R${input.equipmentQuote.distance_charge}`,
+        amountZar: input.equipmentQuote.distance_charge,
+      });
+      lines.push({
+        label: "Equipment logistics fee",
+        amountZar: input.equipment_logistics_fee,
+      });
+    }
   }
 
   if (input.service_fee > 0) {

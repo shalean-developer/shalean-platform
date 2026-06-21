@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { CleanerPricingTier, TeamPricingConfig } from "@/lib/admin/officePricingTypes";
+import { parseEquipmentPricingConfig } from "@/lib/booking-v2/equipmentPricing";
 import { requireAdminFromRequest } from "@/lib/admin/requireAdmin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -112,6 +113,7 @@ export async function PATCH(request: Request) {
     extra_cleaner_fee_zar?: unknown;
     cleaner_pricing_tiers?: unknown;
     team_pricing?: unknown;
+    equipment_pricing?: unknown;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -171,6 +173,11 @@ export async function PATCH(request: Request) {
     const team = parseTeamPricing(body.team_pricing);
     if (!team) return NextResponse.json({ error: "Invalid team_pricing." }, { status: 400 });
     current.team_pricing = team;
+    changed = true;
+  }
+
+  if (body.equipment_pricing != null) {
+    current.equipment_pricing = parseEquipmentPricingConfig(body.equipment_pricing);
     changed = true;
   }
 
