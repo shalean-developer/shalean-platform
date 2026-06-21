@@ -31,7 +31,9 @@ function ForgotPasswordForm() {
         setError(err.message);
         return;
       }
-      setInfo("If an account exists for that email, we sent a link to reset your password. Check your inbox.");
+      setInfo(
+        "If an account exists for that email, we sent a link to reset your password. Check your inbox and spam folder — it may take a few minutes.",
+      );
     } finally {
       setSubmitting(false);
     }

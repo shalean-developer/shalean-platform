@@ -117,13 +117,18 @@ export async function signOut(): Promise<{ error: Error | null }> {
   return { error: error ? new Error(error.message) : null };
 }
 
-/** Sends a Supabase password recovery email; link opens `/auth/reset-password`. */
+/** Sends a password recovery email via `/api/auth/forgot-password` (Resend in production). */
 export async function requestPasswordReset(email: string) {
-  const sb = client();
-  const redirectTo =
-    typeof window !== "undefined" ? `${window.location.origin}/auth/reset-password` : undefined;
-  const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-  return { error: error ? new Error(error.message) : null };
+  const res = await fetch("/api/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) {
+    return { error: new Error(json.error ?? "Could not send reset email. Try again.") };
+  }
+  return { error: null };
 }
 
 export async function updatePassword(password: string) {
