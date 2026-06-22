@@ -313,7 +313,7 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Ground neighbourhood friction using the{" "}
-            <SafeInternalLink href="/locations/gardens-cleaning-services">Gardens cleaning services hub</SafeInternalLink> when your listing sits near
+            <SafeInternalLink href={CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path}>standard cleaning in Cape Town</SafeInternalLink> when your listing sits near
             the City Bowl—parking and loading rules shift block by block.
           </p>
         </>
@@ -352,7 +352,7 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Claremont-style family homes often show wear differently than compact Sea Point flats—compare notes with the{" "}
-            <SafeInternalLink href="/locations/claremont-cleaning-services">Claremont cleaning hub</SafeInternalLink> when routing predicts stairs,
+            <SafeInternalLink href="/book">book online</SafeInternalLink> when routing predicts stairs,
             gates, and mudrooms.
           </p>
         </>
@@ -397,7 +397,7 @@ export function AirbnbHostGuideBlogTemplate({ post }: { post: AirbnbHostGuidePos
           </p>
           <p>
             Hosting near schools and family routes in the Southern Suburbs? Ground parking and gate habits using the{" "}
-            <SafeInternalLink href="/locations/claremont-cleaning-services">Claremont cleaning hub</SafeInternalLink> alongside your turnover brief.
+            <SafeInternalLink href={AIRBNB_SERVICE}>Airbnb cleaning in Cape Town</SafeInternalLink> alongside your turnover brief.
           </p>
         </>
       ) : null}

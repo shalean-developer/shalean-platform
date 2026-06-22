@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { remapAdminPathToOffice } from "@/lib/admin/remapAdminPathToOffice";
 import { getLocation } from "@/lib/locations";
 import { resolveLegacyGrowthLocal, resolveLegacySingularLocation } from "@/lib/seo/legacyPhase1EdgeRedirects";
+import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
 import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
 
@@ -36,6 +37,11 @@ async function runProxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  /** Phase-1 SEO rebuild — retired programmatic URLs (not blanket homepage redirects). */
+  if (isSeoRebuildGonePath(pathname)) {
+    return new NextResponse(null, { status: 410 });
+  }
+
   /** `/location/{city}/{suburb}` (singular) — hub, JHB growth page, or 410 (never `/` or weak catalogue). */
   const legacySingularLocation = pathname.match(/^\/location\/([^/]+)\/([^/]+)\/?$/);
   if (legacySingularLocation) {
@@ -61,15 +67,10 @@ async function runProxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  /** Thin “best cleaners in {area}” clones → canonical suburb hub (`/locations/{area}-cleaning-services`). */
+  /** Thin “best cleaners in {area}” clones — permanently removed (410). */
   const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
-  if (bestCleaningBlog) {
-    const area = bestCleaningBlog[1] ?? "";
-    if (area) {
-      const url = request.nextUrl.clone();
-      url.pathname = `/locations/${area}-cleaning-services`;
-      return NextResponse.redirect(url, 308);
-    }
+  if (bestCleaningBlog?.[1]) {
+    return new NextResponse(null, { status: 410 });
   }
 
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);

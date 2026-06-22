@@ -252,8 +252,8 @@ export function BlogPostLayout({
                   </SafeInternalLink>
                 </p>
                 <p className="mt-6 text-sm text-zinc-500">
-                  <SafeInternalLink href="/cleaning-services-cape-town" className={linkInNavClassName}>
-                    Cape Town service areas
+                  <SafeInternalLink href="/services" className={linkInNavClassName}>
+                    All cleaning services
                   </SafeInternalLink>
                   {" · "}
                   <SafeInternalLink href="/book" className={linkInNavClassName}>

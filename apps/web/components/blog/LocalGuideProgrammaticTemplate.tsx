@@ -83,13 +83,10 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
       <div className={articleStack}>
         <p className="lead text-lg leading-relaxed text-zinc-700">{variantBody.lead}</p>
 
-        {hubHref ? (
-          <p>
-            Start from the{" "}
-            <SafeInternalLink href={hubHref}>cleaning services in {loc}</SafeInternalLink> hub for suburb FAQs, illustration pricing, and booking
-            CTAs—this article expands on long-tail searches only.
-          </p>
-        ) : null}
+        <p>
+          Book{" "}
+          <SafeInternalLink href="/book">cleaning services in {loc}</SafeInternalLink> online—add your address at checkout for suburb FAQs, illustration pricing, and availability.
+        </p>
 
         <h2 id={LOCAL_GUIDE_DOC_ANCHOR_IDS.overview}>{variantBody.overviewHeading}</h2>
         {variantBody.overviewParas.map((t, i) => (
@@ -122,8 +119,8 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
               </span>
             ))}
             . Compare scope on our{" "}
-            <SafeInternalLink href={editorialCrossLinks.serviceHref}>{editorialCrossLinks.serviceLabel}</SafeInternalLink>, then use the{" "}
-            <SafeInternalLink href={editorialCrossLinks.hubHref}>{loc} cleaning services hub</SafeInternalLink> for illustration pricing and FAQs.
+            <SafeInternalLink href={editorialCrossLinks.serviceHref}>{editorialCrossLinks.serviceLabel}</SafeInternalLink>, then{" "}
+            <SafeInternalLink href="/book">book online</SafeInternalLink> for illustration pricing and FAQs.
           </p>
         ) : null}
 
@@ -182,29 +179,22 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
           Check pricing &amp; live availability for {loc}
         </GrowthCtaLink>
 
-        <h2 id={LOCAL_GUIDE_DOC_ANCHOR_IDS.nearby}>Suburb hub &amp; nearby areas</h2>
+        <h2 id={LOCAL_GUIDE_DOC_ANCHOR_IDS.nearby}>Suburbs we serve nearby</h2>
         <p>
-          Bookmark{" "}
-          {hubHref ? (
-            <SafeInternalLink href={hubHref}>cleaning services in {loc}</SafeInternalLink>
-          ) : (
-            <SafeInternalLink href="/cleaning-services-cape-town">Cape Town cleaning hubs</SafeInternalLink>
-          )}{" "}
-          for the shortest path from search → quote → booking.
+          We cover {loc} and surrounding Cape Town suburbs—{" "}
+          <SafeInternalLink href="/book">book online</SafeInternalLink> and confirm your address at checkout for the shortest path from search → quote → booking.
         </p>
         <p>
-          Nearby hubs with overlapping routing:{" "}
-          {nearbyHubPieces.length > 0 ? (
-            <>
-              {nearbyHubPieces.map((item, i) => (
-                <span key={item.href}>
-                  {i > 0 ? (i === nearbyHubPieces.length - 1 ? ", and " : ", ") : null}
-                  <SafeInternalLink href={item.href}>cleaning services in {item.name}</SafeInternalLink>
-                </span>
-              ))}
-            </>
+          Nearby areas with overlapping routing:{" "}
+          {nearby.length > 0 ? (
+            nearby.map((name, i) => (
+              <span key={name}>
+                {i > 0 ? (i === nearby.length - 1 ? ", and " : ", ") : null}
+                {name}
+              </span>
+            ))
           ) : (
-            <SafeInternalLink href="/cleaning-services-cape-town">Cape Town overview</SafeInternalLink>
+            "Cape Town metro-wide"
           )}
           .
         </p>

@@ -8,7 +8,7 @@ import {
 describe("NOTIFICATION_TEMPLATE_CATALOG", () => {
   it("lists the full expected catalog size", () => {
     expect(NOTIFICATION_TEMPLATE_CATALOG_COUNT).toBe(35);
-    expect(RUNTIME_WIRED_TEMPLATE_COUNT).toBe(3);
+    expect(RUNTIME_WIRED_TEMPLATE_COUNT).toBe(14);
   });
 
   it("has unique key+channel pairs", () => {

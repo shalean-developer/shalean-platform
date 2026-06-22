@@ -2,7 +2,13 @@ import { applyFallbackDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { sendCleanerNewJobEmail } from "@/lib/email/sendCleanerNotification";
-import { buildBookingNotifyMessageFields, formatBookingNotifyPlainLines } from "@/lib/notifications/bookingNotifyFormat";
+import {
+  buildBookingNotifyFieldsFromRow,
+  formatAdminDateTimeLine,
+  formatBookingNotifyPlainLines,
+  resolveBookingEmailLabelsFromRow,
+} from "@/lib/notifications/bookingNotifyFormat";
+import { bookingEmailRowOverlayFromRecord } from "@/lib/email/resolveBookingEmailFields";
 import { resolveDisplayEarnings } from "@/lib/cleaner/displayEarnings";
 import {
   buildBookingEmailPayload,
@@ -14,6 +20,8 @@ import {
   sendCustomerTwoHourReminderEmail,
   type BookingEmailPayload,
 } from "@/lib/email/sendBookingEmail";
+import { sendAdminEmailWithDbTemplateFallback } from "@/lib/email/customerEmailFromTemplate";
+import { buildAdminPaymentConfirmedTemplateData } from "@/lib/templates/bookingEmailTemplateData";
 import { getCustomerContactHealthScore } from "@/lib/notifications/customerContactHealth";
 import { inferCustomerCountryForNotifications } from "@/lib/notifications/notificationRegionPolicy";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
@@ -142,7 +150,7 @@ function adminBaseBlock(b: {
   return `<div style="font-family:system-ui,sans-serif;font-size:14px;color:#111">
   <p><strong>Booking ID:</strong> <code>${escapeHtml(b.bookingId)}</code></p>
   <p><strong>Service:</strong> ${escapeHtml(b.service)}</p>
-  <p><strong>Date / time:</strong> ${escapeHtml(b.date)} ${escapeHtml(b.time)}</p>
+  <p><strong>Date / time:</strong> ${escapeHtml(formatAdminDateTimeLine(b.date, b.time))}</p>
   <p><strong>Address:</strong> ${escapeHtml(b.location || "—")}</p>
   ${b.customerEmail ? `<p><strong>Customer:</strong> ${escapeHtml(b.customerEmail)}</p>` : ""}
   ${b.paystackRef ? `<p><strong>Payment ref:</strong> <code>${escapeHtml(b.paystackRef)}</code></p>` : ""}
@@ -201,7 +209,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: bookingHead } = await supabase
       .from("bookings")
       .select(
-        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, date, time, location, suburb, service, booking_snapshot",
+        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
@@ -302,15 +310,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       bookingId: event.bookingId,
       assignmentType,
       fallbackReason,
-      bookingRow: head
-        ? {
-            date: typeof head.date === "string" ? head.date : null,
-            time: typeof head.time === "string" ? head.time : null,
-            location: typeof head.location === "string" ? head.location : null,
-            suburb: typeof head.suburb === "string" ? head.suburb : null,
-            service: typeof head.service === "string" ? head.service : null,
-          }
-        : null,
+      bookingRow: head ? bookingEmailRowOverlayFromRecord(head) : null,
+      persistedSnapshot: head?.booking_snapshot,
       assignedCleanerName,
     });
     let cust: { sent: boolean; error?: string } = { sent: false };
@@ -487,13 +488,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
 
     // DO NOT notify cleaner on payment — SMS-only flow uses dispatch offer SMS + assigned SMS only.
 
-    const payFields = buildBookingNotifyMessageFields({
-      bookingId: event.bookingId,
-      service: payload.serviceLabel,
-      date: payload.dateLabel,
-      time: payload.timeLabel,
-      location: payload.location,
-    });
+    const payFields = buildBookingNotifyFieldsFromRow(event.bookingId, head ?? {});
     await sendAdminIfConfigured(
       "payment_confirmed",
       { bookingId: event.bookingId },
@@ -520,10 +515,27 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           customerEmail: payload.customerEmail,
           paystackRef: event.paymentReference,
         })}`;
-        const adminResult = await sendAdminHtmlEmail({
-          subject: `[PAYMENT_CONFIRMED] ${payload.serviceLabel} — ${event.bookingId.slice(0, 8)}…`,
-          html: adminHtml,
-          context: { bookingId: event.bookingId, type: "payment_confirmed" },
+        const adminSubject = `[PAYMENT_CONFIRMED] ${payload.serviceLabel} — ${event.bookingId.slice(0, 8)}…`;
+        const adminResult = await sendAdminEmailWithDbTemplateFallback({
+          templateKey: "admin_payment_confirmed",
+          data: buildAdminPaymentConfirmedTemplateData({
+            bookingId: payFields.id,
+            serviceLabel: payFields.service,
+            dateLabel: payFields.date,
+            timeLabel: payFields.time,
+            customerEmail: payload.customerEmail,
+            paymentReference: event.paymentReference,
+          }),
+          bookingId: event.bookingId,
+          logEventType: "payment_confirmed_admin",
+          legacySubject: adminSubject,
+          legacyHtml: adminHtml,
+          sendLegacy: () =>
+            sendAdminHtmlEmail({
+              subject: adminSubject,
+              html: adminHtml,
+              context: { bookingId: event.bookingId, type: "payment_confirmed" },
+            }),
         });
         if (!adminResult.sent) {
           await releaseNotificationIdempotencyClaim(supabase, {
@@ -593,17 +605,18 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: b } = await supabase
       .from("bookings")
       .select(
-        "id, paystack_reference, customer_email, customer_name, customer_phone, user_id, service, date, time, location, booking_snapshot, amount_paid_cents, total_paid_zar, cleaner_id, is_team_job, display_earnings_cents, cleaner_payout_cents, status, created_at",
+        "id, paystack_reference, customer_email, customer_name, customer_phone, user_id, service, service_slug, date, time, location, suburb, booking_snapshot, amount_paid_cents, total_paid_zar, cleaner_id, is_team_job, display_earnings_cents, cleaner_payout_cents, status, created_at",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
 
     if (!b || typeof b !== "object") return;
 
-    const snap = (b as { booking_snapshot?: unknown }).booking_snapshot as BookingSnapshotV1 | null;
-    const ref = String((b as { paystack_reference?: string }).paystack_reference ?? event.bookingId);
-    const cents = Number((b as { amount_paid_cents?: number }).amount_paid_cents ?? 0);
-    const emailRaw = String((b as { customer_email?: string | null }).customer_email ?? "").trim();
+    const row = b as Record<string, unknown>;
+    const snap = row.booking_snapshot as BookingSnapshotV1 | null;
+    const ref = String(row.paystack_reference ?? event.bookingId);
+    const cents = Number(row.amount_paid_cents ?? 0);
+    const emailRaw = String(row.customer_email ?? "").trim();
     const { data: cRow } = await supabase
       .from("cleaners")
       .select("full_name, phone_number, email")
@@ -620,6 +633,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         customerEmail: emailRaw,
         snapshot: snap,
         bookingId: event.bookingId,
+        bookingRow: bookingEmailRowOverlayFromRecord(row),
+        persistedSnapshot: row.booking_snapshot,
       });
       const assignPayload: BookingEmailPayload = { ...payload, cleanerName };
       const r = await sendCustomerBookingAssignedEmail(assignPayload);
@@ -637,13 +652,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       });
     }
 
-    const msgFields = buildBookingNotifyMessageFields({
-      bookingId: event.bookingId,
-      service: (b as { service?: string | null }).service,
-      date: (b as { date?: string | null }).date,
-      time: (b as { time?: string | null }).time,
-      location: (b as { location?: string | null }).location,
-    });
+    const msgFields = buildBookingNotifyFieldsFromRow(event.bookingId, row);
 
     const payResolved = resolveDisplayEarnings({
       id: event.bookingId,
@@ -773,12 +782,13 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: b } = await supabase
       .from("bookings")
       .select(
-        "id, paystack_reference, customer_email, customer_name, customer_phone, service, date, time, location, booking_snapshot, amount_paid_cents, cleaner_id, status, completed_at, is_team_job, team_id",
+        "id, paystack_reference, customer_email, customer_name, customer_phone, service, service_slug, date, time, location, suburb, booking_snapshot, amount_paid_cents, cleaner_id, status, completed_at, is_team_job, team_id",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
     if (!b || typeof b !== "object") return;
-    const email = String((b as { customer_email?: string | null }).customer_email ?? "").trim();
+    const row = b as Record<string, unknown>;
+    const email = String(row.customer_email ?? "").trim();
     if (!email) {
       await logSystemEvent({
         level: "warn",
@@ -787,16 +797,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, stage: "completed" },
       });
     }
-    const snap = (b as { booking_snapshot?: unknown }).booking_snapshot as BookingSnapshotV1 | null;
-    const ref = String((b as { paystack_reference?: string }).paystack_reference ?? event.bookingId);
-    const cents = Number((b as { amount_paid_cents?: number }).amount_paid_cents ?? 0);
-    const service = String((b as { service?: string | null }).service ?? "Cleaning");
-    let dateLabel = "—";
-    const d = String((b as { date?: string | null }).date ?? "");
-    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
-      const [y, m, da] = d.split("-").map(Number);
-      dateLabel = new Date(y, m - 1, da).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "short" });
-    }
+    const snap = row.booking_snapshot as BookingSnapshotV1 | null;
+    const ref = String(row.paystack_reference ?? event.bookingId);
+    const cents = Number(row.amount_paid_cents ?? 0);
+    const labels = resolveBookingEmailLabelsFromRow(row);
+    const service = labels.serviceLabel;
     if (email) {
       const payload = buildBookingEmailPayload({
         paymentReference: ref,
@@ -804,6 +809,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         customerEmail: email,
         snapshot: snap,
         bookingId: event.bookingId,
+        bookingRow: bookingEmailRowOverlayFromRecord(row),
+        persistedSnapshot: row.booking_snapshot,
       });
       const r = await sendCustomerJobCompletedEmail(payload);
       if (!r.sent && r.error) {
@@ -835,13 +842,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       }
     }
 
-    const doneFields = buildBookingNotifyMessageFields({
-      bookingId: event.bookingId,
-      service: (b as { service?: string | null }).service,
-      date: (b as { date?: string | null }).date,
-      time: (b as { time?: string | null }).time,
-      location: (b as { location?: string | null }).location,
-    });
+    const doneFields = buildBookingNotifyFieldsFromRow(event.bookingId, row);
     await sendAdminIfConfigured("completed", { bookingId: event.bookingId }, async () => {
       await sendAdminHtmlEmail({
         subject: `[COMPLETED] ${service} — ${event.bookingId.slice(0, 8)}…`,
@@ -917,12 +918,13 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     for (const id of freshIds.slice(0, 40)) {
       const { data: row } = await supabase
         .from("bookings")
-        .select("id, service, date, time, location, customer_email, paystack_reference")
+        .select("id, service, service_slug, date, time, location, suburb, booking_snapshot, customer_email, paystack_reference")
         .eq("id", id)
         .maybeSingle();
       if (!row || typeof row !== "object") continue;
+      const fields = buildBookingNotifyFieldsFromRow(id, row as Record<string, unknown>);
       lines.push(
-        `<li><code>${escapeHtml(id)}</code> — ${escapeHtml(String((row as { service?: string }).service ?? ""))} — ${escapeHtml(String((row as { date?: string }).date ?? ""))} ${escapeHtml(String((row as { time?: string }).time ?? ""))} — ${escapeHtml(String((row as { customer_email?: string }).customer_email ?? ""))}</li>`,
+        `<li><code>${escapeHtml(id)}</code> — ${escapeHtml(fields.service)} — ${escapeHtml(formatAdminDateTimeLine(fields.date, fields.time))} — ${escapeHtml(String((row as { customer_email?: string }).customer_email ?? ""))}</li>`,
       );
     }
     await sendAdminIfConfigured(
@@ -947,11 +949,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
 
     const { data: b } = await supabase
       .from("bookings")
-      .select("id, customer_email, service, date, time, location, cleaner_id")
+      .select("id, customer_email, service, service_slug, date, time, location, suburb, booking_snapshot, cleaner_id")
       .eq("id", event.bookingId)
       .maybeSingle();
     if (!b || typeof b !== "object") return;
-    const email = String((b as { customer_email?: string | null }).customer_email ?? "").trim();
+    const row = b as Record<string, unknown>;
+    const email = String(row.customer_email ?? "").trim();
     if (!email && event.includeCustomerEmail) {
       await logSystemEvent({
         level: "warn",
@@ -960,22 +963,14 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, stage: "reminder_2h" },
       });
     }
-    const service = String((b as { service?: string | null }).service ?? "Cleaning");
-    const date = String((b as { date?: string | null }).date ?? "");
-    const time = String((b as { time?: string | null }).time ?? "");
-    const location = String((b as { location?: string | null }).location ?? "");
-    let dateLabel = date;
-    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      const [y, m, da] = date.split("-").map(Number);
-      dateLabel = new Date(y, m - 1, da).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "short" });
-    }
+    const labels = resolveBookingEmailLabelsFromRow(row);
     if (event.includeCustomerEmail && email) {
       const r = await sendCustomerTwoHourReminderEmail({
         customerEmail: email,
-        serviceLabel: service,
-        dateLabel,
-        timeLabel: time,
-        location,
+        serviceLabel: labels.serviceLabel,
+        dateLabel: labels.dateLabel,
+        timeLabel: labels.timeLabel,
+        location: labels.location,
         bookingId: event.bookingId,
       });
       if (!r.sent && r.error) {
@@ -989,17 +984,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         bookingId: event.bookingId,
       });
     }
-    const cleanerId = String((b as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
+    const cleanerId = String(row.cleaner_id ?? "").trim();
     if (cleanerId) {
       const { data: c } = await supabase.from("cleaners").select("phone_number").eq("id", cleanerId).maybeSingle();
       const phone = c && typeof c === "object" ? String((c as { phone_number?: string | null }).phone_number ?? "") : "";
-      const remFields = buildBookingNotifyMessageFields({
-        bookingId: event.bookingId,
-        service,
-        date,
-        time,
-        location,
-      });
+      const remFields = buildBookingNotifyFieldsFromRow(event.bookingId, row);
       const msg = formatBookingNotifyPlainLines(remFields, { headline: "⏰ Reminder: cleaning job soon" });
       const e164 = customerPhoneToE164(phone);
       if (!e164) {

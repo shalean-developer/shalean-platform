@@ -4,7 +4,6 @@ import {
 } from "@/lib/blog/canonicalEditorialBlogLinks";
 import { getBlogServiceType } from "@/lib/blog/getBlogServiceType";
 import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
-import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 
@@ -12,7 +11,7 @@ type Props = { slug: string };
 
 const S = CAPE_TOWN_SERVICE_SEO;
 
-/** One crawl-friendly strip: money pages + suburb hub + city hub (no generic “read more”). */
+/** One crawl-friendly strip: money pages + booking path (no retired location hubs). */
 export function BlogAuthorityHubStrip({ slug }: Props) {
   const kind = getBlogServiceType(slug);
 
@@ -21,7 +20,7 @@ export function BlogAuthorityHubStrip({ slug }: Props) {
       <p className="not-prose mt-4 max-w-3xl text-sm leading-relaxed text-zinc-600">
         Compare live bands on{" "}
         <SafeInternalLink href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className={`font-semibold ${linkEmphasisClassName}`}>
-          cleaning prices in Cape Town
+          cleaning services and pricing
         </SafeInternalLink>
         , then open{" "}
         <SafeInternalLink href={S["standard-cleaning-cape-town"].path} className={`font-semibold ${linkEmphasisClassName}`}>
@@ -39,15 +38,11 @@ export function BlogAuthorityHubStrip({ slug }: Props) {
         <SafeInternalLink href={S["deep-cleaning-cape-town"].path} className={`font-semibold ${linkEmphasisClassName}`}>
           deep cleaning in Cape Town
         </SafeInternalLink>{" "}
-        for reset scope—Southern Suburbs crews often route from{" "}
-        <SafeInternalLink href="/locations/claremont-cleaning-services" className={`font-semibold ${linkEmphasisClassName}`}>
-          Claremont cleaning services
+        for reset scope, or pair with{" "}
+        <SafeInternalLink href={S["standard-cleaning-cape-town"].path} className={`font-semibold ${linkEmphasisClassName}`}>
+          standard home cleaning
         </SafeInternalLink>{" "}
-        and the wider{" "}
-        <SafeInternalLink href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={`font-semibold ${linkEmphasisClassName}`}>
-          Cape Town cleaning hub
-        </SafeInternalLink>
-        .
+        for recurring visits.
       </p>
     );
   }
@@ -59,15 +54,11 @@ export function BlogAuthorityHubStrip({ slug }: Props) {
         <SafeInternalLink href={S["airbnb-cleaning-cape-town"].path} className={`font-semibold ${linkEmphasisClassName}`}>
           Airbnb cleaning in Cape Town
         </SafeInternalLink>
-        —Seaboard hosts often start from{" "}
-        <SafeInternalLink href="/locations/sea-point-cleaning-services" className={`font-semibold ${linkEmphasisClassName}`}>
-          Sea Point cleaning services
+        , then{" "}
+        <SafeInternalLink href="/book" className={`font-semibold ${linkEmphasisClassName}`}>
+          book online
         </SafeInternalLink>{" "}
-        before branching to other{" "}
-        <SafeInternalLink href="/locations" className={`font-semibold ${linkEmphasisClassName}`}>
-          suburb hubs
-        </SafeInternalLink>
-        .
+        with your property address at checkout.
       </p>
     );
   }
@@ -83,11 +74,7 @@ export function BlogAuthorityHubStrip({ slug }: Props) {
         <SafeInternalLink href={CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF} className={`font-semibold ${linkEmphasisClassName}`}>
           move-out cleaning checklist
         </SafeInternalLink>
-        , then confirm suburb context via{" "}
-        <SafeInternalLink href="/locations" className={`font-semibold ${linkEmphasisClassName}`}>
-          all location hubs
-        </SafeInternalLink>
-        .
+        , then confirm your suburb when you book.
       </p>
     );
   }
@@ -99,11 +86,11 @@ export function BlogAuthorityHubStrip({ slug }: Props) {
         <SafeInternalLink href={S["carpet-cleaning-cape-town"].path} className={`font-semibold ${linkEmphasisClassName}`}>
           carpet and upholstery care in Cape Town
         </SafeInternalLink>{" "}
-        to a standard visit when fibres need extraction—browse{" "}
-        <SafeInternalLink href="/locations" className={`font-semibold ${linkEmphasisClassName}`}>
-          suburb hubs
+        to a standard visit when fibres need extraction—see{" "}
+        <SafeInternalLink href="/services" className={`font-semibold ${linkEmphasisClassName}`}>
+          all services
         </SafeInternalLink>{" "}
-        for local access notes.
+        for scope options.
       </p>
     );
   }
@@ -114,15 +101,11 @@ export function BlogAuthorityHubStrip({ slug }: Props) {
       <SafeInternalLink href={S["standard-cleaning-cape-town"].path} className={`font-semibold ${linkEmphasisClassName}`}>
         standard home cleaning in Cape Town
       </SafeInternalLink>{" "}
-      and the{" "}
-      <SafeInternalLink href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={`font-semibold ${linkEmphasisClassName}`}>
-        citywide cleaning hub
+      and the wider{" "}
+      <SafeInternalLink href="/services" className={`font-semibold ${linkEmphasisClassName}`}>
+        services overview
       </SafeInternalLink>
-      —open{" "}
-      <SafeInternalLink href="/locations" className={`font-semibold ${linkEmphasisClassName}`}>
-        all suburb pages
-      </SafeInternalLink>{" "}
-      when you want hyperlocal access context.
+      —add your suburb at checkout for availability.
     </p>
   );
 }

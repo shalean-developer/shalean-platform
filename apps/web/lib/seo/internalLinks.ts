@@ -15,6 +15,7 @@ import {
   type CapeTownSeoServiceSlug,
   type LocationSeoSlug,
 } from "@/lib/seo/capeTownSeoPages";
+import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 
 /** Keyword-rich cross-page internal link (render `anchor` as link text). */
 export type SeoInternalLink = { href: string; anchor: string };
@@ -27,7 +28,7 @@ export type SeoInternalLink = { href: string; anchor: string };
  * Intent: do not sprinkle this href across every post — follow `PRICING_HUB_LINKING_GOVERNANCE` in
  * `lib/seo/blogGovernance.ts` (same folder as this module).
  */
-export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/cleaning-prices-cape-town";
+export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/services";
 
 /** Methodology + indicative bands (2026) — pair with {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} on service pages, not as a duplicate hub link. */
 export const CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF = "/blog/how-much-does-cleaning-cost-cape-town-2026" as const;
@@ -126,14 +127,21 @@ export function getBlogIntentServicePair(kind: BlogServiceLinkKind, slugKey: str
   return getBlogCoreServiceLinks(key);
 }
 
-/** Sideways links into high-authority `/locations/*` hubs (pair per layout budget). */
+/** Sideways links into high-authority suburb hubs — suppressed during phase-1 SEO rebuild. */
 export function getBlogExploreLocationLinks(slugKey: string): SeoInternalLink[] {
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) return [];
   return getRelevantBlogLocationLinks("standard", slugKey).slice(0, 2);
 }
 
 /** Optional third hub for lists that allow an extra CBD-oriented sideways link. */
 export function getBlogExploreLocationLinkGardensCbd(slugKey: string): SeoInternalLink {
   const key = slugKey.trim() || "blog";
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) {
+    return {
+      href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path,
+      anchor: pickGeoHubAnchor(`${key}|hub|gardens`, "Gardens area"),
+    };
+  }
   return {
     href: LOCATION_SEO_PAGES["gardens-cleaning-services"].path,
     anchor: pickGeoHubAnchor(`${key}|hub|gardens`, "Gardens"),
@@ -183,6 +191,7 @@ function intentLocationHubTriples(kind: BlogServiceLinkKind): readonly [Location
 
 /** Topic-matched suburb hubs for blog clusters (3 links, deduped). */
 export function getRelevantBlogLocationLinks(kind: BlogServiceLinkKind, slugKey: string): SeoInternalLink[] {
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) return [];
   const key = slugKey.trim() || "blog";
   const out: SeoInternalLink[] = [];
   const seen = new Set<string>();
@@ -337,8 +346,8 @@ export function getPopularCapeTownFooterStripLinks(): { href: string; label: str
     { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning" },
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning" },
-    { href: LOCATION_SEO_PAGES["sea-point-cleaning-services"].path, label: "Sea Point cleaning" },
-    { href: LOCATION_SEO_PAGES["claremont-cleaning-services"].path, label: "Claremont cleaning" },
+    { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning" },
+    { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning" },
   ];
 }
 

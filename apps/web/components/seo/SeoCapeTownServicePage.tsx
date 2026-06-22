@@ -18,8 +18,9 @@ import { ServicePageCommercialIntentSection } from "@/components/seo/ServicePage
 import { StandardCleaningCapeTownEnhancements } from "@/components/seo/StandardCleaningCapeTownEnhancements";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
-import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES, resolveCapeTownServiceSchemaFields } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_SERVICE_SEO, resolveCapeTownServiceSchemaFields } from "@/lib/seo/capeTownSeoPages";
 import {
+  CAPE_TOWN_PRICING_AUTHORITY_HREF,
   getSecondaryEditorialBlogLink,
   getServicePagePricingEducationBlogLink,
   partitionServiceHubLocationLinks,
@@ -31,6 +32,7 @@ import {
   STANDARD_CLEANING_SNIPPET_FAQS,
 } from "@/lib/seo/standardCleaningMoneyPageFaqs";
 import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
+import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
@@ -49,7 +51,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   const areasHeading = data.areasSectionHeading ?? "Areas we serve in Cape Town";
   const areasIntro =
     data.areasSectionIntro ??
-    "Explore suburb-focused cleaning pages across Cape Town—priority hubs below cover Sea Point, Claremont, Green Point, and Gardens, then we widen to more suburbs so crawlers and customers can move sideways without orphaning long-tail hubs.";
+    "We serve suburbs across Cape Town—add your address at checkout to confirm availability and routing.";
   const { featured: featuredHubLinks, other: otherHubLinks } = partitionServiceHubLocationLinks(slug);
   const secondaryHubLinks = otherHubLinks.slice(0, 8);
   const areasPillLinks = [...featuredHubLinks, ...secondaryHubLinks];
@@ -210,7 +212,6 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
 
   const deepPath = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
   const moveOutPath = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
-  const greenPointPath = LOCATION_SEO_PAGES["green-point-cleaning-services"].path;
 
   return (
     <main
@@ -328,7 +329,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             ))}
             <p>
               <SafeInternalLink
-                href="/cleaning-prices-cape-town"
+                href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
                 className="font-semibold text-blue-700 underline-offset-2 hover:underline"
               >
                 See current tier from-prices
@@ -361,15 +362,8 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             ) : null}
             {slug === "deep-cleaning-cape-town" ? (
               <p>
-                Cleaning along the Atlantic Seaboard? Compare{" "}
-                <SafeInternalLink
-                  href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path}
-                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                >
-                  cleaning services in Sea Point
-                </SafeInternalLink>{" "}
-                for salt-air buildup, compact apartments, and rental-heavy streets—then lock bedrooms, bathrooms, and add-ons
-                for your deep clean online.
+                Cleaning along the Atlantic Seaboard? Sea Point and Green Point often need extra dwell on salt-air buildup,
+                compact apartments, and rental-heavy streets—lock bedrooms, bathrooms, and add-ons for your deep clean online.
               </p>
             ) : null}
             {slug === "standard-cleaning-cape-town" ? (
@@ -384,46 +378,34 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
             {slug === "standard-cleaning-cape-town" ? (
               <p>
                 For ongoing weekly cleaning, see our{" "}
-                <SafeInternalLink href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  maid services in Cape Town
+                <SafeInternalLink href={CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  recurring standard cleaning in Cape Town
                 </SafeInternalLink>
                 .
               </p>
             ) : null}
             {slug === "airbnb-cleaning-cape-town" ? (
               <p>
-                We also offer{" "}
+                Bundle{" "}
                 <SafeInternalLink
-                  href={CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path}
+                  href={CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path}
                   className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                 >
-                  window cleaning in Cape Town
+                  carpet and upholstery care
                 </SafeInternalLink>{" "}
-                for apartments and balconies.
+                when high-traffic fibres need extraction between peak bookings.
               </p>
             ) : null}
             {slug === "airbnb-cleaning-cape-town" ? (
               <p>
-                Hosting near the Promenade or Main Road corridor? Read our{" "}
-                <SafeInternalLink
-                  href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path}
-                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                >
-                  cleaning services in Sea Point
-                </SafeInternalLink>{" "}
-                hub for turnover pacing, parking, and guest-ready presentation alongside this Cape Town-wide Airbnb scope.
+                Hosting near the Promenade or Main Road corridor? Sea Point turnovers often need tight parking and lift notes—add
+                them at checkout alongside this Cape Town-wide Airbnb scope.
               </p>
             ) : null}
             {slug === "airbnb-cleaning-cape-town" ? (
               <p>
-                Running a listing in Green Point? Read{" "}
-                <SafeInternalLink
-                  href={LOCATION_SEO_PAGES["green-point-cleaning-services"].path}
-                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                >
-                  Airbnb cleaning in Green Point
-                </SafeInternalLink>
-                —pricing, same-day turnovers, and guest-ready standards for STR hosts.
+                Running a listing in Green Point? Plan for Atlantic Seaboard humidity and same-day buffers—share check-out and
+                check-in times when you book turnover cleaning.
               </p>
             ) : null}
             {slug === "move-out-cleaning-cape-town" ? (
@@ -434,25 +416,18 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                   className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                 >
                   deep cleaning services
-                </SafeInternalLink>
-                ,{" "}
+                </SafeInternalLink>{" "}
+                for occupied homes, or{" "}
                 <SafeInternalLink
-                  href={CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path}
+                  href={CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path}
                   className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                 >
-                  airbnb cleaning
+                  standard cleaning
                 </SafeInternalLink>{" "}
-                for turnovers, and dedicated{" "}
-                <SafeInternalLink
-                  href={CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path}
-                  className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                >
-                  window cleaning services
-                </SafeInternalLink>{" "}
-                when glass needs a polish for inspection photos.
+                when you still live in the property before move-out day.
               </p>
             ) : null}
-            {data.neighbourhoodBlogGuide ? (
+            {data.neighbourhoodBlogGuide && !isSeoRebuildGonePath(data.neighbourhoodBlogGuide.blogPath) ? (
               <p>
                 Looking for cleaning services in {data.neighbourhoodBlogGuide.areaName}? See our full area guide:{" "}
                 <SafeInternalLink
@@ -464,7 +439,9 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 .
               </p>
             ) : null}
-            {data.extraNeighbourhoodBlogGuides?.map((g) => (
+            {data.extraNeighbourhoodBlogGuides
+              ?.filter((g) => !isSeoRebuildGonePath(g.blogPath))
+              .map((g) => (
               <p key={g.blogPath}>
                 For {g.areaName}-specific cleaning guidance, read{" "}
                 <SafeInternalLink href={g.blogPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
@@ -573,14 +550,14 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 <strong className="text-zinc-800">Recurring visits</strong> (weekly, bi-weekly, or monthly) keep mess from
                 compounding and often cost less per session because maintenance is lighter. For domestic rhythm and maid-style
                 cadence copy, see{" "}
-                <SafeInternalLink href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  maid services in Cape Town
+                <SafeInternalLink href={CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  recurring standard cleaning in Cape Town
                 </SafeInternalLink>
                 .
               </p>
             </div>
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Popular services &amp; hubs</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Popular services</h2>
               <p className="mt-4 text-base leading-relaxed text-zinc-600">
                 Explore{" "}
                 <SafeInternalLink href={deepPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
@@ -590,23 +567,11 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                 <SafeInternalLink href={moveOutPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                   move out cleaning in Cape Town
                 </SafeInternalLink>
-                , and our{" "}
-                <SafeInternalLink href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  cleaning prices in Cape Town
-                </SafeInternalLink>{" "}
-                hub. Browse priority suburbs like{" "}
-                <SafeInternalLink href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  Sea Point cleaning services
-                </SafeInternalLink>
-                ,{" "}
-                <SafeInternalLink href={LOCATION_SEO_PAGES["claremont-cleaning-services"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  Claremont
-                </SafeInternalLink>
                 , and{" "}
-                <SafeInternalLink href={greenPointPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  Green Point cleaning services
+                <SafeInternalLink href="/services" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  all services and pricing
                 </SafeInternalLink>
-                .
+                . Add your suburb when you book online.
               </p>
             </div>
           </div>
@@ -641,131 +606,69 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
           <p className="mt-3 text-zinc-600">{areasIntro}</p>
           {slug === "standard-cleaning-cape-town" ? (
             <p className="mt-4 text-base leading-relaxed text-zinc-600">
-              High-demand hubs include{" "}
-              <SafeInternalLink
-                href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path}
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                cleaning services in Sea Point
-              </SafeInternalLink>
-              ,{" "}
-              <SafeInternalLink
-                href={LOCATION_SEO_PAGES["claremont-cleaning-services"].path}
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                Claremont cleaning services
-              </SafeInternalLink>
-              , and{" "}
-              <SafeInternalLink
-                href={LOCATION_SEO_PAGES["observatory-cleaning-services"].path}
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                Observatory cleaning services
-              </SafeInternalLink>{" "}
-              —each page adds typical layouts, parking, and short-stay context before you book.
+              High-demand areas include Sea Point, Claremont, and Observatory—add your suburb at checkout for parking, layout,
+              and short-stay context before your team arrives.
             </p>
           ) : null}
           {slug === "standard-cleaning-cape-town" ? (
             <div className="mt-8 grid gap-6 md:grid-cols-3">
               <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  <SafeInternalLink href={LOCATION_SEO_PAGES["sea-point-cleaning-services"].path} className="text-blue-800 hover:underline">
-                    Sea Point
-                  </SafeInternalLink>
-                </h3>
+                <h3 className="text-lg font-semibold text-zinc-900">Sea Point</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">
                   High-rise apartments, Airbnb turnovers, and coastal dust along the Promenade and Main Road—fast access notes for
                   lifts and parking before you book.
                 </p>
               </div>
               <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  <SafeInternalLink href={LOCATION_SEO_PAGES["claremont-cleaning-services"].path} className="text-blue-800 hover:underline">
-                    Claremont
-                  </SafeInternalLink>
-                </h3>
+                <h3 className="text-lg font-semibold text-zinc-900">Claremont</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">
                   Family homes, townhouses, and student-adjacent rentals—good mix of weekly upkeep and deeper seasonal resets near
                   schools and malls.
                 </p>
               </div>
               <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  <SafeInternalLink href={LOCATION_SEO_PAGES["observatory-cleaning-services"].path} className="text-blue-800 hover:underline">
-                    Observatory
-                  </SafeInternalLink>
-                </h3>
+                <h3 className="text-lg font-semibold text-zinc-900">Observatory</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">
                   Shared houses and compact flats with frequent move-outs—ideal for flexible once-offs or tighter recurring scopes.
                 </p>
               </div>
             </div>
           ) : null}
-          {featuredHubLinks.length >= 2 &&
+          {slug !== "standard-cleaning-cape-town" &&
           slug !== "window-cleaning-cape-town" &&
           slug !== "airbnb-cleaning-cape-town" ? (
             <p className="mt-4 text-base leading-relaxed text-zinc-600">
-              Looking for {data.bookingLabel} with suburb-specific context? We serve{" "}
-              <SafeInternalLink
-                href={featuredHubLinks[0]!.href}
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                {featuredHubLinks[0]!.label}
+              Looking for {data.bookingLabel} with suburb-specific context?{" "}
+              <SafeInternalLink href={bookingPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                Book online
               </SafeInternalLink>{" "}
-              and{" "}
-              <SafeInternalLink
-                href={featuredHubLinks[1]!.href}
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                {featuredHubLinks[1]!.label}
-              </SafeInternalLink>{" "}
-              alongside the rest of the Cape Town network—open a hub for parking, access, and layout notes before you
-              book.
+              and add parking, access, and layout notes at checkout.
             </p>
           ) : null}
-          {slug === "window-cleaning-cape-town" ? (
-            <p className="mt-4 text-sm leading-relaxed text-zinc-600">
-              Popular hubs for glass work:{" "}
-              <SafeInternalLink
-                href="/locations/sea-point-cleaning-services"
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                window cleaning in Sea Point
-              </SafeInternalLink>
-              ,{" "}
-              <SafeInternalLink
-                href="/locations/green-point-cleaning-services"
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                window cleaning in Green Point
-              </SafeInternalLink>
-              , and{" "}
-              <SafeInternalLink
-                href="/locations/claremont-cleaning-services"
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              >
-                window cleaning in Claremont
-              </SafeInternalLink>
-              —each location page adds parking and access context before you book.
+          {slug === "airbnb-cleaning-cape-town" ? (
+            <p className="mt-4 text-base leading-relaxed text-zinc-600">
+              Popular turnover corridors include Sea Point, Green Point, and Claremont—share check-out times, remote access, and
+              linen notes when you book.
             </p>
           ) : null}
-          <ul className="mt-8 flex flex-wrap gap-3">
-            {areasPillLinks.map((loc) => (
-              <li key={loc.href}>
-                <SafeInternalLink
-                  href={loc.href}
-                  className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 transition hover:border-blue-400 hover:bg-blue-50"
-                >
-                  {loc.label}
-                </SafeInternalLink>
-              </li>
-            ))}
-          </ul>
+          {areasPillLinks.length > 0 ? (
+            <ul className="mt-8 flex flex-wrap gap-3">
+              {areasPillLinks.map((loc) => (
+                <li key={loc.href}>
+                  <SafeInternalLink
+                    href={loc.href}
+                    className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 transition hover:border-blue-400 hover:bg-blue-50"
+                  >
+                    {loc.label}
+                  </SafeInternalLink>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <p className="mt-6 text-sm leading-relaxed text-zinc-600">
-            Explore more suburb hubs for parking, building access, and typical layouts
             {areasSentenceLinks.length > 0 ? (
               <>
-                —start with{" "}
+                Related guides:{" "}
                 {areasSentenceLinks.map((l, i, arr) => (
                   <span key={l.href}>
                     {i > 0 ? (i === arr.length - 1 ? ", or " : ", ") : null}
@@ -774,15 +677,13 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
                     </SafeInternalLink>
                   </span>
                 ))}
-                , or browse{" "}
+                .{" "}
               </>
-            ) : (
-              <>—browse{" "}</>
-            )}
-            <SafeInternalLink href="/locations" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              all Cape Town cleaning locations
-            </SafeInternalLink>
-            .
+            ) : null}
+            <SafeInternalLink href="/book" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              Book online
+            </SafeInternalLink>{" "}
+            and add parking, building access, and suburb details at checkout.
           </p>
         </div>
       </section>

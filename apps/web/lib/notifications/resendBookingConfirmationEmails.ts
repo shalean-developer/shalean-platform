@@ -6,7 +6,8 @@ import {
   sendAdminHtmlEmail,
   sendBookingConfirmationEmail,
 } from "@/lib/email/sendBookingEmail";
-import { buildBookingNotifyMessageFields } from "@/lib/notifications/bookingNotifyFormat";
+import { buildBookingNotifyFieldsFromRow, formatAdminDateTimeLine } from "@/lib/notifications/bookingNotifyFormat";
+import { bookingEmailRowOverlayFromRecord } from "@/lib/email/resolveBookingEmailFields";
 
 export type ResendBookingConfirmationEmailsResult = {
   customer: { attempted: boolean; sent: boolean; error?: string };
@@ -33,7 +34,7 @@ function adminBaseBlock(b: {
   return `<div style="font-family:system-ui,sans-serif;font-size:14px;color:#111">
   <p><strong>Booking ID:</strong> <code>${escapeHtml(b.bookingId)}</code></p>
   <p><strong>Service:</strong> ${escapeHtml(b.service)}</p>
-  <p><strong>Date / time:</strong> ${escapeHtml(b.date)} ${escapeHtml(b.time)}</p>
+  <p><strong>Date / time:</strong> ${escapeHtml(formatAdminDateTimeLine(b.date, b.time))}</p>
   <p><strong>Address:</strong> ${escapeHtml(b.location || "—")}</p>
   ${b.customerEmail ? `<p><strong>Customer:</strong> ${escapeHtml(b.customerEmail)}</p>` : ""}
   ${b.paystackRef ? `<p><strong>Payment ref:</strong> <code>${escapeHtml(b.paystackRef)}</code></p>` : ""}
@@ -60,7 +61,7 @@ export async function resendBookingConfirmationEmails(
   const { data: row, error } = await supabase
     .from("bookings")
     .select(
-      "id, customer_email, paystack_reference, amount_paid_cents, booking_snapshot, assignment_type, fallback_reason, selected_cleaner_id, date, time, location, suburb, service",
+      "id, customer_email, paystack_reference, amount_paid_cents, booking_snapshot, assignment_type, fallback_reason, selected_cleaner_id, date, time, location, suburb, service, service_slug",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -118,13 +119,8 @@ export async function resendBookingConfirmationEmails(
     bookingId,
     assignmentType: String(head.assignment_type ?? "").trim() || null,
     fallbackReason: String(head.fallback_reason ?? "").trim() || null,
-    bookingRow: {
-      date: typeof head.date === "string" ? head.date : null,
-      time: typeof head.time === "string" ? head.time : null,
-      location: typeof head.location === "string" ? head.location : null,
-      suburb: typeof head.suburb === "string" ? head.suburb : null,
-      service: typeof head.service === "string" ? head.service : null,
-    },
+    bookingRow: bookingEmailRowOverlayFromRecord(head),
+    persistedSnapshot: head.booking_snapshot,
     assignedCleanerName,
   });
 
@@ -148,13 +144,7 @@ export async function resendBookingConfirmationEmails(
     if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
       result.admin.error = "ADMIN_NOTIFICATION_EMAIL not configured.";
     } else {
-      const payFields = buildBookingNotifyMessageFields({
-        bookingId,
-        service: payload.serviceLabel,
-        date: payload.dateLabel,
-        time: payload.timeLabel,
-        location: payload.location,
-      });
+      const payFields = buildBookingNotifyFieldsFromRow(bookingId, head);
       const adminAssignmentNote =
         payload.showCleanerSubstitutionNotice && payload.fallbackReason
           ? `<p style="font-family:system-ui,sans-serif;font-size:14px;color:#92400e"><strong>Checkout assignment:</strong> auto_fallback — ${escapeHtml(payload.fallbackReason)}</p>`

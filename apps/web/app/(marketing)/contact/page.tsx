@@ -5,6 +5,13 @@ import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { clipSerpTitle } from "@/lib/seo/metaTitle";
+import {
+  HOME_OG_IMAGE,
+  HOME_OG_IMAGE_ALT,
+  HOME_OG_IMAGE_HEIGHT,
+  HOME_OG_IMAGE_WIDTH,
+} from "@/lib/seo/homePageMeta";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import {
   CUSTOMER_SUPPORT_EMAIL,
@@ -13,30 +20,45 @@ import {
   CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
   customerSupportWhatsAppHref,
 } from "@/lib/site/customerSupport";
+import { buildContactPageJsonLdGraph } from "@/lib/seo/contactPageJsonLd";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+
+const contactJsonLdHtml = JSON.stringify(buildContactPageJsonLdGraph()).replace(/</g, "\\u003c");
 
 const PATH = "/contact";
 const CANONICAL = absoluteCanonicalUrl(PATH);
+const CONTACT_TITLE = clipSerpTitle("Contact Shalean | Cape Town Cleaning Support");
 
 const CONTACT_META_DESC = clampMetaDescription(
-  "Contact Shalean Cleaning Services in Cape Town—call, WhatsApp, or email for booking help, quotes, and support. Office hours Mon–Sat.",
+  "Contact Shalean Cleaning Services in Cape Town—call, WhatsApp, or email for booking help, quotes, and support. Mon–Sat, 8am–6pm.",
 );
 
 export const metadata: Metadata = {
-  title: "Contact Shalean | Cape Town Cleaning Services",
+  title: CONTACT_TITLE,
   description: CONTACT_META_DESC,
   robots: SEO_INDEX_FOLLOW,
-  alternates: { canonical: CANONICAL },
+  alternates: { canonical: CANONICAL, languages: { "en-ZA": CANONICAL } },
   openGraph: {
     type: "website",
     url: CANONICAL,
-    title: "Contact Shalean | Cape Town Cleaning Services",
+    locale: "en_ZA",
+    siteName: "Shalean Cleaning Services",
+    title: CONTACT_TITLE,
     description: CONTACT_META_DESC,
+    images: [
+      {
+        url: HOME_OG_IMAGE,
+        width: HOME_OG_IMAGE_WIDTH,
+        height: HOME_OG_IMAGE_HEIGHT,
+        alt: HOME_OG_IMAGE_ALT,
+      },
+    ],
   },
   twitter: {
-    card: "summary",
-    title: "Contact Shalean | Cape Town Cleaning Services",
+    card: "summary_large_image",
+    title: CONTACT_TITLE,
     description: CONTACT_META_DESC,
+    images: [HOME_OG_IMAGE],
   },
 };
 
@@ -69,11 +91,12 @@ export default function ContactPage() {
 
   return (
     <div className="bg-white text-slate-900">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: contactJsonLdHtml }} />
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Contact</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          Get in touch with Shalean
+          Contact Shalean Cleaning Services in Cape Town
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
           Questions about booking, pricing, or an existing clean? Reach our Cape Town team by phone,

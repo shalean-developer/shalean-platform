@@ -54,4 +54,39 @@ describe("resolveBookingEmailFields", () => {
     expect(fields.location).toBe("Claremont");
     expect(fields.timeLabel).toBe("11:00");
   });
+
+  it("reads booking-v2 persisted snapshot when Paystack metadata snapshot is empty", () => {
+    const fields = resolveBookingEmailFields({
+      snapshot: { v: 1 },
+      persistedSnapshot: {
+        serviceSlug: "deep-cleaning",
+        address: "12 Main Rd",
+        suburb: "Sea Point",
+        city: "Cape Town",
+        date: "2026-06-21",
+        time: "14:30:00",
+      },
+    });
+    expect(fields.serviceLabel).toBe("Deep Cleaning");
+    expect(fields.dateLabel).toContain("Jun");
+    expect(fields.timeLabel).toBe("14:30");
+    expect(fields.location).toContain("12 Main Rd");
+    expect(fields.location).toContain("Sea Point");
+  });
+
+  it("coerces booking row date/time columns from Supabase values", () => {
+    const fields = resolveBookingEmailFields({
+      snapshot: null,
+      bookingRow: {
+        date: "2026-06-21" as unknown as string,
+        time: "09:00:00" as unknown as string,
+        location: "45 Beach Rd",
+        suburb: "Camps Bay",
+        service_slug: "regular-cleaning",
+      },
+    });
+    expect(fields.dateLabel).toContain("Jun");
+    expect(fields.timeLabel).toBe("09:00");
+    expect(fields.serviceLabel).toBe("Regular Cleaning");
+  });
 });

@@ -52,12 +52,24 @@ export function AboutPageView() {
   const webPageJsonLd = {
     "@context": "https://schema.org",
     "@type": "AboutPage",
+    "@id": `${SITE_ORIGIN}/about#webpage`,
     name: "About Shalean — Trusted home cleaning in Cape Town",
     url: `${SITE_ORIGIN}/about`,
     isPartOf: { "@type": "WebSite", name: "Shalean", url: SITE_ORIGIN },
     description:
       "Learn why homeowners choose Shalean: vetted cleaners, transparent quotes, and reliable service across Cape Town suburbs.",
     mainEntity: { "@id": `${SITE_ORIGIN}/about#organization` },
+    breadcrumb: { "@id": `${SITE_ORIGIN}/about#breadcrumbs` },
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "@id": `${SITE_ORIGIN}/about#breadcrumbs`,
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
+      { "@type": "ListItem", position: 2, name: "About", item: `${SITE_ORIGIN}/about` },
+    ],
   };
 
   const orgEntityJsonLd = { ...orgJsonLd, "@id": `${SITE_ORIGIN}/about#organization` };
@@ -65,6 +77,7 @@ export function AboutPageView() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgEntityJsonLd) }} />
 
       <article>
@@ -233,25 +246,22 @@ export function AboutPageView() {
               Serving homes across Cape Town
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-600 sm:text-base">
-              Browse suburb hubs for parking, property mix, and realistic scopes—then book with the same upfront quote flow everywhere.
+              We serve popular Cape Town suburbs—add your address at checkout to confirm availability.
             </p>
             <ul className="mt-8 flex flex-wrap gap-2">
               {FOOTER_POPULAR_LOCATION_HUBS.map((loc) => (
                 <li key={loc.slug}>
-                  <Link
-                    href={`/locations/${loc.slug}`}
-                    className="inline-flex min-h-11 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-emerald-300 hover:text-emerald-950"
-                  >
+                  <span className="inline-flex min-h-11 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm">
                     {loc.name}
-                  </Link>
+                  </span>
                 </li>
               ))}
               <li>
                 <Link
-                  href="/locations"
+                  href="/book"
                   className={`inline-flex min-h-11 items-center rounded-xl px-4 py-2 text-sm font-semibold ${linkEmphasisClassName}`}
                 >
-                  All locations →
+                  Book for your area →
                 </Link>
               </li>
             </ul>

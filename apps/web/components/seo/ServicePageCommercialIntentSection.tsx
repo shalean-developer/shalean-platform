@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
 const CORE_SERVICE_SLUGS = [
   "standard-cleaning-cape-town",
@@ -13,8 +13,6 @@ const CORE_LABELS: Record<(typeof CORE_SERVICE_SLUGS)[number], string> = {
   "deep-cleaning-cape-town": "Deep cleaning",
   "move-out-cleaning-cape-town": "Move-out cleaning",
 };
-
-const PRICES_PATH = "/cleaning-prices-cape-town";
 
 type Props = { slug: CapeTownSeoServiceSlug };
 
@@ -43,19 +41,16 @@ export function ServicePageCommercialIntentSection({ slug }: Props) {
             Keep maintenance cleaning on rhythm in Cape Town
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Use the{" "}
-            <Link href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={linkClass}>
-              Cape Town cleaning hub
+            Browse the{" "}
+            <Link href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className={linkClass}>
+              services overview
             </Link>{" "}
-            for metro-wide context, then open{" "}
-            <Link href="/locations" className={linkClass}>
-              suburb hubs
+            for scope context, then{" "}
+            <Link href="/book" className={linkClass}>
+              book online
             </Link>{" "}
-            for lifts, parking, and access notes.{" "}
-            <Link href={PRICES_PATH} className={linkClass}>
-              Published from-prices
-            </Link>{" "}
-            show tier entry bands—your checkout total still reflects the exact rooms you pick.
+            and add your suburb at checkout. Published from-prices show tier entry bands—your checkout total still reflects
+            the exact rooms you pick.
           </p>
           <ul className="mt-6 space-y-2 text-base leading-relaxed text-zinc-700">
             {crossRows.map((row) => (
@@ -95,19 +90,15 @@ export function ServicePageCommercialIntentSection({ slug }: Props) {
             Book intensive reset time—not a quick tidy
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Deep visits buy dwell on grease, grout, and edges. Route through{" "}
-            <Link href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={linkClass}>
-              citywide cleaning context
+            Deep visits buy dwell on grease, grout, and edges. Compare dwell-heavy tiers on{" "}
+            <Link href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className={linkClass}>
+              services and pricing
             </Link>
             , then{" "}
-            <Link href="/locations" className={linkClass}>
-              your suburb hub
+            <Link href="/book" className={linkClass}>
+              lock bedrooms and baths online
             </Link>{" "}
-            for layout-specific notes. Compare dwell-heavy tiers on{" "}
-            <Link href={PRICES_PATH} className={linkClass}>
-              cleaning prices in Cape Town
-            </Link>{" "}
-            before you lock bedrooms and baths.
+            before checkout.
           </p>
           <ul className="mt-6 space-y-2 text-base leading-relaxed text-zinc-700">
             {crossRows.map((row) => (
@@ -147,19 +138,15 @@ export function ServicePageCommercialIntentSection({ slug }: Props) {
             Handover-led cleaning for empty or nearly empty homes
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Move-out scope assumes inspection evidence, not occupied-home upkeep. Skim the{" "}
-            <Link href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={linkClass}>
-              Cape Town cleaning hub
+            Move-out scope assumes inspection evidence, not occupied-home upkeep. Align add-ons against{" "}
+            <Link href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className={linkClass}>
+              published service tiers
             </Link>
-            , cross-check{" "}
-            <Link href="/locations" className={linkClass}>
-              suburb access notes
+            , then{" "}
+            <Link href="/book" className={linkClass}>
+              confirm your suburb at checkout
             </Link>
-            , then align add-ons against{" "}
-            <Link href={PRICES_PATH} className={linkClass}>
-              published move-out from-prices
-            </Link>{" "}
-            before checkout.
+            .
           </p>
           <ul className="mt-6 space-y-2 text-base leading-relaxed text-zinc-700">
             {crossRows.map((row) => (
@@ -198,17 +185,13 @@ export function ServicePageCommercialIntentSection({ slug }: Props) {
           Next steps across Cape Town services
         </h2>
         <p className="mt-4 text-base leading-relaxed text-zinc-600">
-          Anchor on the{" "}
-          <Link href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH} className={linkClass}>
-            citywide cleaning hub
+          Compare core residential tiers on{" "}
+          <Link href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className={linkClass}>
+            services and pricing
           </Link>
-          , branch into{" "}
-          <Link href="/locations" className={linkClass}>
-            suburb pages
-          </Link>{" "}
-          for local notes, and sanity-check tiers on{" "}
-          <Link href={PRICES_PATH} className={linkClass}>
-            cleaning prices in Cape Town
+          , then{" "}
+          <Link href="/book" className={linkClass}>
+            book online
           </Link>{" "}
           before you switch service type in the quote builder.
         </p>

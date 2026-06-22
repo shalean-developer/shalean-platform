@@ -3,6 +3,8 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { sendCustomerEmailWithDbTemplateFallback } from "@/lib/email/customerEmailFromTemplate";
+import { buildLifecycleTemplateData } from "@/lib/templates/bookingEmailTemplateData";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -104,13 +106,32 @@ function buildReminderHtml(ctx: LifecycleEmailBookingContext): string {
 
 /** ~24h before appointment */
 export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
-  return sendLifecycle(
-    "reminder_email",
-    "Reminder: your clean is coming up",
-    buildReminderHtml(ctx),
-    ctx.to,
-    ctx.bookingId,
-  );
+  const { paused } = await isCustomerOutboundPaused();
+  if (paused) return { sent: false, error: "customer_outbound_paused" };
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    await reportOperationalIssue("warn", "reminder_email", "RESEND_API_KEY not set", { bookingId: ctx.bookingId });
+    return { sent: false, error: "Email not configured" };
+  }
+  const result = await sendCustomerEmailWithDbTemplateFallback({
+    to: ctx.to,
+    templateKey: "booking_reminder_24h",
+    data: buildLifecycleTemplateData(ctx),
+    bookingId: ctx.bookingId,
+    logEventType: "reminder_email",
+    buildLegacy: () => ({
+      subject: "Reminder: your clean is coming up",
+      html: buildReminderHtml(ctx),
+    }),
+  });
+  if (result.sent) {
+    await logSystemEvent({
+      level: "info",
+      source: "reminder_email",
+      message: "Email sent",
+      context: { bookingId: ctx.bookingId, email: ctx.to },
+    });
+  }
+  return result;
 }
 
 function buildReviewHtml(ctx: LifecycleEmailBookingContext): string {
@@ -141,7 +162,32 @@ function buildReviewHtml(ctx: LifecycleEmailBookingContext): string {
 
 /** A few hours after appointment */
 export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
-  return sendLifecycle("review_email", "How was your cleaning?", buildReviewHtml(ctx), ctx.to, ctx.bookingId);
+  const { paused } = await isCustomerOutboundPaused();
+  if (paused) return { sent: false, error: "customer_outbound_paused" };
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    await reportOperationalIssue("warn", "review_email", "RESEND_API_KEY not set", { bookingId: ctx.bookingId });
+    return { sent: false, error: "Email not configured" };
+  }
+  const result = await sendCustomerEmailWithDbTemplateFallback({
+    to: ctx.to,
+    templateKey: "review_prompt",
+    data: buildLifecycleTemplateData(ctx),
+    bookingId: ctx.bookingId,
+    logEventType: "review_email",
+    buildLegacy: () => ({
+      subject: "How was your cleaning?",
+      html: buildReviewHtml(ctx),
+    }),
+  });
+  if (result.sent) {
+    await logSystemEvent({
+      level: "info",
+      source: "review_email",
+      message: "Email sent",
+      context: { bookingId: ctx.bookingId, email: ctx.to },
+    });
+  }
+  return result;
 }
 
 function buildRebookHtml(ctx: LifecycleEmailBookingContext): string {

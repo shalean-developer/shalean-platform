@@ -11,7 +11,11 @@ import {
   sendCustomerBookingCancelledEmail,
 } from "@/lib/email/sendBookingEmail";
 import { sendCleanerBookingCancelledEmail } from "@/lib/email/sendCleanerNotification";
-import { buildBookingNotifyMessageFields, formatBookingNotifyPlainLines } from "@/lib/notifications/bookingNotifyFormat";
+import {
+  buildBookingNotifyFieldsFromRow,
+  formatBookingNotifyPlainLines,
+  resolveBookingEmailLabelsFromRow,
+} from "@/lib/notifications/bookingNotifyFormat";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
 import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
@@ -43,19 +47,6 @@ type BookingCancelRow = {
   amount_paid_cents: number | null;
   paystack_reference: string | null;
 };
-
-function formatDateLabel(dateYmd: string | null): string {
-  if (!dateYmd || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return "—";
-  const [y, m, d] = dateYmd.split("-").map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateYmd;
-  return new Date(y, m - 1, d).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "short" });
-}
-
-function formatTimeLabel(timeHm: string | null): string {
-  const t = String(timeHm ?? "").trim();
-  if (!t) return "—";
-  return t.length >= 5 ? t.slice(0, 5) : t;
-}
 
 function cancellationReasonLabel(row: BookingCancelRow, override?: string | null): string | null {
   const custom = override?.trim();
@@ -120,7 +111,7 @@ export async function dispatchBookingCancelledNotifications(
   const { data: raw, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, customer_email, customer_name, customer_phone, service, date, time, location, cleaner_id, is_team_job, cancelled_by, amount_paid_cents, paystack_reference",
+      "id, status, customer_email, customer_name, customer_phone, service, service_slug, date, time, location, suburb, booking_snapshot, cleaner_id, is_team_job, cancelled_by, amount_paid_cents, paystack_reference",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -147,10 +138,8 @@ export async function dispatchBookingCancelledNotifications(
     return { dispatched: false, skippedReason: "draft_unconfirmed_booking" };
   }
 
-  const serviceLabel = String(row.service ?? "").trim() || "Cleaning";
-  const dateLabel = formatDateLabel(row.date);
-  const timeLabel = formatTimeLabel(row.time);
-  const location = String(row.location ?? "").trim() || "—";
+  const rowRecord = row as unknown as Record<string, unknown>;
+  const { serviceLabel, dateLabel, timeLabel, location } = resolveBookingEmailLabelsFromRow(rowRecord);
   const reason = cancellationReasonLabel(row, params.cancellationReason);
   const idemRef = `${CANCEL_IDEM_REF_PREFIX}:${bookingId}`;
 
@@ -224,13 +213,7 @@ export async function dispatchBookingCancelledNotifications(
   );
 
   if (cleanerIds.length > 0) {
-    const msgFields = buildBookingNotifyMessageFields({
-      bookingId,
-      service: serviceLabel,
-      date: row.date,
-      time: row.time,
-      location: row.location,
-    });
+    const msgFields = buildBookingNotifyFieldsFromRow(bookingId, rowRecord);
 
     for (const cleanerId of cleanerIds) {
       const claimedCleaner = await tryClaimNotificationIdempotency(supabase, {

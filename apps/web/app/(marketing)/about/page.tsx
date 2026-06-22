@@ -6,6 +6,7 @@ import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import {
   HOME_OG_IMAGE,
   HOME_OG_IMAGE_HEIGHT,
@@ -16,25 +17,28 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/about";
 const CANONICAL = absoluteCanonicalUrl(PATH);
+const ABOUT_TITLE = clipSerpTitle("About Shalean | Trusted Home Cleaning Cape Town");
 const ABOUT_META_DESC = clampMetaDescription(
   "Vetted cleaners, transparent pricing, and reliable home cleaning across Cape Town. Learn how Shalean works and book online with upfront quotes.",
 );
 const ABOUT_OG_DESC = clampMetaDescription(
-  "Background-checked teams, clear totals before payment, and suburb hubs across the metro—book standard, deep, or move-out cleaning.",
+  "Background-checked teams, clear totals before payment, and service across Cape Town—book standard, deep, or move-out cleaning online.",
 );
 const ABOUT_TWITTER_DESC = clampMetaDescription(
   "Why homeowners choose Shalean: vetted cleaners, transparent pricing, same-day when routing allows.",
 );
 
 export const metadata: Metadata = {
-  title: "About Shalean | Trusted Home Cleaning Cape Town",
+  title: ABOUT_TITLE,
   description: ABOUT_META_DESC,
   robots: SEO_INDEX_FOLLOW,
-  alternates: { canonical: CANONICAL },
+  alternates: { canonical: CANONICAL, languages: { "en-ZA": CANONICAL } },
   openGraph: {
     type: "website",
     url: CANONICAL,
-    title: "About Shalean | Trusted Home Cleaning Cape Town",
+    locale: "en_ZA",
+    siteName: "Shalean Cleaning Services",
+    title: ABOUT_TITLE,
     description: ABOUT_OG_DESC,
     images: [
       {
@@ -47,7 +51,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "About Shalean | Trusted Home Cleaning Cape Town",
+    title: ABOUT_TITLE,
     description: ABOUT_TWITTER_DESC,
     images: [HOME_OG_IMAGE],
   },

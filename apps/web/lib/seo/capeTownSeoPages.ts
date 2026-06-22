@@ -11,6 +11,7 @@ import { clampMetaDescription, generateMetaDescription, hubRegionGeoBoostLine } 
 import { clipSerpTitle, generateCtrTitle, serviceTitleBaseForCtr } from "@/lib/seo/metaTitle";
 import { leadPriceForServiceSlug } from "@/lib/seo/serviceTitleLeadPrice";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import {
   getLocationTitleVariant,
@@ -295,33 +296,23 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     introSectionHeading: "How deep cleaning works as a reset visit",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/locations/claremont-cleaning-services",
-      linkAnchorText: "cleaning services in Claremont",
+      blogPath: "/blog/deep-cleaning-claremont-cape-town",
+      linkAnchorText: "deep cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Green Point",
-        blogPath: "/locations/green-point-cleaning-services",
-        linkAnchorText: "cleaning services in Green Point",
+        blogPath: "/blog/deep-cleaning-green-point-cape-town",
+        linkAnchorText: "deep cleaning guide for Green Point",
       },
       {
-        areaName: "Gardens",
-        blogPath: "/locations/gardens-cleaning-services",
-        linkAnchorText: "cleaning services in Gardens",
-      },
-      {
-        areaName: "Camps Bay",
-        blogPath: "/locations/camps-bay-cleaning-services",
-        linkAnchorText: "cleaning services in Camps Bay",
-      },
-      {
-        areaName: "Constantia",
-        blogPath: "/locations/constantia-cleaning-services",
-        linkAnchorText: "cleaning services in Constantia",
+        areaName: "Sea Point",
+        blogPath: "/blog/deep-cleaning-sea-point-cape-town",
+        linkAnchorText: "deep cleaning guide for Sea Point",
       },
     ],
     areasSectionIntro:
-      "Southern Suburb hubs from Claremont to Rosebank spell out parking, pets, and typical layouts so your booking notes match what teams see on the day. Skim them for neighbourhood context, then confirm this deep cleaning scope for Cape Town before you checkout.",
+      "Deep cleaning crews route across Claremont, Sea Point, Green Point, and the wider metro—enter your suburb at checkout so scope and travel time match your property.",
     explanation: [
       "Deep cleaning is the service Cape Town customers choose when a standard tidy is not enough. Build-up on ovens, grout lines, skirting boards, and bathroom fixtures takes time, and Shalean teams are briefed to work through those detail zones methodically.",
       "Whether you are recovering after renovations, preparing for guests, or refreshing a rental before handover photos, deep cleaning focuses on the areas that change how a space feels day to day across the Western Cape seaboard and Southern Suburbs.",
@@ -378,49 +369,34 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "standard-cleaning-cape-town": {
     slug: "standard-cleaning-cape-town",
     path: "/services/standard-cleaning-cape-town",
-    title: "Cleaning Services Cape Town from R250 | Book Today | Shalean",
+    title: "Standard Home Cleaning Cape Town | From R250 | Shalean",
     description:
       "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes and vetted Shalean cleaners.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
-    h1: "Cleaning Services Cape Town",
+    h1: "Standard home cleaning services in Cape Town",
     schemaName: "Cleaning Services Cape Town | Shalean",
     bookingLabel: "standard cleaning",
     introSectionHeading: "How standard cleaning works in Cape Town",
     includedSectionHeading: "What's included in our cleaning service",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/locations/claremont-cleaning-services",
-      linkAnchorText: "cleaning services in Claremont",
+      blogPath: "/blog/standard-cleaning-claremont-cape-town",
+      linkAnchorText: "standard cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
-        areaName: "Camps Bay",
-        blogPath: "/locations/camps-bay-cleaning-services",
-        linkAnchorText: "cleaning services in Camps Bay",
-      },
-      {
-        areaName: "Wynberg",
-        blogPath: "/locations/wynberg-cleaning-services",
-        linkAnchorText: "cleaning services in Wynberg",
+        areaName: "Sea Point",
+        blogPath: "/blog/standard-cleaning-sea-point-cape-town",
+        linkAnchorText: "standard cleaning guide for Sea Point",
       },
       {
         areaName: "Observatory",
-        blogPath: "/locations/observatory-cleaning-services",
-        linkAnchorText: "cleaning services in Observatory",
-      },
-      {
-        areaName: "Plumstead",
-        blogPath: "/locations/plumstead-cleaning-services",
-        linkAnchorText: "cleaning services in Plumstead",
-      },
-      {
-        areaName: "Constantia",
-        blogPath: "/locations/constantia-cleaning-services",
-        linkAnchorText: "cleaning services in Constantia",
+        blogPath: "/blog/standard-cleaning-observatory-cape-town",
+        linkAnchorText: "standard cleaning guide for Observatory",
       },
     ],
     areasSectionIntro:
-      "Each suburb hub below highlights how standard visits usually run there—stairs, shared drives, school-run timing, and typical room counts. Use them to brief your booking, then align expectations with the baseline checklist on this Cape Town service page.",
+      "We serve Sea Point, Claremont, Observatory, and suburbs across the metro—add your address at checkout to confirm availability and get suburb-aware routing notes.",
     explanation: [
       "Standard cleaning keeps Cape Town apartments and houses in a steady rhythm: floors walked daily, kitchens used nightly, and bathrooms that need dependable sanitisation without booking a full deep clean every time.",
       "It suits professionals near the CBD, families in the Southern Suburbs, and lock-up-and-go homes that still deserve a reliable reset on a predictable schedule.",
@@ -486,21 +462,21 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingLabel: "move-out cleaning",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/locations/claremont-cleaning-services",
-      linkAnchorText: "cleaning services in Claremont",
+      blogPath: "/blog/move-out-cleaning-claremont-cape-town",
+      linkAnchorText: "move-out cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
-        areaName: "Rondebosch",
-        blogPath: "/locations/rondebosch-cleaning-services",
-        linkAnchorText: "cleaning services in Rondebosch",
+        areaName: "Sea Point",
+        blogPath: "/blog/move-out-cleaning-sea-point-cape-town",
+        linkAnchorText: "move-out cleaning guide for Sea Point",
       },
     ],
     introSectionHeading: "Professional move out cleaning for Cape Town rentals",
     includedSectionHeading: "Move Out Cleaning Checklist",
     areasSectionHeading: "Move Out Cleaning Across Cape Town",
     areasSectionIntro:
-      "We serve Sea Point, Green Point, Claremont, Rondebosch, Observatory, Wynberg, City Bowl and surrounding areas. Explore suburb hubs below for parking, building access, and typical layouts—each links back to this move-out guide.",
+      "We serve Sea Point, Green Point, Claremont, Rondebosch, Observatory, Wynberg, the City Bowl, and surrounding areas—add your address at checkout for handover-ready scope.",
     explanation: [
       "Moving out? Our professional move out cleaning in Cape Town ensures your home is spotless and ready for inspection. Whether you're a tenant, landlord, or property manager, we provide detailed end of tenancy cleaning that meets rental standards and helps secure your deposit.",
       "We clean everything from kitchens and bathrooms to inside cupboards, appliances, and hard-to-reach areas — so you leave your property in perfect condition.",
@@ -566,7 +542,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     h1: "Office cleaning services in Cape Town for productive, presentable workspaces",
     bookingLabel: "office cleaning",
     areasSectionIntro:
-      "Studios near Rosebank duplexes behave differently from Newlands village-adjacent offices. Skim the suburb hubs for access and parking norms, then map your workspace visit to the checklist on this Cape Town office cleaning page.",
+      "Small offices across Claremont, the CBD fringe, Newlands, and the wider metro—share square metres, headcount, and access notes when you book so scope matches your workspace.",
     explanation: [
       "Small offices, agency studios, and hybrid workspaces across Cape Town need the same fundamentals as homes—sanitised kitchens, presentable bathrooms, dust-free desks, and floors that look professional when clients visit.",
       "Shalean treats office bookings with the same vetted cleaner model as residential work, with scope agreed up front so communal fridges, glass partitions, and high-traffic corridors get proportionate time.",
@@ -632,12 +608,19 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingPath: "/book",
     neighbourhoodBlogGuide: {
       areaName: "Green Point",
-      blogPath: "/locations/green-point-cleaning-services",
-      linkAnchorText: "cleaning services in Green Point",
+      blogPath: "/blog/airbnb-cleaning-green-point-cape-town",
+      linkAnchorText: "Airbnb cleaning guide for Green Point",
     },
+    extraNeighbourhoodBlogGuides: [
+      {
+        areaName: "Sea Point",
+        blogPath: "/blog/airbnb-cleaning-sea-point-cape-town",
+        linkAnchorText: "Airbnb cleaning guide for Sea Point",
+      },
+    ],
     introSectionHeading: "Built for Airbnb hosts, property managers & short-term rental owners",
     areasSectionIntro:
-      "Turnover pressure is street-specific—tight lifts on the Atlantic Seaboard versus Southern Suburb gates and school traffic. The hubs below capture local access cues; combine them with this Cape Town Airbnb cleaning checklist for consistent guest-ready results.",
+      "Turnover pressure varies by street—tight lifts on the Atlantic Seaboard versus Southern Suburb gates and school traffic. Add your listing address at checkout for realistic routing and access notes.",
     explanation: [
       "Between back-to-back guests, calendar gaps, and same-day check-outs, Airbnb hosts need a turnover partner that respects inventory photos, linen resets, and tight handover windows—not just a generic tidy.",
       "Shalean focuses on short-stay and vacation rental realities across Cape Town: sand tracked in from the beach, coffee rings on dining tables, and bathrooms that must read “hotel fresh” before your next review arrives.",
@@ -711,7 +694,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     h1: "Carpet cleaning services in Cape Town for fresher rugs, carpets, and high-traffic rooms",
     bookingLabel: "carpet cleaning",
     areasSectionIntro:
-      "Rugs in Observatory rentals behave differently from Kenilworth family lounges. Browse the suburb hubs for context on access and typical room mixes, then align carpet scope and any bundled home clean on this Cape Town service page.",
+      "Carpet and rug work across Claremont, Sea Point, Observatory, Constantia, and the wider metro—note room mix and fibre type when you book so extraction time is realistic.",
     explanation: [
       "Carpet cleaning helps refresh rooms that collect dust, foot traffic, pet hair, and everyday marks. Shalean makes it easy to add carpet cleaning to a wider home cleaning plan when you want kitchens, bathrooms, and living spaces handled in the same visit.",
       "Carpet cleaning in Cape Town is especially useful in living rooms, bedrooms, rental properties, and homes with children or pets—where soft flooring holds onto dust and marks longer than hard floors.",
@@ -1499,6 +1482,7 @@ const SERVICE_HUB_PHRASE: Record<CapeTownSeoServiceSlug, string> = {
 
 /** Service SEO page → suburb hubs: “{Service} in Claremont” etc. */
 export function serviceHubLocationLinks(serviceSlug: CapeTownSeoServiceSlug): { href: string; label: string }[] {
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) return [];
   const phrase = SERVICE_HUB_PHRASE[serviceSlug];
   return LOCATION_SEO_SLUGS.flatMap((locSlug) => {
     const block = LOCATION_SEO_PAGES[locSlug];
@@ -1545,10 +1529,10 @@ export function locationSeoPathFromLegacyAreaSlug(areaSlug: string): string | nu
 export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Metadata {
   const url = absoluteCanonicalUrl(data.path);
   const metaDescription = buildServicePageMetaDescription(data);
-  /** CTR test: lead with city cleaning intent + price + action (replaces rotated template for this slug only). */
+  /** CTR test: distinct from homepage head term — targets standard/recurring intent. */
   const title =
     data.slug === "standard-cleaning-cape-town"
-      ? clipSerpTitle("Cleaning Services Cape Town from R250 | Book Today | Shalean")
+      ? clipSerpTitle("Standard Home Cleaning Cape Town | From R250 | Shalean")
       : generateCtrTitle({
           base: serviceTitleBaseForCtr(data.bookingLabel, data.slug),
           place: "Cape Town",
@@ -1562,10 +1546,12 @@ export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Met
     description: metaDescription,
     robots: SEO_INDEX_FOLLOW,
     ...(data.keywords?.length ? { keywords: data.keywords } : {}),
-    alternates: { canonical: url },
+    alternates: { canonical: url, languages: { "en-ZA": url } },
     openGraph: {
       type: "website",
       url,
+      locale: "en_ZA",
+      siteName: "Shalean Cleaning Services",
       title,
       description: metaDescription,
       images: [{ url: data.ogImage, alt: data.h1 }],
@@ -1668,6 +1654,7 @@ export function locationPageServiceLinks(): { href: string; label: string }[] {
 }
 
 export function capeTownSeoLocationLinks(): { href: string; label: string }[] {
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) return [];
   return LOCATION_SEO_SLUGS.flatMap((locSlug) => {
     const block = LOCATION_SEO_PAGES[locSlug];
     const place = LOCATION_SEO_SHORT_PLACE[locSlug] ?? getProgrammaticLocation(locSlug)?.name;
@@ -1682,18 +1669,14 @@ let homepageInternalSeoLinksCache: { href: string; label: string }[] | undefined
 export function getHomepageInternalSeoLinks(): { href: string; label: string }[] {
   if (homepageInternalSeoLinksCache) return homepageInternalSeoLinksCache;
   homepageInternalSeoLinksCache = [
-    { href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: "Cape Town cleaning services hub" },
-    { href: "/locations", label: "All suburb cleaning locations" },
-    { href: "/cleaning-prices-cape-town", label: "Cleaning prices Cape Town" },
-    { href: "/maid-services-cape-town", label: "Maid services Cape Town" },
+    { href: "/services", label: "Cleaning services Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning Cape Town" },
-    { href: CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path, label: "Window cleaning Cape Town" },
-    ...capeTownSeoLocationLinks(),
+    { href: "/contact", label: "Contact Shalean" },
   ];
   return homepageInternalSeoLinksCache;
 }

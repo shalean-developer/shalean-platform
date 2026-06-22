@@ -25,10 +25,18 @@ export const GENERIC_EMAIL_FIELD_DEFAULTS: Record<string, string> = {
   booking_id: "Not provided",
   booking_reference: "Not provided",
   cleaner_name: "Cleaner assignment pending",
+  previous_date: "Pending",
+  previous_time: "Pending",
+  new_date: "Pending",
+  new_time: "Pending",
   payment_url: "#",
+  payment_method: "Paystack",
   account_url: "#",
   review_url: "#",
   continue_url: "#",
+  quote_label: "",
+  google_review_url: "",
+  google_review_section: "",
   book_again_url: "",
   cleaner_substitution_notice: "",
   book_again_section: "",
@@ -49,6 +57,9 @@ export function getEmailTemplateDefaults(templateKey: string): Record<string, st
 export function getEmailTemplateRawHtmlKeys(templateKey: string): string[] {
   if (templateKey === "booking_confirmed") {
     return ["cleaner_substitution_notice", "book_again_section"];
+  }
+  if (templateKey === "job_completed") {
+    return ["google_review_section"];
   }
   return [];
 }

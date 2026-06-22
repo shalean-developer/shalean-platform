@@ -1,3 +1,9 @@
+import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import {
+  bookingEmailRowOverlayFromRecord,
+  resolveBookingEmailFields,
+} from "@/lib/email/resolveBookingEmailFields";
+
 /**
  * Single source for booking copy in customer email, cleaner WhatsApp/SMS, and admin alerts.
  */
@@ -15,6 +21,17 @@ function normaliseTimeHm(raw: string): string {
   return s || "—";
 }
 
+/** Single line for admin HTML when date/time may be missing independently. */
+export function formatAdminDateTimeLine(date: string, time: string): string {
+  const d = date.trim();
+  const t = time.trim();
+  const missing = (s: string) => !s || s === "—";
+  if (missing(d) && missing(t)) return "—";
+  if (missing(d)) return t;
+  if (missing(t)) return d;
+  return `${d} ${t}`;
+}
+
 export function buildBookingNotifyMessageFields(input: {
   bookingId: string;
   service?: string | null;
@@ -28,6 +45,55 @@ export function buildBookingNotifyMessageFields(input: {
     time: normaliseTimeHm(String(input.time ?? "—")),
     address: String(input.location ?? "—").trim() || "—",
     id: input.bookingId,
+  };
+}
+
+/** Resolve booking copy from a DB row + persisted snapshot (V1 locked/flat or booking-v2). */
+export function buildBookingNotifyFieldsFromRow(
+  bookingId: string,
+  row: Record<string, unknown>,
+): BookingNotifyMessageFields {
+  const persisted = row.booking_snapshot;
+  const snapshot =
+    persisted && typeof persisted === "object" && !Array.isArray(persisted)
+      ? (persisted as BookingSnapshotV1)
+      : null;
+  const fields = resolveBookingEmailFields({
+    snapshot,
+    bookingRow: bookingEmailRowOverlayFromRecord(row),
+    persistedSnapshot: persisted,
+  });
+  return buildBookingNotifyMessageFields({
+    bookingId,
+    service: fields.serviceLabel,
+    date: fields.dateLabel || "—",
+    time: fields.timeLabel || "—",
+    location: fields.location,
+  });
+}
+
+/** Date/time/location labels for customer lifecycle emails (cancelled, reminders, etc.). */
+export function resolveBookingEmailLabelsFromRow(row: Record<string, unknown>): {
+  serviceLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  location: string;
+} {
+  const persisted = row.booking_snapshot;
+  const snapshot =
+    persisted && typeof persisted === "object" && !Array.isArray(persisted)
+      ? (persisted as BookingSnapshotV1)
+      : null;
+  const fields = resolveBookingEmailFields({
+    snapshot,
+    bookingRow: bookingEmailRowOverlayFromRecord(row),
+    persistedSnapshot: persisted,
+  });
+  return {
+    serviceLabel: fields.serviceLabel,
+    dateLabel: fields.dateLabel || "—",
+    timeLabel: fields.timeLabel || "—",
+    location: fields.location?.trim() || "—",
   };
 }
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getServiceLabel } from "@/components/booking/serviceCategories";
+import { resolveBookingEmailLabelsFromRow } from "@/lib/notifications/bookingNotifyFormat";
 
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
@@ -308,7 +308,7 @@ export async function processLifecycleJob(
 
     .select(
 
-      "id, service, booking_snapshot, location, status, completed_at, cleaner_id, is_team_job, team_id, date, user_id, recurring_id, is_recurring_generated, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar",
+      "id, service, service_slug, booking_snapshot, location, suburb, status, completed_at, cleaner_id, is_team_job, team_id, date, time, user_id, recurring_id, is_recurring_generated, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar",
 
     )
 
@@ -359,12 +359,8 @@ export async function processLifecycleJob(
 
 
   const bookingRow = booking as Record<string, unknown>;
-
+  const snap = (bookingRow.booking_snapshot as BookingSnapshotV1 | null | undefined) ?? null;
   const userId = typeof bookingRow.user_id === "string" ? bookingRow.user_id : null;
-
-  const snap = booking.booking_snapshot as BookingSnapshotV1 | null;
-
-
 
   if (isBookingCancelledForLifecycle(bookingRow)) {
 
@@ -512,49 +508,7 @@ export async function processLifecycleJob(
 
 
 
-  let serviceLabel = typeof booking.service === "string" ? booking.service : "Cleaning service";
-
-  if (snap?.locked?.service != null) serviceLabel = getServiceLabel(snap.locked.service);
-
-
-
-  let dateLabel = "—";
-
-  let timeLabel = "—";
-
-  const locked = snap?.locked;
-
-  if (locked?.date) {
-
-    const [y, m, d] = locked.date.split("-").map(Number);
-
-    if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
-
-      dateLabel = new Date(y, m - 1, d).toLocaleDateString("en-ZA", {
-
-        weekday: "long",
-
-        day: "numeric",
-
-        month: "short",
-
-      });
-
-    }
-
-  }
-
-  if (locked?.time) timeLabel = locked.time;
-
-  const location =
-
-    locked?.location?.trim() ||
-
-    (typeof booking.location === "string" ? booking.location : "") ||
-
-    "";
-
-
+  const { serviceLabel, dateLabel, timeLabel, location } = resolveBookingEmailLabelsFromRow(bookingRow);
 
   const ctx: LifecycleEmailBookingContext = {
 

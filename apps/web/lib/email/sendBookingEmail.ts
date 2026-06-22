@@ -1,3 +1,4 @@
+import { formatAdminDateTimeLine } from "@/lib/notifications/bookingNotifyFormat";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import {
@@ -6,15 +7,25 @@ import {
 } from "@/lib/email/resolveBookingEmailFields";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
-import { sendEmailFromTemplateKey } from "@/lib/email/sendTemplateEmail";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
-import { getTemplate } from "@/lib/templates/store";
 import { buildBookingConfirmedTemplateData } from "@/lib/templates/bookingConfirmedData";
+import { sendCustomerEmailWithDbTemplateFallback, trySendCustomerEmailFromDbTemplate } from "@/lib/email/customerEmailFromTemplate";
+import {
+  buildBookingAssignedTemplateData,
+  buildBookingCancelledTemplateData,
+  buildBookingRescheduledTemplateData,
+  buildJobCompletedTemplateData,
+  buildPaymentLinkTemplateData,
+  buildPaymentProcessingTemplateData,
+  buildReminder2hTemplateData,
+  buildSavedQuoteRecoveryTemplateData,
+  customerNameFromEmail,
+} from "@/lib/templates/bookingEmailTemplateData";
 
 export type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 export { buildBookingConfirmedTemplateData };
@@ -43,20 +54,13 @@ async function pausedCustomerEmailResult(): Promise<{ sent: false; error: string
 type DbTemplateAttempt = { usedRow: false } | { usedRow: true; sent: boolean; error?: string };
 
 async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: BookingEmailPayload): Promise<DbTemplateAttempt> {
-  const template = await getTemplate("booking_confirmed", "email");
-  if (!template) return { usedRow: false };
-
-  const data = buildBookingConfirmedTemplateData(payload);
-  const result = await sendEmailFromTemplateKey({
+  return trySendCustomerEmailFromDbTemplate({
     to: payload.customerEmail,
-    key: "booking_confirmed",
-    data,
+    templateKey: "booking_confirmed",
+    data: buildBookingConfirmedTemplateData(payload),
     bookingId: bookingIdForNotificationLog(payload),
-    logRole: "customer",
     logEventType: CUSTOMER_PAYMENT_EVENT,
   });
-  if (!result.ok) return { usedRow: true, sent: false, error: result.error };
-  return { usedRow: true, sent: true };
 }
 
 const BOOKING_PAYMENT_PROCESSING_EVENT = "booking_payment_processing";
@@ -70,72 +74,36 @@ export async function sendCustomerBookingPaymentProcessingEmail(input: {
 }): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
   const to = normalizeEmail(input.customerEmail.trim());
   if (!to) {
     return { sent: false, error: "Invalid email" };
   }
-  if (!resend) {
+  if (!process.env.RESEND_API_KEY?.trim()) {
     await reportOperationalIssue("warn", "sendCustomerBookingPaymentProcessingEmail", "RESEND_API_KEY not set", {
       reference: input.paymentReference,
     });
     return { sent: false, error: "Email not configured" };
   }
-  const greet = (to.split("@")[0]?.replace(/[.+_]/g, " ").trim() || "there").slice(0, 120);
-  const html = `
+
+  const greet = customerNameFromEmail(to);
+  return sendCustomerEmailWithDbTemplateFallback({
+    to,
+    templateKey: "booking_payment_processing",
+    data: buildPaymentProcessingTemplateData(input),
+    bookingId: null,
+    logEventType: BOOKING_PAYMENT_PROCESSING_EVENT,
+    buildLegacy: () => ({
+      subject: "We're finalising your booking",
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
-  <p>We’ve received your payment and are finalising your booking. You’ll receive a confirmation email shortly.</p>
+  <p>We&apos;ve received your payment and are finalising your booking. You&apos;ll receive a confirmation email shortly.</p>
   <p style="font-size:12px;color:#6b7280;">Reference: <span style="font-family:monospace;">${escapeHtml(input.paymentReference)}</span></p>
-</div>`;
-  const from = getDefaultFromAddress();
-  const subject = "We’re finalising your booking";
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to,
-      subject,
-      html,
-    });
-    if (error) {
-      await reportOperationalIssue("error", "sendCustomerBookingPaymentProcessingEmail", error.message, {
-        reference: input.paymentReference,
-      });
-      await writeNotificationLog({
-        booking_id: null,
-        channel: "email",
-        template_key: "booking_payment_processing",
-        recipient: to,
-        status: "failed",
-        error: error.message,
-        provider: "resend",
-        role: "customer",
-        event_type: BOOKING_PAYMENT_PROCESSING_EVENT,
-        payload: { payment_reference: input.paymentReference },
-      });
-      return { sent: false, error: error.message };
-    }
-    await writeNotificationLog({
-      booking_id: null,
-      channel: "email",
-      template_key: "booking_payment_processing",
-      recipient: to,
-      status: "sent",
-      error: null,
-      provider: "resend",
-      role: "customer",
-      event_type: BOOKING_PAYMENT_PROCESSING_EVENT,
-      payload: { payment_reference: input.paymentReference },
-    });
-    return { sent: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await reportOperationalIssue("error", "sendCustomerBookingPaymentProcessingEmail", msg, {
-      reference: input.paymentReference,
-    });
-    return { sent: false, error: msg };
-  }
+</div>`,
+    }),
+    legacyPayload: { payment_reference: input.paymentReference },
+  });
 }
 
 export async function sendBookingConfirmationEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
@@ -612,6 +580,57 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
       : input.paymentUrl;
 
   const shortCopy = input.emailCopyVariant === "variant_a";
+
+  const buildControlLegacy = () => ({
+    subject: `Complete payment — ${input.serviceLabel}`,
+    html: `
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
+  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+  <h1 style="font-size: 22px; margin: 0 0 12px;">Complete your booking payment</h1>
+  <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
+  <p style="color:#374151;">Your cleaning visit is reserved. Pay securely below to confirm.</p>
+  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin: 18px 0;">
+    <p><strong>Service:</strong> ${escapeHtml(input.serviceLabel)}</p>
+    <p><strong>Date:</strong> ${escapeHtml(input.dateLabel)}</p>
+    <p><strong>Time:</strong> ${escapeHtml(input.timeLabel)}</p>
+    ${amountBlock}
+    <p style="font-size:12px;color:#6b7280;margin-top:12px;">
+      Booking: <span style="font-family:monospace;">${escapeHtml(input.bookingId)}</span><br/>
+      Reference: <span style="font-family:monospace;">${escapeHtml(input.paystackReference)}</span>
+    </p>
+  </div>
+  <p style="margin: 24px 0;">
+    <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
+  </p>
+  <p style="font-size:12px;color:#6b7280;">If the button does not work, copy this link into your browser:<br/>
+  <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(input.paymentUrl)}</span></p>
+</div>`,
+  });
+
+  if (!shortCopy) {
+    const dbResult = await sendCustomerEmailWithDbTemplateFallback({
+      to,
+      templateKey: "payment_link",
+      data: {
+        ...buildPaymentLinkTemplateData(input),
+        payment_url: trustPayPageHref,
+      },
+      bookingId: bid,
+      logEventType: PAYMENT_LINK_EMAIL_EVENT,
+      buildLegacy: buildControlLegacy,
+      legacyPayload: { paystack_reference: input.paystackReference, email_copy_variant: "control" },
+    });
+    if (dbResult.sent) {
+      await logSystemEvent({
+        level: "info",
+        source: "email",
+        message: "Payment link email sent",
+        context: { reference: input.paystackReference, to, bookingId: input.bookingId },
+      });
+    }
+    return dbResult;
+  }
+
   const html = shortCopy
     ? `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
@@ -762,10 +781,17 @@ export async function sendAdminNewBookingEmail(payload: BookingEmailPayload): Pr
 export async function sendCustomerBookingAssignedEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
-  if (!resend) return { sent: false, error: "Email not configured" };
-  const from = getDefaultFromAddress();
-  const html = `
+  if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
+  const bookingId = payload.bookingId?.trim() || null;
+  return sendCustomerEmailWithDbTemplateFallback({
+    to: payload.customerEmail,
+    templateKey: "booking_assigned",
+    data: buildBookingAssignedTemplateData(payload),
+    bookingId,
+    logEventType: "booking_assigned",
+    buildLegacy: () => ({
+      subject: `Cleaner assigned — ${payload.serviceLabel}`,
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <h1 style="font-size: 20px;">Cleaner assigned</h1>
@@ -781,29 +807,18 @@ export async function sendCustomerBookingAssignedEmail(payload: BookingEmailPayl
       Payment ref: <span style="font-family:monospace;">${escapeHtml(payload.paymentReference)}</span>
     </p>
   </div>
-</div>`;
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: payload.customerEmail,
-      subject: `Cleaner assigned — ${payload.serviceLabel}`,
-      html,
-    });
-    if (error) return { sent: false, error: error.message };
-    return { sent: true };
-  } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
-  }
+</div>`,
+    }),
+  });
 }
 
 export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
-  if (!resend) return { sent: false, error: "Email not configured" };
-  const from = getDefaultFromAddress();
+  if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
+  const bookingId = payload.bookingId?.trim() || null;
+  const bid = bookingId || payload.paymentReference;
   const appUrl = getPublicAppUrlBase();
-  const bid = payload.bookingId?.trim() || payload.paymentReference;
   const reviewUrl = `${appUrl}/review?booking=${encodeURIComponent(bid)}`;
   const googleReviewUrl = getGoogleReviewWriteUrl();
   const googleBlock =
@@ -812,7 +827,15 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
   <p>If you have a moment, please leave us a quick Google review — it helps other households choose trusted cleaning:</p>
   <p><a href="${escapeAttr(googleReviewUrl)}" style="display:inline-block;margin-top:8px;padding:12px 18px;background:#0f766e;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">Leave a Google review</a></p>`
       : "";
-  const html = `
+  return sendCustomerEmailWithDbTemplateFallback({
+    to: payload.customerEmail,
+    templateKey: "job_completed",
+    data: buildJobCompletedTemplateData(payload),
+    bookingId,
+    logEventType: "job_completed",
+    buildLegacy: () => ({
+      subject: `Cleaning complete — ${payload.serviceLabel}`,
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <h1 style="font-size: 20px;">Cleaning complete</h1>
@@ -823,19 +846,9 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
   </p>
   ${googleBlock}
   <p style="margin-top:16px;"><a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;font-weight:600;">Rate this visit in Shalean</a> <span style="color:#6b7280;font-weight:400;">(optional feedback)</span></p>
-</div>`;
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: payload.customerEmail,
-      subject: `Cleaning complete — ${payload.serviceLabel}`,
-      html,
-    });
-    if (error) return { sent: false, error: error.message };
-    return { sent: true };
-  } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
-  }
+</div>`,
+    }),
+  });
 }
 
 /** Gentle nudge when checkout was started but payment not completed (cron). */
@@ -889,14 +902,11 @@ export async function sendSavedQuoteRecoveryEmail(params: {
 }): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
   const to = normalizeEmail(params.customerEmail.trim());
   if (!to) return { sent: false, error: "Invalid email" };
-  if (!resend) return { sent: false, error: "Email not configured" };
+  if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
 
-  const from = getDefaultFromAddress();
-  const name =
-    (params.firstName?.trim() || to.split("@")[0]?.replace(/[.+_]/g, " ").trim() || "there").slice(0, 120);
+  const name = customerNameFromEmail(to, params.firstName);
   const quoteLine = params.quoteLabel?.trim()
     ? `<p style="margin:12px 0 0;color:#374151;"><strong>Saved quote:</strong> ${escapeHtml(params.quoteLabel.trim())}</p>`
     : "";
@@ -904,7 +914,15 @@ export async function sendSavedQuoteRecoveryEmail(params: {
     ? `<p style="margin-top:14px;"><a href="${escapeAttr(params.whatsappUrl.trim())}" style="color:#047857;font-weight:600;text-decoration:none;">Continue over WhatsApp</a></p>`
     : "";
 
-  const html = `
+  return sendCustomerEmailWithDbTemplateFallback({
+    to,
+    templateKey: "booking_recovery_saved_quote",
+    data: buildSavedQuoteRecoveryTemplateData(params),
+    bookingId: null,
+    logEventType: "booking_recovery_saved",
+    buildLegacy: () => ({
+      subject: `Your Shalean quote is saved — ${params.serviceLabel}`,
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <p>Hi ${escapeHtml(name)},</p>
@@ -914,48 +932,10 @@ export async function sendSavedQuoteRecoveryEmail(params: {
   <p style="margin:24px 0 10px;"><a href="${escapeAttr(params.continueUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Continue your booking</a></p>
   ${whatsappBlock}
   <p style="font-size:12px;color:#6b7280;">No payment has been taken. Prices and available times can change until you confirm.</p>
-</div>`;
-
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to,
-      subject: `Your Shalean quote is saved — ${params.serviceLabel}`,
-      html,
-    });
-    if (error) {
-      await writeNotificationLog({
-        booking_id: null,
-        channel: "email",
-        template_key: "booking_recovery_saved_quote",
-        recipient: to,
-        status: "failed",
-        error: error.message,
-        provider: "resend",
-        role: "customer",
-        event_type: "booking_recovery_saved",
-        payload: { service_label: params.serviceLabel },
-      });
-      return { sent: false, error: error.message };
-    }
-    await writeNotificationLog({
-      booking_id: null,
-      channel: "email",
-      template_key: "booking_recovery_saved_quote",
-      recipient: to,
-      status: "sent",
-      error: null,
-      provider: "resend",
-      role: "customer",
-      event_type: "booking_recovery_saved",
-      payload: { service_label: params.serviceLabel },
-    });
-    return { sent: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await reportOperationalIssue("error", "sendSavedQuoteRecoveryEmail", msg, { to });
-    return { sent: false, error: msg };
-  }
+</div>`,
+    }),
+    legacyPayload: { service_label: params.serviceLabel },
+  });
 }
 
 export async function sendCustomerBookingCancelledEmail(params: {
@@ -968,16 +948,24 @@ export async function sendCustomerBookingCancelledEmail(params: {
 }): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
-  if (!resend) return { sent: false, error: "Email not configured" };
-  const from = getDefaultFromAddress();
+  if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
   const name =
     params.customerName?.trim() ||
     (params.customerEmail.includes("@") ? params.customerEmail.split("@")[0]?.replace(/[.+_]/g, " ").trim() : "") ||
     "there";
   const appUrl = getPublicAppUrlBase();
   const bookUrl = `${appUrl}/book`;
-  const html = `
+
+  return sendCustomerEmailWithDbTemplateFallback({
+    to: params.customerEmail,
+    templateKey: "booking_cancelled",
+    data: buildBookingCancelledTemplateData(params),
+    bookingId: params.bookingId,
+    logEventType: "booking_cancelled",
+    legacyTemplateKey: "customer_booking_cancelled",
+    buildLegacy: () => ({
+      subject: `Booking cancelled — ${params.serviceLabel}`,
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <h1 style="font-size: 22px; margin: 0 0 12px;">Your booking has been cancelled</h1>
@@ -996,45 +984,10 @@ export async function sendCustomerBookingCancelledEmail(params: {
     <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">Booking ID: <span style="font-family:monospace;">${escapeHtml(params.bookingId)}</span></p>
-</div>`;
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: params.customerEmail,
-      subject: `Booking cancelled — ${params.serviceLabel}`,
-      html,
-    });
-    if (error) {
-      await writeNotificationLog({
-        booking_id: params.bookingId,
-        channel: "email",
-        template_key: "customer_booking_cancelled",
-        recipient: params.customerEmail,
-        status: "failed",
-        error: error.message.slice(0, 500),
-        provider: "resend",
-        role: "customer",
-        event_type: "booking_cancelled",
-        payload: { step: "customer_booking_cancelled" },
-      });
-      return { sent: false, error: error.message };
-    }
-    await writeNotificationLog({
-      booking_id: params.bookingId,
-      channel: "email",
-      template_key: "customer_booking_cancelled",
-      recipient: params.customerEmail,
-      status: "sent",
-      provider: "resend",
-      role: "customer",
-      event_type: "booking_cancelled",
-      payload: { step: "customer_booking_cancelled" },
-    });
-    return { sent: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { sent: false, error: msg };
-  }
+</div>`,
+    }),
+    legacyPayload: { step: "customer_booking_cancelled" },
+  });
 }
 
 export async function sendAdminBookingCancelledEmail(params: {
@@ -1057,7 +1010,7 @@ ${reasonBlock}
 <div style="font-family:system-ui,sans-serif;font-size:14px;color:#111">
   <p><strong>Booking ID:</strong> <code>${escapeHtml(params.bookingId)}</code></p>
   <p><strong>Service:</strong> ${escapeHtml(params.serviceLabel)}</p>
-  <p><strong>Date / time:</strong> ${escapeHtml(params.dateLabel)} ${escapeHtml(params.timeLabel)}</p>
+  <p><strong>Date / time:</strong> ${escapeHtml(formatAdminDateTimeLine(params.dateLabel, params.timeLabel))}</p>
   <p><strong>Address:</strong> ${escapeHtml(params.location || "—")}</p>
   ${params.customerEmail ? `<p><strong>Customer email:</strong> ${escapeHtml(params.customerEmail)}</p>` : ""}
   ${params.paystackReference ? `<p><strong>Payment ref:</strong> <code>${escapeHtml(params.paystackReference)}</code></p>` : ""}
@@ -1089,10 +1042,17 @@ export async function sendCustomerRescheduledEmail(params: {
 }): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
-  if (!resend) return { sent: false, error: "Email not configured" };
-  const from = getDefaultFromAddress();
-  const html = `
+  if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
+
+  return sendCustomerEmailWithDbTemplateFallback({
+    to: params.customerEmail,
+    templateKey: "booking_rescheduled",
+    data: buildBookingRescheduledTemplateData(params),
+    bookingId: params.bookingId,
+    logEventType: "booking_rescheduled",
+    buildLegacy: () => ({
+      subject: `Updated schedule — ${params.serviceLabel}`,
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <h1 style="font-size: 20px;">Booking rescheduled</h1>
@@ -1102,19 +1062,9 @@ export async function sendCustomerRescheduledEmail(params: {
     <p><strong>New:</strong> ${escapeHtml(params.newDate)} ${escapeHtml(params.newTime)}</p>
     <p style="font-size:12px;color:#6b7280;">Booking ID: <span style="font-family:monospace;">${escapeHtml(params.bookingId)}</span></p>
   </div>
-</div>`;
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: params.customerEmail,
-      subject: `Updated schedule — ${params.serviceLabel}`,
-      html,
-    });
-    if (error) return { sent: false, error: error.message };
-    return { sent: true };
-  } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
-  }
+</div>`,
+    }),
+  });
 }
 
 export async function sendCustomerTwoHourReminderEmail(params: {
@@ -1127,12 +1077,19 @@ export async function sendCustomerTwoHourReminderEmail(params: {
 }): Promise<{ sent: boolean; error?: string }> {
   const paused = await pausedCustomerEmailResult();
   if (paused) return paused;
-  const resend = getResend();
-  if (!resend) return { sent: false, error: "Email not configured" };
-  const from = getDefaultFromAddress();
+  if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
   const appUrl = getPublicAppUrlBase();
   const dashUrl = `${appUrl}/dashboard/bookings`;
-  const html = `
+
+  return sendCustomerEmailWithDbTemplateFallback({
+    to: params.customerEmail,
+    templateKey: "reminder_2h",
+    data: buildReminder2hTemplateData(params),
+    bookingId: params.bookingId,
+    logEventType: "reminder_2h",
+    buildLegacy: () => ({
+      subject: `Reminder: ${params.serviceLabel} soon`,
+      html: `
 <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
   <h2>Shalean<span style="color:#2563eb;">.</span></h2>
   <h1 style="font-size: 20px;">Reminder: cleaning soon</h1>
@@ -1143,19 +1100,9 @@ export async function sendCustomerTwoHourReminderEmail(params: {
     <p style="font-size:12px;color:#6b7280;">Booking ID: <span style="font-family:monospace;">${escapeHtml(params.bookingId)}</span></p>
   </div>
   <p><a href="${escapeAttr(dashUrl)}" style="color:#2563eb;font-weight:600;">Open dashboard</a></p>
-</div>`;
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: params.customerEmail,
-      subject: `Reminder: ${params.serviceLabel} soon`,
-      html,
-    });
-    if (error) return { sent: false, error: error.message };
-    return { sent: true };
-  } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
-  }
+</div>`,
+    }),
+  });
 }
 
 export function buildBookingEmailPayload(params: {
@@ -1170,6 +1117,8 @@ export function buildBookingEmailPayload(params: {
   fallbackReason?: string | null;
   /** Booking row fields when snapshot is sparse (payment_confirmed). */
   bookingRow?: BookingEmailRowOverlay | null;
+  /** Persisted `bookings.booking_snapshot` when Paystack charge metadata is sparse. */
+  persistedSnapshot?: unknown;
   /** Assigned cleaner display name when known. */
   assignedCleanerName?: string | null;
 }): BookingEmailPayload {
@@ -1183,6 +1132,7 @@ export function buildBookingEmailPayload(params: {
   const fields = resolveBookingEmailFields({
     snapshot: params.snapshot,
     bookingRow: params.bookingRow,
+    persistedSnapshot: params.persistedSnapshot,
     cleanerName: params.assignedCleanerName ?? params.snapshot?.cleaner_name ?? null,
   });
 

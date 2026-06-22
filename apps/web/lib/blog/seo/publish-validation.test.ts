@@ -14,7 +14,7 @@ describe("validateBlogPublish governance warnings", () => {
       content([
         {
           type: "paragraph",
-          content: "See [prices](https://shalean.co.za/cleaning-prices-cape-town) for bands.",
+          content: "See [prices](https://shalean.co.za/services) for bands.",
         },
       ]),
       { tags: ["cluster-2"] },
@@ -27,7 +27,7 @@ describe("validateBlogPublish governance warnings", () => {
       content([
         {
           type: "paragraph",
-          content: "See [prices](https://shalean.co.za/cleaning-prices-cape-town).",
+          content: "See [prices](https://shalean.co.za/services).",
         },
       ]),
       { tags: ["pricing"] },
@@ -48,7 +48,7 @@ describe("validateBlogPublish governance warnings", () => {
       content([
         {
           type: "paragraph",
-          content: "Link to /cleaning-prices-cape-town here.",
+          content: "Link to /services here.",
         },
       ]),
       { semanticCluster: "booking-confidence" },

@@ -20,9 +20,16 @@ import {
   type CapeTownSeoServiceSlug,
 } from "@/lib/seo/capeTownSeoPages";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { buildPrimaryLocalBusinessMoneyPageNode } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { generateCtrTitle } from "@/lib/seo/metaTitle";
 import { leadPriceForServiceSlug } from "@/lib/seo/serviceTitleLeadPrice";
+import {
+  HOME_OG_IMAGE,
+  HOME_OG_IMAGE_ALT,
+  HOME_OG_IMAGE_HEIGHT,
+  HOME_OG_IMAGE_WIDTH,
+} from "@/lib/seo/homePageMeta";
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import {
@@ -54,7 +61,6 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "airbnb-cleaning-cape-town",
   "office-cleaning-cape-town",
   "carpet-cleaning-cape-town",
-  "window-cleaning-cape-town",
 ];
 
 const title = generateCtrTitle({
@@ -117,6 +123,7 @@ const hubPageJsonLd = {
         acceptedAnswer: { "@type": "Answer", text: item.a },
       })),
     },
+    buildPrimaryLocalBusinessMoneyPageNode(),
   ],
 };
 
@@ -124,19 +131,28 @@ export const metadata: Metadata = {
   title,
   description,
   robots: SEO_INDEX_FOLLOW,
-  alternates: { canonical: PAGE_URL },
+  alternates: { canonical: PAGE_URL, languages: { "en-ZA": PAGE_URL } },
   openGraph: {
     type: "website",
     url: PAGE_URL,
+    locale: "en_ZA",
+    siteName: "Shalean Cleaning Services",
     title,
     description,
-    images: [{ url: "/images/marketing/standard-cleaning-cape-town-kitchen.webp", alt: "Professional cleaning in Cape Town" }],
+    images: [
+      {
+        url: HOME_OG_IMAGE,
+        width: HOME_OG_IMAGE_WIDTH,
+        height: HOME_OG_IMAGE_HEIGHT,
+        alt: HOME_OG_IMAGE_ALT,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title,
     description,
-    images: ["/images/marketing/standard-cleaning-cape-town-kitchen.webp"],
+    images: [HOME_OG_IMAGE],
   },
 };
 

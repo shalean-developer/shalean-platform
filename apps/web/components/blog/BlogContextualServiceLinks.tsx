@@ -1,6 +1,5 @@
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { BLOG_CONTEXT_SERVICE_LINKS } from "@/lib/blog/blogServiceContextLinks";
-import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 
 const proseArticle =
   "prose prose-zinc max-w-3xl prose-headings:scroll-mt-24 prose-a:text-slate-700 prose-a:no-underline prose-a:transition-colors prose-a:duration-200 hover:prose-a:text-blue-600 hover:prose-a:underline prose-a:underline-offset-4";
@@ -25,10 +24,8 @@ export function BlogContextualServiceLinks({ embedded = false }: Props) {
         <SafeInternalLink href={standard.href}>{standard.anchor}</SafeInternalLink> and add{" "}
         <SafeInternalLink href={deep.href}>{deep.anchor}</SafeInternalLink> when kitchens, bathrooms, or high-use areas need extra attention.
         Hosts often combine <SafeInternalLink href={airbnb.href}>Airbnb cleaning</SafeInternalLink> with occasional{" "}
-        <SafeInternalLink href={deep.href}>deep cleans</SafeInternalLink> between peak bookings. For suburb-level access
-        and parking notes, pair guides with the{" "}
-        <SafeInternalLink href={CAPE_TOWN_LOCATIONS_OVERVIEW_PATH}>Cape Town cleaning services hub</SafeInternalLink> and{" "}
-        <SafeInternalLink href="/locations">all location hubs</SafeInternalLink>.
+        <SafeInternalLink href={deep.href}>deep cleans</SafeInternalLink> between peak bookings. When you are ready,{" "}
+        <SafeInternalLink href="/book">book online</SafeInternalLink> and add your suburb at checkout.
       </p>
     </div>
   );
