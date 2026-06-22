@@ -9,7 +9,7 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { cn } from "@/lib/utils";
 import { SiteTopBar } from "@/components/nav/SiteTopBar";
-import { isAuthShellRoute } from "@/lib/auth/authShellRoutes";
+import { shouldHideGlobalTopNav } from "@/lib/marketing/globalTopNavVisibility";
 import { MARKETING_HEADER_SERVICE_LINKS } from "@/lib/marketing/marketingHomeHeaderNav";
 
 const bookingHref = "/book";
@@ -51,29 +51,8 @@ export function GlobalTopNav() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [servicesOpen]);
 
-  /** Booking / admin / dashboard / cleaner / auth pages each own their header. */
-  const hideMarketingNav =
-    isAuthShellRoute(pathname) ||
-    pathname === "/" ||
-    pathname === "/about" ||
-    pathname === "/faq" ||
-    pathname === "/reviews" ||
-    pathname.startsWith("/admin") ||
-    pathname === "/book" ||
-    pathname.startsWith("/book/") ||
-    pathname === "/booking" ||
-    pathname.startsWith("/booking/") ||
-    pathname === "/dashboard" ||
-    pathname.startsWith("/dashboard/") ||
-    pathname.startsWith("/cleaner") ||
-    pathname === "/account" ||
-    pathname.startsWith("/account/") ||
-    pathname === "/jobs" ||
-    pathname.startsWith("/jobs/") ||
-    pathname === "/office" ||
-    pathname.startsWith("/office/");
-
-  if (hideMarketingNav) return null;
+  /** Booking / admin / dashboard / cleaner / auth / MarketingHomeHeader pages each own their header. */
+  if (shouldHideGlobalTopNav(pathname)) return null;
 
   return (
     <header className="sticky top-0 z-50">
