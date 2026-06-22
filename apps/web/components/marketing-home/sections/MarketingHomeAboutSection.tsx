@@ -1,4 +1,5 @@
 import { Star, Quote } from "lucide-react";
+import { googleReviewsCountPlusDisplay } from "@/lib/seo/googleReviews";
 
 export function MarketingHomeAboutSection() {
   return (
@@ -56,10 +57,10 @@ export function MarketingHomeAboutSection() {
               ))}
             </div>
             <div className="mt-4">
-              <p className="text-3xl font-extrabold tracking-tight text-slate-900">100+</p>
+              <p className="text-3xl font-extrabold tracking-tight text-slate-900">{googleReviewsCountPlusDisplay()}</p>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              5-star reviews from happy customers.
+              Google reviews from happy customers.
             </p>
           </div>
         </div>

@@ -56,3 +56,25 @@ export function googleReviewsShortTrustLine(): string {
 export function googleReviewsServiceTrustLine(): string {
   return `Trusted across Cape Town — ${GOOGLE_BUSINESS_REVIEWS.rating}★ on Google (${GOOGLE_BUSINESS_REVIEWS.count} reviews)`;
 }
+
+/** Hero subline — must align with JSON-LD `aggregateRating.reviewCount`. */
+export function googleReviewsBasedOnCountLine(): string {
+  return `Based on ${GOOGLE_BUSINESS_REVIEWS.count}+ Google reviews`;
+}
+
+/** Booking funnel, checkout, and compact trust rows. */
+export function googleReviewsBookingSocialProofLine(): string {
+  return `${GOOGLE_BUSINESS_REVIEWS.rating}★ from ${GOOGLE_BUSINESS_REVIEWS.count} Google reviews`;
+}
+
+export function googleReviewsTrustBarTitle(): string {
+  return `${GOOGLE_BUSINESS_REVIEWS.rating} Google rating`;
+}
+
+export function googleReviewsTrustBarSubtitle(): string {
+  return `${GOOGLE_BUSINESS_REVIEWS.count} reviews`;
+}
+
+export function googleReviewsCountPlusDisplay(): string {
+  return `${GOOGLE_BUSINESS_REVIEWS.count}+`;
+}

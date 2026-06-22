@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ShieldCheck, ThumbsUp, MousePointerClick, Star, Users } from "lucide-react";
-import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
-import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
+import { GET_FREE_QUOTE_HREF, getFreeQuoteButtonClass } from "@/lib/marketing/getFreeQuote";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { googleReviewsBasedOnCountLine } from "@/lib/seo/googleReviews";
 import { HOME_PAGE_HEADLINE } from "@/lib/seo/homePageMeta";
 
 const HERO_MAIN = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
@@ -58,17 +58,23 @@ export function MarketingHomeHeroSection() {
             </Link>
           </p>
 
-          {/* CTAs */}
+          {/* CTAs — plain links keep this section free of client JS for faster LCP */}
           <div className="flex flex-wrap items-center gap-3">
-            <GrowthCtaLink
+            <Link
               href={bookHref}
-              source="marketing_hero_book_cleaning"
+              data-growth-cta-source="marketing_hero_book_cleaning"
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
               Book a cleaning
               <span aria-hidden className="ml-0.5">→</span>
-            </GrowthCtaLink>
-            <GetFreeQuoteLink source="marketing_hero" variant="outline" />
+            </Link>
+            <Link
+              href={GET_FREE_QUOTE_HREF}
+              data-quote-cta-source="marketing_hero"
+              className={getFreeQuoteButtonClass.outline}
+            >
+              Get Free Quote
+            </Link>
           </div>
 
           {/* Google rating row */}
@@ -104,7 +110,7 @@ export function MarketingHomeHeroSection() {
               ))}
             </div>
             <span className="text-sm font-semibold text-slate-800">{avg}</span>
-            <span className="text-sm text-slate-500">Based on 120+ reviews</span>
+            <span className="text-sm text-slate-500">{googleReviewsBasedOnCountLine()}</span>
           </div>
         </div>
 

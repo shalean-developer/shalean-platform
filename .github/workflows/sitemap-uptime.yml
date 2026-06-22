@@ -1,0 +1,25 @@
+name: sitemap-uptime
+
+on:
+  schedule:
+    # Every 6 hours — alerts via GitHub workflow failure notifications
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Sitemap uptime (production)
+        run: npm run check:sitemap-uptime

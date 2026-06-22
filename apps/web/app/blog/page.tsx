@@ -21,7 +21,7 @@ import { getAllPublishedPosts } from "@/lib/blog/get-all-posts";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
-import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { SEO_INDEX_FOLLOW, SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
 import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
 const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
@@ -70,7 +70,7 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
   return {
     title,
     description,
-    robots: SEO_INDEX_FOLLOW,
+    robots: topic === "all" ? SEO_INDEX_FOLLOW : SEO_NOINDEX_FOLLOW,
     alternates: { canonical: CANONICAL_ABS },
     openGraph: {
       type: "website",

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { googleReviewsCountPlusDisplay } from "@/lib/seo/googleReviews";
 import {
   Banknote,
   CalendarClock,
@@ -22,7 +23,7 @@ export const CLEANER_APPLY_WHY_JOIN: ReadonlyArray<{ Icon: LucideIcon; text: str
 export const CLEANER_APPLY_STATS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "Since 2022", label: "Serving Cape Town homes" },
   { value: "4,500+", label: "Cleans completed" },
-  { value: "100+", label: "5-star customer reviews" },
+  { value: googleReviewsCountPlusDisplay(), label: "Google customer reviews" },
 ];
 
 export const CLEANER_APPLY_WORK_TYPES: ReadonlyArray<{

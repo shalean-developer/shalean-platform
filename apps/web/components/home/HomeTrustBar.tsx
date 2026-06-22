@@ -1,8 +1,12 @@
 import { CreditCard, ShieldCheck, Star, Zap } from "lucide-react";
+import {
+  GOOGLE_BUSINESS_REVIEWS,
+  googleReviewsTrustBarSubtitle,
+} from "@/lib/seo/googleReviews";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { icon: Star, label: "4.8 ★ Google reviews", sub: "129 reviews" },
+  { icon: Star, label: `${GOOGLE_BUSINESS_REVIEWS.rating} ★ Google reviews`, sub: googleReviewsTrustBarSubtitle() },
   { icon: ShieldCheck, label: "Vetted Cleaners", sub: "Background-checked teams" },
   { icon: CreditCard, label: "Secure Payments", sub: "Pay safely online" },
   { icon: Zap, label: "Same-Day Available", sub: "When slots open up" },

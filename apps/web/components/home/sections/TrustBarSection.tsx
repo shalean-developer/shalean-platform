@@ -1,7 +1,11 @@
 import { ShieldCheck, Sparkles, Star, Users } from "lucide-react";
+import {
+  googleReviewsTrustBarSubtitle,
+  googleReviewsTrustBarTitle,
+} from "@/lib/seo/googleReviews";
 
 const items = [
-  { icon: Star, title: "4.8 Google rating", subtitle: "129 reviews" },
+  { icon: Star, title: googleReviewsTrustBarTitle(), subtitle: googleReviewsTrustBarSubtitle() },
   { icon: Users, title: "Trusted Cape Town homes", subtitle: "Southern Suburbs to CBD" },
   { icon: ShieldCheck, title: "Vetted cleaners", subtitle: "ID & reference checked" },
   { icon: Sparkles, title: "Satisfaction guarantee", subtitle: "Support if something is missed" },

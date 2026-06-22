@@ -1,4 +1,5 @@
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 export const HOME_OG_IMAGE = "/images/marketing/cape-town-house-cleaning-kitchen-og.webp";
@@ -12,7 +13,8 @@ export const HOME_OG_IMAGE_ALT = "Professional cleaning services in Cape Town";
 /** Primary keyword phrase — shared by `<title>`, `<h1>`, and JSON-LD WebPage name. */
 export const HOME_PAGE_HEADLINE = "Cleaning Services Cape Town from R250";
 
-export const HOME_PAGE_TITLE = `${HOME_PAGE_HEADLINE} | Same-Day Booking | Shalean`;
+/** SERP `<title>` — shorter than legacy; H1 + JSON-LD keep `HOME_PAGE_HEADLINE`. */
+export const HOME_PAGE_TITLE = clipSerpTitle(`${HOME_PAGE_HEADLINE} | Shalean`);
 
 export const HOME_PAGE_META_DESCRIPTION = clampMetaDescription(
   "Book trusted cleaning services in Cape Town. Affordable prices, same-day availability when routing allows, and vetted cleaners. Get a quote in under a minute.",

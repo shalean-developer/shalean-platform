@@ -10,6 +10,8 @@
     "validate:blog-routes": "tsx scripts/validate-blog-routes.ts",
     "audit:internal-links": "tsx scripts/audit-internal-links.ts",
     "validate:live-seo": "tsx scripts/validate-live-seo.ts",
+    "check:sitemap-uptime": "tsx scripts/check-sitemap-uptime.ts",
+    "audit:gsc-cannibalization": "tsx scripts/gsc-cannibalization-audit.ts",
     "report:blog-seo-governance": "tsx scripts/blog-seo-governance-report.ts",
     "report:canonical-purity": "tsx scripts/calculate-canonical-purity.ts",
     "export:blog-route-graph": "tsx scripts/export-blog-route-graph.ts",

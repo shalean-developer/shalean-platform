@@ -4,7 +4,7 @@ import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeDbSections } from "@/components/marketing-home/MarketingHomeDbSections";
 import { MarketingHomeDbSectionsFallback } from "@/components/marketing-home/MarketingHomeDbSectionsFallback";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
-import { MarketingHomeStickyCta } from "@/components/marketing-home/MarketingHomeStickyCta";
+import { MarketingHomeStickyCtaClient } from "@/components/marketing-home/MarketingHomeStickyCtaClient";
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -43,7 +43,7 @@ export default function MarketingHomePage() {
       </main>
       <FooterSection stackFloats />
       <MarketingStickyTrustBadge />
-      <MarketingHomeStickyCta />
+      <MarketingHomeStickyCtaClient />
     </div>
   );
 }

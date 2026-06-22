@@ -1,6 +1,13 @@
 /**
  * Conversion-focused booking microcopy (static — safe to import anywhere).
  */
+import {
+  GOOGLE_BUSINESS_REVIEWS,
+  googleReviewsBookingSocialProofLine,
+} from "@/lib/seo/googleReviews";
+
+const checkoutGoogleTrustLine = `⭐ ${GOOGLE_BUSINESS_REVIEWS.rating}★ average on Google (${GOOGLE_BUSINESS_REVIEWS.count} reviews)`;
+
 export const bookingCopy = {
   entry: {
     title: "Book a trusted home cleaner in Cape Town",
@@ -19,7 +26,7 @@ export const bookingCopy = {
     addressLabel: "Your address",
     propertyLabel: "Home type",
     propertyHint: "Pick the option that best matches your home.",
-    socialProof: "4.8★ from 129 Google reviews",
+    socialProof: googleReviewsBookingSocialProofLine(),
     /** Shown when service-locations loaded OK but every area has zero active cleaners (all busy / none rostered). */
     emptyServiceAreaCoverage:
       "No cleaners available in your area right now. Try a nearby suburb or check back later.",
@@ -47,7 +54,7 @@ export const bookingCopy = {
     cta: "Continue",
     earlyTrust: "⭐ Trusted by homeowners across Cape Town",
     /** Mid-flow social proof after service selection. */
-    midFlowSocialProof: "4.8★ from 129 Google reviews",
+    midFlowSocialProof: googleReviewsBookingSocialProofLine(),
     notesHeading: "Anything else we should know?",
     notesPlaceholder: "Access codes, pets, focus areas… (optional)",
   },
@@ -228,7 +235,7 @@ export const bookingCopy = {
       "This booking is locked for checkout. Complete payment below to confirm your visit.",
     title: "Review & Pay",
     trust: [
-      "⭐ 4.8★ average on Google (129 reviews)",
+      checkoutGoogleTrustLine,
       "🛡️ Not happy? We’ll come back and re-clean for free",
       "👩‍🔧 Experienced, background-checked cleaners",
       "🔒 Secure payment powered by Paystack",

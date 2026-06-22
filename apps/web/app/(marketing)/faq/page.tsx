@@ -12,6 +12,7 @@ import { flattenAllFaqItems } from "@/lib/faq/faq-page-data";
 import { buildFaqPageJsonLd } from "@/lib/faq/faq-jsonld";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -28,20 +29,22 @@ const FAQ_TWITTER_DESC = clampMetaDescription(
   "Pricing, booking, supplies, and trust—quick answers before you lock a quote.",
 );
 
+const FAQ_PAGE_TITLE = clipSerpTitle("Cleaning FAQs Cape Town | Pricing & Booking | Shalean");
+
 export const metadata: Metadata = {
-  title: "Cleaning Service FAQs | Pricing, Booking & Trust | Shalean Cape Town",
+  title: FAQ_PAGE_TITLE,
   description: FAQ_META_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
   openGraph: {
     type: "website",
     url: CANONICAL,
-    title: "Cleaning Service FAQs | Shalean Cape Town",
+    title: FAQ_PAGE_TITLE,
     description: FAQ_OG_DESC,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cleaning Service FAQs | Shalean Cape Town",
+    title: FAQ_PAGE_TITLE,
     description: FAQ_TWITTER_DESC,
   },
 };

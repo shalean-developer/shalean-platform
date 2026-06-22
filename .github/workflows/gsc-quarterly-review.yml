@@ -1,0 +1,32 @@
+name: gsc-quarterly-review
+
+on:
+  schedule:
+    # 09:00 UTC on the 1st of Jan, Apr, Jul, Oct
+    - cron: "0 9 1 1,4,7,10 *"
+  workflow_dispatch:
+
+jobs:
+  cannibalization-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: GSC cannibalization audit
+        run: npm run audit:gsc-cannibalization | tee gsc-cannibalization-report.txt
+      - name: Upload GSC review report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc-cannibalization-report
+          path: apps/web/gsc-cannibalization-report.txt
+          retention-days: 400

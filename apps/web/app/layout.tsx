@@ -1,5 +1,6 @@
 import type { Viewport } from "next";
 import { Suspense } from "react";
+import { DeferredGrowthCtaTracking } from "@/components/analytics/DeferredGrowthCtaTracking";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
 import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvider";
@@ -26,17 +27,17 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} h-full antialiased`}
     >
-      <head>
-        <GoogleAnalytics />
-      </head>
+      <head />
       <body className="min-h-full flex flex-col">
-        <GoogleTagManager />
         <SessionReplayProvider />
         <GlobalTopNav />
         {children}
         <Suspense fallback={null}>
           <ReferralCapture />
         </Suspense>
+        <GoogleAnalytics />
+        <GoogleTagManager />
+        <DeferredGrowthCtaTracking />
       </body>
     </html>
   );
