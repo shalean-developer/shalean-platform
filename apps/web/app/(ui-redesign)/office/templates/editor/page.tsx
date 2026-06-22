@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { buildDefaultTemplatePreviewJson } from "@/lib/admin/templatePreviewDefaults";
 
 type TemplateChannel = "email" | "whatsapp" | "sms";
 
@@ -25,24 +26,6 @@ type TemplateRow = {
   variables: unknown;
   is_active: boolean;
 };
-
-function buildDefaultPreviewJson(): string {
-  const appUrl = getPublicAppUrlBase();
-  return JSON.stringify(
-    {
-      customer_name: "Test Customer",
-      date: "Mon, 1 Dec 2025",
-      time: "09:00",
-      price: "R 299",
-      booking_id: "00000000-0000-4000-8000-000000000001",
-      payment_url: `${appUrl}/pay/00000000-0000-4000-8000-000000000001`,
-      account_url: `${appUrl}/account`,
-      review_url: `${appUrl}/review?booking=00000000-0000-4000-8000-000000000001`,
-    },
-    null,
-    2,
-  );
-}
 
 export default function OfficeTemplatesEditorPage() {
   const searchParams = useSearchParams();
@@ -59,7 +42,7 @@ export default function OfficeTemplatesEditorPage() {
 
   const [previewKey, setPreviewKey] = useState("booking_confirmed");
   const [previewChannel, setPreviewChannel] = useState<TemplateChannel>("email");
-  const [previewJson, setPreviewJson] = useState(buildDefaultPreviewJson);
+  const [previewJson, setPreviewJson] = useState(buildDefaultTemplatePreviewJson);
   const [previewSubject, setPreviewSubject] = useState<string | null>(null);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -172,7 +155,7 @@ export default function OfficeTemplatesEditorPage() {
     setPreviewLoading(false);
   }
 
-  async function runTestSend() {
+  async function runTestSend(recipient?: string) {
     let data: Record<string, unknown>;
     try {
       data = JSON.parse(previewJson) as Record<string, unknown>;
@@ -181,19 +164,20 @@ export default function OfficeTemplatesEditorPage() {
       emitAdminToast("Test JSON must be an object.", "error");
       return;
     }
-    if (!testTo.trim()) {
-      emitAdminToast("Enter a test recipient email.", "error");
+    const to = recipient ?? testTo.trim();
+    if (!to && recipient !== "self") {
+      emitAdminToast("Enter a test recipient email or use Send to me.", "error");
       return;
     }
     setTestSending(true);
-    const res = await adminFetch<{ success?: boolean }>("/api/admin/templates/test-send", {
+    const res = await adminFetch<{ success?: boolean; sent_to?: string }>("/api/admin/templates/test-send", {
       method: "POST",
-      body: JSON.stringify({ key: previewKey, to: testTo.trim(), data }),
+      body: JSON.stringify({ key: previewKey, to: to || "self", data }),
     });
     if (!res.ok) {
       emitAdminToast(res.error ?? "Send failed.", "error");
     } else {
-      emitAdminToast("Test email sent.", "success");
+      emitAdminToast(`Test email sent to ${res.data?.sent_to ?? to ?? "your inbox"}.`, "success");
     }
     setTestSending(false);
   }
@@ -373,6 +357,14 @@ export default function OfficeTemplatesEditorPage() {
               </div>
               <Button type="button" onClick={() => void runTestSend()} disabled={testSending}>
                 {testSending ? "Sending…" : "Send test"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void runTestSend("self")}
+                disabled={testSending}
+              >
+                {testSending ? "Sending…" : "Send to me"}
               </Button>
             </div>
           </div>

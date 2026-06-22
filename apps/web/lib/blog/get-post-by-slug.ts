@@ -384,3 +384,38 @@ export async function getPublishedBlogSlugs(): Promise<string[]> {
   }
   return (data ?? []).map((r) => String((r as { slug: string }).slug)).filter(Boolean);
 }
+
+export type PublishedBlogSitemapRow = { slug: string; lastModified: Date };
+
+/** Slug → `updated_at` (fallback `published_at`) for sitemap freshness signals. */
+export async function getPublishedBlogSitemapRows(): Promise<PublishedBlogSitemapRow[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) return [];
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("slug, published_at, updated_at")
+    .eq("status", "published")
+    .lte("published_at", nowIso)
+    .not("content_json", "is", null);
+
+  if (error) {
+    console.error("[blog] getPublishedBlogSitemapRows", error.message);
+    return [];
+  }
+
+  return (data ?? [])
+    .map((row) => {
+      const slug = String((row as { slug: string }).slug).trim();
+      if (!slug) return null;
+      const updated = (row as { updated_at?: string | null }).updated_at;
+      const published = (row as { published_at?: string | null }).published_at;
+      const iso = updated?.trim() || published?.trim();
+      if (!iso) return null;
+      const ms = Date.parse(iso);
+      if (Number.isNaN(ms)) return null;
+      return { slug, lastModified: new Date(ms) };
+    })
+    .filter((r): r is PublishedBlogSitemapRow => r != null);
+}

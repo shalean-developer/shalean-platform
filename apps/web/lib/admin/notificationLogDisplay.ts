@@ -5,6 +5,7 @@ export type NotificationLogDisplayRow = {
   status: string;
   role?: string | null;
   created_at?: string | null;
+  error?: string | null;
   payload?: Record<string, unknown> | null;
 };
 

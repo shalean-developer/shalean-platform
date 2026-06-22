@@ -10,6 +10,7 @@ import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { cn } from "@/lib/utils";
 import { SiteTopBar } from "@/components/nav/SiteTopBar";
 import { isAuthShellRoute } from "@/lib/auth/authShellRoutes";
+import { MARKETING_HEADER_SERVICE_LINKS } from "@/lib/marketing/marketingHomeHeaderNav";
 
 const bookingHref = "/book";
 
@@ -107,26 +108,25 @@ export function GlobalTopNav() {
                         )}
                       />
                     </button>
-                    {servicesOpen && (
-                      <div className="absolute left-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-blue-100 bg-white py-1.5 shadow-lg">
-                        {[
-                          ["Standard Cleaning", "/services/standard-cleaning"],
-                          ["Deep Cleaning", "/services/deep-cleaning"],
-                          ["Move In / Out Cleaning", "/services/move-in-out-cleaning"],
-                          ["Office Cleaning", "/services/office-cleaning"],
-                          ["All Services", "/services"],
-                        ].map(([item, itemHref]) => (
-                          <Link
-                            key={item}
-                            href={itemHref}
-                            className="block px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
-                            onClick={() => setServicesOpen(false)}
-                          >
-                            {item}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
+                    <div
+                      className={cn(
+                        "absolute left-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-blue-100 bg-white py-1.5 shadow-lg transition-[opacity,visibility] duration-150",
+                        servicesOpen ? "visible opacity-100" : "invisible pointer-events-none opacity-0",
+                      )}
+                      aria-hidden={!servicesOpen}
+                    >
+                      {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
+                        <Link
+                          key={item}
+                          href={itemHref}
+                          className="block px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                          onClick={() => setServicesOpen(false)}
+                          tabIndex={servicesOpen ? 0 : -1}
+                        >
+                          {item}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 );
               }
@@ -176,24 +176,46 @@ export function GlobalTopNav() {
         </div>
       </div>
 
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <div id="mobile-nav" className="border-t border-blue-100 bg-white px-4 py-4 shadow-md lg:hidden">
-          <div className="flex flex-col gap-1">
-            <GetFreeQuoteLink source="nav_mobile_menu" variant="outline" className="mb-2 w-full" />
-            {navLinks.map(({ label, href }) => (
+      {/* Mobile drawer — links stay in HTML when collapsed for crawlers */}
+      <div
+        id="mobile-nav"
+        className={cn(
+          "border-t border-blue-100 bg-white shadow-md lg:hidden",
+          mobileOpen ? "visible px-4 py-4 opacity-100" : "invisible max-h-0 overflow-hidden opacity-0",
+        )}
+        aria-hidden={!mobileOpen}
+      >
+        <div className="flex flex-col gap-1">
+          <GetFreeQuoteLink source="nav_mobile_menu" variant="outline" className="mb-2 w-full" />
+          {navLinks.map(({ label, href, dropdown }) => (
+            <div key={label}>
               <Link
-                key={label}
                 href={href}
-                className="rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                className="block rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700"
                 onClick={() => setMobileOpen(false)}
+                tabIndex={mobileOpen ? 0 : -1}
               >
                 {label}
               </Link>
-            ))}
-          </div>
+              {dropdown ? (
+                <div className="ml-3 border-l border-blue-100 pl-2">
+                  {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
+                    <Link
+                      key={item}
+                      href={itemHref}
+                      className="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => setMobileOpen(false)}
+                      tabIndex={mobileOpen ? 0 : -1}
+                    >
+                      {item}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </header>
   );
 }

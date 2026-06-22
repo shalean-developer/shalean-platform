@@ -36,20 +36,25 @@ export function MarketingHomeServicesDropdown() {
           className={cn("h-4 w-4 transition-transform duration-150", open && "rotate-180")}
         />
       </button>
-      {open ? (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-blue-100 bg-white py-1.5 shadow-lg">
-          {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
-            <Link
-              key={item}
-              href={itemHref}
-              className="block px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
-              onClick={() => setOpen(false)}
-            >
-              {item}
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <div
+        className={cn(
+          "absolute left-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-blue-100 bg-white py-1.5 shadow-lg transition-[opacity,visibility] duration-150",
+          open ? "visible opacity-100" : "invisible pointer-events-none opacity-0",
+        )}
+        aria-hidden={!open}
+      >
+        {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
+          <Link
+            key={item}
+            href={itemHref}
+            className="block px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+            onClick={() => setOpen(false)}
+            tabIndex={open ? 0 : -1}
+          >
+            {item}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

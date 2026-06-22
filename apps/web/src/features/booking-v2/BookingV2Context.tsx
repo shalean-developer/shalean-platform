@@ -21,13 +21,13 @@ import {
   type BookingV2FormData,
   type BookingStep,
 } from "@/src/features/booking-v2/types";
-import { step1Schema, buildStep2Schema } from "@/src/features/booking-v2/schemas";
-import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
+import { coerceYesNoValue } from "@/src/features/booking-v2/components/serviceQuestionYesNo";
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
 
 export type { LiveServiceConfig };
 
@@ -75,6 +75,25 @@ function writeToStorage(data: BookingV2FormData): void {
   } catch {
     /* ignore */
   }
+}
+
+function sanitizeStoredForm(data: Partial<BookingV2FormData>): Partial<BookingV2FormData> {
+  const serviceDetails = { ...(data.serviceDetails ?? {}) };
+  for (const [key, value] of Object.entries(serviceDetails)) {
+    if (value === null) {
+      delete serviceDetails[key];
+    } else if (value === true || value === false) {
+      serviceDetails[key] = value ? "yes" : "no";
+    }
+  }
+
+  return {
+    ...data,
+    serviceDetails,
+    ...(data.equipmentRequired != null
+      ? { equipmentRequired: coerceYesNoValue(data.equipmentRequired) }
+      : {}),
+  };
 }
 
 function clearStorage(): void {
@@ -150,10 +169,11 @@ export function BookingV2Provider({
   // After mount: restore persisted state, then merge marketing URL prefill (legacy /booking links).
   useEffect(() => {
     const saved = readFromStorage(serviceSlug);
+    const sanitized = saved ? sanitizeStoredForm(saved) : null;
     const urlPatch = bookingV2PrefillPatchFromLegacySearchParams(searchParams);
     const merged = {
       ...defaults,
-      ...(saved ?? {}),
+      ...(sanitized ?? {}),
       ...(urlPatch.serviceDetails
         ? {
             serviceDetails: {
@@ -171,7 +191,7 @@ export function BookingV2Provider({
           }
         : {}),
     };
-    if (saved || urlPatch.serviceDetails || urlPatch.suburb || urlPatch.selectedExtras?.length) {
+    if (sanitized || urlPatch.serviceDetails || urlPatch.suburb || urlPatch.selectedExtras?.length) {
       form.reset(merged, { keepDefaultValues: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,16 +234,6 @@ export function BookingV2Provider({
           return false;
         }
 
-        const showEquipment =
-          liveConfig?.showEquipmentQuestion ??
-          liveConfig?.showCleaningProductsQuestion ??
-          serviceShowsEquipmentQuestion(serviceSlug);
-
-        if (showEquipment && !values.equipmentRequired) {
-          form.setError("equipmentRequired", { message: "Select whether you need equipment delivery." });
-          return false;
-        }
-
         return true;
       }
       if (step === 2) {
@@ -240,7 +250,7 @@ export function BookingV2Provider({
       }
       return true;
     },
-    [form, scheduling, liveConfig, serviceSlug],
+    [form, scheduling],
   );
 
   const goNext = useCallback(async () => {

@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
-import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
+import { ReviewsPageContent } from "@/components/reviews/ReviewsPageContent";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import {
+  HOME_OG_IMAGE,
+  HOME_OG_IMAGE_ALT,
+  HOME_OG_IMAGE_HEIGHT,
+  HOME_OG_IMAGE_WIDTH,
+} from "@/lib/seo/homePageMeta";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -29,11 +35,20 @@ export const metadata: Metadata = {
     url: REVIEWS_CANONICAL,
     title: "Google Reviews | Shalean Cleaning Services Cape Town",
     description: REVIEWS_OG_DESC,
+    images: [
+      {
+        url: HOME_OG_IMAGE,
+        width: HOME_OG_IMAGE_WIDTH,
+        height: HOME_OG_IMAGE_HEIGHT,
+        alt: HOME_OG_IMAGE_ALT,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Google Reviews | Shalean Cleaning Services Cape Town",
     description: REVIEWS_TWITTER_DESC,
+    images: [HOME_OG_IMAGE],
   },
 };
 
@@ -44,7 +59,7 @@ export default function ReviewsPage() {
     <div className="bg-white text-slate-900">
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main>
-        <MarketingGoogleReviewsBand />
+        <ReviewsPageContent />
       </main>
       <FooterSection />
     </div>

@@ -31,14 +31,16 @@ export type RenderTemplateOptions = {
   escapeHtmlValues?: boolean;
   /** Strip angle brackets from substituted values (plain-text channels). */
   stripAngleBrackets?: boolean;
+  /** Keys whose values are trusted pre-built HTML fragments (skip escaping). */
+  rawHtmlKeys?: string[];
 };
 
-function formatValue(raw: unknown, opts: RenderTemplateOptions): string {
+function formatValue(raw: unknown, key: string, opts: RenderTemplateOptions): string {
   if (raw === undefined || raw === null) return "";
   const s = String(raw);
   let v = s;
   if (opts.stripAngleBrackets) v = v.replace(/[<>]/g, "");
-  if (opts.escapeHtmlValues) return escapeHtml(v);
+  if (opts.escapeHtmlValues && !opts.rawHtmlKeys?.includes(key)) return escapeHtml(v);
   return v;
 }
 
@@ -56,6 +58,6 @@ export function renderTemplate(
     const key = rawKey.trim();
     if (allow && allow.length && !allow.includes(key)) return "";
     const value = data[key];
-    return formatValue(value, options);
+    return formatValue(value, key, options);
   });
 }

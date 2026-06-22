@@ -31,15 +31,21 @@ function StatusBadge({ status }: { status: string }) {
 function TimelineRow({
   row,
   compact = false,
+  onRetryEmail,
+  retrying = false,
 }: {
   row: NotificationLogDisplayRow;
   compact?: boolean;
+  onRetryEmail?: (logId: string) => void;
+  retrying?: boolean;
 }) {
   const title = formatNotificationLogTitle(row);
   const subtitle = formatNotificationLogSubtitle(row);
   const time = formatNotificationLogTime(row.created_at);
   const retried = notificationLogHasRetry(row.payload);
   const smsFallback = notificationLogIsSmsFallback(row.payload);
+  const failedEmail =
+    row.channel === "email" && row.status?.trim().toLowerCase() === "failed";
 
   return (
     <div
@@ -52,9 +58,24 @@ function TimelineRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
           <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          {row.error?.trim() ? (
+            <p className="mt-1 text-xs text-red-600" title={row.error}>
+              {row.error}
+            </p>
+          ) : null}
           {retried ? <p className="mt-1 text-[11px] text-slate-400">Retry attempt</p> : null}
           {smsFallback ? (
             <p className="mt-1 text-[11px] font-medium text-amber-800">SMS fallback after WhatsApp</p>
+          ) : null}
+          {failedEmail && onRetryEmail ? (
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => onRetryEmail(row.id)}
+              className="mt-2 text-xs font-semibold text-blue-700 hover:underline disabled:opacity-50"
+            >
+              {retrying ? "Retrying…" : "Retry email"}
+            </button>
           ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -76,12 +97,16 @@ export function BookingNotificationTimeline({
   emptyMessage = "No outbound logs yet",
   compact = false,
   limit,
+  onRetryEmail,
+  retryingLogId,
 }: {
   rows: NotificationLogDisplayRow[];
   loading?: boolean;
   emptyMessage?: string;
   compact?: boolean;
   limit?: number;
+  onRetryEmail?: (logId: string) => void;
+  retryingLogId?: string | null;
 }) {
   if (loading) {
     return <p className="text-sm text-slate-500">Loading notification history…</p>;
@@ -95,7 +120,13 @@ export function BookingNotificationTimeline({
   return (
     <div className={cn("space-y-2", !compact && "space-y-2.5")}>
       {visible.map((row) => (
-        <TimelineRow key={row.id} row={row} compact={compact} />
+        <TimelineRow
+          key={row.id}
+          row={row}
+          compact={compact}
+          onRetryEmail={onRetryEmail}
+          retrying={retryingLogId === row.id}
+        />
       ))}
     </div>
   );

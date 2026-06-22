@@ -58,3 +58,29 @@ export async function tryClaimNotificationIdempotency(
   });
   return false;
 }
+
+/** Drop a claim so a failed delivery can be retried on the next notify attempt. */
+export async function releaseNotificationIdempotencyClaim(
+  supabase: SupabaseClient,
+  params: TryClaimNotificationIdempotencyParams,
+): Promise<void> {
+  const reference = String(params.reference ?? "").trim();
+  if (!reference) return;
+
+  const { error } = await supabase
+    .from("notification_idempotency_claims")
+    .delete()
+    .eq("reference", reference)
+    .eq("event_type", params.eventType)
+    .eq("channel", params.channel);
+
+  if (error) {
+    await reportOperationalIssue("warn", "notificationIdempotencyClaim/release", error.message, {
+      reference,
+      bookingId: params.bookingId ?? null,
+      eventType: params.eventType,
+      channel: params.channel,
+      code: error.code,
+    });
+  }
+}

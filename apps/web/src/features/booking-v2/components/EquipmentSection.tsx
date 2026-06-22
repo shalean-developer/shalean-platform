@@ -7,6 +7,7 @@ import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+import { coerceYesNoValue } from "@/src/features/booking-v2/components/serviceQuestionYesNo";
 import { YesNoToggleRow } from "@/src/features/booking-v2/components/YesNoToggleRow";
 
 function addressReady(address: string, suburb: string): boolean {
@@ -22,7 +23,7 @@ export function EquipmentSection() {
     liveConfig?.showCleaningProductsQuestion ??
     serviceShowsEquipmentQuestion(serviceSlug);
 
-  const equipmentRequired = watch("equipmentRequired") ?? "";
+  const equipmentRequired = coerceYesNoValue(watch("equipmentRequired"));
   const address = watch("address") ?? "";
   const suburb = watch("suburb") ?? "";
   const city = watch("city") ?? "Cape Town";

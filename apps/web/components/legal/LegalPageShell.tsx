@@ -1,0 +1,21 @@
+import type { ReactNode } from "react";
+import { FooterSection } from "@/components/home/sections/FooterSection";
+import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+
+type Props = {
+  children: ReactNode;
+};
+
+/** Shared marketing chrome for indexable legal/support pages. */
+export function LegalPageShell({ children }: Props) {
+  const bookingHref = marketingHomeBookingHref();
+
+  return (
+    <div className="bg-white text-slate-900">
+      <MarketingHomeHeader bookingHref={bookingHref} />
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">{children}</main>
+      <FooterSection />
+    </div>
+  );
+}

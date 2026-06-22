@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
@@ -14,7 +14,7 @@ import { generateMetaDescription, hubRegionGeoBoostLine } from "@/lib/seo/metaDe
 import { generateCtrTitle } from "@/lib/seo/metaTitle";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
-import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { SEO_INDEX_FOLLOW, SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 type Props = { params: Promise<{ city: string; location: string }> };
 
@@ -88,6 +88,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!cityName || !locationName) return { title: defaultTitle };
 
+  /** Cape Town legacy URLs 301 to `/locations/*` hubs — keep out of the index if HTML is ever served. */
+  if (locationSeoPathFromLegacyAreaSlug(location)) {
+    return { ...shared, robots: SEO_NOINDEX_FOLLOW };
+  }
+
   return { ...shared, robots: SEO_INDEX_FOLLOW };
 }
 
@@ -101,6 +106,12 @@ function areaHref(citySlug: string, areaSlug: string): string {
 
 export default async function CityLocationCleaningPage({ params }: Props) {
   const { city, location } = await params;
+
+  if (city === "cape-town") {
+    const hubPath = locationSeoPathFromLegacyAreaSlug(location);
+    if (hubPath) permanentRedirect(hubPath);
+  }
+
   const cityName = cityNameFromSlug(city);
   const locationName = locationNameForCity(city, location);
   if (!cityName || !locationName) notFound();

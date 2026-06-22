@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
+import { tryClaimNotificationIdempotency, releaseNotificationIdempotencyClaim } from "@/lib/notifications/notificationIdempotencyClaim";
 
 vi.mock("@/lib/observability/paymentStructuredLog", () => ({
   logPaymentStructured: vi.fn(),
@@ -75,5 +75,29 @@ describe("tryClaimNotificationIdempotency", () => {
     });
     expect(ok).toBe(true);
     expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("releaseNotificationIdempotencyClaim", () => {
+  it("deletes claim by reference, event type, and channel", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: null }));
+    const eq2 = vi.fn(() => ({ eq }));
+    const eq1 = vi.fn(() => ({ eq: eq2 }));
+    const del = vi.fn(() => ({ eq: eq1 }));
+    const supabase = {
+      from: vi.fn(() => ({
+        delete: del,
+      })),
+    };
+    await releaseNotificationIdempotencyClaim(supabase as never, {
+      reference: "pay-ref",
+      eventType: "payment_confirmed",
+      channel: "email",
+      bookingId: "b1",
+    });
+    expect(del).toHaveBeenCalled();
+    expect(eq1).toHaveBeenCalledWith("reference", "pay-ref");
+    expect(eq2).toHaveBeenCalledWith("event_type", "payment_confirmed");
+    expect(eq).toHaveBeenCalledWith("channel", "email");
   });
 });

@@ -41,8 +41,26 @@ const equipmentQuoteSchema = z
   })
   .passthrough();
 
+const serviceDetailValueSchema = z.union([z.string(), z.number(), z.boolean()]);
+
+function normalizeServiceDetails(value: unknown): Record<string, string | number | boolean> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (raw === null || raw === undefined) continue;
+    if (raw === true || raw === false) {
+      out[key] = raw ? "yes" : "no";
+      continue;
+    }
+    if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+      out[key] = raw;
+    }
+  }
+  return out;
+}
+
 export const step1Schema = z.object({
-  serviceDetails: z.record(z.union([z.string(), z.number(), z.boolean()])),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
   address: z.string().min(5, "Enter your street address"),
   suburb: z.string().min(2, "Enter your suburb"),
   city: z.string().optional().default("Cape Town"),
@@ -52,7 +70,15 @@ export const step1Schema = z.object({
   gateCode: z.string().optional().default(""),
   contactPhone: contactPhoneField,
   selectedExtras: z.array(z.string()).default([]),
-  equipmentRequired: z.enum(["yes", "no", ""]).default(""),
+  equipmentRequired: z.preprocess(
+    (value) => {
+      if (value === true || value === "yes") return "yes";
+      if (value === false || value === "no") return "no";
+      if (value === "" || value == null) return "no";
+      return value;
+    },
+    z.enum(["yes", "no"]),
+  ),
   equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
 });
 
@@ -145,7 +171,7 @@ export type SignUpData = z.infer<typeof signUpSchema>;
 
 export const bookingV2ConfirmSchema = z.object({
   serviceSlug: z.enum(SERVICE_SLUGS),
-  serviceDetails: z.record(z.union([z.string(), z.number(), z.boolean()])),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
   address: z.string().min(5),
   suburb: z.string().min(2),
   city: z.string().optional().default("Cape Town"),
@@ -155,7 +181,15 @@ export const bookingV2ConfirmSchema = z.object({
   gateCode: z.string().optional().default(""),
   contactPhone: contactPhoneField,
   selectedExtras: z.array(z.string()).default([]),
-  equipmentRequired: z.enum(["yes", "no", ""]).optional().default(""),
+  equipmentRequired: z.preprocess(
+    (value) => {
+      if (value === true || value === "yes") return "yes";
+      if (value === false || value === "no") return "no";
+      if (value === "" || value == null) return "no";
+      return value;
+    },
+    z.enum(["yes", "no"]),
+  ).optional().default("no"),
   equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
   bookingType: z.enum(["once_off", "recurring"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

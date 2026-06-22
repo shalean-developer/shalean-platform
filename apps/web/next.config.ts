@@ -106,6 +106,26 @@ const nextConfig: NextConfig = {
         destination: "/services/deep-cleaning-cape-town",
         permanent: true,
       },
+      {
+        source: "/services/standard-cleaning",
+        destination: "/services/standard-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/services/deep-cleaning",
+        destination: "/services/deep-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/services/move-in-out-cleaning",
+        destination: "/services/move-out-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/services/office-cleaning",
+        destination: "/services/office-cleaning-cape-town",
+        permanent: true,
+      },
       ...programmaticBlogCleanupRedirects,
       {
         source: "/dashboard/bookings",

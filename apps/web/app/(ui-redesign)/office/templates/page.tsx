@@ -13,10 +13,13 @@ import {
   MessageSquare,
   RefreshCw,
   Search,
+  Send,
   X,
 } from "lucide-react";
 import { adminFetch, useAdminData } from "@/hooks/useAdminData";
 import type { OfficeTemplateChannel, OfficeTemplateItem, OfficeTemplatesSummary } from "@/lib/admin/officeTemplates";
+import { buildDefaultTemplatePreviewData } from "@/lib/admin/templatePreviewDefaults";
+import { emitAdminToast } from "@/lib/admin/toastBus";
 import { cn } from "@/lib/utils";
 
 const CHANNEL_FILTER_LABELS: Record<"all" | OfficeTemplateChannel, string> = {
@@ -45,6 +48,25 @@ function TemplateDetailPanel({
   onSaved: () => void;
 }) {
   const [toggling, setToggling] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+
+  async function sendTestToMe() {
+    setSendingTest(true);
+    const res = await adminFetch<{ success?: boolean; sent_to?: string }>("/api/admin/templates/test-send", {
+      method: "POST",
+      body: JSON.stringify({
+        key: template.key,
+        to: "self",
+        data: buildDefaultTemplatePreviewData(),
+      }),
+    });
+    setSendingTest(false);
+    if (!res.ok) {
+      emitAdminToast(res.error ?? "Test send failed.", "error");
+      return;
+    }
+    emitAdminToast(`Test email sent to ${res.data?.sent_to ?? "your inbox"}.`, "success");
+  }
 
   async function toggleActive() {
     setToggling(true);
@@ -124,6 +146,27 @@ function TemplateDetailPanel({
                   </span>
                 ))}
               </div>
+            </div>
+          ) : null}
+
+          {template.channel === "email" ? (
+            <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-800">Test this template</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Sends a preview with sample data to your admin email. Does not affect production jobs.
+              </p>
+              <button
+                type="button"
+                disabled={sendingTest || template.status !== "active"}
+                onClick={() => void sendTestToMe()}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {sendingTest ? "Sending…" : "Send test to me"}
+              </button>
+              {template.status !== "active" ? (
+                <p className="mt-2 text-xs text-amber-700">Activate this template before sending a test.</p>
+              ) : null}
             </div>
           ) : null}
         </div>

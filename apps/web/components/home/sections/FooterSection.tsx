@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
+import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
+import { MARKETING_FOOTER_SERVICE_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
+import { customerSupportWhatsAppHref } from "@/lib/site/customerSupport";
 
-const waHref = "https://wa.me/27825915525?text=Hi%20Shalean%20Cleaning%20Services";
+const waHref = customerSupportWhatsAppHref();
 
 const trackEvent = (eventName: string) => {
   if (typeof window !== "undefined" && typeof (window as any).gtag === "function") {
@@ -12,20 +15,13 @@ const trackEvent = (eventName: string) => {
   }
 };
 
-const FOOTER_SERVICES = [
-  { label: "Home Cleaning", href: "/services/standard-cleaning" },
-  { label: "Deep Cleaning", href: "/services/deep-cleaning" },
-  { label: "Move-in / Move-out", href: "/services/move-in-out-cleaning" },
-  { label: "Office Cleaning", href: "/services/office-cleaning" },
-  { label: "Window Cleaning", href: "/services" },
-  { label: "Laundry & Ironing", href: "/services" },
-];
+const FOOTER_SERVICES = [...MARKETING_FOOTER_SERVICE_LINKS];
 
 const FOOTER_COMPANY = [
   { label: "About Us", href: "/about" },
   { label: "Reviews", href: "/reviews" },
   { label: "Blog", href: "/blog" },
-  { label: "Careers", href: "/contact" },
+  { label: "Careers", href: "/cleaner/apply" },
   { label: "Contact", href: "/contact" },
 ];
 
@@ -79,34 +75,23 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
                 Reliable, professional cleaning services in Cape Town. We clean so you can live.
               </p>
               <div className="mt-5 flex items-center gap-3">
-                <a
-                  href="https://www.facebook.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Shalean on Facebook"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
-                >
-                  <FacebookIcon className="h-4 w-4" />
-                </a>
-                <a
-                  href="https://www.instagram.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Shalean on Instagram"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
-                >
-                  <InstagramIcon className="h-4 w-4" />
-                </a>
-                <a
-                  href={waHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Shalean on WhatsApp"
-                  onClick={() => trackEvent("whatsapp_click")}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
-                >
-                  <WhatsAppIcon className="h-4 w-4" />
-                </a>
+                {SHALEAN_SOCIAL_LINKS.map((link) => {
+                  const Icon =
+                    link.id === "facebook" ? FacebookIcon : link.id === "instagram" ? InstagramIcon : WhatsAppIcon;
+                  return (
+                    <a
+                      key={link.id}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Shalean on ${link.label}`}
+                      onClick={link.id === "whatsapp" ? () => trackEvent("whatsapp_click") : undefined}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
+                    >
+                      <Icon className="h-4 w-4" />
+                    </a>
+                  );
+                })}
               </div>
             </div>
 

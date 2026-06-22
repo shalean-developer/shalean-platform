@@ -4,7 +4,11 @@ import { Controller, useFormContext } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import type { FormQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
-import { isYesNoQuestion } from "@/src/features/booking-v2/components/serviceQuestionYesNo";
+import {
+  coerceYesNoValue,
+  isYesNoQuestion,
+  validateYesNoRequired,
+} from "@/src/features/booking-v2/components/serviceQuestionYesNo";
 import { YesNoToggleRow } from "@/src/features/booking-v2/components/YesNoToggleRow";
 
 function optionGridClass(count: number): string {
@@ -27,6 +31,46 @@ type ServiceQuestionOptionCardsProps = {
   compact?: boolean;
 };
 
+function YesNoServiceQuestionField({
+  question,
+  compact,
+}: {
+  question: FormQuestion;
+  compact?: boolean;
+}) {
+  const {
+    control,
+    formState: { errors },
+  } = useFormContext<BookingV2FormData>();
+  const fieldKey = `serviceDetails.${question.key}` as const;
+  const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[
+    question.key
+  ]?.message;
+
+  return (
+    <Controller
+      name={fieldKey}
+      control={control}
+      defaultValue="no"
+      rules={{
+        validate: (value) =>
+          question.required ? validateYesNoRequired(value, question.label) : true,
+      }}
+      render={({ field }) => (
+        <YesNoToggleRow
+          label={question.label}
+          hint={question.hint}
+          required={question.required}
+          checked={coerceYesNoValue(field.value) === "yes"}
+          onCheckedChange={(next) => field.onChange(next ? "yes" : "no")}
+          error={fieldError}
+          bordered={!compact}
+        />
+      )}
+    />
+  );
+}
+
 export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestionOptionCardsProps) {
   const {
     control,
@@ -40,24 +84,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
   const gridClass = optionGridClass(options.length);
 
   if (isYesNoQuestion(question)) {
-    return (
-      <Controller
-        name={fieldKey}
-        control={control}
-        rules={{ required: question.required ? `${question.label} is required` : false }}
-        render={({ field }) => (
-          <YesNoToggleRow
-            label={question.label}
-            hint={question.hint}
-            required={question.required}
-            checked={String(field.value ?? "") === "yes"}
-            onCheckedChange={(next) => field.onChange(next ? "yes" : "no")}
-            error={fieldError}
-            bordered={!compact}
-          />
-        )}
-      />
-    );
+    return <YesNoServiceQuestionField question={question} compact={compact} />;
   }
 
   return (

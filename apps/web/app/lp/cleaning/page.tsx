@@ -1,6 +1,19 @@
+import type { Metadata } from "next";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { absoluteCanonicalUrl } from "@/lib/site/canonical";
+import { SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
+
+const PATH = "/lp/cleaning";
+const CANONICAL = absoluteCanonicalUrl(PATH);
+
+export const metadata: Metadata = {
+  title: "Book a Cleaner | Shalean Cape Town",
+  description: "Paid landing page for Shalean home cleaning in Cape Town.",
+  robots: SEO_NOINDEX_FOLLOW,
+  alternates: { canonical: CANONICAL },
+};
 
 export default function CleaningAdLandingPage() {
   return (

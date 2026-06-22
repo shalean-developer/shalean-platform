@@ -94,7 +94,7 @@ export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: Cl
     gateCode: "",
     contactPhone: "",
     selectedExtras: [],
-    equipmentRequired: "",
+    equipmentRequired: "no",
     equipmentQuote: null,
     bookingType: "once_off",
     date: "",

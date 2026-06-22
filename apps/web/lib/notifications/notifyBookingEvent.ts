@@ -35,7 +35,7 @@ import {
 } from "@/lib/notifications/customerUserNotifications";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
-import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
+import { tryClaimNotificationIdempotency, releaseNotificationIdempotencyClaim } from "@/lib/notifications/notificationIdempotencyClaim";
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
 import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
@@ -200,7 +200,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     let debugCustomerSmsOk: boolean | null = null;
     const { data: bookingHead } = await supabase
       .from("bookings")
-      .select("user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id")
+      .select(
+        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, date, time, location, suburb, service, booking_snapshot",
+      )
       .eq("id", event.bookingId)
       .maybeSingle();
     const head =
@@ -257,6 +259,21 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const assignmentType = head ? String(head.assignment_type ?? "").trim() || null : null;
     const fallbackReason = head ? String(head.fallback_reason ?? "").trim() || null : null;
 
+    let assignedCleanerName: string | null = null;
+    const selectedCleanerId = head ? String(head.selected_cleaner_id ?? "").trim() : "";
+    if (selectedCleanerId) {
+      const { data: cleanerRow } = await supabase
+        .from("cleaners")
+        .select("full_name")
+        .eq("id", selectedCleanerId)
+        .maybeSingle();
+      const name =
+        cleanerRow && typeof cleanerRow === "object"
+          ? String((cleanerRow as { full_name?: string | null }).full_name ?? "").trim()
+          : "";
+      assignedCleanerName = name || null;
+    }
+
     let preferredNotificationChannel: "whatsapp" | "sms" | "email" | null = null;
     const payUserId = head ? String(head.user_id ?? "").trim() : "";
     if (payUserId) {
@@ -285,6 +302,16 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       bookingId: event.bookingId,
       assignmentType,
       fallbackReason,
+      bookingRow: head
+        ? {
+            date: typeof head.date === "string" ? head.date : null,
+            time: typeof head.time === "string" ? head.time : null,
+            location: typeof head.location === "string" ? head.location : null,
+            suburb: typeof head.suburb === "string" ? head.suburb : null,
+            service: typeof head.service === "string" ? head.service : null,
+          }
+        : null,
+      assignedCleanerName,
     });
     let cust: { sent: boolean; error?: string } = { sent: false };
     if (hasEmail) {
@@ -302,6 +329,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           notifyBookingDebug("payment_confirmed_email_throw", { bookingId: event.bookingId, message: msg });
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference,
+            eventType: "payment_confirmed",
+            channel: "email",
+            bookingId: event.bookingId,
+          });
           await enqueueNotificationDeliveryFailure({
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
@@ -310,6 +343,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           });
         }
         if (!cust.sent && cust.error) {
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference,
+            eventType: "payment_confirmed",
+            channel: "email",
+            bookingId: event.bookingId,
+          });
           await reportOperationalIssue("error", "notifyBookingEvent/payment_confirmed", cust.error, {
             bookingId: event.bookingId,
           });
@@ -481,11 +520,19 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           customerEmail: payload.customerEmail,
           paystackRef: event.paymentReference,
         })}`;
-        await sendAdminHtmlEmail({
+        const adminResult = await sendAdminHtmlEmail({
           subject: `[PAYMENT_CONFIRMED] ${payload.serviceLabel} — ${event.bookingId.slice(0, 8)}…`,
           html: adminHtml,
           context: { bookingId: event.bookingId, type: "payment_confirmed" },
         });
+        if (!adminResult.sent) {
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference,
+            eventType: "payment_confirmed_admin",
+            channel: "email",
+            bookingId: event.bookingId,
+          });
+        }
       },
     );
 

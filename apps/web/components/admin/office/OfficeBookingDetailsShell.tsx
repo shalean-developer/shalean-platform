@@ -120,6 +120,8 @@ export type OfficeBookingDetailsShellProps = {
   onReschedule: () => void;
   onContactCustomer: () => void;
   onMarkPaid: () => void;
+  onResendConfirmationEmails?: () => void;
+  resendConfirmationEmailsBusy?: boolean;
   onFixEarnings: () => void;
   onResetEarnings: () => void;
   onMarkComplete: () => void;
@@ -542,6 +544,21 @@ function ActionsPanel(props: OfficeBookingDetailsShellProps) {
             >
               <Wallet className="h-4 w-4" /> Mark as Paid
             </Button>
+            {!props.canMarkPaid && props.onResendConfirmationEmails ? (
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                disabled={props.resendConfirmationEmailsBusy}
+                onClick={props.onResendConfirmationEmails}
+              >
+                {props.resendConfirmationEmailsBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                Resend confirmation emails
+              </Button>
+            ) : null}
             <Button variant="outline" className="w-full justify-start" disabled={props.fixEarningsBusy} onClick={props.onFixEarnings}>
               {props.fixEarningsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
               Fix earnings

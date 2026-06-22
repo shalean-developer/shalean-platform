@@ -1,6 +1,11 @@
 import type React from "react";
 import { Clock, Mail, MapPin, Phone, Shield } from "lucide-react";
 import { SiteTopBarAccount } from "@/components/nav/SiteTopBarAccount";
+import {
+  CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
+  CUSTOMER_SUPPORT_TELEPHONE_TEL,
+} from "@/lib/site/customerSupport";
+import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
 
 type ContactItem = {
   icon: React.ComponentType<{ className?: string }>;
@@ -11,7 +16,7 @@ type ContactItem = {
 const CONTACT_ITEMS: ContactItem[] = [
   { icon: Shield, label: "No hidden fees, ever" },
   { icon: Clock, label: "8am – 6pm (Mon - Sat)" },
-  { icon: Phone, label: "087 153 5250", href: "tel:0871535250" },
+  { icon: Phone, label: CUSTOMER_SUPPORT_TELEPHONE_DISPLAY, href: CUSTOMER_SUPPORT_TELEPHONE_TEL },
   { icon: MapPin, label: "Cape Town, South Africa" },
   { icon: Mail, label: "hello@shalean.co.za", href: "mailto:hello@shalean.co.za" },
 ];
@@ -40,11 +45,11 @@ function WhatsAppIcon() {
   );
 }
 
-const SOCIAL_LINKS = [
-  { icon: FacebookIcon, href: "https://www.facebook.com/shaleancleaningservices", label: "Facebook" },
-  { icon: InstagramIcon, href: "https://www.instagram.com/shaleancleaningservices", label: "Instagram" },
-  { icon: WhatsAppIcon, href: "https://wa.me/27871535250", label: "WhatsApp" },
-] as const;
+const SOCIAL_ICON_BY_ID = {
+  facebook: FacebookIcon,
+  instagram: InstagramIcon,
+  whatsapp: WhatsAppIcon,
+} as const;
 
 export function SiteTopBar() {
   return (
@@ -79,18 +84,21 @@ export function SiteTopBar() {
 
         <div className="flex shrink-0 items-center gap-3">
           <SiteTopBarAccount />
-          {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={label}
-              className="text-white/80 transition-colors hover:text-white"
-            >
-              <Icon />
-            </a>
-          ))}
+          {SHALEAN_SOCIAL_LINKS.map((link) => {
+            const Icon = SOCIAL_ICON_BY_ID[link.id];
+            return (
+              <a
+                key={link.id}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.label}
+                className="text-white/80 transition-colors hover:text-white"
+              >
+                <Icon />
+              </a>
+            );
+          })}
         </div>
       </div>
     </div>

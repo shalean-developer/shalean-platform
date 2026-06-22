@@ -287,6 +287,7 @@ type BookingNotificationLogRow = {
   event_type: string | null;
   provider: string;
   created_at: string;
+  error: string | null;
   payload: Record<string, unknown> | null;
 };
 
@@ -859,6 +860,9 @@ export default function BookingDetailsView({
   const [fleetBestUxVariant, setFleetBestUxVariant] = useState<CleanerUxVariant | "unknown" | null>(null);
   const [notificationLogs, setNotificationLogs] = useState<BookingNotificationLogRow[]>([]);
   const [notificationLogsLoading, setNotificationLogsLoading] = useState(false);
+  const [notificationLogRefresh, setNotificationLogRefresh] = useState(0);
+  const [resendConfirmationBusy, setResendConfirmationBusy] = useState(false);
+  const [retryingNotificationLogId, setRetryingNotificationLogId] = useState<string | null>(null);
   const [cleanerIssueReports, setCleanerIssueReports] = useState<CleanerIssueReportRow[]>([]);
   const [serviceQa, setServiceQa] = useState<ServiceQaAdminWire | null>(null);
   const [supportsTeamAssignment, setSupportsTeamAssignment] = useState(false);
@@ -1267,7 +1271,81 @@ export default function BookingDetailsView({
     return () => {
       cancelled = true;
     };
-  }, [bookingId, fullBooking]);
+  }, [bookingId, fullBooking, notificationLogRefresh]);
+
+  async function retryFailedNotificationLog(logId: string) {
+    if (!bookingId) return;
+    setRetryingNotificationLogId(logId);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/admin/notifications/retry", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ logId }),
+      });
+      const j = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !j.success) {
+        setToast({ kind: "error", text: j.error ?? "Could not retry email." });
+        return;
+      }
+      setToast({ kind: "success", text: "Email sent." });
+      setNotificationLogRefresh((n) => n + 1);
+    } catch {
+      setToast({ kind: "error", text: "Could not retry email." });
+    } finally {
+      setRetryingNotificationLogId(null);
+    }
+  }
+
+  async function resendConfirmationEmails() {
+    if (!bookingId) return;
+    setResendConfirmationBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) return;
+      const res = await fetch(
+        `/api/admin/bookings/${encodeURIComponent(bookingId)}/resend-confirmation-emails`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ includeCustomer: true, includeAdmin: true }),
+        },
+      );
+      const j = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        result?: {
+          customer?: { sent?: boolean; error?: string };
+          admin?: { sent?: boolean; error?: string };
+        };
+      };
+      if (!res.ok || !j.ok) {
+        setToast({ kind: "error", text: j.error ?? "Could not resend confirmation emails." });
+        return;
+      }
+      const parts: string[] = [];
+      if (j.result?.customer?.sent) parts.push("customer");
+      if (j.result?.admin?.sent) parts.push("admin");
+      setToast({
+        kind: "success",
+        text: parts.length ? `Sent: ${parts.join(" + ")}` : "Resend completed.",
+      });
+      setNotificationLogRefresh((n) => n + 1);
+    } catch {
+      setToast({ kind: "error", text: "Could not resend confirmation emails." });
+    } finally {
+      setResendConfirmationBusy(false);
+    }
+  }
 
   const flags = useMemo(() => (fullBooking ? detailFlags(fullBooking, userProfile) : []), [fullBooking, userProfile]);
 
@@ -2429,7 +2507,13 @@ export default function BookingDetailsView({
     ) : null;
 
   const officeOverviewNotifications = (
-    <BookingNotificationTimeline rows={notificationLogs} compact limit={4} />
+    <BookingNotificationTimeline
+      rows={notificationLogs}
+      compact
+      limit={4}
+      onRetryEmail={(logId) => void retryFailedNotificationLog(logId)}
+      retryingLogId={retryingNotificationLogId}
+    />
   );
 
   return (
@@ -2519,6 +2603,8 @@ export default function BookingDetailsView({
             setMarkPaidDepositReason("");
             setMarkPaidModalOpen(true);
           }}
+          onResendConfirmationEmails={() => void resendConfirmationEmails()}
+          resendConfirmationEmailsBusy={resendConfirmationBusy}
           onFixEarnings={() => void handleFixEarnings()}
           onResetEarnings={() => setResetEarningsModalOpen(true)}
           onMarkComplete={() => void setStatusOptimistic("completed")}
@@ -2587,7 +2673,12 @@ export default function BookingDetailsView({
           }
           tabNotifications={
             <AdminInfoCard title="Notification timeline" icon={Mail}>
-              <BookingNotificationTimeline rows={notificationLogs} compact />
+              <BookingNotificationTimeline
+                rows={notificationLogs}
+                compact
+                onRetryEmail={(logId) => void retryFailedNotificationLog(logId)}
+                retryingLogId={retryingNotificationLogId}
+              />
             </AdminInfoCard>
           }
           tabActivity={
@@ -3231,6 +3322,8 @@ export default function BookingDetailsView({
                 rows={notificationLogs}
                 loading={notificationLogsLoading}
                 emptyMessage="No notification log rows for this booking yet."
+                onRetryEmail={(logId) => void retryFailedNotificationLog(logId)}
+                retryingLogId={retryingNotificationLogId}
               />
             </div>
           </DetailCard>

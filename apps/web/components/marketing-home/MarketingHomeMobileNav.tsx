@@ -5,7 +5,11 @@ import { useState } from "react";
 import { CalendarDays, Menu, X } from "lucide-react";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import { MARKETING_HEADER_NAV_LINKS } from "@/lib/marketing/marketingHomeHeaderNav";
+import {
+  MARKETING_HEADER_NAV_LINKS,
+  MARKETING_HEADER_SERVICE_LINKS,
+} from "@/lib/marketing/marketingHomeHeaderNav";
+import { cn } from "@/lib/utils";
 
 type Props = {
   bookingHref: string;
@@ -38,27 +42,44 @@ export function MarketingHomeMobileNav({ bookingHref }: Props) {
         </button>
       </div>
 
-      {open ? (
-        <div className="border-t border-blue-100 bg-white px-4 py-4 shadow-md lg:hidden">
-          <div className="flex flex-col gap-1">
-            <GetFreeQuoteLink
-              source="marketing_mobile_menu"
-              variant="outline"
-              className="mb-2 w-full"
-            />
-            {MARKETING_HEADER_NAV_LINKS.map(({ label, href }) => (
+      <div
+        className={cn(
+          "border-t border-blue-100 bg-white shadow-md lg:hidden",
+          open ? "visible px-4 py-4 opacity-100" : "invisible max-h-0 overflow-hidden opacity-0",
+        )}
+        aria-hidden={!open}
+      >
+        <div className="flex flex-col gap-1">
+          <GetFreeQuoteLink source="marketing_mobile_menu" variant="outline" className="mb-2 w-full" />
+          {MARKETING_HEADER_NAV_LINKS.map(({ label, href, dropdown }) => (
+            <div key={label}>
               <Link
-                key={label}
                 href={href}
-                className="rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                className="block rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700"
                 onClick={() => setOpen(false)}
+                tabIndex={open ? 0 : -1}
               >
                 {label}
               </Link>
-            ))}
-          </div>
+              {dropdown ? (
+                <div className="ml-3 border-l border-blue-100 pl-2">
+                  {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
+                    <Link
+                      key={item}
+                      href={itemHref}
+                      className="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => setOpen(false)}
+                      tabIndex={open ? 0 : -1}
+                    >
+                      {item}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
         </div>
-      ) : null}
+      </div>
     </>
   );
 }

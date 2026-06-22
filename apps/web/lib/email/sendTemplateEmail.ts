@@ -1,7 +1,13 @@
+import { wrapBrandedEmailContent } from "@/lib/email/emailBrandShell";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
-import { getVariableAllowlistFromRow, renderTemplate } from "@/lib/templates/render";
+import { getVariableAllowlistFromRow, parseTemplateVariableAllowlist, renderTemplate } from "@/lib/templates/render";
+import {
+  getEmailTemplateDefaults,
+  getEmailTemplateRawHtmlKeys,
+  normalizeTemplateData,
+} from "@/lib/templates/templateDefaults";
 import { getTemplate } from "@/lib/templates/store";
 import type { TemplateChannel } from "@/lib/templates/types";
 
@@ -25,8 +31,33 @@ function templateEmailLogPayload(
   return { ...extra, step: eventType };
 }
 
+export function renderBrandedEmailFromTemplate(params: {
+  key: string;
+  content: string;
+  subjectTemplate: string | null;
+  variables: unknown;
+  data: Record<string, unknown>;
+}): { subject: string; html: string } {
+  const allow = parseTemplateVariableAllowlist(params.variables);
+  const defaults = getEmailTemplateDefaults(params.key);
+  const normalized = normalizeTemplateData(params.data, {
+    defaults,
+    allowKeys: allow.length ? allow : undefined,
+  });
+  const renderOpts = {
+    allowedKeys: allow.length ? allow : undefined,
+    escapeHtmlValues: true as const,
+    rawHtmlKeys: getEmailTemplateRawHtmlKeys(params.key),
+  };
+  const innerHtml = renderTemplate(params.content, normalized, renderOpts);
+  const html = wrapBrandedEmailContent(innerHtml);
+  const subjectRaw = params.subjectTemplate?.trim() ? params.subjectTemplate : `Shalean — ${params.key}`;
+  const subject = renderTemplate(subjectRaw, normalized, renderOpts);
+  return { subject, html };
+}
+
 /**
- * Sends a single-channel template email (admin test-send and future multi-key flows).
+ * Sends a single-channel template email (admin test-send and DB-driven production flows).
  */
 export async function sendEmailFromTemplateKey(params: {
   to: string;
@@ -77,12 +108,33 @@ export async function sendEmailFromTemplateKey(params: {
     return { ok: false, error: "Email not configured" };
   }
 
-  const allow = getVariableAllowlistFromRow(template);
-  const renderOpts = { allowedKeys: allow.length ? allow : undefined, escapeHtmlValues: true as const };
-  const html = renderTemplate(template.content, params.data, renderOpts);
-  const subjectRaw =
-    template.subject?.trim() ? template.subject : `Shalean — ${params.key}`;
-  const subject = renderTemplate(subjectRaw, params.data, renderOpts);
+  let subject: string;
+  let html: string;
+  try {
+    ({ subject, html } = renderBrandedEmailFromTemplate({
+      key: params.key,
+      content: template.content,
+      subjectTemplate: template.subject,
+      variables: template.variables,
+      data: params.data,
+    }));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("warn", "sendEmailFromTemplateKey/render", msg, { key: params.key });
+    await writeNotificationLog({
+      booking_id: bid,
+      channel: "email",
+      template_key: params.key,
+      recipient: params.to,
+      status: "failed",
+      error: msg,
+      provider: "resend",
+      role,
+      event_type: eventType,
+      payload: templateEmailLogPayload(eventType, { phase: "render" }),
+    });
+    return { ok: false, error: msg };
+  }
 
   try {
     const { error } = await resend.emails.send({
@@ -148,13 +200,22 @@ export async function previewTemplateRender(params: {
   const template = await getTemplate(params.key, params.channel);
   if (!template) return null;
 
+  if (params.channel === "email") {
+    const { subject, html } = renderBrandedEmailFromTemplate({
+      key: params.key,
+      content: template.content,
+      subjectTemplate: template.subject,
+      variables: template.variables,
+      data: params.data,
+    });
+    return { subject, content: html };
+  }
+
   const allow = getVariableAllowlistFromRow(template);
-  const escapeHtmlValues = params.channel === "email";
-  const stripAngleBrackets = params.channel !== "email";
   const content = renderTemplate(template.content, params.data, {
     allowedKeys: allow.length ? allow : undefined,
-    escapeHtmlValues,
-    stripAngleBrackets,
+    escapeHtmlValues: false,
+    stripAngleBrackets: true,
   });
 
   let subject: string | null = null;

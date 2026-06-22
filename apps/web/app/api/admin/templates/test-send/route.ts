@@ -17,8 +17,10 @@ export async function POST(request: Request) {
   }
 
   const key = typeof body.key === "string" ? body.key.trim() : "";
-  const to = typeof body.to === "string" ? body.to.trim() : "";
+  const toRaw = typeof body.to === "string" ? body.to.trim() : "";
   if (!key) return NextResponse.json({ error: "Missing key." }, { status: 400 });
+
+  const to = toRaw && toRaw !== "self" ? toRaw : auth.email.trim();
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     return NextResponse.json({ error: "Invalid to email." }, { status: 400 });
   }
@@ -33,5 +35,5 @@ export async function POST(request: Request) {
   if (!sent.ok) {
     return NextResponse.json({ success: false, error: sent.error }, { status: sent.error === "Template not found" ? 404 : 502 });
   }
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, sent_to: to });
 }

@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 import { Suspense } from "react";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
@@ -6,22 +6,11 @@ import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvi
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { ReferralCapture } from "@/components/referrals/ReferralCapture";
 import { geistSans } from "@/lib/fonts/appFonts";
-import { metadataBaseUrl } from "@/lib/site/canonical";
-import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { ROOT_METADATA } from "@/lib/site/rootMetadata";
 import "./globals.css";
 
 /** `metadataBase` must stay `metadataBaseUrl()` — never `new URL(process.env.…)` here (bad prod env → global 500). */
-export const metadata: Metadata = {
-  metadataBase: metadataBaseUrl(),
-  robots: SEO_INDEX_FOLLOW,
-  title: {
-    default: "Shalean Cleaning Services",
-    template: "%s",
-  },
-  description: "Book vetted home cleaners across Cape Town with instant pricing and secure online checkout.",
-  // Tab + PWA icons: `app/favicon.ico`, `app/icon.png`, `app/apple-icon.png` (same-origin; avoids metadataBase pinning icons to production in dev).
-  manifest: "/site.webmanifest",
-};
+export const metadata = ROOT_METADATA;
 
 export const viewport: Viewport = {
   themeColor: "#5A73D8",

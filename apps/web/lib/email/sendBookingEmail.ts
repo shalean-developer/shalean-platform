@@ -1,34 +1,23 @@
-import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import {
+  resolveBookingEmailFields,
+  type BookingEmailRowOverlay,
+} from "@/lib/email/resolveBookingEmailFields";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
+import { sendEmailFromTemplateKey } from "@/lib/email/sendTemplateEmail";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
-import { getVariableAllowlistFromRow, renderTemplate } from "@/lib/templates/render";
 import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
 import { getTemplate } from "@/lib/templates/store";
+import { buildBookingConfirmedTemplateData } from "@/lib/templates/bookingConfirmedData";
 
-export type BookingEmailPayload = {
-  customerEmail: string;
-  /** From snapshot when available — used for email greeting. */
-  customerName?: string | null;
-  serviceLabel: string;
-  dateLabel: string;
-  timeLabel: string;
-  location: string;
-  cleanerName: string | null;
-  totalPaidZar: number;
-  paymentReference: string;
-  /** DB booking id for links / admin copy (optional). */
-  bookingId?: string | null;
-  /** True when checkout cleaner choice was not honored and another cleaner was assigned. */
-  showCleanerSubstitutionNotice?: boolean;
-  /** Machine-readable reason when substitution applies (e.g. invalid_cleaner_id). */
-  fallbackReason?: string | null;
-};
+export type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
+export { buildBookingConfirmedTemplateData };
 
 export { getDefaultFromAddress };
 
@@ -51,144 +40,23 @@ async function pausedCustomerEmailResult(): Promise<{ sent: false; error: string
   return { sent: false, error: "customer_outbound_paused" };
 }
 
-export function buildBookingConfirmedTemplateData(payload: BookingEmailPayload): Record<string, string> {
-  const price = `R ${payload.totalPaidZar.toLocaleString("en-ZA")}`;
-  const bookingId = (payload.bookingId?.trim() || payload.paymentReference).trim();
-  const emailLocal = payload.customerEmail.includes("@")
-    ? payload.customerEmail.split("@")[0]?.replace(/[.+_]/g, " ").trim() ?? ""
-    : payload.customerEmail.trim();
-  const customerName = (payload.customerName?.trim() || emailLocal || "there").slice(0, 120);
-  return {
-    customer_name: customerName,
-    date: payload.dateLabel,
-    time: payload.timeLabel,
-    price,
-    booking_id: bookingId,
-    service: payload.serviceLabel,
-    location: (payload.location?.trim() || "—").slice(0, 500),
-  };
-}
-
 type DbTemplateAttempt = { usedRow: false } | { usedRow: true; sent: boolean; error?: string };
 
 async function sendBookingConfirmationFromDbTemplateIfConfigured(payload: BookingEmailPayload): Promise<DbTemplateAttempt> {
   const template = await getTemplate("booking_confirmed", "email");
   if (!template) return { usedRow: false };
 
-  const resend = getResend();
-  const bid = bookingIdForNotificationLog(payload);
-  if (!resend) {
-    await reportOperationalIssue("warn", "sendBookingConfirmationFromDbTemplateIfConfigured", "RESEND_API_KEY not set", {
-      reference: payload.paymentReference,
-    });
-    await writeNotificationLog({
-      booking_id: bid,
-      channel: "email",
-      template_key: "booking_confirmed",
-      recipient: payload.customerEmail,
-      status: "failed",
-      error: "resend_not_configured",
-      provider: "resend",
-      role: "customer",
-      event_type: CUSTOMER_PAYMENT_EVENT,
-      payload: customerPaymentPayload({ payment_reference: payload.paymentReference, phase: "db_template" }),
-    });
-    return { usedRow: true, sent: false, error: "Email not configured" };
-  }
-
-  const allow = getVariableAllowlistFromRow(template);
-  const data = buildBookingConfirmedTemplateData(payload) as Record<string, unknown>;
-  const renderOpts = { allowedKeys: allow.length ? allow : undefined, escapeHtmlValues: true as const };
-  const html = renderTemplate(template.content, data, renderOpts);
-  const subjectRaw =
-    template.subject?.trim() ? template.subject : "Your booking is confirmed — {{customer_name}}";
-  const subject = renderTemplate(subjectRaw, data, renderOpts);
-
-  const from = getDefaultFromAddress();
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: payload.customerEmail,
-      subject,
-      html,
-    });
-    if (error) {
-      console.log("[EMAIL DEBUG RESULT]", { sent: false, error: error.message, path: "db_template" });
-      console.error("[EMAIL FAILED HARD]", error.message);
-      await reportOperationalIssue("error", "sendBookingConfirmationFromDbTemplateIfConfigured", error.message, {
-        reference: payload.paymentReference,
-        to: payload.customerEmail,
-      });
-      await writeNotificationLog({
-        booking_id: bid,
-        channel: "email",
-        template_key: "booking_confirmed",
-        recipient: payload.customerEmail,
-        status: "failed",
-        error: error.message,
-        provider: "resend",
-        role: "customer",
-        event_type: CUSTOMER_PAYMENT_EVENT,
-        payload: customerPaymentPayload({
-          subject,
-          html,
-          payment_reference: payload.paymentReference,
-          source: "db_template",
-        }),
-      });
-      return { usedRow: true, sent: false, error: error.message };
-    }
-    await logSystemEvent({
-      level: "info",
-      source: "email",
-      message: "Booking confirmation email sent (DB template)",
-      context: { reference: payload.paymentReference, to: payload.customerEmail },
-    });
-    await writeNotificationLog({
-      booking_id: bid,
-      channel: "email",
-      template_key: "booking_confirmed",
-      recipient: payload.customerEmail,
-      status: "sent",
-      error: null,
-      provider: "resend",
-      role: "customer",
-      event_type: CUSTOMER_PAYMENT_EVENT,
-      payload: customerPaymentPayload({
-        subject,
-        html,
-        payment_reference: payload.paymentReference,
-        source: "db_template",
-      }),
-    });
-    return { usedRow: true, sent: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log("[EMAIL DEBUG RESULT]", { sent: false, error: msg, path: "db_template" });
-    console.error("[EMAIL FAILED HARD]", msg);
-    await reportOperationalIssue("error", "sendBookingConfirmationFromDbTemplateIfConfigured", msg, {
-      reference: payload.paymentReference,
-      to: payload.customerEmail,
-    });
-    await writeNotificationLog({
-      booking_id: bid,
-      channel: "email",
-      template_key: "booking_confirmed",
-      recipient: payload.customerEmail,
-      status: "failed",
-      error: msg,
-      provider: "resend",
-      role: "customer",
-      event_type: CUSTOMER_PAYMENT_EVENT,
-      payload: customerPaymentPayload({
-        subject,
-        html,
-        payment_reference: payload.paymentReference,
-        source: "db_template",
-      }),
-    });
-    return { usedRow: true, sent: false, error: msg };
-  }
+  const data = buildBookingConfirmedTemplateData(payload);
+  const result = await sendEmailFromTemplateKey({
+    to: payload.customerEmail,
+    key: "booking_confirmed",
+    data,
+    bookingId: bookingIdForNotificationLog(payload),
+    logRole: "customer",
+    logEventType: CUSTOMER_PAYMENT_EVENT,
+  });
+  if (!result.ok) return { usedRow: true, sent: false, error: result.error };
+  return { usedRow: true, sent: true };
 }
 
 const BOOKING_PAYMENT_PROCESSING_EVENT = "booking_payment_processing";
@@ -514,7 +382,7 @@ export async function sendAdminHtmlEmail(params: {
   subject: string;
   html: string;
   context?: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<{ sent: boolean; error?: string }> {
   const ctx = params.context ?? {};
   const bookingId =
     typeof ctx.bookingId === "string" && ctx.bookingId.trim() ? ctx.bookingId.trim() : undefined;
@@ -550,7 +418,7 @@ export async function sendAdminHtmlEmail(params: {
       event_type: adminEventType,
       payload: { subject: params.subject, html: params.html, step: adminEventType, ...ctx },
     });
-    return;
+    return { sent: false, error: String(e) };
   }
 
   const adminLogPayload = (): Record<string, unknown> => ({
@@ -584,7 +452,7 @@ export async function sendAdminHtmlEmail(params: {
       event_type: adminEventType,
       payload: adminLogPayload(),
     });
-    return;
+    return { sent: false, error: "RESEND_API_KEY not set" };
   }
   const from = getDefaultFromAddress();
   const to = recipients[0]!;
@@ -619,7 +487,7 @@ export async function sendAdminHtmlEmail(params: {
         event_type: adminEventType,
         payload: adminLogPayload(),
       });
-      return;
+      return { sent: false, error: error.message };
     }
     await logPipelineEmailTelemetry({
       role: "admin",
@@ -640,6 +508,7 @@ export async function sendAdminHtmlEmail(params: {
       event_type: adminEventType,
       payload: adminLogPayload(),
     });
+    return { sent: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await reportOperationalIssue("warn", "sendAdminHtmlEmail", msg, ctx);
@@ -663,6 +532,7 @@ export async function sendAdminHtmlEmail(params: {
       event_type: adminEventType,
       payload: adminLogPayload(),
     });
+    return { sent: false, error: msg };
   }
 }
 
@@ -1298,6 +1168,10 @@ export function buildBookingEmailPayload(params: {
   assignmentType?: string | null;
   /** From `bookings.fallback_reason` when substitution occurred. */
   fallbackReason?: string | null;
+  /** Booking row fields when snapshot is sparse (payment_confirmed). */
+  bookingRow?: BookingEmailRowOverlay | null;
+  /** Assigned cleaner display name when known. */
+  assignedCleanerName?: string | null;
 }): BookingEmailPayload {
   const locked = params.snapshot?.locked;
   const custName = params.snapshot?.customer?.name?.trim();
@@ -1306,22 +1180,11 @@ export function buildBookingEmailPayload(params: {
       ? params.snapshot.total_zar
       : Math.max(0, Math.round(params.amountCents / 100));
 
-  let dateLabel = "—";
-  let timeLabel = "—";
-  if (locked?.date) {
-    const [y, m, d] = locked.date.split("-").map(Number);
-    if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
-      dateLabel = new Date(y, m - 1, d).toLocaleDateString("en-ZA", {
-        weekday: "long",
-        day: "numeric",
-        month: "short",
-      });
-    }
-  }
-  if (locked?.time) timeLabel = locked.time;
-
-  const serviceLabel =
-    locked?.service != null ? getServiceLabel(locked.service) : "Cleaning service";
+  const fields = resolveBookingEmailFields({
+    snapshot: params.snapshot,
+    bookingRow: params.bookingRow,
+    cleanerName: params.assignedCleanerName ?? params.snapshot?.cleaner_name ?? null,
+  });
 
   const emailNorm = params.customerEmail.trim() ? normalizeEmail(params.customerEmail) : params.customerEmail;
 
@@ -1331,11 +1194,11 @@ export function buildBookingEmailPayload(params: {
   return {
     customerEmail: emailNorm,
     customerName: custName || null,
-    serviceLabel,
-    dateLabel,
-    timeLabel,
-    location: locked?.location?.trim() ?? "",
-    cleanerName: params.snapshot?.cleaner_name ?? null,
+    serviceLabel: fields.serviceLabel,
+    dateLabel: fields.dateLabel || "—",
+    timeLabel: fields.timeLabel || "—",
+    location: fields.location,
+    cleanerName: fields.cleanerName,
     totalPaidZar,
     paymentReference: params.paymentReference,
     bookingId: params.bookingId?.trim() ?? null,
