@@ -96,7 +96,7 @@ export type InvoiceSnapshotEvent =
       /** First consolidated invoice email from finalize cron (idempotent guard vs duplicate finalize). */
       kind: "invoice_payment_link_email_sent";
       at: string;
-      actor: "system";
+      actor: string;
       paystack_reference: string;
     };
 
@@ -207,7 +207,7 @@ export function parseInvoiceSnapshotEvent(raw: unknown): InvoiceSnapshotEvent | 
     return {
       kind: "invoice_payment_link_email_sent",
       at: String(o.at ?? ""),
-      actor: "system",
+      actor: String(o.actor ?? "system"),
       paystack_reference: String(o.paystack_reference ?? ""),
     };
   }

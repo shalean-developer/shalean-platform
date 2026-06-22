@@ -47,9 +47,7 @@ export async function loadPayMonthlyInvoiceLanding(
 
   const { data: row, error } = await admin
     .from("monthly_invoices")
-    .select(
-      "id, month, status, balance_cents, paystack_reference, payment_link, payment_link_expires_at",
-    )
+    .select("id, month, status, balance_cents, paystack_reference, payment_link")
     .eq("id", id)
     .maybeSingle();
 
@@ -74,12 +72,6 @@ export async function loadPayMonthlyInvoiceLanding(
   const balance = Math.max(0, Math.round(Number(r.balance_cents ?? 0)));
   if (balance <= 0) {
     return { ok: false, httpStatus: 410, error: "Nothing is due on this invoice." };
-  }
-
-  const expiresAt =
-    typeof r.payment_link_expires_at === "string" ? r.payment_link_expires_at : null;
-  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
-    return { ok: false, httpStatus: 410, error: "This payment link has expired." };
   }
 
   const paymentLink = typeof r.payment_link === "string" ? r.payment_link : "";

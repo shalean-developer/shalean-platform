@@ -623,20 +623,31 @@ describe("M-9 source contracts", () => {
     expect(classifyCalls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("finalizeDueMonthlyInvoices imports the breaker AND consults shouldSkipRemainingSends BEFORE claiming or sending", async () => {
+  it("finalizeAndSendMonthlyInvoice imports the breaker AND consults shouldSkipRemainingSends BEFORE claiming or sending", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const file = path.resolve(__dirname, "..", "finalizeAndSendMonthlyInvoice.ts");
+    const src = fs.readFileSync(file, "utf8");
+
+    expect(src).toMatch(/emailBreaker\?\.shouldSkipRemainingSends/);
+
+    const skipIdx = src.indexOf("emailBreaker?.shouldSkipRemainingSends");
+    const claimIdx = src.indexOf("initial_invoice_email_dispatch_claimed: true");
+    const sendIdx = src.indexOf("sendMonthlyInvoiceEmail(");
+    expect(skipIdx).toBeGreaterThan(-1);
+    expect(claimIdx).toBeGreaterThan(skipIdx);
+    expect(sendIdx).toBeGreaterThan(skipIdx);
+  });
+
+  it("finalizeDueMonthlyInvoices passes the email breaker into finalizeAndSendMonthlyInvoice", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const file = path.resolve(__dirname, "..", "finalizeDueMonthlyInvoices.ts");
     const src = fs.readFileSync(file, "utf8");
 
     expect(src).toMatch(/createNotificationConfigBreaker/);
-
-    const skipIdx = src.indexOf("emailBreaker.shouldSkipRemainingSends");
-    const claimIdx = src.indexOf("initial_invoice_email_dispatch_claimed: true");
-    const sendIdx = src.indexOf("sendMonthlyInvoiceEmail(");
-    expect(skipIdx).toBeGreaterThan(-1);
-    expect(claimIdx).toBeGreaterThan(skipIdx);
-    expect(sendIdx).toBeGreaterThan(skipIdx);
+    expect(src).toMatch(/emailBreaker/);
+    expect(src).toMatch(/finalizeAndSendMonthlyInvoice/);
   });
 
   it("runSendInvoiceReminders consults shouldSkipRemainingSends before the email send call", async () => {

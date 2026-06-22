@@ -48,7 +48,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
 
   const { data: inv, error: invErr } = await admin
     .from("monthly_invoices")
-    .select("id, customer_id, month, due_date, payment_link, paystack_reference, balance_cents, total_amount_cents, amount_paid_cents, status")
+    .select(
+      "id, customer_id, month, due_date, payment_link, paystack_reference, balance_cents, total_amount_cents, amount_paid_cents, status, zoho_invoice_id",
+    )
     .eq("id", invoiceId)
     .maybeSingle();
 
@@ -65,6 +67,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     total_amount_cents: number | null;
     amount_paid_cents: number | null;
     status: string | null;
+    zoho_invoice_id: string | null;
   };
 
   const paymentLink = String(row.payment_link ?? "").trim();
@@ -123,9 +126,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     const sent = await sendMonthlyInvoiceEmail({
       to: email,
       monthLabel,
+      month: row.month,
       totalZar: balanceZar,
       paymentUrl,
       dueDateLabel: dueLabel,
+      zohoInvoiceId: row.zoho_invoice_id,
     });
 
     if (!sent.sent) {

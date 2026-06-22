@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { lastScheduledVisitYmd } from "@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
+import { getDraftMonthlyInvoiceDueDateOverride } from "@/lib/monthlyInvoice/setDraftMonthlyInvoiceDueDateOverride";
 import { lastDayYmdOfInvoiceMonth } from "@/lib/recurring/johannesburgCalendar";
 
 /**
@@ -23,6 +24,21 @@ export async function refreshDraftMonthlyInvoiceDueDate(
   const row = inv as { id: string; month: string; status: string | null; due_date: string | null } | null;
   if (!row || String(row.status ?? "").toLowerCase() !== "draft") {
     return { ok: true, dueDateYmd: null, changed: false };
+  }
+
+  const override = await getDraftMonthlyInvoiceDueDateOverride(admin, invoiceId);
+  if (override) {
+    const stored = String(row.due_date ?? "").slice(0, 10);
+    if (stored === override) {
+      return { ok: true, dueDateYmd: override, changed: false };
+    }
+    const { error: upOverrideErr } = await admin
+      .from("monthly_invoices")
+      .update({ due_date: override })
+      .eq("id", invoiceId)
+      .eq("status", "draft");
+    if (upOverrideErr) return { ok: false, error: upOverrideErr.message };
+    return { ok: true, dueDateYmd: override, changed: true };
   }
 
   const month = String(row.month ?? "").trim();

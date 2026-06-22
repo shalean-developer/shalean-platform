@@ -8,6 +8,7 @@ const ZERO: AdjustmentCategoryTotals = {
   discount: 0,
   missed_visit: 0,
   extra_service: 0,
+  cleaning_detergents: 0,
   late_fee: 0,
   other: 0,
 };
@@ -32,6 +33,7 @@ export function categoryAggregateSummaryLines(
     ["discount", "Discounts"],
     ["missed_visit", "Missed visits"],
     ["extra_service", "Extras"],
+    ["cleaning_detergents", adjustmentCategoryLabel("cleaning_detergents")],
     ["late_fee", adjustmentCategoryLabel("late_fee")],
     ["other", adjustmentCategoryLabel("other")],
   ];

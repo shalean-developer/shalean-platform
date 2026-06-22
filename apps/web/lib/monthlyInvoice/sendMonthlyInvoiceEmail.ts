@@ -6,6 +6,7 @@ import {
   type ResendLikeError,
 } from "@/lib/email/classifyResendSendError";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { loadMonthlyInvoiceEmailPdfAttachment } from "@/lib/monthlyInvoice/loadMonthlyInvoiceEmailPdfAttachment";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 /**
@@ -19,6 +20,21 @@ export type SendMonthlyInvoiceEmailResult =
   | { sent: true; classification: "ok" }
   | { sent: false; error: string; classification: EmailSendErrorClassification };
 
+function formatResendSendError(error: ResendLikeError): string {
+  const message = String(error.message ?? "email_send_failed").trim();
+  const name = String(error.name ?? "").trim();
+  if (name === "invalid_api_key" || /api key is invalid/i.test(message)) {
+    return (
+      "Resend rejected the API key. In apps/web/.env.local set RESEND_API_KEY to a current key from " +
+      "resend.com/api-keys (no quotes or spaces), verify RESEND_FROM uses shalean.co.za, then restart npm run dev."
+    );
+  }
+  if (name === "invalid_from_address" || /from address/i.test(message)) {
+    return `Resend rejected the from address (${getDefaultFromAddress()}). Use a verified domain in RESEND_FROM.`;
+  }
+  return message;
+}
+
 function classifyMissingResendConfig(): EmailSendErrorClassification {
   return "permanent_config";
 }
@@ -26,9 +42,12 @@ function classifyMissingResendConfig(): EmailSendErrorClassification {
 export async function sendMonthlyInvoiceEmail(params: {
   to: string;
   monthLabel: string;
+  /** Billing month `YYYY-MM` — used for the PDF filename. */
+  month?: string;
   totalZar: number;
   paymentUrl: string;
   dueDateLabel: string;
+  zohoInvoiceId?: string | null;
 }): Promise<SendMonthlyInvoiceEmailResult> {
   const resend = getResend();
   if (!resend) {
@@ -40,11 +59,29 @@ export async function sendMonthlyInvoiceEmail(params: {
 
   const amount = `R ${Math.round(params.totalZar).toLocaleString("en-ZA")}`;
   const subject = `Your Shalean invoice — ${params.monthLabel}`;
+
+  const pdfAttachment = await loadMonthlyInvoiceEmailPdfAttachment({
+    zohoInvoiceId: params.zohoInvoiceId,
+    month: params.month ?? params.monthLabel,
+  });
+
+  if (params.zohoInvoiceId && !pdfAttachment) {
+    await reportOperationalIssue("warn", "monthly_invoice/email", "invoice_pdf_attachment_unavailable", {
+      to: params.to,
+      zohoInvoiceId: params.zohoInvoiceId,
+    });
+  }
+
+  const pdfNote = pdfAttachment
+    ? "<p>Your invoice PDF is attached to this email.</p>"
+    : "";
+
   const html = `
     <p>Hi,</p>
     <p>Your consolidated cleaning invoice for <strong>${params.monthLabel}</strong> is ready.</p>
     <p><strong>Amount due:</strong> ${amount}<br/>
     <strong>Due:</strong> ${params.dueDateLabel}</p>
+    ${pdfNote}
     <p><a href="${params.paymentUrl}">View and pay your invoice online</a></p>
     <p>Thank you for choosing Shalean.</p>
   `;
@@ -54,6 +91,16 @@ export async function sendMonthlyInvoiceEmail(params: {
     to: params.to,
     subject,
     html,
+    ...(pdfAttachment
+      ? {
+          attachments: [
+            {
+              filename: pdfAttachment.filename,
+              content: pdfAttachment.content,
+            },
+          ],
+        }
+      : {}),
   });
 
   if (error) {
@@ -62,16 +109,16 @@ export async function sendMonthlyInvoiceEmail(params: {
       classification === "permanent_config" ? "error" : "warn",
       "monthly_invoice/email",
       error.message,
-      { to: params.to, classification },
+      { to: params.to, classification, resendErrorName: (error as ResendLikeError).name ?? null },
     );
-    return { sent: false, error: error.message, classification };
+    return { sent: false, error: formatResendSendError(error as ResendLikeError), classification };
   }
 
   await logSystemEvent({
     level: "info",
     source: "monthly_invoice/email",
     message: "monthly_invoice_sent",
-    context: { to: params.to, month: params.monthLabel },
+    context: { to: params.to, month: params.monthLabel, pdfAttached: Boolean(pdfAttachment) },
   });
 
   return { sent: true, classification: "ok" };

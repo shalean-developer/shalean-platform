@@ -16,7 +16,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, parseZarInput } from "@/lib/admin/invoices/invoiceAdminFormatters";
 import {
+  formatInvoiceBookingOptionLabel,
+  type InvoiceBookingOption,
+} from "@/lib/admin/invoices/invoiceBookingSelectOptions";
+import {
   adjustmentCategoryLabel,
+  INVOICE_ADJUSTMENT_CATEGORIES,
   parseAdjustmentCategory,
   type AdjustmentCategory,
 } from "@/lib/monthlyInvoice/adjustmentCategory";
@@ -24,6 +29,7 @@ import {
 const ADJ_PRESETS: { label: string; category: AdjustmentCategory }[] = [
   { label: "Missed visit", category: "missed_visit" },
   { label: "Extra service", category: "extra_service" },
+  { label: "Cleaning detergents", category: "cleaning_detergents" },
   { label: "Discount", category: "discount" },
 ];
 
@@ -33,11 +39,13 @@ export type InvoiceHeaderActionsProps = {
   isClosed: boolean;
   paymentLink: string | null;
   sentAt: string | null;
+  hasInvoicePdf: boolean;
   currencyCode: string;
   totalAmountCents: number;
   amountPaidCents: number;
   balanceCents: number;
   bookingCountToSettle: number;
+  invoiceBookings?: InvoiceBookingOption[];
   getAccessToken: () => Promise<string | null>;
   onDone: () => Promise<void>;
 };
@@ -81,6 +89,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const [adjRand, setAdjRand] = useState("");
   const [adjReason, setAdjReason] = useState("");
   const [adjCategory, setAdjCategory] = useState<AdjustmentCategory>("other");
+  const [adjBookingId, setAdjBookingId] = useState("");
   const [adjErr, setAdjErr] = useState<string | null>(null);
 
   const [confirmPaidOpen, setConfirmPaidOpen] = useState(false);
@@ -95,15 +104,36 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const [resendChannel, setResendChannel] = useState<"email" | "whatsapp">("email");
   const [resendErr, setResendErr] = useState<string | null>(null);
 
+  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
+  const [sendErr, setSendErr] = useState<string | null>(null);
+
   const st = props.status.toLowerCase();
   const canAdjust = !props.isClosed && ["draft", "sent", "partially_paid", "overdue"].includes(st);
   const hasLink = Boolean(props.paymentLink?.trim());
   const canResendEmail = hasLink && ["sent", "partially_paid", "overdue"].includes(st);
   const canMarkPaid = !props.isClosed && ["sent", "partially_paid", "overdue"].includes(st);
   const canHardClose = !props.isClosed && ["draft", "sent", "partially_paid", "overdue", "paid"].includes(st);
+  const canSendInvoice = !props.isClosed && st === "draft";
 
   const settleAmount = Math.max(0, props.balanceCents);
   const bookingLabel = props.bookingCountToSettle === 1 ? "booking" : "bookings";
+  const invoicePdfHref = `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}/pdf`;
+
+  const pdfAttachmentNote = props.hasInvoicePdf ? (
+    <p className="text-xs">
+      <span className="font-semibold">PDF attachment:</span> ready —{" "}
+      <a href={invoicePdfHref} target="_blank" rel="noopener noreferrer" className="font-medium underline">
+        preview Download PDF
+      </a>{" "}
+      to confirm line items before sending.
+    </p>
+  ) : (
+    <p className="text-xs">
+      <span className="font-semibold">PDF attachment:</span> not synced yet. Use{" "}
+      <span className="font-medium">Refresh Zoho PDF</span>, then preview with{" "}
+      <span className="font-medium">Download PDF</span> before you send.
+    </p>
+  );
 
   const adjPreviewCents = (() => {
     const zar = parseZarInput(adjRand);
@@ -130,6 +160,37 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
     if (!url) return;
     await navigator.clipboard.writeText(url);
     setToast({ text: "Payment link copied." });
+  }
+
+  async function sendInvoiceSubmit() {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setSendErr(null);
+    setBusy("send");
+    const idempotencyKey = crypto.randomUUID();
+    try {
+      const res = await authFetch(
+        props.getAccessToken,
+        `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}/send`,
+        {
+          method: "POST",
+          body: JSON.stringify({ forceEarlySend: true }),
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
+      );
+      if (!res.ok) {
+        setSendErr(await readJsonError(res));
+        return;
+      }
+      setToast({ text: "Invoice sent to customer by email." });
+      setConfirmSendOpen(false);
+      await props.onDone();
+    } catch (e) {
+      setSendErr(e instanceof Error ? e.message : "Send failed.");
+    } finally {
+      setBusy(null);
+      actionLock.current = false;
+    }
   }
 
   async function resendSubmit() {
@@ -255,7 +316,12 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
         `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}/adjustments`,
         {
           method: "POST",
-          body: JSON.stringify({ amountCents, reason, category: adjCategory }),
+          body: JSON.stringify({
+            amountCents,
+            reason,
+            category: adjCategory,
+            ...(adjBookingId ? { bookingId: adjBookingId } : {}),
+          }),
           headers: { "Idempotency-Key": idempotencyKey },
         },
       );
@@ -268,6 +334,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       setAdjRand("");
       setAdjReason("");
       setAdjCategory("other");
+      setAdjBookingId("");
       await props.onDone();
     } catch (e) {
       setAdjErr(e instanceof Error ? e.message : "Adjustment failed.");
@@ -296,6 +363,20 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           Add adjustment
         </Button>
       </span>
+      {canSendInvoice ? (
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          disabled={busy !== null}
+          onClick={() => {
+            setSendErr(null);
+            setConfirmSendOpen(true);
+          }}
+        >
+          Send invoice
+        </Button>
+      ) : null}
       <span title={resendDisabledReason ?? undefined}>
         <Button
           type="button"
@@ -358,6 +439,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
             setAdjReason("");
             setAdjErr(null);
             setAdjCategory("other");
+            setAdjBookingId("");
           }
         }}
       >
@@ -401,13 +483,32 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
                 value={adjCategory}
                 onChange={(e) => setAdjCategory(parseAdjustmentCategory(e.target.value))}
               >
-                {(["missed_visit", "extra_service", "discount", "other"] as const).map((c) => (
+                {INVOICE_ADJUSTMENT_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {adjustmentCategoryLabel(c)}
                   </option>
                 ))}
               </select>
             </div>
+            {props.invoiceBookings && props.invoiceBookings.length > 0 ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor="adj-booking">Applies to (optional)</Label>
+                <select
+                  id="adj-booking"
+                  disabled={busy !== null}
+                  className="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 py-1 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  value={adjBookingId}
+                  onChange={(e) => setAdjBookingId(e.target.value)}
+                >
+                  <option value="">Whole invoice</option>
+                  {props.invoiceBookings.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {formatInvoiceBookingOptionLabel(b, props.currencyCode)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="grid gap-1.5">
               <Label htmlFor="adj-zar">Amount (ZAR)</Label>
               <Input
@@ -449,6 +550,38 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
             </Button>
             <Button type="button" disabled={busy !== null} onClick={() => void submitAdjustment()}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmSendOpen} onOpenChange={setConfirmSendOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send invoice to customer?</DialogTitle>
+            <DialogDescription>
+              This finalizes the draft, creates a Paystack payment link, marks the invoice as sent, and emails the customer.
+              You can send before the last visit in the month if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-sm text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+            <p>
+              <span className="font-semibold">Amount due: </span>
+              <span className="tabular-nums font-bold">{formatCurrency(props.balanceCents, props.currencyCode)}</span>
+            </p>
+            <p className="text-xs opacity-90">
+              After sending, line items are frozen and further booking edits on this invoice are restricted. Use{" "}
+              <span className="font-medium">Resend invoice</span> if the customer needs the email again.
+            </p>
+            {pdfAttachmentNote}
+          </div>
+          {sendErr ? <p className="text-sm text-red-600 dark:text-red-400">{sendErr}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmSendOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={busy !== null} onClick={() => void sendInvoiceSubmit()}>
+              Send email
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -554,6 +687,20 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
                 />
                 Email (Resend)
               </label>
+              {resendChannel === "email" ? (
+                <div className="ml-6 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
+                  {props.hasInvoicePdf ? (
+                    <>
+                      PDF will be attached.{" "}
+                      <a href={invoicePdfHref} target="_blank" rel="noopener noreferrer" className="font-medium underline">
+                        Preview PDF
+                      </a>
+                    </>
+                  ) : (
+                    <>No Zoho PDF on file — email will send without a PDF attachment.</>
+                  )}
+                </div>
+              ) : null}
               <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
                   type="radio"

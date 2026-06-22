@@ -24,10 +24,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     amountCents?: unknown;
     reason?: unknown;
     category?: unknown;
+    bookingId?: unknown;
   };
   const amountCents = Math.round(Number(body.amountCents));
   const reason = String(body.reason ?? "").trim();
   const category = parseAdjustmentCategory(body.category);
+  const bookingIdRaw = String(body.bookingId ?? "").trim();
+  const bookingId = bookingIdRaw || null;
   if (!reason) return NextResponse.json({ error: "Reason is required." }, { status: 400 });
   if (!Number.isFinite(amountCents) || amountCents === 0) {
     return NextResponse.json({ error: "amountCents must be a non-zero integer (ZAR cents)." }, { status: 400 });
@@ -52,6 +55,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     return NextResponse.json({ error: "This billing month is closed for adjustments." }, { status: 409 });
   }
 
+  if (bookingId) {
+    const { data: booking, error: bookingErr } = await admin
+      .from("bookings")
+      .select("id, monthly_invoice_id")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (bookingErr) return NextResponse.json({ error: bookingErr.message }, { status: 500 });
+    const linkedInvoiceId = String((booking as { monthly_invoice_id?: string | null } | null)?.monthly_invoice_id ?? "");
+    if (!booking || linkedInvoiceId !== invoiceId) {
+      return NextResponse.json({ error: "Selected booking is not on this invoice." }, { status: 400 });
+    }
+  }
+
   const ins = await insertInvoiceAdjustment(admin, {
     customerId: row.customer_id,
     amountCents,
@@ -59,6 +76,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     monthApplied: row.month,
     createdBy: auth.userId,
     category,
+    bookingId,
   });
 
   if (!ins.ok) return NextResponse.json({ error: ins.error }, { status: 400 });

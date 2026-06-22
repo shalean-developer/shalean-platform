@@ -7,31 +7,61 @@ import {
   updateZohoInvoice,
   zohoInvoiceExists,
 } from "@/lib/zoho/zohoBooksService";
+import { loadInvoiceAdjustmentsForAdmin } from "@/lib/admin/invoices/loadAdminInvoiceBundle";
+import {
+  bookingLineAmountCents,
+  buildMonthlyInvoiceZohoLineItems,
+} from "@/lib/monthlyInvoice/buildMonthlyInvoiceZohoLineItems";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "@/lib/zoho/resolveZohoCustomerContact";
 import { zohoDatesForMonthlyInvoice, billingMonthInvoiceDate } from "@/lib/monthlyInvoice/monthlyInvoiceBillingDates";
 import { refreshDraftMonthlyInvoiceDueDate } from "@/lib/monthlyInvoice/refreshDraftMonthlyInvoiceDueDate";
 import { lastScheduledVisitYmd } from "@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
 
-function formatMonthLabel(ym: string): string {
-  const [y, m] = ym.split("-").map((x) => Number(x));
-  if (!y || !m) return ym;
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-ZA", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+async function loadBookingsSumCents(admin: SupabaseClient, invoiceId: string): Promise<number> {
+  const { data, error } = await admin
+    .from("bookings")
+    .select("total_paid_zar, amount_paid_cents, status")
+    .eq("monthly_invoice_id", invoiceId);
+
+  if (error) throw error;
+
+  let sum = 0;
+  for (const row of data ?? []) {
+    if (String((row as { status?: string }).status ?? "").toLowerCase() === "cancelled") continue;
+    sum += bookingLineAmountCents(row as Record<string, unknown>);
+  }
+  return sum;
 }
 
-function monthlyLineItems(month: string, balanceZar: number) {
-  const monthLabel = formatMonthLabel(month);
-  return [
-    {
-      name: `Shalean Cleaning — ${monthLabel}`,
-      description: `Monthly cleaning invoice for ${monthLabel}`,
-      rate: balanceZar,
-      quantity: 1,
-    },
-  ];
+async function loadZohoLineItems(
+  admin: SupabaseClient,
+  params: {
+    invoiceId: string;
+    customerId: string;
+    month: string;
+    balanceZar: number;
+    status?: string | null;
+  },
+) {
+  const totalAmountCents = Math.round(params.balanceZar * 100);
+  const { data: inv } = await admin
+    .from("monthly_invoices")
+    .select("status")
+    .eq("id", params.invoiceId)
+    .maybeSingle();
+  const status = String(params.status ?? (inv as { status?: string } | null)?.status ?? "").toLowerCase();
+
+  const [bookingsSumCents, adjustments] = await Promise.all([
+    loadBookingsSumCents(admin, params.invoiceId),
+    loadInvoiceAdjustmentsForAdmin(admin, params.invoiceId, params.customerId, params.month, status),
+  ]);
+
+  return buildMonthlyInvoiceZohoLineItems({
+    month: params.month,
+    bookingsSumCents,
+    adjustments,
+    totalAmountCents,
+  });
 }
 
 type MonthlyInvoiceRow = {
@@ -103,7 +133,13 @@ export async function syncMonthlyInvoiceToZohoBooks(
   if (!contactRes.ok) return { ok: false, error: contactRes.error };
   const contact = contactRes.contact;
 
-  const lineItems = monthlyLineItems(params.month, balanceZar);
+  const lineItems = await loadZohoLineItems(admin, {
+    invoiceId: params.invoiceId,
+    customerId: params.customerId,
+    month: params.month,
+    balanceZar,
+    status: rowStatus,
+  });
 
   if (linked) {
     if (rowStatus !== "draft") {

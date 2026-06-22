@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const monthlyInvoiceDir = path.resolve(__dirname, "..");
 
 const apply = path.join(monthlyInvoiceDir, "applyMonthlyInvoicePayment.ts");
-const finalize = path.join(monthlyInvoiceDir, "finalizeDueMonthlyInvoices.ts");
+const finalize = path.join(monthlyInvoiceDir, "finalizeAndSendMonthlyInvoice.ts");
 const manual = path.join(monthlyInvoiceDir, "markMonthlyInvoicePaidManual.ts");
 const helper = path.join(monthlyInvoiceDir, "allocateMonthlyChildPaymentCents.ts");
 const settlementCommand = path.join(monthlyInvoiceDir, "settleMonthlyInvoiceChildBooking.ts");

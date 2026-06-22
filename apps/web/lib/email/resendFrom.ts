@@ -3,8 +3,26 @@ import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 const RESEND_FROM_FALLBACK = "Shalean Cleaning <onboarding@resend.dev>";
 
+/** Strip whitespace / accidental quotes from env (common on Windows .env.local). */
+export function resolveResendApiKey(): string | null {
+  const raw = process.env.RESEND_API_KEY ?? process.env.RESEND_KEY;
+  if (raw == null) return null;
+
+  let key = String(raw).trim().replace(/^\uFEFF/, "");
+  if (!key) return null;
+
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1).trim();
+  }
+
+  return key || null;
+}
+
 export function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
+  const key = resolveResendApiKey();
   if (!key) return null;
   return new Resend(key);
 }

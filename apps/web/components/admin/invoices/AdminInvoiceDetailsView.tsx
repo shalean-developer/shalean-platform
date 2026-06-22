@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InvoiceAdjustmentsTable } from "@/components/admin/invoices/InvoiceAdjustmentsTable";
 import { InvoiceBookingsTable } from "@/components/admin/invoices/InvoiceBookingsTable";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/admin/invoices/buildInvoiceHumanTimelineForAdmin";
 import { categoryAggregateSummaryLines, sumAdjustmentAmountsByCategory } from "@/lib/admin/invoices/invoiceAdjustmentAggregates";
 import { formatCurrency } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { invoiceBookingOptionsFromRows } from "@/lib/admin/invoices/invoiceBookingSelectOptions";
 import { splitHumanTimelineLines } from "@/lib/admin/invoices/invoiceTimelinePresentation";
 import type { AdminInvoiceBundle } from "@/lib/admin/invoices/loadAdminInvoiceBundle";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -37,6 +39,8 @@ export function AdminInvoiceDetailsView({
   customersHref?: string;
 }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [zohoRefreshBusy, setZohoRefreshBusy] = useState(false);
+  const [zohoRefreshToast, setZohoRefreshToast] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async () => {
     if (!invoiceId) {
@@ -83,6 +87,32 @@ export function AdminInvoiceDetailsView({
     return data.session?.access_token ?? null;
   }, []);
 
+  const refreshZohoPdf = useCallback(async () => {
+    setZohoRefreshBusy(true);
+    setZohoRefreshToast(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Not signed in.");
+
+      const res = await fetch(`/api/admin/invoices/${encodeURIComponent(invoiceId)}/sync-zoho`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+
+      setZohoRefreshToast({ text: "Zoho PDF updated. Download again to view changes." });
+      await load();
+    } catch (e) {
+      setZohoRefreshToast({
+        text: e instanceof Error ? e.message : "Zoho refresh failed.",
+        error: true,
+      });
+    } finally {
+      setZohoRefreshBusy(false);
+    }
+  }, [getAccessToken, invoiceId, load]);
+
   const timelineRows = useMemo(() => {
     if (state.status !== "ready") return [];
     const inv = state.data.invoice;
@@ -119,6 +149,11 @@ export function AdminInvoiceDetailsView({
     const cur = String(state.data.invoice.currency_code ?? "ZAR");
     const totals = sumAdjustmentAmountsByCategory(state.data.adjustments);
     return categoryAggregateSummaryLines(totals, cur);
+  }, [state]);
+
+  const invoiceBookingOptions = useMemo(() => {
+    if (state.status !== "ready") return [];
+    return invoiceBookingOptionsFromRows(state.data.bookings);
   }, [state]);
 
   const lastInvoiceClosed = useMemo(() => {
@@ -200,9 +235,23 @@ export function AdminInvoiceDetailsView({
   const accountBillingRisk: "ok" | "at_risk" = billingRiskRaw === "at_risk" ? "at_risk" : "ok";
 
   const hasInvoicePdf = typeof invoice.zoho_invoice_id === "string" && invoice.zoho_invoice_id.trim().length > 0;
+  const canRefreshZohoPdf = status === "draft" && !isClosed;
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
+      {canRefreshZohoPdf ? (
+        <span title="Rebuild the Zoho draft from current bookings and adjustment lines.">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={zohoRefreshBusy}
+            onClick={() => void refreshZohoPdf()}
+          >
+            {zohoRefreshBusy ? "Refreshing…" : "Refresh Zoho PDF"}
+          </Button>
+        </span>
+      ) : null}
       {hasInvoicePdf ? (
         <a
           href={`/api/admin/invoices/${invoiceId}/pdf`}
@@ -219,14 +268,23 @@ export function AdminInvoiceDetailsView({
         isClosed={isClosed}
         paymentLink={paymentLink}
         sentAt={sentAt}
+        hasInvoicePdf={hasInvoicePdf}
         currencyCode={currency}
         totalAmountCents={totalCents}
         amountPaidCents={paidCents}
         balanceCents={balanceCents}
         bookingCountToSettle={bookingCountToSettle}
+        invoiceBookings={invoiceBookingOptions}
         getAccessToken={getAccessToken}
         onDone={load}
       />
+      {zohoRefreshToast ? (
+        <span
+          className={`w-full text-xs sm:w-auto ${zohoRefreshToast.error ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}
+        >
+          {zohoRefreshToast.text}
+        </span>
+      ) : null}
     </div>
   );
 
@@ -298,7 +356,12 @@ export function AdminInvoiceDetailsView({
           liveBookings={bookings}
           cleanersById={cleanersById}
         />
-        <InvoiceAdjustmentsTable currencyCode={currency} rows={adjustments} creatorEmails={adjustmentCreatorEmails} />
+        <InvoiceAdjustmentsTable
+          currencyCode={currency}
+          rows={adjustments}
+          creatorEmails={adjustmentCreatorEmails}
+          invoiceBookings={invoiceBookingOptions}
+        />
         <InvoicePaymentsTable currencyCode={currency} events={events} />
       </div>
     </div>

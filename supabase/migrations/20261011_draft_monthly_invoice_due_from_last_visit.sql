@@ -15,8 +15,8 @@ as $$
       from public.bookings b
       where b.monthly_invoice_id = p_invoice_id
         and coalesce(b.status, '') is distinct from 'cancelled'
-        and b.date >= (p_month || '-01')::date
-        and b.date <= (
+        and b.date::date >= (p_month || '-01')::date
+        and b.date::date <= (
           date_trunc('month', (p_month || '-01')::date) + interval '1 month' - interval '1 day'
         )::date
     ),
