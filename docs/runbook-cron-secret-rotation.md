@@ -2,11 +2,23 @@
 
 All production schedulers run in **Supabase `pg_cron` + `pg_net`**, not Vercel. HTTP crons call Next.js `/api/cron/*` via `public.invoke_nextjs_cron()` (migration `20261005_consolidate_all_http_crons_in_supabase.sql`).
 
+`apps/web/vercel.json` has **no** `crons` block. If **Vercel → shalean-platform → Settings → Cron Jobs** still lists jobs, delete them so only Supabase triggers schedules (avoids duplicate runs and Hobby limits).
+
 Routes authenticate with **`CRON_SECRET`** via `verifyCronSecret` (`apps/web/lib/cron/verifyCronSecret.ts`): accept **`Authorization: Bearer <secret>`** (scheme case-insensitive per RFC 7235; token trimmed) or **`x-cron-secret: <secret>`** (trimmed, exact match).
 
 ---
 
-## One-time production setup (after migration)
+## One-time: move crons from Vercel to Supabase
+
+1. **Apply migrations** through `20261005` (and later) on production Supabase.
+2. From `apps/web`, generate setup SQL:
+   ```bash
+   node scripts/print-setup-supabase-crons.sql.mjs
+   ```
+3. Paste output into **Supabase Dashboard → SQL Editor → Run**.
+4. In **Vercel → shalean-platform → Settings → Cron Jobs**, **delete all** cron jobs.
+5. Keep **`CRON_SECRET`** on Vercel (API routes still validate it when Supabase calls in).
+6. Verify: `node scripts/check-cron-health.mjs` (from `apps/web`).
 
 Set the singleton row (SQL Editor):
 

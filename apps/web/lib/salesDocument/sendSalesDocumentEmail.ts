@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { getDefaultFromAddress, getResend, describeResendApiKeyMisconfig } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export async function sendSalesDocumentEmail(params: {
@@ -13,8 +13,9 @@ export async function sendSalesDocumentEmail(params: {
 }): Promise<{ sent: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) {
-    await reportOperationalIssue("warn", "sales_document/email", "RESEND_API_KEY not set", { to: params.to });
-    return { sent: false, error: "RESEND_API_KEY not set" };
+    const configError = describeResendApiKeyMisconfig();
+    await reportOperationalIssue("warn", "sales_document/email", configError, { to: params.to });
+    return { sent: false, error: configError };
   }
 
   const amount = `R ${Math.round(params.totalZar).toLocaleString("en-ZA")}`;
@@ -31,7 +32,11 @@ export async function sendSalesDocumentEmail(params: {
       params.dueDateLabel && !isQuote ? `<br/><strong>Due:</strong> ${params.dueDateLabel}` : ""
     }</p>
     <p><a href="${params.viewUrl}">View ${isQuote ? "quote" : "invoice"} online</a></p>
-    <p>You can pay online from that page — no account required. Sign in anytime to see your documents in your Shalean account.</p>
+    <p>${
+      isQuote
+        ? "Review and accept the quote from that page — no account required. Sign in anytime to see your documents in your Shalean account."
+        : "You can pay online from that page — no account required. Sign in anytime to see your documents in your Shalean account."
+    }</p>
     <p>Thank you for choosing Shalean.</p>
   `;
 
@@ -43,8 +48,11 @@ export async function sendSalesDocumentEmail(params: {
   });
 
   if (error) {
+    const msg = /api key is invalid/i.test(error.message)
+      ? "Email failed: Resend API key on production is invalid. In Vercel → shalean-platform → Environment Variables, set RESEND_API_KEY to your current re_… key from resend.com/api-keys, then redeploy."
+      : error.message;
     await reportOperationalIssue("warn", "sales_document/email", error.message, { to: params.to });
-    return { sent: false, error: error.message };
+    return { sent: false, error: msg };
   }
 
   await logSystemEvent({

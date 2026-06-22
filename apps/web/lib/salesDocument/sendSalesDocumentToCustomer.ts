@@ -63,15 +63,6 @@ export async function sendSalesDocumentToCustomer(
   const zoho = await syncSalesDocumentToZoho(admin, row.id, { paymentUrl: paymentUrlForZoho });
   if (!zoho.ok) return { ok: false, error: `zoho:${zoho.error}` };
 
-  const nowIso = new Date().toISOString();
-  const nextStatus = row.document_type === "quote" ? "sent" : "sent";
-  const { error: statusErr } = await admin
-    .from("sales_documents")
-    .update({ status: nextStatus, sent_at: nowIso })
-    .eq("id", row.id);
-
-  if (statusErr) return { ok: false, error: statusErr.message };
-
   const mail = await sendSalesDocumentEmail({
     to: row.customer_email,
     documentType: row.document_type,
@@ -82,6 +73,15 @@ export async function sendSalesDocumentToCustomer(
   });
 
   if (!mail.sent) return { ok: false, error: mail.error ?? "email_failed" };
+
+  const nowIso = new Date().toISOString();
+  const nextStatus = row.document_type === "quote" ? "sent" : "sent";
+  const { error: statusErr } = await admin
+    .from("sales_documents")
+    .update({ status: nextStatus, sent_at: nowIso })
+    .eq("id", row.id);
+
+  if (statusErr) return { ok: false, error: statusErr.message };
 
   return { ok: true, viewUrl };
 }

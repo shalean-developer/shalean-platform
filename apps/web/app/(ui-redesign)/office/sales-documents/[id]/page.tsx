@@ -52,6 +52,7 @@ export default function OfficeSalesDocumentDetailPage() {
   const [doc, setDoc] = useState<DocDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageKind, setMessageKind] = useState<"success" | "error">("success");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -74,15 +75,17 @@ export default function OfficeSalesDocumentDetailPage() {
     void load();
   }, [load]);
 
-  async function runAction(path: string, label: string) {
+  async function runAction(path: string, successLabel: string) {
     setBusy(true);
     setMessage(null);
     try {
       const res = await adminFetch(path, { method: "POST", body: JSON.stringify({}) });
       if (!res.ok) throw new Error(res.error ?? "Action failed.");
-      setMessage(label);
+      setMessageKind("success");
+      setMessage(successLabel);
       await load();
     } catch (err) {
+      setMessageKind("error");
       setMessage(err instanceof Error ? err.message : "Action failed.");
     }
     setBusy(false);
@@ -190,10 +193,13 @@ export default function OfficeSalesDocumentDetailPage() {
         <button
           type="button"
           disabled={busy || !canSend}
-          onClick={() => void runAction(`/api/admin/sales-documents/${id}/send`, "Quote sent to customer.")}
+          onClick={() => void runAction(
+            `/api/admin/sales-documents/${id}/send`,
+            doc.document_type === "invoice" ? "Invoice sent to customer." : "Quote sent to customer.",
+          )}
           className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          Send quote to customer
+          {doc.document_type === "invoice" ? "Send invoice to customer" : "Send quote to customer"}
         </button>
         {doc.status === "requested" ? (
           <p className="text-sm text-amber-700">Save pricing first, then send the quote.</p>
@@ -232,6 +238,7 @@ export default function OfficeSalesDocumentDetailPage() {
               type="button"
               onClick={() => {
                 void navigator.clipboard.writeText(viewUrl);
+                setMessageKind("success");
                 setMessage("Customer link copied.");
               }}
               className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
@@ -242,7 +249,9 @@ export default function OfficeSalesDocumentDetailPage() {
         ) : null}
       </div>
 
-      {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
+      {message ? (
+        <p className={messageKind === "error" ? "text-sm text-red-700" : "text-sm text-emerald-700"}>{message}</p>
+      ) : null}
       {doc.converted_from_id ? (
         <p className="text-sm text-slate-500">
           Converted from quote{" "}

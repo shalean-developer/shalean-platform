@@ -1,6 +1,10 @@
-import { Resend } from "resend";
 import { NextResponse } from "next/server";
-import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
+import {
+  describeResendApiKeyMisconfig,
+  getDefaultFromAddress,
+  getResend,
+  resendApiKeyFingerprint,
+} from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
@@ -28,9 +32,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const key = process.env.RESEND_API_KEY?.trim();
-  if (!key) {
-    return NextResponse.json({ ok: false, error: "RESEND_API_KEY not set." }, { status: 503 });
+  const resend = getResend();
+  if (!resend) {
+    const configError = describeResendApiKeyMisconfig();
+    return NextResponse.json(
+      {
+        ok: false,
+        error: configError,
+        keyFingerprint: resendApiKeyFingerprint(process.env.RESEND_API_KEY || process.env.RESEND_KEY),
+        from: getDefaultFromAddress(),
+      },
+      { status: 503 },
+    );
   }
 
   let to = "";
@@ -52,7 +65,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const resend = new Resend(key);
   const from = getDefaultFromAddress();
 
   try {
@@ -65,7 +77,15 @@ export async function POST(request: Request) {
 
     if (error) {
       await reportOperationalIssue("error", "api/test-email", error.message, { to });
-      return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+          keyFingerprint: resendApiKeyFingerprint(process.env.RESEND_API_KEY || process.env.RESEND_KEY),
+          from,
+        },
+        { status: 502 },
+      );
     }
 
     await logSystemEvent({
