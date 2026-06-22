@@ -29,11 +29,18 @@ const getSupabaseAdminMock = vi.mocked(getSupabaseAdmin);
 function bookingSelectOnce(data: unknown, error: { message: string } | null = null) {
   return {
     from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn(async () => ({ data, error })),
-        })),
-      })),
+      select: vi.fn((columns: string) => {
+        if (columns === "customer_id") {
+          return {
+            limit: vi.fn(async () => ({ data: [], error: null })),
+          };
+        }
+        return {
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(async () => ({ data, error })),
+          })),
+        };
+      }),
     })),
   };
 }

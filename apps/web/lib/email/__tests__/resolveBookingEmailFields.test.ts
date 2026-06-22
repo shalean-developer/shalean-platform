@@ -11,7 +11,7 @@ describe("resolveBookingEmailFields", () => {
         date: "2026-06-21",
         time: "09:00",
         location: "12 Main Rd, Cape Town",
-      } as BookingSnapshotV1["locked"],
+      } as unknown as BookingSnapshotV1["locked"],
     };
     const fields = resolveBookingEmailFields({ snapshot });
     expect(fields.dateLabel).toContain("Jun");

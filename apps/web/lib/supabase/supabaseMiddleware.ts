@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { sanitizeCleanerPostAuthRedirect } from "@/lib/cleaner/cleanerRedirect";
+import { isOfficePortalPath } from "@/lib/auth/officePortalPath";
 
 /**
  * Refreshes the Supabase auth cookie and enforces cleaner-area session on navigations.
@@ -108,8 +109,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Protect admin office dashboard
-  if (pathname.startsWith("/office") && !user) {
+  // Protect admin office dashboard (not public `/office-cleaning/*` SEO landings)
+  if (isOfficePortalPath(pathname) && !user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
