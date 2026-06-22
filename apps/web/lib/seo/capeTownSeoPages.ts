@@ -296,18 +296,18 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     introSectionHeading: "How deep cleaning works as a reset visit",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/blog/deep-cleaning-claremont-cape-town",
+      blogPath: "/locations/claremont-cleaning-services",
       linkAnchorText: "deep cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Green Point",
-        blogPath: "/blog/deep-cleaning-green-point-cape-town",
+        blogPath: "/locations/green-point-cleaning-services",
         linkAnchorText: "deep cleaning guide for Green Point",
       },
       {
         areaName: "Sea Point",
-        blogPath: "/blog/deep-cleaning-sea-point-cape-town",
+        blogPath: "/locations/sea-point-cleaning-services",
         linkAnchorText: "deep cleaning guide for Sea Point",
       },
     ],
@@ -380,13 +380,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     includedSectionHeading: "What's included in our cleaning service",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/blog/standard-cleaning-claremont-cape-town",
+      blogPath: "/locations/claremont-cleaning-services",
       linkAnchorText: "standard cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Sea Point",
-        blogPath: "/blog/standard-cleaning-sea-point-cape-town",
+        blogPath: "/locations/sea-point-cleaning-services",
         linkAnchorText: "standard cleaning guide for Sea Point",
       },
       {
@@ -462,13 +462,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingLabel: "move-out cleaning",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
-      blogPath: "/blog/move-out-cleaning-claremont-cape-town",
+      blogPath: "/locations/claremont-cleaning-services",
       linkAnchorText: "move-out cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Sea Point",
-        blogPath: "/blog/move-out-cleaning-sea-point-cape-town",
+        blogPath: "/locations/sea-point-cleaning-services",
         linkAnchorText: "move-out cleaning guide for Sea Point",
       },
     ],
@@ -608,13 +608,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     bookingPath: "/book",
     neighbourhoodBlogGuide: {
       areaName: "Green Point",
-      blogPath: "/blog/airbnb-cleaning-green-point-cape-town",
+      blogPath: "/locations/green-point-cleaning-services",
       linkAnchorText: "Airbnb cleaning guide for Green Point",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Sea Point",
-        blogPath: "/blog/airbnb-cleaning-sea-point-cape-town",
+        blogPath: "/locations/sea-point-cleaning-services",
         linkAnchorText: "Airbnb cleaning guide for Sea Point",
       },
     ],
