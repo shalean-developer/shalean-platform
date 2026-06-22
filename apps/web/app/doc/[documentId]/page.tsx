@@ -5,6 +5,7 @@ import { GuestDocumentFooter } from "@/components/public/GuestDocumentFooter";
 import { AcceptQuoteButton } from "@/components/public/AcceptQuoteButton";
 import { trustSalesDocPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { loadPublicSalesDocument } from "@/lib/salesDocument/loadPublicSalesDocument";
+import { recordSalesDocumentView } from "@/lib/salesDocument/recordSalesDocumentView";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export default async function PublicSalesDocumentPage({
   }
 
   const doc = loaded.document;
+  void recordSalesDocumentView(doc.id);
   const isQuote = doc.document_type === "quote";
   const title = isQuote ? "Your quote" : "Your invoice";
   const total = `R ${(doc.total_cents / 100).toLocaleString("en-ZA")}`;

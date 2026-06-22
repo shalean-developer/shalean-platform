@@ -68,7 +68,7 @@ export default function AccountInvoicesPage() {
     <div className="space-y-8 pb-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Monthly Invoices</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Monthly billing</h1>
         <p className="mt-1 text-sm text-gray-500">
           One consolidated bill per month for all your cleaning visits.
         </p>

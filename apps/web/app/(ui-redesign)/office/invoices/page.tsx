@@ -83,6 +83,14 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
               {inv.days_overdue}d overdue
             </span>
           ) : null}
+          {inv.view_count > 0 ? (
+            <p className="w-full text-[10px] text-slate-400">
+              Opened {inv.view_count}×
+              {inv.first_viewed_at
+                ? ` · ${new Date(inv.first_viewed_at).toLocaleDateString("en-ZA", { dateStyle: "medium" })}`
+                : ""}
+            </p>
+          ) : null}
         </div>
       </td>
       <td className="px-4 py-3">
@@ -154,8 +162,8 @@ export default function InvoicesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Monthly invoice summaries for all customers.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Monthly billing</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Consolidated monthly invoices for recurring customers.</p>
         </div>
         <div className="flex items-center gap-2">
           <button

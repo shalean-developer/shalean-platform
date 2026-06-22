@@ -231,6 +231,9 @@ export function AdminInvoiceDetailsView({
   const isClosed = Boolean(invoice.is_closed);
   const paymentLink = typeof invoice.payment_link === "string" ? invoice.payment_link : null;
   const sentAt = typeof invoice.sent_at === "string" ? invoice.sent_at : null;
+  const viewCount = Math.max(0, Math.round(Number(invoice.view_count ?? 0)));
+  const firstViewedAt = typeof invoice.first_viewed_at === "string" ? invoice.first_viewed_at : null;
+  const lastViewedAt = typeof invoice.last_viewed_at === "string" ? invoice.last_viewed_at : null;
   const billingRiskRaw = String(customerProfile?.account_billing_risk ?? "ok").toLowerCase();
   const accountBillingRisk: "ok" | "at_risk" = billingRiskRaw === "at_risk" ? "at_risk" : "ok";
 
@@ -304,6 +307,9 @@ export function AdminInvoiceDetailsView({
         amountPaidCents={paidCents}
         balanceCents={balanceCents}
         sentAt={sentAt}
+        viewCount={viewCount}
+        firstViewedAt={firstViewedAt}
+        lastViewedAt={lastViewedAt}
         accountBillingRisk={accountBillingRisk}
         listHref={listHref}
         customersHref={customersHref}

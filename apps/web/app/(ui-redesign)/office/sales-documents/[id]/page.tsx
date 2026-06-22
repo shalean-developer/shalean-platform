@@ -25,6 +25,10 @@ type DocDetail = {
   public_token: string;
   paystack_reference: string | null;
   converted_from_id: string | null;
+  sent_at: string | null;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  view_count: number;
 };
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -44,6 +48,11 @@ const PROPERTY_LABELS: Record<string, string> = {
 
 function formatZar(cents: number) {
   return `R ${(cents / 100).toLocaleString("en-ZA")}`;
+}
+
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export default function OfficeSalesDocumentDetailPage() {
@@ -104,7 +113,7 @@ export default function OfficeSalesDocumentDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <Link href="/office/sales-documents" className="text-sm text-blue-600 hover:underline">← All documents</Link>
+      <Link href="/office/sales-documents" className="text-sm text-blue-600 hover:underline">← All quotes</Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -122,6 +131,41 @@ export default function OfficeSalesDocumentDetailPage() {
           {doc.status === "requested" ? "Pricing needed" : formatZar(doc.total_cents)}
         </p>
       </div>
+
+      {doc.sent_at || doc.view_count > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Customer link activity</h2>
+          <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+            {doc.sent_at ? (
+              <div>
+                <dt className="text-xs text-slate-500">Sent to customer</dt>
+                <dd className="font-medium">{formatDateTime(doc.sent_at)}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="text-xs text-slate-500">Times opened</dt>
+              <dd className="font-medium tabular-nums">{doc.view_count}</dd>
+            </div>
+            {doc.first_viewed_at ? (
+              <div>
+                <dt className="text-xs text-slate-500">First opened</dt>
+                <dd className="font-medium">{formatDateTime(doc.first_viewed_at)}</dd>
+              </div>
+            ) : doc.sent_at ? (
+              <div>
+                <dt className="text-xs text-slate-500">First opened</dt>
+                <dd className="font-medium text-slate-400">Not yet</dd>
+              </div>
+            ) : null}
+            {doc.last_viewed_at && doc.view_count > 1 ? (
+              <div>
+                <dt className="text-xs text-slate-500">Last opened</dt>
+                <dd className="font-medium">{formatDateTime(doc.last_viewed_at)}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
+      ) : null}
 
       {rd ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">

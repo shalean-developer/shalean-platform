@@ -3,13 +3,11 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { createSalesDocument } from "@/lib/salesDocument/salesDocumentMutations";
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
+import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const PUBLIC_COLUMNS =
-  "id, document_type, status, source, customer_id, customer_name, customer_email, customer_phone, line_items, subtotal_cents, total_cents, balance_cents, amount_paid_cents, currency, due_date, notes, request_details, sent_at, converted_from_id, public_token, paystack_reference, created_at, updated_at";
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
@@ -23,7 +21,7 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
 
-  let query = admin.from("sales_documents").select(PUBLIC_COLUMNS).order("created_at", { ascending: false });
+  let query = admin.from("sales_documents").select(SALES_DOCUMENT_ADMIN_COLUMNS).order("created_at", { ascending: false });
 
   if (type === "quote" || type === "invoice") {
     query = query.eq("document_type", type);

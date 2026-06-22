@@ -38,6 +38,18 @@ export function formatDate(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: JHB }).format(new Date(ms));
 }
 
+/** Display date and time in Africa/Johannesburg (en-ZA medium + short). */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return "—";
+  return new Intl.DateTimeFormat("en-ZA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: JHB,
+  }).format(new Date(ms));
+}
+
 /** Long month label for emails (matches finalize cron). */
 export function formatMonthLongYearUtc(ym: string): string {
   const [y, m] = ym.split("-").map((x) => Number(x));

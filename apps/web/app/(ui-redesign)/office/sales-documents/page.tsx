@@ -16,6 +16,8 @@ type SalesDocRow = {
   total_cents: number;
   balance_cents: number;
   created_at: string;
+  view_count: number;
+  first_viewed_at: string | null;
 };
 
 type FilterTab = "all" | "requests" | "quote" | "invoice";
@@ -78,9 +80,9 @@ export default function OfficeSalesDocumentsPage() {
     <div className="space-y-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Quotes & invoices</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Quotes</h1>
           <p className="text-sm text-slate-500">
-            Review customer quote requests, create ad-hoc quotes, and send invoices.
+            Review customer quote requests, create ad-hoc quotes, and send one-off invoices.
           </p>
         </div>
         <Link
@@ -171,6 +173,14 @@ export default function OfficeSalesDocumentsPage() {
                     <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold capitalize", statusCls(d.status))}>
                       {statusLabel(d.status)}
                     </span>
+                    {d.view_count > 0 ? (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Opened {d.view_count}×
+                        {d.first_viewed_at
+                          ? ` · ${new Date(d.first_viewed_at).toLocaleDateString("en-ZA", { dateStyle: "medium" })}`
+                          : ""}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link href={`/office/sales-documents/${d.id}`} className="text-sm font-medium text-blue-600 hover:underline">

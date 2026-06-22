@@ -3,13 +3,11 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { updateSalesDocumentDraft } from "@/lib/salesDocument/salesDocumentMutations";
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
+import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const PUBLIC_COLUMNS =
-  "id, document_type, status, source, customer_id, customer_name, customer_email, customer_phone, line_items, subtotal_cents, total_cents, balance_cents, amount_paid_cents, currency, due_date, notes, request_details, sent_at, converted_from_id, public_token, paystack_reference, created_at, updated_at";
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminApi(_request);
@@ -19,7 +17,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const { data, error } = await admin.from("sales_documents").select(PUBLIC_COLUMNS).eq("id", id).maybeSingle();
+  const { data, error } = await admin
+    .from("sales_documents")
+    .select(SALES_DOCUMENT_ADMIN_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "not_found" }, { status: 404 });
 

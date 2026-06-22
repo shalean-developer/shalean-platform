@@ -26,6 +26,8 @@ export type AdminInvoiceListRow = {
   /** From `invoice_adjustments` applied to this invoice (for list badges / filters). */
   has_discount_lines: boolean;
   has_missed_visit_lines: boolean;
+  view_count: number;
+  first_viewed_at: string | null;
 };
 
 export type AdminInvoiceMonthGroup = {
@@ -112,7 +114,7 @@ export async function loadAdminInvoiceList(
   const { data: invs, error } = await admin
     .from("monthly_invoices")
     .select(
-      "id, customer_id, month, status, total_amount_cents, amount_paid_cents, balance_cents, is_overdue, is_closed, due_date, currency_code",
+      "id, customer_id, month, status, total_amount_cents, amount_paid_cents, balance_cents, is_overdue, is_closed, due_date, currency_code, view_count, first_viewed_at",
     )
     .order("month", { ascending: false })
     .limit(500);
@@ -195,6 +197,8 @@ export async function loadAdminInvoiceList(
       booking_count: stats?.count ?? 0,
       has_discount_lines: false,
       has_missed_visit_lines: false,
+      view_count: Math.max(0, num(r.view_count)),
+      first_viewed_at: typeof r.first_viewed_at === "string" ? r.first_viewed_at : null,
     };
   });
 

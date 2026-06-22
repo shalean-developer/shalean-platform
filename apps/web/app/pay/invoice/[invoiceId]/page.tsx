@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { GuestDocumentFooter } from "@/components/public/GuestDocumentFooter";
+import { recordMonthlyInvoiceView } from "@/lib/monthlyInvoice/recordMonthlyInvoiceView";
 import { loadPayMonthlyInvoiceLanding } from "@/lib/pay/loadPayMonthlyInvoiceLanding";
 
 export const runtime = "nodejs";
@@ -42,6 +43,8 @@ export default async function PayMonthlyInvoicePage({
       </main>
     );
   }
+
+  void recordMonthlyInvoiceView(land.invoiceId);
 
   const price = `R ${land.amountZar.toLocaleString("en-ZA")}`;
 

@@ -3,7 +3,12 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatDate, formatInvoiceMonth } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatInvoiceMonth,
+} from "@/lib/admin/invoices/invoiceAdminFormatters";
 
 export type InvoiceHeaderProps = {
   customerLabel: string;
@@ -20,6 +25,9 @@ export type InvoiceHeaderProps = {
   balanceCents: number;
   /** Last time the monthly invoice email was sent (from `monthly_invoices.sent_at`). */
   sentAt: string | null;
+  viewCount?: number;
+  firstViewedAt?: string | null;
+  lastViewedAt?: string | null;
   /** From `user_profiles.account_billing_risk`. */
   accountBillingRisk: "ok" | "at_risk";
   listHref?: string;
@@ -84,6 +92,24 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Last invoice email sent: {props.sentAt ? formatDate(props.sentAt) : "—"}
             </p>
+            {props.sentAt || (props.viewCount ?? 0) > 0 ? (
+              <div className="rounded-lg border border-zinc-200 bg-white/80 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300">
+                <p className="font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Customer pay link activity
+                </p>
+                <p className="mt-1 tabular-nums">
+                  Opened {(props.viewCount ?? 0)}×
+                  {props.firstViewedAt
+                    ? ` · first ${formatDateTime(props.firstViewedAt)}`
+                    : props.sentAt
+                      ? " · not yet opened"
+                      : ""}
+                  {(props.viewCount ?? 0) > 1 && props.lastViewedAt
+                    ? ` · last ${formatDateTime(props.lastViewedAt)}`
+                    : ""}
+                </p>
+              </div>
+            ) : null}
             {props.actions ? <div className="w-full max-w-xl lg:w-auto">{props.actions}</div> : null}
           </div>
         </div>

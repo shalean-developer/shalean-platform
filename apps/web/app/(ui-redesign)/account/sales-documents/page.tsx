@@ -21,7 +21,7 @@ export default function AccountSalesDocumentsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Quotes & invoices</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Quotes</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Ad-hoc quotes and invoices sent to you by Shalean.
         </p>

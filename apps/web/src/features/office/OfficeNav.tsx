@@ -119,8 +119,8 @@ export const OFFICE_NAV_SECTIONS: NavSection[] = [
     title: "CUSTOMERS",
     items: [
       { label: "Customers", href: "/office/customers", icon: Users },
-      { label: "Quotes & invoices", href: "/office/sales-documents", icon: FileText },
-      { label: "Invoices", href: "/office/invoices", icon: Receipt },
+      { label: "Quotes", href: "/office/sales-documents", icon: FileText },
+      { label: "Monthly billing", href: "/office/invoices", icon: Receipt },
       { label: "Reviews", href: "/office/reviews", icon: ThumbsUp },
       { label: "Review funnel", href: "/office/review-funnel", icon: MessageCircle },
     ],
