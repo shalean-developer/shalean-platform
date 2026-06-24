@@ -3,7 +3,8 @@ import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { addDaysYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { sendRecurringVisitPrechargeReminderEmail } from "@/lib/email/subscriptionEmails";
-import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { resolveCustomerOutboundEmail } from "@/lib/customer/readCustomerProfileContact";
+import { pickBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
   }
 
   let sent = 0;
+  let failed = 0;
   for (const raw of rows ?? []) {
     const row = raw as {
       id: string;
@@ -66,21 +68,28 @@ export async function POST(request: Request) {
       date: string | null;
     };
 
-    let email = normalizeEmail(String(row.customer_email ?? ""));
-    if (!email && row.user_id) {
-      const u = await admin.auth.admin.getUserById(row.user_id);
-      email = normalizeEmail(String(u.data.user?.email ?? ""));
-    }
+    const email = row.user_id
+      ? await resolveCustomerOutboundEmail(admin, row.user_id, { bookingCustomerEmail: row.customer_email })
+      : pickBillingEmail([row.customer_email]);
     if (!email) continue;
 
     const serviceLabel = row.service != null && String(row.service).trim() ? String(row.service) : "cleaning";
     const visitDate = row.date != null ? String(row.date) : tomorrow;
 
-    await sendRecurringVisitPrechargeReminderEmail({
+    const mail = await sendRecurringVisitPrechargeReminderEmail({
       to: email,
       serviceLabel,
       visitDateYmd: visitDate,
     });
+
+    if (!mail.sent) {
+      failed++;
+      await reportOperationalIssue("warn", "cron/recurring-precharge-reminders", mail.error ?? "email_failed", {
+        booking_id: row.id,
+        to: email,
+      });
+      continue;
+    }
 
     await admin.from("bookings").update({ recurring_precharge_notified_at: new Date().toISOString() }).eq("id", row.id);
 
@@ -97,10 +106,10 @@ export async function POST(request: Request) {
     level: "info",
     source: "cron/recurring-precharge-reminders",
     message: "Cron finished",
-    context: { scanned: rows?.length ?? 0, sent },
+    context: { scanned: rows?.length ?? 0, sent, failed },
   });
 
-  return NextResponse.json({ ok: true, scanned: rows?.length ?? 0, sent, tomorrow });
+  return NextResponse.json({ ok: true, scanned: rows?.length ?? 0, sent, failed, tomorrow });
   } finally {
     await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
   }

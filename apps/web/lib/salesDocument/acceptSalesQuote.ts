@@ -72,7 +72,7 @@ export async function acceptSalesQuoteAndCreateInvoice(
       customer_email?: string;
       total_cents?: number | null;
     };
-    void notifyAdminSalesQuoteAccepted(admin, {
+    await notifyAdminSalesQuoteAccepted(admin, {
       quoteId,
       invoiceId: converted.invoiceId,
       customerName: String(q.customer_name ?? ""),

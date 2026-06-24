@@ -19,8 +19,19 @@ for (const line of readFileSync(resolve(__dir, "../.env.local"), "utf8").split("
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const secret = process.env.CRON_SECRET?.trim();
-const base = (process.env.NEXT_PUBLIC_APP_URL || "https://shalean.co.za").replace(/\/$/, "");
-const host = base.startsWith("http") ? base : `https://${base}`;
+
+function resolveAppHost() {
+  const raw = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://shalean.co.za"
+  ).trim();
+  if (/localhost|127\.0\.0\.1|::1/i.test(raw)) return "https://shalean.co.za";
+  const base = raw.replace(/\/$/, "");
+  return base.startsWith("http") ? base : `https://${base}`;
+}
+
+const host = resolveAppHost();
 
 if (!url || !key) {
   console.error("Missing Supabase env");
@@ -93,19 +104,24 @@ if (targetsErr) {
 }
 
 if (secret) {
-  console.log("\n=== production auth probe (GET) ===\n");
+  console.log(`\n=== production auth probe (GET → ${host}) ===\n`);
   for (const path of [
     "/api/cron/booking-lifecycle",
     "/api/cron/retry-failed-jobs",
     "/api/cron/payment-recovery",
     "/api/cron/payout-integrity-daily",
   ]) {
-    const r = await fetch(`${host}${path}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${secret}`, "x-cron-secret": secret },
-    });
-    const text = await r.text();
-    console.log(`${path}: HTTP ${r.status} ${text.slice(0, 120)}`);
+    try {
+      const r = await fetch(`${host}${path}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${secret}`, "x-cron-secret": secret },
+      });
+      const text = await r.text();
+      console.log(`${path}: HTTP ${r.status} ${text.slice(0, 120)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`${path}: FETCH FAILED — ${msg}`);
+    }
   }
 } else {
   console.log("\n(skip auth probe — CRON_SECRET missing locally)");

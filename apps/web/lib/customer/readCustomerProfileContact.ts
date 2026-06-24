@@ -80,3 +80,17 @@ export async function readCustomerProfileContact(
     bookingEmail: billingEmail ?? loginEmail ?? "",
   };
 }
+
+/**
+ * Best-effort customer inbox for outbound email (recurring reminders, monthly invoices).
+ * Prefers booking `customer_email`, then `user_profiles.billing_email`, then a real auth login.
+ * Skips synthetic `@walkin.shalean.com` / `@cleaner.shalean.com` login aliases.
+ */
+export async function resolveCustomerOutboundEmail(
+  admin: SupabaseClient,
+  userId: string,
+  opts?: { bookingCustomerEmail?: string | null; authUser?: User | null },
+): Promise<string | null> {
+  const contact = await readCustomerProfileContact(admin, userId, opts?.authUser);
+  return pickBillingEmail([opts?.bookingCustomerEmail, contact.billingEmail, contact.loginEmail]);
+}

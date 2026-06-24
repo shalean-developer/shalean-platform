@@ -8,6 +8,7 @@ import { formatDueDateLabel, formatMonthLongYearUtc } from "@/lib/admin/invoices
 import { sendViaMetaWhatsApp } from "@/lib/dispatch/metaWhatsAppSend";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
+import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
 import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
@@ -79,12 +80,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     ? trustMonthlyInvoicePayPageUrl(row.id, paystackRef, paymentLink)
     : paymentLink;
 
-  const { data: udata, error: uerr } = await admin.auth.admin.getUserById(row.customer_id);
-  if (uerr || !udata?.user?.email) {
+  const email = await resolveMonthlyInvoiceCustomerEmail(admin, {
+    customerId: row.customer_id,
+    invoiceId: row.id,
+  });
+  if (!email) {
     return NextResponse.json({ error: "Could not resolve customer email." }, { status: 400 });
   }
-
-  const email = String(udata.user.email).trim().toLowerCase();
   const total = Math.max(0, Math.round(Number(row.total_amount_cents ?? 0)));
   const paid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const balance =
@@ -129,6 +131,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
       month: row.month,
       totalZar: balanceZar,
       paymentUrl,
+      paystackPaymentUrl: paymentLink,
       dueDateLabel: dueLabel,
       zohoInvoiceId: row.zoho_invoice_id,
     });
@@ -158,7 +161,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
     return NextResponse.json(payload);
   }
 
-  const phoneRaw = typeof udata.user.phone === "string" ? udata.user.phone.trim() : "";
+  const { data: udata } = await admin.auth.admin.getUserById(row.customer_id);
+  const phoneRaw = typeof udata?.user?.phone === "string" ? udata.user.phone.trim() : "";
   if (!phoneRaw) {
     return NextResponse.json(
       { error: "Customer has no phone on their account. Ask them to add a phone or use email." },

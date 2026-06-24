@@ -18,6 +18,8 @@ type CustomerRow = {
   total_spend_zar: number;
   last_booking_at: string | null;
   tier: string | null;
+  status: "active" | "inactive";
+  has_active_recurring_plan: boolean;
 };
 
 type CustomersResponse = {
@@ -28,6 +30,8 @@ type CustomersResponse = {
       totalSpendZar?: number;
       lastBookingAt?: string | null;
       user_id?: string | null;
+      has_active_recurring_plan?: boolean;
+      status?: "active" | "inactive";
     }
   >;
 };
@@ -48,6 +52,8 @@ function normalizeCustomer(
     total_spend_zar: c.total_spend_zar ?? c.totalSpendZar ?? 0,
     last_booking_at: c.last_booking_at ?? c.lastBookingAt ?? null,
     tier: c.tier ?? null,
+    status: c.status === "inactive" ? "inactive" : "active",
+    has_active_recurring_plan: Boolean(c.has_active_recurring_plan),
   };
 }
 
@@ -69,13 +75,21 @@ function formatRelativeDate(iso: string | null): string {
   return `${Math.floor(diffDays / 365)} years ago`;
 }
 
-function getTierBadge(tier: string | null, totalBookings: number): { label: string; cls: string } {
+function getTierBadge(tier: string | null, totalBookings: number): { label: string; cls: string } | null {
   if (tier === "gold" || tier === "platinum" || totalBookings >= 10) {
     return { label: "VIP", cls: "bg-yellow-100 text-yellow-700" };
   }
-  if (totalBookings >= 3) return { label: "Active", cls: "bg-emerald-100 text-emerald-700" };
-  if (totalBookings === 0) return { label: "Inactive", cls: "bg-slate-100 text-slate-600" };
-  return { label: "Active", cls: "bg-emerald-100 text-emerald-700" };
+  return null;
+}
+
+function getCustomerStatusBadge(c: CustomerRow): { label: string; cls: string } {
+  if (c.has_active_recurring_plan) {
+    return { label: "Recurring", cls: "bg-blue-100 text-blue-700" };
+  }
+  if (c.status === "active") {
+    return { label: "Active", cls: "bg-emerald-100 text-emerald-700" };
+  }
+  return { label: "Inactive", cls: "bg-slate-100 text-slate-600" };
 }
 
 function getInitials(name: string | null, email: string): string {
@@ -147,7 +161,7 @@ export default function CustomersPage() {
   }
 
   const vipCount = customers.filter((c) => c.total_bookings >= 10 || c.tier === "gold" || c.tier === "platinum").length;
-  const activeCount = customers.filter((c) => c.total_bookings >= 1).length;
+  const activeCount = customers.filter((c) => c.status === "active" || c.has_active_recurring_plan).length;
   const totalSpend = customers.reduce((s, c) => s + (c.total_spend_zar ?? 0), 0);
 
   async function deleteCustomer(c: CustomerRow) {
@@ -409,7 +423,8 @@ export default function CustomersPage() {
                 </tr>
               ) : (
                 filtered.map((c) => {
-                  const badge = getTierBadge(c.tier, c.total_bookings);
+                  const statusBadge = getCustomerStatusBadge(c);
+                  const tierBadge = getTierBadge(c.tier, c.total_bookings);
                   return (
                     <tr key={c.id} className={cn("group hover:bg-slate-50/50 transition-colors", selectedIds.has(c.id) && "bg-blue-50/40")}>
                       <td className="px-4 py-3">
@@ -432,6 +447,11 @@ export default function CustomersPage() {
                           <div>
                             <p className="text-sm font-semibold text-slate-800">
                               {c.full_name ?? c.email}
+                              {tierBadge ? (
+                                <span className={cn("ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold", tierBadge.cls)}>
+                                  {tierBadge.label}
+                                </span>
+                              ) : null}
                             </p>
                             <p className="text-xs text-slate-400">{c.email}</p>
                           </div>
@@ -453,8 +473,8 @@ export default function CustomersPage() {
                         {formatRelativeDate(c.last_booking_at)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", badge.cls)}>
-                          {badge.label}
+                        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", statusBadge.cls)}>
+                          {statusBadge.label}
                         </span>
                       </td>
                       <td className="px-4 py-3">

@@ -9,6 +9,8 @@ import { daysPastDueJhb } from "@/lib/dashboard/invoiceOverdueEscalation";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { appendMonthlyInvoiceSnapshotEvent, type InvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { sendMonthlyInvoiceReminderEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
+import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
+import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
@@ -43,6 +45,7 @@ type InvoiceRow = {
   month: string;
   due_date: string | null;
   payment_link: string | null;
+  paystack_reference: string | null;
   balance_cents: number | null;
   total_amount_cents: number | null;
   amount_paid_cents: number | null;
@@ -116,7 +119,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
   const { data: rows, error: qErr } = await admin
     .from("monthly_invoices")
     .select(
-      "id, customer_id, month, due_date, payment_link, balance_cents, total_amount_cents, amount_paid_cents, status, is_closed",
+      "id, customer_id, month, due_date, payment_link, paystack_reference, balance_cents, total_amount_cents, amount_paid_cents, status, is_closed",
     )
     .gt("balance_cents", 0)
     .in("status", ["sent", "partially_paid"])
@@ -204,14 +207,22 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
         ? Math.max(0, Math.round(inv.balance_cents))
         : Math.max(0, total - paid);
 
-    const paymentUrl = String(inv.payment_link ?? "").trim();
+    const paystackUrl = String(inv.payment_link ?? "").trim();
+    const paystackRef = String(inv.paystack_reference ?? "").trim();
+    const paymentUrl = paystackRef
+      ? trustMonthlyInvoicePayPageUrl(inv.id, paystackRef, paystackUrl)
+      : paystackUrl;
     const monthLabel = formatMonthLongYearUtc(inv.month);
     const dueLabel = formatDueDateLabel(inv.due_date);
     const dayOffset = inv.day_offset;
 
-    const { data: udata, error: uerr } = await admin.auth.admin.getUserById(inv.customer_id);
-    const user = !uerr ? udata?.user : undefined;
-    const email = user?.email ? String(user.email).trim().toLowerCase() : "";
+    const email =
+      (await resolveMonthlyInvoiceCustomerEmail(admin, {
+        customerId: inv.customer_id,
+        invoiceId: inv.id,
+      })) ?? "";
+    const { data: udata } = await admin.auth.admin.getUserById(inv.customer_id);
+    const user = udata?.user;
     const phoneRaw = typeof user?.phone === "string" ? user.phone.trim() : "";
     const phoneForWa = phoneRaw ? resolveCustomerPhoneForWhatsApp(phoneRaw) : null;
 
@@ -281,6 +292,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
         paidZar: zar(paid),
         balanceZar: zar(balance),
         paymentUrl,
+        paystackPaymentUrl: paystackUrl,
         dueDateLabel: dueLabel,
       });
       if (emailRes.sent) {

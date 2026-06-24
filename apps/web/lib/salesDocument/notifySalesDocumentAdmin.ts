@@ -27,22 +27,27 @@ async function sendSalesDocumentAdminMail(
     subject: string;
     html: string;
     context: Record<string, unknown>;
+    bookingId?: string | null;
   },
-): Promise<void> {
-  if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) return;
+): Promise<{ sent: boolean; skipped?: string }> {
+  if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
+    return { sent: false, skipped: "ADMIN_NOTIFICATION_EMAIL not configured" };
+  }
 
   const claimed = await tryClaimNotificationIdempotency(admin, {
     reference: params.reference,
     eventType: params.eventType,
     channel: "email",
+    bookingId: params.bookingId,
   });
-  if (!claimed) return;
+  if (!claimed) return { sent: false, skipped: "duplicate" };
 
-  await sendAdminHtmlEmail({
+  const result = await sendAdminHtmlEmail({
     subject: params.subject,
     html: params.html,
-    context: { type: params.eventType, ...params.context },
+    context: { type: params.eventType, bookingId: params.bookingId ?? undefined, ...params.context },
   });
+  return { sent: result.sent, skipped: result.sent ? undefined : result.error };
 }
 
 /** Notify ops when a customer submits the public /quote form. */
@@ -106,6 +111,52 @@ export async function notifyAdminCustomerQuoteRequest(
       customerEmail: email,
       suburb: d.suburb,
     },
+  });
+}
+
+/** Notify ops when a customer starts online booking (pending payment). */
+export async function notifyAdminCustomerBookingRequest(
+  admin: SupabaseClient,
+  params: {
+    bookingId: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    serviceLabel: string;
+    date: string;
+    time: string;
+    location: string;
+    totalZar: number;
+  },
+): Promise<void> {
+  const name = params.customerName.trim() || "Customer";
+  const email = params.customerEmail.trim();
+  const phone = params.customerPhone.trim();
+  const bookingUrl = absoluteCanonicalUrl(`/office/bookings/${params.bookingId}`);
+  const amount = formatZarFromCents(Math.round(params.totalZar * 100));
+
+  const html = `
+    <p>A customer submitted a booking request and is awaiting payment.</p>
+    <p><strong>Customer:</strong> ${escapeHtml(name)} (${escapeHtml(email)})<br/>
+    <strong>Phone:</strong> ${escapeHtml(phone)}</p>
+    <p><strong>Service:</strong> ${escapeHtml(params.serviceLabel)}<br/>
+    <strong>When:</strong> ${escapeHtml(params.date)} at ${escapeHtml(params.time)}<br/>
+    <strong>Where:</strong> ${escapeHtml(params.location)}<br/>
+    <strong>Quoted:</strong> ${escapeHtml(amount)}</p>
+    <p><a href="${bookingUrl}">View booking in Office</a></p>
+  `;
+
+  await sendSalesDocumentAdminMail(admin, {
+    reference: `customer_booking_request:${params.bookingId}`,
+    eventType: "customer_booking_request",
+    subject: `New booking request — ${name} — ${params.date}`,
+    html,
+    context: {
+      bookingId: params.bookingId,
+      customerEmail: email,
+      date: params.date,
+    },
+    bookingId: params.bookingId,
   });
 }
 

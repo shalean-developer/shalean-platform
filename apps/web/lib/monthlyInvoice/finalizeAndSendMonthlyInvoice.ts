@@ -14,7 +14,9 @@ import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initia
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
+import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 type EmailBreaker = ReturnType<typeof createNotificationConfigBreaker>;
 
@@ -166,9 +168,17 @@ export async function finalizeAndSendMonthlyInvoice(
     return { ok: true, outcome: "paid_zero" };
   }
 
-  const userRes = await admin.auth.admin.getUserById(params.customerId);
-  const email = String(userRes.data.user?.email ?? "").trim().toLowerCase();
-  if (!email) return { ok: false, error: "customer_email_missing" };
+  const email = await resolveMonthlyInvoiceCustomerEmail(admin, {
+    customerId: params.customerId,
+    invoiceId: row.id,
+  });
+  if (!email) {
+    await reportOperationalIssue("warn", "monthly_invoice/email", "customer_email_missing", {
+      invoiceId: row.id,
+      customerId: params.customerId,
+    });
+    return { ok: false, error: "customer_email_missing" };
+  }
 
   const snapshot = await buildMonthlyInvoiceSnapshot(admin, row.id);
   if (!snapshot) return { ok: false, error: "snapshot_build_failed" };
@@ -215,7 +225,16 @@ export async function finalizeAndSendMonthlyInvoice(
     status: "draft",
   });
   if (!zohoSync.ok && zohoSync.error !== "zero_balance") {
-    return { ok: false, error: `zoho_sync:${zohoSync.error}` };
+    await reportOperationalIssue("warn", "monthly_invoice/zoho_sync", zohoSync.error, {
+      invoiceId: row.id,
+      customerId: params.customerId,
+    });
+    await logSystemEvent({
+      level: "warn",
+      source: "monthly_invoice/finalize",
+      message: "zoho_sync_failed_email_continues",
+      context: { invoice_id: row.id, error: zohoSync.error },
+    });
   }
 
   if (await invoicePaymentLinkEmailSentExists(admin, row.id)) {
@@ -261,6 +280,7 @@ export async function finalizeAndSendMonthlyInvoice(
     month: row.month,
     totalZar: balanceZar,
     paymentUrl: brandedPayUrl,
+    paystackPaymentUrl: pay.authorizationUrl,
     dueDateLabel: formatDueDateLabel(paymentDueDate),
     zohoInvoiceId: zohoInvoiceId || null,
   });

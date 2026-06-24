@@ -18,6 +18,9 @@ export type CronHealthRecentError = {
   message: string;
 };
 
+/** Jobs that must show last success even when older than the 24h dashboard window. */
+const CRITICAL_JOB_FALLBACK = ["generate-recurring-bookings", "charge-recurring-bookings"] as const;
+
 /** Rows logged before we stopped persisting 401s, or stray unauthenticated HTTP hits — not failed job execution. */
 function isCronAuthProbeRow(message: string | null | undefined): boolean {
   const m = (message ?? "").trim();
@@ -81,6 +84,26 @@ export async function GET(request: Request) {
           recentErrors.push({ job_name: job, created_at: created, message: msg || "(no message)" });
         }
       }
+    }
+  }
+
+  for (const jobName of CRITICAL_JOB_FALLBACK) {
+    const agg = byJob.get(jobName);
+    if (agg?.last_success_at) continue;
+    const { data: lastOk } = await admin
+      .from("cron_runs")
+      .select("created_at")
+      .eq("job_name", jobName)
+      .eq("status", "success")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const created = (lastOk?.[0] as { created_at?: string } | undefined)?.created_at;
+    if (!created) continue;
+    if (!agg) {
+      byJob.set(jobName, { last_success_at: created, last_run_at: created, errors_last_24h: 0 });
+    } else {
+      agg.last_success_at = created;
+      if (!agg.last_run_at) agg.last_run_at = created;
     }
   }
 

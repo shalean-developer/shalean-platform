@@ -114,7 +114,7 @@ export async function applySalesDocumentPayment(
     context: { documentId: row.id, reference: ref, amountCents: paidIn },
   });
 
-  void notifyAdminSalesDocumentInvoicePaid(admin, {
+  await notifyAdminSalesDocumentInvoicePaid(admin, {
     documentId: row.id,
     customerName: row.customer_name,
     customerEmail: row.customer_email,

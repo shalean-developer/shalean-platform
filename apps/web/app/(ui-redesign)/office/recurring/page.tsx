@@ -161,7 +161,8 @@ function generatorCronWarning(jobs: CronHealthJob[] | undefined): {
     return {
       show: true,
       severity: "red",
-      message: "Recurring generator cron has no recorded runs. Visit rows will not spawn until pg_cron is fixed.",
+      message:
+        "Recurring generator cron has no recorded runs in cron_runs. Reschedule pg_cron (see scripts/print-repair-generate-recurring-pg-cron.sql.mjs) and ensure CRON_SECRET matches Vercel.",
     };
   }
   const lastSuccess = gen.last_success_at ? new Date(gen.last_success_at).getTime() : null;

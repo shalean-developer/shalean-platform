@@ -118,13 +118,22 @@ export async function createCustomerQuoteRequest(
     context: { documentId: id, email, suburb: requestDetails.suburb },
   });
 
-  void notifyAdminCustomerQuoteRequest(admin, {
-    documentId: id,
-    customerName: name,
-    customerEmail: email,
-    customerPhone: phone,
-    requestDetails,
-  });
+  try {
+    await notifyAdminCustomerQuoteRequest(admin, {
+      documentId: id,
+      customerName: name,
+      customerEmail: email,
+      customerPhone: phone,
+      requestDetails,
+    });
+  } catch (err) {
+    await logSystemEvent({
+      level: "warn",
+      source: "sales_document/quote_request",
+      message: "admin_notification_failed",
+      context: { documentId: id, error: err instanceof Error ? err.message : String(err) },
+    });
+  }
 
   return { ok: true, id };
 }

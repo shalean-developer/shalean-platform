@@ -20,6 +20,7 @@ export type AdminCustomerListRow = {
   last_booking_at: string | null;
   tier: string | null;
   status: "active" | "inactive";
+  has_active_recurring_plan: boolean;
 };
 
 type ProfileRow = {
@@ -36,6 +37,21 @@ type ProfileRow = {
 };
 
 const ACTIVE_MS = 1000 * 60 * 60 * 24 * 90;
+
+export function deriveCustomerListStatus(params: {
+  lastBookingAt: string | null;
+  hasActiveRecurringPlan: boolean;
+  nowMs?: number;
+}): "active" | "inactive" {
+  if (params.hasActiveRecurringPlan) return "active";
+  if (!params.lastBookingAt) return "inactive";
+  const now = params.nowMs ?? Date.now();
+  return now - new Date(params.lastBookingAt).getTime() <= ACTIVE_MS ? "active" : "inactive";
+}
+
+export function resolveCustomerTotalBookings(profileCount: number, actualCount: number): number {
+  return Math.max(0, Math.max(Math.round(profileCount), Math.round(actualCount)));
+}
 
 /** True when the profile belongs to staff (admin/cleaner), not a billing customer. */
 export function isExcludedStaffCustomer(params: {
@@ -116,6 +132,43 @@ async function loadLatestBookingHints(
   return out;
 }
 
+async function loadBookingCountsByUserId(admin: SupabaseClient, userIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  const chunkSize = 100;
+  for (let i = 0; i < userIds.length; i += chunkSize) {
+    const chunk = userIds.slice(i, i + chunkSize);
+    const { data } = await admin
+      .from("bookings")
+      .select("user_id")
+      .in("user_id", chunk)
+      .neq("status", "cancelled");
+    for (const raw of data ?? []) {
+      const uid = String((raw as { user_id?: string | null }).user_id ?? "").trim();
+      if (!uid) continue;
+      counts.set(uid, (counts.get(uid) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+async function loadActiveRecurringCustomerIds(admin: SupabaseClient, userIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const chunkSize = 100;
+  for (let i = 0; i < userIds.length; i += chunkSize) {
+    const chunk = userIds.slice(i, i + chunkSize);
+    const { data } = await admin
+      .from("recurring_bookings")
+      .select("customer_id")
+      .eq("status", "active")
+      .in("customer_id", chunk);
+    for (const raw of data ?? []) {
+      const uid = String((raw as { customer_id?: string | null }).customer_id ?? "").trim();
+      if (uid) out.add(uid);
+    }
+  }
+  return out;
+}
+
 function displayEmail(profile: ProfileRow, loginEmail: string | null): string {
   const billing = pickBillingEmail([profile.billing_email, loginEmail]);
   if (billing) return billing;
@@ -175,6 +228,8 @@ export async function loadAdminCustomersList(admin: SupabaseClient): Promise<Adm
 
   const filteredIds = filteredProfiles.map((p) => p.id);
   const bookingHints = await loadLatestBookingHints(admin, filteredIds);
+  const bookingCounts = await loadBookingCountsByUserId(admin, filteredIds);
+  const activeRecurringIds = await loadActiveRecurringCustomerIds(admin, filteredIds);
 
   const now = Date.now();
   const customers: AdminCustomerListRow[] = [];
@@ -185,10 +240,13 @@ export async function loadAdminCustomersList(admin: SupabaseClient): Promise<Adm
     const email = displayLabel(profile, loginEmail);
 
     const hints = bookingHints.get(profile.id);
-    const totalBookings = Math.max(0, Math.round(Number(profile.booking_count ?? 0)));
+    const totalBookings = resolveCustomerTotalBookings(
+      Number(profile.booking_count ?? 0),
+      bookingCounts.get(profile.id) ?? 0,
+    );
     const totalSpendZar = Math.max(0, Math.round(Number(profile.total_spent_cents ?? 0) / 100));
     const lastBookingAt = hints?.last_booking_at ?? null;
-    const recentMs = lastBookingAt ? now - new Date(lastBookingAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const hasActiveRecurringPlan = activeRecurringIds.has(profile.id);
 
     customers.push({
       id: profile.id,
@@ -202,7 +260,12 @@ export async function loadAdminCustomersList(admin: SupabaseClient): Promise<Adm
       total_spend_zar: totalSpendZar,
       last_booking_at: lastBookingAt,
       tier: profile.tier ?? null,
-      status: recentMs <= ACTIVE_MS ? "active" : "inactive",
+      has_active_recurring_plan: hasActiveRecurringPlan,
+      status: deriveCustomerListStatus({
+        lastBookingAt,
+        hasActiveRecurringPlan,
+        nowMs: now,
+      }),
     });
   }
 

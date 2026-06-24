@@ -7,6 +7,7 @@ import {
 } from "@/lib/email/classifyResendSendError";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { loadMonthlyInvoiceEmailPdfAttachment } from "@/lib/monthlyInvoice/loadMonthlyInvoiceEmailPdfAttachment";
+import { renderMonthlyInvoicePaymentLinksHtml } from "@/lib/monthlyInvoice/monthlyInvoicePaymentLinkHtml";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
 /**
@@ -46,6 +47,8 @@ export async function sendMonthlyInvoiceEmail(params: {
   month?: string;
   totalZar: number;
   paymentUrl: string;
+  /** Direct Paystack checkout URL when branded app link fails (e.g. mobile DNS). */
+  paystackPaymentUrl?: string | null;
   dueDateLabel: string;
   zohoInvoiceId?: string | null;
 }): Promise<SendMonthlyInvoiceEmailResult> {
@@ -76,13 +79,18 @@ export async function sendMonthlyInvoiceEmail(params: {
     ? "<p>Your invoice PDF is attached to this email.</p>"
     : "";
 
+  const paymentLinks = renderMonthlyInvoicePaymentLinksHtml({
+    paymentUrl: params.paymentUrl,
+    paystackFallbackUrl: params.paystackPaymentUrl,
+  });
+
   const html = `
     <p>Hi,</p>
     <p>Your consolidated cleaning invoice for <strong>${params.monthLabel}</strong> is ready.</p>
     <p><strong>Amount due:</strong> ${amount}<br/>
     <strong>Due:</strong> ${params.dueDateLabel}</p>
     ${pdfNote}
-    <p><a href="${params.paymentUrl}">View and pay your invoice online</a></p>
+    ${paymentLinks}
     <p>Thank you for choosing Shalean.</p>
   `;
 
@@ -141,6 +149,7 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
   paidZar: number;
   balanceZar: number;
   paymentUrl: string;
+  paystackPaymentUrl?: string | null;
   dueDateLabel: string;
 }): Promise<SendMonthlyInvoiceEmailResult> {
   const resend = getResend();
@@ -154,7 +163,12 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
   const fmt = (n: number) => `R ${Math.round(n).toLocaleString("en-ZA")}`;
   const dayPart = params.daysPastDue === 1 ? "1 day" : `${params.daysPastDue} days`;
   const subject = `Reminder: Shalean invoice overdue (${dayPart})`;
-  const pay = escapeHtml(params.paymentUrl);
+  const paymentLinks = renderMonthlyInvoicePaymentLinksHtml({
+    paymentUrl: params.paymentUrl,
+    paystackFallbackUrl: params.paystackPaymentUrl,
+    primaryLinkText: "Pay your invoice online",
+    fallbackLinkText: "pay directly via Paystack",
+  });
   const html = `
     <p>Hi,</p>
     <p>Your invoice is overdue by <strong>${params.daysPastDue}</strong> day${params.daysPastDue === 1 ? "" : "s"}.</p>
@@ -163,7 +177,7 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
     <strong>Paid:</strong> ${fmt(params.paidZar)}<br/>
     <strong>Balance due:</strong> ${fmt(params.balanceZar)}<br/>
     <strong>Due date:</strong> ${escapeHtml(params.dueDateLabel)}</p>
-    <p><a href="${pay}">Pay securely with Paystack</a></p>
+    ${paymentLinks}
     <p>Thank you,<br/>Shalean Cleaning Services</p>
   `;
 

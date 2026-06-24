@@ -22,8 +22,9 @@ if (!secret) {
   process.exit(1);
 }
 
-const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
-const url = `${base.replace(/\/$/, "")}/api/cron/generate-recurring-bookings`;
+const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://shalean.co.za";
+const host = base.includes("localhost") ? "https://shalean.co.za" : base.replace(/\/$/, "");
+const url = `${host}/api/cron/generate-recurring-bookings`;
 console.log("POST", url);
 
 const res = await fetch(url, {

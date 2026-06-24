@@ -64,7 +64,7 @@ export async function markSalesDocumentPaidManual(
     });
   }
 
-  void notifyAdminSalesDocumentInvoicePaid(admin, {
+  await notifyAdminSalesDocumentInvoicePaid(admin, {
     documentId: row.id,
     customerName: row.customer_name,
     customerEmail: row.customer_email,

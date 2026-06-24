@@ -11,6 +11,8 @@ import { INITIAL_BOOKING_STEP1_STATE, type BookingStep1State } from "@/component
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import { insertPendingPaymentBookingRow } from "@/lib/booking/insertPendingPaymentBooking";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
+import { logSystemEvent } from "@/lib/logging/systemLog";
+import { notifyAdminCustomerBookingRequest } from "@/lib/salesDocument/notifySalesDocumentAdmin";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
@@ -289,6 +291,27 @@ export async function insertBookingFromFlowIntake(
   if (upErr) {
     await admin.from("bookings").delete().eq("id", bookingId).eq("status", "pending_payment");
     return { ok: false, error: upErr.message };
+  }
+
+  try {
+    await notifyAdminCustomerBookingRequest(admin, {
+      bookingId,
+      customerName: name,
+      customerEmail: email,
+      customerPhone: phone,
+      serviceLabel: getServiceLabel(svc),
+      date,
+      time,
+      location: displayLocation,
+      totalZar: totalRounded,
+    });
+  } catch (err) {
+    await logSystemEvent({
+      level: "warn",
+      source: "booking/flow_intake",
+      message: "admin_notification_failed",
+      context: { bookingId, error: err instanceof Error ? err.message : String(err) },
+    });
   }
 
   return { ok: true, bookingId };

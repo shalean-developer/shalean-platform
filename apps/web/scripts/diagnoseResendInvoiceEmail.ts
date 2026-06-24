@@ -78,6 +78,7 @@ async function main() {
     month: row.month,
     totalZar: Math.round(Number(row.balance_cents ?? 0)) / 100,
     paymentUrl,
+    paystackPaymentUrl: String(row.payment_link ?? ""),
     dueDateLabel: String(row.due_date ?? ""),
     zohoInvoiceId: row.zoho_invoice_id,
   });

@@ -18,6 +18,7 @@ import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { resolveCustomerOutboundEmail } from "@/lib/customer/readCustomerProfileContact";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -158,7 +159,9 @@ export async function POST(request: Request) {
     }
 
     const userRes = await admin.auth.admin.getUserById(r.customer_id);
-    const email = normalizeEmail(String(userRes.data.user?.email ?? ""));
+    const email = await resolveCustomerOutboundEmail(admin, r.customer_id, {
+      authUser: userRes.data.user ?? null,
+    });
     if (!email) {
       await logSystemEvent({
         level: "warn",
