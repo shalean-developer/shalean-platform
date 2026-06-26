@@ -40,9 +40,13 @@ export function isTeamService(booking: TeamBookingServiceRef): boolean {
       const sid = parseBookingServiceId((locked as { service?: unknown }).service);
       if (sid === "deep" || sid === "move") return true;
     }
-    const topSlug = (snap as { service_slug?: unknown }).service_slug;
-    const fromSnap = typeof topSlug === "string" ? parseBookingServiceId(topSlug) : null;
-    if (fromSnap === "deep" || fromSnap === "move") return true;
+    for (const rawSlug of [
+      (snap as { service_slug?: unknown }).service_slug,
+      (snap as { serviceSlug?: unknown }).serviceSlug,
+    ]) {
+      const fromSnap = typeof rawSlug === "string" ? parseBookingServiceId(rawSlug) : null;
+      if (fromSnap === "deep" || fromSnap === "move") return true;
+    }
   }
 
   const s = String(booking.service ?? "").toLowerCase();
@@ -67,10 +71,14 @@ export function teamServiceType(booking: TeamBookingServiceRef): "deep_cleaning"
       if (sid === "move") return "move_cleaning";
       if (sid === "deep") return "deep_cleaning";
     }
-    const topSlug = (snap as { service_slug?: unknown }).service_slug;
-    const fromSnap = typeof topSlug === "string" ? parseBookingServiceId(topSlug) : null;
-    if (fromSnap === "move") return "move_cleaning";
-    if (fromSnap === "deep") return "deep_cleaning";
+    for (const rawSlug of [
+      (snap as { service_slug?: unknown }).service_slug,
+      (snap as { serviceSlug?: unknown }).serviceSlug,
+    ]) {
+      const fromSnap = typeof rawSlug === "string" ? parseBookingServiceId(rawSlug) : null;
+      if (fromSnap === "move") return "move_cleaning";
+      if (fromSnap === "deep") return "deep_cleaning";
+    }
   }
 
   const s = String(booking.service ?? "").toLowerCase();

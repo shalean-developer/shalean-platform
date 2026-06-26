@@ -169,6 +169,19 @@ export const BOOKING_SERVICE_IDS: readonly BookingServiceId[] = SERVICE_CATEGORI
 const LEGACY_SERVICE_MAP: Record<string, BookingServiceId> = {
   basic: "standard",
   premium: "deep",
+  /** Booking v2 catalog slugs (`bookings.service` / `service_slug`). */
+  "regular-cleaning": "standard",
+  "regular_cleaning": "standard",
+  "deep-cleaning": "deep",
+  "deep_cleaning": "deep",
+  "moving-cleaning": "move",
+  "moving_cleaning": "move",
+  "airbnb-cleaning": "airbnb",
+  "airbnb_cleaning": "airbnb",
+  "carpet-cleaning": "carpet",
+  "carpet_cleaning": "carpet",
+  "office-cleaning": "standard",
+  "office_cleaning": "standard",
 };
 
 /** Checkout / snapshot may store `BookingServiceTypeKey` strings instead of catalog ids. */
