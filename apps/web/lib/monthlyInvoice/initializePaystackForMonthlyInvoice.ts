@@ -183,7 +183,9 @@ export async function initializePaystackForMonthlyInvoice(
   }
 
   const appUrl = getPublicAppUrlBase();
-  const callbackUrl = appUrl ? `${appUrl}/account` : undefined;
+  const callbackUrl = appUrl
+    ? `${appUrl}/pay/invoice/${encodeURIComponent(row.id)}/success`
+    : undefined;
 
   const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",

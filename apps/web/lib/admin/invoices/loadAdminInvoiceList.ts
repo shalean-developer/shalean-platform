@@ -60,13 +60,23 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function isSettledInvoice(status: string, balanceCents: number): boolean {
+  const st = status.toLowerCase();
+  return st === "paid" || st === "refunded" || balanceCents <= 0;
+}
+
 function buildInvoiceSummary(rows: AdminInvoiceListRow[]): AdminInvoiceListSummary {
   let paid_count = 0;
   let overdue_count = 0;
   let total_outstanding_cents = 0;
   for (const inv of rows) {
     if (inv.status.toLowerCase() === "paid") paid_count += 1;
-    if (inv.is_overdue || inv.status.toLowerCase() === "overdue") overdue_count += 1;
+    if (
+      !isSettledInvoice(inv.status, inv.balance_cents) &&
+      (inv.is_overdue || inv.status.toLowerCase() === "overdue")
+    ) {
+      overdue_count += 1;
+    }
     total_outstanding_cents += Math.max(0, inv.balance_cents);
   }
   return {
@@ -173,8 +183,10 @@ export async function loadAdminInvoiceList(
     if (statusLower === "draft" && stats?.lastVisitYmd?.startsWith(monthYm)) {
       due = stats.lastVisitYmd;
     }
-    const overdueDays = daysOverdueForDisplay(due);
-    const displayOverdue = isInvoiceOverdueForDisplay(due, balance_cents);
+    const overdueDays = isSettledInvoice(statusLower, balance_cents) ? 0 : daysOverdueForDisplay(due);
+    const displayOverdue = isSettledInvoice(statusLower, balance_cents)
+      ? false
+      : isInvoiceOverdueForDisplay(due, balance_cents);
     const prof = profiles.get(customer_id);
     const riskRaw = String(prof?.account_billing_risk ?? "ok").toLowerCase();
     const account_billing_risk: "ok" | "at_risk" = riskRaw === "at_risk" ? "at_risk" : "ok";
@@ -186,7 +198,9 @@ export async function loadAdminInvoiceList(
       total_amount_cents: total,
       amount_paid_cents: paid,
       balance_cents,
-      is_overdue: Boolean(r.is_overdue) || displayOverdue,
+      is_overdue: isSettledInvoice(statusLower, balance_cents)
+        ? false
+        : Boolean(r.is_overdue) || displayOverdue,
       is_closed: Boolean(r.is_closed),
       due_date: due,
       customer_name: prof?.full_name ?? null,

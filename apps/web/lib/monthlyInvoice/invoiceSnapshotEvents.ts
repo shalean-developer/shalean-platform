@@ -98,6 +98,21 @@ export type InvoiceSnapshotEvent =
       at: string;
       actor: string;
       paystack_reference: string;
+    }
+  | {
+      kind: "payment_refunded";
+      at: string;
+      amount_cents: number;
+      amount_paid_cents_after: number;
+      total_amount_cents: number;
+      balance_cents_after: number;
+      paystack_charge_reference: string;
+      refund_reference: string;
+      recorded_only: boolean;
+      paystack_refunded: boolean;
+      actor: string;
+      reference: string;
+      note?: string;
     };
 
 /** Narrow unknown JSON from DB into a typed event when possible. */
@@ -254,6 +269,8 @@ export function invoiceSnapshotEventToRpcPayload(ev: InvoiceSnapshotEvent): Reco
       return { ...ev, kind: "invoice_reminder_sent" };
     case "invoice_payment_link_email_sent":
       return { ...ev, kind: "invoice_payment_link_email_sent" };
+    case "payment_refunded":
+      return { ...ev, kind: "payment_refunded" };
     default: {
       const _x: never = ev;
       return _x as Record<string, unknown>;

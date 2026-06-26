@@ -230,7 +230,10 @@ export function AdminInvoiceDetailsView({
   const isOverdue = Boolean(invoice.is_overdue);
   const isClosed = Boolean(invoice.is_closed);
   const paymentLink = typeof invoice.payment_link === "string" ? invoice.payment_link : null;
+  const paystackReference = typeof invoice.paystack_reference === "string" ? invoice.paystack_reference : null;
   const sentAt = typeof invoice.sent_at === "string" ? invoice.sent_at : null;
+  const refundedAt = typeof invoice.refunded_at === "string" ? invoice.refunded_at : null;
+  const refundReference = typeof invoice.refund_reference === "string" ? invoice.refund_reference : null;
   const viewCount = Math.max(0, Math.round(Number(invoice.view_count ?? 0)));
   const firstViewedAt = typeof invoice.first_viewed_at === "string" ? invoice.first_viewed_at : null;
   const lastViewedAt = typeof invoice.last_viewed_at === "string" ? invoice.last_viewed_at : null;
@@ -270,6 +273,7 @@ export function AdminInvoiceDetailsView({
         status={status}
         isClosed={isClosed}
         paymentLink={paymentLink}
+        paystackReference={paystackReference}
         sentAt={sentAt}
         hasInvoicePdf={hasInvoicePdf}
         currencyCode={currency}
@@ -277,6 +281,8 @@ export function AdminInvoiceDetailsView({
         amountPaidCents={paidCents}
         balanceCents={balanceCents}
         bookingCountToSettle={bookingCountToSettle}
+        refundedAt={refundedAt}
+        refundReference={refundReference}
         invoiceBookings={invoiceBookingOptions}
         getAccessToken={getAccessToken}
         onDone={load}
@@ -297,6 +303,7 @@ export function AdminInvoiceDetailsView({
         customerLabel={customerLabel}
         customerId={customerId}
         customerEmail={customerContact.email}
+        customerLoginEmail={customerContact.loginEmail}
         customerPhone={customerContact.phone}
         month={month}
         status={status}

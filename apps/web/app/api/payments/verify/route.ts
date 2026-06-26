@@ -13,6 +13,7 @@ import {
   shouldShortCircuitForSalesDocument,
 } from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
 import { salesDocumentIdFromPaystackMetadata } from "@/lib/salesDocument/salesDocumentPaystackReference";
+import { monthlyInvoiceIdFromPaystackMetadata } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
 import { bookingPaymentTotalCents, clampTipZar, type BookingRowPaymentInput } from "@/lib/payments/bookingPaymentSummary";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -198,6 +199,9 @@ export async function POST(request: Request) {
     const monthlyRouting = await routePaystackChargeForMonthlyInvoice(admin, {
       reference: paystackVerifyRef,
       amountCents: amount,
+      invoiceIdHint: monthlyInvoiceIdFromPaystackMetadata(
+        tx.metadata as Record<string, unknown> | undefined,
+      ),
     });
     if (shouldShortCircuitForMonthlyInvoice(monthlyRouting)) {
       await logSystemEvent({

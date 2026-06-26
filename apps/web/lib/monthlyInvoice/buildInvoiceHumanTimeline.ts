@@ -43,6 +43,13 @@ function eventLine(ev: Record<string, unknown>): string | null {
     return `${day} – Payment received (${formatZarFromCents(amt)})${suffix} · system${refPart}`;
   }
 
+  if (kind === "payment_refunded") {
+    const amt = Math.round(Number(ev.amount_cents ?? 0));
+    const ref = String(ev.refund_reference ?? ev.reference ?? "").trim();
+    const refPart = ref ? ` · ref ${ref.slice(0, 48)}${ref.length > 48 ? "…" : ""}` : "";
+    return `${day} – Payment refunded (${formatZarFromCents(amt)})${refPart} · admin`;
+  }
+
   if (kind === "adjustment_applied" || kind === "adjustment_post_send") {
     const amt = Math.round(Number(ev.amount_cents ?? 0));
     const reason = String(ev.reason ?? "").trim();

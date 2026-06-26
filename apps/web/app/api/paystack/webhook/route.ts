@@ -20,6 +20,7 @@ import {
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import { routePaystackChargeForMonthlyInvoice } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
+import { monthlyInvoiceIdFromPaystackMetadata } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
 import {
   routePaystackChargeForSalesDocument,
 } from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
@@ -151,9 +152,13 @@ export async function POST(request: Request) {
      *   - `monthly_already_processed` → 200 plain-text "Already processed" ack.
      *   - `monthly_error` (rare) AND `not_monthly` → fall through to booking-finalize pipeline.
      */
+    const monthlyInvoiceIdHint = monthlyInvoiceIdFromPaystackMetadata(
+      normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
+    );
     const monthlyRouting = await routePaystackChargeForMonthlyInvoice(supabase, {
       reference,
       amountCents: typeof data.amount === "number" ? data.amount : 0,
+      invoiceIdHint: monthlyInvoiceIdHint,
     });
     if (monthlyRouting.kind === "monthly_settled") {
       const partialCtx =

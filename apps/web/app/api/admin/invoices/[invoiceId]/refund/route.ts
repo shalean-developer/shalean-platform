@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
-import { refundSalesDocumentPayment } from "@/lib/salesDocument/refundSalesDocumentPayment";
+import { refundMonthlyInvoicePayment } from "@/lib/monthlyInvoice/refundMonthlyInvoicePayment";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, ctx: { params: Promise<{ invoiceId: string }> }) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const { id } = await ctx.params;
+  const { invoiceId } = await ctx.params;
   const body = (await request.json().catch(() => ({}))) as {
     note?: unknown;
     record_only?: unknown;
@@ -25,8 +25,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await refundSalesDocumentPayment(admin, {
-    documentId: id,
+  const result = await refundMonthlyInvoicePayment(admin, {
+    invoiceId,
     note,
     recordOnly,
     refundReference,
@@ -35,7 +35,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const status =
       result.error === "already_refunded"
         ? 409
-        : result.error === "document_not_found"
+        : result.error === "invoice_not_found"
           ? 404
           : 400;
     return NextResponse.json({ error: result.error }, { status });
@@ -47,5 +47,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     recorded_only: result.recordedOnly,
     already_reversed_on_paystack: result.alreadyReversedOnPaystack,
     refund_reference: result.refundReference,
+    payout_eligible_bookings: result.payoutEligibleBookings,
   });
 }

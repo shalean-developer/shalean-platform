@@ -62,11 +62,12 @@ export type PaystackChargeMonthlyRouting =
 
 export async function routePaystackChargeForMonthlyInvoice(
   admin: SupabaseClient,
-  params: { reference: string; amountCents: number },
+  params: { reference: string; amountCents: number; invoiceIdHint?: string | null },
 ): Promise<PaystackChargeMonthlyRouting> {
   const outcome = await applyMonthlyInvoicePayment(admin, {
     reference: params.reference,
     amountCents: params.amountCents,
+    invoiceIdHint: params.invoiceIdHint,
   });
   return interpretMonthlyInvoiceOutcome(outcome);
 }

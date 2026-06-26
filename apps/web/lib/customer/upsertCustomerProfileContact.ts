@@ -36,7 +36,14 @@ export async function upsertCustomerProfileContact(
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
   if (normalized.full_name) patch.full_name = normalized.full_name;
-  if (normalized.billing_email) patch.billing_email = normalized.billing_email;
+  if (params.contact.billingEmail !== undefined) {
+    patch.billing_email =
+      params.contact.billingEmail === null || String(params.contact.billingEmail).trim() === ""
+        ? null
+        : normalized.billing_email ?? null;
+  } else if (normalized.billing_email) {
+    patch.billing_email = normalized.billing_email;
+  }
   if (normalized.phone) patch.phone = normalized.phone;
   if (normalized.phone_e164) patch.phone_e164 = normalized.phone_e164;
   if (normalized.preferred_notification_channel) {

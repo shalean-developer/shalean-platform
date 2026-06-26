@@ -2,12 +2,20 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 import type { InvoiceTimelineDbEvent } from "@/lib/monthlyInvoice/buildInvoiceHumanTimeline";
+import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 
 export type AdminInvoiceBundle = {
   invoice: Record<string, unknown>;
   customerProfile: { id: string; full_name: string | null; account_billing_risk: string | null } | null;
-  customerContact: { email: string | null; phone: string | null };
+  customerContact: {
+    /** Best outbound / billing inbox for this invoice (matches send + resend). */
+    email: string | null;
+    phone: string | null;
+    billingEmail: string | null;
+    loginEmail: string | null;
+  };
   bookings: Record<string, unknown>[];
   adjustments: Record<string, unknown>[];
   /** `created_by` user id → admin email (best-effort via Auth admin API). */
@@ -151,15 +159,25 @@ export async function loadAdminInvoiceBundle(
 
   if (profileRes.error) return { ok: false, error: "load_failed", message: profileRes.error.message };
 
-  let customerContact: { email: string | null; phone: string | null } = { email: null, phone: null };
+  let customerContact: AdminInvoiceBundle["customerContact"] = {
+    email: null,
+    phone: null,
+    billingEmail: null,
+    loginEmail: null,
+  };
   if (customerId) {
-    const { data: udata, error: uerr } = await admin.auth.admin.getUserById(customerId);
-    if (!uerr && udata?.user) {
-      customerContact = {
-        email: udata.user.email ?? null,
-        phone: udata.user.phone ?? null,
-      };
-    }
+    const { data: udata } = await admin.auth.admin.getUserById(customerId);
+    const profileContact = await readCustomerProfileContact(admin, customerId, udata?.user ?? null);
+    const outboundEmail = await resolveMonthlyInvoiceCustomerEmail(admin, {
+      customerId,
+      invoiceId,
+    });
+    customerContact = {
+      email: outboundEmail,
+      phone: profileContact.phone,
+      billingEmail: profileContact.billingEmail,
+      loginEmail: profileContact.loginEmail,
+    };
   }
 
   const adjustmentCreatorEmails = await loadAdjustmentCreatorEmails(admin, adjustments);

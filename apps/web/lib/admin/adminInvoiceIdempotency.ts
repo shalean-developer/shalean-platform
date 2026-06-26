@@ -10,7 +10,8 @@ export type AdminInvoiceIdempotentAction =
   | "mark_paid"
   | "hard_close"
   | "resend_invoice"
-  | "send_invoice";
+  | "send_invoice"
+  | "sync_payment";
 
 /**
  * Reads `Idempotency-Key` (optional). When absent, idempotency is skipped (backward compatible).

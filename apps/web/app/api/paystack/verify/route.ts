@@ -35,6 +35,7 @@ import {
   isSalesDocumentPaystackReference,
   salesDocumentIdFromPaystackMetadata,
 } from "@/lib/salesDocument/salesDocumentPaystackReference";
+import { monthlyInvoiceIdFromPaystackMetadata } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
@@ -150,9 +151,13 @@ export async function GET(request: Request) {
    */
   if (adminGet) {
     const monthlyAmountGet = typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
+    const monthlyInvoiceIdHintGet = monthlyInvoiceIdFromPaystackMetadata(
+      tx.metadata as Record<string, unknown> | undefined,
+    );
     const monthlyRoutingGet = await routePaystackChargeForMonthlyInvoice(adminGet, {
       reference: ref,
       amountCents: monthlyAmountGet,
+      invoiceIdHint: monthlyInvoiceIdHintGet,
     });
     if (shouldShortCircuitForMonthlyInvoice(monthlyRoutingGet)) {
       await logSystemEvent({
@@ -460,6 +465,9 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     const monthlyRoutingPost = await routePaystackChargeForMonthlyInvoice(adminPost, {
       reference: ref,
       amountCents: txAmount,
+      invoiceIdHint: monthlyInvoiceIdFromPaystackMetadata(
+        normalizePaystackMetadata(tx.metadata) as unknown as Record<string, unknown>,
+      ),
     });
     if (shouldShortCircuitForMonthlyInvoice(monthlyRoutingPost)) {
       await logSystemEvent({

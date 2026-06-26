@@ -25,10 +25,6 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
   const useSnapshot = Boolean(props.snapshotAtFinalize?.bookings?.length);
   const rows = useSnapshot
     ? (props.snapshotAtFinalize!.bookings ?? []).map((b) => {
-        const fromCents = Number(b.amount_paid_cents ?? NaN);
-        const fromZar =
-          typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar) ? Math.round(b.total_paid_zar * 100) : 0;
-        const cents = Math.max(0, Number.isFinite(fromCents) ? Math.round(fromCents) : fromZar);
         const rawStatus = typeof b.status === "string" ? b.status : null;
         return {
           id: b.id,
@@ -36,7 +32,10 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
           service: b.service,
           statusLabel: rawStatus ?? "—",
           statusTitle: null as string | null,
-          cents,
+          cents: bookingAmountCents({
+            total_paid_zar: b.total_paid_zar,
+            amount_paid_cents: b.amount_paid_cents,
+          }),
           cleanerLabel: null as string | null,
         };
       })

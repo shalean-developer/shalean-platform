@@ -56,7 +56,8 @@ export async function tryClaimNotificationIdempotency(
     channel: params.channel,
     code: error.code,
   });
-  return false;
+  // Fail-open: do not block outbound mail when the claim row cannot be inserted (schema drift, transient DB).
+  return true;
 }
 
 /** Drop a claim so a failed delivery can be retried on the next notify attempt. */

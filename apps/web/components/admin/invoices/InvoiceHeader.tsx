@@ -14,6 +14,7 @@ export type InvoiceHeaderProps = {
   customerLabel: string;
   customerId: string;
   customerEmail: string | null;
+  customerLoginEmail?: string | null;
   customerPhone: string | null;
   month: string;
   status: string;
@@ -118,12 +119,22 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Contact</p>
           <div className="mt-2 flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
             {props.customerEmail ? (
-              <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={`mailto:${props.customerEmail}`}>
-                {props.customerEmail}
-              </a>
+              <span>
+                <span className="mr-1 text-xs text-zinc-500 dark:text-zinc-400">Billing email</span>
+                <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={`mailto:${props.customerEmail}`}>
+                  {props.customerEmail}
+                </a>
+              </span>
             ) : (
-              <span className="text-zinc-500">No email on file</span>
+              <span className="text-zinc-500">No billing email on file</span>
             )}
+            {props.customerLoginEmail &&
+            props.customerEmail &&
+            props.customerLoginEmail.toLowerCase() !== props.customerEmail.toLowerCase() ? (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Login: {props.customerLoginEmail}
+              </span>
+            ) : null}
             {props.customerPhone ? (
               <a className="font-medium text-zinc-800 hover:underline dark:text-zinc-100" href={`tel:${props.customerPhone}`}>
                 {props.customerPhone}

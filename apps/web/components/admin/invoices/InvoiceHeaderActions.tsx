@@ -38,6 +38,7 @@ export type InvoiceHeaderActionsProps = {
   status: string;
   isClosed: boolean;
   paymentLink: string | null;
+  paystackReference: string | null;
   sentAt: string | null;
   hasInvoicePdf: boolean;
   currencyCode: string;
@@ -45,6 +46,8 @@ export type InvoiceHeaderActionsProps = {
   amountPaidCents: number;
   balanceCents: number;
   bookingCountToSettle: number;
+  refundedAt?: string | null;
+  refundReference?: string | null;
   invoiceBookings?: InvoiceBookingOption[];
   getAccessToken: () => Promise<string | null>;
   onDone: () => Promise<void>;
@@ -104,6 +107,16 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const [resendChannel, setResendChannel] = useState<"email" | "whatsapp">("email");
   const [resendErr, setResendErr] = useState<string | null>(null);
 
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundNote, setRefundNote] = useState("");
+  const [refundRecordOnly, setRefundRecordOnly] = useState(false);
+  const [refundReference, setRefundReference] = useState("");
+  const [refundErr, setRefundErr] = useState<string | null>(null);
+
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncReference, setSyncReference] = useState("");
+  const [syncErr, setSyncErr] = useState<string | null>(null);
+
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
 
@@ -112,6 +125,9 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const hasLink = Boolean(props.paymentLink?.trim());
   const canResendEmail = hasLink && ["sent", "partially_paid", "overdue"].includes(st);
   const canMarkPaid = !props.isClosed && ["sent", "partially_paid", "overdue"].includes(st);
+  const canSyncPayment =
+    !props.isClosed && ["sent", "partially_paid", "overdue"].includes(st) && Boolean(props.paystackReference?.trim());
+  const canRefund = !props.isClosed && st === "paid";
   const canHardClose = !props.isClosed && ["draft", "sent", "partially_paid", "overdue", "paid"].includes(st);
   const canSendInvoice = !props.isClosed && st === "draft";
 
@@ -220,6 +236,96 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       await props.onDone();
     } catch (e) {
       setResendErr(e instanceof Error ? e.message : "Resend failed.");
+    } finally {
+      setBusy(null);
+      actionLock.current = false;
+    }
+  }
+
+  async function syncPaymentSubmit(referenceInput: string) {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setSyncErr(null);
+    setBusy("sync_payment");
+    setToast(null);
+    const idempotencyKey = crypto.randomUUID();
+    try {
+      const ref = referenceInput.trim();
+      const res = await authFetch(
+        props.getAccessToken,
+        `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}/sync-payment`,
+        {
+          method: "POST",
+          body: JSON.stringify(ref ? { reference: ref } : {}),
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
+      );
+      if (!res.ok) {
+        setSyncErr(await readJsonError(res));
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as { settled?: string; reference?: string };
+      const settled = String(data.settled ?? "full");
+      setToast({
+        text:
+          settled === "already_paid" || settled === "duplicate_charge"
+            ? "Invoice was already recorded as paid."
+            : settled === "partial"
+              ? "Partial payment synced from Paystack."
+              : `Online payment synced — invoice marked paid${data.reference ? ` (ref ${data.reference})` : ""}.`,
+      });
+      setSyncOpen(false);
+      setSyncReference("");
+      await props.onDone();
+    } catch (e) {
+      setSyncErr(e instanceof Error ? e.message : "Sync failed.");
+    } finally {
+      setBusy(null);
+      actionLock.current = false;
+    }
+  }
+
+  async function refundSubmit() {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setRefundErr(null);
+    setBusy("refund");
+    try {
+      const res = await authFetch(
+        props.getAccessToken,
+        `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}/refund`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            note: refundNote.trim() || undefined,
+            record_only: refundRecordOnly,
+            refund_reference: refundReference.trim() || undefined,
+          }),
+        },
+      );
+      if (!res.ok) {
+        setRefundErr(await readJsonError(res));
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as {
+        paystack_refunded?: boolean;
+        recorded_only?: boolean;
+        payout_eligible_bookings?: number;
+      };
+      let text = "Refund recorded.";
+      if (data.recorded_only) text = "Refund recorded in Shalean (Paystack dashboard refund).";
+      else if (data.paystack_refunded) text = "Payment refunded via Paystack.";
+      if ((data.payout_eligible_bookings ?? 0) > 0) {
+        text += ` Note: ${data.payout_eligible_bookings} booking(s) had eligible payouts — review cleaner batches.`;
+      }
+      setToast({ text });
+      setRefundOpen(false);
+      setRefundNote("");
+      setRefundRecordOnly(false);
+      setRefundReference("");
+      await props.onDone();
+    } catch (e) {
+      setRefundErr(e instanceof Error ? e.message : "Refund failed.");
     } finally {
       setBusy(null);
       actionLock.current = false;
@@ -395,6 +501,21 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       <Button type="button" variant="outline" size="sm" disabled={!hasLink || busy !== null} onClick={() => void copyLink()}>
         Copy payment link
       </Button>
+      {canSyncPayment ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={busy !== null}
+          onClick={() => {
+            setSyncErr(null);
+            setSyncReference(props.paystackReference?.trim() ?? "");
+            setSyncOpen(true);
+          }}
+        >
+          Sync Paystack payment
+        </Button>
+      ) : null}
       <Button
         type="button"
         variant="destructive"
@@ -409,6 +530,29 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       >
         Mark paid
       </Button>
+      {canRefund ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy !== null}
+          onClick={() => {
+            setRefundErr(null);
+            setRefundNote("");
+            setRefundRecordOnly(false);
+            setRefundReference("");
+            setRefundOpen(true);
+          }}
+        >
+          Refund
+        </Button>
+      ) : null}
+      {props.refundedAt ? (
+        <span className="self-center text-xs text-red-700 dark:text-red-300">
+          Refunded {formatDate(props.refundedAt)}
+          {props.refundReference ? ` · ${props.refundReference}` : ""}
+        </span>
+      ) : null}
       <Button
         type="button"
         variant="outline"
@@ -641,6 +785,100 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
             </Button>
             <Button type="button" variant="destructive" disabled={busy !== null} onClick={() => void markPaidSubmit()}>
               Confirm mark paid
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={syncOpen} onOpenChange={(open) => !busy && setSyncOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sync payment from Paystack</DialogTitle>
+            <DialogDescription>
+              Looks up a successful charge on Paystack and marks this invoice paid. Leave the reference blank to
+              auto-detect (stored ref, metadata, recent transactions). If you see &quot;Transaction reference not
+              found&quot;, paste the reference from Paystack → Transactions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="sync-reference">Paystack reference (optional)</Label>
+            <Input
+              id="sync-reference"
+              placeholder={props.paystackReference?.trim() ?? "e.g. mi_inv_… or Paystack ref"}
+              value={syncReference}
+              disabled={busy !== null}
+              onChange={(e) => setSyncReference(e.target.value)}
+            />
+            {props.paystackReference?.trim() ? (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Stored on invoice: <span className="font-mono">{props.paystackReference.trim()}</span>
+              </p>
+            ) : null}
+          </div>
+          {syncErr ? <p className="text-sm text-red-600 dark:text-red-400">{syncErr}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSyncOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={busy !== null} onClick={() => void syncPaymentSubmit(syncReference)}>
+              Sync payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Refund this invoice?</DialogTitle>
+            <DialogDescription>
+              {refundRecordOnly
+                ? "Records the refund in Shalean only — use when you already refunded on the Paystack dashboard."
+                : "Issues a Paystack refund when a charge reference exists, then marks the invoice refunded and reopens linked bookings for billing."}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={refundRecordOnly}
+              disabled={busy !== null}
+              onChange={(e) => setRefundRecordOnly(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-medium">Already refunded on Paystack dashboard</span>
+              <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                Skips the Paystack API and only updates Shalean.
+              </span>
+            </span>
+          </label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="refund-reference">Paystack refund reference (optional)</Label>
+            <Input
+              id="refund-reference"
+              placeholder="From Paystack dashboard"
+              value={refundReference}
+              disabled={busy !== null}
+              onChange={(e) => setRefundReference(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="refund-note">Note (optional)</Label>
+            <Textarea
+              id="refund-note"
+              rows={2}
+              value={refundNote}
+              disabled={busy !== null}
+              onChange={(e) => setRefundNote(e.target.value)}
+            />
+          </div>
+          {refundErr ? <p className="text-sm text-red-600 dark:text-red-400">{refundErr}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRefundOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" disabled={busy !== null} onClick={() => void refundSubmit()}>
+              {refundRecordOnly ? "Record refund in Shalean" : "Confirm refund"}
             </Button>
           </DialogFooter>
         </DialogContent>

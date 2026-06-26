@@ -25,15 +25,26 @@ export function InvoicePaymentsTable(props: InvoicePaymentsTableProps) {
   const payments = props.events
     .map((e) => {
       const k = payloadKind(e.payload);
-      if (k !== "payment_received" && k !== "payment_applied" && k !== "admin_mark_paid") return null;
+      if (k !== "payment_received" && k !== "payment_applied" && k !== "admin_mark_paid" && k !== "payment_refunded")
+        return null;
       const at = typeof e.payload.at === "string" ? e.payload.at : e.created_at;
       const cents = Math.round(Number(e.payload.amount_cents ?? e.payload.amount_recorded_cents ?? 0));
       const ref =
         k === "admin_mark_paid"
           ? `admin · ${String(e.payload.admin_email ?? "")}`
-          : String(e.payload.paystack_charge_reference ?? "");
+          : k === "payment_refunded"
+            ? String(e.payload.refund_reference ?? e.payload.reference ?? "")
+            : String(e.payload.paystack_charge_reference ?? "");
       const bal = remainingBalanceAfter(e.payload as Record<string, unknown>, k);
-      return { id: `${e.created_at}-${at}-${cents}`, at, cents, ref, manual: k === "admin_mark_paid", balanceAfter: bal };
+      return {
+        id: `${e.created_at}-${at}-${cents}`,
+        at,
+        cents,
+        ref,
+        manual: k === "admin_mark_paid",
+        refunded: k === "payment_refunded",
+        balanceAfter: bal,
+      };
     })
     .filter((x): x is NonNullable<typeof x> => x != null)
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
@@ -67,10 +78,16 @@ export function InvoicePaymentsTable(props: InvoicePaymentsTableProps) {
                 <tr key={p.id} className="border-b border-zinc-100 dark:border-zinc-800">
                   <td className="py-2 pr-4 align-top text-zinc-800 dark:text-zinc-100">{formatDate(p.at)}</td>
                   <td className="py-2 pr-4 align-top font-medium tabular-nums text-zinc-900 dark:text-zinc-50">
+                    {p.refunded ? "−" : ""}
                     {formatCurrency(p.cents, props.currencyCode)}
                     {p.manual ? (
                       <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
                         Manual
+                      </span>
+                    ) : null}
+                    {p.refunded ? (
+                      <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-900 dark:bg-red-950/60 dark:text-red-100">
+                        Refund
                       </span>
                     ) : null}
                   </td>

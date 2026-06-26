@@ -78,7 +78,7 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
         <div className="flex flex-wrap items-center gap-1.5">
           <SIcon className="h-3.5 w-3.5" />
           <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold capitalize", s.cls)}>{s.label}</span>
-          {inv.days_overdue > 0 ? (
+          {inv.days_overdue > 0 && inv.status.toLowerCase() !== "paid" && inv.balance_cents > 0 ? (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
               {inv.days_overdue}d overdue
             </span>

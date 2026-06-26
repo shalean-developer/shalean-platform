@@ -25,18 +25,18 @@ describe("tryClaimNotificationIdempotency", () => {
     expect(ok).toBe(false);
   });
 
-  it("returns false on other DB errors (fail closed)", async () => {
+  it("returns true on other DB errors (fail-open so delivery is not blocked)", async () => {
     const supabase = {
       from: vi.fn(() => ({
-        insert: vi.fn(() => Promise.resolve({ error: { code: "42P01", message: "missing table" } })),
+        insert: vi.fn(() => Promise.resolve({ error: { code: "23502", message: "booking_id not null" } })),
       })),
     };
     const ok = await tryClaimNotificationIdempotency(supabase as never, {
-      reference: "paystack-ref-1",
-      eventType: "payment_confirmed",
+      reference: "customer_quote_request:doc-1",
+      eventType: "customer_quote_request",
       channel: "email",
     });
-    expect(ok).toBe(false);
+    expect(ok).toBe(true);
   });
 
   it("returns true on successful insert", async () => {

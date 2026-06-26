@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { monthlyInvoicePaystackReferencesMatch } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
+import { resolveMonthlyInvoiceForPaystackCharge } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceForPaystackCharge";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "@/lib/zoho/resolveZohoCustomerContact";
@@ -25,31 +27,42 @@ export type ApplyMonthlyInvoicePaymentResult =
  */
 export async function applyMonthlyInvoicePayment(
   admin: SupabaseClient,
-  params: { reference: string; amountCents: number },
+  params: { reference: string; amountCents: number; invoiceIdHint?: string | null },
 ): Promise<ApplyMonthlyInvoicePaymentResult> {
   const ref = params.reference.trim();
   if (!ref) return { ok: false, error: "missing_reference" };
 
   const paidIn = Math.max(0, Math.round(params.amountCents));
 
-  const { data: inv, error: invErr } = await admin
-    .from("monthly_invoices")
-    .select("id, status, total_amount_cents, amount_paid_cents, balance_cents")
-    .eq("paystack_reference", ref)
-    .maybeSingle();
-
-  if (invErr) return { ok: false, error: invErr.message };
-  if (!inv || typeof (inv as { id?: string }).id !== "string") {
-    return { ok: true, skipped: true, reason: "not_found" };
-  }
-
-  const row = inv as {
+  let row: {
     id: string;
     status: string | null;
     total_amount_cents: number | null;
     amount_paid_cents: number | null;
     balance_cents: number | null;
+    paystack_reference: string | null;
   };
+
+  try {
+    const resolved = await resolveMonthlyInvoiceForPaystackCharge(admin, {
+      reference: ref,
+      invoiceIdHint: params.invoiceIdHint,
+    });
+    if (!resolved) {
+      return { ok: true, skipped: true, reason: "not_found" };
+    }
+    row = resolved;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "lookup_failed" };
+  }
+
+  if (!monthlyInvoicePaystackReferencesMatch(row.id, row.paystack_reference, ref)) {
+    const { error: refPatchErr } = await admin
+      .from("monthly_invoices")
+      .update({ paystack_reference: ref })
+      .eq("id", row.id);
+    if (refPatchErr) return { ok: false, error: refPatchErr.message };
+  }
 
   const st = String(row.status ?? "").toLowerCase();
   if (st === "paid") {

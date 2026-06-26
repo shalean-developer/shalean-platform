@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { sendAdminHtmlEmail } from "@/lib/email/sendBookingEmail";
+import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 
@@ -31,6 +32,10 @@ async function sendSalesDocumentAdminMail(
   },
 ): Promise<{ sent: boolean; skipped?: string }> {
   if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
+    await reportOperationalIssue("warn", "sendSalesDocumentAdminMail", "ADMIN_NOTIFICATION_EMAIL not configured", {
+      eventType: params.eventType,
+      reference: params.reference,
+    });
     return { sent: false, skipped: "ADMIN_NOTIFICATION_EMAIL not configured" };
   }
 
@@ -47,6 +52,13 @@ async function sendSalesDocumentAdminMail(
     html: params.html,
     context: { type: params.eventType, bookingId: params.bookingId ?? undefined, ...params.context },
   });
+  if (!result.sent) {
+    await reportOperationalIssue("warn", "sendSalesDocumentAdminMail", result.error ?? "send_failed", {
+      eventType: params.eventType,
+      reference: params.reference,
+      bookingId: params.bookingId ?? null,
+    });
+  }
   return { sent: result.sent, skipped: result.sent ? undefined : result.error };
 }
 

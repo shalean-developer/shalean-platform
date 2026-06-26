@@ -186,9 +186,9 @@ export function AdminInvoicesListView() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         <Badge variant={statusBadgeVariant(r.status)}>{r.status.replace(/_/g, " ")}</Badge>
-                        {r.days_overdue > 0 ? (
+                        {r.days_overdue > 0 && r.status.toLowerCase() !== "paid" && r.balance_cents > 0 ? (
                           <Badge variant="destructive">Overdue · {r.days_overdue}d</Badge>
-                        ) : r.is_overdue ? (
+                        ) : r.is_overdue && r.status.toLowerCase() !== "paid" && r.balance_cents > 0 ? (
                           <Badge variant="destructive">Overdue</Badge>
                         ) : null}
                         {r.account_billing_risk === "at_risk" ? (

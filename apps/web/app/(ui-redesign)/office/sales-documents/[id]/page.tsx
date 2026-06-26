@@ -5,6 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { adminFetch } from "@/hooks/useAdminData";
 import { SalesDocumentQuoteEditor } from "@/components/admin/sales-documents/SalesDocumentQuoteEditor";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { trustDocPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { SalesDocumentQuoteRequestDetails } from "@/lib/salesDocument/types";
 
@@ -65,6 +72,12 @@ export default function OfficeSalesDocumentDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [messageKind, setMessageKind] = useState<"success" | "error">("success");
   const [busy, setBusy] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundNote, setRefundNote] = useState("");
+  const [refundRecordOnly, setRefundRecordOnly] = useState(false);
+  const [refundReference, setRefundReference] = useState("");
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileReference, setReconcileReference] = useState("");
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -96,16 +109,12 @@ export default function OfficeSalesDocumentDetailPage() {
     void load();
   }, [load]);
 
-  async function runReconcilePayment() {
-    const pasted = window.prompt(
-      "Paystack reference (optional)\n\nLeave blank to auto-detect. If reconcile failed before, paste the reference from Paystack → Transactions.",
-    );
-    if (pasted === null) return;
+  async function runReconcilePayment(referenceInput: string) {
     setBusy(true);
     setMessage(null);
     try {
       const body: { reference?: string } = {};
-      const ref = pasted.trim();
+      const ref = referenceInput.trim();
       if (ref) body.reference = ref;
       const res = await adminFetch<{ ok: boolean; already_paid?: boolean; reference?: string }>(
         `/api/admin/sales-documents/${id}/reconcile-payment`,
@@ -118,6 +127,8 @@ export default function OfficeSalesDocumentDetailPage() {
           ? "Invoice was already marked paid."
           : `Payment reconciled — invoice marked paid${res.data?.reference ? ` (ref ${res.data.reference})` : ""}.`,
       );
+      setReconcileOpen(false);
+      setReconcileReference("");
       await load();
     } catch (err) {
       setMessageKind("error");
@@ -126,30 +137,43 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
-  async function runRefund() {
-    const note = window.prompt(
-      "Refund reason (optional). Paystack payments are refunded automatically; manual payments are recorded only.",
-    );
-    if (note === null) return;
+  async function runRefund(opts: {
+    noteInput: string;
+    recordOnly: boolean;
+    refundReferenceInput: string;
+  }) {
     setBusy(true);
     setMessage(null);
     try {
       const res = await adminFetch<{
         ok: boolean;
         paystack_refunded?: boolean;
+        recorded_only?: boolean;
+        already_reversed_on_paystack?: boolean;
         refund_reference?: string | null;
       }>(`/api/admin/sales-documents/${id}/refund`, {
         method: "POST",
-        body: JSON.stringify({ note: note.trim() || undefined }),
+        body: JSON.stringify({
+          note: opts.noteInput.trim() || undefined,
+          record_only: opts.recordOnly,
+          refund_reference: opts.refundReferenceInput.trim() || undefined,
+        }),
       });
       if (!res.ok) throw new Error(res.error ?? "Refund failed.");
-      const viaPaystack = res.data?.paystack_refunded;
       setMessageKind("success");
-      setMessage(
-        viaPaystack
-          ? "Payment refunded via Paystack."
-          : "Refund recorded (no Paystack charge to reverse).",
-      );
+      if (res.data?.recorded_only) {
+        setMessage("Refund recorded in Shalean (Paystack dashboard refund).");
+      } else if (res.data?.already_reversed_on_paystack) {
+        setMessage("Invoice marked refunded — payment was already reversed on Paystack.");
+      } else if (res.data?.paystack_refunded) {
+        setMessage("Payment refunded via Paystack.");
+      } else {
+        setMessage("Refund recorded (no Paystack charge to reverse).");
+      }
+      setRefundOpen(false);
+      setRefundNote("");
+      setRefundRecordOnly(false);
+      setRefundReference("");
       await load();
     } catch (err) {
       setMessageKind("error");
@@ -353,7 +377,10 @@ export default function OfficeSalesDocumentDetailPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void runReconcilePayment()}
+            onClick={() => {
+              setReconcileReference(doc.paystack_reference ?? "");
+              setReconcileOpen(true);
+            }}
             className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
           >
             Reconcile Paystack payment
@@ -363,7 +390,12 @@ export default function OfficeSalesDocumentDetailPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void runRefund()}
+            onClick={() => {
+              setRefundNote("");
+              setRefundRecordOnly(false);
+              setRefundReference(doc.paystack_reference ?? "");
+              setRefundOpen(true);
+            }}
             className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
           >
             Refund payment
@@ -397,6 +429,140 @@ export default function OfficeSalesDocumentDetailPage() {
       {message ? (
         <p className={messageKind === "error" ? "text-sm text-red-700" : "text-sm text-emerald-700"}>{message}</p>
       ) : null}
+
+      <Dialog
+        open={refundOpen}
+        onOpenChange={(open) => {
+          if (!busy) {
+            setRefundOpen(open);
+            if (!open) {
+              setRefundRecordOnly(false);
+              setRefundReference("");
+            }
+          }
+        }}
+      >
+        <DialogContent className="max-w-md rounded-2xl border-slate-200">
+          <DialogHeader>
+            <DialogTitle>Refund payment</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            {refundRecordOnly
+              ? "Records the refund in Shalean only — use when you already refunded on the Paystack dashboard."
+              : "Refunds via Paystack when a charge exists. Manual payments are recorded only."}
+          </p>
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              checked={refundRecordOnly}
+              onChange={(e) => setRefundRecordOnly(e.target.checked)}
+              disabled={busy}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium">Already refunded on Paystack dashboard</span>
+              <span className="mt-0.5 block text-slate-600">
+                Only update Shalean — do not call Paystack again.
+              </span>
+            </span>
+          </label>
+          <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="refund-reference">
+            Paystack reference <span className="font-normal text-slate-500">(optional)</span>
+          </label>
+          <input
+            id="refund-reference"
+            type="text"
+            value={refundReference}
+            onChange={(e) => setRefundReference(e.target.value)}
+            disabled={busy}
+            placeholder="sd_inv_… or transaction reference"
+            className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
+          />
+          <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="refund-note">
+            Refund reason <span className="font-normal text-slate-500">(optional)</span>
+          </label>
+          <textarea
+            id="refund-note"
+            rows={3}
+            value={refundNote}
+            onChange={(e) => setRefundNote(e.target.value)}
+            disabled={busy}
+            placeholder="e.g. Customer cancelled before service"
+            className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
+          />
+          <DialogFooter className="gap-2 sm:justify-end">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setRefundOpen(false)}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void runRefund({
+                  noteInput: refundNote,
+                  recordOnly: refundRecordOnly,
+                  refundReferenceInput: refundReference,
+                })
+              }
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {busy
+                ? "Saving…"
+                : refundRecordOnly
+                  ? "Record refund in Shalean"
+                  : "Confirm refund"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reconcileOpen} onOpenChange={(open) => !busy && setReconcileOpen(open)}>
+        <DialogContent className="max-w-md rounded-2xl border-slate-200">
+          <DialogHeader>
+            <DialogTitle>Reconcile Paystack payment</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            Leave blank to auto-detect. If reconcile failed before, paste the reference from Paystack →
+            Transactions.
+          </p>
+          <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="reconcile-reference">
+            Paystack reference <span className="font-normal text-slate-500">(optional)</span>
+          </label>
+          <input
+            id="reconcile-reference"
+            type="text"
+            value={reconcileReference}
+            onChange={(e) => setReconcileReference(e.target.value)}
+            disabled={busy}
+            placeholder="sd_inv_…"
+            className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
+          />
+          <DialogFooter className="gap-2 sm:justify-end">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setReconcileOpen(false)}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void runReconcilePayment(reconcileReference)}
+              className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {busy ? "Reconciling…" : "Reconcile payment"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {doc.converted_from_id ? (
         <p className="text-sm text-slate-500">
           Converted from quote{" "}

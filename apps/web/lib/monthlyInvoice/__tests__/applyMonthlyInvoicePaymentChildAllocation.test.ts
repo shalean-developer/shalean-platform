@@ -60,10 +60,13 @@ function buildFakeAdmin(opts: {
           }),
           update: (patch: Record<string, unknown>) => {
             captured.invoiceUpdates.push(patch);
+            const resolved = Promise.resolve({ error: null as null });
             return {
-              eq: (_col: string, _val: string) => ({
-                in: async (_col2: string, _vals: string[]) => ({ error: null }),
-              }),
+              eq: (_col: string, _val: string) =>
+                Object.assign(resolved, {
+                  in: async (_col2: string, _vals: string[]) => ({ error: null }),
+                  select: async () => ({ data: [{ id: opts.invoice.id }], error: null }),
+                }),
             };
           },
         };
@@ -85,6 +88,10 @@ function buildFakeAdmin(opts: {
             eq: (_col: string, _val: string) => ({
               neq: async (_col2: string, _val2: string) => ({
                 data: opts.children,
+                error: null,
+              }),
+              maybeSingle: async () => ({
+                data: { payment_completed_at: null, paid_at: null, completed_at: "2026-01-01T00:00:00.000Z" },
                 error: null,
               }),
             }),
