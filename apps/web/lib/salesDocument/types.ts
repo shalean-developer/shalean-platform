@@ -6,6 +6,7 @@ export type SalesDocumentStatus =
   | "sent"
   | "accepted"
   | "paid"
+  | "refunded"
   | "void"
   | "expired";
 
@@ -67,6 +68,8 @@ export type SalesDocumentRow = {
   created_by: string | null;
   source?: SalesDocumentSource;
   request_details?: SalesDocumentQuoteRequestDetails | null;
+  refund_reference: string | null;
+  refunded_at: string | null;
   created_at: string;
   updated_at: string;
 };

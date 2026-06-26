@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { notifyAdminSalesDocumentInvoicePaid } from "@/lib/salesDocument/notifySalesDocumentAdmin";
+import { resolveSalesDocumentForPaystackCharge } from "@/lib/salesDocument/resolveSalesDocumentForPaystackCharge";
+import { salesDocumentPaystackReferencesMatch } from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 
 export type ApplySalesDocumentPaymentResult =
@@ -13,37 +15,26 @@ export type ApplySalesDocumentPaymentResult =
 
 export async function applySalesDocumentPayment(
   admin: SupabaseClient,
-  params: { reference: string; amountCents: number },
+  params: { reference: string; amountCents: number; documentIdHint?: string | null },
 ): Promise<ApplySalesDocumentPaymentResult> {
   const ref = params.reference.trim();
   if (!ref) return { ok: false, error: "missing_reference" };
 
   const paidIn = Math.max(0, Math.round(params.amountCents));
 
-  const { data: doc, error: docErr } = await admin
-    .from("sales_documents")
-    .select(
-      "id, status, document_type, total_cents, amount_paid_cents, balance_cents, zoho_invoice_id, customer_email, customer_name",
-    )
-    .eq("paystack_reference", ref)
-    .maybeSingle();
-
-  if (docErr) return { ok: false, error: docErr.message };
-  if (!doc || typeof (doc as { id?: string }).id !== "string") {
-    return { ok: true, skipped: true, reason: "not_found" };
+  let row;
+  try {
+    row = await resolveSalesDocumentForPaystackCharge(admin, {
+      reference: ref,
+      documentIdHint: params.documentIdHint,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "lookup_failed" };
   }
 
-  const row = doc as {
-    id: string;
-    status: string | null;
-    document_type: string;
-    total_cents: number | null;
-    amount_paid_cents: number | null;
-    balance_cents: number | null;
-    zoho_invoice_id: string | null;
-    customer_email: string;
-    customer_name: string;
-  };
+  if (!row) {
+    return { ok: true, skipped: true, reason: "not_found" };
+  }
 
   if (row.document_type !== "invoice") {
     return { ok: false, error: "not_an_invoice" };
@@ -58,6 +49,15 @@ export async function applySalesDocumentPayment(
     return { ok: false, error: `document_not_payable_status:${st || "unknown"}` };
   }
 
+  if (!salesDocumentPaystackReferencesMatch(row.id, row.paystack_reference, ref)) {
+    const { error: refPatchErr } = await admin
+      .from("sales_documents")
+      .update({ paystack_reference: ref })
+      .eq("id", row.id);
+    if (refPatchErr) return { ok: false, error: refPatchErr.message };
+  }
+
+  let dedupInserted = false;
   const { error: dedupErr } = await admin.from("sales_document_paystack_charge_dedup").insert({
     charge_reference: ref,
     document_id: row.id,
@@ -67,9 +67,14 @@ export async function applySalesDocumentPayment(
   if (dedupErr) {
     const code = (dedupErr as { code?: string }).code;
     if (code === "23505") {
-      return { ok: true, skipped: true, reason: "duplicate_charge" };
+      if (st === "paid") {
+        return { ok: true, skipped: true, reason: "duplicate_charge" };
+      }
+    } else {
+      return { ok: false, error: dedupErr.message };
     }
-    return { ok: false, error: dedupErr.message };
+  } else {
+    dedupInserted = true;
   }
 
   const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
@@ -81,6 +86,7 @@ export async function applySalesDocumentPayment(
       status: "paid",
       amount_paid_cents: total,
       balance_cents: 0,
+      paystack_reference: ref,
       updated_at: nowIso,
     })
     .eq("id", row.id);
@@ -111,7 +117,7 @@ export async function applySalesDocumentPayment(
     level: "info",
     source: "sales_document/payment",
     message: "sales_document.paid",
-    context: { documentId: row.id, reference: ref, amountCents: paidIn },
+    context: { documentId: row.id, reference: ref, amountCents: paidIn, dedupInserted },
   });
 
   await notifyAdminSalesDocumentInvoicePaid(admin, {

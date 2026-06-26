@@ -31,6 +31,10 @@ import {
   routePaystackChargeForSalesDocument,
   shouldShortCircuitForSalesDocument,
 } from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
+import {
+  isSalesDocumentPaystackReference,
+  salesDocumentIdFromPaystackMetadata,
+} from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
@@ -183,9 +187,13 @@ export async function GET(request: Request) {
       });
     }
 
+    const salesDocIdHintGet = salesDocumentIdFromPaystackMetadata(
+      tx.metadata as Record<string, unknown> | undefined,
+    );
     const salesRoutingGet = await routePaystackChargeForSalesDocument(adminGet, {
       reference: ref,
       amountCents: monthlyAmountGet,
+      documentIdHint: salesDocIdHintGet,
     });
     if (shouldShortCircuitForSalesDocument(salesRoutingGet)) {
       await logSystemEvent({
@@ -218,6 +226,30 @@ export async function GET(request: Request) {
         salesDocumentId:
           salesRoutingGet.kind === "sales_doc_settled" ? salesRoutingGet.documentId : null,
       });
+    }
+    if (salesRoutingGet.kind === "sales_doc_error") {
+      return NextResponse.json(
+        {
+          ok: false,
+          success: false,
+          paymentStatus: "unknown",
+          error: salesRoutingGet.error,
+          reference: ref,
+        },
+        { status: 409 },
+      );
+    }
+    if (isSalesDocumentPaystackReference(ref)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          success: false,
+          paymentStatus: "unknown",
+          error: "sales_document_payment_not_applied",
+          reference: ref,
+        },
+        { status: 409 },
+      );
     }
   }
   if (adminGet) {
@@ -479,9 +511,13 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       });
     }
 
+    const salesDocIdHintPost = salesDocumentIdFromPaystackMetadata(
+      tx.metadata as Record<string, unknown> | undefined,
+    );
     const salesRoutingPost = await routePaystackChargeForSalesDocument(adminPost, {
       reference: ref,
       amountCents: txAmount,
+      documentIdHint: salesDocIdHintPost,
     });
     if (shouldShortCircuitForSalesDocument(salesRoutingPost)) {
       await logSystemEvent({
@@ -531,6 +567,30 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         salesDocumentId:
           salesRoutingPost.kind === "sales_doc_settled" ? salesRoutingPost.documentId : null,
       });
+    }
+    if (salesRoutingPost.kind === "sales_doc_error") {
+      return NextResponse.json(
+        {
+          success: false,
+          ok: false,
+          paymentStatus: "unknown",
+          error: salesRoutingPost.error,
+          reference: ref,
+        },
+        { status: 409 },
+      );
+    }
+    if (isSalesDocumentPaystackReference(ref)) {
+      return NextResponse.json(
+        {
+          success: false,
+          ok: false,
+          paymentStatus: "unknown",
+          error: "sales_document_payment_not_applied",
+          reference: ref,
+        },
+        { status: 409 },
+      );
     }
   }
   if (adminPost) {

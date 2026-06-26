@@ -254,8 +254,8 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
     : "AD";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-3 shadow-sm sm:px-4">
-      {/* Left: logo + mobile menu */}
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-white px-3 shadow-sm sm:gap-4 sm:px-4">
+      {/* Left: mobile menu + logo */}
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -266,21 +266,20 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
           <Menu className="h-5 w-5" />
         </button>
         <Link href="/office" aria-label="Shalean office dashboard" className="flex shrink-0 items-center">
-          <ShaleanNavLogo className="h-8 w-auto max-w-[148px]" intrinsicHeight={120} />
+          <ShaleanNavLogo className="h-7 w-auto max-w-[104px] sm:h-8 sm:max-w-[148px]" intrinsicHeight={120} />
         </Link>
       </div>
 
-      {/* Right */}
-      <div className="flex shrink-0 items-center gap-2">
-        {/* Search */}
+      {/* Right: search, notifications, account */}
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <button
           type="button"
-          className="flex h-10 w-44 items-center gap-2 rounded-xl border border-border bg-slate-50 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/20 sm:w-56"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-slate-50 text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/20 sm:w-56 sm:justify-start sm:gap-2 sm:px-3"
           onClick={onCommandPalette}
           aria-label="Search (Cmd+K)"
         >
           <Search className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-left">Search...</span>
+          <span className="hidden min-w-0 flex-1 truncate text-left text-sm sm:inline">Search...</span>
           <kbd className="hidden shrink-0 rounded-md border border-border bg-white px-1.5 py-0.5 text-[10px] font-medium leading-none sm:inline-flex">
             ⌘K
           </kbd>
@@ -308,7 +307,7 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
         <button
           type="button"
           onClick={onLogout}
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted"
+          className="flex shrink-0 items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-muted sm:px-2"
           title="Sign out"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">

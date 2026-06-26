@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus, Search } from "lucide-react";
 import { getAdminToken } from "@/hooks/useAdminData";
@@ -55,12 +55,22 @@ export function SalesDocumentCatalogPicker({
   const [query, setQuery] = useState("");
   const [bedrooms, setBedrooms] = useState(2);
   const [bathrooms, setBathrooms] = useState(1);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError(null);
     const token = await getAdminToken();
     if (!token) {
+      if (!mountedRef.current) return;
       setError("Sign in as admin to load catalog.");
       setLoading(false);
       return;
@@ -75,14 +85,16 @@ export function SalesDocumentCatalogPicker({
       const eJson = (await eRes.json()) as { extras?: PricingExtraRow[]; error?: string };
       if (!sRes.ok) throw new Error(sJson.error ?? "Could not load services.");
       if (!eRes.ok) throw new Error(eJson.error ?? "Could not load extras.");
+      if (!mountedRef.current) return;
       setServices((sJson.services ?? []).filter((s) => s.is_active));
       setExtras((eJson.extras ?? []).filter((e) => e.is_active));
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : "Could not load catalog.");
       setServices([]);
       setExtras([]);
     }
-    setLoading(false);
+    if (mountedRef.current) setLoading(false);
   }, []);
 
   useEffect(() => {

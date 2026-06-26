@@ -38,7 +38,7 @@ export async function sendSalesDocumentToCustomer(
     balance_cents: number;
   };
 
-  if (row.status === "void" || row.status === "paid") {
+  if (row.status === "void" || row.status === "paid" || row.status === "refunded") {
     return { ok: false, error: "invalid_status" };
   }
   if (row.status === "requested") {

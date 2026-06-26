@@ -80,7 +80,7 @@ export default async function PublicSalesDocumentPage({
           <span>Total</span>
           <span>{total}</span>
         </div>
-        {balance && doc.status !== "paid" ? (
+        {balance && doc.status !== "paid" && doc.status !== "refunded" ? (
           <div className="mt-2 flex justify-between text-sm text-orange-700">
             <span>Balance due</span>
             <span>{balance}</span>
@@ -92,7 +92,12 @@ export default async function PublicSalesDocumentPage({
       </div>
 
       <div className="mt-8 flex flex-col gap-3">
-        {payHref && doc.status !== "paid" ? (
+        {doc.status === "refunded" ? (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-800">
+            This invoice was refunded. Contact Shalean if you have questions.
+          </p>
+        ) : null}
+        {payHref && doc.status !== "paid" && doc.status !== "refunded" ? (
           <Link
             href={payHref}
             className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white shadow hover:bg-blue-700"

@@ -4,16 +4,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { salesDocumentPaystackReference } from "@/lib/salesDocument/salesDocumentPaystackReference";
 
 export type InitializeSalesDocumentPaystackResult =
   | { ok: true; authorizationUrl: string; reference: string; reused?: boolean }
   | { ok: false; error: string };
 
 const PAYABLE_STATUSES = new Set(["draft", "sent", "accepted"]);
-
-function salesDocumentPaystackReference(documentId: string): string {
-  return `sd_inv_${documentId}`;
-}
 
 type DocRow = {
   id: string;
@@ -24,6 +21,11 @@ type DocRow = {
   paystack_reference: string | null;
   payment_link: string | null;
 };
+
+function isDuplicatePaystackReferenceMessage(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes("duplicate") || m.includes("already exist");
+}
 
 export async function initializePaystackForSalesDocument(
   admin: SupabaseClient,
@@ -64,12 +66,26 @@ export async function initializePaystackForSalesDocument(
   const reference = salesDocumentPaystackReference(row.id);
   const existingRef = String(row.paystack_reference ?? "").trim();
   const existingLink = String(row.payment_link ?? "").trim();
-  if (existingLink && existingRef) {
-    return { ok: true, authorizationUrl: existingLink, reference: existingRef, reused: true };
+
+  if (!existingRef || existingRef !== reference) {
+    const { error: refErr } = await admin
+      .from("sales_documents")
+      .update({ paystack_reference: reference })
+      .eq("id", row.id);
+    if (refErr) return { ok: false, error: refErr.message };
+  }
+
+  if (existingLink) {
+    return {
+      ok: true,
+      authorizationUrl: existingLink,
+      reference: existingRef === reference ? existingRef : reference,
+      reused: true,
+    };
   }
 
   const appUrl = getPublicAppUrlBase();
-  const callbackUrl = appUrl ? `${appUrl}/account/sales-documents` : undefined;
+  const callbackUrl = appUrl ? `${appUrl}/pay/doc/${encodeURIComponent(row.id)}/success` : undefined;
 
   const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
@@ -99,6 +115,18 @@ export async function initializePaystackForSalesDocument(
 
   if (!json.status || !json.data?.authorization_url) {
     const msg = String(json.message ?? "");
+    if (isDuplicatePaystackReferenceMessage(msg)) {
+      const { data: again } = await admin
+        .from("sales_documents")
+        .select("paystack_reference, payment_link")
+        .eq("id", row.id)
+        .maybeSingle();
+      const link2 = String((again as DocRow | null)?.payment_link ?? "").trim();
+      const pref2 = String((again as DocRow | null)?.paystack_reference ?? reference).trim();
+      if (link2 && pref2) {
+        return { ok: true, authorizationUrl: link2, reference: pref2, reused: true };
+      }
+    }
     await reportOperationalIssue("error", "sales_document/paystack_init", msg || "initialize failed", {
       documentId: row.id,
     });

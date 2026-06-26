@@ -15,7 +15,7 @@ export type PaystackChargeSalesDocRouting =
 
 export async function routePaystackChargeForSalesDocument(
   admin: SupabaseClient,
-  params: { reference: string; amountCents: number },
+  params: { reference: string; amountCents: number; documentIdHint?: string | null },
 ): Promise<PaystackChargeSalesDocRouting> {
   const outcome = await applySalesDocumentPayment(admin, params);
   return interpretSalesDocumentOutcome(outcome);

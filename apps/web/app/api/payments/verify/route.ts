@@ -12,6 +12,7 @@ import {
   routePaystackChargeForSalesDocument,
   shouldShortCircuitForSalesDocument,
 } from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
+import { salesDocumentIdFromPaystackMetadata } from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { bookingPaymentTotalCents, clampTipZar, type BookingRowPaymentInput } from "@/lib/payments/bookingPaymentSummary";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -224,9 +225,13 @@ export async function POST(request: Request) {
       });
     }
 
+    const salesDocIdHint = salesDocumentIdFromPaystackMetadata(
+      tx.metadata as Record<string, unknown> | undefined,
+    );
     const salesRouting = await routePaystackChargeForSalesDocument(admin, {
       reference: paystackVerifyRef,
       amountCents: amount,
+      documentIdHint: salesDocIdHint,
     });
     if (shouldShortCircuitForSalesDocument(salesRouting)) {
       await logSystemEvent({

@@ -5,6 +5,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminFetch } from "@/hooks/useAdminData";
 import {
+  AdminCustomerPicker,
+  type AdminCustomerPickerValue,
+} from "@/components/admin/AdminCustomerPicker";
+import {
   SalesDocumentCatalogPicker,
   type CatalogLineInput,
 } from "@/components/admin/sales-documents/SalesDocumentCatalogPicker";
@@ -18,9 +22,12 @@ function formatZar(cents: number) {
 export default function OfficeSalesDocumentCreatePage() {
   const router = useRouter();
   const [documentType, setDocumentType] = useState<"quote" | "invoice">("quote");
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [customer, setCustomer] = useState<AdminCustomerPickerValue>({
+    customerId: null,
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+  });
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<LineRow[]>([]);
@@ -60,9 +67,10 @@ export default function OfficeSalesDocumentCreatePage() {
         method: "POST",
         body: JSON.stringify({
           document_type: documentType,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          customer_phone: customerPhone || null,
+          customer_id: customer.customerId,
+          customer_name: customer.customerName,
+          customer_email: customer.customerEmail,
+          customer_phone: customer.customerPhone || null,
           due_date: dueDate || null,
           notes: notes || null,
           line_items: lines.map((l) => ({
@@ -110,44 +118,17 @@ export default function OfficeSalesDocumentCreatePage() {
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="text-slate-600">Customer name</span>
-              <input
-                required
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-slate-600">Email</span>
-              <input
-                required
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-slate-600">Phone (optional)</span>
-              <input
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-slate-600">Due date (optional)</span>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              />
-            </label>
-          </div>
+          <AdminCustomerPicker value={customer} onChange={setCustomer} disabled={saving} />
+
+          <label className="block text-sm">
+            <span className="text-slate-600">Due date (optional)</span>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 sm:max-w-xs"
+            />
+          </label>
 
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2">

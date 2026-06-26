@@ -23,6 +23,7 @@ import { routePaystackChargeForMonthlyInvoice } from "@/lib/booking/routePaystac
 import {
   routePaystackChargeForSalesDocument,
 } from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
+import { salesDocumentIdFromPaystackMetadata } from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { metrics } from "@/lib/metrics/counters";
 import {
   expectedCheckoutZarFromVerify,
@@ -182,9 +183,13 @@ export async function POST(request: Request) {
       });
     }
 
+    const salesDocIdHint = salesDocumentIdFromPaystackMetadata(
+      normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
+    );
     const salesRouting = await routePaystackChargeForSalesDocument(supabase, {
       reference,
       amountCents: typeof data.amount === "number" ? data.amount : 0,
+      documentIdHint: salesDocIdHint,
     });
     if (salesRouting.kind === "sales_doc_settled") {
       await logSystemEvent({
@@ -200,6 +205,15 @@ export async function POST(request: Request) {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
+    }
+    if (salesRouting.kind === "sales_doc_error") {
+      await logSystemEvent({
+        level: "error",
+        source: "paystack/webhook",
+        message: "sales_document.charge.error",
+        context: { reference, error: salesRouting.error },
+      });
+      return NextResponse.json({ received: true });
     }
   }
 

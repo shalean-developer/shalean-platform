@@ -1,9 +1,10 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { salesDocumentPaystackReferencesMatch } from "@/lib/salesDocument/salesDocumentPaystackReference";
 
-function refsMatch(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+function refsMatch(documentId: string, storedRef: string, urlRef: string): boolean {
+  return salesDocumentPaystackReferencesMatch(documentId, storedRef, urlRef);
 }
 
 export type PaySalesDocumentLandingOk = {
@@ -55,13 +56,16 @@ export async function loadPaySalesDocumentLanding(
   }
 
   const paystackRef = typeof r.paystack_reference === "string" ? r.paystack_reference : "";
-  if (!paystackRef || !refsMatch(paystackRef, reference)) {
+  if (!refsMatch(id, paystackRef, reference)) {
     return { ok: false, httpStatus: 403, error: "Invalid payment reference." };
   }
 
   const status = String(r.status ?? "").toLowerCase();
   if (status === "paid") {
     return { ok: false, httpStatus: 410, error: "This invoice has already been paid." };
+  }
+  if (status === "refunded") {
+    return { ok: false, httpStatus: 410, error: "This invoice was refunded." };
   }
   if (!["sent", "accepted"].includes(status)) {
     return {

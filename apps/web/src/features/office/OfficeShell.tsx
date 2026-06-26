@@ -113,13 +113,18 @@ export function OfficeShell({ children }: { children: ReactNode }) {
       setGate("denied");
       return;
     }
+    let active = true;
     void getSupabaseSession().then((session) => {
+      if (!active) return;
       const email = session?.user?.email?.trim();
       if (email) setUserLabel(email);
       setGate("ready");
       setErrorMessage(null);
       setNoSupabase(false);
     });
+    return () => {
+      active = false;
+    };
   }, [roleState.status]);
 
   useEffect(() => {
