@@ -2,7 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { logSystemEvent } from "@/lib/logging/systemLog";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
+import {
+  describePaystackKeyModes,
+  getPaystackSecretKeyCandidates,
+} from "@/lib/paystack/paystackSecretKeys";
 import { canonicalSalesDocumentPaystackReference } from "@/lib/salesDocument/resolveSalesDocumentForPaystackCharge";
 import {
   parseSalesDocumentIdFromPaystackReference,
@@ -41,14 +46,23 @@ function isSuccessfulVerify(
   return { reference, amountCents: Math.round(tx.amount) };
 }
 
-async function verifyReference(
-  secret: string,
+async function verifyReferenceWithKeys(
+  keys: ReturnType<typeof getPaystackSecretKeyCandidates>,
   reference: string,
-): Promise<FoundSalesDocumentPaystackCharge | null> {
+): Promise<{ hit: FoundSalesDocumentPaystackCharge | null; lastMessage: string | null }> {
   const ref = reference.trim();
-  if (!ref) return null;
-  const verify = await fetchPaystackTransactionVerify(ref, secret);
-  return isSuccessfulVerify(verify);
+  if (!ref) return { hit: null, lastMessage: null };
+
+  let lastMessage: string | null = null;
+  for (const key of keys) {
+    const verify = await fetchPaystackTransactionVerify(ref, key.secret);
+    if (typeof verify.message === "string" && verify.message.trim()) {
+      lastMessage = verify.message.trim();
+    }
+    const hit = isSuccessfulVerify(verify);
+    if (hit) return { hit, lastMessage };
+  }
+  return { hit: null, lastMessage };
 }
 
 async function listRecentSuccessfulPaystackTransactions(
@@ -78,6 +92,24 @@ async function listRecentSuccessfulPaystackTransactions(
   return out;
 }
 
+function trustedAdminOverrideCharge(params: {
+  documentId: string;
+  overrideReference: string;
+  totalCents: number | null;
+  balanceCents: number | null;
+}): FoundSalesDocumentPaystackCharge | null {
+  const refDocId = parseSalesDocumentIdFromPaystackReference(params.overrideReference);
+  if (refDocId !== params.documentId) return null;
+
+  const amountCents = Math.max(
+    0,
+    Math.round(Number(params.totalCents ?? params.balanceCents ?? 0)),
+  );
+  if (amountCents <= 0) return null;
+
+  return { reference: params.overrideReference.trim(), amountCents };
+}
+
 /**
  * Locate a successful Paystack charge for a sales invoice when the stored reference
  * does not verify (reference drift, duplicate-init edge cases, test/live mismatch recovery).
@@ -95,12 +127,12 @@ export async function findSuccessfulPaystackChargeForSalesDocument(
     return { ok: false, error: "invalid_document_id" };
   }
 
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!secret) return { ok: false, error: "paystack_not_configured" };
+  const keys = getPaystackSecretKeyCandidates();
+  if (keys.length === 0) return { ok: false, error: "paystack_not_configured" };
 
   const { data: doc, error: docErr } = await admin
     .from("sales_documents")
-    .select("id, paystack_reference, customer_email, created_at")
+    .select("id, paystack_reference, customer_email, created_at, total_cents, balance_cents")
     .eq("id", documentId)
     .maybeSingle();
   if (docErr) return { ok: false, error: docErr.message };
@@ -111,6 +143,8 @@ export async function findSuccessfulPaystackChargeForSalesDocument(
     paystack_reference: string | null;
     customer_email: string;
     created_at: string;
+    total_cents: number | null;
+    balance_cents: number | null;
   };
 
   const candidates = new Set<string>();
@@ -130,50 +164,86 @@ export async function findSuccessfulPaystackChargeForSalesDocument(
     if (cr) candidates.add(cr);
   }
 
+  let lastPaystackMessage: string | null = null;
+
   for (const ref of candidates) {
-    const hit = await verifyReference(secret, ref);
+    const { hit, lastMessage } = await verifyReferenceWithKeys(keys, ref);
+    if (lastMessage) lastPaystackMessage = lastMessage;
     if (hit) return hit;
   }
 
   const fromDate = new Date(row.created_at);
   fromDate.setDate(fromDate.getDate() - 7);
-  const txs = await listRecentSuccessfulPaystackTransactions(secret, {
-    fromIso: fromDate.toISOString(),
-    maxPages: 8,
-  });
-
   const emailNeedle = (params.customerEmail ?? row.customer_email).trim().toLowerCase();
 
-  for (const tx of txs) {
-    const ref = String(tx.reference ?? "").trim();
-    if (!ref) continue;
-    const metaId = metadataDocumentId(tx.metadata);
-    const refDocId = parseSalesDocumentIdFromPaystackReference(ref);
-    if (metaId === documentId || refDocId === documentId) {
-      const hit = await verifyReference(secret, ref);
-      if (hit) return hit;
-    }
-  }
+  for (const key of keys) {
+    const txs = await listRecentSuccessfulPaystackTransactions(key.secret, {
+      fromIso: fromDate.toISOString(),
+      maxPages: 8,
+    });
 
-  if (emailNeedle) {
     for (const tx of txs) {
       const ref = String(tx.reference ?? "").trim();
       if (!ref) continue;
-      const hit = await verifyReference(secret, ref);
-      if (!hit) continue;
-      const verify = await fetchPaystackTransactionVerify(ref, secret);
-      const email = String(verify.data?.metadata?.customer_email ?? "")
-        .trim()
-        .toLowerCase();
-      if (email && email === emailNeedle && metadataDocumentId(verify.data?.metadata) === documentId) {
-        return hit;
+      const metaId = metadataDocumentId(tx.metadata);
+      const refDocId = parseSalesDocumentIdFromPaystackReference(ref);
+      if (metaId === documentId || refDocId === documentId) {
+        const { hit, lastMessage } = await verifyReferenceWithKeys(keys, ref);
+        if (lastMessage) lastPaystackMessage = lastMessage;
+        if (hit) return hit;
+      }
+    }
+
+    if (emailNeedle) {
+      for (const tx of txs) {
+        const ref = String(tx.reference ?? "").trim();
+        if (!ref) continue;
+        const { hit, lastMessage } = await verifyReferenceWithKeys(keys, ref);
+        if (lastMessage) lastPaystackMessage = lastMessage;
+        if (!hit) continue;
+        const verify = await fetchPaystackTransactionVerify(ref, key.secret);
+        const email = String(verify.data?.metadata?.customer_email ?? "")
+          .trim()
+          .toLowerCase();
+        if (email && email === emailNeedle && metadataDocumentId(verify.data?.metadata) === documentId) {
+          return hit;
+        }
       }
     }
   }
 
+  if (override) {
+    const trusted = trustedAdminOverrideCharge({
+      documentId,
+      overrideReference: override,
+      totalCents: row.total_cents,
+      balanceCents: row.balance_cents,
+    });
+    if (trusted) {
+      await logSystemEvent({
+        level: "warn",
+        source: "sales_document/reconcile",
+        message: "trusted_admin_reference_without_paystack_verify",
+        context: {
+          documentId,
+          reference: trusted.reference,
+          amountCents: trusted.amountCents,
+          keysTried: describePaystackKeyModes(keys),
+          lastPaystackMessage,
+        },
+      });
+      return trusted;
+    }
+  }
+
+  const keysLabel = describePaystackKeyModes(keys);
+  const paystackHint = lastPaystackMessage ? ` Paystack: ${lastPaystackMessage}.` : "";
   return {
     ok: false,
     error:
-      "paystack_charge_not_found — paste the Paystack reference from your dashboard (Transactions). Check test vs live keys match the payment environment.",
+      `paystack_charge_not_found — could not verify with configured keys (${keysLabel}).` +
+      paystackHint +
+      " Ensure PAYSTACK_SECRET_KEY matches the dashboard mode (test vs live) where the payment was taken," +
+      " or set PAYSTACK_SECRET_KEY_LIVE / PAYSTACK_SECRET_KEY_TEST for reconcile to try both.",
   };
 }
