@@ -51,7 +51,43 @@ export function InvoiceAdjustmentsTable(props: InvoiceAdjustmentsTableProps) {
       <CardHeader>
         <CardTitle>Adjustments</CardTitle>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="p-0 sm:px-6">
+        {props.rows.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400 sm:px-0">
+            <p className="font-medium text-zinc-700 dark:text-zinc-300">No adjustments on this invoice</p>
+            <p className="mt-1 text-xs">Credits or extra charges will show here once applied to this invoice month.</p>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-zinc-100 md:hidden dark:divide-zinc-800">
+              {props.rows.map((r) => {
+                const cents = Math.round(Number(r.amount_cents ?? 0));
+                const positive = cents >= 0;
+                const cat = parseAdjustmentCategory(r.category);
+                return (
+                  <div key={String(r.id ?? `${appliedIso(r)}-${cents}`)} className="space-y-2 px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{adjustmentCategoryLabel(cat)}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">{formatDate(appliedIso(r))}</p>
+                      </div>
+                      <p
+                        className={`shrink-0 text-sm font-semibold tabular-nums ${
+                          positive ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"
+                        }`}
+                      >
+                        {positive ? "+" : ""}
+                        {formatCurrency(cents, props.currencyCode)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300">Booking: {bookingLabel(r)}</p>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300">By: {byLine(r.created_by, creators)}</p>
+                    <p className="break-words text-sm text-zinc-700 dark:text-zinc-200">{String(r.reason ?? "—")}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
@@ -64,15 +100,7 @@ export function InvoiceAdjustmentsTable(props: InvoiceAdjustmentsTableProps) {
             </tr>
           </thead>
           <tbody>
-            {props.rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                  <p className="font-medium text-zinc-700 dark:text-zinc-300">No adjustments on this invoice</p>
-                  <p className="mt-1 text-xs">Credits or extra charges will show here once applied to this invoice month.</p>
-                </td>
-              </tr>
-            ) : (
-              props.rows.map((r) => {
+            {props.rows.map((r) => {
                 const cents = Math.round(Number(r.amount_cents ?? 0));
                 const positive = cents >= 0;
                 const cat = parseAdjustmentCategory(r.category);
@@ -93,10 +121,12 @@ export function InvoiceAdjustmentsTable(props: InvoiceAdjustmentsTableProps) {
                     <td className="py-2 align-top text-zinc-700 dark:text-zinc-200">{String(r.reason ?? "—")}</td>
                   </tr>
                 );
-              })
-            )}
+              })}
           </tbody>
         </table>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

@@ -65,7 +65,41 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
           <p className="text-xs text-zinc-500 dark:text-zinc-400">Showing live booking rows for this invoice.</p>
         )}
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="p-0 sm:px-6">
+        {rows.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400 sm:px-0">
+            <p className="font-medium text-zinc-700 dark:text-zinc-300">No bookings on this invoice</p>
+            <p className="mt-1 text-xs">Jobs linked to this billing month will appear here (or in the finalize snapshot once sent).</p>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-zinc-100 md:hidden dark:divide-zinc-800">
+              {rows.map((r) => (
+                <div key={r.id} className="space-y-2 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{formatDate(r.date)}</p>
+                      <p className="mt-0.5 text-sm text-zinc-700 dark:text-zinc-200">{r.service ?? "—"}</p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                      {formatCurrency(r.cents, props.currencyCode)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
+                      title={r.statusTitle ?? undefined}
+                    >
+                      {r.statusLabel}
+                    </span>
+                    {!useSnapshot && r.cleanerLabel ? (
+                      <span className="text-xs text-zinc-600 dark:text-zinc-300">{r.cleanerLabel}</span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
@@ -77,15 +111,7 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={useSnapshot ? 4 : 5} className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                  <p className="font-medium text-zinc-700 dark:text-zinc-300">No bookings on this invoice</p>
-                  <p className="mt-1 text-xs">Jobs linked to this billing month will appear here (or in the finalize snapshot once sent).</p>
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
+            {rows.map((r) => (
                 <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-800">
                   <td className="py-2 pr-4 align-top text-zinc-800 dark:text-zinc-100">{formatDate(r.date)}</td>
                   <td className="py-2 pr-4 align-top text-zinc-700 dark:text-zinc-200">{r.service ?? "—"}</td>
@@ -102,10 +128,12 @@ export function InvoiceBookingsTable(props: InvoiceBookingsTableProps) {
                   </td>
                   {!useSnapshot ? <td className="py-2 align-top text-zinc-600 dark:text-zinc-300">{r.cleanerLabel ?? "—"}</td> : null}
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

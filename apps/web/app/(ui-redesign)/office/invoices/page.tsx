@@ -50,6 +50,108 @@ function statusPresentation(status: string): {
   return { label: status.replace(/_/g, " "), cls: "bg-orange-100 text-orange-700", icon: Clock };
 }
 
+function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
+  const s = statusPresentation(inv.status);
+  const SIcon = s.icon;
+  const href = `/office/invoices/${inv.id}`;
+  return (
+    <Link
+      href={href}
+      className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 transition-colors last:border-b-0 active:bg-slate-50"
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-slate-900">
+            {(inv.customer_name ?? "").trim() || "—"}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {formatInvoiceMonth(inv.month)} · {inv.id.slice(0, 8).toUpperCase()}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold tabular-nums text-slate-900">
+            {formatCurrency(inv.total_amount_cents, inv.currency_code)}
+          </p>
+          {inv.balance_cents > 0 ? (
+            <p className="text-xs font-medium tabular-nums text-orange-600">
+              Due {formatCurrency(inv.balance_cents, inv.currency_code)}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold capitalize", s.cls)}>
+          <SIcon className="h-3 w-3" />
+          {s.label}
+        </span>
+        {inv.days_overdue > 0 && inv.status.toLowerCase() !== "paid" && inv.balance_cents > 0 ? (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+            {inv.days_overdue}d overdue
+          </span>
+        ) : null}
+        <span className="text-xs text-slate-500">Due {formatDueDateLabel(inv.due_date)}</span>
+        <span className="text-xs text-slate-400">
+          {inv.booking_count} booking{inv.booking_count === 1 ? "" : "s"}
+        </span>
+        {inv.view_count > 0 ? (
+          <span className="text-[10px] text-slate-400">Opened {inv.view_count}×</span>
+        ) : null}
+      </div>
+      <span className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-50 py-2.5 text-sm font-semibold text-blue-600">
+        View invoice
+        <ChevronRight className="h-4 w-4" aria-hidden />
+      </span>
+    </Link>
+  );
+}
+
+const OUTSTANDING_TOOLTIP =
+  "Sum of unpaid balances on all invoices in the list (every month). For current recurring billing, compare with the month draft total on /office/recurring.";
+
+function SummaryStatCard({
+  label,
+  value,
+  color,
+  tooltip,
+  wide = false,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+  tooltip?: string;
+  wide?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "shrink-0 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm md:shrink md:p-4",
+        wide ? "min-w-[9.5rem]" : "min-w-[7.25rem]",
+      )}
+    >
+      <div className="flex items-center gap-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p>
+        {tooltip ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex rounded-full text-slate-400 transition hover:text-slate-600"
+                aria-label={`About ${label}`}
+              >
+                <HelpCircle className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start" className="max-w-[16rem] text-left text-xs leading-relaxed">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
+      <p className={cn("mt-1 text-lg font-bold tabular-nums sm:text-2xl", color)}>{value}</p>
+    </div>
+  );
+}
+
 function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
   const s = statusPresentation(inv.status);
   const SIcon = s.icon;
@@ -96,7 +198,7 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
       <td className="px-4 py-3">
         <Link
           href={`/office/invoices/${inv.id}`}
-          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors opacity-0 group-hover:opacity-100"
+          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
         >
           View
         </Link>
@@ -159,7 +261,7 @@ export default function InvoicesPage() {
   const totalOutstandingCents = summary?.total_outstanding_cents ?? 0;
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Monthly billing</h1>
@@ -193,70 +295,45 @@ export default function InvoicesPage() {
       )}
 
       <TooltipProvider delayDuration={200}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Total invoices", value: loading ? "—" : totalInvoices, color: "text-slate-800" },
-            { label: "Paid", value: loading ? "—" : paidCount, color: "text-emerald-600" },
-            {
-              label: "Overdue",
-              value: loading ? "—" : overdueCount,
-              color: overdueCount > 0 ? "text-red-600" : "text-slate-400",
-            },
-            {
-              label: "Outstanding",
-              value: loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR"),
-              color: "text-orange-600",
-              tooltip:
-                "Sum of unpaid balances on all invoices in the list (every month). For current recurring billing, compare with the month draft total on /office/recurring.",
-            },
-          ].map((k) => (
-            <div key={k.label} className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
-              <div className="flex items-center gap-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
-                {"tooltip" in k && k.tooltip ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="rounded-full text-slate-400 transition hover:text-slate-600"
-                        aria-label={`About ${k.label}`}
-                      >
-                        <HelpCircle className="h-3 w-3" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-left">
-                      {k.tooltip}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </div>
-              <p className={cn("mt-1 text-2xl font-bold tabular-nums", k.color)}>{k.value}</p>
-            </div>
-          ))}
+        <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible lg:grid-cols-4">
+          <SummaryStatCard label="Invoices" value={loading ? "—" : totalInvoices} color="text-slate-800" />
+          <SummaryStatCard label="Paid" value={loading ? "—" : paidCount} color="text-emerald-600" />
+          <SummaryStatCard
+            label="Overdue"
+            value={loading ? "—" : overdueCount}
+            color={overdueCount > 0 ? "text-red-600" : "text-slate-400"}
+          />
+          <SummaryStatCard
+            label="Unpaid"
+            value={loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR")}
+            color="text-orange-600"
+            tooltip={OUTSTANDING_TOOLTIP}
+            wide
+          />
         </div>
       </TooltipProvider>
 
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
-          <div className="relative flex-1 min-w-[200px]">
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+        <div className="space-y-3 border-b border-slate-100 px-4 py-3">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search invoices…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:outline-none focus:border-blue-300"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
             />
           </div>
-          <div className="flex gap-1">
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
             {(["all", "paid", "unpaid", "overdue"] as const).map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => setStatusFilter(s)}
                 className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
-                  statusFilter === s ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-100",
+                  "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold capitalize transition-colors",
+                  statusFilter === s ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
                 )}
               >
                 {s === "all" ? "All" : s}
@@ -265,8 +342,38 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="md:hidden">
+          {loading ? (
+            <div className="space-y-3 px-4 py-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-100" />
+              ))}
+            </div>
+          ) : invoices.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-slate-400">No invoices found.</p>
+          ) : monthGroups.length > 0 ? (
+            monthGroups.map((group) => {
+              const groupTotalCents = group.invoices.reduce((sum, inv) => sum + inv.total_amount_cents, 0);
+              const groupOutstandingCents = group.invoices.reduce(
+                (sum, inv) => sum + Math.max(0, inv.balance_cents),
+                0,
+              );
+              return (
+                <MonthGroupMobileSection
+                  key={group.month}
+                  group={group}
+                  groupTotalCents={groupTotalCents}
+                  groupOutstandingCents={groupOutstandingCents}
+                />
+              );
+            })
+          ) : (
+            invoices.map((inv) => <InvoiceCard key={inv.id} inv={inv} />)
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 {["Invoice", "Customer", "Bookings", "Amount", "Due", "Status", ""].map((h) => (
@@ -317,7 +424,7 @@ export default function InvoicesPage() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-slate-400">
             {loading
               ? "Loading…"
@@ -325,13 +432,13 @@ export default function InvoicesPage() {
                 ? "No invoices"
                 : `Showing ${pagination.from}–${pagination.to} of ${pagination.total} invoices across ${pagination.totalMonths} month${pagination.totalMonths === 1 ? "" : "s"}`}
           </p>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex w-full items-center justify-between gap-2 text-xs text-slate-500 sm:w-auto sm:justify-start">
               Months per page
               <select
                 value={monthsPerPage}
                 onChange={(e) => setMonthsPerPage(Number(e.target.value))}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
               >
                 {[1, 2, 3, 6, 12].map((size) => (
                   <option key={size} value={size}>
@@ -340,31 +447,69 @@ export default function InvoicesPage() {
                 ))}
               </select>
             </label>
-            <span className="text-xs font-medium text-slate-500">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={loading || !pagination.hasPreviousPage}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Prev
-            </button>
-            <button
-              type="button"
-              disabled={loading || !pagination.hasNextPage}
-              onClick={() => setPage((p) => p + 1)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
+              <span className="text-xs font-medium text-slate-500">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={loading || !pagination.hasPreviousPage}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  disabled={loading || !pagination.hasNextPage}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function MonthGroupMobileSection({
+  group,
+  groupTotalCents,
+  groupOutstandingCents,
+}: {
+  group: AdminInvoiceMonthGroup;
+  groupTotalCents: number;
+  groupOutstandingCents: number;
+}) {
+  return (
+    <section className="border-b border-slate-200 last:border-b-0">
+      <div className="bg-slate-50 px-4 py-3">
+        <p className="text-sm font-bold text-slate-800">{formatInvoiceMonth(group.month)}</p>
+        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+          <span>
+            {group.invoices.length} invoice{group.invoices.length === 1 ? "" : "s"}
+          </span>
+          <span className="font-semibold text-slate-800">
+            Total {formatCurrency(groupTotalCents, group.invoices[0]?.currency_code ?? "ZAR")}
+          </span>
+          {groupOutstandingCents > 0 ? (
+            <span className="font-semibold text-orange-600">
+              Unpaid {formatCurrency(groupOutstandingCents, group.invoices[0]?.currency_code ?? "ZAR")}
+            </span>
+          ) : null}
+        </p>
+      </div>
+      {group.invoices.map((inv) => (
+        <InvoiceCard key={inv.id} inv={inv} />
+      ))}
+    </section>
   );
 }
 
@@ -395,7 +540,7 @@ function MonthGroupSection({
               </span>
               {groupOutstandingCents > 0 ? (
                 <span className="font-semibold text-orange-600">
-                  Outstanding: {formatCurrency(groupOutstandingCents, group.invoices[0]?.currency_code ?? "ZAR")}
+                  Unpaid: {formatCurrency(groupOutstandingCents, group.invoices[0]?.currency_code ?? "ZAR")}
                 </span>
               ) : null}
             </div>

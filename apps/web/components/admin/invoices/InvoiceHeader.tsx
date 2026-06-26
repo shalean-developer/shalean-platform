@@ -68,14 +68,17 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
             <CardTitle className="text-xl">Monthly invoice</CardTitle>
             <CardDescription className="text-base text-zinc-700 dark:text-zinc-200">
               <span className="font-medium text-zinc-900 dark:text-zinc-50">{props.customerLabel}</span>
-              <span className="block text-xs font-normal text-zinc-500 dark:text-zinc-400">Customer ID: {props.customerId}</span>
+              <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                <span className="sm:hidden">Customer ID: {props.customerId.slice(0, 8)}…</span>
+                <span className="hidden break-all sm:inline">Customer ID: {props.customerId}</span>
+              </span>
             </CardDescription>
             <p className="pt-1 text-sm text-zinc-600 dark:text-zinc-300">
               Billing month: <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatInvoiceMonth(props.month)}</span>{" "}
               <span className="text-zinc-400">({props.month})</span>
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex w-full min-w-0 flex-col gap-3 lg:items-end">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={statusBadgeVariant(st)}>{st.replace(/_/g, " ")}</Badge>
               {props.isOverdue ? <Badge variant="destructive">Overdue</Badge> : null}
@@ -111,7 +114,7 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
                 </p>
               </div>
             ) : null}
-            {props.actions ? <div className="w-full max-w-xl lg:w-auto">{props.actions}</div> : null}
+            {props.actions ? <div className="w-full min-w-0">{props.actions}</div> : null}
           </div>
         </div>
 
@@ -119,9 +122,12 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Contact</p>
           <div className="mt-2 flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
             {props.customerEmail ? (
-              <span>
+              <span className="min-w-0">
                 <span className="mr-1 text-xs text-zinc-500 dark:text-zinc-400">Billing email</span>
-                <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={`mailto:${props.customerEmail}`}>
+                <a
+                  className="break-all font-medium text-blue-600 hover:underline dark:text-blue-400"
+                  href={`mailto:${props.customerEmail}`}
+                >
                   {props.customerEmail}
                 </a>
               </span>
@@ -158,21 +164,21 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/60 sm:p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total</p>
             <p className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-50 sm:text-lg">
               {formatCurrency(props.totalAmountCents, props.currencyCode)}
             </p>
           </div>
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/60 sm:p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Paid</p>
             <p className="mt-1 text-base font-semibold text-emerald-700 dark:text-emerald-300 sm:text-lg">
               {formatCurrency(props.amountPaidCents, props.currencyCode)}
             </p>
           </div>
           <div
-            className={`rounded-lg p-4 sm:col-span-1 ${
+            className={`col-span-2 rounded-lg p-3 sm:col-span-1 sm:p-4 ${
               settled
                 ? "border-2 border-emerald-500/70 bg-emerald-50 dark:border-emerald-600/60 dark:bg-emerald-950/30"
                 : "border-2 border-red-500/80 bg-red-50 dark:border-red-600/70 dark:bg-red-950/25"

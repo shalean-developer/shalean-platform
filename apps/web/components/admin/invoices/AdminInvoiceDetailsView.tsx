@@ -244,31 +244,32 @@ export function AdminInvoiceDetailsView({
   const canRefreshZohoPdf = status === "draft" && !isClosed;
 
   const headerActions = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end">
       {canRefreshZohoPdf ? (
-        <span title="Rebuild the Zoho draft from current bookings and adjustment lines.">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={zohoRefreshBusy}
-            onClick={() => void refreshZohoPdf()}
-          >
-            {zohoRefreshBusy ? "Refreshing…" : "Refresh Zoho PDF"}
-          </Button>
-        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={zohoRefreshBusy}
+          className="w-full justify-center sm:w-auto"
+          title="Rebuild the Zoho draft from current bookings and adjustment lines."
+          onClick={() => void refreshZohoPdf()}
+        >
+          {zohoRefreshBusy ? "Refreshing…" : "Refresh Zoho PDF"}
+        </Button>
       ) : null}
       {hasInvoicePdf ? (
         <a
           href={`/api/admin/invoices/${invoiceId}/pdf`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 sm:w-auto dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
         >
           Download PDF
         </a>
       ) : null}
-      <InvoiceHeaderActions
+      <div className="contents sm:col-span-2 lg:contents">
+        <InvoiceHeaderActions
         invoiceId={invoiceId}
         status={status}
         isClosed={isClosed}
@@ -286,19 +287,20 @@ export function AdminInvoiceDetailsView({
         invoiceBookings={invoiceBookingOptions}
         getAccessToken={getAccessToken}
         onDone={load}
-      />
+        />
+      </div>
       {zohoRefreshToast ? (
-        <span
-          className={`w-full text-xs sm:w-auto ${zohoRefreshToast.error ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}
+        <p
+          className={`col-span-full text-xs ${zohoRefreshToast.error ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}
         >
           {zohoRefreshToast.text}
-        </span>
+        </p>
       ) : null}
     </div>
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-w-0 max-w-full flex-col gap-6 overflow-x-hidden">
       <InvoiceHeader
         customerLabel={customerLabel}
         customerId={customerId}
@@ -348,16 +350,16 @@ export function AdminInvoiceDetailsView({
             Frozen line totals for bookings already eligible for payout (customer invoice fully settled path).
           </p>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-8 text-sm">
+        <CardContent className="grid grid-cols-2 gap-4 sm:flex sm:flex-wrap sm:gap-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Eligible total</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">
+            <p className="mt-1 text-xl font-bold tabular-nums text-emerald-900 sm:text-2xl dark:text-emerald-100">
               {formatCurrency(payoutSummary.totalCents, currency)}
             </p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Eligible bookings</p>
-            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">{payoutSummary.count}</p>
+            <p className="mt-1 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-zinc-50">{payoutSummary.count}</p>
           </div>
         </CardContent>
       </Card>

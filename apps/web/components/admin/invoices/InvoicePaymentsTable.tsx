@@ -55,7 +55,47 @@ export function InvoicePaymentsTable(props: InvoicePaymentsTableProps) {
         <CardTitle>Payments</CardTitle>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">From the invoice event log (Paystack and manual admin settlements).</p>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="p-0 sm:px-6">
+        {payments.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400 sm:px-0">
+            <p className="font-medium text-zinc-700 dark:text-zinc-300">No payments yet</p>
+            <p className="mt-1 text-xs">When the customer pays via Paystack (or you mark paid manually), entries will appear here.</p>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-zinc-100 md:hidden dark:divide-zinc-800">
+              {payments.map((p) => (
+                <div key={p.id} className="space-y-2 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{formatDate(p.at)}</p>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                      {p.refunded ? "−" : ""}
+                      {formatCurrency(p.cents, props.currencyCode)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {p.manual ? (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
+                        Manual
+                      </span>
+                    ) : null}
+                    {p.refunded ? (
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-900 dark:bg-red-950/60 dark:text-red-100">
+                        Refund
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                    Balance after:{" "}
+                    {p.balanceAfter == null
+                      ? "—"
+                      : `${formatCurrency(p.balanceAfter, props.currencyCode)}${p.balanceAfter === 0 ? " (Settled)" : ""}`}
+                  </p>
+                  <p className="break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">{p.ref || "—"}</p>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[520px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
@@ -66,15 +106,7 @@ export function InvoicePaymentsTable(props: InvoicePaymentsTableProps) {
             </tr>
           </thead>
           <tbody>
-            {payments.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                  <p className="font-medium text-zinc-700 dark:text-zinc-300">No payments yet</p>
-                  <p className="mt-1 text-xs">When the customer pays via Paystack (or you mark paid manually), entries will appear here.</p>
-                </td>
-              </tr>
-            ) : (
-              payments.map((p) => (
+            {payments.map((p) => (
                 <tr key={p.id} className="border-b border-zinc-100 dark:border-zinc-800">
                   <td className="py-2 pr-4 align-top text-zinc-800 dark:text-zinc-100">{formatDate(p.at)}</td>
                   <td className="py-2 pr-4 align-top font-medium tabular-nums text-zinc-900 dark:text-zinc-50">
@@ -105,10 +137,12 @@ export function InvoicePaymentsTable(props: InvoicePaymentsTableProps) {
                   </td>
                   <td className="py-2 align-top font-mono text-xs text-zinc-600 dark:text-zinc-300">{p.ref || "—"}</td>
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

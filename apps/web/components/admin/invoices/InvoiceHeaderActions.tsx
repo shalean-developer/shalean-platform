@@ -463,9 +463,16 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       : undefined;
 
   return (
-    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-      <span title={addAdjustmentTitle}>
-        <Button type="button" variant="outline" size="sm" disabled={!canAdjust || busy !== null} onClick={() => setAdjOpen(true)}>
+    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
+      <span title={addAdjustmentTitle} className="w-full sm:contents">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full justify-center sm:w-auto"
+          disabled={!canAdjust || busy !== null}
+          onClick={() => setAdjOpen(true)}
+        >
           Add adjustment
         </Button>
       </span>
@@ -474,6 +481,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           type="button"
           variant="default"
           size="sm"
+          className="w-full justify-center sm:w-auto"
           disabled={busy !== null}
           onClick={() => {
             setSendErr(null);
@@ -483,11 +491,12 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           Send invoice
         </Button>
       ) : null}
-      <span title={resendDisabledReason ?? undefined}>
+      <span title={resendDisabledReason ?? undefined} className="w-full sm:contents">
         <Button
           type="button"
           variant="secondary"
           size="sm"
+          className="w-full justify-center sm:w-auto"
           disabled={!canResendEmail || busy !== null}
           onClick={() => {
             setResendErr(null);
@@ -498,7 +507,14 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           Resend invoice
         </Button>
       </span>
-      <Button type="button" variant="outline" size="sm" disabled={!hasLink || busy !== null} onClick={() => void copyLink()}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full justify-center sm:w-auto"
+        disabled={!hasLink || busy !== null}
+        onClick={() => void copyLink()}
+      >
         Copy payment link
       </Button>
       {canSyncPayment ? (
@@ -506,6 +522,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           type="button"
           variant="secondary"
           size="sm"
+          className="w-full justify-center sm:w-auto"
           disabled={busy !== null}
           onClick={() => {
             setSyncErr(null);
@@ -520,6 +537,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
         type="button"
         variant="destructive"
         size="sm"
+        className="w-full justify-center sm:w-auto"
         disabled={!canMarkPaid || busy !== null}
         onClick={() => {
           setPaidErr(null);
@@ -535,6 +553,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           type="button"
           variant="outline"
           size="sm"
+          className="w-full justify-center sm:w-auto"
           disabled={busy !== null}
           onClick={() => {
             setRefundErr(null);
@@ -548,7 +567,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
         </Button>
       ) : null}
       {props.refundedAt ? (
-        <span className="self-center text-xs text-red-700 dark:text-red-300">
+        <span className="col-span-full text-xs text-red-700 dark:text-red-300">
           Refunded {formatDate(props.refundedAt)}
           {props.refundReference ? ` · ${props.refundReference}` : ""}
         </span>
@@ -557,6 +576,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
         type="button"
         variant="outline"
         size="sm"
+        className="w-full justify-center sm:w-auto"
         disabled={!canHardClose || busy !== null}
         onClick={() => {
           setCloseErr(null);
@@ -565,10 +585,10 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       >
         Hard close
       </Button>
-      {busy ? <span className="self-center text-xs text-zinc-500">{busy}…</span> : null}
+      {busy ? <span className="col-span-full text-xs text-zinc-500">{busy}…</span> : null}
       {toast ? (
         <span
-          className={`self-center text-xs ${toast.error ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}
+          className={`col-span-full text-xs ${toast.error ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}
         >
           {toast.text}
         </span>
