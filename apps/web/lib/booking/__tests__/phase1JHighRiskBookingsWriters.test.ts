@@ -288,6 +288,11 @@ const CLASSIFIED_SQL_BOOKINGS_HIGH_RISK_MUTATIONS: readonly SqlClassification[] 
     rationale: "assign_team_and_sync_roster lead-cleaner-id refinement.",
   },
   {
+    file: "20261033_assign_team_admin_promote_status_on_assign.sql",
+    category: "runtime_rpc_definition",
+    rationale: "assign_team_and_sync_roster admin variant promotes status when setting cleaner_id.",
+  },
+  {
     file: "20260937_h5_legacy_completed_payment_status_repair.sql",
     category: "one_time_data_fix",
     rationale: "Legacy completed payment-status repair.",

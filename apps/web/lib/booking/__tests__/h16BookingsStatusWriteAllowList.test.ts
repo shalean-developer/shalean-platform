@@ -747,6 +747,7 @@ describe("H-16 bookings.status direct-write allow-list", () => {
       ["20260883_assign_team_admin_preserve_cleaner_lifecycle.sql", "lifecycle_rpc"],
       ["20260926_assign_team_sync_roster_persist_payout_owner.sql", "lifecycle_rpc"],
       ["20260928_assign_team_lead_cleaner_id.sql", "lifecycle_rpc"],
+      ["20261033_assign_team_admin_promote_status_on_assign.sql", "lifecycle_rpc"],
       // M-12: `accept_dispatch_offer_atomic` RPC. Single-tx counterpart to
       // the cleaner-side `acceptDispatchOffer` flow — atomically marks the
       // winning offer accepted, the losers as `superseded`, and promotes
