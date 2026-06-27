@@ -1,60 +1,47 @@
-"use client";
-
-import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { redirect } from "next/navigation";
 import { AuthRoleChoiceScreen } from "@/components/auth/AuthRoleChoiceScreen";
-import { AuthLegalFooter, AuthCard } from "@/components/auth/AuthShell";
+import { AuthLegalFooter } from "@/components/auth/AuthShell";
 
-function RedirectingMessage() {
-  return (
-    <AuthCard>
-      <p className="text-center text-sm text-zinc-600 dark:text-zinc-300">Redirecting…</p>
-    </AuthCard>
-  );
+type Props = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-function RoleLoginRouterPageInner() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+function safeInAppRedirect(raw: string | undefined): string {
+  const t = (raw ?? "").trim();
+  if (!t.startsWith("/") || t.startsWith("//") || t.includes("://")) return "";
+  return t;
+}
 
-  const roleRaw = searchParams.get("role");
-  const redirect = searchParams.get("redirect")?.trim() ?? "";
-  const safeRedirect = redirect.startsWith("/") ? redirect : "";
+/** Server-side role routing — avoids client `useSearchParams` hydration mismatch on `/login?role=…`. */
+export default async function RoleLoginRouterPage({ searchParams }: Props) {
+  const params = (await searchParams) ?? {};
+  const roleRaw = firstParam(params.role);
   const roleNorm = (roleRaw ?? "").toLowerCase();
-  const isKnownRole = roleNorm === "cleaner" || roleNorm === "admin" || roleNorm === "customer";
+  const safeRedirectPath = safeInAppRedirect(firstParam(params.redirect));
 
-  useEffect(() => {
-    if (!roleRaw || !isKnownRole) return;
+  if (roleNorm === "cleaner") {
+    const target = safeRedirectPath.startsWith("/jobs") ? safeRedirectPath : "/jobs";
+    redirect(`/cleaner/login?redirect=${encodeURIComponent(target)}`);
+  }
 
-    if (roleNorm === "cleaner") {
-      const target = safeRedirect && safeRedirect.startsWith("/jobs") ? safeRedirect : "/jobs";
-      router.replace(`/cleaner/login?redirect=${encodeURIComponent(target)}`);
-      return;
-    }
+  if (roleNorm === "admin") {
+    const target = safeRedirectPath || "/office";
+    redirect(`/auth/login?redirect=${encodeURIComponent(target)}&intent=customer`);
+  }
 
-    const defaultRedirect =
-      roleNorm === "admin" ? "/office" : roleNorm === "customer" ? "/account" : "/account";
-    const targetRedirect = safeRedirect || defaultRedirect;
-    const intent = roleNorm === "admin" ? "customer" : roleNorm;
-    router.replace(`/auth/login?redirect=${encodeURIComponent(targetRedirect)}&intent=${encodeURIComponent(intent)}`);
-  }, [router, roleRaw, isKnownRole, roleNorm, safeRedirect]);
-
-  if (roleRaw && isKnownRole) {
-    return <RedirectingMessage />;
+  if (roleNorm === "customer") {
+    const target = safeRedirectPath || "/account";
+    redirect(`/auth/login?redirect=${encodeURIComponent(target)}&intent=customer`);
   }
 
   return (
     <>
-      <AuthRoleChoiceScreen redirect={safeRedirect || null} />
+      <AuthRoleChoiceScreen redirect={safeRedirectPath || null} />
       <AuthLegalFooter />
     </>
-  );
-}
-
-export default function RoleLoginRouterPage() {
-  return (
-    <Suspense fallback={<RedirectingMessage />}>
-      <RoleLoginRouterPageInner />
-    </Suspense>
   );
 }

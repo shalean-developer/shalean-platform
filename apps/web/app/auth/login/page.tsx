@@ -1,14 +1,22 @@
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 
-import { AuthCard } from "@/components/auth/AuthShell";
 import { parseLoginSearchParams } from "@/lib/auth/sanitizeLoginSearchParams";
 
-import { LoginForm } from "./LoginForm";
+import { LoginFormClient } from "./LoginFormClient";
 
 type Props = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function safeInAppRedirect(raw: string | undefined, fallback: string): string {
+  const t = (raw ?? "").trim();
+  if (t.startsWith("/") && !t.startsWith("//") && !t.includes("://")) return t;
+  return fallback;
+}
 
 export default async function LoginPage({ searchParams }: Props) {
   const params = (await searchParams) ?? {};
@@ -18,18 +26,15 @@ export default async function LoginPage({ searchParams }: Props) {
     redirect(`/auth/login${parsed.safeSearch}`);
   }
 
+  const redirectTo = safeInAppRedirect(firstParam(params.redirect), "/account");
+  const intent = firstParam(params.intent) ?? null;
+
   return (
-    <Suspense
-      fallback={
-        <AuthCard>
-          <p className="text-center text-sm text-zinc-500">Loading…</p>
-        </AuthCard>
-      }
-    >
-      <LoginForm
-        initialEmail={parsed.emailPrefill ?? ""}
-        stripCredentialsFromUrl={parsed.shouldStripCredentialsFromUrl}
-      />
-    </Suspense>
+    <LoginFormClient
+      initialEmail={parsed.emailPrefill ?? ""}
+      stripCredentialsFromUrl={parsed.shouldStripCredentialsFromUrl}
+      redirect={redirectTo}
+      intent={intent}
+    />
   );
 }

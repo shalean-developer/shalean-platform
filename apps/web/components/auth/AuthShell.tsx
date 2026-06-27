@@ -54,9 +54,15 @@ export function AuthShell({ children }: AuthShellProps) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-zinc-100 px-4 py-10 sm:py-12 dark:bg-zinc-950">
       <div className="mb-8 flex w-full max-w-[440px] flex-col items-center text-center">
-        <Link href="/" className="inline-flex flex-col items-center gap-2 transition hover:opacity-90">
+        <Link
+          href="/"
+          className="inline-flex flex-col items-center gap-2 transition hover:opacity-90"
+          suppressHydrationWarning
+        >
           <ShaleanNavLogo className="h-9 w-auto sm:h-10" intrinsicHeight={80} priority />
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Professional cleaning, simplified.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400" suppressHydrationWarning>
+            Professional cleaning, simplified.
+          </p>
         </Link>
       </div>
 

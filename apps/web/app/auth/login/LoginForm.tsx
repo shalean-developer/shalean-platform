@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AlertCircle, Mail } from "lucide-react";
 import { AuthBackLink, AuthCard } from "@/components/auth/AuthShell";
@@ -14,14 +14,17 @@ import { stripCredentialParamsFromBrowserUrl } from "@/lib/auth/sanitizeLoginSea
 export function LoginForm({
   initialEmail = "",
   stripCredentialsFromUrl = false,
+  redirect = "/account",
+  intent = null,
 }: {
   initialEmail?: string;
   stripCredentialsFromUrl?: boolean;
+  /** Safe in-app post-login path from server `searchParams`. */
+  redirect?: string;
+  intent?: string | null;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect")?.trim() || "/account";
-  const intentParam = searchParams.get("intent");
+  const intentParam = intent;
 
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
