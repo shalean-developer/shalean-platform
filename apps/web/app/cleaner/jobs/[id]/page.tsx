@@ -1115,7 +1115,7 @@ export default function CleanerJobDetailPage() {
               Job details
             </p>
             <div className="mt-2 space-y-5">
-              <h1 className="text-xl font-semibold leading-snug text-foreground">{title}</h1>
+              <h1 className="text-2xl font-bold tracking-tight leading-snug text-foreground">{title}</h1>
               {operational?.overrideApplied ? (
                 <p
                   className="rounded-lg border border-violet-600/35 bg-violet-500/10 px-3 py-2 text-sm text-violet-950 dark:border-violet-500/30 dark:bg-violet-950/30 dark:text-violet-50"
@@ -1178,7 +1178,7 @@ export default function CleanerJobDetailPage() {
               </div>
 
               {showLifecycleDebugStrip ? (
-                <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/40 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground">
                   <span className="font-semibold text-foreground">Lifecycle debug</span>
                   <br />
                   status: {displayJob.status ?? "—"}
@@ -1341,7 +1341,7 @@ export default function CleanerJobDetailPage() {
                           {stripExtraTimeSuffixFromDisplayLabel(String(it.name ?? ""))}
                           {it.quantity > 1 ? <span className="text-muted-foreground"> ×{it.quantity}</span> : null}
                         </span>
-                        <span className="shrink-0 text-[10px] font-medium uppercase text-muted-foreground">{it.item_type}</span>
+                        <span className="shrink-0 text-xs font-medium uppercase text-muted-foreground">{it.item_type}</span>
                       </li>
                     ))}
                   </ul>

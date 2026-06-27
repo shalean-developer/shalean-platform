@@ -29,7 +29,7 @@ export function CleanerEarningsCard({ earnings, className }: EarningsCardProps) 
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
             Today&apos;s Earnings
           </p>
           <p className="mt-0.5 text-3xl font-extrabold tabular-nums tracking-tight text-slate-900">

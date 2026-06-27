@@ -86,7 +86,7 @@ function InfoRow({ icon: Icon, label, value }: InfoRowProps) {
     <div className="flex items-center gap-3 px-4 py-3">
       <Icon className="size-4 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden />
       <div className="flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">{label}</p>
         <p className="mt-0.5 text-sm text-slate-800">{value}</p>
       </div>
     </div>
@@ -174,7 +174,7 @@ export default function JobsProfilePage() {
       {/* Contact details */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
         <div className="px-4 pt-3.5 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
             Contact Details
           </p>
         </div>
@@ -188,7 +188,7 @@ export default function JobsProfilePage() {
       {/* Work preferences */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
         <div className="px-4 pt-3.5 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
             Work Preferences
           </p>
         </div>
@@ -207,7 +207,7 @@ export default function JobsProfilePage() {
             <div className="flex items-start gap-3 px-4 py-3">
               <Star className="mt-0.5 size-4 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden />
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
                   Available days
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -229,7 +229,7 @@ export default function JobsProfilePage() {
       {/* Documents */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
         <div className="px-4 pt-3.5 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
             Documents
           </p>
         </div>
@@ -239,7 +239,7 @@ export default function JobsProfilePage() {
               <FileText className="size-4 text-slate-400" strokeWidth={1.75} aria-hidden />
               <p className="text-sm text-slate-800">ID document</p>
             </div>
-            <span className="rounded-full bg-green-50 border border-green-100 px-2.5 py-0.5 text-[10px] font-semibold text-green-700">
+            <span className="rounded-full bg-green-50 border border-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
               On file
             </span>
           </div>
@@ -248,7 +248,7 @@ export default function JobsProfilePage() {
               <Shield className="size-4 text-slate-400" strokeWidth={1.75} aria-hidden />
               <p className="text-sm text-slate-800">Background check</p>
             </div>
-            <span className="rounded-full bg-green-50 border border-green-100 px-2.5 py-0.5 text-[10px] font-semibold text-green-700">
+            <span className="rounded-full bg-green-50 border border-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
               Cleared
             </span>
           </div>
@@ -257,7 +257,7 @@ export default function JobsProfilePage() {
               <Star className="size-4 text-slate-400" strokeWidth={1.75} aria-hidden />
               <p className="text-sm text-slate-800">Training</p>
             </div>
-            <span className="rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-[10px] font-semibold text-blue-700">
+            <span className="rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
               Completed
             </span>
           </div>
@@ -267,7 +267,7 @@ export default function JobsProfilePage() {
       {/* Settings */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden divide-y divide-gray-50">
         <div className="px-4 pt-3.5 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
             Settings
           </p>
         </div>

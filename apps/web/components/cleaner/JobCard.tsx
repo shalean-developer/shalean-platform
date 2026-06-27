@@ -95,7 +95,7 @@ export function JobCard({ row, variant, now = new Date(), className, onRowPatche
           <div className="flex flex-col items-end gap-1.5 shrink-0">
             <span
               className={cn(
-                "rounded-full px-2.5 py-0.5 text-[10px] font-semibold",
+                "rounded-full px-2.5 py-0.5 text-xs font-semibold",
                 statusChipClass(phase),
               )}
             >

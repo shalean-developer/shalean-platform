@@ -64,7 +64,7 @@ function JobEarningPanel({ offer }: { offer: CleanerJobOffer }) {
       <div className="min-w-0 flex-1">
         <p
           className={cn(
-            "text-[10px] font-semibold uppercase tracking-wider",
+            "text-xs font-semibold uppercase tracking-wider",
             positive
               ? "text-emerald-900/70 dark:text-emerald-100/80"
               : "text-amber-900/80 dark:text-amber-100/85",
@@ -104,7 +104,7 @@ function MetaChip({
   children: React.ReactNode;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[12px] font-medium text-foreground/80">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-foreground/80">
       <Icon className="size-3.5 text-muted-foreground" aria-hidden />
       {children}
     </span>
@@ -158,7 +158,7 @@ export function JobOfferCard({ offer, busy, onAccept, onDecline, onOfferExpired 
     >
       {showSmsFallbackHint && offer.offerToken ? (
         <div
-          className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-950 dark:text-amber-50"
+          className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-950 dark:text-amber-50"
           role="status"
         >
           <span className="min-w-0 truncate">
@@ -177,7 +177,7 @@ export function JobOfferCard({ offer, busy, onAccept, onDecline, onOfferExpired 
       <div className="flex items-center justify-between gap-2">
         <span
           className={cn(
-            "inline-flex max-w-[70%] items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white",
+            "inline-flex max-w-[70%] items-center rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-white",
             offer.offerType === "preferred" ? "bg-violet-600" : "bg-emerald-600",
           )}
         >
@@ -196,7 +196,7 @@ export function JobOfferCard({ offer, busy, onAccept, onDecline, onOfferExpired 
       </div>
 
       {offer.offerType === "preferred" ? (
-        <p className="mt-2 text-[11px] font-medium leading-snug text-violet-900 dark:text-violet-100">
+        <p className="mt-2 text-xs font-medium leading-snug text-violet-900 dark:text-violet-100">
           {offer.isUrgentOffer
             ? "Accept quickly before this offer expires."
             : `Please accept before ${new Date(offer.acceptDeadlineIso ?? offer.expiresAt).toLocaleString("en-ZA", {

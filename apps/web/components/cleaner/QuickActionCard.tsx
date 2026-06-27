@@ -79,7 +79,7 @@ export function QuickActionCard({ className }: QuickActionCardProps) {
                   aria-hidden
                 />
               </span>
-              <span className="text-[10px] font-medium leading-tight text-slate-600">
+              <span className="text-xs font-medium leading-tight text-slate-600">
                 {action.label}
               </span>
             </Link>

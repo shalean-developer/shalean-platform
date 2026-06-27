@@ -196,11 +196,11 @@ export function BookingServiceQaPanel({
                               className="h-16 w-16 rounded-md border border-border object-cover"
                             />
                           ) : (
-                            <span className="inline-flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 text-[10px] text-muted-foreground">
+                            <span className="inline-flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 text-xs text-muted-foreground">
                               Link expired — refresh page
                             </span>
                           )}
-                          <span className="absolute -bottom-1 left-0 rounded bg-background/90 px-1 text-[9px] font-medium uppercase text-muted-foreground shadow">
+                          <span className="absolute -bottom-1 left-0 rounded bg-background/90 px-1 text-xs font-medium uppercase text-muted-foreground shadow">
                             {ph.photo_type}
                           </span>
                         </div>

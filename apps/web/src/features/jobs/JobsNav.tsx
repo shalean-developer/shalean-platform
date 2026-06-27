@@ -84,13 +84,13 @@ export function JobsBottomNav() {
                 {tabBadge?.kind === "offers" ? (
                   <span
                     aria-hidden
-                    className="absolute -right-2 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold leading-none text-white shadow-sm"
+                    className="absolute -right-2 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-semibold leading-none text-white shadow-sm"
                   >
                     {cleanerNavBadgeLabel(tabBadge.count)}
                   </span>
                 ) : null}
               </span>
-              <span className={cn("max-w-[4.5rem] truncate text-center text-[10px] tabular-nums leading-tight", active ? "font-semibold" : "font-medium")}>
+              <span className={cn("max-w-[4.5rem] truncate text-center text-xs tabular-nums leading-tight", active ? "font-semibold" : "font-medium")}>
                 {tabBadge ? `${label} (${cleanerNavBadgeLabel(tabBadge.count)})` : label}
               </span>
             </Link>

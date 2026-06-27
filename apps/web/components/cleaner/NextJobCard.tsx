@@ -109,12 +109,12 @@ export function NextJobCard({
       {/* Header row */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-gray-50">
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
             Next Job
           </span>
           <span
             className={cn(
-              "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
               statusChipClass(statusVariant),
             )}
           >
@@ -148,7 +148,7 @@ export function NextJobCard({
           </div>
 
           <div className="shrink-0 rounded-2xl bg-green-50 border border-green-100 px-3 py-2 text-center min-w-[90px]">
-            <p className="text-[9px] font-semibold uppercase tracking-wider text-green-600">
+            <p className="text-xs font-semibold uppercase tracking-wider text-green-600">
               Job Earning
             </p>
             <p className="mt-0.5 text-base font-extrabold tabular-nums text-green-700 leading-none">

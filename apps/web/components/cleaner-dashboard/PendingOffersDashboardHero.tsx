@@ -60,10 +60,10 @@ export function PendingOffersDashboardHero({ pendingOffersCount, embedded, stick
         />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-semibold tracking-tight text-emerald-950 dark:text-emerald-50">
+        <p className="truncate text-sm font-semibold tracking-tight text-emerald-950 dark:text-emerald-50">
           {headline}
         </p>
-        <p className="mt-0.5 truncate text-[12px] text-emerald-900/80 dark:text-emerald-100/85">{helper}</p>
+        <p className="mt-0.5 truncate text-xs text-emerald-900/80 dark:text-emerald-100/85">{helper}</p>
       </div>
       <ChevronRight
         className="size-4 shrink-0 text-emerald-700/70 transition-transform group-hover:translate-x-0.5 dark:text-emerald-200/80"

@@ -50,7 +50,7 @@ export function ProfileSummaryCard({
 
         {/* Info */}
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-bold text-slate-900 leading-tight">{name}</h2>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 leading-tight">{name}</h1>
           <p className={cn("mt-0.5 text-sm font-medium", status.color)}>{status.text}</p>
           <div className="mt-2 flex items-center gap-3">
             {rating ? (

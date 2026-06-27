@@ -57,11 +57,11 @@ export function JobEarningInline({ earning, variant = "prominent", className, tr
       >
         {positive ? (
           <>
-            <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{JOB_EARNING_LABEL}</span>
+            <span className="text-xs font-semibold uppercase tracking-wide opacity-80">{JOB_EARNING_LABEL}</span>
             <span>{formatZarFromCents(earning.amount_cents ?? 0)}</span>
           </>
         ) : (
-          <span className="text-[11px] font-medium">{JOB_EARNING_UNAVAILABLE_LABEL}</span>
+          <span className="text-xs font-medium">{JOB_EARNING_UNAVAILABLE_LABEL}</span>
         )}
       </span>
     );
@@ -93,7 +93,7 @@ export function JobEarningInline({ earning, variant = "prominent", className, tr
       <div className="min-w-0 flex-1">
         <p
           className={cn(
-            "text-[10px] font-semibold uppercase tracking-wider",
+            "text-xs font-semibold uppercase tracking-wider",
             positive ? "text-emerald-900/70 dark:text-emerald-100/80" : "text-amber-900/80 dark:text-amber-100/85",
           )}
         >

@@ -214,12 +214,12 @@ export default function JobsHomePage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-800 leading-tight">{job.timeLine}</p>
                   <p className="mt-0.5 text-xs text-slate-500">{job.suburb}</p>
-                  <span className="mt-1 inline-block rounded-full bg-green-50 border border-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                  <span className="mt-1 inline-block rounded-full bg-green-50 border border-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
                     EARNING {formatCleanerJobEarningDisplay(job.jobEarning)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                  <span className="rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
                     {job.phaseDisplay}
                   </span>
                   <span className="text-slate-300">›</span>

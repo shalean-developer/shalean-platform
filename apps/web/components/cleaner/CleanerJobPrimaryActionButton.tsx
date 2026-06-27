@@ -203,10 +203,10 @@ export function CleanerJobPrimaryActionButton({
         </button>
       )}
       {completeBlocked ? (
-        <p className="text-[11px] leading-snug text-amber-700">{JOB_EARNING_BLOCK_COMPLETION_MESSAGE}</p>
+        <p className="text-xs leading-snug text-amber-700">{JOB_EARNING_BLOCK_COMPLETION_MESSAGE}</p>
       ) : null}
       {error ? (
-        <p className="text-[11px] leading-snug text-red-600" role="alert">
+        <p className="text-xs leading-snug text-red-600" role="alert">
           {error}
         </p>
       ) : null}

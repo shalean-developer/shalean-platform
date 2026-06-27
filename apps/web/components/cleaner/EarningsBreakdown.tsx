@@ -54,14 +54,14 @@ export function EarningsBreakdown({
             key={period.label}
             className="rounded-2xl border border-gray-100 bg-white px-3 py-3.5 shadow-sm text-center"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
               {period.label}
             </p>
             <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900 leading-none">
               {period.value}
             </p>
             {period.sub ? (
-              <p className="mt-0.5 text-[9px] text-slate-400">{period.sub}</p>
+              <p className="mt-0.5 text-xs text-slate-400">{period.sub}</p>
             ) : null}
           </div>
         ))}

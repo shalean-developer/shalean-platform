@@ -207,7 +207,7 @@ function EarningsPageContent() {
                   </span>
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                      "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
                       statusChip(row.payout_status),
                     )}
                   >

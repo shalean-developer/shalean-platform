@@ -52,7 +52,7 @@ export function ActiveJobHero({
       )}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className={cn("rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wider", badgeClass)}>
+        <span className={cn("rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wider", badgeClass)}>
           Active job
         </span>
         <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs font-medium text-foreground ring-1 ring-amber-600/25">

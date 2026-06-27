@@ -25,7 +25,7 @@ export function CleanerPageHeader({
           Hi, {firstName} {"\u{1F44B}"}
         </h1>
         {subline ? (
-          <p className="mt-0.5 text-sm text-slate-500">{subline}</p>
+          <p className="mt-0.5 text-sm text-slate-400">{subline}</p>
         ) : null}
       </div>
       <button
@@ -42,7 +42,7 @@ export function CleanerPageHeader({
         {notificationCount > 0 ? (
           <span
             aria-hidden
-            className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold leading-none text-white"
+            className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold leading-none text-white"
           >
             {notificationCount > 9 ? "9+" : notificationCount}
           </span>

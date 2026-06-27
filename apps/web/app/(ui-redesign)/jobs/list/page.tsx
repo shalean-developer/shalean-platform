@@ -203,14 +203,14 @@ export default function JobsListPage() {
               >
                 {tab.label}
                 {tab.id === "upcoming" && upcomingRaw.length > 0 ? (
-                  <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                  <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold",
                     filter === "upcoming" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
                   )}>
                     {upcomingRaw.length}
                   </span>
                 ) : null}
                 {tab.id === "today" && todayRows.length > 0 ? (
-                  <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                  <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold",
                     filter === "today" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
                   )}>
                     {todayRows.length}
