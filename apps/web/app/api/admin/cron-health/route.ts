@@ -9,6 +9,8 @@ export type CronHealthJobSummary = {
   job_name: string;
   last_success_at: string | null;
   last_run_at: string | null;
+  last_run_status: "success" | "error" | null;
+  last_run_message: string | null;
   errors_last_24h: number;
 };
 
@@ -53,7 +55,13 @@ export async function GET(request: Request) {
 
   const byJob = new Map<
     string,
-    { last_success_at: string | null; last_run_at: string | null; errors_last_24h: number }
+    {
+      last_success_at: string | null;
+      last_run_at: string | null;
+      last_run_status: "success" | "error" | null;
+      last_run_message: string | null;
+      errors_last_24h: number;
+    }
   >();
 
   const recentErrors: CronHealthRecentError[] = [];
@@ -67,11 +75,20 @@ export async function GET(request: Request) {
 
     let agg = byJob.get(job);
     if (!agg) {
-      agg = { last_success_at: null, last_run_at: null, errors_last_24h: 0 };
+      agg = {
+        last_success_at: null,
+        last_run_at: null,
+        last_run_status: null,
+        last_run_message: null,
+        errors_last_24h: 0,
+      };
       byJob.set(job, agg);
     }
     if (!agg.last_run_at) {
       agg.last_run_at = created;
+      agg.last_run_status = status === "success" || status === "error" ? status : null;
+      const msg = typeof r.message === "string" ? r.message.trim() : "";
+      agg.last_run_message = msg || null;
     }
     if (status === "success" && !agg.last_success_at) {
       agg.last_success_at = created;
@@ -100,7 +117,13 @@ export async function GET(request: Request) {
     const created = (lastOk?.[0] as { created_at?: string } | undefined)?.created_at;
     if (!created) continue;
     if (!agg) {
-      byJob.set(jobName, { last_success_at: created, last_run_at: created, errors_last_24h: 0 });
+      byJob.set(jobName, {
+        last_success_at: created,
+        last_run_at: created,
+        last_run_status: "success",
+        last_run_message: null,
+        errors_last_24h: 0,
+      });
     } else {
       agg.last_success_at = created;
       if (!agg.last_run_at) agg.last_run_at = created;
@@ -112,6 +135,8 @@ export async function GET(request: Request) {
       job_name,
       last_success_at: v.last_success_at,
       last_run_at: v.last_run_at,
+      last_run_status: v.last_run_status,
+      last_run_message: v.last_run_message,
       errors_last_24h: v.errors_last_24h,
     }))
     .sort((a, b) => a.job_name.localeCompare(b.job_name));

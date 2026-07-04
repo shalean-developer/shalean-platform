@@ -19,6 +19,12 @@ import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/loggin
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { resolveCustomerOutboundEmail } from "@/lib/customer/readCustomerProfileContact";
+import {
+  buildRecurringGeneratorRunContext,
+  emptyRecurringGeneratorRunCounters,
+  recurringGeneratorCronStatus,
+  serializeRecurringGeneratorRunMessage,
+} from "@/lib/recurring/recurringGeneratorRunSummary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,7 +92,9 @@ export async function POST(request: Request) {
   }
 
   let generated = 0;
-  let skipped = 0;
+  let skippedDuplicate = 0;
+  let failed = 0;
+  let skippedPlans = 0;
 
   try {
   const today = todayJohannesburg();
@@ -154,7 +162,6 @@ export async function POST(request: Request) {
     if (compareYmd(fromYmd, throughYmd) > 0) {
       const nextRun = calculateNextRunDate(schedule, today);
       await admin.from("recurring_bookings").update({ last_generated_at: new Date().toISOString(), next_run_date: nextRun }).eq("id", r.id);
-      skipped++;
       continue;
     }
 
@@ -169,7 +176,7 @@ export async function POST(request: Request) {
         message: "recurring_skip_no_email",
         context: { recurring_id: r.id, customer_id: r.customer_id },
       });
-      skipped++;
+      skippedPlans++;
       continue;
     }
 
@@ -236,7 +243,7 @@ export async function POST(request: Request) {
         message: "recurring_skip_profile_select_failed",
         context: { recurring_id: r.id, customer_id: r.customer_id, error: profileErr.message },
       });
-      skipped++;
+      skippedPlans++;
       continue;
     }
     if (!profileRow) {
@@ -256,7 +263,7 @@ export async function POST(request: Request) {
             "Create user_profiles row (billing_type, schedule_type) for this auth user, then the next cron run will generate.",
         },
       });
-      skipped++;
+      skippedPlans++;
       const nextRun = calculateNextRunDate(schedule, today);
       await admin
         .from("recurring_bookings")
@@ -288,7 +295,7 @@ export async function POST(request: Request) {
           schedule_type: scheduleType,
         },
       });
-      skipped++;
+      skippedPlans++;
       const nextRun = calculateNextRunDate(schedule, today);
       await admin
         .from("recurring_bookings")
@@ -307,6 +314,7 @@ export async function POST(request: Request) {
     const datesAll = occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
     const dates = datesAll.slice(0, MAX_OCCURRENCES_PER_PLAN);
     const partialBacklog = datesAll.length > dates.length;
+    let planInsertFailures = 0;
 
     for (const d of dates) {
       if (r.skip_next_occurrence_date && d === r.skip_next_occurrence_date) continue;
@@ -380,7 +388,7 @@ export async function POST(request: Request) {
           },
         });
       } else if (ins.code === "duplicate_occurrence") {
-        skipped++;
+        skippedDuplicate++;
         console.log("[generate] skipped recurring duplicate", { planId: r.id, date: d });
       } else {
         await logSystemEvent({
@@ -389,13 +397,17 @@ export async function POST(request: Request) {
           message: "recurring_booking_generate_failed",
           context: { recurring_id: r.id, occurrence_date: d, error: ins.message },
         });
-        skipped++;
+        failed++;
+        planInsertFailures++;
       }
     }
 
-    const nextRun = partialBacklog
-      ? datesAll[MAX_OCCURRENCES_PER_PLAN]!
-      : calculateNextRunDate(schedule, throughYmd);
+    const nextRun =
+      planInsertFailures > 0
+        ? r.next_run_date
+        : partialBacklog
+          ? datesAll[MAX_OCCURRENCES_PER_PLAN]!
+          : calculateNextRunDate(schedule, throughYmd);
     await admin
       .from("recurring_bookings")
       .update({
@@ -406,43 +418,56 @@ export async function POST(request: Request) {
       .eq("id", r.id);
   }
 
-  await logSystemEvent({
-    level: "info",
-    source: "cron/generate-recurring-bookings",
-    message: "Cron finished",
-    context: {
-      scanned: rows?.length ?? 0,
+  const counters = buildRecurringGeneratorRunContext(
+    {
+      ...emptyRecurringGeneratorRunCounters(rows?.length ?? 0),
       generated,
-      skipped,
+      skipped_duplicate: skippedDuplicate,
+      failed,
+      skipped_plans: skippedPlans,
+    },
+    {
       today,
       month_start: monthStart,
       month_end: monthEnd,
       cursor_eligibility_end: cursorEligibilityEnd,
     },
+  );
+
+  await logSystemEvent({
+    level: recurringGeneratorCronStatus(counters) === "error" ? "warn" : "info",
+    source: "cron/generate-recurring-bookings",
+    message: "Cron finished",
+    context: counters,
   });
+
+  if (counters.failed > 0) {
+    await reportOperationalIssue(
+      "error",
+      "cron/generate-recurring-bookings",
+      `${counters.failed} recurring occurrence insert(s) failed`,
+      counters,
+    );
+  }
+  if (counters.skipped_plans > 0) {
+    await reportOperationalIssue(
+      "error",
+      "cron/generate-recurring-bookings",
+      `${counters.skipped_plans} active recurring plan(s) skipped (email/profile/billing/window)`,
+      counters,
+    );
+  }
+
+  const cronStatus = recurringGeneratorCronStatus(counters);
   await logCronRun({
     jobName: "generate-recurring-bookings",
-    status: "success",
-    message: JSON.stringify({
-      scanned: rows?.length ?? 0,
-      generated,
-      skipped,
-      today,
-      month_start: monthStart,
-      month_end: monthEnd,
-      cursor_eligibility_end: cursorEligibilityEnd,
-    }),
+    status: cronStatus,
+    message: serializeRecurringGeneratorRunMessage(counters),
   });
 
   return NextResponse.json({
-    ok: true,
-    scanned: rows?.length ?? 0,
-    generated,
-    skipped,
-    today,
-    month_start: monthStart,
-    month_end: monthEnd,
-    cursor_eligibility_end: cursorEligibilityEnd,
+    ok: cronStatus === "success",
+    ...counters,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

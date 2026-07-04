@@ -74,4 +74,23 @@ describe("recurring occurrence insertion convergence (static guard)", () => {
     expect(src).not.toContain("insertRecurringOccurrenceBooking");
     expect(src).not.toContain("insertMonthlyRecurringOccurrenceBooking");
   });
+
+  it("generate cron logs error status when occurrence inserts fail (not silent success)", () => {
+    const src = readFileSync(join(cwd, "app/api/cron/generate-recurring-bookings/route.ts"), "utf8");
+    expect(src).toContain("recurringGeneratorCronStatus");
+    expect(src).toContain("failed");
+    expect(src).toContain("skipped_duplicate");
+    expect(src).toMatch(/status:\s*cronStatus/);
+  });
+
+  it("recurring insert helpers use schema-aware customer ownership patch", () => {
+    for (const file of [
+      "lib/recurring/insertRecurringOccurrenceBooking.ts",
+      "lib/recurring/insertMonthlyRecurringOccurrenceBooking.ts",
+    ]) {
+      const src = readFileSync(join(cwd, file), "utf8");
+      expect(src).toContain("recurringBookingCustomerOwnershipPatch");
+      expect(src).not.toMatch(/user_id:\s*params\.recurring\.customer_id/);
+    }
+  });
 });

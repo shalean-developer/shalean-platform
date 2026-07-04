@@ -45,6 +45,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { formatCurrency } from "@/lib/admin/invoices/invoiceAdminFormatters";
 import { estimateMonthlyRevenue } from "@/lib/recurring/estimateMonthlyRevenue";
 import type { RecurringPageSummary } from "@/lib/recurring/loadRecurringPageSummary";
+import { recurringGeneratorCronWarning } from "@/lib/recurring/recurringGeneratorRunSummary";
 
 type PlanStatus = "active" | "paused" | "cancelled";
 
@@ -96,6 +97,8 @@ type CronHealthJob = {
   job_name: string;
   last_success_at: string | null;
   last_run_at: string | null;
+  last_run_status: "success" | "error" | null;
+  last_run_message: string | null;
   errors_last_24h: number;
 };
 
@@ -149,39 +152,6 @@ function RecurringStatCard({
       ) : null}
     </div>
   );
-}
-
-function generatorCronWarning(jobs: CronHealthJob[] | undefined): {
-  show: boolean;
-  message: string;
-  severity: "amber" | "red";
-} | null {
-  const gen = jobs?.find((j) => j.job_name === "generate-recurring-bookings");
-  if (!gen) {
-    return {
-      show: true,
-      severity: "red",
-      message:
-        "Recurring generator cron has no recorded runs in cron_runs. Reschedule pg_cron (see scripts/print-repair-generate-recurring-pg-cron.sql.mjs) and ensure CRON_SECRET matches Vercel.",
-    };
-  }
-  const lastSuccess = gen.last_success_at ? new Date(gen.last_success_at).getTime() : null;
-  const staleMs = 30 * 60 * 1000;
-  if (!lastSuccess || Date.now() - lastSuccess > staleMs) {
-    return {
-      show: true,
-      severity: "red",
-      message: `Recurring generator last succeeded ${formatCronTs(gen.last_success_at)}. Expected every ~10 minutes — check Supabase pg_cron and CRON_SECRET.`,
-    };
-  }
-  if (gen.errors_last_24h > 0) {
-    return {
-      show: true,
-      severity: "amber",
-      message: `Generator cron reported ${gen.errors_last_24h} error(s) in the last 24h. Last success ${formatCronTs(gen.last_success_at)}.`,
-    };
-  }
-  return null;
 }
 
 function formatDays(days: number[]): string {
@@ -356,7 +326,10 @@ export default function RecurringPage() {
   const { data: cronHealth, refetch: refetchCronHealth } = useAdminData<{ jobs?: CronHealthJob[] }>(
     "/api/admin/cron-health",
   );
-  const cronWarning = generatorCronWarning(cronHealth?.jobs);
+  const cronWarning = recurringGeneratorCronWarning(
+    cronHealth?.jobs?.find((j) => j.job_name === "generate-recurring-bookings"),
+    formatCronTs,
+  );
   const plans = data?.recurring ?? [];
 
   const filtered = useMemo(() => {
