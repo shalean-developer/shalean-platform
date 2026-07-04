@@ -52,6 +52,8 @@ import {
 import { metrics } from "@/lib/metrics/counters";
 import { fetchServiceQaForCleanerJob } from "@/lib/booking/bookingServiceQaServer";
 import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
+import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -126,8 +128,13 @@ function markBookingCompletedOpToLifecycleResult(
   return { status: st, json };
 }
 
-const BOOKING_DETAIL_SELECT =
-  "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email, user_id, extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
+function buildBookingDetailSelect(ownershipColumn: BookingCustomerOwnershipColumn): string {
+  return [
+    "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email",
+    ownershipColumn,
+    "extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by",
+  ].join(", ");
+}
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
@@ -142,12 +149,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const session = await resolveCleanerIdFromRequest(request, admin);
   if (!session.cleanerId) return NextResponse.json({ error: session.error ?? "Unauthorized." }, { status: session.status ?? 401 });
 
-  const { data: row, error } = await admin.from("bookings").select(BOOKING_DETAIL_SELECT).eq("id", bookingId).maybeSingle();
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const { data: row, error } = await admin
+    .from("bookings")
+    .select(buildBookingDetailSelect(ownershipColumn))
+    .eq("id", bookingId)
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!row) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
 
-  const record = row as Record<string, unknown>;
+  const record = row as unknown as Record<string, unknown>;
   const canAccess = await cleanerHasBookingAccess(admin, session.cleanerId, {
     id: bookingId,
     cleaner_id: (record.cleaner_id as string | null | undefined) ?? null,
@@ -256,6 +268,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     amount_paid_cents: _omitAmountPaid,
     base_amount_cents: _omitBaseAmount,
     service_fee_cents: _omitServiceFee,
+    customer_id: _omitCustomerId,
     user_id: _omitUserId,
     customer_email: _omitCustomerEmail,
     selected_extras: _omitSelectedExtras,
@@ -285,6 +298,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     customer_name: typeof safe.customer_name === "string" ? safe.customer_name : null,
     customer_phone: typeof safe.customer_phone === "string" ? safe.customer_phone : null,
     customer_email: typeof record.customer_email === "string" ? record.customer_email : null,
+    customer_id: typeof record.customer_id === "string" ? record.customer_id : null,
     user_id: typeof record.user_id === "string" ? record.user_id : null,
     booking_snapshot: snap,
   });
@@ -409,7 +423,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       team_roster_summary,
       cleaner_has_issue_report,
       ...(service_qa ? { service_qa } : {}),
-      ...augmentCleanerBookingWire(record as Record<string, unknown>, session.cleanerId),
+      ...augmentCleanerBookingWire(record, session.cleanerId),
     },
   });
 }
