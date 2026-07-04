@@ -6,6 +6,7 @@ import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     request.headers.get("x-dispatch-load-test-secret")?.trim() ??
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ??
     "";
-  if (provided !== secret) {
+  if (!timingSafeEqualString(provided, secret)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

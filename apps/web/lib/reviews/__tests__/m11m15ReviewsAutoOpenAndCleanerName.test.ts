@@ -389,9 +389,12 @@ describe("M-15: source-level contract — review hooks/route surface the cleaner
     "utf8",
   );
 
-  it("useReviews fetches `cleaners(full_name)` so the list can show the cleaner name", () => {
-    expect(useReviewsSrc).toMatch(/cleaners\(full_name\)/);
+  it("review loading path still exposes cleanerName after the server-side cleaner lookup refactor", () => {
+    expect(useReviewsSrc).toMatch(/dashboardFetchJson/);
     expect(useReviewsSrc).toMatch(/cleanerName/);
+    expect(
+      readFileSync(path.resolve(__dirname, "..", "..", "customer", "loadCustomerReviewsForUser.ts"), "utf8"),
+    ).toMatch(/from\("cleaners"\)\.select\("id,\s*full_name"\)/);
   });
 
   it("useReviews exposes a `cleanerName: string | null` field on each item", () => {

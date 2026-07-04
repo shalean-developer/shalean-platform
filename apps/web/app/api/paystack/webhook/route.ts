@@ -34,6 +34,7 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
+import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
   const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
 
-  if (!signature || hash !== signature) {
+  if (!signature || !timingSafeEqualString(hash, signature)) {
     await reportOperationalIssue("warn", "paystack/webhook", "paystack.webhook.signature_invalid", {
       errorType: "paystack_webhook_signature_invalid",
     });

@@ -61,14 +61,18 @@ describe("booking earnings snapshot command convergence (Phase 1B)", () => {
 
   it("keeps direct booking earnings column writes inside the existing core persist implementation", () => {
     const coreSrc = readFileSync(core, "utf8");
-    expect(coreSrc).toMatch(/display_earnings_cents:\s*earnings\.display_earnings_cents/);
-    expect(coreSrc).toMatch(/payout_earnings_cents:\s*earnings\.payout_earnings_cents/);
-    expect(coreSrc).toMatch(/internal_earnings_cents:\s*earnings\.internal_earnings_cents/);
-    expect(coreSrc).toMatch(/earnings_model_version:\s*earnings\.earnings_model_version/);
-    expect(coreSrc).toMatch(/earnings_percentage_applied:\s*earnings\.earnings_percentage_applied/);
-    expect(coreSrc).toMatch(/earnings_cap_cents_applied:\s*earnings\.earnings_cap_cents_applied/);
+    expect(coreSrc).toMatch(/display_earnings_cents:\s*(?:earnings\.display_earnings_cents|c\.displayEarningsCents)/);
+    expect(coreSrc).toMatch(/payout_earnings_cents:\s*(?:earnings\.payout_earnings_cents|c\.payoutEarningsCents)/);
+    expect(coreSrc).toMatch(/internal_earnings_cents:\s*(?:earnings\.internal_earnings_cents|c\.internalEarningsCents)/);
+    expect(coreSrc).toMatch(/earnings_model_version:\s*(?:earnings\.earnings_model_version|c\.earningsModelVersion)/);
     expect(coreSrc).toMatch(
-      /earnings_tenure_months_at_assignment:\s*earnings\.earnings_tenure_months_at_assignment/,
+      /earnings_percentage_applied:\s*(?:earnings\.earnings_percentage_applied|c\.earningsPercentageApplied)/,
+    );
+    expect(coreSrc).toMatch(
+      /earnings_cap_cents_applied:\s*(?:earnings\.earnings_cap_cents_applied|c\.earningsCapCentsApplied)/,
+    );
+    expect(coreSrc).toMatch(
+      /earnings_tenure_months_at_assignment:\s*(?:earnings\.earnings_tenure_months_at_assignment|c\.tenureMonths)/,
     );
   });
 });

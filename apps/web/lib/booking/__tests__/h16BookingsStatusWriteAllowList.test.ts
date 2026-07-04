@@ -175,6 +175,8 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   "lib/admin/adminBookingPostCreatePipeline.ts",
   "lib/payout/adminBookingAssignmentEarningsGate.ts",
   "lib/booking/adminEditBookingDetails.ts",
+  "lib/recurring/reconcileRecurringPlanOccurrences.ts",
+  "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts",
 
   // Admin manual safe paths.
   // Phase-1D command boundary for admin manual cleaner-offer state. The
@@ -183,6 +185,12 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   // delegates to `setAdminManualBookingOffered`, narrowing the lifecycle
   // bypass surface to a single auditable command function.
   "lib/admin/adminManualBookingOfferCommand.ts",
+  "lib/admin/adminManualDirectAssignCommand.ts",
+  "lib/admin/performAdminAssignTeam.ts",
+  // Admin launch-readiness tooling seeds and tears down synthetic bookings.
+  // There is no dedicated dev-only exemption list in this audit, so the
+  // runtime-owned status writes stay explicitly allow-listed here.
+  "lib/launch/launchReadinessChecks.ts",
 
   // Customer-facing safe path (auth-gated self-cancel).
   "app/api/dashboard/bookings/[id]/cancel/route.ts",
@@ -224,6 +232,8 @@ const APPROVED_INDIRECT_STATUS_WRITERS: ReadonlySet<string> = new Set([
   // while this module owns the conditional `bookings.update(...)` guards.
   "lib/booking/assignmentBookingStateCommands.ts",
   "lib/cleaner/cleanerLifecycleBookingCommands.ts",
+  "lib/admin/adminManualDirectAssignCommand.ts",
+  "lib/admin/performAdminAssignTeam.ts",
 ]);
 
 /** Directories scanned for `from("bookings").update(...)` call sites. */

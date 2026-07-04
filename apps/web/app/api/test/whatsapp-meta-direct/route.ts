@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { metaWhatsAppToDigits } from "@/lib/dispatch/metaWhatsAppSend";
+import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { sendTestWhatsApp } from "@/lib/whatsapp/sendTestWhatsApp";
 
 export const runtime = "nodejs";
@@ -17,7 +18,8 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  if (!timingSafeEqualString(authHeader, `Bearer ${secret}`)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 

@@ -156,6 +156,16 @@ const CLASSIFIED_ASSIGNMENT_MUTATION_FILES: Classification[] = [
     rationale: "Recurring monthly occurrence spawn; same pre-payment lifecycle as per-booking spawn.",
   },
   {
+    file: "apps/web/lib/launch/launchCheckSeed.ts",
+    coverage: "intake_only",
+    rationale: "Launch-check seed helper inserts synthetic pending-payment bookings for admin verification.",
+  },
+  {
+    file: "apps/web/app/api/booking-v2/confirm/route.ts",
+    coverage: "intake_only",
+    rationale: "Booking confirm route inserts pending-payment rows with selected-cleaner preference only.",
+  },
+  {
     file: "apps/web/lib/booking/checkoutDispatchOfferFailureFallback.ts",
     coverage: "recovery_via_ensure",
     rationale: "Fallback recovery routes through ensureBookingAssignment (covered).",

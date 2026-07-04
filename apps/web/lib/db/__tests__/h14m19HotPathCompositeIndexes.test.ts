@@ -290,11 +290,9 @@ describe("H-14 / M-19 hot-path query shapes still match the new indexes", () => 
     expect(src).toMatch(/\.order\(\s*["']created_at["']\s*,\s*\{\s*ascending:\s*false/);
   });
 
-  it("dashboard summary route still issues `WHERE user_id = ? ORDER BY date DESC, created_at DESC`", () => {
+  it("dashboard summary route still delegates customer booking loading to the hot-path helper", () => {
     const src = readSrc("app/api/dashboard/summary/route.ts");
-    expect(src).toMatch(/\.eq\(\s*["']user_id["']/);
-    expect(src).toMatch(/\.order\(\s*["']date["']\s*,\s*\{\s*ascending:\s*false/);
-    expect(src).toMatch(/\.order\(\s*["']created_at["']\s*,\s*\{\s*ascending:\s*false/);
+    expect(src).toMatch(/loadCustomerBookingRowsForUser\(admin,\s*userId/);
   });
 
   it("persistCleanerPayout's open-offer probe still keys on (booking_id, cleaner_id, status='pending')", () => {

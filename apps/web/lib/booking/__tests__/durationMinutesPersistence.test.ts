@@ -51,6 +51,11 @@ function buildInsertAdmin(): {
   const state: { insertPayload?: Record<string, unknown> } = {};
   const admin = {
     from(table: string) {
+      if (table === "booking_payment_recovery_jobs") {
+        return {
+          insert: async () => ({ error: null }),
+        };
+      }
       if (table !== "bookings") throw new Error(`unexpected table ${table}`);
       return {
         insert(payload: Record<string, unknown>) {

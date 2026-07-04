@@ -156,7 +156,7 @@ describe("dashboardSystemStatus", () => {
     expect(payload.bookingEngine).toBe("degraded");
     expect(payload.paymentGateway).toBe("operational");
     expect(payload.productionHealth.totalFindings).toBe(3);
-    expect(payload.productionHealth.topFindings?.[0]?.code).toBe("dispatch_retry_backlog");
+    expect(payload.productionHealth.topFindings?.[0]?.code).toBe("dispatch_stale_unassigned");
     expect(payload.cronErrorsLast24h).toBe(0);
   });
 });

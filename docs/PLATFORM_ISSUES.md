@@ -1,8 +1,8 @@
 # Platform issues register (revenue-critical)
 
-> **Generated:** 2026-05-25 (Phase 1 audit). **Phase 2 fixes:** 2026-05-30.  
+> **Generated:** 2026-05-25 (Phase 1 audit). **Phase 2 fixes:** 2026-05-30. **V-03 refresh:** 2026-07-04.  
 > **Scope:** Booking funnel, Paystack, dispatch, cleaner eligibility, payouts.  
-> **Related:** Broader backend audit in [`docs/audits/shalean-backend-end-to-end-system-audit.md`](audits/shalean-backend-end-to-end-system-audit.md).
+> **Related:** Broader backend audit in [`docs/audits/shalean-backend-end-to-end-system-audit.md`](audits/shalean-backend-end-to-end-system-audit.md). Security audit PRD (ISSUE-01–05, V-01–02) closed 2026-07-04.
 
 ---
 
@@ -14,15 +14,16 @@
 | **P1 (customer/cleaner visible + CI blind spots)** | 6 |
 | **P2 (test drift, tooling, doc debt)** | 8 |
 | **P3 (backlog)** | 3 |
-| **Full vitest** | **2248 passed** / 0 failed (315 files) |
-| **CI `test:critical`** | 31/31 passed |
+| **Full vitest** | **2701 passed** / 0 failed (424 files) — refreshed 2026-07-04 |
+| **CI `test:critical`** | 32/32 passed |
 | **CI revenue slice** | Added in `web-test.yml` (booking/dispatch/cleaner/cron/admin) |
+| **CI `audit:production`** | High+ production CVE gate added 2026-07-04 |
 | **`npx tsc --noEmit`** | Passed |
-| **`npm run lint`** | **Failed** (220 errors, 128 warnings) — REV-008 open |
-| **`npm run build`** | Passed |
+| **`npm run lint`** | **Failed** (288 errors, 241 warnings after `eslint --fix`) — REV-008 open |
+| **`npm run build`** | Passed (Next.js 16.2.10) |
 | **`npm run ops:smoke`** | Zero-member teams warn; fails only on &lt;2 members (not empty roster) |
 
-**Headline (post Phase 2):** Full vitest and typecheck are green. CI now runs a revenue-focused vitest slice in addition to `test:critical`. Admin schedule hints apply strict `cleaner_preferences` when `bookingCapabilitySlug` is set (aligned with picker/dispatch). Remaining debt is mostly repo-wide ESLint and optional E2E/staging coverage.
+**Headline (2026-07-04):** Full vitest (2701), typecheck, and build are green. Security audit PRD items ISSUE-01–05 and V-01–02 are closed; V-03 test drift triage completed (31 failing guard/mock tests updated). Remaining debt is repo-wide ESLint (REV-008) and optional E2E/staging coverage.
 
 **Standard cleaning E2E audit:** Service-scoped funnel + dashboard issues (S-*, C-*, CL-*, A-*) — see [`docs/reports/standard-cleaning-end-to-end-audit.md`](reports/standard-cleaning-end-to-end-audit.md).
 
@@ -54,7 +55,7 @@
 | REV-005 | P1 | Cron | H-15 `ops-health` orphan | Manifest lists stale | `confirmed` | `ops-health` in protected + expected locked sets | **fixed** |
 | REV-006 | P2 | Admin eligibility | Admin hints ignored strict service prefs | Parallel implementation gap | `code review` | `cleaner_preferences` + `cleanerPreferenceStrictExcludesJob` in `computeAssignEligibility` | **fixed** |
 | REV-007 | P2 | Typecheck | `tsc` failed on eligibility tests | Incomplete `LockedBooking` types | `confirmed` | `baseLocked()` + correct offer earnings inputs | **fixed** |
-| REV-008 | P2 | Lint | 220 ESLint errors repo-wide | Many `react-hooks/refs` violations; not limited to revenue paths | `confirmed`: `npm run lint` | Triage: fix revenue-touching routes first; consider CI lint job with incremental baseline | open |
+| REV-008 | P2 | Lint | 288 ESLint errors repo-wide (241 warnings) | Many `react-hooks/refs` violations; not limited to revenue paths | `confirmed`: `npm run lint` (2026-07-04) | Triage: fix revenue-touching routes first; consider CI lint job with incremental baseline | open |
 | REV-009 | P2 | Dispatch | Strict preference filter applied twice for dispatch | `getEligibleCleaners` filters prefs; `findSmartDispatchCandidates` calls `cleanerPreferenceStrictExcludesJob` again | `code review` | Harmless redundancy; optional dedupe for performance | open |
 | REV-010 | P2 | Checkout | Customer can still receive dispatch **offer** to picked cleaner on eligibility fallback | By design: `checkoutPaidDispatchOfferCleanerId` returns pick on `fallback` for visibility; auto-assign excludes via `excludeCleanerIds` | `code review` | Documented in runbook + this register | **documented** |
 | REV-011 | P2 | Ops | Ops smoke fails on zero-member teams | Data: empty roster on active team | `confirmed` | Zero-member → WARN; fail only when `0 < members < 2` | **fixed** (script); DB roster still ops task |

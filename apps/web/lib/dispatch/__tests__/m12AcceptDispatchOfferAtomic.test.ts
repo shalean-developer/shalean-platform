@@ -239,9 +239,13 @@ describe("acceptDispatchOffer (M-12 atomic accept)", () => {
     });
     expect(atomicCall!.args.p_truth_patch).toBeTypeOf("object");
 
-    /** No direct `bookings.update` and no direct `dispatch_offers.update` happen — both moved into the RPC. */
+    /** No direct `bookings.update` happens; app code only stamps `accepted_at` after the RPC wins. */
     expect(bookingsUpdates).toEqual([]);
-    expect(dispatchOffersUpdates).toEqual([]);
+    expect(dispatchOffersUpdates).toEqual([
+      {
+        accepted_at: expect.any(String),
+      },
+    ]);
 
     /** And the legacy peer-expire RPC must NOT be called: it's now part of the atomic RPC. */
     expect(rpcCalls.some((c) => c.name === "dispatch_expire_peer_offers")).toBe(false);
@@ -270,8 +274,8 @@ describe("acceptDispatchOffer (M-12 atomic accept)", () => {
     expect(rpcCalls.some((c) => c.name === "accept_dispatch_offer_atomic")).toBe(true);
     expect(bookingsUpdates).toEqual([]);
     /**
-     * No direct dispatch_offers writes from app code — all status moves are
-     * the RPC's responsibility now.
+     * No status writes happen from app code on the stale path; only the
+     * post-accept success path stamps `accepted_at`.
      */
     expect(dispatchOffersUpdates).toEqual([]);
   });

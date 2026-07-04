@@ -292,7 +292,7 @@ describe("M-24 mirrors the runtime expiry contract (does not replace it)", () =>
     const src = readFileSync(path.join(webRoot, "lib/dispatch/runDispatchTimeouts.ts"), "utf8");
     /** Must still flip pending → expired with the CAS guard. */
     expect(src).toMatch(
-      /\.update\(\{\s*status:\s*"expired",\s*responded_at:\s*respondedAt\s*\}\)[\s\S]*?\.eq\(\s*"status",\s*"pending"\s*\)/,
+      /\.update\(\{\s*status:\s*"expired",\s*responded_at:\s*respondedAt(?:,\s*expired_at:\s*respondedAt)?\s*\}\)[\s\S]*?\.eq\(\s*"status",\s*"pending"\s*\)/,
     );
   });
 

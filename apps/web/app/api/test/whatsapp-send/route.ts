@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
 
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  if (!timingSafeEqualString(authHeader, `Bearer ${secret}`)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 

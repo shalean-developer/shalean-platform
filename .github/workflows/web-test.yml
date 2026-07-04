@@ -26,6 +26,8 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Install
         run: npm ci
+      - name: Production dependency audit (high+)
+        run: npm run audit:production
       - name: Critical tests (payments + referrals)
         run: npm run test:critical
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks)

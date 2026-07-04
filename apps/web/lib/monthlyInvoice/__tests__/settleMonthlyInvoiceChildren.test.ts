@@ -18,6 +18,15 @@ function buildAdmin(failingBookingIds: string[] = []) {
     from(table: string) {
       if (table !== "bookings") throw new Error(`unexpected table ${table}`);
       return {
+        select: () => ({
+          eq: (_col: string, bookingId: string) => ({
+            maybeSingle: async () => ({
+              data: { payment_completed_at: null, paid_at: null, completed_at: null },
+              error: null,
+            }),
+            neq: async () => ({ data: [], error: null }),
+          }),
+        }),
         update(patch: Record<string, unknown>) {
           return {
             eq: async (_col: string, bookingId: string) => {
@@ -78,6 +87,7 @@ describe("settleMonthlyInvoiceChildren", () => {
           amount_paid_cents: 80_000,
           payout_status: "eligible",
           payout_frozen_cents: 25_000,
+          payment_completed_at: expect.any(String),
         },
       },
       {
@@ -87,6 +97,7 @@ describe("settleMonthlyInvoiceChildren", () => {
           amount_paid_cents: 12_345,
           payout_status: "eligible",
           payout_frozen_cents: 30_000,
+          payment_completed_at: expect.any(String),
         },
       },
     ]);

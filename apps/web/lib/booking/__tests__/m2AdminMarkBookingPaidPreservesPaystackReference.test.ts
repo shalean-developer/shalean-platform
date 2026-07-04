@@ -67,6 +67,10 @@ vi.mock("@/lib/booking/recordBookingSideEffects", () => ({
   recordBookingSideEffects: vi.fn(async () => undefined),
 }));
 
+vi.mock("@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs", () => ({
+  cancelUnsentBookingPaymentRecoveryJobs: vi.fn(async () => undefined),
+}));
+
 vi.mock("@/lib/referrals/server", () => ({
   processCustomerReferralAfterFirstPaidBooking: vi.fn(),
 }));

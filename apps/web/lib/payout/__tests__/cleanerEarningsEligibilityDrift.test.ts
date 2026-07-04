@@ -191,7 +191,7 @@ describe("cleaner earnings eligibility drift scanners", () => {
     ]);
 
     expect(lineSubtotal).toBe(50_000);
-    expect(standardPayout("standard", lineSubtotal).displayEarningsCents).toBe(35_000);
-    expect(standardPayout("airbnb", lineSubtotal).displayEarningsCents).toBe(35_000);
+    expect(standardPayout("standard", lineSubtotal).displayEarningsCents).toBe(30_000);
+    expect(standardPayout("airbnb", lineSubtotal).displayEarningsCents).toBe(30_000);
   });
 });

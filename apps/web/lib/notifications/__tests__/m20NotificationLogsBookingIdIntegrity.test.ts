@@ -328,6 +328,7 @@ describe("M-20 writer call-site audit: every writeNotificationLog passes a UUID-
     "row.booking_id",
     "ev.bookingId",
     "ev.bookingId ?? null",
+    "ctx.bookingId",
     "null",
     /** Per-call expressions used in current code; review on add. */
     "bookingIdForSmsLog(params.deliveryLog, params.context)",
@@ -554,11 +555,11 @@ describe("M-20 writer source contract: notificationLogWrite.ts mirrors the SQL c
 // Contract E — Read paths still treat booking_id as TEXT-comparable
 // ---------------------------------------------------------------------------
 describe("M-20 read paths still query notification_logs.booking_id as TEXT", () => {
-  it("admin notification-logs route still selects booking_id and filters .eq('booking_id', …)", () => {
+  it("admin notification-logs route still selects booking_id and routes booking_id filtering through the shared helper", () => {
     const src = readFileSync(path.join(webRoot, "app/api/admin/notification-logs/route.ts"), "utf8");
     expect(src).toMatch(/from\(\s*["']notification_logs["']\s*\)/);
     expect(src).toMatch(/booking_id/);
-    expect(src).toMatch(/\.eq\(\s*["']booking_id["']/);
+    expect(src).toMatch(/applyOfficeNotificationLogFilters/);
   });
 
   it("notifyCleanerBookingPaid cooldown probe still keys on (booking_id, template_key, channel, status, created_at)", () => {

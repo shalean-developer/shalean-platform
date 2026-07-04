@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCookieUser } from "@/lib/auth/getCookieUser";
+import { ownsDocumentRow } from "@/lib/customer/documentOwnership";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { zohoInvoicePdfResponse } from "@/lib/zoho/zohoInvoicePdfResponse";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 /**
  * Streams the Zoho Books invoice PDF for a single (per-visit) booking.
  * Auth is cookie-based so a plain `<a href>` download works; the caller must
- * own the booking (by `user_id` or matching `customer_email`).
+ * own the booking (`user_id` match, or orphan email match when `user_id` unset).
  */
 export async function GET(_request: Request, ctx: { params: Promise<{ bookingId: string }> }) {
   const { bookingId } = await ctx.params;
@@ -31,12 +32,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ bookingId:
   if (error) return NextResponse.json({ error: "Lookup failed." }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const owns =
-    data.user_id === user.id ||
-    (!!user.email &&
-      !!data.customer_email &&
-      String(data.customer_email).toLowerCase() === user.email.toLowerCase());
-  if (!owns) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const owns = ownsDocumentRow(
+    { ownerId: data.user_id, ownerEmail: data.customer_email },
+    { id: user.id, email: user.email ?? null },
+  );
+  if (!owns) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   return zohoInvoicePdfResponse(data.zoho_invoice_id, `shalean-invoice-${id.slice(0, 8)}`);
 }

@@ -7,68 +7,94 @@ type MaybeSingleResult<T> = { data: T | null; error: { message: string } | null 
 type ExistingProfile = {
   billing_type: string | null;
   schedule_type: string | null;
+  role?: string | null;
 };
 
 type AuthUserMeta = {
   full_name?: unknown;
   name?: unknown;
+  phone?: unknown;
 };
 
 type FakeAdmin = {
-  /** Number of `from('user_profiles')...maybeSingle()` calls. */
   reads: number;
-  /** Captured insert payloads. */
   inserts: Array<Record<string, unknown>>;
-  /** Number of `auth.admin.getUserById` calls. */
   authGetCalls: number;
 };
 
 function buildFakeAdmin(opts: {
   initialProfile: ExistingProfile | null;
   authMeta: AuthUserMeta | null;
+  authEmail?: string | null;
   authError?: string | null;
   insertError?: string | null;
-  /** Optional: simulate row inserted by a concurrent write between insert and re-read. */
   racedProfileAfterInsertError?: ExistingProfile | null;
   readError?: string | null;
 }): { admin: unknown; state: FakeAdmin } {
   const state: FakeAdmin = { reads: 0, inserts: [], authGetCalls: 0 };
-  // Mutable simulated profile row visible to the second read attempt.
-  let currentProfile: ExistingProfile | null = opts.initialProfile;
+  let profileRow: (ExistingProfile & { id: string }) | null = opts.initialProfile
+    ? { id: ID_VALID, ...opts.initialProfile }
+    : null;
   const insertError = opts.insertError ?? null;
 
   const admin = {
     from(table: string) {
+      if (table === "cleaners") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
       if (table !== "user_profiles") throw new Error(`unexpected table ${table}`);
       return {
-        select() {
+        select(_cols?: string) {
           return {
             eq() {
               return {
-                async maybeSingle(): Promise<MaybeSingleResult<ExistingProfile>> {
+                async maybeSingle(): Promise<MaybeSingleResult<ExistingProfile & { id?: string }>> {
                   state.reads += 1;
                   if (opts.readError) {
                     return { data: null, error: { message: opts.readError } };
                   }
-                  return { data: currentProfile, error: null };
+                  if (!profileRow) return { data: null, error: null };
+                  if (_cols === "id") {
+                    return { data: { id: profileRow.id }, error: null };
+                  }
+                  return {
+                    data: {
+                      billing_type: profileRow.billing_type,
+                      schedule_type: profileRow.schedule_type,
+                      role: profileRow.role ?? null,
+                    },
+                    error: null,
+                  };
                 },
+                is: async () => ({ error: null }),
               };
             },
           };
         },
+        update: () => ({
+          eq: () => ({
+            is: async () => ({ error: null }),
+          }),
+        }),
         async insert(row: Record<string, unknown>) {
           state.inserts.push(row);
           if (insertError) {
-            // Simulate race: a different request (or an unrelated UNIQUE
-            // violation) inserted the row first; expose it on next read.
             if (opts.racedProfileAfterInsertError) {
-              currentProfile = opts.racedProfileAfterInsertError;
+              profileRow = { id: ID_VALID, ...opts.racedProfileAfterInsertError };
             }
             return { data: null, error: { message: insertError } };
           }
-          currentProfile = {
-            billing_type: String(row.billing_type ?? ""),
-            schedule_type: String(row.schedule_type ?? ""),
+          profileRow = {
+            id: ID_VALID,
+            billing_type: String(row.billing_type ?? "per_booking"),
+            schedule_type: String(row.schedule_type ?? "on_demand"),
+            role: typeof row.role === "string" ? row.role : "customer",
           };
           return { data: null, error: null };
         },
@@ -81,7 +107,13 @@ function buildFakeAdmin(opts: {
           if (opts.authError) return { data: null, error: { message: opts.authError } };
           if (!opts.authMeta) return { data: null, error: { message: "not found" } };
           return {
-            data: { user: { id, user_metadata: opts.authMeta } },
+            data: {
+              user: {
+                id,
+                email: opts.authEmail ?? "customer@example.com",
+                user_metadata: opts.authMeta,
+              },
+            },
             error: null,
           };
         },
@@ -101,7 +133,7 @@ describe("ensureUserProfileForAuthUser", () => {
 
   it("returns existing profile billing/schedule and does not insert", async () => {
     const { admin, state } = buildFakeAdmin({
-      initialProfile: { billing_type: "monthly", schedule_type: "recurring" },
+      initialProfile: { billing_type: "monthly", schedule_type: "recurring", role: "customer" },
       authMeta: null,
     });
     const res = (await ensureUserProfileForAuthUser(admin as never, ID_VALID)) as {
@@ -139,6 +171,7 @@ describe("ensureUserProfileForAuthUser", () => {
       booking_count: 0,
       total_spent_cents: 0,
       full_name: "Farai Chitekedza",
+      role: "customer",
     });
   });
 
@@ -195,7 +228,7 @@ describe("ensureUserProfileForAuthUser", () => {
       initialProfile: null,
       authMeta: { full_name: "Race Winner" },
       insertError: "duplicate key value violates unique constraint",
-      racedProfileAfterInsertError: { billing_type: "monthly", schedule_type: "recurring" },
+      racedProfileAfterInsertError: { billing_type: "monthly", schedule_type: "recurring", role: "customer" },
     });
     const res = (await ensureUserProfileForAuthUser(admin as never, ID_VALID)) as {
       billing_type: string;

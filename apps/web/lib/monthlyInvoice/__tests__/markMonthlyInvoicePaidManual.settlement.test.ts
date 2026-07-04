@@ -61,11 +61,15 @@ function buildAdmin(opts: {
       if (table === "bookings") {
         return {
           select: (_cols: string, opts2?: { count?: string; head?: boolean }) => ({
-            eq: () => ({
+            eq: (_col: string, bookingId?: string) => ({
               neq: async () =>
                 opts2?.head
                   ? { count: opts.children.length, error: null }
                   : { data: opts.children, error: null },
+              maybeSingle: async () => ({
+                data: { payment_completed_at: null, paid_at: null, completed_at: null },
+                error: null,
+              }),
             }),
           }),
           update: (patch: Record<string, unknown>) => ({

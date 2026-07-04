@@ -14,8 +14,8 @@ const EXPERIENCED_JOINED_AT = "2024-01-01T00:00:00.000Z";
 
 describe("computeCleanerOfferEarningsSnapshot", () => {
   describe("solo standard", () => {
-    it("resolves canonical 60% × R600 = R360 → clamped to R350 base for a junior cleaner", () => {
-      /** R600 booking → 60% = R360 → above the R350 base cap → bonus = R10, base = R350, display = R360. */
+    it("resolves canonical 60% × R600 = R360 → clamped to R300 cap for a junior cleaner", () => {
+      /** R600 booking → 60% = R360 → capped at R300 (v3 canonical engine). */
       const r = computeCleanerOfferEarningsSnapshot({
         booking: {
           is_team_job: false,
@@ -28,14 +28,14 @@ describe("computeCleanerOfferEarningsSnapshot", () => {
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.amount_cents).toBe(36_000);
+      expect(r.amount_cents).toBe(30_000);
       expect(r.source).toBe(OFFER_EARNINGS_SOURCE.CANONICAL);
       expect(r.diagnostics.payout_percentage).toBeCloseTo(0.6);
       expect(r.diagnostics.payout_mode).toBe("solo_percentage");
     });
 
-    it("uses the experienced 70% rate when cleaner tenure ≥ 4 months", () => {
-      /** Same R600 booking → 70% = R420 → still above R350 base cap → display = R420. */
+    it("uses the experienced 70% rate capped at R300 when cleaner tenure ≥ 4 months", () => {
+      /** Same R600 booking → 70% = R420 → capped at R300. */
       const r = computeCleanerOfferEarningsSnapshot({
         booking: {
           is_team_job: false,
@@ -48,7 +48,7 @@ describe("computeCleanerOfferEarningsSnapshot", () => {
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.amount_cents).toBe(42_000);
+      expect(r.amount_cents).toBe(30_000);
       expect(r.diagnostics.payout_percentage).toBeCloseTo(0.7);
     });
 
@@ -99,7 +99,7 @@ describe("computeCleanerOfferEarningsSnapshot", () => {
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       /** Tenure = 0 → junior rate, identical to a known-junior cleaner. */
-      expect(r.amount_cents).toBe(36_000);
+      expect(r.amount_cents).toBe(30_000);
       expect(r.source).toBe(OFFER_EARNINGS_SOURCE.CLEANER_TENURE_UNKNOWN);
     });
   });
@@ -143,7 +143,7 @@ describe("computeCleanerOfferEarningsSnapshot", () => {
   });
 
   describe("team job", () => {
-    it("returns R250 per cleaner regardless of tenure or basis", () => {
+    it("returns team percentage parity per cleaner (v3 standard team)", () => {
       const r = computeCleanerOfferEarningsSnapshot({
         booking: {
           is_team_job: true,
@@ -157,13 +157,13 @@ describe("computeCleanerOfferEarningsSnapshot", () => {
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.amount_cents).toBe(25_000);
+      expect(r.amount_cents).toBe(30_000);
       expect(r.source).toBe(OFFER_EARNINGS_SOURCE.CANONICAL);
-      expect(r.diagnostics.payout_mode).toBe("team_per_cleaner_fixed");
+      expect(r.diagnostics.payout_mode).toBe("team_percentage_parity");
       expect(r.diagnostics.team_cleaner_count).toBe(3);
     });
 
-    it("still resolves R250 per cleaner when payment basis is zero", () => {
+    it("returns zero per cleaner when standard team has zero payment basis", () => {
       const r = computeCleanerOfferEarningsSnapshot({
         booking: {
           is_team_job: true,
@@ -177,7 +177,7 @@ describe("computeCleanerOfferEarningsSnapshot", () => {
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.amount_cents).toBe(25_000);
+      expect(r.amount_cents).toBe(0);
     });
   });
 

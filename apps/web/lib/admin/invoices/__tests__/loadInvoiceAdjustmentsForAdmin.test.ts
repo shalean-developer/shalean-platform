@@ -8,20 +8,21 @@ function mockAdmin(responses: {
 }) {
   const applied = responses.applied ?? { data: [], error: null };
   const pending = responses.pending ?? { data: [], error: null };
-  const eqColumns: string[] = [];
+  let currentEqColumns: string[] = [];
 
   return {
     from: vi.fn((table: string) => {
       if (table !== "invoice_adjustments") throw new Error(`unexpected table ${table}`);
+      currentEqColumns = [];
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn((column: string) => {
-          eqColumns.push(column);
+          currentEqColumns.push(column);
           return chain;
         }),
         is: vi.fn(() => chain),
         order: vi.fn(async () => {
-          if (eqColumns.includes("applied_to_invoice_id")) return applied;
+          if (currentEqColumns.includes("applied_to_invoice_id")) return applied;
           return pending;
         }),
       };

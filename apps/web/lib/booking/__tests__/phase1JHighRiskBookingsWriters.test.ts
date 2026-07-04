@@ -111,6 +111,21 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     rationale: "Admin PATCH route; existing validated broad legacy writer.",
   },
   {
+    file: "lib/admin/adminManualDirectAssignCommand.ts",
+    category: "legacy_admin_exception",
+    rationale: "Admin direct-assign command updates booking lifecycle + assignment fields together.",
+  },
+  {
+    file: "lib/admin/performAdminAssignTeam.ts",
+    category: "legacy_admin_exception",
+    rationale: "Admin team-assignment workflow updates booking header state and team payout snapshot fields.",
+  },
+  {
+    file: "lib/launch/launchReadinessChecks.ts",
+    category: "legacy_admin_exception",
+    rationale: "Admin launch-readiness tooling mutates synthetic booking lifecycle states during checks.",
+  },
+  {
     file: "lib/dispatch/dispatchOffers.ts",
     category: "legacy_assignment_exception",
     rationale: "Dispatch offer state writer; direct status write moved to SQL RPC, dispatch_status remains here.",
@@ -126,14 +141,34 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     rationale: "Pre-payment booking intake insert path.",
   },
   {
+    file: "lib/launch/launchCheckSeed.ts",
+    category: "legacy_intake_exception",
+    rationale: "Launch-check seed helper inserts synthetic pending-payment bookings for admin verification flows.",
+  },
+  {
+    file: "app/api/booking-v2/confirm/route.ts",
+    category: "legacy_intake_exception",
+    rationale: "Customer booking confirm route inserts the canonical pending-payment booking row.",
+  },
+  {
     file: "lib/booking/upsertBookingFromPaystack.ts",
     category: "legacy_payment_exception",
     rationale: "Paystack upsert/reconciliation path; intentionally not migrated in Phase 1J.",
   },
   {
+    file: "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts",
+    category: "legacy_payment_exception",
+    rationale: "Sales-document invoice payment sync advances booking payment/lifecycle state after invoice settlement.",
+  },
+  {
     file: "lib/monthlyInvoice/settleMonthlyInvoiceChildBooking.ts",
     category: "legacy_monthly_exception",
     rationale: "Monthly invoice child settlement freezes payment/payout state.",
+  },
+  {
+    file: "lib/monthlyInvoice/refundMonthlyInvoicePayment.ts",
+    category: "legacy_monthly_exception",
+    rationale: "Monthly invoice refund helper rolls child booking payment state back to pending_monthly.",
   },
   {
     file: "lib/payout/adminBookingAssignmentEarningsGate.ts",
@@ -164,6 +199,11 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     file: "app/api/cron/expire-pending-payments/route.ts",
     category: "legacy_cron_exception",
     rationale: "Cron pending-payment expiry pass.",
+  },
+  {
+    file: "lib/recurring/reconcileRecurringPlanOccurrences.ts",
+    category: "legacy_cron_exception",
+    rationale: "Recurring occurrence reconciler cancels orphan bookings after payout-safety checks.",
   },
   {
     file: "app/api/dashboard/bookings/[id]/cancel/route.ts",

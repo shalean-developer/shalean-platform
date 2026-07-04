@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCookieUser } from "@/lib/auth/getCookieUser";
+import { ownsDocumentRow } from "@/lib/customer/documentOwnership";
 import { salesDocumentPdfResponse } from "@/lib/salesDocument/salesDocumentPdfResponse";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -17,8 +18,6 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-
-  const email = String(user.email ?? "").trim().toLowerCase();
 
   const { data, error } = await admin
     .from("sales_documents")
@@ -38,9 +37,10 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     id: string;
   };
 
-  const owns =
-    row.customer_id === user.id ||
-    (email && row.customer_email.trim().toLowerCase() === email);
+  const owns = ownsDocumentRow(
+    { ownerId: row.customer_id, ownerEmail: row.customer_email },
+    { id: user.id, email: user.email ?? null },
+  );
   if (!owns) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   return salesDocumentPdfResponse(row, `shalean-${documentId.slice(0, 8)}`);

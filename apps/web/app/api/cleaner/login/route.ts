@@ -1,5 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import {
+  allowCleanerLoginIpRequest,
+  allowCleanerLoginPhoneRequest,
+  cleanerLoginIpRateLimitKey,
+  cleanerLoginPhoneRateLimitKey,
+} from "@/lib/rateLimit/cleanerLoginIpLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { digitsOnly, normalizeSouthAfricaPhone, southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
@@ -42,8 +48,9 @@ async function resolveLoginEmail(admin: SupabaseClient, row: CleanerLoginRow): P
 }
 
 export async function POST(request: Request) {
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  if (!allowCleanerLoginIpRequest(cleanerLoginIpRateLimitKey(request))) {
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -63,6 +70,13 @@ export async function POST(request: Request) {
   if (!phone || !password) {
     return NextResponse.json({ error: "Phone and password are required." }, { status: 400 });
   }
+
+  if (!allowCleanerLoginPhoneRequest(cleanerLoginPhoneRateLimitKey(phone))) {
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const variants = [...new Set(southAfricaPhoneLookupVariants(phone))].filter(Boolean);
   let cleaner: CleanerLoginRow | null = null;

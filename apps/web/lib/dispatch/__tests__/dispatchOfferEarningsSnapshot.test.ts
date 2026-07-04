@@ -124,20 +124,20 @@ describe("resolveAndPersistDispatchOfferEarningsSnapshot", () => {
       offerId: OFFER_ID,
     });
 
-    /** Experienced (>= 4 mo) cleaner gets 70% × R600 = R420. */
-    expect(r.amountCents).toBe(42_000);
+    /** Experienced (>= 4 mo) cleaner gets 70% × R600 capped at R300. */
+    expect(r.amountCents).toBe(30_000);
     expect(r.source).toBe("canonical");
     expect(r.missingReason).toBeNull();
 
     const writes = updateCalls.filter((c) => c.table === "dispatch_offers");
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.payload).toMatchObject({ display_earnings_cents: 42_000, earnings_snapshot_source: "canonical" });
+    expect(writes[0]!.payload).toMatchObject({ display_earnings_cents: 30_000, earnings_snapshot_source: "canonical" });
     /** Snapshot writes must be guarded by `is null` to never overwrite a positive value. */
     expect(writes[0]!.isNullDisplay).toBe(true);
     expect(writes[0]!.eqId).toBe(OFFER_ID);
   });
 
-  it("writes R250 per cleaner for team jobs without consulting tenure", async () => {
+  it("writes team percentage parity per cleaner for standard team jobs", async () => {
     const { admin, updateCalls } = makeAdmin({
       booking: {
         id: BOOKING_ID,
@@ -158,9 +158,9 @@ describe("resolveAndPersistDispatchOfferEarningsSnapshot", () => {
       offerId: OFFER_ID,
     });
 
-    expect(r.amountCents).toBe(25_000);
+    expect(r.amountCents).toBe(30_000);
     expect(r.source).toBe("canonical");
-    expect(updateCalls[0]!.payload.display_earnings_cents).toBe(25_000);
+    expect(updateCalls[0]!.payload.display_earnings_cents).toBe(30_000);
   });
 
   it("returns a stable miss source and skips the amount write when solo standard has no payment basis", async () => {

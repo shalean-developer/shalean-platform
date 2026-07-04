@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
+import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ function verifyPaystackSignature(rawBody: string, signature: string): boolean {
     return process.env.NODE_ENV !== "production";
   }
   const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
-  return hash === signature;
+  return timingSafeEqualString(hash, signature);
 }
 
 type PaystackWebhookEvent = {

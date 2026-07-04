@@ -120,6 +120,11 @@ function buildFakeBookingsAdmin(opts: { onInsertReturnsId?: string } = {}) {
           },
         };
       }
+      if (table === "booking_payment_recovery_jobs") {
+        return {
+          insert: async () => ({ error: null }),
+        };
+      }
       throw new Error(`Unexpected table read: ${table}`);
     },
   };
