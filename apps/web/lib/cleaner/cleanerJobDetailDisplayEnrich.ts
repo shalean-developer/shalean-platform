@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bookingCustomerKey, type BookingCustomerIdentityRow } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import type { CustomerBookingDetailLine } from "@/lib/booking/bookingV2CustomerDisplay";
 import {
   accessNotesFromBookingRow,
@@ -36,11 +38,10 @@ export function formatCleanerJobLocationDisplay(input: {
 
 export async function resolveCleanerJobCustomerContact(
   admin: SupabaseClient,
-  row: {
+  row: BookingCustomerIdentityRow & {
     customer_name?: string | null;
     customer_phone?: string | null;
     customer_email?: string | null;
-    user_id?: string | null;
     phone?: string | null;
     booking_snapshot?: unknown;
   },
@@ -55,7 +56,7 @@ export async function resolveCleanerJobCustomerContact(
     bookingSnapshot: row.booking_snapshot,
   });
 
-  const userId = String(row.user_id ?? "").trim();
+  const userId = bookingCustomerKey(row);
   if (userId) {
     if (!customer_name) {
       const { data: profile } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
@@ -74,10 +75,11 @@ export async function resolveCleanerJobCustomerContact(
       }
     }
     if (!customer_phone) {
+      const ownershipColumn = await resolveBookingOwnershipColumn(admin);
       const { data: lastBookingPhoneRow } = await admin
         .from("bookings")
         .select("customer_phone, booking_snapshot")
-        .eq("user_id", userId)
+        .eq(ownershipColumn, userId)
         .order("created_at", { ascending: false })
         .limit(12);
       for (const row of lastBookingPhoneRow ?? []) {
