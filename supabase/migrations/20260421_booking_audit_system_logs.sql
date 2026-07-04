@@ -19,8 +19,15 @@ alter table public.system_logs enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- Atomic increment for user_profiles (avoids lost updates under concurrency)
+-- Parameter name p_amount matches app RPC args (see 20260421_fix_user_profile_function).
+-- Drop first: Postgres rejects CREATE OR REPLACE when only parameter names change (42P13).
 -- ---------------------------------------------------------------------------
-create or replace function public.increment_user_profile_stats(p_user_id uuid, p_amount_cents bigint)
+drop function if exists public.increment_user_profile_stats(uuid, bigint);
+
+create function public.increment_user_profile_stats(
+  p_user_id uuid,
+  p_amount bigint
+)
 returns void
 language plpgsql
 security definer
@@ -28,7 +35,7 @@ set search_path = public
 as $$
 begin
   insert into public.user_profiles (id, booking_count, total_spent_cents, updated_at)
-  values (p_user_id, 1, p_amount_cents, now())
+  values (p_user_id, 1, p_amount, now())
   on conflict (id) do update set
     booking_count = user_profiles.booking_count + 1,
     total_spent_cents = user_profiles.total_spent_cents + excluded.total_spent_cents,
