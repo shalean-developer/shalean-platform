@@ -2,13 +2,14 @@
  * Centralized heuristics for SEO hub triage — reuse in admin UI, cron output, and future automation.
  */
 
-export type PageHealthBand = "critical" | "needs_improvement" | "strong";
+export type PageHealthBand = "critical" | "needs_improvement" | "strong" | "insufficient_data";
 
 /** Normalizes API/string payloads into a known band (defaults to strong). */
 export function normalizePageHealthBand(raw: string | null | undefined): PageHealthBand {
   const s = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, "_");
   if (s === "critical") return "critical";
   if (s === "needs_improvement") return "needs_improvement";
+  if (s === "insufficient_data") return "insufficient_data";
   if (s === "strong") return "strong";
   return "strong";
 }
@@ -61,6 +62,7 @@ const AFFECTED_LABEL: Record<SeoAffectedMetric, string> = {
 export function priorityLabelFromBand(band: PageHealthBand): string {
   if (band === "critical") return "P1 · Critical";
   if (band === "needs_improvement") return "P2 · Watch";
+  if (band === "insufficient_data") return "P2 · Gathering data";
   return "P3 · Healthy";
 }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { BlogFeaturedHeroCard } from "@/components/blog/BlogFeaturedHeroCard";
 import { BlogGridWithQuoteCta } from "@/components/blog/BlogGridWithQuoteCta";
 import { BlogTopicFilterNav } from "@/components/blog/BlogTopicFilterNav";
@@ -169,7 +170,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
 
   return (
     <MarketingLayout>
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+      <main className={`mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-16 ${marketingWhatsAppFloatMainPadding}`}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
         <header className="mx-auto max-w-3xl text-center lg:max-w-4xl">

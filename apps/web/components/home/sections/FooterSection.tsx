@@ -63,10 +63,10 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
     <>
       <footer
         id="contact"
-        className="scroll-mt-28 bg-[#0d1b69] py-14 text-slate-300"
+        className="scroll-mt-28 bg-[#0d1b69] py-12 text-slate-300 sm:py-14"
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-8 sm:grid-cols-2 sm:gap-10 lg:grid-cols-5">
 
             {/* Col 1 — Brand */}
             <div className="lg:col-span-1">
@@ -86,7 +86,7 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
                       rel="noopener noreferrer"
                       aria-label={`Shalean on ${link.label}`}
                       onClick={link.id === "whatsapp" ? () => trackEvent("whatsapp_click") : undefined}
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white sm:h-10 sm:w-10"
                     >
                       <Icon className="h-4 w-4" />
                     </a>
@@ -98,10 +98,10 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
             {/* Col 2 — Services */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Services</p>
-              <ul className="mt-4 space-y-2.5 text-sm">
+              <ul className="mt-4 space-y-1 text-sm sm:space-y-2.5">
                 {FOOTER_SERVICES.map(({ label, href }) => (
                   <li key={label}>
-                    <Link href={href} className="transition hover:text-white">
+                    <Link href={href} className="block py-2 transition hover:text-white sm:py-0">
                       {label}
                     </Link>
                   </li>
@@ -112,10 +112,10 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
             {/* Col 3 — Company */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Company</p>
-              <ul className="mt-4 space-y-2.5 text-sm">
+              <ul className="mt-4 space-y-1 text-sm sm:space-y-2.5">
                 {FOOTER_COMPANY.map(({ label, href }) => (
                   <li key={label}>
-                    <Link href={href} className="transition hover:text-white">
+                    <Link href={href} className="block py-2 transition hover:text-white sm:py-0">
                       {label}
                     </Link>
                   </li>
@@ -126,10 +126,10 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
             {/* Col 4 — Support */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Support</p>
-              <ul className="mt-4 space-y-2.5 text-sm">
+              <ul className="mt-4 space-y-1 text-sm sm:space-y-2.5">
                 {FOOTER_SUPPORT.map(({ label, href }) => (
                   <li key={label}>
-                    <Link href={href} className="transition hover:text-white">
+                    <Link href={href} className="block py-2 transition hover:text-white sm:py-0">
                       {label}
                     </Link>
                   </li>
@@ -140,12 +140,12 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
             {/* Col 5 — Contact */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Contact Us</p>
-              <ul className="mt-4 space-y-3 text-sm">
+              <ul className="mt-4 space-y-2 text-sm sm:space-y-3">
                 <li>
                   <a
                     href="tel:0871535250"
                     onClick={() => trackEvent("phone_click")}
-                    className="flex items-center gap-2 transition hover:text-white"
+                    className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"
                   >
                     <Phone className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />
                     087 153 5250
@@ -154,7 +154,7 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
                 <li>
                   <a
                     href="tel:0825915525"
-                    className="flex items-center gap-2 transition hover:text-white"
+                    className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"
                   >
                     <Phone className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />
                     082 591 5525
@@ -163,7 +163,7 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
                 <li>
                   <a
                     href="mailto:hello@shalean.co.za"
-                    className="flex items-center gap-2 transition hover:text-white"
+                    className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"
                   >
                     <Mail className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />
                     hello@shalean.co.za
@@ -194,8 +194,8 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
         aria-label="Chat on WhatsApp"
         className={
           stackFloats
-            ? "fixed bottom-[calc(5.25rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600 md:bottom-[4.75rem]"
-            : "fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600"
+            ? "fixed bottom-[calc(5.25rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600 sm:right-6 md:bottom-[4.75rem]"
+            : "fixed bottom-4 right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition hover:scale-105 hover:bg-green-600 sm:bottom-6 sm:right-6"
         }
       >
         <WhatsAppIcon className="h-7 w-7" />

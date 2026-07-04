@@ -11,6 +11,9 @@ vi.mock("@/lib/logging/systemLog", () => ({
 vi.mock("@/lib/recurring/recurringBookingInsertGuards", () => ({
   findActiveCustomerSlotOccupant: vi.fn().mockResolvedValue(null),
   recurringPlanOccurrenceRowExists: vi.fn().mockResolvedValue(false),
+  recurringBookingCustomerOwnershipPatch: vi
+    .fn()
+    .mockResolvedValue({ customer_id: "55555555-5555-4555-8555-555555555555" }),
 }));
 
 vi.mock("@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan", () => ({

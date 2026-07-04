@@ -3,6 +3,7 @@ import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { ReviewsPageContent } from "@/components/reviews/ReviewsPageContent";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import {
   HOME_OG_IMAGE,
@@ -58,7 +59,7 @@ export default function ReviewsPage() {
   return (
     <div className="bg-white text-slate-900">
       <MarketingHomeHeader bookingHref={bookingHref} />
-      <main>
+      <main className={marketingWhatsAppFloatMainPadding}>
         <ReviewsPageContent />
       </main>
       <FooterSection />

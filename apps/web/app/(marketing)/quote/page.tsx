@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { FooterSection } from "@/components/home/sections/FooterSection";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { QuoteRequestForm } from "@/components/quote/QuoteRequestForm";
+import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
@@ -28,13 +31,16 @@ export const metadata: Metadata = {
 };
 
 export default function QuoteRequestPage() {
+  const bookingHref = marketingHomeBookingHref();
+
   return (
     <div className="bg-slate-50 text-slate-900">
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "quote_request", content_group: "marketing_quote" }}
       />
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
+      <MarketingHomeHeader bookingHref={bookingHref} />
+      <main className={`mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16 ${marketingWhatsAppFloatMainPadding}`}>
         <div className="mb-8 text-center">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Free quote</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">

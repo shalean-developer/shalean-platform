@@ -27,7 +27,7 @@ export function ShaleanNavLogo({ className, intrinsicHeight = 204, priority = fa
       alt="Shalean Cleaning Services"
       width={intrinsicWidth}
       height={intrinsicHeight}
-      className={cn("h-auto w-auto shrink-0 object-contain object-left", className)}
+      className={cn("object-contain object-left min-w-0 max-w-full", className)}
       sizes="(max-width: 640px) 140px, 200px"
       priority={priority}
     />

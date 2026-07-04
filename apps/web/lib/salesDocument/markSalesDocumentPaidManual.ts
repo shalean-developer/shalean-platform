@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { notifyAdminSalesDocumentInvoicePaid } from "@/lib/salesDocument/notifySalesDocumentAdmin";
+import { syncBookingPaymentFromSalesDocumentInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
 import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 
 export async function markSalesDocumentPaidManual(
@@ -71,6 +72,11 @@ export async function markSalesDocumentPaidManual(
     totalCents: total,
     reference: `manual_${row.id.slice(0, 8)}`,
     source: "manual",
+  });
+
+  await syncBookingPaymentFromSalesDocumentInvoice(admin, row.id, {
+    amountCents: total,
+    reference: `manual_${row.id.slice(0, 8)}`,
   });
 
   return { ok: true };

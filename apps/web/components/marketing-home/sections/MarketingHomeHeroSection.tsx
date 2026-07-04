@@ -14,11 +14,11 @@ export function MarketingHomeHeroSection() {
   const avg = publicTrustAverageDisplay(null);
 
   return (
-    <section className="relative w-full bg-white py-6 md:py-8 lg:py-10">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
+    <section className="relative w-full bg-white py-8 md:py-8 lg:py-10">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 px-4 sm:gap-10 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
 
         {/* Left column */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col items-center gap-5 text-center sm:items-start sm:gap-6 sm:text-left">
 
           {/* Badge */}
           <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-blue-700">
@@ -36,7 +36,7 @@ export function MarketingHomeHeroSection() {
           </p>
 
           {/* Benefit icons */}
-          <div className="flex flex-wrap gap-4 sm:gap-5">
+          <div className="flex flex-wrap justify-center gap-3 sm:justify-start sm:gap-5">
             {[
               { Icon: ShieldCheck, label: "Vetted & trained cleaners" },
               { Icon: ThumbsUp, label: "Satisfaction guaranteed" },
@@ -59,11 +59,11 @@ export function MarketingHomeHeroSection() {
           </p>
 
           {/* CTAs — plain links keep this section free of client JS for faster LCP */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               href={bookHref}
               data-growth-cta-source="marketing_hero_book_cleaning"
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto sm:text-sm"
             >
               Book a cleaning
               <span aria-hidden className="ml-0.5">→</span>
@@ -71,14 +71,14 @@ export function MarketingHomeHeroSection() {
             <Link
               href={GET_FREE_QUOTE_HREF}
               data-quote-cta-source="marketing_hero"
-              className={getFreeQuoteButtonClass.outline}
+              className={`${getFreeQuoteButtonClass.outline} w-full sm:w-auto`}
             >
               Get Free Quote
             </Link>
           </div>
 
           {/* Google rating row */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
               {/* Google G */}
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
@@ -129,7 +129,7 @@ export function MarketingHomeHeroSection() {
           </div>
 
           {/* Floating stats card */}
-          <div className="absolute -left-4 bottom-6 z-10 flex items-center gap-3 rounded-2xl bg-blue-600 px-5 py-4 shadow-lg sm:-left-6">
+          <div className="absolute left-2 bottom-4 z-10 flex items-center gap-3 rounded-2xl bg-blue-600 px-4 py-3 shadow-lg sm:-left-6 sm:bottom-6 sm:px-5 sm:py-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
               <Users className="h-5 w-5 text-white" aria-hidden />
             </div>

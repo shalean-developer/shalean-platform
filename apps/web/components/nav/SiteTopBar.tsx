@@ -6,19 +6,22 @@ import {
   CUSTOMER_SUPPORT_TELEPHONE_TEL,
 } from "@/lib/site/customerSupport";
 import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
+import { cn } from "@/lib/utils";
 
 type ContactItem = {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   href?: string;
+  /** Hide below this Tailwind breakpoint prefix (e.g. "sm" = hidden on default, show sm+). */
+  showFrom?: "sm" | "md";
 };
 
 const CONTACT_ITEMS: ContactItem[] = [
-  { icon: Shield, label: "No hidden fees, ever" },
-  { icon: Clock, label: "8am – 6pm (Mon - Sat)" },
+  { icon: Shield, label: "No hidden fees, ever", showFrom: "md" },
+  { icon: Clock, label: "8am – 6pm (Mon - Sat)", showFrom: "sm" },
   { icon: Phone, label: CUSTOMER_SUPPORT_TELEPHONE_DISPLAY, href: CUSTOMER_SUPPORT_TELEPHONE_TEL },
-  { icon: MapPin, label: "Cape Town, South Africa" },
-  { icon: Mail, label: "hello@shalean.co.za", href: "mailto:hello@shalean.co.za" },
+  { icon: MapPin, label: "Cape Town, South Africa", showFrom: "md" },
+  { icon: Mail, label: "hello@shalean.co.za", href: "mailto:hello@shalean.co.za", showFrom: "sm" },
 ];
 
 function FacebookIcon() {
@@ -51,54 +54,63 @@ const SOCIAL_ICON_BY_ID = {
   whatsapp: WhatsAppIcon,
 } as const;
 
+function showFromClass(showFrom?: ContactItem["showFrom"]) {
+  if (showFrom === "sm") return "hidden sm:flex";
+  if (showFrom === "md") return "hidden md:flex";
+  return "flex";
+}
+
 export function SiteTopBar() {
   return (
     <div className="bg-gradient-to-r from-[#0d1b69] to-[#1a3dbd]">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4 overflow-x-auto scrollbar-none md:gap-6">
-          {CONTACT_ITEMS.map(({ icon: Icon, label, href }) => {
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6 sm:py-2 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 md:gap-6">
+          {CONTACT_ITEMS.map(({ icon: Icon, label, href, showFrom }) => {
             const content = (
               <>
                 <Icon className="h-3.5 w-3.5 shrink-0 text-white/70" />
-                <span className="whitespace-nowrap text-xs text-white/90">{label}</span>
+                <span className="truncate text-xs text-white/90">{label}</span>
               </>
             );
+            const wrapperClass = cn("min-w-0 items-center gap-1.5", showFromClass(showFrom));
             if (href) {
               return (
                 <a
                   key={label}
                   href={href}
-                  className="flex items-center gap-1.5 transition-opacity hover:opacity-80"
+                  className={cn(wrapperClass, "transition-opacity hover:opacity-80")}
                 >
                   {content}
                 </a>
               );
             }
             return (
-              <span key={label} className="flex items-center gap-1.5">
+              <span key={label} className={wrapperClass}>
                 {content}
               </span>
             );
           })}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <SiteTopBarAccount />
-          {SHALEAN_SOCIAL_LINKS.map((link) => {
-            const Icon = SOCIAL_ICON_BY_ID[link.id];
-            return (
-              <a
-                key={link.id}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={link.label}
-                className="text-white/80 transition-colors hover:text-white"
-              >
-                <Icon />
-              </a>
-            );
-          })}
+          <div className="hidden items-center gap-3 sm:flex">
+            {SHALEAN_SOCIAL_LINKS.map((link) => {
+              const Icon = SOCIAL_ICON_BY_ID[link.id];
+              return (
+                <a
+                  key={link.id}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.label}
+                  className="text-white/80 transition-colors hover:text-white"
+                >
+                  <Icon />
+                </a>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

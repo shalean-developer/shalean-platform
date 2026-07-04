@@ -13,6 +13,7 @@ import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegri
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import {
   findActiveCustomerSlotOccupant,
+  recurringBookingCustomerOwnershipPatch,
   recurringPlanOccurrenceRowExists,
 } from "@/lib/recurring/recurringBookingInsertGuards";
 import {
@@ -131,12 +132,17 @@ export async function insertRecurringOccurrenceBooking(
     operationalStatus: "pending_payment",
   });
 
+  const customerOwnershipPatch = await recurringBookingCustomerOwnershipPatch(
+    admin,
+    params.recurring.customer_id,
+  );
+
   const baseRow = {
     paystack_reference: paystackReference,
     customer_email: email,
     customer_name: params.customerName,
     customer_phone: params.customerPhone,
-    user_id: params.recurring.customer_id,
+    ...customerOwnershipPatch,
     amount_paid_cents: 0,
     currency: "ZAR",
     booking_snapshot: snapshot,

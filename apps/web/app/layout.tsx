@@ -14,6 +14,8 @@ import "./globals.css";
 export const metadata = ROOT_METADATA;
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   themeColor: "#5A73D8",
 };
 

@@ -48,7 +48,7 @@ export function MarketingAreasSection({ locations }: Props) {
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-12 lg:items-start xl:gap-16">
           <header className="max-w-xl">
             <p className="text-sm font-medium tracking-wide text-slate-400">— Areas We Serve</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+            <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl md:text-4xl">
               Cleaning services across Cape Town suburbs
             </h2>
           </header>

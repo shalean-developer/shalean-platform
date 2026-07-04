@@ -8,6 +8,9 @@ import {
   type SalesDocumentLineItem,
   type SalesDocumentType,
 } from "@/lib/salesDocument/types";
+import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
+import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
+import { logSystemEvent } from "@/lib/logging/systemLog";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
 
 export type CreateSalesDocumentInput = {
@@ -146,7 +149,17 @@ export async function convertSalesQuoteToInvoice(
   if (existingLookupErr) return { ok: false, error: existingLookupErr.message };
   if (existingInvoice?.id) {
     await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
-    return { ok: true, invoiceId: String(existingInvoice.id) };
+    const invoiceId = String(existingInvoice.id);
+    const bookingResult = await createBookingFromSalesQuoteInvoice(admin, { quoteId, invoiceId });
+    if (!bookingResult.ok) {
+      await logSystemEvent({
+        level: "warn",
+        source: "sales_document/convert",
+        message: "booking_create_failed",
+        context: { quoteId, invoiceId, error: bookingResult.error },
+      });
+    }
+    return { ok: true, invoiceId };
   }
 
   const { data: quote, error } = await admin.from("sales_documents").select("*").eq("id", quoteId).maybeSingle();
@@ -174,6 +187,20 @@ export async function convertSalesQuoteToInvoice(
     return { ok: false, error: "quote_not_convertible" };
   }
 
+  if (!q.customer_id) {
+    const ensured = await ensureSalesDocumentCustomer(admin, quoteId);
+    if (ensured.ok) {
+      q.customer_id = ensured.customerId;
+    } else {
+      await logSystemEvent({
+        level: "warn",
+        source: "sales_document/convert",
+        message: "customer_ensure_failed",
+        context: { quoteId, error: ensured.error },
+      });
+    }
+  }
+
   const created = await createSalesDocument(admin, {
     document_type: "invoice",
     customer_id: q.customer_id,
@@ -190,6 +217,19 @@ export async function convertSalesQuoteToInvoice(
   if (!created.ok) return created;
 
   await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
+
+  const bookingResult = await createBookingFromSalesQuoteInvoice(admin, {
+    quoteId,
+    invoiceId: created.id,
+  });
+  if (!bookingResult.ok) {
+    await logSystemEvent({
+      level: "warn",
+      source: "sales_document/convert",
+      message: "booking_create_failed",
+      context: { quoteId, invoiceId: created.id, error: bookingResult.error },
+    });
+  }
 
   return { ok: true, invoiceId: created.id };
 }

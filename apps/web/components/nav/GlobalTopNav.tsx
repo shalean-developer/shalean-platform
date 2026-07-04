@@ -5,12 +5,22 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ArrowRight, Menu, X } from "lucide-react";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
+import { MarketingMobileServicesNav } from "@/components/marketing/MarketingMobileServicesNav";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import { MarketingMobileHeaderBookButton } from "@/components/marketing-home/MarketingMobileHeaderBookButton";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { cn } from "@/lib/utils";
 import { SiteTopBar } from "@/components/nav/SiteTopBar";
 import { shouldHideGlobalTopNav } from "@/lib/marketing/globalTopNavVisibility";
 import { MARKETING_HEADER_SERVICE_LINKS } from "@/lib/marketing/marketingHomeHeaderNav";
+import {
+  marketingHeaderLogoLinkClass,
+  marketingHeaderLogoImageClass,
+  marketingMobileDrawerLinkClass,
+  marketingMobileDrawerOpenPadding,
+  marketingMobileHeaderActionsClass,
+  marketingMobileMenuButtonClass,
+} from "@/lib/marketing/marketingMobileLayout";
 
 const bookingHref = "/book";
 
@@ -61,10 +71,10 @@ export function GlobalTopNav() {
 
       {/* Main nav card */}
       <div className="bg-white/95 px-3 py-2 shadow-sm backdrop-blur sm:px-5">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 lg:justify-between">
           {/* Logo */}
-          <Link href="/" className="flex shrink-0 items-center" aria-label="Shalean home">
-            <ShaleanNavLogo className="h-8 w-auto max-w-[140px] sm:h-10 sm:max-w-[168px]" priority />
+          <Link href="/" className={marketingHeaderLogoLinkClass} aria-label="Shalean home">
+            <ShaleanNavLogo className={marketingHeaderLogoImageClass} intrinsicHeight={80} priority />
           </Link>
 
           {/* Desktop nav */}
@@ -132,18 +142,11 @@ export function GlobalTopNav() {
           </div>
 
           {/* Mobile right */}
-          <div className="flex items-center gap-2 lg:hidden">
-            <GrowthCtaLink
-              href={bookingHref}
-              source="nav_mobile_book"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm"
-            >
-              <CalendarDays className="h-3.5 w-3.5" />
-              Book Now
-            </GrowthCtaLink>
+          <div className={marketingMobileHeaderActionsClass}>
+            <MarketingMobileHeaderBookButton bookingHref={bookingHref} source="nav_mobile_book" />
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-100 text-slate-700"
+              className={marketingMobileMenuButtonClass}
               onClick={() => setMobileOpen((v) => !v)}
               aria-expanded={mobileOpen}
               aria-controls="mobile-nav"
@@ -160,39 +163,33 @@ export function GlobalTopNav() {
         id="mobile-nav"
         className={cn(
           "border-t border-blue-100 bg-white shadow-md lg:hidden",
-          mobileOpen ? "visible px-4 py-4 opacity-100" : "invisible max-h-0 overflow-hidden opacity-0",
+          mobileOpen
+            ? cn("visible px-4 py-4 opacity-100", marketingMobileDrawerOpenPadding)
+            : "invisible max-h-0 overflow-hidden opacity-0",
         )}
         aria-hidden={!mobileOpen}
       >
         <div className="flex flex-col gap-1">
           <GetFreeQuoteLink source="nav_mobile_menu" variant="outline" className="mb-2 w-full" />
-          {navLinks.map(({ label, href, dropdown }) => (
-            <div key={label}>
+          {navLinks.map(({ label, href, dropdown }) =>
+            dropdown ? (
+              <MarketingMobileServicesNav
+                key={label}
+                drawerOpen={mobileOpen}
+                onNavigate={() => setMobileOpen(false)}
+              />
+            ) : (
               <Link
+                key={label}
                 href={href}
-                className="block rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                className={marketingMobileDrawerLinkClass}
                 onClick={() => setMobileOpen(false)}
                 tabIndex={mobileOpen ? 0 : -1}
               >
                 {label}
               </Link>
-              {dropdown ? (
-                <div className="ml-3 border-l border-blue-100 pl-2">
-                  {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
-                    <Link
-                      key={item}
-                      href={itemHref}
-                      className="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-700"
-                      onClick={() => setMobileOpen(false)}
-                      tabIndex={mobileOpen ? 0 : -1}
-                    >
-                      {item}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ))}
+            ),
+          )}
         </div>
       </div>
     </header>

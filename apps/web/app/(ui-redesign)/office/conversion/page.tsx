@@ -15,16 +15,18 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
-import {
-  funnelVisitorCount,
-  paymentCompletedCount,
-  type BookingFunnelApiPayload,
-} from "@/lib/admin/officeFunnelPresentation";
+import { type BookingFunnelApiPayload } from "@/lib/admin/officeFunnelPresentation";
 import { DIRECT_BOOKING_FLOW_LANDING, landingDisplayName } from "@/lib/admin/landingPageAttribution";
 
 type SeoLanding = {
   since?: string;
   rowsLoaded?: number;
+  summary: {
+    distinctSessionsQuoted: number;
+    distinctSessionsCompleted: number;
+    overallConversionPct: number;
+    sessionsTracked: number;
+  } | null;
   byLanding: Array<{
     landing: string;
     sessions: number;
@@ -42,11 +44,6 @@ function formatSince(iso: string | undefined): string | null {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return null;
   return d.toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function pct(part: number, total: number): number | null {
-  if (total <= 0) return null;
-  return Math.round((part / total) * 1000) / 10;
 }
 
 export default function ConversionPage() {
@@ -86,11 +83,11 @@ export default function ConversionPage() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const visitors = funnelData ? funnelVisitorCount(funnelData) : null;
-  const starts = funnelData?.funnelStartSessions ?? null;
-  const completed = funnelData ? paymentCompletedCount(funnelData) : null;
-  const startToPaidPct =
-    starts != null && completed != null ? pct(completed, Math.max(starts, 1)) : null;
+  const summary = seo.data?.summary;
+  const sessionsTracked = summary?.sessionsTracked ?? null;
+  const quoteStarts = summary?.distinctSessionsQuoted ?? null;
+  const completions = summary?.distinctSessionsCompleted ?? null;
+  const quoteToPaidPct = summary ? summary.overallConversionPct : null;
 
   const dailyTrends = funnelData?.intelligence?.dailyTrends ?? [];
   const dailyChart = dailyTrends.slice(-7);
@@ -102,7 +99,7 @@ export default function ConversionPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Conversion</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Session-based funnel from booking analytics{sinceLabel ? ` · since ${sinceLabel}` : ""}.
+            Session-based conversion from analytics events{sinceLabel ? ` · since ${sinceLabel}` : ""}.
           </p>
         </div>
         <button
@@ -126,12 +123,12 @@ export default function ConversionPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Funnel visitors", value: visitors ?? "—", icon: Globe, color: "bg-blue-50 text-blue-600" },
-          { label: "Quote starts", value: starts ?? "—", icon: ShoppingCart, color: "bg-orange-50 text-orange-600" },
-          { label: "Paid completions", value: completed ?? "—", icon: CreditCard, color: "bg-emerald-50 text-emerald-600" },
+          { label: "Sessions tracked", value: sessionsTracked ?? "—", icon: Globe, color: "bg-blue-50 text-blue-600" },
+          { label: "Booking starts", value: quoteStarts ?? "—", icon: ShoppingCart, color: "bg-orange-50 text-orange-600" },
+          { label: "Completions", value: completions ?? "—", icon: CreditCard, color: "bg-emerald-50 text-emerald-600" },
           {
-            label: "Quote → paid",
-            value: startToPaidPct != null ? `${startToPaidPct}%` : "—",
+            label: "Start → complete",
+            value: quoteToPaidPct != null ? `${quoteToPaidPct}%` : "—",
             icon: TrendingUp,
             color: "bg-violet-50 text-violet-600",
           },
@@ -187,7 +184,7 @@ export default function ConversionPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Page", "Sessions", "Booking starts", "Completions", "CVR"].map((h) => (
+                  {["Page", "Sessions", "Booking starts", "Completions", "Start → complete"].map((h) => (
                     <th key={h} className="pb-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
                       {h}
                     </th>

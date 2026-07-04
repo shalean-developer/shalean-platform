@@ -24,7 +24,7 @@ export function MarketingHomeServicesGrid({ cards }: Props) {
               href={href}
               className="group flex flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:shadow-md"
             >
-              <div className="relative aspect-[16/9] w-full overflow-hidden">
+              <div className="relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/9]">
                 <Image
                   src={image}
                   alt={imageAlt}

@@ -14,8 +14,8 @@ type Props = {
 };
 
 const spacingClass = {
-  default: "py-14 md:py-20",
-  tight: "py-10 md:py-12",
+  default: "py-10 md:py-20",
+  tight: "py-8 md:py-12",
 } as const;
 
 /**

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { notifyAdminSalesDocumentInvoicePaid } from "@/lib/salesDocument/notifySalesDocumentAdmin";
+import { syncBookingPaymentFromSalesDocumentInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
 import { resolveSalesDocumentForPaystackCharge } from "@/lib/salesDocument/resolveSalesDocumentForPaystackCharge";
 import { salesDocumentPaystackReferencesMatch } from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
@@ -127,6 +128,11 @@ export async function applySalesDocumentPayment(
     totalCents: total,
     reference: ref,
     source: "paystack",
+  });
+
+  await syncBookingPaymentFromSalesDocumentInvoice(admin, row.id, {
+    amountCents: total,
+    reference: ref,
   });
 
   return { ok: true, settled: "full", documentId: row.id };

@@ -5,6 +5,7 @@ import { LocationCard } from "@/components/locations/LocationCard";
 import { LocationGroup } from "@/components/locations/LocationGroup";
 import { LocationSearch, type LocationSearchItem } from "@/components/locations/LocationSearch";
 import { LocationsIndexStickyCta } from "@/components/locations/LocationsIndexStickyCta";
+import { marketingStickyCtaMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import {
   LOCATIONS_INDEX_BLOG_GUIDES,
   LOCATIONS_INDEX_QUICK_SLUGS,
@@ -61,7 +62,7 @@ export function LocationsIndexView() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
 
-      <main className="bg-white pb-28 text-zinc-900 md:pb-0">
+      <main className={`bg-white text-zinc-900 ${marketingStickyCtaMainPadding}`}>
         {/* Hero */}
         <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/70 via-white to-white">
           <div className="mx-auto max-w-6xl px-4 pt-12 pb-14 sm:px-6 sm:pt-16 lg:px-8">

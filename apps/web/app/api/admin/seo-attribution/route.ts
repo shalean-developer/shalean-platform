@@ -207,9 +207,8 @@ export async function GET(request: Request) {
       ? `${session.utm_source ?? (session.gbp_attribution ? `gbp:${session.gbp_attribution}` : "—")}|${session.utm_medium ?? "—"}`
       : "(organic / no UTM)";
 
-    if (session.hadPageView) {
-      ensureBucket(landingBuckets, session.landing).sessions.add(sid);
-    }
+    // Count every attributed session — quote-only sessions were previously omitted when page_view was missing.
+    ensureBucket(landingBuckets, session.landing).sessions.add(sid);
 
     const srcLabel = hasAttributionSignal
       ? session.utm_source ?? (session.gbp_attribution ? `gbp:${session.gbp_attribution}` : "—")

@@ -8,6 +8,7 @@ import { FaqPageExperience } from "@/components/faq/FaqPageExperience";
 import { FaqStickyMobileCta } from "@/components/faq/FaqStickyMobileCta";
 import { FaqTrustStrip } from "@/components/faq/FaqTrustStrip";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { marketingStickyCtaMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { flattenAllFaqItems } from "@/lib/faq/faq-page-data";
 import { buildFaqPageJsonLd } from "@/lib/faq/faq-jsonld";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -61,7 +62,7 @@ export default function FaqPage() {
         payload={{ page_type: "faq", content_group: "marketing_faq", primary_kw: "cleaning FAQ Cape Town" }}
       />
       <MarketingHomeHeader bookingHref={bookingHref} />
-      <main>
+      <main className={marketingStickyCtaMainPadding}>
         <FaqHero />
         <FaqPageExperience />
         <FaqTrustStrip />

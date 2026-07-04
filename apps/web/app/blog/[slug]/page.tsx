@@ -12,6 +12,7 @@ import { ProgrammaticBlogTemplate } from "@/components/blog/ProgrammaticBlogTemp
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImages";
 import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
 import { AirbnbHostGuideBlogTemplate } from "@/components/blog/AirbnbHostGuideBlogTemplate";
@@ -711,7 +712,7 @@ async function BlogPostPageImpl(props: Props) {
 
       return (
         <MarketingLayout>
-          <main className="bg-white text-zinc-900">
+          <main className={`bg-white text-zinc-900 ${marketingWhatsAppFloatMainPadding}`}>
             <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_post_db", slug: dbPost.slug }} />
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
@@ -778,7 +779,7 @@ async function BlogPostPageImpl(props: Props) {
 
     return (
       <MarketingLayout>
-        <main className="bg-white text-zinc-900">
+        <main className={`bg-white text-zinc-900 ${marketingWhatsAppFloatMainPadding}`}>
           <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_high_conversion", slug: hc.slug }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
@@ -819,7 +820,7 @@ async function BlogPostPageImpl(props: Props) {
 
     return (
       <MarketingLayout>
-        <main className="bg-white text-zinc-900">
+        <main className={`bg-white text-zinc-900 ${marketingWhatsAppFloatMainPadding}`}>
           <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_airbnb_host_guide", slug: hostGuide.slug }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
@@ -870,7 +871,7 @@ async function BlogPostPageImpl(props: Props) {
 
   return (
     <MarketingLayout>
-      <main className="bg-white text-zinc-900">
+      <main className={`bg-white text-zinc-900 ${marketingWhatsAppFloatMainPadding}`}>
         <GrowthTracking event={ANALYTICS_EVENTS.PAGE_VIEW} payload={{ page_type: "blog_programmatic", slug: prog.slug }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 

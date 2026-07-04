@@ -13,6 +13,22 @@ export type SeoInsightsHealthRow = {
   slug: string;
   health_score: number;
   health_band: string;
+  data_gaps?: SeoPageDataGaps;
+  score_components?: { ctr: number; scroll: number; cta: number };
+};
+
+export type SeoPageDataGaps = {
+  scroll_sessions_at_25: number;
+  scroll_sessions_needed: number;
+  scroll_ready: boolean;
+  cta_sessions: number;
+  cta_sessions_needed: number;
+  cta_ready: boolean;
+  gsc_impressions: number | null;
+  ctr_pct: number | null;
+  ctr_target_pct: number | null;
+  avg_position: number | null;
+  missing_signals: string[];
 };
 
 export type SeoInsightsRecommendation = {
@@ -52,20 +68,29 @@ export type OfficeSeoPageRow = {
   ctrPct: number | null;
   avgPosition: number | null;
   bookingStarts: number;
+  dataGaps: SeoPageDataGaps | null;
 };
 
 export type OfficeSeoKpis = {
   pagesTracked: number;
   avgHealth: number | null;
   criticalPages: number;
+  insufficientDataPages: number;
   totalBookingStarts: number;
   gscPages: number;
   avgPosition: number | null;
 };
 
+export type OfficeSeoDataGapsSummary = {
+  pagesWithGaps: number;
+  commonGaps: { label: string; count: number }[];
+  topPages: Array<{ slug: string; label: string; missing: string[] }>;
+};
+
 function bandClass(band: string): string {
   if (band === "strong") return "bg-emerald-100 text-emerald-800";
   if (band === "needs_improvement") return "bg-amber-100 text-amber-800";
+  if (band === "insufficient_data") return "bg-slate-100 text-slate-700";
   return "bg-red-100 text-red-800";
 }
 
@@ -107,9 +132,47 @@ export function buildOfficeSeoKpis(data: SeoInsightsPayload | null): OfficeSeoKp
     pagesTracked: rows.length,
     avgHealth,
     criticalPages: rows.filter((r) => r.health_band === "critical").length,
+    insufficientDataPages: rows.filter((r) => r.health_band === "insufficient_data").length,
     totalBookingStarts: bookingStarts.reduce((s, r) => s + r.booking_starts, 0),
     gscPages: gsc.length,
     avgPosition,
+  };
+}
+
+export function buildOfficeSeoDataGapsSummary(data: SeoInsightsPayload | null): OfficeSeoDataGapsSummary {
+  const rows = buildOfficeSeoPageRows(data).filter((r) => r.dataGaps && r.dataGaps.missing_signals.length > 0);
+  const gapCounts = new Map<string, number>();
+
+  for (const row of rows) {
+    for (const signal of row.dataGaps?.missing_signals ?? []) {
+      let key = signal;
+      if (signal.includes("scroll sessions")) key = "More scroll sessions (25% depth)";
+      else if (signal.includes("CTA click sessions")) key = "More CTA click sessions";
+      else if (signal.startsWith("Raise CTR")) key = "Improve CTR vs position benchmark";
+      else if (signal.startsWith("Sync GSC")) key = "Add GSC metrics for slug";
+      gapCounts.set(key, (gapCounts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const commonGaps = [...gapCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, count]) => ({ label, count }));
+
+  const topPages = rows
+    .slice()
+    .sort((a, b) => (b.dataGaps?.missing_signals.length ?? 0) - (a.dataGaps?.missing_signals.length ?? 0))
+    .slice(0, 8)
+    .map((row) => ({
+      slug: row.slug,
+      label: row.label,
+      missing: row.dataGaps?.missing_signals ?? [],
+    }));
+
+  return {
+    pagesWithGaps: rows.length,
+    commonGaps,
+    topPages,
   };
 }
 
@@ -137,6 +200,7 @@ export function buildOfficeSeoPageRows(data: SeoInsightsPayload | null): OfficeS
         avgPosition:
           g?.avg_position != null && !Number.isNaN(g.avg_position) ? Math.round(g.avg_position * 10) / 10 : null,
         bookingStarts: bookingMap.get(row.slug) ?? 0,
+        dataGaps: row.data_gaps ?? null,
       };
     })
     .sort((a, b) => {

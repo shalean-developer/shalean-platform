@@ -25,9 +25,9 @@ const TRUST_CARDS = [
 
 export function MarketingHomeTrustSection() {
   return (
-    <section className="bg-[#1e4fd4] py-12 md:py-14">
+    <section className="bg-[#1e4fd4] py-10 md:py-14">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <h2 className="mx-auto max-w-3xl text-center text-xl font-bold leading-snug tracking-tight text-white sm:text-2xl">
+        <h2 className="mx-auto max-w-3xl text-center text-lg font-bold leading-snug tracking-tight text-white sm:text-2xl">
           Trusted by homeowners, tenants and Airbnb hosts across Cape Town
         </h2>
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ensureCustomerAccount } from "@/lib/customer/ensureCustomerAccount";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { notifyAdminCustomerQuoteRequest } from "@/lib/salesDocument/notifySalesDocumentAdmin";
 import type {
@@ -110,6 +111,36 @@ export async function createCustomerQuoteRequest(
   if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
 
   const id = String((data as { id: string }).id);
+
+  const customerResult = await ensureCustomerAccount(admin, {
+    fullName: name,
+    phone,
+    email,
+    source: "customer_quote_request",
+  });
+
+  if (customerResult.ok) {
+    const { error: linkErr } = await admin
+      .from("sales_documents")
+      .update({ customer_id: customerResult.userId })
+      .eq("id", id);
+
+    if (linkErr) {
+      await logSystemEvent({
+        level: "warn",
+        source: "sales_document/quote_request",
+        message: "customer_link_failed",
+        context: { documentId: id, customerId: customerResult.userId, error: linkErr.message },
+      });
+    }
+  } else {
+    await logSystemEvent({
+      level: "warn",
+      source: "sales_document/quote_request",
+      message: "customer_create_failed",
+      context: { documentId: id, error: customerResult.error },
+    });
+  }
 
   await logSystemEvent({
     level: "info",

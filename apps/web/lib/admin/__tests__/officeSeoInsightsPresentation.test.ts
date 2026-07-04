@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOfficeSeoDataGapsSummary,
   buildOfficeSeoKpis,
   buildOfficeSeoPageRows,
   formatRecommendationDetail,
@@ -78,6 +79,39 @@ describe("buildOfficeSeoKpis", () => {
     expect(kpis.pagesTracked).toBe(2);
     expect(kpis.avgHealth).toBe(60);
     expect(kpis.criticalPages).toBe(1);
+  });
+});
+
+describe("buildOfficeSeoDataGapsSummary", () => {
+  it("aggregates missing signals across pages", () => {
+    const summary = buildOfficeSeoDataGapsSummary({
+      gsc_import_snapshot: [],
+      optimization: {
+        page_health_table: [
+          {
+            slug: "sea-point-cleaning-services",
+            health_score: 22,
+            health_band: "insufficient_data",
+            data_gaps: {
+              scroll_sessions_at_25: 3,
+              scroll_sessions_needed: 20,
+              scroll_ready: false,
+              cta_sessions: 0,
+              cta_sessions_needed: 10,
+              cta_ready: false,
+              gsc_impressions: 120,
+              ctr_pct: 2.8,
+              ctr_target_pct: 3,
+              avg_position: 21.7,
+              missing_signals: ["Need 17 more scroll sessions (25% depth)"],
+            },
+          },
+        ],
+        recommendations: [],
+      },
+    });
+    expect(summary.pagesWithGaps).toBe(1);
+    expect(summary.commonGaps[0]?.label).toContain("scroll");
   });
 });
 

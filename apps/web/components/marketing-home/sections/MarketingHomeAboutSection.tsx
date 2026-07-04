@@ -5,7 +5,7 @@ export function MarketingHomeAboutSection() {
   return (
     <section id="about" className="scroll-mt-24 bg-white py-14 md:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
 
           {/* Card 1: Since 2022 */}
           <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -31,7 +31,7 @@ export function MarketingHomeAboutSection() {
           </div>
 
           {/* Card 3: Testimonial */}
-          <div className="col-span-2 flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:col-span-1">
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:col-span-2 lg:col-span-1">
             <Quote className="h-8 w-8 text-slate-200" strokeWidth={1} aria-hidden />
             <blockquote className="mt-3 text-sm leading-relaxed text-slate-700">
               Shalean Cleaning transformed my home! The team was so friendly and left every corner spotless. Highly recommended.

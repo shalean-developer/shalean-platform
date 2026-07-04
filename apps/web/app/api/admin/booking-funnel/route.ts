@@ -356,9 +356,9 @@ export async function GET(request: Request) {
     const sessionId = correlationSessionId(event);
     if (sessionId && event.event_type === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED) startedQuote.add(sessionId);
   }
-  const funnelStart = Math.max(startedQuote.size, 1);
+  const funnelStart = startedQuote.size;
   const paidOrCheckout = reachedPayment.size;
-  const conversionRatePct = Math.round((paidOrCheckout / funnelStart) * 1000) / 10;
+  const conversionRatePct = funnelStart > 0 ? Math.round((paidOrCheckout / funnelStart) * 1000) / 10 : 0;
 
   const dropOffByStep: { step: string; viewed: number; dropped: number; dropOffPct: number }[] = [];
   for (let i = 0; i < FUNNEL_ORDER.length - 1; i++) {
@@ -516,11 +516,8 @@ export async function GET(request: Request) {
   const paystackOpened = paystackOpenedSessions.size;
   const paystackCompleted = [...paystackOpenedSessions].filter((sid) => completedSessions.has(sid)).length;
   const analyticsCompletedSessions = completedSessions.size;
-  const completedPaymentSessions = Math.max(
-    analyticsCompletedSessions,
-    paystackCompleted,
-    paidBookingsInWindow.length,
-  );
+  /** Session-correlated completions only — paid booking volume is exposed separately as `paidBookingsCount`. */
+  const completedPaymentSessions = Math.max(analyticsCompletedSessions, paystackCompleted);
 
   type DemandBucket = {
     label: string;

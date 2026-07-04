@@ -11,6 +11,7 @@ describe("normalizePageHealthBand", () => {
   it("defaults unknown values to strong", () => {
     expect(normalizePageHealthBand("")).toBe("strong");
     expect(normalizePageHealthBand("weird")).toBe("strong");
+    expect(normalizePageHealthBand("insufficient_data")).toBe("insufficient_data");
   });
 });
 

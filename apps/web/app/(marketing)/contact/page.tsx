@@ -4,6 +4,7 @@ import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import {
@@ -93,7 +94,7 @@ export default function ContactPage() {
     <div className="bg-white text-slate-900">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: contactJsonLdHtml }} />
       <MarketingHomeHeader bookingHref={bookingHref} />
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
+      <main className={`mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16 ${marketingWhatsAppFloatMainPadding}`}>
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Contact</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           Contact Shalean Cleaning Services in Cape Town

@@ -43,11 +43,19 @@ export function AboutReviewsRotator({ reviews, intervalMs = 7000 }: Props) {
               aria-selected={idx === i}
               aria-label={`Show review ${idx + 1}`}
               className={cn(
-                "size-2 rounded-full transition",
-                idx === i ? "bg-emerald-600" : "bg-zinc-300 hover:bg-zinc-400",
+                "flex h-11 w-11 items-center justify-center rounded-full transition",
+                idx === i ? "bg-emerald-600" : "bg-transparent",
               )}
               onClick={() => setI(idx)}
-            />
+            >
+              <span
+                className={cn(
+                  "size-2.5 rounded-full transition",
+                  idx === i ? "bg-white" : "bg-zinc-300 hover:bg-zinc-400",
+                )}
+                aria-hidden
+              />
+            </button>
           ))}
         </div>
       ) : null}

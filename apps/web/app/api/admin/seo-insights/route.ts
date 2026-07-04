@@ -143,6 +143,8 @@ export async function GET(request: Request) {
     slug: row.slug,
     health_score: row.score,
     health_band: row.band,
+    score_components: row.components,
+    data_gaps: row.data_gaps,
     winning_title_variant_db: variantMap.get(row.slug)?.variant ?? null,
     suggested_title_variant_gsc: row.winning_title_variant,
     best_cta_key: row.best_cta_key,

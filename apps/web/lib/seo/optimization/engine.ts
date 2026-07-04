@@ -7,7 +7,7 @@ import {
   hasManualLocationMetaTitle,
 } from "@/lib/seo/location-seo-feedback";
 import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
-import type { AggregatedSeoEvents } from "@/lib/seo/optimization/aggregate-seo-events";
+import type { AggregatedSeoEvents, ScrollFunnelRow } from "@/lib/seo/optimization/aggregate-seo-events";
 
 /** Minimum impressions per variant row before it qualifies for a title winner test. */
 export const TITLE_VARIANT_MIN_IMPRESSIONS = 100;
@@ -31,12 +31,34 @@ export const CTA_GLOBAL_MIN_REL_CONV_LIFT = 0.15;
 /** Minimum sessions for per-slug “best CTA” attribution. */
 export const CTA_SLUG_MIN_SESSIONS = 12;
 
-export type PageHealthBand = "strong" | "needs_improvement" | "critical";
+export type PageHealthBand = "strong" | "needs_improvement" | "critical" | "insufficient_data";
+
+export type PageHealthDataGaps = {
+  scroll_sessions_at_25: number;
+  scroll_sessions_needed: number;
+  scroll_ready: boolean;
+  cta_sessions: number;
+  cta_sessions_needed: number;
+  cta_ready: boolean;
+  gsc_impressions: number | null;
+  ctr_pct: number | null;
+  ctr_target_pct: number | null;
+  avg_position: number | null;
+  missing_signals: string[];
+};
+
+export type PageHealthComponents = {
+  ctr: number;
+  scroll: number;
+  cta: number;
+};
 
 export type PageHealthRow = {
   slug: string;
   score: number;
   band: PageHealthBand;
+  components: PageHealthComponents;
+  data_gaps: PageHealthDataGaps;
   winning_title_variant: LocationTitleVariantId | null;
   best_cta_key: string | null;
 };
@@ -154,9 +176,27 @@ function heroSwapFromAggregates(aggregated: AggregatedSeoEvents): HubUiAutoPatch
   return patches;
 }
 
+/** Expected organic CTR (0–1) for a mean Search Console position. */
+export function expectedCtrForPosition(position: number): number {
+  if (position <= 3) return 0.12;
+  if (position <= 10) return 0.055;
+  if (position <= 20) return 0.03;
+  if (position <= 40) return 0.018;
+  return 0.01;
+}
+
+export function expectedCtrPctForPosition(position: number): number {
+  return Math.round(expectedCtrForPosition(position) * 10_000) / 100;
+}
+
 function gscCtrScore(metrics: LocationGscMetricSnapshot | null): number {
   if (!metrics || typeof metrics.ctr !== "number") return 0;
-  return Math.min(40, (metrics.ctr / 0.12) * 40);
+  const position =
+    typeof metrics.avg_position === "number" && metrics.avg_position > 0 ? metrics.avg_position : 25;
+  const expected = expectedCtrForPosition(position);
+  if (expected <= 0) return 0;
+  const ratio = metrics.ctr / expected;
+  return Math.min(40, Math.round(ratio * 30 * 10) / 10);
 }
 
 function scrollCompositeScore(pct50: number, pct75: number, pct100: number): number {
@@ -165,11 +205,137 @@ function scrollCompositeScore(pct50: number, pct75: number, pct100: number): num
   return Math.min(35, s);
 }
 
-function suburbBookingScore(suburbName: string | undefined, suburbRollup: AggregatedSeoEvents["suburbCtaBooking"]): number {
+const CTA_SUBURB_MIN_SESSIONS = 10;
+
+function suburbCtaSessions(
+  suburbName: string | undefined,
+  suburbRollup: AggregatedSeoEvents["suburbCtaBooking"],
+): number {
   if (!suburbName) return 0;
+  return suburbRollup.find((r) => r.suburb === suburbName)?.sessions_with_cta ?? 0;
+}
+
+function suburbBookingScore(suburbName: string | undefined, suburbRollup: AggregatedSeoEvents["suburbCtaBooking"]): number {
+  const sessions = suburbCtaSessions(suburbName, suburbRollup);
+  if (sessions < CTA_SUBURB_MIN_SESSIONS) return 0;
   const row = suburbRollup.find((r) => r.suburb === suburbName);
-  if (!row || row.sessions_with_cta < 10) return 0;
+  if (!row) return 0;
   return Math.min(25, row.conversion_pct * 2.5);
+}
+
+function ctrPctFromGsc(metrics: LocationGscMetricSnapshot | null): number | null {
+  if (!metrics || typeof metrics.ctr !== "number") return null;
+  return Math.round(metrics.ctr * 10_000) / 100;
+}
+
+function buildPageHealthDataGaps(
+  gsc: LocationGscMetricSnapshot | null,
+  scroll: ScrollFunnelRow | undefined,
+  ctaSessions: number,
+): PageHealthDataGaps {
+  const scrollSessions = scroll?.sessions_at_25 ?? 0;
+  const scrollReady = scrollSessions >= SCROLL_MIN_SESSIONS_BASELINE;
+  const ctaReady = ctaSessions >= CTA_SUBURB_MIN_SESSIONS;
+  const position =
+    gsc && typeof gsc.avg_position === "number" && gsc.avg_position > 0 ? gsc.avg_position : null;
+  const ctrPct = ctrPctFromGsc(gsc);
+  const ctrTargetPct = position != null ? expectedCtrPctForPosition(position) : null;
+  const missing: string[] = [];
+
+  if (!gsc?.impressions) missing.push("Sync GSC or add search metrics for this slug");
+  if (!scrollReady) {
+    missing.push(
+      `Need ${Math.max(0, SCROLL_MIN_SESSIONS_BASELINE - scrollSessions)} more scroll sessions (25% depth)`,
+    );
+  }
+  if (!ctaReady) {
+    missing.push(`Need ${Math.max(0, CTA_SUBURB_MIN_SESSIONS - ctaSessions)} more CTA click sessions`);
+  }
+  if (ctrPct != null && ctrTargetPct != null && ctrPct < ctrTargetPct) {
+    missing.push(`Raise CTR toward ${ctrTargetPct}% for position #${position?.toFixed(1) ?? "?"}`);
+  }
+
+  return {
+    scroll_sessions_at_25: scrollSessions,
+    scroll_sessions_needed: SCROLL_MIN_SESSIONS_BASELINE,
+    scroll_ready: scrollReady,
+    cta_sessions: ctaSessions,
+    cta_sessions_needed: CTA_SUBURB_MIN_SESSIONS,
+    cta_ready: ctaReady,
+    gsc_impressions: typeof gsc?.impressions === "number" ? gsc.impressions : null,
+    ctr_pct: ctrPct,
+    ctr_target_pct: ctrTargetPct,
+    avg_position: position,
+    missing_signals: missing,
+  };
+}
+
+function resolveHealthBand(
+  score: number,
+  ctx: {
+    hasGsc: boolean;
+    scrollSessions: number;
+    ctaSessions: number;
+    ctrPart: number;
+  },
+): PageHealthBand {
+  const raw = bandFromScore(score);
+  const hasEngagementBaseline =
+    ctx.scrollSessions >= SCROLL_MIN_SESSIONS_BASELINE || ctx.ctaSessions >= CTA_SUBURB_MIN_SESSIONS;
+
+  if (raw !== "critical") return raw;
+
+  if (!ctx.hasGsc && !hasEngagementBaseline) return "insufficient_data";
+  if (ctx.hasGsc && !hasEngagementBaseline && ctx.ctrPart >= 20) return "needs_improvement";
+  if (ctx.hasGsc && !hasEngagementBaseline && ctx.ctrPart >= 12) return "insufficient_data";
+  return "critical";
+}
+
+function computeSlugHealth(
+  slug: string,
+  aggregated: AggregatedSeoEvents,
+  scrollMap: Map<string, ScrollFunnelRow>,
+  suburbBySlug: Map<string, string>,
+  titleAutoCandidates: TitleAutoCandidate[],
+  slugBestCta: Map<string, { key: string; conversion_pct: number; sessions: number }>,
+): PageHealthRow {
+  const gsc = getLocationGscMetrics(slug);
+  const scroll = scrollMap.get(slug);
+  const suburb = suburbBySlug.get(slug);
+  const ctaSessions = suburbCtaSessions(suburb, aggregated.suburbCtaBooking);
+  const ctrPart = gscCtrScore(gsc);
+  const scrollPart =
+    scroll && scroll.sessions_at_25 >= SCROLL_MIN_SESSIONS_BASELINE
+      ? scrollCompositeScore(scroll.pct_to_50, scroll.pct_to_75, scroll.pct_to_100)
+      : 0;
+  const ctaPart = suburbBookingScore(suburb, aggregated.suburbCtaBooking);
+
+  let score = Math.round(ctrPart + scrollPart + ctaPart);
+  if (!gsc && scroll && scroll.sessions_at_25 < SCROLL_MIN_SESSIONS_BASELINE) {
+    score = Math.min(score, 65);
+  }
+
+  const band = resolveHealthBand(score, {
+    hasGsc: Boolean(gsc?.impressions),
+    scrollSessions: scroll?.sessions_at_25 ?? 0,
+    ctaSessions,
+    ctrPart,
+  });
+  const titleCand = titleAutoCandidates.find((t) => t.slug === slug);
+
+  return {
+    slug,
+    score,
+    band,
+    components: {
+      ctr: Math.round(ctrPart * 10) / 10,
+      scroll: Math.round(scrollPart * 10) / 10,
+      cta: Math.round(ctaPart * 10) / 10,
+    },
+    data_gaps: buildPageHealthDataGaps(gsc, scroll, ctaSessions),
+    winning_title_variant: titleCand?.variant ?? null,
+    best_cta_key: slugBestCta.get(slug)?.key ?? null,
+  };
 }
 
 export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOptimizationEngineResult {
@@ -283,23 +449,39 @@ export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOp
       });
     }
 
-    const gsc = getLocationGscMetrics(slug);
-    const scroll = scrollMap.get(slug);
-    const suburb = suburbBySlug.get(slug);
-    const ctrPart = gscCtrScore(gsc);
-    const scrollPart =
-      scroll && scroll.sessions_at_25 >= SCROLL_MIN_SESSIONS_BASELINE
-        ? scrollCompositeScore(scroll.pct_to_50, scroll.pct_to_75, scroll.pct_to_100)
-        : 0;
-    const ctaPart = suburbBookingScore(suburb, aggregated.suburbCtaBooking);
+    const health = computeSlugHealth(
+      slug,
+      aggregated,
+      scrollMap,
+      suburbBySlug,
+      titleAutoCandidates,
+      slugBestCta,
+    );
+    const { score, band, components } = health;
+    const ctrPart = components.ctr;
+    const scrollPart = components.scroll;
+    const ctaPart = components.cta;
 
-    let score = Math.round(ctrPart + scrollPart + ctaPart);
-    if (!gsc && scroll && scroll.sessions_at_25 < SCROLL_MIN_SESSIONS_BASELINE) {
-      score = Math.min(score, 65);
+    if (band === "insufficient_data") {
+      recommendations.push({
+        slug,
+        kind: "data_gaps",
+        severity: "info",
+        title: "Need more on-site data before full health scoring",
+        detail: {
+          score,
+          band,
+          missing_signals: health.data_gaps.missing_signals,
+          scroll_sessions_at_25: health.data_gaps.scroll_sessions_at_25,
+          scroll_sessions_needed: health.data_gaps.scroll_sessions_needed,
+          cta_sessions: health.data_gaps.cta_sessions,
+          cta_sessions_needed: health.data_gaps.cta_sessions_needed,
+        },
+        confidence: 0.45,
+      });
     }
 
-    const band = bandFromScore(score);
-    if (band !== "strong") {
+    if (band !== "strong" && band !== "insufficient_data") {
       recommendations.push({
         slug,
         kind: "page_health",
@@ -308,14 +490,29 @@ export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOp
         detail: {
           score,
           band,
-          ctr_component: Math.round(ctrPart * 10) / 10,
-          scroll_component: Math.round(scrollPart * 10) / 10,
-          cta_component: Math.round(ctaPart * 10) / 10,
+          ctr_component: ctrPart,
+          scroll_component: scrollPart,
+          cta_component: ctaPart,
         },
         confidence: Math.min(
           1,
-          (scroll?.sessions_at_25 ?? 0) / 100 + (gsc?.impressions ?? 0) / 1000,
+          (scrollMap.get(slug)?.sessions_at_25 ?? 0) / 100 + (getLocationGscMetrics(slug)?.impressions ?? 0) / 1000,
         ),
+      });
+    } else if (band === "insufficient_data") {
+      recommendations.push({
+        slug,
+        kind: "page_health",
+        severity: "info",
+        title: `Page health · gathering data (${score})`,
+        detail: {
+          score,
+          band,
+          ctr_component: ctrPart,
+          scroll_component: scrollPart,
+          cta_component: ctaPart,
+        },
+        confidence: 0.4,
       });
     }
     if (band === "critical") {
@@ -330,29 +527,9 @@ export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOp
     }
   }
 
-  const pageHealth: PageHealthRow[] = [...slugSet].map((slug) => {
-    const gsc = getLocationGscMetrics(slug);
-    const scroll = scrollMap.get(slug);
-    const suburb = suburbBySlug.get(slug);
-    const ctrPart = gscCtrScore(gsc);
-    const scrollPart =
-      scroll && scroll.sessions_at_25 >= SCROLL_MIN_SESSIONS_BASELINE
-        ? scrollCompositeScore(scroll.pct_to_50, scroll.pct_to_75, scroll.pct_to_100)
-        : 0;
-    const ctaPart = suburbBookingScore(suburb, aggregated.suburbCtaBooking);
-    let score = Math.round(ctrPart + scrollPart + ctaPart);
-    if (!gsc && scroll && scroll.sessions_at_25 < SCROLL_MIN_SESSIONS_BASELINE) {
-      score = Math.min(score, 65);
-    }
-    const titleCand = titleAutoCandidates.find((t) => t.slug === slug);
-    return {
-      slug,
-      score,
-      band: bandFromScore(score),
-      winning_title_variant: titleCand?.variant ?? null,
-      best_cta_key: slugBestCta.get(slug)?.key ?? null,
-    };
-  });
+  const pageHealth: PageHealthRow[] = [...slugSet].map((slug) =>
+    computeSlugHealth(slug, aggregated, scrollMap, suburbBySlug, titleAutoCandidates, slugBestCta),
+  );
   pageHealth.sort((a, b) => a.score - b.score);
 
   return { titleAutoCandidates, hubUiPatches, recommendations, pageHealth };

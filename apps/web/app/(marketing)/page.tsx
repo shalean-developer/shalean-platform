@@ -8,6 +8,7 @@ import { MarketingHomeStickyCtaClient } from "@/components/marketing-home/Market
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { marketingHomeMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import {
   HOME_CANONICAL,
   HOME_OPEN_GRAPH,
@@ -35,7 +36,7 @@ export default function MarketingHomePage() {
   return (
     <div className="bg-white text-slate-900">
       <MarketingHomeHeader bookingHref={bookingHref} />
-      <main>
+      <main className={marketingHomeMainPadding}>
         <MarketingHomeHeroSection />
         <Suspense fallback={<MarketingHomeDbSectionsFallback />}>
           <MarketingHomeDbSections />

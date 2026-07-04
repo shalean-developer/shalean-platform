@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import {
+  buildOfficeSeoDataGapsSummary,
   buildOfficeSeoKpis,
   buildOfficeSeoPageRows,
   formatRecommendationDetail,
@@ -48,6 +49,7 @@ export default function SeoInsightsPage() {
 
   const pageRows = useMemo(() => buildOfficeSeoPageRows(data), [data]);
   const kpis = useMemo(() => buildOfficeSeoKpis(data), [data]);
+  const gapsSummary = useMemo(() => buildOfficeSeoDataGapsSummary(data), [data]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -150,11 +152,17 @@ export default function SeoInsightsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[
           { label: "Pages tracked", value: kpis.pagesTracked, icon: Activity, color: "bg-blue-50 text-blue-600" },
           { label: "Avg health score", value: kpis.avgHealth ?? "—", icon: Target, color: "bg-violet-50 text-violet-600" },
           { label: "Critical pages", value: kpis.criticalPages, icon: AlertTriangle, color: "bg-red-50 text-red-600" },
+          {
+            label: "Gathering data",
+            value: kpis.insufficientDataPages,
+            icon: Loader2,
+            color: "bg-slate-50 text-slate-600",
+          },
           {
             label: hasGsc ? "Avg GSC position" : "Booking starts",
             value: hasGsc ? (kpis.avgPosition ?? "—") : kpis.totalBookingStarts,
@@ -179,6 +187,75 @@ export default function SeoInsightsPage() {
           );
         })}
       </div>
+
+      {!loading && gapsSummary.pagesWithGaps > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800">Data gaps — what each page still needs</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Scores stay in “gathering data” until scroll depth (≥20 sessions at 25%) or CTA clicks (≥10 sessions) accumulate.
+            CTR is compared to position-adjusted benchmarks, not a flat 12% target.
+          </p>
+          {gapsSummary.commonGaps.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {gapsSummary.commonGaps.map((gap) => (
+                <span
+                  key={gap.label}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                >
+                  {gap.label} · {gap.count} page{gap.count === 1 ? "" : "s"}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {gapsSummary.topPages.length > 0 ? (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    <th className="pb-2 pr-4">Page</th>
+                    <th className="pb-2 pr-4">Scroll</th>
+                    <th className="pb-2 pr-4">CTA sessions</th>
+                    <th className="pb-2 pr-4">CTR target</th>
+                    <th className="pb-2">Still needed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {gapsSummary.topPages.map((page) => {
+                    const row = pageRows.find((r) => r.slug === page.slug);
+                    const gaps = row?.dataGaps;
+                    return (
+                      <tr key={page.slug}>
+                        <td className="py-2.5 pr-4">
+                          <p className="font-medium text-slate-800">{page.label}</p>
+                          <p className="font-mono text-[10px] text-slate-400">{page.slug}</p>
+                        </td>
+                        <td className="py-2.5 pr-4 tabular-nums text-slate-600">
+                          {gaps ? `${gaps.scroll_sessions_at_25}/${gaps.scroll_sessions_needed}` : "—"}
+                        </td>
+                        <td className="py-2.5 pr-4 tabular-nums text-slate-600">
+                          {gaps ? `${gaps.cta_sessions}/${gaps.cta_sessions_needed}` : "—"}
+                        </td>
+                        <td className="py-2.5 pr-4 tabular-nums text-slate-600">
+                          {gaps?.ctr_pct != null && gaps.ctr_target_pct != null
+                            ? `${gaps.ctr_pct}% → ${gaps.ctr_target_pct}%`
+                            : "—"}
+                        </td>
+                        <td className="py-2.5 text-xs text-slate-600">
+                          <ul className="list-inside list-disc space-y-0.5">
+                            {page.missing.slice(0, 3).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-slate-100 bg-white shadow-sm lg:col-span-2">

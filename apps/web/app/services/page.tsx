@@ -32,6 +32,7 @@ import {
 } from "@/lib/seo/homePageMeta";
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { marketingStickyCtaMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import {
   AppWindow,
   Building2,
@@ -187,7 +188,7 @@ export default function ServicesHubPage() {
     <MarketingLayout>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
-      <main className="bg-white pb-28 text-zinc-900 md:pb-0">
+      <main className={`bg-white text-zinc-900 ${marketingStickyCtaMainPadding}`}>
         <GrowthTracking
           event={ANALYTICS_EVENTS.PAGE_VIEW}
           payload={{

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { getBlogPostsByTagSlug } from "@/lib/blog/get-taxonomy-posts";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
@@ -59,7 +60,7 @@ export default async function BlogTagPage({ params }: Props) {
 
   return (
     <MarketingLayout>
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <main className={`mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8 ${marketingWhatsAppFloatMainPadding}`}>
         <nav className="text-sm text-zinc-500" aria-label="Breadcrumb">
           <SafeInternalLink href="/" className={cn(linkInNavClassName, "text-sm")}>
             Home

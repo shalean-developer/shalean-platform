@@ -5,6 +5,7 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import {
@@ -67,7 +68,7 @@ export default function AboutPage() {
         payload={{ page_type: "about", content_group: "marketing_about", primary_kw: "Shalean cleaning Cape Town" }}
       />
       <MarketingHomeHeader bookingHref={bookingHref} />
-      <main>
+      <main className={marketingWhatsAppFloatMainPadding}>
         <AboutPageView />
       </main>
       <FooterSection />

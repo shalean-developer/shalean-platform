@@ -14,6 +14,7 @@ import type { RecurringRowForInsert } from "@/lib/recurring/insertRecurringOccur
 import { cloneSnapshotTemplate } from "@/lib/recurring/insertRecurringOccurrenceBooking";
 import {
   findActiveCustomerSlotOccupant,
+  recurringBookingCustomerOwnershipPatch,
   recurringPlanOccurrenceRowExists,
 } from "@/lib/recurring/recurringBookingInsertGuards";
 import {
@@ -102,12 +103,17 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     operationalStatus: "pending",
   });
 
+  const customerOwnershipPatch = await recurringBookingCustomerOwnershipPatch(
+    admin,
+    params.recurring.customer_id,
+  );
+
   const baseRow = {
     paystack_reference: paystackReference,
     customer_email: email,
     customer_name: params.customerName,
     customer_phone: params.customerPhone,
-    user_id: params.recurring.customer_id,
+    ...customerOwnershipPatch,
     amount_paid_cents: 0,
     currency: "ZAR",
     booking_snapshot: snapshot,

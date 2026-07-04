@@ -13,8 +13,30 @@ import "server-only";
  * `insertRecurringOccurrenceBooking` / `insertMonthlyRecurringOccurrenceBooking` via `slot_duplicate_exempt` retry.
  */
 
+import {
+  bookingCustomerOwnershipPatch,
+  type BookingCustomerOwnershipColumn,
+} from "@/lib/booking/bookingCustomerIdentity";
 import { terminalStatusesNotInDuplicateProbe } from "@/lib/booking/bookingTerminalStatuses";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+let cachedBookingOwnershipColumn: BookingCustomerOwnershipColumn | null = null;
+
+async function bookingOwnershipColumn(admin: SupabaseClient): Promise<BookingCustomerOwnershipColumn> {
+  if (cachedBookingOwnershipColumn) return cachedBookingOwnershipColumn;
+  cachedBookingOwnershipColumn = await resolveBookingOwnershipColumn(admin);
+  return cachedBookingOwnershipColumn;
+}
+
+/** Insert patch for the active bookings ownership column (`customer_id` in production). */
+export async function recurringBookingCustomerOwnershipPatch(
+  admin: SupabaseClient,
+  customerAuthUserId: string,
+): Promise<Partial<Record<BookingCustomerOwnershipColumn, string>>> {
+  const column = await bookingOwnershipColumn(admin);
+  return bookingCustomerOwnershipPatch(customerAuthUserId, column);
+}
 
 /** DB unique `bookings_recurring_service_date_uidx` — one row per plan + calendar date. */
 export async function recurringPlanOccurrenceRowExists(
@@ -39,10 +61,11 @@ export async function findActiveCustomerSlotOccupant(
   admin: SupabaseClient,
   p: { userId: string; dateYmd: string; time: string | null | undefined; serviceSlug: string },
 ): Promise<{ id: string; recurring_id: string | null } | null> {
+  const ownershipColumn = await bookingOwnershipColumn(admin);
   let q = admin
     .from("bookings")
     .select("id, recurring_id")
-    .eq("user_id", p.userId)
+    .eq(ownershipColumn, p.userId)
     .eq("date", p.dateYmd)
     .eq("service_slug", p.serviceSlug)
     .not("status", "in", terminalStatusesNotInDuplicateProbe());
