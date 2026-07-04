@@ -6,6 +6,10 @@ import {
   SalesDocumentCatalogPicker,
   type CatalogLineInput,
 } from "@/components/admin/sales-documents/SalesDocumentCatalogPicker";
+import {
+  salesDocumentIsEditableWithoutPayment,
+  type SalesDocumentType,
+} from "@/lib/salesDocument/types";
 
 type LineRow = { description: string; quantity: number; unit_price_cents: number };
 
@@ -15,16 +19,24 @@ function formatZar(cents: number) {
 
 export function SalesDocumentQuoteEditor({
   documentId,
+  documentType,
   status,
+  amountPaidCents,
   initialLines,
   onSaved,
 }: {
   documentId: string;
+  documentType: SalesDocumentType;
   status: string;
+  amountPaidCents: number;
   initialLines: LineRow[];
   onSaved: () => void;
 }) {
-  const editable = status === "requested" || status === "draft";
+  const editable = salesDocumentIsEditableWithoutPayment({
+    document_type: documentType,
+    status,
+    amount_paid_cents: amountPaidCents,
+  });
   const [lines, setLines] = useState<LineRow[]>(initialLines);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

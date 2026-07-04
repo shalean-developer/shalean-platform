@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   computeSalesDocumentTotals,
   parseSalesDocumentLineItems,
+  salesDocumentIsEditableWithoutPayment,
   type SalesDocumentLineItem,
   type SalesDocumentType,
 } from "@/lib/salesDocument/types";
@@ -83,18 +84,28 @@ export async function updateSalesDocumentDraft(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: existing, error: loadErr } = await admin
     .from("sales_documents")
-    .select("id, status, document_type")
+    .select("id, status, document_type, amount_paid_cents")
     .eq("id", documentId)
     .maybeSingle();
 
   if (loadErr) return { ok: false, error: loadErr.message };
   if (!existing) return { ok: false, error: "document_not_found" };
-  const currentStatus = String((existing as { status: string }).status);
-  if (currentStatus !== "draft" && currentStatus !== "requested") {
+
+  const row = existing as {
+    status: string;
+    document_type: SalesDocumentType;
+    amount_paid_cents: number | null;
+  };
+  const currentStatus = String(row.status);
+  if (
+    !salesDocumentIsEditableWithoutPayment({
+      document_type: row.document_type,
+      status: currentStatus,
+      amount_paid_cents: row.amount_paid_cents ?? 0,
+    })
+  ) {
     return { ok: false, error: "not_editable" };
   }
-
-  const row = existing as { document_type: SalesDocumentType };
   const updates: Record<string, unknown> = {};
 
   if (patch.customer_name) updates.customer_name = patch.customer_name.trim();
@@ -113,6 +124,10 @@ export async function updateSalesDocumentDraft(
     updates.total_cents = totals.total_cents;
     if (row.document_type === "invoice") {
       updates.balance_cents = totals.total_cents;
+      if (currentStatus !== "draft" && currentStatus !== "requested") {
+        updates.payment_link = null;
+        updates.payment_link_expires_at = null;
+      }
     }
     if (currentStatus === "requested" && totals.total_cents > 0) {
       updates.status = "draft";

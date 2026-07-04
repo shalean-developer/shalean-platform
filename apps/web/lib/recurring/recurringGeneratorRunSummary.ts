@@ -68,11 +68,12 @@ export function parseRecurringGeneratorRunMessage(
     return {
       scanned: typeof o.scanned === "number" ? o.scanned : undefined,
       generated: typeof o.generated === "number" ? o.generated : undefined,
-      skipped_duplicate: legacySkipped
-        ? o.skipped
-        : typeof o.skipped_duplicate === "number"
-          ? o.skipped_duplicate
-          : undefined,
+      skipped_duplicate:
+        legacySkipped && typeof o.skipped === "number"
+          ? o.skipped
+          : typeof o.skipped_duplicate === "number"
+            ? o.skipped_duplicate
+            : undefined,
       failed: typeof o.failed === "number" ? o.failed : legacySkipped ? 0 : undefined,
       skipped_plans: typeof o.skipped_plans === "number" ? o.skipped_plans : undefined,
       today: typeof o.today === "string" ? o.today : undefined,

@@ -10,6 +10,7 @@ import {
   todayYmdJhb,
 } from "@/lib/zoho/zohoBooksService";
 import {
+  salesDocumentIsEditableWithoutPayment,
   salesDocumentLineItemsToZoho,
   type SalesDocumentLineItem,
   type SalesDocumentRow,
@@ -49,6 +50,11 @@ export async function syncSalesDocumentToZoho(
   const dueDate = ymdOrToday(row.due_date);
   const payNote = opts?.paymentUrl ? ` Pay via: ${opts.paymentUrl}` : "";
   const notes = `${row.notes ?? ""}${payNote}\nShalean sales document ${row.id}`.trim();
+  const editableWithoutPayment = salesDocumentIsEditableWithoutPayment({
+    document_type: row.document_type,
+    status: row.status,
+    amount_paid_cents: row.amount_paid_cents,
+  });
 
   const contact = {
     customerEmail: row.customer_email,
@@ -60,7 +66,7 @@ export async function syncSalesDocumentToZoho(
     const linked = String(row.zoho_estimate_id ?? "").trim();
     const expiryDate = row.due_date ? ymdOrToday(row.due_date) : undefined;
 
-    if (linked && row.status === "draft") {
+    if (linked && editableWithoutPayment) {
       const upd = await updateZohoEstimate({
         zohoEstimateId: linked,
         ...contact,
@@ -95,11 +101,7 @@ export async function syncSalesDocumentToZoho(
   }
 
   const linkedInv = String(row.zoho_invoice_id ?? "").trim();
-  if (linkedInv && row.status !== "draft") {
-    return { ok: true };
-  }
-
-  if (linkedInv && row.status === "draft") {
+  if (linkedInv && editableWithoutPayment) {
     const upd = await updateZohoInvoice({
       zohoInvoiceId: linkedInv,
       ...contact,
@@ -112,6 +114,8 @@ export async function syncSalesDocumentToZoho(
     if (!upd.ok) return { ok: false, error: upd.error };
     return { ok: true };
   }
+
+  if (linkedInv) return { ok: true };
 
   const created = await createZohoInvoice({
     referenceId: row.id,

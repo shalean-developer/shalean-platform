@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { trustDocPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { SalesDocumentQuoteRequestDetails } from "@/lib/salesDocument/types";
+import { salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
 
 type DocDetail = {
   id: string;
@@ -26,6 +27,7 @@ type DocDetail = {
   line_items: Array<{ description: string; quantity: number; unit_price_cents: number }>;
   total_cents: number;
   balance_cents: number;
+  amount_paid_cents: number;
   due_date: string | null;
   notes: string | null;
   request_details: SalesDocumentQuoteRequestDetails | null;
@@ -209,6 +211,11 @@ export default function OfficeSalesDocumentDetailPage() {
     doc.status !== "void" &&
     doc.status !== "requested" &&
     doc.total_cents > 0;
+  const canEditLines = salesDocumentIsEditableWithoutPayment({
+    document_type: doc.document_type === "invoice" ? "invoice" : "quote",
+    status: doc.status,
+    amount_paid_cents: doc.amount_paid_cents ?? 0,
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -327,11 +334,17 @@ export default function OfficeSalesDocumentDetailPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-xs font-semibold uppercase text-slate-500">
-          {doc.status === "requested" ? "Add pricing & line items" : "Line items"}
+          {doc.status === "requested"
+            ? "Add pricing & line items"
+            : canEditLines
+              ? "Edit line items"
+              : "Line items"}
         </h2>
         <SalesDocumentQuoteEditor
           documentId={doc.id}
+          documentType={doc.document_type === "invoice" ? "invoice" : "quote"}
           status={doc.status}
+          amountPaidCents={doc.amount_paid_cents ?? 0}
           initialLines={doc.line_items}
           onSaved={() => void load()}
         />

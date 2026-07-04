@@ -74,6 +74,21 @@ export type SalesDocumentRow = {
   updated_at: string;
 };
 
+const NON_EDITABLE_STATUSES = new Set(["paid", "refunded", "void", "expired"]);
+
+/** Quotes and invoices may be edited until a payment is recorded. */
+export function salesDocumentIsEditableWithoutPayment(params: {
+  document_type: SalesDocumentType;
+  status: string;
+  amount_paid_cents: number;
+}): boolean {
+  const st = String(params.status ?? "").toLowerCase();
+  if (NON_EDITABLE_STATUSES.has(st)) return false;
+  if (Math.max(0, Math.round(Number(params.amount_paid_cents ?? 0))) > 0) return false;
+  if (params.document_type === "quote" && st === "accepted") return false;
+  return st === "requested" || st === "draft" || st === "sent" || st === "accepted";
+}
+
 export function parseSalesDocumentLineItems(raw: unknown): SalesDocumentLineItem[] {
   if (!Array.isArray(raw)) return [];
   return raw
