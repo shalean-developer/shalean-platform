@@ -1026,16 +1026,32 @@ export default function BookingDetailsView({
           return;
         }
 
-        const [res, anRes] = await Promise.all([
-          fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: ac.signal,
-          }),
-          fetch("/api/admin/analytics", { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal }),
-        ]);
+        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ac.signal,
+        });
 
-        const [json, anJson] = await Promise.all([
-          res.json() as Promise<{
+        void fetch("/api/admin/analytics", { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal })
+          .then(async (anRes) => {
+            if (ac.signal.aborted) return;
+            const anJson = (await anRes.json().catch(() => ({}))) as { experimentBestUxVariant?: string | null };
+            if (!anRes.ok) {
+              setFleetBestUxVariant(null);
+              return;
+            }
+            const raw = anJson.experimentBestUxVariant;
+            if (raw === "unknown") setFleetBestUxVariant("unknown");
+            else if (typeof raw === "string" && (CLEANER_UX_VARIANTS as readonly string[]).includes(raw)) {
+              setFleetBestUxVariant(raw as CleanerUxVariant);
+            } else {
+              setFleetBestUxVariant(null);
+            }
+          })
+          .catch(() => {
+            if (!ac.signal.aborted) setFleetBestUxVariant(null);
+          });
+
+        const json = (await res.json()) as {
             booking?: BookingDetails;
             dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
             cleaner?: Cleaner | null;
@@ -1051,23 +1067,10 @@ export default function BookingDetailsView({
             customer_contact_name?: string | null;
             earnings_display?: AdminEarningsDisplay | null;
             error?: string;
-          }>,
-          anRes.json().catch(() => ({})) as Promise<{ experimentBestUxVariant?: string | null }>,
-        ]);
+          };
 
         if (ac.signal.aborted) return;
 
-        if (anRes.ok) {
-          const raw = anJson.experimentBestUxVariant;
-          if (raw === "unknown") setFleetBestUxVariant("unknown");
-          else if (typeof raw === "string" && (CLEANER_UX_VARIANTS as readonly string[]).includes(raw)) {
-            setFleetBestUxVariant(raw as CleanerUxVariant);
-          } else {
-            setFleetBestUxVariant(null);
-          }
-        } else {
-          setFleetBestUxVariant(null);
-        }
         if (!res.ok) {
           setError(json.error ?? "Could not load booking.");
           return;
@@ -2291,10 +2294,16 @@ export default function BookingDetailsView({
     setToast({ kind: "error", text: message || "Failed to assign cleaner" });
   };
 
+  function openRescheduleModal() {
+    setDraftDate(fullBooking.date ?? "");
+    setDraftTime((fullBooking.time ?? "").slice(0, 5));
+    setRescheduleOpen(true);
+  }
+
   const saveScheduleInline = async () => {
     if (!draftDate || !draftTime) {
       setToast({ kind: "error", text: "Date and time are required" });
-      return;
+      return false;
     }
     const prevDate = fullBooking.date;
     const prevTime = fullBooking.time;
@@ -2303,10 +2312,13 @@ export default function BookingDetailsView({
     try {
       await updateBooking(fullBooking.id, { date: draftDate, time: draftTime });
       setEditingSchedule(false);
+      setRescheduleOpen(false);
       setToast({ kind: "success", text: "Schedule updated" });
+      return true;
     } catch (e) {
       setFullBooking((p) => (p ? { ...p, date: prevDate, time: prevTime } : p));
       setToast({ kind: "error", text: e instanceof Error ? e.message : "Something went wrong" });
+      return false;
     } finally {
       setSavingSchedule(false);
     }
@@ -2593,7 +2605,7 @@ export default function BookingDetailsView({
           isTeamAssigned={Boolean(fullBooking.team_id)}
           onAssignPrimary={() => (supportsTeamAssignment ? void openTeamModal() : void openAssignModal())}
           onEditBooking={() => openEditDetailsModal()}
-          onReschedule={() => setRescheduleOpen(true)}
+          onReschedule={openRescheduleModal}
           onContactCustomer={handleContactCustomer}
           onMarkPaid={() => {
             setMarkPaidMethod("cash");
@@ -2758,7 +2770,7 @@ export default function BookingDetailsView({
                   showMarkCancel={showAdminMarkCancel}
                   onAssign={() => void openAssignModal()}
                   onReassign={() => void openAssignModal()}
-                  onReschedule={() => setRescheduleOpen(true)}
+                  onReschedule={openRescheduleModal}
                   onComplete={() => void setStatusOptimistic("completed")}
                   onCancel={() => void setStatusOptimistic("cancelled")}
                   onDelete={() => void handleDeleteBooking()}
@@ -3863,6 +3875,10 @@ export default function BookingDetailsView({
         </aside>
       </main>
 
+
+    </div>
+      )}
+
       {editDetailsModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
@@ -4040,8 +4056,6 @@ export default function BookingDetailsView({
           </div>
         </div>
       ) : null}
-    </div>
-      )}
 
       {markPaidModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -4406,11 +4420,11 @@ export default function BookingDetailsView({
                     <p>
                       Create or activate teams under{" "}
                       <Link
-                        href="/admin/teams"
+                        href={basePath.startsWith("/office") ? "/office/teams" : "/admin/teams"}
                         className="font-semibold text-emerald-700 underline hover:text-emerald-800 dark:text-emerald-400"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        Admin → Teams
+                        {basePath.startsWith("/office") ? "Office → Teams" : "Admin → Teams"}
                       </Link>
                       , then open this dialog again.
                     </p>
@@ -4479,19 +4493,50 @@ export default function BookingDetailsView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-zinc-900">Reschedule booking</h3>
-            <p className="mt-2 text-sm text-zinc-600">Reschedule UI is scaffolded and ready for date/time controls.</p>
+            <p className="mt-2 text-sm text-zinc-600">Update the visit date and time for this booking.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-zinc-500">
+                Date
+                <input
+                  type="date"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Time
+                <input
+                  type="time"
+                  value={draftTime}
+                  onChange={(e) => setDraftTime(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setRescheduleOpen(false)} className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700">Close</button>
               <button
                 type="button"
-                onClick={() => {
-                  void rescheduleBooking(fullBooking.id, fullBooking.date ?? "", fullBooking.time ?? "");
-                  setRescheduleOpen(false);
-                  setToast({ kind: "success", text: "Reschedule flow prepared" });
-                }}
-                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-semibold text-white"
+                disabled={savingSchedule}
+                onClick={() => setRescheduleOpen(false)}
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700"
               >
-                Save scaffold
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingSchedule}
+                onClick={() => void saveScheduleInline()}
+                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {savingSchedule ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    Saving…
+                  </span>
+                ) : (
+                  "Save schedule"
+                )}
               </button>
             </div>
           </div>

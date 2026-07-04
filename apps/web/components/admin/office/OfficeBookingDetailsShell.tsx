@@ -524,7 +524,7 @@ function ActionsPanel(props: OfficeBookingDetailsShellProps) {
           </Button>
 
           <ActionGroup title="Booking">
-            <Button variant="outline" className="w-full justify-start" onClick={props.onEditBooking} disabled={Boolean(props.editBookingBlockedReason) || props.editDetailsBusy}>
+            <Button variant="outline" className="w-full justify-start" onClick={props.onEditBooking} disabled={Boolean(props.editBookingBlockedReason) || props.editDetailsBusy} title={props.editBookingBlockedReason ?? undefined}>
               <Pencil className="h-4 w-4" /> Edit booking
             </Button>
             <Button variant="outline" className="w-full justify-start" onClick={props.onReschedule}>
@@ -567,6 +567,7 @@ function ActionsPanel(props: OfficeBookingDetailsShellProps) {
               variant="outline"
               className="w-full justify-start border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
               disabled={Boolean(props.resetEarningsBlockedReason) || props.resetEarningsBusy}
+              title={props.resetEarningsBlockedReason ?? undefined}
               onClick={props.onResetEarnings}
             >
               <RotateCcw className="h-4 w-4" /> Reset & recompute

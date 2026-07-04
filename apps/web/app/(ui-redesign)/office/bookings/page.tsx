@@ -19,9 +19,15 @@ import {
   Trash2,
   X,
   Filter,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
+import {
+  buildOfficeBookingsListCsv,
+  downloadOfficeBookingsCsv,
+  fetchAllOfficeBookingsForExport,
+} from "@/lib/admin/officeBookingsListExport";
 import { AdminDashboardActionError, deleteBookingAdmin } from "@/lib/admin/dashboard";
 import {
   canHardDeleteBooking,
@@ -207,6 +213,7 @@ export default function BookingsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pendingRemovals, setPendingRemovals] = useState<BookingRow[]>([]);
   const [teamAssignTarget, setTeamAssignTarget] = useState<BookingRow | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   useEffect(() => {
@@ -375,23 +382,38 @@ export default function BookingsPage() {
   const totalBookingsActive =
     !recurringIdFilter && !hasExtraFilters && activeFilter === "all" && !debouncedSearch;
 
+  const listQueryParams = useMemo(
+    () => ({
+      filter: recurringIdFilter ? "all" : listFilter,
+      page: String(page),
+      pageSize: String(pageSize),
+      ...(activeFilter !== "all" ? { bookingStatus: activeFilter } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(recurringIdFilter ? { recurring_id: recurringIdFilter } : {}),
+      ...(!recurringIdFilter && opsQuick ? { opsQuick } : {}),
+      ...(!recurringIdFilter && dateFrom ? { from: dateFrom } : {}),
+      ...(!recurringIdFilter && dateTo ? { to: dateTo } : {}),
+      ...(!recurringIdFilter && serviceFilter !== "all" ? { serviceSlug: serviceFilter } : {}),
+      ...(!recurringIdFilter && cityId !== "all" ? { cityId } : {}),
+    }),
+    [
+      activeFilter,
+      cityId,
+      dateFrom,
+      dateTo,
+      debouncedSearch,
+      listFilter,
+      opsQuick,
+      page,
+      pageSize,
+      recurringIdFilter,
+      serviceFilter,
+    ],
+  );
+
   const { data, loading, error, refetch } = useAdminData<AdminBookingsResponse>(
     "/api/admin/bookings",
-    {
-      params: {
-        filter: recurringIdFilter ? "all" : listFilter,
-        page: String(page),
-        pageSize: String(pageSize),
-        ...(activeFilter !== "all" ? { bookingStatus: activeFilter } : {}),
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-        ...(recurringIdFilter ? { recurring_id: recurringIdFilter } : {}),
-        ...(!recurringIdFilter && opsQuick ? { opsQuick } : {}),
-        ...(!recurringIdFilter && dateFrom ? { from: dateFrom } : {}),
-        ...(!recurringIdFilter && dateTo ? { to: dateTo } : {}),
-        ...(!recurringIdFilter && serviceFilter !== "all" ? { serviceSlug: serviceFilter } : {}),
-        ...(!recurringIdFilter && cityId !== "all" ? { cityId } : {}),
-      },
-    },
+    { params: listQueryParams },
   );
 
   const serverBookings = data?.bookings ?? [];
@@ -452,6 +474,27 @@ export default function BookingsPage() {
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  async function handleExport() {
+    if (exporting || loading) return;
+    setExporting(true);
+    try {
+      const exportParams = { ...listQueryParams };
+      delete exportParams.page;
+      const rows = await fetchAllOfficeBookingsForExport(exportParams);
+      if (rows.length === 0) {
+        showToast("No bookings to export for the current filters", false);
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadOfficeBookingsCsv(`bookings-${stamp}.csv`, buildOfficeBookingsListCsv(rows));
+      showToast(`Exported ${rows.length} booking${rows.length === 1 ? "" : "s"}`, true);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Export failed", false);
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleCancel(bookingId: string) {
@@ -535,7 +578,7 @@ export default function BookingsPage() {
   const completedTodayCount = data?.statusCounts?.completedToday ?? 0;
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       <OfficeDeleteBookingDialog
         open={deleteDialogOpen}
         booking={deleteTarget}
@@ -583,7 +626,13 @@ export default function BookingsPage() {
             Manage all customer bookings, assignments and actions.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/office/bookings/create"
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 shadow-sm"
+          >
+            <Plus className="h-4 w-4" /> Create booking
+          </Link>
           <button
             type="button"
             onClick={() => void refetch()}
@@ -594,9 +643,12 @@ export default function BookingsPage() {
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
+            disabled={exporting || loading}
+            onClick={() => void handleExport()}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> Export
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Export
           </button>
         </div>
       </div>
@@ -857,16 +909,26 @@ export default function BookingsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                {["Booking", "Customer", "Service", "Date/Time", "Assignment", "Amount", "Status", "Actions"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  { label: "Booking", className: "" },
+                  { label: "Customer", className: "" },
+                  { label: "Service", className: "hidden md:table-cell" },
+                  { label: "Date/Time", className: "" },
+                  { label: "Assignment", className: "" },
+                  { label: "Amount", className: "" },
+                  { label: "Status", className: "" },
+                  { label: "Actions", className: "" },
+                ].map(({ label, className }) => (
+                  <th
+                    key={label}
+                    className={cn(
+                      "px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400",
+                      className,
+                    )}
+                  >
+                    {label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -891,9 +953,12 @@ export default function BookingsPage() {
                   return (
                     <tr key={b.id} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="text-xs font-mono font-bold text-blue-600">
+                        <Link
+                          href={`/office/bookings/${b.id}`}
+                          className="text-xs font-mono font-bold text-blue-600 hover:underline"
+                        >
                           {b.id.slice(0, 8).toUpperCase()}
-                        </span>
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-sm font-semibold text-slate-800">
@@ -953,35 +1018,35 @@ export default function BookingsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <a
+                        <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                          <Link
                             href={`/office/bookings/${b.id}`}
-                            title="View"
+                            aria-label="View booking"
                             className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                           >
                             <Eye className="h-3.5 w-3.5" />
-                          </a>
+                          </Link>
                           {teamAssignable ? (
                             <button
                               type="button"
-                              title={b.team_id || b.team?.name ? "Change team" : "Assign team"}
+                              aria-label={b.team_id || b.team?.name ? "Change team" : "Assign team"}
                               onClick={() => setTeamAssignTarget(b)}
                               className="rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
                             >
                               <Users className="h-3.5 w-3.5" />
                             </button>
                           ) : (
-                            <a
+                            <Link
                               href={`/office/bookings/${b.id}?action=assign`}
-                              title="Assign cleaner"
+                              aria-label="Assign cleaner"
                               className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
                             >
                               <UserCheck className="h-3.5 w-3.5" />
-                            </a>
+                            </Link>
                           )}
                           <button
                             type="button"
-                            title="Cancel"
+                            aria-label="Cancel booking"
                             disabled={isActing || b.status === "cancelled" || b.status === "completed"}
                             onClick={() => void handleCancel(b.id)}
                             className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30"
@@ -995,7 +1060,7 @@ export default function BookingsPage() {
                           {canHardDeleteBooking(b) ? (
                             <button
                               type="button"
-                              title="Delete permanently (draft / unpaid only)"
+                              aria-label="Delete permanently"
                               disabled={isActing}
                               onClick={() => openDeleteDialog(b)}
                               className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-30"
