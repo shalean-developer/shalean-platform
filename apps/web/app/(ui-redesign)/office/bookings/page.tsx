@@ -480,8 +480,7 @@ export default function BookingsPage() {
     if (exporting || loading) return;
     setExporting(true);
     try {
-      const exportParams = { ...listQueryParams };
-      delete exportParams.page;
+      const { page: _page, ...exportParams } = listQueryParams;
       const rows = await fetchAllOfficeBookingsForExport(exportParams);
       if (rows.length === 0) {
         showToast("No bookings to export for the current filters", false);

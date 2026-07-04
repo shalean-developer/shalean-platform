@@ -2295,6 +2295,7 @@ export default function BookingDetailsView({
   };
 
   function openRescheduleModal() {
+    if (!fullBooking) return;
     setDraftDate(fullBooking.date ?? "");
     setDraftTime((fullBooking.time ?? "").slice(0, 5));
     setRescheduleOpen(true);
