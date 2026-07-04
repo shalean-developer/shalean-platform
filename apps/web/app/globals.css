@@ -19,14 +19,15 @@
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
 
-  /* Sidebar / dashboard chrome */
-  --sidebar-bg: #0f172a;
-  --sidebar-fg: #f1f5f9;
-  --sidebar-muted: #94a3b8;
-  --sidebar-active: #1e40af;
-  --sidebar-active-fg: #dbeafe;
-  --sidebar-border: #1e293b;
-  --sidebar-hover: #1e293b;
+  /* Sidebar / dashboard chrome (Zoho Books–style light nav) */
+  --sidebar-bg: #f8f9fb;
+  --sidebar-fg: #313949;
+  --sidebar-muted: #5c6578;
+  --sidebar-active: #408df7;
+  --sidebar-active-fg: #ffffff;
+  --sidebar-border: #e8ecf1;
+  --sidebar-hover: #eef1f6;
+  --sidebar-flyout-bg: #ffffff;
 
   /* Brand navy (SiteTopBar) */
   --navy-from: #0d1b69;
@@ -104,6 +105,16 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Collapsed office sidebar flyout — solid surface, never transparent */
+.office-nav-flyout {
+  background-color: #ffffff;
+  border: 1px solid #e8ecf1;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.08),
+    0 12px 28px -4px rgb(0 0 0 / 0.12);
+  color: #313949;
 }
 
 /* Subtle periodic shimmer over “available jobs” area (cleaner home). */

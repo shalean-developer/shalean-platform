@@ -1,17 +1,19 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { signOut } from "@/lib/auth/authClient";
 import { RoleGuardRetryBanner, useRoleRouteGuard } from "@/lib/auth/useRoleRouteGuard";
 import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 import { AdminToastHost } from "@/components/admin/AdminToastHost";
+import { cn } from "@/lib/utils";
 import {
   OfficeSidebarContent,
   OfficeTopBar,
   OfficeCommandPalette,
+  useOfficeSidebarCollapsed,
 } from "./OfficeNav";
 
 type Gate = "denied" | "ready";
@@ -21,7 +23,7 @@ function OfficeSkeleton() {
     <div className="flex min-h-screen flex-col bg-slate-50">
       <div className="h-16 animate-pulse border-b border-slate-200 bg-white" />
       <div className="flex flex-1">
-        <div className="hidden w-44 animate-pulse bg-slate-100 md:block" />
+        <div className="hidden w-[220px] animate-pulse bg-[--sidebar-bg] md:block" />
         <div className="flex-1 space-y-4 p-6">
           <div className="h-8 w-64 animate-pulse rounded-lg bg-slate-200" />
           <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
@@ -105,6 +107,8 @@ export function OfficeShell({ children }: { children: ReactNode }) {
   const [noSupabase, setNoSupabase] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const { collapsed: sidebarCollapsed, toggleCollapsed: toggleSidebarCollapsed } = useOfficeSidebarCollapsed();
 
   useEffect(() => {
     if (roleState.status !== "ready") return;
@@ -218,9 +222,22 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-h-0 flex-1">
         {/* Desktop sidebar */}
-        <aside className="hidden w-44 shrink-0 flex-col md:flex">
-          <div className="sticky top-16 h-[calc(100vh-4rem)] overflow-hidden">
-            <OfficeSidebarContent userLabel={userLabel} onLogout={() => void handleLogout()} />
+        <aside
+          ref={sidebarRef}
+          className={cn(
+            "relative z-20 hidden shrink-0 flex-col border-r border-[--sidebar-border] bg-[--sidebar-bg] transition-[width] duration-200 md:flex",
+            sidebarCollapsed ? "w-[72px]" : "w-[220px]",
+          )}
+        >
+          <div className="sticky top-16 h-[calc(100vh-4rem)] overflow-visible">
+            <OfficeSidebarContent
+              userLabel={userLabel}
+              onLogout={() => void handleLogout()}
+              collapsed={sidebarCollapsed}
+              onToggleCollapsed={toggleSidebarCollapsed}
+              showCollapseToggle
+              sidebarRef={sidebarRef}
+            />
           </div>
         </aside>
 

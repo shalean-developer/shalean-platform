@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type ComponentType, type RefObject, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
@@ -23,6 +24,8 @@ import {
   Menu,
   MessageCircle,
   Megaphone,
+  PanelLeftClose,
+  PanelLeftOpen,
   PenLine,
   Receipt,
   Repeat,
@@ -45,10 +48,20 @@ import { cn } from "@/lib/utils";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { useNotifications } from "@/hooks/useNotifications";
 
+type NavIcon = ComponentType<{ className?: string; strokeWidth?: number }>;
+
 type NavItem = {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: NavIcon;
+};
+
+type NavModule = {
+  id: string;
+  label: string;
+  icon: NavIcon;
+  href?: string;
+  children?: NavItem[];
 };
 
 type NavSection = {
@@ -56,39 +69,52 @@ type NavSection = {
   items: NavItem[];
 };
 
-export const OFFICE_NAV_SECTIONS: NavSection[] = [
+export const OFFICE_NAV_MODULES: NavModule[] = [
+  { id: "dashboard", label: "Dashboard", href: "/office", icon: LayoutDashboard },
   {
-    title: "MAIN",
-    items: [
-      { label: "Dashboard", href: "/office", icon: LayoutDashboard },
+    id: "bookings",
+    label: "Bookings",
+    icon: BookOpen,
+    children: [
       { label: "Bookings", href: "/office/bookings", icon: BookOpen },
       { label: "Recurring", href: "/office/recurring", icon: Repeat },
+      { label: "Schedule", href: "/office/schedule", icon: Calendar },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    icon: Wallet,
+    children: [
       { label: "Payouts", href: "/office/payouts", icon: Wallet },
       { label: "Pricing", href: "/office/pricing", icon: Tag },
+      { label: "Monthly invoices", href: "/office/invoices", icon: FileText },
+      { label: "Zoho sync", href: "/office/billing", icon: Receipt },
     ],
   },
   {
-    title: "ANALYTICS",
-    items: [
+    id: "analytics",
+    label: "Analytics",
+    icon: BarChart3,
+    children: [
       { label: "Analytics", href: "/office/analytics", icon: BarChart3 },
       { label: "Funnel intelligence", href: "/office/funnel-intelligence", icon: TrendingUp },
+      { label: "Conversion", href: "/office/conversion", icon: ShoppingCart },
+      { label: "SEO insights", href: "/office/seo-insights", icon: Eye },
+      { label: "SEO attribution", href: "/office/seo-attribution", icon: Link2 },
     ],
   },
   {
-    title: "OPERATIONS",
-    items: [
-      { label: "Schedule", href: "/office/schedule", icon: Calendar },
+    id: "operations",
+    label: "Operations",
+    icon: Settings,
+    children: [
       { label: "Notifications", href: "/office/notifications", icon: Bell },
       { label: "Delivery logs", href: "/office/notification-logs", icon: Mail },
       { label: "Lifecycle emails", href: "/office/lifecycle-emails", icon: Send },
       { label: "Ops Health", href: "/office/ops-health", icon: Activity },
       { label: "Launch check", href: "/office/launch-check", icon: CheckCircle },
       { label: "Templates", href: "/office/templates", icon: FileText },
-    ],
-  },
-  {
-    title: "QUALITY",
-    items: [
       { label: "SLA Breaches", href: "/office/sla-breaches", icon: AlertTriangle },
       { label: "Cleaner Performance", href: "/office/cleaner-performance", icon: Award },
       { label: "Earnings disputes", href: "/office/disputes", icon: Shield },
@@ -97,73 +123,419 @@ export const OFFICE_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "GROWTH",
-    items: [
+    id: "growth",
+    label: "Growth",
+    icon: Megaphone,
+    children: [
       { label: "Marketing", href: "/office/marketing", icon: Megaphone },
       { label: "Blog", href: "/office/blog", icon: PenLine },
-      { label: "Conversion", href: "/office/conversion", icon: ShoppingCart },
-      { label: "SEO insights", href: "/office/seo-insights", icon: Eye },
-      { label: "SEO attribution", href: "/office/seo-attribution", icon: Link2 },
       { label: "Referrals", href: "/office/referrals", icon: HeartHandshake },
     ],
   },
   {
-    title: "WORKFORCE",
-    items: [
+    id: "workforce",
+    label: "Workforce",
+    icon: Users,
+    children: [
       { label: "Cleaners", href: "/office/cleaners", icon: Users },
       { label: "Teams", href: "/office/teams", icon: UserCheck },
       { label: "Cleaner Applications", href: "/office/cleaner-applications", icon: UserPlus },
     ],
   },
   {
-    title: "CUSTOMERS",
-    items: [
+    id: "customers",
+    label: "Customers",
+    icon: ThumbsUp,
+    children: [
       { label: "Customers", href: "/office/customers", icon: Users },
-      { label: "Quotes", href: "/office/sales-documents", icon: FileText },
-      { label: "Monthly billing", href: "/office/invoices", icon: Receipt },
       { label: "Reviews", href: "/office/reviews", icon: ThumbsUp },
       { label: "Review funnel", href: "/office/review-funnel", icon: MessageCircle },
     ],
   },
 ];
 
-// Flat list for command palette / top-bar label lookup
-export const OFFICE_NAV_ALL_ITEMS: (NavItem & { section: string })[] = OFFICE_NAV_SECTIONS.flatMap(
-  (s) => s.items.map((item) => ({ ...item, section: s.title })),
-);
+/** Legacy flat sections — derived from modules for command palette grouping. */
+export const OFFICE_NAV_SECTIONS: NavSection[] = OFFICE_NAV_MODULES.map((module) => ({
+  title: module.label.toUpperCase(),
+  items: module.href
+    ? [{ label: module.label, href: module.href, icon: module.icon }]
+    : (module.children ?? []),
+}));
+
+export const OFFICE_NAV_ALL_ITEMS: (NavItem & { section: string })[] = OFFICE_NAV_MODULES.flatMap((module) => {
+  if (module.href) {
+    return [{ label: module.label, href: module.href, icon: module.icon, section: module.label }];
+  }
+  return (module.children ?? []).map((item) => ({ ...item, section: module.label }));
+});
+
+const SIDEBAR_COLLAPSED_KEY = "office-sidebar-collapsed";
+
+export function useOfficeSidebarCollapsed() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (stored !== null) setCollapsed(stored === "true");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  return { collapsed, toggleCollapsed, setCollapsed };
+}
 
 function isItemActive(pathname: string, href: string): boolean {
   if (href === "/office") return pathname === "/office";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function isModuleActive(pathname: string, module: NavModule): boolean {
+  if (module.href) return isItemActive(pathname, module.href);
+  return module.children?.some((item) => isItemActive(pathname, item.href)) ?? false;
+}
+
+function truncateLabel(label: string, max = 8): string {
+  if (label.length <= max) return label;
+  return `${label.slice(0, max)}…`;
+}
+
+function userInitials(userLabel: string): string {
+  if (!userLabel) return "AD";
+  return (
+    userLabel
+      .split("@")[0]!
+      .split(/[._-]/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("")
+      .slice(0, 2) || "AD"
+  );
+}
+
+function findActiveModuleId(pathname: string): string | null {
+  const match = OFFICE_NAV_MODULES.find(
+    (module) => module.children?.some((item) => isItemActive(pathname, item.href)),
+  );
+  return match?.id ?? null;
+}
+
+type FlyoutPosition = {
+  anchorRect: DOMRect;
+  sidebarRect: DOMRect | null;
+};
+
+function computeCollapsedFlyoutStyle(
+  anchorRect: DOMRect,
+  sidebarRect: DOMRect | null,
+  itemCount: number,
+): CSSProperties {
+  const gap = 10;
+  const left = (sidebarRect?.right ?? anchorRect.right) + gap;
+  const estimatedHeight = 40 + itemCount * 36;
+  const viewportPad = 12;
+  const maxTop = window.innerHeight - estimatedHeight - viewportPad;
+  let top = anchorRect.top;
+  if (top > maxTop) top = Math.max(viewportPad, maxTop);
+
+  return {
+    top,
+    left,
+    maxHeight: window.innerHeight - viewportPad * 2,
+    backgroundColor: "#ffffff",
+  };
+}
+
+type ModuleFlyoutProps = {
+  module: NavModule;
+  pathname: string;
+  position: FlyoutPosition;
+  anchorRef: RefObject<HTMLElement | null>;
+  onClose?: () => void;
+};
+
+function CollapsedModuleFlyout({ module, pathname, position, anchorRef, onClose }: ModuleFlyoutProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const itemCount = module.children?.length ?? 0;
+  const flyoutStyle = computeCollapsedFlyoutStyle(position.anchorRect, position.sidebarRect, itemCount);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose?.();
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [anchorRef, onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="office-nav-flyout fixed z-[100] w-52 overflow-y-auto rounded-lg py-1"
+      style={flyoutStyle}
+      role="menu"
+      aria-label={`${module.label} submenu`}
+    >
+      <p className="sticky top-0 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#5c6578]">
+        {module.label}
+      </p>
+      {(module.children ?? []).map((item) => {
+        const active = isItemActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            role="menuitem"
+            onClick={onClose}
+            className={cn(
+              "mx-1 flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
+              active ? "bg-[#408df7] text-white" : "text-[#313949] hover:bg-[#eef1f6]",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <span className="truncate">{item.label}</span>
+          </Link>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+}
+
+type InlineModuleChildrenProps = {
+  module: NavModule;
+  pathname: string;
+  onClose?: () => void;
+};
+
+function InlineModuleChildren({ module, pathname, onClose }: InlineModuleChildrenProps) {
+  return (
+    <div className="mb-0.5 ml-[18px] space-y-0.5 border-l border-[--sidebar-border] py-0.5 pl-2">
+      {(module.children ?? []).map((item) => {
+        const active = isItemActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onClose}
+            className={cn(
+              "flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors",
+              active
+                ? "bg-[--sidebar-active] text-[--sidebar-active-fg]"
+                : "text-[--sidebar-muted] hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <span className="truncate">{item.label}</span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+type NavModuleRowProps = {
+  module: NavModule;
+  collapsed: boolean;
+  pathname: string;
+  openModuleId: string | null;
+  setOpenModuleId: (id: string | null) => void;
+  sidebarRef?: RefObject<HTMLElement | null>;
+  onClose?: () => void;
+};
+
+function NavModuleRow({
+  module,
+  collapsed,
+  pathname,
+  openModuleId,
+  setOpenModuleId,
+  sidebarRef,
+  onClose,
+}: NavModuleRowProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [flyoutPosition, setFlyoutPosition] = useState<FlyoutPosition | null>(null);
+  const hasChildren = Boolean(module.children?.length);
+  const active = isModuleActive(pathname, module);
+  const isOpen = openModuleId === module.id;
+  const Icon = module.icon;
+
+  useEffect(() => {
+    if (!collapsed || !isOpen || !rowRef.current) {
+      setFlyoutPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const anchorRect = rowRef.current?.getBoundingClientRect();
+      if (!anchorRect) return;
+      const sidebarRect = sidebarRef?.current?.getBoundingClientRect() ?? null;
+      setFlyoutPosition({ anchorRect, sidebarRect });
+    };
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [collapsed, isOpen, sidebarRef]);
+
+  const activeClasses = "bg-[--sidebar-active] text-[--sidebar-active-fg]";
+  const inactiveClasses = "text-[--sidebar-fg] hover:bg-[--sidebar-hover]";
+
+  if (!hasChildren && module.href) {
+    if (collapsed) {
+      return (
+        <Link
+          href={module.href}
+          onClick={onClose}
+          title={module.label}
+          className={cn(
+            "relative flex flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-center transition-colors",
+            active ? activeClasses : inactiveClasses,
+          )}
+        >
+          <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
+          <span className="max-w-full truncate text-[10px] font-medium leading-tight">{truncateLabel(module.label, 7)}</span>
+        </Link>
+      );
+    }
+
+    return (
+      <Link
+        href={module.href}
+        onClick={onClose}
+        className={cn(
+          "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
+          active ? activeClasses : inactiveClasses,
+        )}
+      >
+        <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
+        <span className="truncate">{module.label}</span>
+      </Link>
+    );
+  }
+
+  if (collapsed) {
+    return (
+      <div ref={rowRef} className="relative">
+        <button
+          type="button"
+          title={module.label}
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          onClick={() => setOpenModuleId(isOpen ? null : module.id)}
+          className={cn(
+            "relative flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-center transition-colors",
+            active || isOpen ? activeClasses : inactiveClasses,
+          )}
+        >
+          <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
+          <span className="max-w-full truncate text-[10px] font-medium leading-tight">{truncateLabel(module.label, 7)}</span>
+          <span
+            className="pointer-events-none absolute bottom-1.5 right-1.5 h-0 w-0 border-b-[5px] border-r-[5px] border-b-transparent border-r-[--sidebar-muted]"
+            aria-hidden
+          />
+        </button>
+        {isOpen && flyoutPosition ? (
+          <CollapsedModuleFlyout
+            module={module}
+            pathname={pathname}
+            position={flyoutPosition}
+            anchorRef={rowRef}
+            onClose={() => {
+              setOpenModuleId(null);
+              onClose?.();
+            }}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={rowRef}>
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={() => setOpenModuleId(isOpen ? null : module.id)}
+        className={cn(
+          "flex w-full items-center gap-1 rounded-lg py-2 pl-1 pr-2.5 text-left text-[13px] font-medium transition-colors",
+          active || isOpen ? activeClasses : inactiveClasses,
+        )}
+      >
+        <ChevronRight
+          className={cn("h-3.5 w-3.5 shrink-0 transition-transform", isOpen && "rotate-90")}
+          strokeWidth={2}
+        />
+        <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
+        <span className="min-w-0 flex-1 truncate">{module.label}</span>
+      </button>
+      {isOpen ? <InlineModuleChildren module={module} pathname={pathname} onClose={onClose} /> : null}
+    </div>
+  );
+}
+
 type OfficeSidebarProps = {
   userLabel: string;
   onLogout: () => void;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  showCollapseToggle?: boolean;
+  sidebarRef?: RefObject<HTMLElement | null>;
 };
 
-export function OfficeSidebarContent({ userLabel, onLogout, onClose }: OfficeSidebarProps) {
+export function OfficeSidebarContent({
+  userLabel,
+  onLogout,
+  onClose,
+  collapsed = false,
+  onToggleCollapsed,
+  showCollapseToggle = false,
+  sidebarRef,
+}: OfficeSidebarProps) {
   const pathname = usePathname() ?? "";
+  const [openModuleId, setOpenModuleId] = useState<string | null>(null);
+  const initials = userInitials(userLabel);
+  const isMobileDrawer = Boolean(onClose);
+  const useCollapsedNav = collapsed && !isMobileDrawer;
 
-  const initials = userLabel
-    ? userLabel
-        .split("@")[0]!
-        .split(/[._-]/)
-        .slice(0, 2)
-        .map((p) => p[0]?.toUpperCase() ?? "")
-        .join("")
-        .slice(0, 2) || "AD"
-    : "AD";
+  useEffect(() => {
+    if (useCollapsedNav) {
+      setOpenModuleId(null);
+      return;
+    }
+    setOpenModuleId(findActiveModuleId(pathname));
+  }, [pathname, useCollapsedNav]);
 
   return (
     <div className="flex h-full flex-col bg-[--sidebar-bg] text-[--sidebar-fg]">
       {onClose ? (
-        <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-2 md:hidden">
+        <div className="flex shrink-0 items-center justify-end border-b border-[--sidebar-border] px-2 py-2 md:hidden">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded-lg p-1.5 text-[--sidebar-muted] hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -171,61 +543,82 @@ export function OfficeSidebarContent({ userLabel, onLogout, onClose }: OfficeSid
         </div>
       ) : null}
 
-      {/* Nav sections */}
-      <nav className="flex-1 overflow-y-auto px-1.5 py-2.5 scrollbar-hide" aria-label="Office navigation">
-        {OFFICE_NAV_SECTIONS.map((section) => (
-          <div key={section.title} className="mb-3">
-            {/* Section label */}
-            <p className="mb-1 px-2.5 text-[9px] font-bold uppercase tracking-widest text-[--sidebar-muted] select-none">
-              {section.title}
-            </p>
-            {/* Nav items */}
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const active = isItemActive(pathname, item.href);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
-                      active
-                        ? "bg-[--sidebar-active] text-[--sidebar-active-fg]"
-                        : "text-[--sidebar-muted] hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]",
-                    )}
-                  >
-                    <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-[--sidebar-active-fg]" : "")} />
-                    <span className="truncate">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav
+        className={cn("flex-1 overflow-y-auto py-2 scrollbar-hide", collapsed ? "px-1" : "px-2")}
+        aria-label="Office navigation"
+      >
+        <div className={cn("space-y-0.5", collapsed && "space-y-1")}>
+          {OFFICE_NAV_MODULES.map((module) => (
+            <NavModuleRow
+              key={module.id}
+              module={module}
+              collapsed={useCollapsedNav}
+              pathname={pathname}
+              openModuleId={openModuleId}
+              setOpenModuleId={setOpenModuleId}
+              sidebarRef={sidebarRef}
+              onClose={onClose}
+            />
+          ))}
+        </div>
       </nav>
 
-      {/* User footer */}
       <div className="shrink-0 border-t border-[--sidebar-border] p-1.5">
-        <div className="flex items-center gap-1.5 rounded-lg px-1 py-1.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-700 text-[11px] font-bold text-white">
-            {initials}
+        {collapsed && !isMobileDrawer ? (
+          <div className="flex flex-col items-center gap-2 py-1">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[--sidebar-active] text-[11px] font-bold text-white"
+              title={userLabel || "Admin"}
+            >
+              {initials}
+            </div>
+            {showCollapseToggle && onToggleCollapsed ? (
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className="rounded-lg p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]"
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            ) : null}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[11px] font-semibold text-[--sidebar-fg]">{userLabel || "Admin"}</p>
-            <p className="text-[10px] text-[--sidebar-muted]">Administrator</p>
+        ) : (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 rounded-lg px-1 py-1.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[--sidebar-active] text-[11px] font-bold text-white">
+                {initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] font-semibold text-[--sidebar-fg]">{userLabel || "Admin"}</p>
+                <p className="text-[10px] text-[--sidebar-muted]">Administrator</p>
+              </div>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="rounded-lg p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-red-500"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </div>
+            {showCollapseToggle && onToggleCollapsed ? (
+              <div className="flex justify-end px-1">
+                <button
+                  type="button"
+                  onClick={onToggleCollapsed}
+                  className="rounded-lg border border-[--sidebar-border] bg-white p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]"
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                >
+                  <PanelLeftClose className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+              </div>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-lg p-1.5 text-[--sidebar-muted] hover:bg-[--sidebar-hover] hover:text-red-400 transition-colors"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -242,20 +635,10 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
   const { notifications } = useNotifications();
   const unreadNotifications = notifications.filter((notification) => !notification.read_at).length;
   const notificationBadge = unreadNotifications > 99 ? "99+" : String(unreadNotifications);
-
-  const initials = userLabel
-    ? userLabel
-        .split("@")[0]!
-        .split(/[._-]/)
-        .slice(0, 2)
-        .map((p) => p[0]?.toUpperCase() ?? "")
-        .join("")
-        .slice(0, 2) || "AD"
-    : "AD";
+  const initials = userInitials(userLabel);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-white px-3 shadow-sm sm:gap-4 sm:px-4">
-      {/* Left: mobile menu + logo */}
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -270,7 +653,6 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
         </Link>
       </div>
 
-      {/* Right: search, notifications, account */}
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <button
           type="button"
@@ -285,14 +667,11 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
           </kbd>
         </button>
 
-        {/* Notification bell */}
         <Link
           href="/office/notifications"
           className="relative flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/20"
           aria-label={
-            unreadNotifications > 0
-              ? `Open notifications, ${unreadNotifications} unread`
-              : "Open notifications"
+            unreadNotifications > 0 ? `Open notifications, ${unreadNotifications} unread` : "Open notifications"
           }
         >
           <Bell className="h-5 w-5" />
@@ -303,7 +682,6 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
           ) : null}
         </Link>
 
-        {/* Avatar + role */}
         <button
           type="button"
           onClick={onLogout}
@@ -323,7 +701,6 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
   );
 }
 
-// Command palette
 type CommandPaletteProps = { open: boolean; onClose: () => void };
 
 export function OfficeCommandPalette({ open, onClose }: CommandPaletteProps) {
@@ -355,7 +732,7 @@ export function OfficeCommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[10vh]"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
@@ -392,7 +769,7 @@ export function OfficeCommandPalette({ open, onClose }: CommandPaletteProps) {
                   <button
                     key={item.href}
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-muted transition-colors"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted"
                     onClick={() => {
                       router.push(item.href);
                       closePalette();
