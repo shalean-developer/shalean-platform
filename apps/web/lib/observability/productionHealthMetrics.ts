@@ -455,6 +455,62 @@ export const PRODUCTION_HEALTH_CRON_ALIASES: Readonly<Record<string, readonly st
   "generate-recurring-bookings": ["charge-recurring-bookings"],
 };
 
+function cronJobQueryNames(jobName: string): readonly string[] {
+  return [jobName, ...(PRODUCTION_HEALTH_CRON_ALIASES[jobName] ?? [])];
+}
+
+/**
+ * Latest success per monitored cron job. Minutely jobs flood `cron_runs`, so a global
+ * `order by created_at desc limit N` window evicts daily jobs (e.g. charge-monthly-invoices)
+ * and falsely reports them as missing even when they ran within `maxAgeMinutes`.
+ */
+export async function fetchExpectedCronSuccessRows(
+  admin: SupabaseClient,
+  expectedJobs: readonly ExpectedCronJob[],
+): Promise<{ rows: CronRunHealthRow[]; failures: ProductionHealthScannerFailure[] }> {
+  const failures: ProductionHealthScannerFailure[] = [];
+  const rows: CronRunHealthRow[] = [];
+
+  await Promise.all(
+    expectedJobs.map(async (expected) => {
+      let best: CronRunHealthRow | null = null;
+
+      for (const name of cronJobQueryNames(expected.jobName)) {
+        const { data, error } = await admin
+          .from("cron_runs")
+          .select("job_name, status, created_at, message")
+          .eq("job_name", name)
+          .eq("status", "success")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (error) {
+          failures.push({
+            scanner: `cron_runs:${name}`,
+            message: errorMessage(error),
+            code: error.code ?? null,
+          });
+          continue;
+        }
+
+        const row = (data?.[0] ?? null) as CronRunHealthRow | null;
+        const createdAt = typeof row?.created_at === "string" ? row.created_at.trim() : "";
+        if (!createdAt) continue;
+
+        if (!best?.created_at || new Date(createdAt).getTime() > new Date(best.created_at).getTime()) {
+          best = row;
+        }
+      }
+
+      if (best) {
+        rows.push({ ...best, job_name: expected.jobName });
+      }
+    }),
+  );
+
+  return { rows, failures };
+}
+
 export function detectStaleCronRuns(
   rows: readonly CronRunHealthRow[],
   expectedJobs: readonly ExpectedCronJob[],
@@ -695,10 +751,6 @@ export async function runProductionHealthScan(
           .limit(scanLimit),
       },
       {
-        name: "cron_runs",
-        query: admin.from("cron_runs").select("job_name, status, created_at, message").order("created_at", { ascending: false }).limit(2000),
-      },
-      {
         name: "duration_fallback_logs",
         query: admin
           .from("system_logs")
@@ -719,8 +771,12 @@ export async function runProductionHealthScan(
           .limit(scanLimit),
       },
     ] as const;
-    const results = await Promise.all(querySpecs.map((spec) => spec.query));
-    const failures: ProductionHealthScannerFailure[] = [];
+    const expectedCronJobs = options?.expectedCronJobs ?? DEFAULT_PRODUCTION_HEALTH_CRON_JOBS;
+    const [results, cronFetch] = await Promise.all([
+      Promise.all(querySpecs.map((spec) => spec.query)),
+      fetchExpectedCronSuccessRows(admin, expectedCronJobs),
+    ]);
+    const failures: ProductionHealthScannerFailure[] = [...cronFetch.failures];
 
     function rowsAt<T>(index: number): T[] {
       const result = results[index] as { data?: T[] | null; error?: { message?: string; code?: string | null } | null };
@@ -741,9 +797,9 @@ export async function runProductionHealthScan(
     const recurringRows = rowsAt<RecurringMonthlyDriftBookingRow>(4);
     const invoices = rowsAt<RecurringMonthlyDriftInvoiceRow>(5);
     const dispatchRows = rowsAt<DispatchHealthRow>(6);
-    const cronRows = rowsAt<CronRunHealthRow>(7);
-    const durationLogs = rowsAt<SystemLogHealthRow>(8);
-    const workloadLogs = rowsAt<SystemLogHealthRow>(9);
+    const cronRows = cronFetch.rows;
+    const durationLogs = rowsAt<SystemLogHealthRow>(7);
+    const workloadLogs = rowsAt<SystemLogHealthRow>(8);
 
     const invoiceMap = new Map<string, RecurringMonthlyDriftInvoiceRow>();
     for (const row of invoices) {
@@ -765,7 +821,7 @@ export async function runProductionHealthScan(
       recurringInvoicesById: invoiceMap,
       dispatchRows,
       cronRows,
-      expectedCronJobs: options?.expectedCronJobs ?? DEFAULT_PRODUCTION_HEALTH_CRON_JOBS,
+      expectedCronJobs,
       durationFallbackLogs: durationLogs,
       workloadForceOverrideLogs: workloadLogs,
       scannerFailures: failures,

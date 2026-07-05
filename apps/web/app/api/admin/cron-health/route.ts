@@ -21,7 +21,12 @@ export type CronHealthRecentError = {
 };
 
 /** Jobs that must show last success even when older than the 24h dashboard window. */
-const CRITICAL_JOB_FALLBACK = ["generate-recurring-bookings", "charge-recurring-bookings"] as const;
+const CRITICAL_JOB_FALLBACK = [
+  "generate-recurring-bookings",
+  "charge-recurring-bookings",
+  "charge-monthly-invoices",
+  "payout-integrity-daily",
+] as const;
 
 /** Rows logged before we stopped persisting 401s, or stray unauthenticated HTTP hits — not failed job execution. */
 function isCronAuthProbeRow(message: string | null | undefined): boolean {

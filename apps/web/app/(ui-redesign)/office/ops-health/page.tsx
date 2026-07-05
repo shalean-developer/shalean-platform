@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Activity,
   CheckCircle2,
@@ -22,6 +22,7 @@ import {
   OFFICE_OPS_SERVICE_ICONS,
   OFFICE_OPS_STATUS_CONFIG,
   OFFICE_OPS_UPTIME_BAR_CLASS,
+  resolveOpsHealthBanner,
   type OfficeOpsHealthSummary,
   type OfficeOpsServiceCard,
   type OfficeOpsServiceId,
@@ -53,7 +54,10 @@ function StatusPill({ label, status }: { label: string; status: OfficeOpsService
 }
 
 export default function OpsHealthPage() {
-  const { data, loading, error, refetch } = useAdminData<OfficeOpsHealthSummary>("/api/admin/office-ops-health");
+  const [showAcknowledged, setShowAcknowledged] = useState(false);
+  const { data, loading, error, refetch } = useAdminData<OfficeOpsHealthSummary>("/api/admin/office-ops-health", {
+    params: showAcknowledged ? { includeAcknowledged: "1" } : undefined,
+  });
   const serviceRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const scrollToService = useCallback((serviceId: string) => {
@@ -61,10 +65,8 @@ export default function OpsHealthPage() {
     if (node) node.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
-  const unifiedHealthy = data?.unified.status === "healthy";
-  const allOkNow = unifiedHealthy && (data?.allOperationalNow ?? false);
-  const allOk30d = unifiedHealthy && data?.overallPeriodStatus === "operational";
   const issueBreakdown = data?.unified.issueBreakdown;
+  const banner = data ? resolveOpsHealthBanner(data) : null;
 
   return (
     <div className="space-y-5">
@@ -74,10 +76,11 @@ export default function OpsHealthPage() {
           <p className="mt-0.5 text-sm text-slate-500">
             Live service status from production scans, cron runs, system logs, and notification delivery.
           </p>
-          {issueBreakdown && (data?.kpis.issuesNow ?? 0) > 0 ? (
+          {issueBreakdown && ((data?.kpis.issuesNow ?? 0) > 0 || issueBreakdown.critical > 0) ? (
             <p className="mt-2 text-xs font-semibold text-slate-600">
-              Issue breakdown: {issueBreakdown.high} High · {issueBreakdown.medium} Medium · {issueBreakdown.low} Low
-              {issueBreakdown.critical > 0 ? ` · ${issueBreakdown.critical} Critical` : ""}
+              Issue breakdown:{" "}
+              {issueBreakdown.critical > 0 ? `${issueBreakdown.critical} Critical · ` : ""}
+              {issueBreakdown.high} High · {issueBreakdown.medium} Medium · {issueBreakdown.low} Low
             </p>
           ) : null}
         </div>
@@ -105,16 +108,16 @@ export default function OpsHealthPage() {
       <div
         className={cn(
           "flex items-center gap-3 rounded-2xl border p-4",
-          allOkNow && allOk30d
+          banner?.tone === "healthy"
             ? "border-emerald-200 bg-emerald-50"
-            : data?.overallStatus === "down"
+            : banner?.tone === "critical"
               ? "border-red-200 bg-red-50"
               : "border-orange-200 bg-orange-50",
         )}
       >
-        {allOkNow && allOk30d ? (
+        {banner?.tone === "healthy" ? (
           <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" />
-        ) : data?.overallStatus === "down" ? (
+        ) : banner?.tone === "critical" ? (
           <XCircle className="h-6 w-6 shrink-0 text-red-600" />
         ) : (
           <AlertTriangle className="h-6 w-6 shrink-0 text-orange-600" />
@@ -123,23 +126,26 @@ export default function OpsHealthPage() {
           <p
             className={cn(
               "text-sm font-bold",
-              allOkNow && allOk30d ? "text-emerald-800" : data?.overallStatus === "down" ? "text-red-800" : "text-orange-800",
+              banner?.tone === "healthy"
+                ? "text-emerald-800"
+                : banner?.tone === "critical"
+                  ? "text-red-800"
+                  : "text-orange-800",
             )}
           >
-            {          allOkNow && allOk30d
-            ? "All systems operational"
-            : data?.unified.status === "down" || data?.unified.status === "critical"
-              ? "Critical production issues detected"
-              : !allOkNow && !allOk30d
-                ? "Current and 30-day issues detected"
-                : !allOkNow
-                  ? "Issues detected right now"
-                  : "Historical issues in the last 30 days"}
+            {banner?.title ?? "Checking services…"}
           </p>
-          <p className={cn("text-xs", allOkNow && allOk30d ? "text-emerald-600" : data?.overallStatus === "down" ? "text-red-600" : "text-orange-600")}>
-            {data
-              ? `Ops health: ${data.unified.status.toUpperCase()} · Now: ${OFFICE_OPS_STATUS_CONFIG[data.overallCurrentStatus].label} · 30d: ${OFFICE_OPS_STATUS_CONFIG[data.overallPeriodStatus].label}`
-              : "Checking services…"}
+          <p
+            className={cn(
+              "text-xs",
+              banner?.tone === "healthy"
+                ? "text-emerald-600"
+                : banner?.tone === "critical"
+                  ? "text-red-600"
+                  : "text-orange-600",
+            )}
+          >
+            {banner?.subtitle ?? "Loading status…"}
           </p>
           {data && !data.unified.consistencyValid ? (
             <p className="mt-1 text-xs font-medium text-amber-700">Consistency check flagged a mismatch — unified scanner has been reconciled.</p>
@@ -204,7 +210,7 @@ export default function OpsHealthPage() {
                     <p className="text-xs text-slate-600">
                       <span className="font-semibold">30d:</span> {service.periodDetail}
                     </p>
-                    {service.currentStatus !== "operational" && service.currentDetail ? (
+                    {service.currentStatus !== "operational" && service.currentStatus !== "degraded" && service.currentDetail ? (
                       <p className="text-[11px] font-medium text-orange-800">
                         Last failure: {service.currentDetail}
                       </p>
@@ -245,8 +251,12 @@ export default function OpsHealthPage() {
 
       <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <OpsHealthFullPanel
-          initialData={data?.scanner ?? null}
-          onRefreshAll={refetch}
+          data={data?.scanner ?? null}
+          loading={loading}
+          error={error}
+          showAcknowledged={showAcknowledged}
+          onToggleAcknowledged={() => setShowAcknowledged((value) => !value)}
+          onRefresh={refetch}
           onViewService={scrollToService}
         />
       </div>

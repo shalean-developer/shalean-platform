@@ -108,8 +108,10 @@ function defaultSignals(summary: MockProductionHealthSummary = healthySummary(),
     dbOk: true,
     systemErrorRows: [],
     cronErrorRows: [],
+    paymentDriftRows: [],
     notificationRows: [],
     whatsappPausedUntil: null,
+    customerOutboundPausedUntil: null,
     notificationsQueryOk: true,
     ...overrides,
   };
@@ -199,7 +201,7 @@ describe("GET /api/admin/ops-health", () => {
       ok: true,
       status: "critical",
       degraded: false,
-      counts: { critical: 4, high: 0, medium: 0, low: 0, info: 0, totalFindings: 4 },
+      counts: { critical: 3, high: 0, medium: 0, low: 0, info: 0, totalFindings: 3 },
       sampleIds: { payment_verified_not_finalized: ["job-1", "job-2"] },
     });
     expect(json.summaries.length).toBeGreaterThanOrEqual(1);
@@ -277,7 +279,7 @@ describe("GET /api/admin/ops-health", () => {
     const shown = await shownRes.json();
     expect(shown).toMatchObject({
       status: "critical",
-      counts: { critical: 4, totalFindings: 4, acknowledgedHidden: 2 },
+      counts: { critical: 3, totalFindings: 3, acknowledgedHidden: 2 },
     });
     expect(shown.summaries.some((finding: { code: string }) => finding.code === "payment_verified_not_finalized")).toBe(true);
   });

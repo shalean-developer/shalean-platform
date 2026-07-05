@@ -20,6 +20,9 @@ function normalizeSnapshot(json: OpsSnapshot): OpsSnapshot {
     slaWorstBreachPendingSinceIso:
       typeof json.slaWorstBreachPendingSinceIso === "string" ? json.slaWorstBreachPendingSinceIso : null,
     unassigned: json.unassigned,
+    unassignedToday: typeof json.unassignedToday === "number" ? json.unassignedToday : 0,
+    unassignedPastDue: typeof json.unassignedPastDue === "number" ? json.unassignedPastDue : 0,
+    unassignedUpcoming: typeof json.unassignedUpcoming === "number" ? json.unassignedUpcoming : 0,
     startingSoon: json.startingSoon,
     startingSoonNextMinutes:
       typeof json.startingSoonNextMinutes === "number" && Number.isFinite(json.startingSoonNextMinutes)

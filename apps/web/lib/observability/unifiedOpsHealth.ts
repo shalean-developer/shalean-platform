@@ -1,4 +1,5 @@
 import type { OfficeOpsServiceCard, OfficeOpsServiceId, OfficeOpsServiceStatus } from "@/lib/admin/officeOpsHealth";
+import { isBookingEngineScannerOnlyFindingCode } from "@/lib/admin/officeOpsHealthFilters";
 import type {
   ProductionHealthFinding,
   ProductionHealthSeverity,
@@ -137,36 +138,48 @@ export function mergeUnifiedHealthFindings(params: {
   };
 }
 
+function isInformationalScanFinding(finding: ProductionHealthFinding): boolean {
+  if (isServiceFinding(finding)) return false;
+  if (isBookingEngineScannerOnlyFindingCode(finding.code)) return true;
+  return false;
+}
+
+function actionableScanTotals(findings: readonly ProductionHealthFinding[]): UnifiedIssueBreakdown {
+  return sumFindingTotals(findings.filter((finding) => !isInformationalScanFinding(finding)));
+}
+
 export function evaluateUnifiedPlatformStatus(
   services: readonly OfficeOpsServiceCard[],
   mergedSummary: ProductionHealthSummary,
 ): UnifiedOpsHealthStatus {
-  const anyCriticalServiceDown = services.some(
-    (service) =>
-      CRITICAL_SERVICE_IDS.has(service.id) &&
-      (service.currentStatus === "down" || service.periodStatus === "down"),
+  const scanCritical = mergedSummary.findings
+    .filter((finding) => !isServiceFinding(finding) && !isInformationalScanFinding(finding) && finding.severity === "critical")
+    .reduce((sum, finding) => sum + finding.count, 0);
+  const actionableTotals = actionableScanTotals(mergedSummary.findings);
+  const anyCriticalServiceDownNow = services.some(
+    (service) => CRITICAL_SERVICE_IDS.has(service.id) && service.currentStatus === "down",
   );
-  const anyServiceDown = services.some(
-    (service) => service.currentStatus === "down" || service.periodStatus === "down",
-  );
+  const anyServiceDownNow = services.some((service) => service.currentStatus === "down");
   const anyServiceDegraded = services.some(
     (service) => service.currentStatus === "degraded" || service.periodStatus === "degraded",
   );
+  const anyServicePeriodIssue = services.some((service) => service.periodStatus !== "operational");
   const anyServiceMaintenance = services.some(
     (service) => service.currentStatus === "maintenance" || service.periodStatus === "maintenance",
   );
 
-  if (mergedSummary.totals.critical > 0 || anyCriticalServiceDown) return "critical";
-  if (anyServiceDown) return "down";
+  if (scanCritical > 0 || anyCriticalServiceDownNow) return "critical";
+  if (anyServiceDownNow) return "down";
   if (
     mergedSummary.degraded === true ||
-    mergedSummary.totals.high > 0 ||
-    mergedSummary.totals.medium > 0 ||
-    anyServiceDegraded
+    actionableTotals.high > 0 ||
+    actionableTotals.medium > 0 ||
+    anyServiceDegraded ||
+    anyServicePeriodIssue
   ) {
     return "degraded";
   }
-  if (mergedSummary.totals.low > 0 || mergedSummary.totals.info > 0 || anyServiceMaintenance) {
+  if (actionableTotals.low > 0 || actionableTotals.info > 0 || anyServiceMaintenance) {
     return "degraded";
   }
   return "healthy";
@@ -187,6 +200,12 @@ export function unifiedStatusDescription(status: UnifiedOpsHealthStatus): string
   return "Critical drift exists and should be triaged before routine operational changes.";
 }
 
+function actionableFindingCount(findings: readonly ProductionHealthFinding[]): number {
+  return findings
+    .filter((finding) => !isInformationalScanFinding(finding))
+    .reduce((sum, finding) => sum + finding.count, 0);
+}
+
 export function validateHealthConsistency(params: {
   services: readonly OfficeOpsServiceCard[];
   issuesNow: number;
@@ -196,15 +215,15 @@ export function validateHealthConsistency(params: {
   const activeServiceIssues = params.services.filter(
     (service) => service.currentStatus !== "operational" || service.periodStatus !== "operational",
   ).length;
-  const totalFindings = params.mergedSummary.findings.reduce((sum, finding) => sum + finding.count, 0);
+  const actionableFindings = actionableFindingCount(params.mergedSummary.findings);
 
   if (params.unifiedStatus === "healthy") {
-    if (params.issuesNow > 0 || activeServiceIssues > 0 || totalFindings > 0) return false;
+    if (params.issuesNow > 0 || activeServiceIssues > 0 || actionableFindings > 0) return false;
     return true;
   }
 
-  if (params.issuesNow > 0 && totalFindings === 0) return false;
-  if (activeServiceIssues > 0 && totalFindings === 0) return false;
+  if (params.issuesNow > 0 && actionableFindings === 0) return false;
+  if (activeServiceIssues > 0 && actionableFindings === 0) return false;
   return true;
 }
 

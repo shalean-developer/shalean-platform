@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { collectOfficeOpsHealthSignals } from "@/lib/admin/collectOfficeOpsHealthSignals";
+import { assembleOfficeOpsHealthResponse } from "@/lib/admin/assembleOfficeOpsHealthResponse";
 import { buildOfficeOpsHealthSummary } from "@/lib/admin/officeOpsHealth";
 import { requireAdminSession } from "@/lib/admin/requireAdminSession";
-import {
-  applyOpsHealthAcknowledgements,
-  recordOpsHealthAcknowledgement,
-} from "@/lib/observability/opsHealthAcknowledgements";
+import { recordOpsHealthAcknowledgement } from "@/lib/observability/opsHealthAcknowledgements";
 import {
   buildProductionHealthSummary,
   recordProductionHealthSummaryMetrics,
@@ -49,6 +47,7 @@ function fallbackScannerResponse(scanLimit: number, error?: string): AdminOpsHea
     dbOk: false,
     systemErrorRows: [],
     cronErrorRows: [],
+    paymentDriftRows: [],
     notificationRows: [],
     whatsappPausedUntil: null,
     notificationsQueryOk: false,
@@ -72,43 +71,16 @@ export async function GET(request: Request) {
 
   try {
     const signals = await collectOfficeOpsHealthSignals(admin, scanLimit);
-    const ackView = signals.rawProductionHealth
-      ? applyOpsHealthAcknowledgements(signals.rawProductionHealth, signals.acknowledgements, { includeAcknowledged })
-      : null;
-
-    const officeSummary = buildOfficeOpsHealthSummary({
-      fetchedAt: signals.fetchedAt,
-      productionHealth: includeAcknowledged ? signals.rawProductionHealth : signals.productionHealth,
-      productionHealthError: signals.productionHealthError,
-      dbLatencyMs: signals.dbLatencyMs,
-      dbOk: signals.dbOk,
-      systemErrorRows: signals.systemErrorRows,
-      cronErrorRows: signals.cronErrorRows,
-      notificationRows: signals.notificationRows,
-      whatsappPausedUntil: signals.whatsappPausedUntil,
-      customerOutboundPausedUntil: signals.customerOutboundPausedUntil,
-      notificationsQueryOk: signals.notificationsQueryOk,
+    const officeSummary = assembleOfficeOpsHealthResponse(signals, {
+      includeAcknowledged,
+      metricsRecorded: metricsRequested,
     });
 
     if (metricsRequested && signals.rawProductionHealth) {
       await recordProductionHealthSummaryMetrics(signals.rawProductionHealth).catch(() => undefined);
     }
 
-    const acknowledgedHidden = ackView?.acknowledgedFindings.reduce((sum, finding) => sum + finding.count, 0) ?? 0;
-
-    return NextResponse.json({
-      ...officeSummary.scanner,
-      lastScan: {
-        ...officeSummary.scanner.lastScan,
-        metricsRecorded: metricsRequested,
-      },
-      counts: {
-        ...officeSummary.scanner.counts,
-        acknowledgedHidden,
-      },
-      acknowledgedSummaries: ackView?.acknowledgedFindings ?? [],
-      acknowledgements: signals.acknowledgements,
-    } satisfies AdminOpsHealthResponse);
+    return NextResponse.json(officeSummary.scanner satisfies AdminOpsHealthResponse);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     const fallback = fallbackScannerResponse(scanLimit, error);

@@ -14,13 +14,49 @@ import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
-import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import {
+  rememberBookingOwnershipColumn,
+  resetBookingOwnershipColumnCacheForTests,
+  resolveBookingOwnershipColumn,
+} from "@/lib/customer/customerBookingsForUser";
+import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
+import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_CHARGE = 100;
+
+const RECURRING_CHARGE_BOOKING_SELECT_BASE =
+  "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking";
+
+async function loadRecurringChargeCandidateBookings(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  ownershipColumn: BookingCustomerOwnershipColumn,
+) {
+  const runQuery = (column: BookingCustomerOwnershipColumn) =>
+    admin
+      .from("bookings")
+      .select(`${RECURRING_CHARGE_BOOKING_SELECT_BASE}, ${column}`)
+      .eq("status", "pending_payment")
+      .eq("is_recurring_generated", true)
+      .is("recurring_fallback_at", null)
+      .not("recurring_id", "is", null)
+      .or("payment_status.is.null,payment_status.eq.pending")
+      .limit(MAX_CHARGE);
+
+  const primary = await runQuery(ownershipColumn);
+  if (!primary.error || !isUnknownColumnError(primary.error, ownershipColumn)) {
+    return primary;
+  }
+
+  const fallback: BookingCustomerOwnershipColumn = ownershipColumn === "customer_id" ? "user_id" : "customer_id";
+  resetBookingOwnershipColumnCacheForTests();
+  const secondary = await runQuery(fallback);
+  if (!secondary.error) rememberBookingOwnershipColumn(fallback);
+  return secondary;
+}
 
 function isChargeDue(row: { recurring_next_charge_attempt_at?: string | null }): boolean {
   const next = row.recurring_next_charge_attempt_at;
@@ -91,17 +127,7 @@ export async function POST(request: Request) {
 
   try {
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
-  const { data: bookings, error } = await admin
-    .from("bookings")
-    .select(
-      `id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, ${ownershipColumn}, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking`,
-    )
-    .eq("status", "pending_payment")
-    .eq("is_recurring_generated", true)
-    .is("recurring_fallback_at", null)
-    .not("recurring_id", "is", null)
-    .or("payment_status.is.null,payment_status.eq.pending")
-    .limit(MAX_CHARGE);
+  const { data: bookings, error } = await loadRecurringChargeCandidateBookings(admin, ownershipColumn);
 
   if (error) {
     await reportOperationalIssue("error", "cron/charge-recurring-bookings", error.message);

@@ -114,4 +114,103 @@ describe("evaluateUnifiedPlatformStatus", () => {
       }),
     ).toBe(true);
   });
+
+  it("does not mark platform critical for 30-day history alone", () => {
+    const services = [
+      service({
+        id: "booking_engine",
+        name: "Booking engine",
+        currentStatus: "degraded",
+        periodStatus: "down",
+        currentDetail: "2 cron error(s) in 24h",
+        periodDetail: "60% clean cron days in 30d",
+      }),
+    ];
+    const merged = mergeUnifiedHealthFindings({
+      fetchedAt: "2026-06-20T12:00:00.000Z",
+      scanLimit: 100,
+      scanSummary: {
+        ok: true,
+        generatedAt: "2026-06-20T12:00:00.000Z",
+        scanLimit: 100,
+        findings: [],
+        totals: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      },
+      serviceFindings: deriveServiceHealthFindings(services),
+    });
+
+    expect(evaluateUnifiedPlatformStatus(services, merged)).toBe("degraded");
+  });
+
+  it("stays healthy when only cron schedule lag is reported and services are operational", () => {
+    const services = [
+      service({ id: "website", name: "Website" }),
+      service({ id: "booking_engine", name: "Booking engine" }),
+      service({ id: "payment_gateway", name: "Payment gateway" }),
+      service({ id: "database", name: "Supabase (DB)" }),
+      service({ id: "notifications", name: "Notification service" }),
+    ];
+    const merged = mergeUnifiedHealthFindings({
+      fetchedAt: "2026-06-20T12:00:00.000Z",
+      scanLimit: 100,
+      scanSummary: {
+        ok: true,
+        generatedAt: "2026-06-20T12:00:00.000Z",
+        scanLimit: 100,
+        findings: [
+          {
+            code: "cron_stale_or_missing_success",
+            severity: "high",
+            count: 2,
+            message: "Critical cron jobs have no recent successful run.",
+            sampleIds: ["charge-monthly-invoices"],
+          },
+        ],
+        totals: { critical: 0, high: 1, medium: 0, low: 0, info: 0 },
+      },
+      serviceFindings: [],
+    });
+
+    expect(evaluateUnifiedPlatformStatus(services, merged)).toBe("healthy");
+    expect(
+      validateHealthConsistency({
+        services,
+        issuesNow: 0,
+        mergedSummary: merged,
+        unifiedStatus: evaluateUnifiedPlatformStatus(services, merged),
+      }),
+    ).toBe(true);
+  });
+
+  it("marks platform critical for production scan drift", () => {
+    const services = [
+      service({
+        id: "payment_gateway",
+        name: "Payment gateway",
+        currentStatus: "down",
+      }),
+    ];
+    const merged = mergeUnifiedHealthFindings({
+      fetchedAt: "2026-06-20T12:00:00.000Z",
+      scanLimit: 100,
+      scanSummary: {
+        ok: true,
+        generatedAt: "2026-06-20T12:00:00.000Z",
+        scanLimit: 100,
+        findings: [
+          {
+            code: "payment_verified_not_finalized",
+            severity: "critical",
+            count: 1,
+            message: "Verified Paystack payment has an unresolved finalization/reconciliation job.",
+            sampleIds: ["job-1"],
+          },
+        ],
+        totals: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
+      },
+      serviceFindings: deriveServiceHealthFindings(services),
+    });
+
+    expect(evaluateUnifiedPlatformStatus(services, merged)).toBe("critical");
+  });
 });

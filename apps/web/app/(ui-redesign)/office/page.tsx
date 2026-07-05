@@ -427,6 +427,9 @@ export default function OfficeDashboardPage() {
 
   const slaBreachCount = opsData?.slaBreaches ?? 0;
   const unassignedCount = opsData?.unassigned ?? 0;
+  const unassignedTodayFleet = opsData?.unassignedToday ?? 0;
+  const unassignedPastDue = opsData?.unassignedPastDue ?? 0;
+  const unassignedUpcoming = opsData?.unassignedUpcoming ?? 0;
   const startingSoonCount = opsData?.startingSoon ?? 0;
   const unassignableCount = opsData?.unassignable ?? 0;
   const oldestBreachMinutes = opsData?.oldestBreachMinutes ?? 0;
@@ -467,14 +470,23 @@ export default function OfficeDashboardPage() {
   const cashTotal = revenueToday + pendingZar + overdueZar;
 
   const actionItems: ActionItem[] = useMemo(() => {
+    const unassignedDetail =
+      unassignedCount === 0
+        ? "All bookings have cleaners"
+        : unassignedPastDue > 0
+          ? `${unassignedPastDue} past due · ${unassignedTodayFleet} today · ${unassignedUpcoming} upcoming`
+          : unassignedTodayFleet > 0
+            ? `${unassignedTodayFleet} today · ${unassignedUpcoming} upcoming`
+            : `${unassignedUpcoming} upcoming visits need cleaners`;
+
     const items: ActionItem[] = [
       {
         key: "unassigned",
         label: "Unassigned bookings",
         count: unassignedCount,
-        detail: unassignedCount > 0 ? "Assign cleaners before start time" : "All bookings have cleaners",
+        detail: unassignedDetail,
         href: "/office/bookings?filter=unassigned",
-        tone: unassignedCount > 0 ? "warning" : "clear",
+        tone: unassignedPastDue > 0 ? "critical" : unassignedCount > 0 ? "warning" : "clear",
       },
       {
         key: "starting-soon",
@@ -512,7 +524,7 @@ export default function OfficeDashboardPage() {
       if (rankDiff !== 0) return rankDiff;
       return b.count - a.count;
     });
-  }, [unassignedCount, startingSoonCount, slaBreachCount, unassignableCount, oldestBreachMinutes]);
+  }, [unassignedCount, unassignedTodayFleet, unassignedPastDue, unassignedUpcoming, startingSoonCount, slaBreachCount, unassignableCount, oldestBreachMinutes]);
 
   const statusAlerts: StatusAlert[] = useMemo(() => {
     const alerts: StatusAlert[] = [];
@@ -526,10 +538,16 @@ export default function OfficeDashboardPage() {
     }
 
     if (unassignedCount > 0) {
+      const unassignedLabel =
+        unassignedPastDue > 0
+          ? `${unassignedCount} unassigned (${unassignedPastDue} overdue)`
+          : unassignedTodayFleet > 0
+            ? `${unassignedTodayFleet} unassigned today`
+            : `${unassignedCount} unassigned upcoming`;
       alerts.push({
         key: "unassigned",
-        label: `${unassignedCount} unassigned`,
-        tone: "warning",
+        label: unassignedLabel,
+        tone: unassignedPastDue > 0 ? "critical" : "warning",
         href: "/office/bookings?filter=unassigned",
       });
     }
@@ -575,7 +593,7 @@ export default function OfficeDashboardPage() {
     }
 
     return alerts;
-  }, [allSystemsOperational, systemStatus, stats, unassignedCount, overdueZar, startingSoonCount, smsFailed, cronErrors]);
+  }, [allSystemsOperational, systemStatus, stats, unassignedCount, unassignedPastDue, unassignedTodayFleet, overdueZar, startingSoonCount, smsFailed, cronErrors]);
 
   const sortedBookings = [...todayBookings].sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? "")));
 
@@ -632,7 +650,7 @@ export default function OfficeDashboardPage() {
         <ZohoPanel title="Needs action" href="/office/bookings" linkLabel="View all bookings">
           <div className="mb-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Priority queue</p>
-            <p className="mt-1 text-sm text-slate-500">Ranked by urgency — tap to resolve.</p>
+            <p className="mt-1 text-sm text-slate-500">All open bookings — ranked by urgency. Today&apos;s schedule counts are separate.</p>
           </div>
           <div className="space-y-2">
             {actionItems.map((item) => (

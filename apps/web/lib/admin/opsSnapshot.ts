@@ -14,6 +14,12 @@ export type OpsSnapshot = {
   /** `became_pending_at` / `created_at` of a worst-overdue breach row (for “Pending since” tooltip). */
   slaWorstBreachPendingSinceIso: string | null;
   unassigned: number;
+  /** Unassigned rows scheduled for today (Johannesburg). */
+  unassignedToday: number;
+  /** Unassigned rows with visit date before today. */
+  unassignedPastDue: number;
+  /** Unassigned rows with visit date after today. */
+  unassignedUpcoming: number;
   startingSoon: number;
   /** Smallest “starts in” minutes among starting-soon rows; null if none. */
   startingSoonNextMinutes: number | null;
@@ -227,6 +233,7 @@ export function sortRowsForAttentionQueue<T extends OpsSnapshotRow>(
 
 export function computeOpsSnapshotFromRows(rows: OpsSnapshotRow[], nowMs = Date.now()): OpsSnapshot {
   const slaMinutes = getDispatchSlaBreachMinutes();
+  const todayYmd = new Date(nowMs).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
   let unassignable = 0;
   let slaBreaches = 0;
   let oldestBreachMinutes = 0;
@@ -235,6 +242,9 @@ export function computeOpsSnapshotFromRows(rows: OpsSnapshotRow[], nowMs = Date.
   let worstBreachOverdue = -1;
   let slaWorstBreachPendingSinceIso: string | null = null;
   let unassigned = 0;
+  let unassignedToday = 0;
+  let unassignedPastDue = 0;
+  let unassignedUpcoming = 0;
   let startingSoon = 0;
   let startingSoonNextMinutes: number | null = null;
 
@@ -265,6 +275,10 @@ export function computeOpsSnapshotFromRows(rows: OpsSnapshotRow[], nowMs = Date.
 
     if (queue === "unassigned") {
       unassigned++;
+      const visitYmd = typeof r.date === "string" ? r.date.trim() : "";
+      if (visitYmd === todayYmd) unassignedToday++;
+      else if (visitYmd && visitYmd < todayYmd) unassignedPastDue++;
+      else if (visitYmd && visitYmd > todayYmd) unassignedUpcoming++;
     }
 
     if (queue === "starting-soon") {
@@ -285,6 +299,9 @@ export function computeOpsSnapshotFromRows(rows: OpsSnapshotRow[], nowMs = Date.
     slaBreachesOverdueGt10Le30,
     slaWorstBreachPendingSinceIso,
     unassigned,
+    unassignedToday,
+    unassignedPastDue,
+    unassignedUpcoming,
     startingSoon,
     startingSoonNextMinutes,
   };

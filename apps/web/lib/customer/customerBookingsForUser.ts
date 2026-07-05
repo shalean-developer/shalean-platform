@@ -67,12 +67,34 @@ export type LoadCustomerBookingsOptions = {
 /** Max rows returned to customer dashboard / account booking lists. */
 export const CUSTOMER_BOOKINGS_LIST_LIMIT = 500;
 
+let cachedBookingOwnershipColumn: BookingCustomerOwnershipColumn | null = null;
+
+export function resetBookingOwnershipColumnCacheForTests(): void {
+  cachedBookingOwnershipColumn = null;
+}
+
+/** Used when a live query proves the cached ownership column is wrong. */
+export function rememberBookingOwnershipColumn(column: BookingCustomerOwnershipColumn): void {
+  cachedBookingOwnershipColumn = column;
+}
+
 export async function resolveBookingOwnershipColumn(admin: SupabaseClient): Promise<BookingCustomerOwnershipColumn> {
-  const probe = await admin.from("bookings").select("customer_id").limit(1);
-  if (probe.error && isUnknownColumnError(probe.error, "customer_id")) {
-    return "user_id";
+  if (cachedBookingOwnershipColumn) return cachedBookingOwnershipColumn;
+
+  const customerProbe = await admin.from("bookings").select("customer_id").limit(1);
+  if (!customerProbe.error) {
+    cachedBookingOwnershipColumn = "customer_id";
+    return cachedBookingOwnershipColumn;
   }
-  return "customer_id";
+  if (isUnknownColumnError(customerProbe.error, "customer_id")) {
+    const userProbe = await admin.from("bookings").select("user_id").limit(1);
+    if (!userProbe.error) {
+      cachedBookingOwnershipColumn = "user_id";
+      return cachedBookingOwnershipColumn;
+    }
+  }
+  cachedBookingOwnershipColumn = "customer_id";
+  return cachedBookingOwnershipColumn;
 }
 
 async function loadOwnedCustomerBookingRows(

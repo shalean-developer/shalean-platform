@@ -1,4 +1,16 @@
 import { formatIsoInJohannesburgYmd, todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
+import type { OfficeOpsCronRunRow } from "@/lib/admin/officeOpsHealthFilters";
+import {
+  filterBookingEngineCronErrors,
+  filterBookingEngineCronSuccesses,
+  bookingEngineUptimeBarsFromSuccessCounts,
+  hasLiveBookingEngineFinding,
+  isBookingEngineCronScheduleFindingCode,
+  isBookingEngineLiveFindingCode,
+  isDatabaseSystemLogRow,
+  isWebsiteCustomerFacingSystemLog,
+  type OfficeOpsCronErrorRow,
+} from "@/lib/admin/officeOpsHealthFilters";
 import type { ProductionHealthFinding, ProductionHealthSummary } from "@/lib/observability/productionHealthMetrics";
 import {
   deriveServiceHealthFindings,
@@ -9,6 +21,12 @@ import {
   type UnifiedIssueBreakdown,
   type UnifiedOpsHealthStatus,
 } from "@/lib/observability/unifiedOpsHealth";
+
+export type OfficeOpsSystemErrorRow = {
+  created_at: string | null;
+  source?: string | null;
+  message?: string | null;
+};
 
 export type OfficeOpsServiceStatus = "operational" | "degraded" | "down" | "maintenance";
 export type OfficeOpsUptimeBar = "ok" | "warn" | "down";
@@ -102,6 +120,8 @@ export type OfficeOpsHealthSummary = {
 };
 
 const UPTIME_DAYS = 30;
+/** Single cold Supabase probe above this is degraded; avoids false alarms from network jitter. */
+export const OFFICE_OPS_DB_LATENCY_DEGRADED_MS = 2_500;
 
 export function lastJohannesburgYmds(count: number, now = new Date()): string[] {
   const anchor = new Date(`${todayYmdJohannesburg(now)}T12:00:00+02:00`);
@@ -157,13 +177,23 @@ export function mergeOfficeOpsStatus(...statuses: OfficeOpsServiceStatus[]): Off
   );
 }
 
-/** Maps the 30-day bar strip to a single status label. */
+/** Maps the 30-day bar strip to a single status label (stricter for live outages). */
 export function statusFromUptimeBars(bars: OfficeOpsUptimeBar[]): OfficeOpsServiceStatus {
   if (bars.length === 0) return "operational";
   const downDays = bars.filter((bar) => bar === "down").length;
   const warnDays = bars.filter((bar) => bar === "warn").length;
   if (downDays >= 4 || downDays / bars.length >= 0.15) return "down";
   if (downDays > 0 || warnDays > 0) return "degraded";
+  return "operational";
+}
+
+/** Softer 30-day history mapping — avoids flagging platform down from old cron noise. */
+export function statusFromUptimeHistoryBars(bars: OfficeOpsUptimeBar[]): OfficeOpsServiceStatus {
+  if (bars.length === 0) return "operational";
+  const downDays = bars.filter((bar) => bar === "down").length;
+  const warnDays = bars.filter((bar) => bar === "warn").length;
+  if (downDays >= 8 || downDays / bars.length >= 0.25) return "down";
+  if (downDays >= 3 || warnDays >= 5) return "degraded";
   return "operational";
 }
 
@@ -197,6 +227,20 @@ function hasFindingCode(findings: ProductionHealthFinding[], matcher: (code: str
   return findings.some((finding) => matcher(finding.code) && (finding.severity === "critical" || finding.severity === "high"));
 }
 
+function hasCriticalFindingCode(findings: ProductionHealthFinding[], matcher: (code: string) => boolean): boolean {
+  return findings.some((finding) => finding.severity === "critical" && matcher(finding.code) && finding.count > 0);
+}
+
+/** Production scan codes that indicate booking-engine / cron / dispatch drift (scanner summaries). */
+export function isBookingEngineFindingCode(code: string): boolean {
+  return isBookingEngineLiveFindingCode(code) || isBookingEngineCronScheduleFindingCode(code);
+}
+
+/** Production scan codes that indicate payment / invoice / payout drift. */
+export function isPaymentGatewayFindingCode(code: string): boolean {
+  return code.includes("payment") || code.includes("invoice") || code.includes("payout");
+}
+
 type NotificationHealthRow = { created_at: string | null; status: string | null; error?: string | null };
 
 /** Provider misconfiguration — not counted as a live delivery failure once keys are fixed. */
@@ -225,22 +269,30 @@ function notificationDeliveryRows(rows: readonly NotificationHealthRow[]): Notif
   return rows.filter(isNotificationDeliveryAttempt);
 }
 
+export { isDatabaseSystemLogRow } from "@/lib/admin/officeOpsHealthFilters";
+
 export function buildOfficeOpsHealthSummary(params: {
   fetchedAt: string;
   productionHealth: ProductionHealthSummary | null;
   productionHealthError?: string;
   dbLatencyMs: number | null;
   dbOk: boolean;
-  systemErrorRows: Array<{ created_at: string | null }>;
-  cronErrorRows: Array<{ created_at: string | null }>;
+  systemErrorRows: OfficeOpsSystemErrorRow[];
+  cronErrorRows: OfficeOpsCronErrorRow[];
+  cronSuccessRows?: OfficeOpsCronRunRow[];
+  paymentDriftRows: Array<{ created_at: string | null }>;
   notificationRows: NotificationHealthRow[];
   whatsappPausedUntil: string | null;
   customerOutboundPausedUntil?: string | null;
   notificationsQueryOk: boolean;
 }): OfficeOpsHealthSummary {
   const days = lastJohannesburgYmds(UPTIME_DAYS, new Date(params.fetchedAt));
-  const systemErrorsByDay = countByJohannesburgDay(params.systemErrorRows);
-  const cronErrorsByDay = countByJohannesburgDay(params.cronErrorRows);
+  const websiteErrorRows = params.systemErrorRows.filter(isWebsiteCustomerFacingSystemLog);
+  const bookingCronErrorRows = filterBookingEngineCronErrors(params.cronErrorRows);
+  const bookingCronSuccessRows = filterBookingEngineCronSuccesses(params.cronSuccessRows ?? []);
+  const systemErrorsByDay = countByJohannesburgDay(websiteErrorRows);
+  const bookingSuccessByDay = countByJohannesburgDay(bookingCronSuccessRows);
+  const bookingErrorsByDay = countByJohannesburgDay(bookingCronErrorRows);
   const deliveryNotificationRows = notificationDeliveryRows(params.notificationRows);
 
   const notificationFailuresByDay = countByJohannesburgDay(
@@ -249,21 +301,19 @@ export function buildOfficeOpsHealthSummary(params: {
   const notificationAttemptsByDay = countByJohannesburgDay(deliveryNotificationRows);
 
   const findings = params.productionHealth?.findings ?? [];
-  const bookingFinding = hasFindingCode(findings, (code) =>
-    code.includes("dispatch") || code.includes("cron") || code.includes("recurring") || code.includes("duration") || code.includes("workload"),
-  );
-  const paymentFinding = hasFindingCode(findings, (code) =>
-    code.includes("payment") || code.includes("invoice") || code.includes("payout"),
-  );
-  const criticalFinding = (params.productionHealth?.totals.critical ?? 0) > 0;
+  const bookingLiveFinding = hasLiveBookingEngineFinding(findings, isBookingEngineLiveFindingCode);
+  const bookingCronScheduleFinding = hasLiveBookingEngineFinding(findings, isBookingEngineCronScheduleFindingCode);
+  const paymentFinding = hasFindingCode(findings, isPaymentGatewayFindingCode);
+  const bookingCriticalFinding = hasCriticalFindingCode(findings, isBookingEngineLiveFindingCode);
+  const paymentCriticalFinding = hasCriticalFindingCode(findings, isPaymentGatewayFindingCode);
 
-  const recentSystemErrors = params.systemErrorRows.filter((row) => {
+  const recentWebsiteErrors = websiteErrorRows.filter((row) => {
     const t = Date.parse(row.created_at ?? "");
     return Number.isFinite(t) && t >= Date.parse(params.fetchedAt) - 3_600_000;
   }).length;
-  const recentCronErrors = params.cronErrorRows.filter((row) => {
+  const recentBookingCronErrors1h = bookingCronErrorRows.filter((row) => {
     const t = Date.parse(row.created_at ?? "");
-    return Number.isFinite(t) && t >= Date.parse(params.fetchedAt) - 24 * 3_600_000;
+    return Number.isFinite(t) && t >= Date.parse(params.fetchedAt) - 3_600_000;
   }).length;
 
   const notificationFailed = deliveryNotificationRows.filter((row) => String(row.status ?? "").toLowerCase() === "failed").length;
@@ -286,10 +336,14 @@ export function buildOfficeOpsHealthSummary(params: {
     typeof params.customerOutboundPausedUntil === "string" &&
     Date.parse(params.customerOutboundPausedUntil) > Date.parse(params.fetchedAt);
 
-  const websiteBars = barsFromDailyCounts(days, systemErrorsByDay, { warn: 1, down: 5 });
-  const bookingBars = barsFromDailyCounts(days, cronErrorsByDay, { warn: 1, down: 3 });
-  const paymentBars = barsFromDailyCounts(days, cronErrorsByDay, { warn: 1, down: 4 });
-  const dbBars = barsFromDailyCounts(days, cronErrorsByDay, { warn: 2, down: 6 });
+  const websiteBars = barsFromDailyCounts(days, systemErrorsByDay, { warn: 2, down: 8 });
+  const bookingBars = bookingEngineUptimeBarsFromSuccessCounts(days, bookingSuccessByDay, bookingErrorsByDay);
+  const paymentDriftByDay = countByJohannesburgDay(params.paymentDriftRows);
+  const paymentBars = barsFromDailyCounts(days, paymentDriftByDay, { warn: 1, down: 3 });
+  const dbErrorRows = params.systemErrorRows.filter(isDatabaseSystemLogRow);
+  if (!params.dbOk) dbErrorRows.push({ created_at: params.fetchedAt });
+  const dbErrorsByDay = countByJohannesburgDay(dbErrorRows);
+  const dbBars = barsFromDailyCounts(days, dbErrorsByDay, { warn: 1, down: 3 });
   const notificationBars = barsFromDailyCounts(
     days,
     new Map(
@@ -307,20 +361,20 @@ export function buildOfficeOpsHealthSummary(params: {
   );
 
   const websiteCurrent: OfficeOpsServiceStatus =
-    recentSystemErrors >= 10 ? "down" : recentSystemErrors > 0 ? "degraded" : "operational";
-  const bookingCurrent: OfficeOpsServiceStatus = criticalFinding
+    recentWebsiteErrors >= 15 ? "down" : recentWebsiteErrors >= 5 ? "degraded" : "operational";
+  const bookingCurrent: OfficeOpsServiceStatus = bookingCriticalFinding
     ? "down"
-    : bookingFinding || recentCronErrors > 0
+    : bookingLiveFinding || recentBookingCronErrors1h >= 5
       ? "degraded"
       : "operational";
-  const paymentCurrent: OfficeOpsServiceStatus = criticalFinding && paymentFinding
+  const paymentCurrent: OfficeOpsServiceStatus = paymentCriticalFinding
     ? "down"
     : paymentFinding
       ? "degraded"
       : "operational";
   const databaseCurrent: OfficeOpsServiceStatus = !params.dbOk
     ? "down"
-    : params.dbLatencyMs != null && params.dbLatencyMs > 800
+    : params.dbLatencyMs != null && params.dbLatencyMs > OFFICE_OPS_DB_LATENCY_DEGRADED_MS
       ? "degraded"
       : "operational";
   const notificationCurrent: OfficeOpsServiceStatus = !params.notificationsQueryOk
@@ -337,11 +391,14 @@ export function buildOfficeOpsHealthSummary(params: {
               ? "degraded"
               : "operational";
 
-  const websitePeriod = statusFromUptimeBars(websiteBars);
-  const bookingPeriod = mergeOfficeOpsStatus(statusFromUptimeBars(bookingBars), bookingFinding ? "degraded" : "operational");
+  const websitePeriod = statusFromUptimeHistoryBars(websiteBars);
+  const bookingPeriod = mergeOfficeOpsStatus(
+    statusFromUptimeHistoryBars(bookingBars),
+    bookingLiveFinding ? "degraded" : "operational",
+  );
   const paymentPeriod = mergeOfficeOpsStatus(statusFromUptimeBars(paymentBars), paymentFinding ? "degraded" : "operational");
-  const databasePeriod = statusFromUptimeBars(dbBars);
-  const notificationPeriod = customerOutboundPaused ? "maintenance" : statusFromUptimeBars(notificationBars);
+  const databasePeriod = statusFromUptimeHistoryBars(dbBars);
+  const notificationPeriod = customerOutboundPaused ? "maintenance" : statusFromUptimeHistoryBars(notificationBars);
 
   const services: OfficeOpsServiceCard[] = [
     buildServiceCard({
@@ -354,7 +411,10 @@ export function buildOfficeOpsHealthSummary(params: {
       latencyLabel: null,
       lastCheckedLabel: formatOfficeOpsRelativeTime(params.fetchedAt),
       uptimeBars: websiteBars,
-      currentDetail: recentSystemErrors > 0 ? `${recentSystemErrors} system error(s) in the last hour` : "No system errors in the last hour",
+      currentDetail:
+        recentWebsiteErrors > 0
+          ? `${recentWebsiteErrors} customer-facing error(s) in the last hour`
+          : "No customer-facing errors in the last hour",
       periodDetail:
         websitePeriod !== "operational"
           ? `${uptimePctFromBars(websiteBars) ?? 0}% clean days in the last 30 days`
@@ -370,15 +430,19 @@ export function buildOfficeOpsHealthSummary(params: {
       latencyLabel: null,
       lastCheckedLabel: formatOfficeOpsRelativeTime(params.productionHealth?.generatedAt ?? params.fetchedAt),
       uptimeBars: bookingBars,
-      currentDetail: bookingFinding
-        ? "Production scan flagged booking or cron drift"
-        : recentCronErrors > 0
-          ? `${recentCronErrors} cron error(s) in 24h`
-          : "No booking drift detected right now",
+      currentDetail: bookingLiveFinding
+        ? "Production scan flagged booking or dispatch drift"
+        : bookingCurrent !== "operational"
+          ? recentBookingCronErrors1h > 0
+            ? `${recentBookingCronErrors1h} booking cron error(s) in the last hour`
+            : "Booking drift detected"
+          : bookingCronScheduleFinding
+            ? "Operational — cron schedule lag noted in scanner below"
+            : "No booking drift detected right now",
       periodDetail:
         bookingPeriod !== "operational"
-          ? `${uptimePctFromBars(bookingBars) ?? 0}% clean cron days in 30d`
-          : "Cron history clean over 30 days",
+          ? `${uptimePctFromBars(bookingBars) ?? 0}% days with successful booking cron in 30d`
+          : "Booking cron history stable over 30 days",
     }),
     buildServiceCard({
       id: "payment_gateway",
@@ -408,8 +472,8 @@ export function buildOfficeOpsHealthSummary(params: {
       uptimeBars: dbBars,
       currentDetail: !params.dbOk
         ? "Database probe failed"
-        : params.dbLatencyMs != null && params.dbLatencyMs > 800
-          ? `Probe latency ${formatOfficeOpsLatency(params.dbLatencyMs)}`
+        : params.dbLatencyMs != null && params.dbLatencyMs > OFFICE_OPS_DB_LATENCY_DEGRADED_MS
+          ? `Probe latency ${formatOfficeOpsLatency(params.dbLatencyMs)} (threshold ${formatOfficeOpsLatency(OFFICE_OPS_DB_LATENCY_DEGRADED_MS)})`
           : `Probe latency ${formatOfficeOpsLatency(params.dbLatencyMs) ?? "normal"}`,
       periodDetail:
         databasePeriod !== "operational"
@@ -541,6 +605,88 @@ export function buildOfficeOpsHealthSummary(params: {
     },
     ...(params.productionHealthError ? { error: params.productionHealthError } : {}),
   };
+}
+
+export type OpsHealthBannerTone = "healthy" | "warning" | "critical";
+
+export type OpsHealthBannerCopy = {
+  tone: OpsHealthBannerTone;
+  title: string;
+  subtitle: string;
+};
+
+/** Maps unified + service status into consistent banner tone and copy for the ops-health page. */
+export function resolveOpsHealthBanner(
+  summary: Pick<OfficeOpsHealthSummary, "unified" | "overallCurrentStatus" | "overallPeriodStatus">,
+): OpsHealthBannerCopy {
+  const unified = summary.unified.status;
+  const nowLabel = OFFICE_OPS_STATUS_CONFIG[summary.overallCurrentStatus].label;
+  const periodLabel = OFFICE_OPS_STATUS_CONFIG[summary.overallPeriodStatus].label;
+  const subtitle = `Ops health: ${unified.toUpperCase()} · Now: ${nowLabel} · 30d: ${periodLabel}`;
+
+  if (
+    unified === "healthy" &&
+    summary.overallCurrentStatus === "operational" &&
+    summary.overallPeriodStatus === "operational"
+  ) {
+    return { tone: "healthy", title: "All systems operational", subtitle };
+  }
+
+  const nowDown = summary.overallCurrentStatus === "down";
+  const nowDegraded = summary.overallCurrentStatus === "degraded";
+  const periodDown = summary.overallPeriodStatus === "down";
+
+  if (nowDown) {
+    return { tone: "critical", title: "Service outage detected right now", subtitle };
+  }
+
+  if (unified === "critical") {
+    if (nowDegraded && periodDown) {
+      return {
+        tone: "critical",
+        title: "Critical drift — services degraded now, 30-day history down",
+        subtitle,
+      };
+    }
+    if (nowDegraded) {
+      return { tone: "critical", title: "Critical drift — services degraded now", subtitle };
+    }
+    if (periodDown) {
+      return { tone: "critical", title: "Critical drift — 30-day history down", subtitle };
+    }
+    return { tone: "critical", title: "Critical production drift detected", subtitle };
+  }
+
+  if (unified === "degraded") {
+    if (nowDegraded && periodDown) {
+      return {
+        tone: "warning",
+        title: "Services degraded now with 30-day history issues",
+        subtitle,
+      };
+    }
+    if (periodDown) {
+      return { tone: "warning", title: "Historical issues in the last 30 days", subtitle };
+    }
+    if (nowDegraded) {
+      return { tone: "warning", title: "Issues detected right now", subtitle };
+    }
+    return { tone: "warning", title: "Active production issues detected", subtitle };
+  }
+
+  if (unified === "down") {
+    return { tone: "critical", title: "Production outage detected", subtitle };
+  }
+
+  if (nowDegraded) {
+    return { tone: "warning", title: "Issues detected right now", subtitle };
+  }
+
+  if (periodDown) {
+    return { tone: "warning", title: "Historical issues in the last 30 days", subtitle };
+  }
+
+  return { tone: "warning", title: "Active production issues detected", subtitle };
 }
 
 export const OFFICE_OPS_STATUS_CONFIG: Record<

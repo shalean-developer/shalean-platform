@@ -406,6 +406,7 @@ export async function GET(request: Request) {
     dbOk: opsSignals.dbOk,
     systemErrorRows: opsSignals.systemErrorRows,
     cronErrorRows: opsSignals.cronErrorRows,
+    paymentDriftRows: opsSignals.paymentDriftRows,
     notificationRows: opsSignals.notificationRows,
     whatsappPausedUntil: opsSignals.whatsappPausedUntil,
     customerOutboundPausedUntil: opsSignals.customerOutboundPausedUntil,

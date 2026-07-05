@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { collectOfficeOpsHealthSignals } from "@/lib/admin/collectOfficeOpsHealthSignals";
+import { assembleOfficeOpsHealthResponse } from "@/lib/admin/assembleOfficeOpsHealthResponse";
 import { buildOfficeOpsHealthSummary } from "@/lib/admin/officeOpsHealth";
 import { requireAdminFromRequest } from "@/lib/admin/requireAdmin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -7,12 +8,18 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEFAULT_SCAN_LIMIT = 250;
+const DEFAULT_SCAN_LIMIT = 500;
+const MAX_SCAN_LIMIT = 5_000;
 
 function clampScanLimit(raw: string | null): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return DEFAULT_SCAN_LIMIT;
-  return Math.min(5000, Math.max(1, Math.round(n)));
+  return Math.min(MAX_SCAN_LIMIT, Math.max(1, Math.round(n)));
+}
+
+function shouldIncludeAcknowledged(url: URL): boolean {
+  const param = url.searchParams.get("includeAcknowledged");
+  return param === "1" || param === "true";
 }
 
 export async function GET(request: Request) {
@@ -23,6 +30,7 @@ export async function GET(request: Request) {
   const fetchedAt = new Date().toISOString();
   const url = new URL(request.url);
   const scanLimit = clampScanLimit(url.searchParams.get("scanLimit"));
+  const includeAcknowledged = shouldIncludeAcknowledged(url);
 
   if (!admin) {
     return NextResponse.json(
@@ -34,6 +42,7 @@ export async function GET(request: Request) {
         dbOk: false,
         systemErrorRows: [],
         cronErrorRows: [],
+        paymentDriftRows: [],
         notificationRows: [],
         whatsappPausedUntil: null,
         notificationsQueryOk: false,
@@ -42,19 +51,7 @@ export async function GET(request: Request) {
   }
 
   const signals = await collectOfficeOpsHealthSignals(admin, scanLimit, fetchedAt);
-  const summary = buildOfficeOpsHealthSummary({
-    fetchedAt: signals.fetchedAt,
-    productionHealth: signals.productionHealth,
-    productionHealthError: signals.productionHealthError,
-    dbLatencyMs: signals.dbLatencyMs,
-    dbOk: signals.dbOk,
-    systemErrorRows: signals.systemErrorRows,
-    cronErrorRows: signals.cronErrorRows,
-    notificationRows: signals.notificationRows,
-    whatsappPausedUntil: signals.whatsappPausedUntil,
-    customerOutboundPausedUntil: signals.customerOutboundPausedUntil,
-    notificationsQueryOk: signals.notificationsQueryOk,
-  });
-
-  return NextResponse.json(summary);
+  return NextResponse.json(
+    assembleOfficeOpsHealthResponse(signals, { includeAcknowledged }),
+  );
 }

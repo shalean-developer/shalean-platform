@@ -25,6 +25,7 @@ import {
   recurringGeneratorCronStatus,
   serializeRecurringGeneratorRunMessage,
 } from "@/lib/recurring/recurringGeneratorRunSummary";
+import { restoreRecurringPreferredCleanerAssignments } from "@/lib/recurring/restoreRecurringPreferredCleanerAssignments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -434,6 +435,21 @@ export async function POST(request: Request) {
     },
   );
 
+  let assignmentRestore: Awaited<ReturnType<typeof restoreRecurringPreferredCleanerAssignments>> | null = null;
+  try {
+    assignmentRestore = await restoreRecurringPreferredCleanerAssignments(admin, {
+      fromDate: monthStart,
+      toDate: monthEnd,
+    });
+  } catch (restoreErr) {
+    await reportOperationalIssue(
+      "warn",
+      "cron/generate-recurring-bookings",
+      restoreErr instanceof Error ? restoreErr.message : String(restoreErr),
+      { phase: "restore_recurring_assignments" },
+    );
+  }
+
   await logSystemEvent({
     level: recurringGeneratorCronStatus(counters) === "error" ? "warn" : "info",
     source: "cron/generate-recurring-bookings",
@@ -468,6 +484,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: cronStatus === "success",
     ...counters,
+    assignment_restore: assignmentRestore,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

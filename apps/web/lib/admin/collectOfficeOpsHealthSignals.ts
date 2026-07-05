@@ -1,6 +1,14 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { OfficeOpsSystemErrorRow } from "@/lib/admin/officeOpsHealth";
+import {
+  filterBookingEngineCronErrors,
+  filterBookingEngineCronSuccesses,
+  isCronRunNoiseMessage,
+  type OfficeOpsCronErrorRow,
+  type OfficeOpsCronRunRow,
+} from "@/lib/admin/officeOpsHealthFilters";
 import {
   applyOpsHealthAcknowledgements,
   listOpsHealthAcknowledgements,
@@ -9,6 +17,8 @@ import {
 import { runProductionHealthScan, type ProductionHealthSummary } from "@/lib/observability/productionHealthMetrics";
 
 export const OFFICE_OPS_HISTORY_DAYS_MS = 30 * 86_400_000;
+
+export type { OfficeOpsSystemErrorRow };
 
 export type OfficeOpsHealthSignals = {
   fetchedAt: string;
@@ -19,21 +29,20 @@ export type OfficeOpsHealthSignals = {
   productionHealthError?: string;
   dbLatencyMs: number | null;
   dbOk: boolean;
-  systemErrorRows: Array<{ created_at: string | null }>;
-  cronErrorRows: Array<{ created_at: string | null }>;
+  systemErrorRows: OfficeOpsSystemErrorRow[];
+  cronErrorRows: OfficeOpsCronErrorRow[];
+  cronSuccessRows: OfficeOpsCronRunRow[];
+  paymentDriftRows: Array<{ created_at: string | null }>;
   notificationRows: Array<{ created_at: string | null; status: string | null; error?: string | null }>;
   whatsappPausedUntil: string | null;
   customerOutboundPausedUntil: string | null;
   notificationsQueryOk: boolean;
 };
 
-function filterCronAuthNoise(
-  rows: Array<{ created_at: string | null; message?: string | null }>,
-): Array<{ created_at: string | null }> {
-  return rows.filter((row) => {
-    const message = String(row.message ?? "").trim();
-    return message !== "Unauthorized." && message !== "[auth] Unauthorized." && !message.startsWith("[auth] Unauthorized");
-  }) as Array<{ created_at: string | null }>;
+function filterCronErrorRows(
+  rows: Array<{ created_at: string | null; job_name?: string | null; message?: string | null }>,
+): OfficeOpsCronErrorRow[] {
+  return rows.filter((row) => !isCronRunNoiseMessage(row.message)) as OfficeOpsCronErrorRow[];
 }
 
 export async function collectOfficeOpsHealthSignals(
@@ -51,6 +60,7 @@ export async function collectOfficeOpsHealthSignals(
     acknowledgements,
     systemLogsRes,
     cronRunsRes,
+    paymentDriftRes,
     notificationLogsRes,
     flagsRes,
   ] = await Promise.all([
@@ -61,15 +71,21 @@ export async function collectOfficeOpsHealthSignals(
     listOpsHealthAcknowledgements(admin),
     admin
       .from("system_logs")
-      .select("created_at, level")
+      .select("created_at, level, source, message")
       .eq("level", "error")
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(5000),
     admin
       .from("cron_runs")
-      .select("created_at, status, message")
-      .eq("status", "error")
+      .select("created_at, status, message, job_name")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(10000),
+    admin
+      .from("failed_jobs")
+      .select("created_at, type")
+      .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation"])
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(5000),
@@ -87,6 +103,11 @@ export async function collectOfficeOpsHealthSignals(
       ? applyOpsHealthAcknowledgements(productionHealthResult.summary, acknowledgements).visibleSummary
       : null;
 
+  const cronRunRows = (cronRunsRes.data ?? []) as OfficeOpsCronRunRow[];
+  const cronErrorRows = filterCronErrorRows(
+    cronRunRows.filter((row) => String(row.status ?? "").trim().toLowerCase() === "error"),
+  );
+
   return {
     fetchedAt,
     scanLimit,
@@ -96,8 +117,10 @@ export async function collectOfficeOpsHealthSignals(
     productionHealthError: productionHealthResult.ok ? undefined : productionHealthResult.error,
     dbLatencyMs,
     dbOk: !dbRes.error,
-    systemErrorRows: (systemLogsRes.data ?? []) as Array<{ created_at: string | null }>,
-    cronErrorRows: filterCronAuthNoise((cronRunsRes.data ?? []) as Array<{ created_at: string | null; message?: string | null }>),
+    systemErrorRows: (systemLogsRes.data ?? []) as OfficeOpsSystemErrorRow[],
+    cronErrorRows,
+    cronSuccessRows: filterBookingEngineCronSuccesses(cronRunRows),
+    paymentDriftRows: (paymentDriftRes.data ?? []) as Array<{ created_at: string | null }>,
     notificationRows: (notificationLogsRes.data ?? []) as Array<{
       created_at: string | null;
       status: string | null;

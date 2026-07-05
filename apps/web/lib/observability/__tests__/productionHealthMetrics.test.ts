@@ -19,6 +19,7 @@ import {
   buildProductionHealthSummary,
   detectPaymentFinalizationDrift,
   detectStaleCronRuns,
+  fetchExpectedCronSuccessRows,
   recordProductionHealthMetric,
   runProductionHealthScan,
 } from "@/lib/observability/productionHealthMetrics";
@@ -154,6 +155,67 @@ describe("productionHealthMetrics", () => {
     });
   });
 
+  it("does not mark daily cron missing when only latest success is supplied per job", () => {
+    const findings = detectStaleCronRuns(
+      [
+        {
+          job_name: "charge-monthly-invoices",
+          status: "success",
+          created_at: "2026-07-04T21:55:00.000Z",
+        },
+      ],
+      [{ jobName: "charge-monthly-invoices", maxAgeMinutes: 26 * 60 }],
+      new Date("2026-07-05T18:55:00.000Z"),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it("fetchExpectedCronSuccessRows resolves aliases and normalizes job_name", async () => {
+    const admin = {
+      from: vi.fn((table: string) => {
+        expect(table).toBe("cron_runs");
+        const builder = {
+          select: vi.fn(() => builder),
+          eq: vi.fn((col: string, val: string) => {
+            if (col === "job_name" && val === "charge-recurring-bookings") {
+              return {
+                ...builder,
+                eq: vi.fn(() => ({
+                  order: vi.fn(() => ({
+                    limit: vi.fn(() =>
+                      Promise.resolve({
+                        data: [{ job_name: "charge-recurring-bookings", status: "success", created_at: "2026-07-05T10:00:00.000Z" }],
+                        error: null,
+                      }),
+                    ),
+                  })),
+                })),
+              };
+            }
+            return builder;
+          }),
+          order: vi.fn(() => builder),
+          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
+        };
+        return builder;
+      }),
+    };
+
+    const { rows, failures } = await fetchExpectedCronSuccessRows(admin as never, [
+      { jobName: "generate-recurring-bookings", maxAgeMinutes: 30 },
+    ]);
+
+    expect(failures).toEqual([]);
+    expect(rows).toEqual([
+      {
+        job_name: "generate-recurring-bookings",
+        status: "success",
+        created_at: "2026-07-05T10:00:00.000Z",
+      },
+    ]);
+  });
+
   it("aggregates recurring drift through the existing recurring/monthly probes", () => {
     const summary = buildProductionHealthSummary({
       recurringRows: [
@@ -242,7 +304,6 @@ describe("productionHealthMetrics", () => {
   it("represents Supabase query errors as degraded scanner findings", async () => {
     const queryResults = [
       { data: [], error: { message: "failed_jobs unavailable", code: "PGRST500" } },
-      { data: [], error: null },
       { data: [], error: null },
       { data: [], error: null },
       { data: [], error: null },
