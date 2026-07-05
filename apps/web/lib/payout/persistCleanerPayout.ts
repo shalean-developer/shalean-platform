@@ -44,6 +44,7 @@ import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensure
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   evaluatePersistCleanerPayoutEligibility,
+  isActiveOnSiteBookingStatus,
   isPayoutEligibilitySkipReason,
 } from "@/lib/payout/bookingPayoutPersistEligibility";
 import {
@@ -133,6 +134,7 @@ function resolveTeamPayoutOwnershipInvariant(params: {
 async function isCleanerAllowedForPersist(
   admin: SupabaseClient,
   r: {
+    status?: string | null;
     cleaner_id?: string | null;
     payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
@@ -142,6 +144,9 @@ async function isCleanerAllowedForPersist(
   bookingId: string,
 ): Promise<boolean> {
   const exp = expectedCleanerId.trim();
+  const st = String(r.status ?? "").trim().toLowerCase();
+  const activeOnSite = isActiveOnSiteBookingStatus(st);
+
   if (r.is_team_job === true) {
     const teamId = String(r.team_id ?? "").trim();
     if (!teamId) return false;
@@ -164,7 +169,11 @@ async function isCleanerAllowedForPersist(
       .eq("team_id", teamId)
       .eq("cleaner_id", expectedCleanerId)
       .maybeSingle();
-    return !error && data != null;
+    if (!error && data != null) return true;
+    if (activeOnSite) {
+      return isCleanerAllowedForPreview(admin, r, expectedCleanerId, bookingId);
+    }
+    return false;
   }
   const cid = String(r.cleaner_id ?? "").trim();
   const owner = String(r.payout_owner_cleaner_id ?? "").trim();
@@ -179,7 +188,40 @@ async function isCleanerAllowedForPersist(
       .maybeSingle();
     if (!bcErr && bc) return true;
   }
+  if (activeOnSite) {
+    return isCleanerAllowedForPreview(admin, r, expectedCleanerId, bookingId);
+  }
   return false;
+}
+
+async function updateBookingSoloDisplayColumns(
+  admin: SupabaseClient,
+  bookingId: string,
+  patch: Record<string, unknown>,
+  opts: { forceDisplay: boolean; recomputeZeroDisplay: boolean },
+): Promise<{ updatedIds: string[]; error: string | null }> {
+  let soloUp = admin
+    .from("bookings")
+    .update(patch)
+    .eq("id", bookingId)
+    .or("is_team_job.eq.false,is_team_job.is.null");
+  soloUp = opts.forceDisplay
+    ? soloUp
+    : opts.recomputeZeroDisplay
+      ? soloUp.eq("display_earnings_cents", 0)
+      : soloUp.is("display_earnings_cents", null);
+  const { data: updated, error: upErr } = await soloUp.select("id");
+  if (upErr) return { updatedIds: [], error: upErr.message };
+  const ids = (updated ?? []).map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
+  if (ids.length > 0 || !opts.forceDisplay) {
+    return { updatedIds: ids, error: null };
+  }
+  const { data: retryUpdated, error: retryErr } = await admin.from("bookings").update(patch).eq("id", bookingId).select("id");
+  if (retryErr) return { updatedIds: [], error: retryErr.message };
+  return {
+    updatedIds: (retryUpdated ?? []).map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean),
+    error: null,
+  };
 }
 
 /**
@@ -1095,9 +1137,7 @@ async function persistCleanerPayoutIfUnsetCore(
       };
     }
 
-    let pairedUp = admin
-      .from("bookings")
-      .update({
+    let pairedUpPatch = {
         cleaner_payout_cents: leadPayoutCents,
         cleaner_bonus_cents: leadBonusCents,
         company_revenue_cents: soloCanonical.companyRevenueFromServiceCents,
@@ -1111,23 +1151,19 @@ async function persistCleanerPayoutIfUnsetCore(
         earnings_cap_cents_applied: soloCanonical.earningsCapCentsApplied ?? null,
         earnings_tenure_months_at_assignment: soloCanonical.tenureMonths ?? null,
         earnings_summary: soloSummary,
-      })
-      .eq("id", bookingId)
-      .or("is_team_job.eq.false,is_team_job.is.null");
-    pairedUp = forceDisplay
-      ? pairedUp
-      : recomputeZeroDisplay
-        ? pairedUp.eq("display_earnings_cents", 0)
-        : pairedUp.is("display_earnings_cents", null);
-    const { data: pairedUpdated, error: pairedUpErr } = await pairedUp.select("id");
-    if (pairedUpErr) {
-      await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", pairedUpErr.message, {
+      };
+    const pairedWrite = await updateBookingSoloDisplayColumns(admin, bookingId, pairedUpPatch, {
+      forceDisplay,
+      recomputeZeroDisplay,
+    });
+    if (pairedWrite.error) {
+      await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", pairedWrite.error, {
         bookingId,
         error_id: newPayoutMoneyPathErrorId(),
       });
-      return { ok: false, error: pairedUpErr.message };
+      return { ok: false, error: pairedWrite.error };
     }
-    if (!pairedUpdated?.length) {
+    if (!pairedWrite.updatedIds.length) {
       return { ok: true, skipped: true, skipReason: "paired_roster_display_update_noop" };
     }
 
@@ -1223,9 +1259,7 @@ async function persistCleanerPayoutIfUnsetCore(
    * Cleaners may see and complete jobs via `payout_owner_cleaner_id` or roster while `cleaner_id` is null or lagging;
    * `isCleanerAllowedForPersist` above is the access gate.
    */
-  let soloUp = admin
-    .from("bookings")
-    .update({
+  const soloPatch = {
       cleaner_payout_cents: payout.payoutCents,
       cleaner_bonus_cents: payout.bonusCents,
       company_revenue_cents: payout.companyRevenueCents,
@@ -1239,25 +1273,21 @@ async function persistCleanerPayoutIfUnsetCore(
       earnings_cap_cents_applied: soloCanonical.earningsCapCentsApplied ?? null,
       earnings_tenure_months_at_assignment: soloCanonical.tenureMonths ?? null,
       earnings_summary: soloSummary,
-    })
-    .eq("id", bookingId)
-    .or("is_team_job.eq.false,is_team_job.is.null");
-  soloUp = forceDisplay
-    ? soloUp
-    : recomputeZeroDisplay
-      ? soloUp.eq("display_earnings_cents", 0)
-      : soloUp.is("display_earnings_cents", null);
-  const { data: updated, error: upErr } = await soloUp.select("id");
+    };
+  const soloWrite = await updateBookingSoloDisplayColumns(admin, bookingId, soloPatch, {
+    forceDisplay,
+    recomputeZeroDisplay,
+  });
 
-  if (upErr) {
-    await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", upErr.message, {
+  if (soloWrite.error) {
+    await reportOperationalIssue("error", "persistCleanerPayoutIfUnset", soloWrite.error, {
       bookingId,
       error_id: newPayoutMoneyPathErrorId(),
     });
-    return { ok: false, error: upErr.message };
+    return { ok: false, error: soloWrite.error };
   }
 
-  if (!updated?.length) {
+  if (!soloWrite.updatedIds.length) {
     return { ok: true, skipped: true, skipReason: "solo_display_update_noop" };
   }
 
@@ -1405,8 +1435,10 @@ async function finalizePersistResult(
     bookingId,
     cleanerId,
     error_id: newPayoutMoneyPathErrorId(),
+    skipReason: core.skipReason ?? null,
   });
-  return { ok: false, error: "Earnings not written" };
+  const skipSuffix = core.skipped && core.skipReason ? ` (${core.skipReason})` : "";
+  return { ok: false, error: `Earnings not written${skipSuffix}` };
 }
 
 /**

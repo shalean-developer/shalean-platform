@@ -43,6 +43,12 @@ function invoiceBackedRow(row: Record<string, unknown>): boolean {
 
 const DISPATCH_FUNNEL_BOOKING_STATUS = new Set(["pending_assignment", "offered"]);
 
+const ACTIVE_ON_SITE_BOOKING_STATUS = new Set(["assigned", "in_progress", "en_route"]);
+
+export function isActiveOnSiteBookingStatus(st: string): boolean {
+  return ACTIVE_ON_SITE_BOOKING_STATUS.has(st);
+}
+
 /**
  * Central gate for whether `persistCleanerPayoutIfUnsetCore` should run writes for this row snapshot.
  * Callers pass the same shape loaded via {@link bookingsPersistSelectListForPersist}.
@@ -53,6 +59,18 @@ export function evaluatePersistCleanerPayoutEligibility(row: Record<string, unkn
 
   if (st === "cancelled" || st === "failed" || st === "payment_expired") {
     return { allowed: false, skipReason: "payout_eligibility_terminal_booking" };
+  }
+
+  if (isAuthoritativeBookingCompleted(row as { status?: string | null; completed_at?: string | null })) {
+    return { allowed: true, mode: "completed" };
+  }
+
+  /**
+   * Cleaner is already on the job. Persist earnings before completion even when
+   * `payment_needs_follow_up` or payment columns lag — preview/completion must not diverge.
+   */
+  if (isActiveOnSiteBookingStatus(st)) {
+    return { allowed: true, mode: "pre_completion_assignment_basis" };
   }
 
   if (st === "pending_payment") {
@@ -69,22 +87,8 @@ export function evaluatePersistCleanerPayoutEligibility(row: Record<string, unkn
     return { allowed: false, skipReason: "payout_eligibility_refund_or_reversal" };
   }
 
-  if (isAuthoritativeBookingCompleted(row as { status?: string | null; completed_at?: string | null })) {
-    return { allowed: true, mode: "completed" };
-  }
-
   if (DISPATCH_FUNNEL_BOOKING_STATUS.has(st)) {
     return { allowed: false, skipReason: "payout_eligibility_dispatch_booking_status" };
-  }
-
-  /**
-   * Active assignment: cleaner is on the job (or en route / started). Persist display
-   * earnings here so completion and dashboards do not depend on payment columns having
-   * landed before the service window — {@link isCompleatableDisplayEarningsCents} still
-   * blocks R0 completion when there is no real payout basis.
-   */
-  if (st === "assigned" || st === "in_progress") {
-    return { allowed: true, mode: "pre_completion_assignment_basis" };
   }
 
   const isTeam = row.is_team_job === true;

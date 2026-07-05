@@ -40,10 +40,10 @@ describe("bookingPayoutPersistEligibility", () => {
     expect(evaluatePersistCleanerPayoutEligibility({ status: "payment_expired" }).allowed).toBe(false);
   });
 
-  it("blocks payment_needs_follow_up for standard per_booking", () => {
+  it("blocks payment_needs_follow_up for standard per_booking when not yet on-site", () => {
     const r = evaluatePersistCleanerPayoutEligibility({
-      status: "completed",
-      completed_at: "2026-06-01T10:00:00Z",
+      status: "pending",
+      completed_at: null,
       payment_needs_follow_up: true,
       billing_type: "per_booking",
       cleaner_id: "00000000-0000-4000-8000-000000000001",
@@ -87,6 +87,19 @@ describe("bookingPayoutPersistEligibility", () => {
       payment_status: null,
       total_paid_cents: null,
       amount_paid_cents: null,
+    });
+    expect(r).toEqual({ allowed: true, mode: "pre_completion_assignment_basis" });
+  });
+
+  it("allows in_progress even when payment_needs_follow_up is set (active job completion path)", () => {
+    const r = evaluatePersistCleanerPayoutEligibility({
+      status: "in_progress",
+      completed_at: null,
+      is_team_job: false,
+      billing_type: "per_booking",
+      payment_needs_follow_up: true,
+      total_paid_zar: 400,
+      total_paid_cents: 40_000,
     });
     expect(r).toEqual({ allowed: true, mode: "pre_completion_assignment_basis" });
   });

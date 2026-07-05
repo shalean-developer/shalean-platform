@@ -11,6 +11,7 @@ import {
   fetchBookingDisplayEarningsCents,
   hasPersistedDisplayEarningsBasis,
   isCompletableDisplayEarningsCents,
+  resolvePersistCleanerIdForBookingWithRoster,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { JOB_EARNING_UNAVAILABLE_ERROR_CODE } from "@/lib/cleaner/cleanerJobEarning";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -1155,10 +1156,17 @@ export async function runCleanerBookingLifecycleAction(params: {
     });
 
     try {
+      const persistCleanerId =
+        (await resolvePersistCleanerIdForBookingWithRoster(admin, {
+          id: bookingId,
+          cleaner_id: bRow.cleaner_id ?? null,
+          payout_owner_cleaner_id: bRow.payout_owner_cleaner_id ?? null,
+          is_team_job: bRow.is_team_job === true,
+        })) ?? cleanerId;
       const payout = await persistCleanerPayoutIfUnset({
         admin,
         bookingId,
-        cleanerId,
+        cleanerId: persistCleanerId,
         forceDisplayRecompute: true,
       });
       if (payout.ok === false) {
