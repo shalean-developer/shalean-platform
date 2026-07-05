@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { adminFetch } from "@/hooks/useAdminData";
 import { SalesDocumentQuoteEditor } from "@/components/admin/sales-documents/SalesDocumentQuoteEditor";
+import { SalesDocumentDetailsEditor } from "@/components/admin/sales-documents/SalesDocumentDetailsEditor";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { trustDocPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { SalesDocumentQuoteRequestDetails } from "@/lib/salesDocument/types";
-import { salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
+import { salesDocumentIsDeletable, salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
 
 type DocDetail = {
   id: string;
@@ -36,6 +37,7 @@ type DocDetail = {
   refund_reference: string | null;
   refunded_at: string | null;
   converted_from_id: string | null;
+  linked_invoice_id?: string | null;
   sent_at: string | null;
   first_viewed_at: string | null;
   last_viewed_at: string | null;
@@ -68,6 +70,7 @@ function formatDateTime(iso: string | null | undefined) {
 
 export default function OfficeSalesDocumentDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = typeof params?.id === "string" ? params.id : "";
   const [doc, setDoc] = useState<DocDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +83,7 @@ export default function OfficeSalesDocumentDetailPage() {
   const [refundReference, setRefundReference] = useState("");
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileReference, setReconcileReference] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -184,6 +188,33 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
+  async function runDelete() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await adminFetch<{ ok?: boolean; error?: string }>(
+        `/api/admin/sales-documents/${id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const err = res.error ?? res.data?.error ?? "Delete failed.";
+        if (err === "linked_paid_booking") {
+          throw new Error("Cannot delete — a paid booking is linked to this invoice.");
+        }
+        if (err === "not_deletable") {
+          throw new Error("Cannot delete — document is paid or locked.");
+        }
+        throw new Error(err);
+      }
+      router.push("/office/sales-documents");
+    } catch (err) {
+      setMessageKind("error");
+      setMessage(err instanceof Error ? err.message : "Delete failed.");
+      setDeleteOpen(false);
+    }
+    setBusy(false);
+  }
+
   async function runAction(path: string, successLabel: string) {
     setBusy(true);
     setMessage(null);
@@ -216,18 +247,50 @@ export default function OfficeSalesDocumentDetailPage() {
     status: doc.status,
     amount_paid_cents: doc.amount_paid_cents ?? 0,
   });
+  const docTypeLabel = doc.document_type === "invoice" ? "Invoice" : "Quote";
+  const canDelete = salesDocumentIsDeletable({
+    document_type: doc.document_type === "invoice" ? "invoice" : "quote",
+    status: doc.status,
+    amount_paid_cents: doc.amount_paid_cents ?? 0,
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <Link href="/office/sales-documents" className="text-sm text-blue-600 hover:underline">← All quotes</Link>
 
+      {canEditLines ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="font-semibold">Editing enabled — not yet paid</p>
+          <p className="mt-1 text-blue-800">
+            Update customer details and line items below. Changes sync to Zoho on save.
+            {doc.linked_invoice_id ? (
+              <>
+                {" "}
+                Linked invoice{" "}
+                <Link
+                  href={`/office/sales-documents/${doc.linked_invoice_id}`}
+                  className="font-medium underline hover:text-blue-950"
+                >
+                  {doc.linked_invoice_id.slice(0, 8).toUpperCase()}
+                </Link>{" "}
+                is updated automatically when you edit this quote.
+              </>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 capitalize">
-            {doc.document_type} · {doc.id.slice(0, 8).toUpperCase()}
+          <h1 className="text-2xl font-bold text-slate-900">
+            {canEditLines ? `Edit ${docTypeLabel.toLowerCase()}` : docTypeLabel} · {doc.id.slice(0, 8).toUpperCase()}
           </h1>
-          <p className="text-sm text-slate-500">{doc.customer_name} · {doc.customer_email}</p>
-          {doc.customer_phone ? <p className="text-sm text-slate-500">{doc.customer_phone}</p> : null}
+          {!canEditLines ? (
+            <>
+              <p className="text-sm text-slate-500">{doc.customer_name} · {doc.customer_email}</p>
+              {doc.customer_phone ? <p className="text-sm text-slate-500">{doc.customer_phone}</p> : null}
+            </>
+          ) : null}
           <p className="mt-1 text-sm capitalize text-slate-600">
             Status: {doc.status === "requested" ? "New request" : doc.status}
             {doc.source === "customer_request" ? " · Website form" : ""}
@@ -239,9 +302,21 @@ export default function OfficeSalesDocumentDetailPage() {
             </p>
           ) : null}
         </div>
-        <p className="text-lg font-bold tabular-nums text-slate-900">
-          {doc.status === "requested" ? "Pricing needed" : formatZar(doc.total_cents)}
-        </p>
+        <div className="flex flex-col items-end gap-2">
+          <p className="text-lg font-bold tabular-nums text-slate-900">
+            {doc.status === "requested" ? "Pricing needed" : formatZar(doc.total_cents)}
+          </p>
+          {canDelete ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDeleteOpen(true)}
+              className="text-sm font-semibold text-red-600 hover:underline disabled:opacity-50"
+            >
+              Delete {docTypeLabel.toLowerCase()}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {doc.sent_at || doc.view_count > 0 ? (
@@ -334,6 +409,24 @@ export default function OfficeSalesDocumentDetailPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-xs font-semibold uppercase text-slate-500">
+          {canEditLines ? "Customer details" : "Customer"}
+        </h2>
+        <SalesDocumentDetailsEditor
+          documentId={doc.id}
+          documentType={doc.document_type === "invoice" ? "invoice" : "quote"}
+          status={doc.status}
+          amountPaidCents={doc.amount_paid_cents ?? 0}
+          initialName={doc.customer_name}
+          initialEmail={doc.customer_email}
+          initialPhone={doc.customer_phone}
+          initialDueDate={doc.due_date}
+          initialNotes={doc.notes}
+          onSaved={() => void load()}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-xs font-semibold uppercase text-slate-500">
           {doc.status === "requested"
             ? "Add pricing & line items"
             : canEditLines
@@ -348,7 +441,6 @@ export default function OfficeSalesDocumentDetailPage() {
           initialLines={doc.line_items}
           onSaved={() => void load()}
         />
-        {doc.notes && !rd ? <p className="mt-4 text-sm text-slate-600">{doc.notes}</p> : null}
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -412,6 +504,16 @@ export default function OfficeSalesDocumentDetailPage() {
             className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
           >
             Refund payment
+          </button>
+        ) : null}
+        {canDelete ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setDeleteOpen(true)}
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+          >
+            Delete {docTypeLabel.toLowerCase()}
           </button>
         ) : null}
         {doc.status !== "requested" ? (
@@ -571,6 +673,48 @@ export default function OfficeSalesDocumentDetailPage() {
               className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
             >
               {busy ? "Reconciling…" : "Reconcile payment"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => !busy && setDeleteOpen(open)}>
+        <DialogContent className="max-w-md rounded-2xl border-slate-200">
+          <DialogHeader>
+            <DialogTitle>Delete {docTypeLabel.toLowerCase()}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            Permanently delete {doc.customer_name}&apos;s {docTypeLabel.toLowerCase()} (
+            {doc.id.slice(0, 8).toUpperCase()})? This cannot be undone.
+          </p>
+          {doc.document_type === "quote" && doc.linked_invoice_id ? (
+            <p className="mt-2 text-sm text-amber-800">
+              The linked unpaid invoice ({doc.linked_invoice_id.slice(0, 8).toUpperCase()}) and any
+              unpaid booking created from it will also be removed.
+            </p>
+          ) : null}
+          {doc.document_type === "invoice" ? (
+            <p className="mt-2 text-sm text-amber-800">
+              Any unpaid booking linked to this invoice will also be removed. The source quote will
+              revert to sent status if applicable.
+            </p>
+          ) : null}
+          <DialogFooter className="gap-2 sm:justify-end">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDeleteOpen(false)}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void runDelete()}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {busy ? "Deleting…" : `Delete ${docTypeLabel.toLowerCase()}`}
             </button>
           </DialogFooter>
         </DialogContent>

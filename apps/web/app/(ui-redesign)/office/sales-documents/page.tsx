@@ -1,17 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adminFetch } from "@/hooks/useAdminData";
+import { SalesDocumentDeleteDialog } from "@/components/admin/sales-documents/SalesDocumentDeleteDialog";
+import {
+  isSalesDocumentEditable,
+  SalesDocumentRowActions,
+  type SalesDocumentActionRow,
+} from "@/components/admin/sales-documents/SalesDocumentRowActions";
 
-type SalesDocRow = {
-  id: string;
-  document_type: string;
-  status: string;
+type SalesDocRow = SalesDocumentActionRow & {
   source?: string;
-  customer_name: string;
   customer_email: string;
   total_cents: number;
   balance_cents: number;
@@ -42,9 +44,13 @@ function statusLabel(status: string) {
   return status.replace(/_/g, " ");
 }
 
-function SalesDocumentListItem({ doc }: { doc: SalesDocRow }) {
-  const actionLabel = doc.status === "requested" ? "Review" : "View";
-
+function SalesDocumentListItem({
+  doc,
+  onDelete,
+}: {
+  doc: SalesDocRow;
+  onDelete: (doc: SalesDocRow) => void;
+}) {
   return (
     <div className="border-t border-slate-100 px-4 py-4 first:border-t-0 hover:bg-slate-50/50">
       <div className="flex items-start justify-between gap-3">
@@ -62,6 +68,11 @@ function SalesDocumentListItem({ doc }: { doc: SalesDocRow }) {
             >
               {statusLabel(doc.status)}
             </span>
+            {isSalesDocumentEditable(doc) ? (
+              <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+                Editable
+              </span>
+            ) : null}
           </div>
           <p className="mt-2 truncate text-sm font-medium text-slate-800">{doc.customer_name}</p>
           <p className="truncate text-xs text-slate-400">{doc.customer_email}</p>
@@ -80,20 +91,19 @@ function SalesDocumentListItem({ doc }: { doc: SalesDocRow }) {
             </p>
           ) : null}
         </div>
-        <Link
-          href={`/office/sales-documents/${doc.id}`}
-          className="shrink-0 text-sm font-medium text-blue-600 hover:underline"
-        >
-          {actionLabel}
-        </Link>
+        <SalesDocumentRowActions doc={doc} onDelete={onDelete} layout="stack" />
       </div>
     </div>
   );
 }
 
-function SalesDocumentTableRow({ doc }: { doc: SalesDocRow }) {
-  const actionLabel = doc.status === "requested" ? "Review" : "View";
-
+function SalesDocumentTableRow({
+  doc,
+  onDelete,
+}: {
+  doc: SalesDocRow;
+  onDelete: (doc: SalesDocRow) => void;
+}) {
   return (
     <tr className="border-t border-slate-100 hover:bg-slate-50/50">
       <td className="px-4 py-3 font-mono text-xs text-blue-600">{doc.id.slice(0, 8).toUpperCase()}</td>
@@ -122,9 +132,7 @@ function SalesDocumentTableRow({ doc }: { doc: SalesDocRow }) {
         ) : null}
       </td>
       <td className="px-4 py-3 text-right">
-        <Link href={`/office/sales-documents/${doc.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-          {actionLabel}
-        </Link>
+        <SalesDocumentRowActions doc={doc} onDelete={onDelete} />
       </td>
     </tr>
   );
@@ -135,6 +143,9 @@ export default function OfficeSalesDocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [deleteTarget, setDeleteTarget] = useState<SalesDocRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,13 +176,42 @@ export default function OfficeSalesDocumentsPage() {
 
   const requestCount = docs.filter((d) => d.status === "requested").length;
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await adminFetch<{ ok?: boolean; error?: string }>(
+        `/api/admin/sales-documents/${deleteTarget.id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const err = res.error ?? res.data?.error ?? "Delete failed.";
+        if (err === "linked_paid_booking") {
+          throw new Error("Cannot delete — a paid booking is linked to this invoice.");
+        }
+        if (err === "not_deletable") {
+          throw new Error("Cannot delete — document is paid or locked.");
+        }
+        throw new Error(err);
+      }
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Delete failed.");
+    }
+    setDeleteBusy(false);
+  }
+
   return (
     <div className="space-y-5 md:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Quotes</h1>
           <p className="text-sm text-slate-500">
-            Review customer quote requests, create ad-hoc quotes, and send one-off invoices.
+            Review customer quote requests, create ad-hoc quotes, and send one-off invoices. Unpaid rows
+            show <span className="font-medium text-violet-700">Edit</span> and{" "}
+            <span className="font-medium text-red-600">Delete</span>.
           </p>
         </div>
         <Link
@@ -222,45 +262,72 @@ export default function OfficeSalesDocumentsPage() {
         </button>
       </div>
 
+      {deleteError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {deleteError}
+        </div>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:hidden">
         {loading ? (
           <div className="px-4 py-8 text-center text-slate-400">Loading…</div>
         ) : filtered.length === 0 ? (
           <div className="px-4 py-8 text-center text-slate-400">No documents yet.</div>
         ) : (
-          filtered.map((d) => <SalesDocumentListItem key={d.id} doc={d} />)
+          filtered.map((d) => (
+            <SalesDocumentListItem key={d.id} doc={d} onDelete={(doc) => setDeleteTarget(doc)} />
+          ))
         )}
       </div>
 
       <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">ID</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Customer</th>
-              <th className="px-4 py-3">Total</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+          <table className="w-full min-w-[820px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">Loading…</td>
+                <th className="px-4 py-3">ID</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Customer</th>
+                <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">No documents yet.</td>
-              </tr>
-            ) : (
-              filtered.map((d) => <SalesDocumentTableRow key={d.id} doc={d} />)
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                    Loading…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                    No documents yet.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((d) => (
+                  <SalesDocumentTableRow key={d.id} doc={d} onDelete={(doc) => setDeleteTarget(doc)} />
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      <SalesDocumentDeleteDialog
+        doc={deleteTarget}
+        open={Boolean(deleteTarget)}
+        busy={deleteBusy}
+        onOpenChange={(open) => {
+          if (!open && !deleteBusy) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

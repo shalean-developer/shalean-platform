@@ -18,6 +18,7 @@ export type AdminBillingDocumentRow = {
   customer_name: string;
   customer_email: string;
   amount_cents: number;
+  amount_paid_cents?: number;
   status: string;
   zoho_linked: boolean;
   zoho_id: string | null;
@@ -135,6 +136,7 @@ export async function loadAdminBillingDocuments(
       customer_name: String(row.customer_name ?? ""),
       customer_email: String(row.customer_email ?? ""),
       amount_cents: Math.max(0, Math.round(Number(row.total_cents ?? 0))),
+      amount_paid_cents: Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0))),
       status: String(row.status ?? ""),
       zoho_linked: zoho.linked,
       zoho_id: zoho.id,

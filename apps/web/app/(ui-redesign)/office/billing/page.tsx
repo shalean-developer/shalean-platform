@@ -10,6 +10,7 @@ import type {
   AdminBillingDocumentsSummary,
 } from "@/lib/admin/billing/loadAdminBillingDocuments";
 import { monthlyInvoiceZohoSyncErrorMessage } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceZohoTotalCents";
+import { salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
 import { adminFetch } from "@/hooks/useAdminData";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +101,15 @@ function canManualSync(doc: AdminBillingDocumentRow): boolean {
   return true;
 }
 
+function canEditBillingDocument(doc: AdminBillingDocumentRow): boolean {
+  if (doc.kind !== "quote" && doc.kind !== "sales_invoice") return false;
+  return salesDocumentIsEditableWithoutPayment({
+    document_type: doc.kind === "quote" ? "quote" : "invoice",
+    status: doc.status,
+    amount_paid_cents: doc.amount_paid_cents ?? 0,
+  });
+}
+
 function BillingDocumentRow({
   doc,
   syncing,
@@ -110,6 +120,7 @@ function BillingDocumentRow({
   onSync: (doc: AdminBillingDocumentRow) => void;
 }) {
   const showSync = canManualSync(doc);
+  const showEdit = canEditBillingDocument(doc);
 
   return (
     <tr className="border-t border-slate-100 hover:bg-slate-50/50">
@@ -146,6 +157,11 @@ function BillingDocumentRow({
             >
               {syncing ? "Syncing…" : "Sync to Zoho"}
             </button>
+          ) : null}
+          {showEdit ? (
+            <Link href={doc.href} className="text-sm font-medium text-violet-700 hover:underline">
+              Edit
+            </Link>
           ) : null}
           <Link href={doc.href} className="text-sm font-medium text-blue-600 hover:underline">
             Open

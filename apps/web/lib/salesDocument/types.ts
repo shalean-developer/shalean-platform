@@ -85,8 +85,16 @@ export function salesDocumentIsEditableWithoutPayment(params: {
   const st = String(params.status ?? "").toLowerCase();
   if (NON_EDITABLE_STATUSES.has(st)) return false;
   if (Math.max(0, Math.round(Number(params.amount_paid_cents ?? 0))) > 0) return false;
-  if (params.document_type === "quote" && st === "accepted") return false;
-  return st === "requested" || st === "draft" || st === "sent" || st === "accepted";
+  return true;
+}
+
+/** Unpaid quotes and invoices may be deleted (same rules as editing). */
+export function salesDocumentIsDeletable(params: {
+  document_type: SalesDocumentType;
+  status: string;
+  amount_paid_cents: number;
+}): boolean {
+  return salesDocumentIsEditableWithoutPayment(params);
 }
 
 export function parseSalesDocumentLineItems(raw: unknown): SalesDocumentLineItem[] {

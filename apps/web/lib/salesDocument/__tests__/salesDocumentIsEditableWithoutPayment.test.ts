@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
+import { salesDocumentIsDeletable, salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
 
 describe("salesDocumentIsEditableWithoutPayment", () => {
   it("allows draft and requested quotes", () => {
@@ -37,14 +37,24 @@ describe("salesDocumentIsEditableWithoutPayment", () => {
     ).toBe(true);
   });
 
-  it("blocks accepted quotes and paid documents", () => {
+  it("allows accepted quotes and invoices with no payment", () => {
     expect(
       salesDocumentIsEditableWithoutPayment({
         document_type: "quote",
         status: "accepted",
         amount_paid_cents: 0,
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      salesDocumentIsEditableWithoutPayment({
+        document_type: "invoice",
+        status: "draft",
+        amount_paid_cents: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks paid documents", () => {
     expect(
       salesDocumentIsEditableWithoutPayment({
         document_type: "invoice",
@@ -59,6 +69,25 @@ describe("salesDocumentIsEditableWithoutPayment", () => {
       salesDocumentIsEditableWithoutPayment({
         document_type: "invoice",
         status: "sent",
+        amount_paid_cents: 100,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("salesDocumentIsDeletable", () => {
+  it("matches unpaid editable rules", () => {
+    expect(
+      salesDocumentIsDeletable({
+        document_type: "quote",
+        status: "accepted",
+        amount_paid_cents: 0,
+      }),
+    ).toBe(true);
+    expect(
+      salesDocumentIsDeletable({
+        document_type: "invoice",
+        status: "paid",
         amount_paid_cents: 100,
       }),
     ).toBe(false);

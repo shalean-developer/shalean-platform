@@ -255,6 +255,17 @@ export async function voidZohoInvoice(zohoInvoiceId: string): Promise<ServiceRes
   }
 }
 
+export async function deleteZohoEstimate(zohoEstimateId: string): Promise<ServiceResult<{ deleted: true }>> {
+  const id = zohoEstimateId.trim();
+  if (!id) return { ok: false, error: "missing_estimate_id" };
+  try {
+    await zohoBooksClient.delete(`/estimates/${encodeURIComponent(id)}`);
+    return { ok: true, deleted: true };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
 export async function zohoInvoiceExists(zohoInvoiceId: string): Promise<boolean | "unknown"> {
   const id = zohoInvoiceId.trim();
   if (!id) return false;

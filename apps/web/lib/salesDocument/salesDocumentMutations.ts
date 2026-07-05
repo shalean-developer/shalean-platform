@@ -69,18 +69,55 @@ export async function createSalesDocument(
   return { ok: true, id };
 }
 
-export async function updateSalesDocumentDraft(
+export type SalesDocumentDraftPatch = {
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string | null;
+  line_items?: SalesDocumentLineItem[];
+  due_date?: string | null;
+  notes?: string | null;
+  customer_id?: string | null;
+};
+
+async function findLinkedUnpaidInvoiceId(
+  admin: SupabaseClient,
+  quoteId: string,
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from("sales_documents")
+    .select("id, status, document_type, amount_paid_cents")
+    .eq("converted_from_id", quoteId)
+    .eq("document_type", "invoice")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const row = data as {
+    id: string;
+    status: string;
+    document_type: SalesDocumentType;
+    amount_paid_cents: number | null;
+  };
+
+  if (
+    !salesDocumentIsEditableWithoutPayment({
+      document_type: row.document_type,
+      status: row.status,
+      amount_paid_cents: row.amount_paid_cents ?? 0,
+    })
+  ) {
+    return null;
+  }
+
+  return String(row.id);
+}
+
+async function applySalesDocumentDraftPatch(
   admin: SupabaseClient,
   documentId: string,
-  patch: {
-    customer_name?: string;
-    customer_email?: string;
-    customer_phone?: string | null;
-    line_items?: SalesDocumentLineItem[];
-    due_date?: string | null;
-    notes?: string | null;
-    customer_id?: string | null;
-  },
+  patch: SalesDocumentDraftPatch,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: existing, error: loadErr } = await admin
     .from("sales_documents")
@@ -134,17 +171,46 @@ export async function updateSalesDocumentDraft(
     }
   }
 
+  if (Object.keys(updates).length === 0) return { ok: true };
+
   const { error: updErr } = await admin.from("sales_documents").update(updates).eq("id", documentId);
   if (updErr) return { ok: false, error: updErr.message };
 
-  const nextStatus =
-    updates.status === "draft" ? "draft" : currentStatus;
-  const nextTotal =
-    typeof updates.total_cents === "number" ? updates.total_cents : undefined;
+  const nextStatus = updates.status === "draft" ? "draft" : currentStatus;
+  const nextTotal = typeof updates.total_cents === "number" ? updates.total_cents : undefined;
   if (nextStatus !== "requested" && (nextTotal === undefined || nextTotal > 0)) {
     await syncSalesDocumentToZoho(admin, documentId);
   }
   return { ok: true };
+}
+
+export async function updateSalesDocumentDraft(
+  admin: SupabaseClient,
+  documentId: string,
+  patch: SalesDocumentDraftPatch,
+): Promise<{ ok: true; linked_invoice_id?: string | null } | { ok: false; error: string }> {
+  const { data: existing, error: loadErr } = await admin
+    .from("sales_documents")
+    .select("id, document_type")
+    .eq("id", documentId)
+    .maybeSingle();
+
+  if (loadErr) return { ok: false, error: loadErr.message };
+  if (!existing) return { ok: false, error: "document_not_found" };
+
+  const result = await applySalesDocumentDraftPatch(admin, documentId, patch);
+  if (!result.ok) return result;
+
+  let linkedInvoiceId: string | null = null;
+  if (String((existing as { document_type: string }).document_type) === "quote") {
+    linkedInvoiceId = await findLinkedUnpaidInvoiceId(admin, documentId);
+    if (linkedInvoiceId) {
+      const linkedResult = await applySalesDocumentDraftPatch(admin, linkedInvoiceId, patch);
+      if (!linkedResult.ok) return linkedResult;
+    }
+  }
+
+  return { ok: true, linked_invoice_id: linkedInvoiceId };
 }
 
 export async function convertSalesQuoteToInvoice(
