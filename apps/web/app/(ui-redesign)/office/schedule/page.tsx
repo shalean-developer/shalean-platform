@@ -366,10 +366,11 @@ function CleanerCapacityPanel({
   const rows = [
     { label: "Available", count: stats.availableIdle, pct: stats.availablePct, color: "bg-emerald-500" },
     { label: "Booked / in job", count: stats.busy, pct: stats.busyPct, color: "bg-blue-500" },
+    { label: "Off today", count: stats.offToday, pct: stats.offTodayPct, color: "bg-amber-300" },
     {
-      label: "Not receiving",
-      count: stats.notReceiving,
-      pct: stats.offlinePct,
+      label: "Offline / paused",
+      count: stats.manuallyUnavailable,
+      pct: stats.manuallyUnavailablePct,
       color: "bg-slate-300",
     },
   ];

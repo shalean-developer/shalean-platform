@@ -163,9 +163,17 @@ export function computeOfficeScheduleCleanerStats(params: {
   total: number;
   availableIdle: number;
   busy: number;
+  /** Cleaners manually offline or paused — excluded from dispatch offers. */
+  manuallyUnavailable: number;
+  /** Cleaners online but today is not a roster day — schedule gate, not a manual opt-out. */
+  offToday: number;
+  /** @deprecated Use {@link manuallyUnavailable} + {@link offToday} for dashboard breakdown. */
   notReceiving: number;
   availablePct: number;
   busyPct: number;
+  manuallyUnavailablePct: number;
+  offTodayPct: number;
+  /** Combined remainder (off today + manually unavailable). */
   offlinePct: number;
 } {
   const activeCleanerIds = new Set(
@@ -197,13 +205,29 @@ export function computeOfficeScheduleCleanerStats(params: {
   const total = params.cleaners.length;
   const availableIdle = cleanerStates.filter((s) => s.stateKey === "online").length;
   const busy = cleanerStates.filter((s) => s.stateKey === "booked" || s.stateKey === "in-job").length;
-  const notReceiving = cleanerStates.filter(
-    (s) => s.stateKey === "paused" || s.stateKey === "offline" || s.stateKey === "off-today",
+  const offToday = cleanerStates.filter((s) => s.stateKey === "off-today").length;
+  const manuallyUnavailable = cleanerStates.filter(
+    (s) => s.stateKey === "paused" || s.stateKey === "offline",
   ).length;
+  const notReceiving = offToday + manuallyUnavailable;
   const availablePct = total > 0 ? Math.round((availableIdle / total) * 1000) / 10 : 0;
   const busyPct = total > 0 ? Math.round((busy / total) * 1000) / 10 : 0;
+  const offTodayPct = total > 0 ? Math.round((offToday / total) * 1000) / 10 : 0;
+  const manuallyUnavailablePct = total > 0 ? Math.round((manuallyUnavailable / total) * 1000) / 10 : 0;
   const offlinePct = Math.max(0, 100 - availablePct - busyPct);
-  return { total, availableIdle, busy, notReceiving, availablePct, busyPct, offlinePct };
+  return {
+    total,
+    availableIdle,
+    busy,
+    offToday,
+    manuallyUnavailable,
+    notReceiving,
+    availablePct,
+    busyPct,
+    offTodayPct,
+    manuallyUnavailablePct,
+    offlinePct,
+  };
 }
 
 export function countOfficeScheduleStartingSoonUnassigned(

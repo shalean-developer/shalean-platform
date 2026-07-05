@@ -87,6 +87,29 @@ describe("computeOfficeScheduleCleanerStats", () => {
     expect(stats.total).toBe(2);
     expect(stats.busy).toBeGreaterThanOrEqual(1);
   });
+
+  it("splits off-today roster gates from manual offline/paused", () => {
+    const stats = computeOfficeScheduleCleanerStats({
+      dateYmd: "2026-07-05",
+      cleaners: [
+        { id: "c1", full_name: "Online", is_available: true, status: "available", availability_weekdays: ["sun"] },
+        {
+          id: "c2",
+          full_name: "Off roster",
+          is_available: true,
+          status: "available",
+          availability_weekdays: ["mon"],
+        },
+        { id: "c3", full_name: "Paused", is_available: false, status: "offline", availability_weekdays: ["sun"] },
+        { id: "c4", full_name: "Offline", is_available: false, status: "offline", availability_weekdays: ["sun"] },
+      ],
+      bookings: [],
+    });
+    expect(stats.offToday).toBe(1);
+    expect(stats.manuallyUnavailable).toBe(2);
+    expect(stats.notReceiving).toBe(3);
+    expect(stats.availableIdle).toBe(1);
+  });
 });
 
 describe("addOfficeScheduleDays", () => {

@@ -6,11 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { OpsSnapshot } from "@/lib/admin/opsSnapshot";
-import { deriveCleanerAvailabilityState } from "@/lib/cleaner/cleanerAvailabilityState";
+import { computeOfficeScheduleCleanerStats, type OfficeScheduleDayResponse } from "@/lib/admin/officeScheduleDayPresentation";
 import {
   computeOfficeTodayScheduleStats,
   officeScheduleStatusPresentation,
-  type OfficeTodayScheduleStats,
 } from "@/lib/admin/officeTodayScheduleStats";
 import {
   AlertTriangle,
@@ -130,25 +129,6 @@ function johannesburgTodayYmd(): string {
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
-}
-
-function weekdayIndexForYmd(ymd: string): number {
-  const day = new Date(`${ymd}T12:00:00+02:00`).getDay();
-  return Number.isFinite(day) ? day : new Date().getDay();
-}
-
-function rosterIncludesWeekday(raw: unknown, weekday: number): boolean {
-  if (!Array.isArray(raw) || raw.length === 0) return true;
-  const names = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  return raw.some((value) => {
-    const v = String(value ?? "").trim().toLowerCase();
-    if (!v) return false;
-    const asNumber = Number(v);
-    if (Number.isFinite(asNumber)) {
-      return asNumber === weekday || asNumber === weekday + 1;
-    }
-    return v === names[weekday] || v.startsWith(names[weekday]);
-  });
 }
 
 function pct(part: number, total: number): number {
@@ -338,62 +318,23 @@ export default function OfficeDashboardPage() {
   const { data: opsData, refetch: refetchOps } = useAdminData<OpsSnapshot>("/api/admin/ops-snapshot");
 
   const todayYmd = johannesburgTodayYmd();
-  const { data: scheduleData } = useAdminData<{
-    bookings: Array<{
-      id: string;
-      time: string | null;
-      service: string | null;
-      location: string | null;
-      status: string | null;
-      cleaner_id: string | null;
-      selected_cleaner_id?: string | null;
-      team_id?: string | null;
-    }>;
-    summary?: OfficeTodayScheduleStats;
-    cleaners: Array<{
-      id: string;
-      full_name: string | null;
-      is_available: boolean | null;
-      status?: string | null;
-      availability_weekdays?: unknown;
-    }>;
-  }>("/api/admin/schedule/day", { params: { date: todayYmd } });
+  const { data: scheduleData } = useAdminData<OfficeScheduleDayResponse>(
+    "/api/admin/schedule/day",
+    { params: { date: todayYmd } },
+  );
 
   const todayBookings = scheduleData?.bookings ?? [];
   const todayStats = scheduleData?.summary ?? computeOfficeTodayScheduleStats(todayBookings);
 
-  const activeCleanerIds = new Set(
-    todayBookings
-      .filter((b) => {
-        const st = String(b.status ?? "").toLowerCase();
-        return st === "in_progress" || st === "en_route";
-      })
-      .flatMap((b) => [b.cleaner_id, b.selected_cleaner_id].filter(Boolean) as string[]),
+  const cleanerStats = useMemo(
+    () =>
+      computeOfficeScheduleCleanerStats({
+        bookings: todayBookings,
+        cleaners: scheduleData?.cleaners ?? [],
+        dateYmd: todayYmd,
+      }),
+    [todayBookings, scheduleData?.cleaners, todayYmd],
   );
-  const bookedCleanerIds = new Set(
-    todayBookings
-      .filter((b) => {
-        const st = String(b.status ?? "").toLowerCase();
-        return (st === "assigned" || st === "confirmed") && (b.cleaner_id || b.selected_cleaner_id);
-      })
-      .flatMap((b) => [b.cleaner_id, b.selected_cleaner_id].filter(Boolean) as string[]),
-  );
-  const weekday = weekdayIndexForYmd(todayYmd);
-  const cleanerStates = (scheduleData?.cleaners ?? []).map((cleaner) =>
-    deriveCleanerAvailabilityState({
-      browserOnline: String(cleaner.status ?? "").toLowerCase() !== "offline",
-      isAvailable: cleaner.is_available === true,
-      rosterIncludesToday: rosterIncludesWeekday(cleaner.availability_weekdays, weekday),
-      hasActiveJob: activeCleanerIds.has(cleaner.id),
-      hasFutureBookedJob: bookedCleanerIds.has(cleaner.id),
-    }),
-  );
-  const cleanerStats = {
-    total: scheduleData?.cleaners?.length ?? 0,
-    availableIdle: cleanerStates.filter((s) => s.stateKey === "online").length,
-    busy: cleanerStates.filter((s) => s.stateKey === "booked" || s.stateKey === "in-job").length,
-    notReceiving: cleanerStates.filter((s) => s.stateKey === "paused" || s.stateKey === "offline" || s.stateKey === "off-today").length,
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -459,7 +400,20 @@ export default function OfficeDashboardPage() {
   const cleanerSegments: BreakdownSegment[] = [
     { key: "available", label: "Available", value: cleanerStats.availableIdle, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
     { key: "busy", label: "Booked / in job", value: cleanerStats.busy, color: "bg-blue-500", legendColor: "bg-blue-500" },
-    { key: "offline", label: "Not receiving", value: cleanerStats.notReceiving, color: "bg-slate-300", legendColor: "bg-slate-300" },
+    {
+      key: "off-today",
+      label: "Off today",
+      value: cleanerStats.offToday,
+      color: "bg-amber-300",
+      legendColor: "bg-amber-300",
+    },
+    {
+      key: "unavailable",
+      label: "Offline / paused",
+      value: cleanerStats.manuallyUnavailable,
+      color: "bg-slate-300",
+      legendColor: "bg-slate-300",
+    },
   ];
 
   const cashSegments: BreakdownSegment[] = [
