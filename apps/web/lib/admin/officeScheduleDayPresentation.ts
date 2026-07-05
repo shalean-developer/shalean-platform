@@ -138,6 +138,26 @@ export function resolveOfficeScheduleSummary(
   return summary ?? computeOfficeTodayScheduleStats(bookings);
 }
 
+export function buildOfficeScheduleCleanersById(
+  cleaners: readonly Pick<OfficeScheduleDayCleaner, "id" | "full_name">[],
+): Map<string, string | null> {
+  return new Map(cleaners.map((cleaner) => [cleaner.id, cleaner.full_name ?? null]));
+}
+
+/** Display label for the cleaner (or team) assigned to a schedule booking. */
+export function officeScheduleAssignedCleanerLabel(
+  booking: Pick<OfficeScheduleDayBooking, "cleaner_id" | "selected_cleaner_id" | "team_id">,
+  cleanersById: ReadonlyMap<string, string | null>,
+): string | null {
+  if (String(booking.team_id ?? "").trim()) {
+    return "Team assigned";
+  }
+  const cleanerId = String(booking.cleaner_id ?? booking.selected_cleaner_id ?? "").trim();
+  if (!cleanerId) return null;
+  const name = cleanersById.get(cleanerId)?.trim();
+  return name || "Assigned cleaner";
+}
+
 export function weekdayIndexForScheduleYmd(ymd: string): number {
   const day = new Date(`${ymd}T12:00:00+02:00`).getDay();
   return Number.isFinite(day) ? day : new Date().getDay();
@@ -278,6 +298,180 @@ export function bookingsInTimelineHour(bookings: OfficeScheduleDayBooking[], hou
   const hour = parseBookingHour(hourLabel);
   if (hour == null) return [];
   return bookings.filter((b) => parseBookingHour(b.time) === hour);
+}
+
+export type OfficeScheduleCalendarView = "month" | "week" | "day" | "list";
+
+const EVENT_BAR_CLS: Record<string, string> = {
+  unassigned: "bg-orange-500 hover:bg-orange-600",
+  completed: "bg-emerald-500 hover:bg-emerald-600",
+  in_progress: "bg-violet-500 hover:bg-violet-600",
+  assigned: "bg-blue-500 hover:bg-blue-600",
+  neutral: "bg-slate-500 hover:bg-slate-600",
+  cancelled: "bg-slate-400 hover:bg-slate-500 opacity-75",
+};
+
+export function officeScheduleEventBarClass(tone: string, status?: string | null): string {
+  const st = String(status ?? "").trim().toLowerCase();
+  if (st === "cancelled" || st === "failed") return EVENT_BAR_CLS.cancelled!;
+  return EVENT_BAR_CLS[tone] ?? EVENT_BAR_CLS.neutral!;
+}
+
+export function parseOfficeScheduleTimeMinutes(time: string | null | undefined): number | null {
+  if (!time) return null;
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+export function formatOfficeScheduleHourLabel(hour24: number): string {
+  if (hour24 === 0) return "12am";
+  if (hour24 < 12) return `${hour24}am`;
+  if (hour24 === 12) return "12pm";
+  return `${hour24 - 12}pm`;
+}
+
+export function formatOfficeScheduleTimeRange(time: string | null | undefined): string {
+  const mins = parseOfficeScheduleTimeMinutes(time);
+  if (mins == null) return "All day";
+  const endMins = mins + 60;
+  const fmt = (m: number) => {
+    const h = Math.floor(m / 60) % 24;
+    const min = m % 60;
+    const suffix = h < 12 || h === 24 ? "am" : "pm";
+    const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return min === 0 ? `${hour12}${suffix}` : `${hour12}:${String(min).padStart(2, "0")}${suffix}`;
+  };
+  return `${fmt(mins)} - ${fmt(endMins)}`;
+}
+
+export function formatOfficeScheduleMonthTitle(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00+02:00`);
+  if (!Number.isFinite(d.getTime())) return ymd;
+  return d.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+}
+
+export function formatOfficeScheduleWeekTitle(startYmd: string, endYmd: string): string {
+  const start = new Date(`${startYmd}T12:00:00+02:00`);
+  const end = new Date(`${endYmd}T12:00:00+02:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return startYmd;
+  const startMonth = start.toLocaleDateString("en-ZA", { month: "short" });
+  const endMonth = end.toLocaleDateString("en-ZA", { month: "short" });
+  const startDay = start.getDate();
+  const endDay = end.getDate();
+  const year = end.getFullYear();
+  if (startMonth === endMonth) return `${startMonth} ${startDay} – ${endDay}, ${year}`;
+  return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${year}`;
+}
+
+export function formatOfficeScheduleDayTitle(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00+02:00`);
+  if (!Number.isFinite(d.getTime())) return ymd;
+  return d.toLocaleDateString("en-ZA", { month: "long", day: "numeric", year: "numeric" });
+}
+
+export function formatOfficeScheduleListDateHeader(ymd: string): { date: string; weekday: string } {
+  const d = new Date(`${ymd}T12:00:00+02:00`);
+  if (!Number.isFinite(d.getTime())) return { date: ymd, weekday: "" };
+  return {
+    date: d.toLocaleDateString("en-ZA", { month: "long", day: "numeric", year: "numeric" }),
+    weekday: d.toLocaleDateString("en-ZA", { weekday: "long" }),
+  };
+}
+
+function startOfCalendarWeekSunday(ymd: string): Date {
+  const anchor = new Date(`${ymd}T12:00:00+02:00`);
+  const day = anchor.getDay();
+  const sunday = new Date(anchor);
+  sunday.setDate(anchor.getDate() - day);
+  return sunday;
+}
+
+export function buildOfficeScheduleWeekDays(anchorYmd: string): string[] {
+  const sunday = startOfCalendarWeekSunday(anchorYmd);
+  const out: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(sunday);
+    cur.setDate(sunday.getDate() + i);
+    out.push(todayYmdJohannesburg(cur));
+  }
+  return out;
+}
+
+export function getOfficeScheduleWeekRange(anchorYmd: string): { from: string; to: string } {
+  const days = buildOfficeScheduleWeekDays(anchorYmd);
+  return { from: days[0]!, to: days[6]! };
+}
+
+export function getOfficeScheduleMonthRange(anchorYmd: string): { from: string; to: string } {
+  const d = new Date(`${anchorYmd}T12:00:00+02:00`);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  return { from: todayYmdJohannesburg(first), to: todayYmdJohannesburg(last) };
+}
+
+export function buildOfficeScheduleMonthGrid(anchorYmd: string): Array<{
+  ymd: string;
+  dayNum: number;
+  inMonth: boolean;
+  isToday: boolean;
+}> {
+  const d = new Date(`${anchorYmd}T12:00:00+02:00`);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const gridStart = startOfCalendarWeekSunday(todayYmdJohannesburg(firstOfMonth));
+  const today = todayYmdJohannesburg();
+  const out: Array<{ ymd: string; dayNum: number; inMonth: boolean; isToday: boolean }> = [];
+  for (let i = 0; i < 42; i++) {
+    const cur = new Date(gridStart);
+    cur.setDate(gridStart.getDate() + i);
+    const ymd = todayYmdJohannesburg(cur);
+    out.push({
+      ymd,
+      dayNum: cur.getDate(),
+      inMonth: cur.getMonth() === month,
+      isToday: ymd === today,
+    });
+  }
+  return out;
+}
+
+export function groupOfficeScheduleBookingsByDate(
+  bookings: readonly OfficeScheduleDayBooking[],
+): Map<string, OfficeScheduleDayBooking[]> {
+  const map = new Map<string, OfficeScheduleDayBooking[]>();
+  for (const booking of bookings) {
+    const date = String(booking.date ?? "").trim();
+    if (!date) continue;
+    const list = map.get(date) ?? [];
+    list.push(booking);
+    map.set(date, list);
+  }
+  for (const [, list] of map) {
+    list.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+  }
+  return map;
+}
+
+export function navigateOfficeScheduleDate(
+  ymd: string,
+  view: OfficeScheduleCalendarView,
+  direction: -1 | 1,
+): string {
+  if (view === "month" || view === "list") {
+    const d = new Date(`${ymd}T12:00:00+02:00`);
+    d.setMonth(d.getMonth() + direction);
+    return todayYmdJohannesburg(d);
+  }
+  if (view === "week") return addOfficeScheduleDays(ymd, direction * 7);
+  return addOfficeScheduleDays(ymd, direction);
 }
 
 export { officeScheduleStatusPresentation };

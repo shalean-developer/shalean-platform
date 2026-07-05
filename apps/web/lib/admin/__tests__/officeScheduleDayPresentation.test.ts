@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   addOfficeScheduleDays,
   bookingsInTimelineHour,
+  buildOfficeScheduleCleanersById,
   buildOfficeScheduleTimelineHours,
   buildOfficeScheduleWeekStrip,
   computeOfficeScheduleCleanerStats,
   countOfficeScheduleStartingSoonUnassigned,
   filterOfficeScheduleBookings,
+  officeScheduleAssignedCleanerLabel,
   resolveOfficeScheduleSummary,
   type OfficeScheduleDayBooking,
 } from "@/lib/admin/officeScheduleDayPresentation";
@@ -144,5 +146,69 @@ describe("filterOfficeScheduleBookings", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe("1");
+  });
+});
+
+describe("officeScheduleAssignedCleanerLabel", () => {
+  const cleanersById = buildOfficeScheduleCleanersById([
+    { id: "c1", full_name: "Alex Cleaner" },
+    { id: "c2", full_name: "Bea Helper" },
+  ]);
+
+  it("returns cleaner full name from cleaner_id", () => {
+    expect(
+      officeScheduleAssignedCleanerLabel(
+        scheduleBooking({ id: "1", status: "assigned", cleaner_id: "c1", time: "09:00", date: "2026-06-19" }),
+        cleanersById,
+      ),
+    ).toBe("Alex Cleaner");
+  });
+
+  it("falls back to selected_cleaner_id when cleaner_id is null", () => {
+    expect(
+      officeScheduleAssignedCleanerLabel(
+        scheduleBooking({
+          id: "1",
+          status: "pending",
+          cleaner_id: null,
+          selected_cleaner_id: "c2",
+          time: "09:00",
+          date: "2026-06-19",
+        }),
+        cleanersById,
+      ),
+    ).toBe("Bea Helper");
+  });
+
+  it("returns team label when team_id is set", () => {
+    expect(
+      officeScheduleAssignedCleanerLabel(
+        scheduleBooking({
+          id: "1",
+          status: "assigned",
+          cleaner_id: "c1",
+          team_id: "team-1",
+          time: "09:00",
+          date: "2026-06-19",
+        }),
+        cleanersById,
+      ),
+    ).toBe("Team assigned");
+  });
+
+  it("returns null when no assignment", () => {
+    expect(
+      officeScheduleAssignedCleanerLabel(
+        scheduleBooking({
+          id: "1",
+          status: "pending",
+          cleaner_id: null,
+          selected_cleaner_id: null,
+          time: "09:00",
+          date: "2026-06-19",
+        }),
+        cleanersById,
+      ),
+    ).toBeNull();
   });
 });

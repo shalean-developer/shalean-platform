@@ -6,7 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { OpsSnapshot } from "@/lib/admin/opsSnapshot";
-import { computeOfficeScheduleCleanerStats, type OfficeScheduleDayResponse } from "@/lib/admin/officeScheduleDayPresentation";
+import {
+  buildOfficeScheduleCleanersById,
+  computeOfficeScheduleCleanerStats,
+  officeScheduleAssignedCleanerLabel,
+  type OfficeScheduleDayResponse,
+} from "@/lib/admin/officeScheduleDayPresentation";
 import {
   computeOfficeTodayScheduleStats,
   officeScheduleStatusPresentation,
@@ -336,6 +341,11 @@ export default function OfficeDashboardPage() {
     [todayBookings, scheduleData?.cleaners, todayYmd],
   );
 
+  const cleanersById = useMemo(
+    () => buildOfficeScheduleCleanersById(scheduleData?.cleaners ?? []),
+    [scheduleData?.cleaners],
+  );
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -645,6 +655,7 @@ export default function OfficeDashboardPage() {
           ) : (
             sortedBookings.slice(0, 8).map((booking) => {
               const { label: statusLabel, tone } = officeScheduleStatusPresentation(booking);
+              const assignedCleaner = officeScheduleAssignedCleanerLabel(booking, cleanersById);
               const statusColor =
                 tone === "unassigned"
                   ? "bg-amber-100 text-amber-800"
@@ -670,6 +681,12 @@ export default function OfficeDashboardPage() {
                       {(booking.service ?? "Service").replace(/-/g, " ")}
                     </p>
                     <p className="truncate text-xs text-slate-500">{booking.location ?? "No location"}</p>
+                    {assignedCleaner ? (
+                      <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-slate-600">
+                        <UserCheck className="h-3 w-3 shrink-0 text-slate-400" />
+                        {assignedCleaner}
+                      </p>
+                    ) : null}
                   </div>
                   <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusColor)}>
                     {statusLabel}
