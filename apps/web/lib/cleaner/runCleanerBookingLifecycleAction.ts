@@ -1155,7 +1155,12 @@ export async function runCleanerBookingLifecycleAction(params: {
     });
 
     try {
-      const payout = await persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId });
+      const payout = await persistCleanerPayoutIfUnset({
+        admin,
+        bookingId,
+        cleanerId,
+        forceDisplayRecompute: true,
+      });
       if (payout.ok === false) {
         const error_id = newPayoutMoneyPathErrorId();
         const persistCode = payout.code ?? "payout_persist_failed";

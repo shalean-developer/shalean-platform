@@ -77,6 +77,16 @@ export function evaluatePersistCleanerPayoutEligibility(row: Record<string, unkn
     return { allowed: false, skipReason: "payout_eligibility_dispatch_booking_status" };
   }
 
+  /**
+   * Active assignment: cleaner is on the job (or en route / started). Persist display
+   * earnings here so completion and dashboards do not depend on payment columns having
+   * landed before the service window — {@link isCompleatableDisplayEarningsCents} still
+   * blocks R0 completion when there is no real payout basis.
+   */
+  if (st === "assigned" || st === "in_progress") {
+    return { allowed: true, mode: "pre_completion_assignment_basis" };
+  }
+
   const isTeam = row.is_team_job === true;
 
   if (!isTeam && invoiceBackedRow(row)) {

@@ -97,6 +97,36 @@ export function resolvePersistCleanerIdForBooking(row: BookingPersistIdsRow): st
   return null;
 }
 
+const ROSTER_LEAD_ROLES = new Set(["primary", "lead", "owner"]);
+
+/** Prefer primary/lead roster row; otherwise first roster member. */
+export function pickPrimaryRosterCleanerId(
+  roster: ReadonlyArray<{ cleaner_id?: string | null; role?: string | null }>,
+): string | null {
+  if (!roster.length) return null;
+  const lead = roster.find((r) => ROSTER_LEAD_ROLES.has(String(r.role ?? "").trim().toLowerCase()));
+  const pick = lead ?? roster[0];
+  const cid = String(pick?.cleaner_id ?? "").trim();
+  return cid || null;
+}
+
+/**
+ * {@link resolvePersistCleanerIdForBooking} plus `booking_cleaners` fallback for
+ * selected-cleaner / roster-only solo assignments (matches persist + lifecycle access).
+ */
+export async function resolvePersistCleanerIdForBookingWithRoster(
+  admin: SupabaseClient,
+  row: BookingPersistIdsRow & { id?: string | null },
+): Promise<string | null> {
+  const direct = resolvePersistCleanerIdForBooking(row);
+  if (direct) return direct;
+  const bookingId = String(row.id ?? "").trim();
+  if (!bookingId) return null;
+  const { data, error } = await admin.from("booking_cleaners").select("cleaner_id, role").eq("booking_id", bookingId);
+  if (error || !data?.length) return null;
+  return pickPrimaryRosterCleanerId(data as { cleaner_id?: string | null; role?: string | null }[]);
+}
+
 /**
  * `display_earnings_cents` is considered persisted for integrity checks when it is non-null
  * and finite (including **0** — free / promo / test jobs).

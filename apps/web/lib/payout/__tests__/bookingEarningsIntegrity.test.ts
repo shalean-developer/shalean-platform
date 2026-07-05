@@ -6,6 +6,7 @@ import {
   bookingsPersistSelectListForPersist,
   hasPersistedDisplayEarningsBasis,
   isCompletableDisplayEarningsCents,
+  pickPrimaryRosterCleanerId,
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 
@@ -72,6 +73,16 @@ describe("bookingEarningsIntegrity", () => {
         cleaner_id: "solo-uuid",
       }),
     ).toBe("solo-uuid");
+  });
+
+  it("pickPrimaryRosterCleanerId prefers primary/lead role", () => {
+    expect(
+      pickPrimaryRosterCleanerId([
+        { cleaner_id: "member-b", role: "assistant" },
+        { cleaner_id: "member-a", role: "primary" },
+      ]),
+    ).toBe("member-a");
+    expect(pickPrimaryRosterCleanerId([{ cleaner_id: "only-one", role: "assistant" }])).toBe("only-one");
   });
 
   describe("bookingSignalsPaidForZeroDisplayRecompute", () => {

@@ -78,6 +78,19 @@ describe("bookingPayoutPersistEligibility", () => {
     if (!r.allowed) expect(r.skipReason).toBe("payout_eligibility_dispatch_booking_status");
   });
 
+  it("allows in_progress without paid columns (preview/completion persist path)", () => {
+    const r = evaluatePersistCleanerPayoutEligibility({
+      status: "in_progress",
+      completed_at: null,
+      is_team_job: false,
+      billing_type: "per_booking",
+      payment_status: null,
+      total_paid_cents: null,
+      amount_paid_cents: null,
+    });
+    expect(r).toEqual({ allowed: true, mode: "pre_completion_assignment_basis" });
+  });
+
   it("allows recurring_invoice solo without completed status", () => {
     const r = evaluatePersistCleanerPayoutEligibility({
       status: "",

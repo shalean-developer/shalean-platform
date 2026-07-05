@@ -43,6 +43,7 @@
     "backfill:sales-document-quote-bookings": "tsx --env-file=.env.local --conditions=react-server scripts/backfillSalesDocumentQuoteBookings.ts",
     "zoho:diagnose": "tsx --env-file=.env.local scripts/zohoDiagnose.ts",
     "repair:zero-earning-assigned": "tsx --env-file=.env.local --conditions=react-server scripts/repairZeroEarningAssignedBookings.ts",
+    "repair:stuck-null-display-active": "tsx --env-file=.env.local --conditions=react-server scripts/repairStuckNullDisplayActiveBookings.ts",
     "repair:production-health-critical": "tsx --env-file=.env.local --conditions=react-server scripts/repairProductionHealthCritical.ts",
     "repair:dispatch-offer-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairMissingDispatchOfferEarningsSnapshot.ts",
     "recalculate:cleaner-earnings-v3": "tsx --env-file=.env.local --conditions=react-server scripts/recalculateAllCleanerEarningsV3.ts",

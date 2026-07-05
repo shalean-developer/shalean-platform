@@ -168,7 +168,18 @@ async function isCleanerAllowedForPersist(
   }
   const cid = String(r.cleaner_id ?? "").trim();
   const owner = String(r.payout_owner_cleaner_id ?? "").trim();
-  return cid === exp || owner === exp;
+  if (cid === exp || owner === exp) return true;
+  const bid = String(bookingId ?? "").trim();
+  if (bid) {
+    const { data: bc, error: bcErr } = await admin
+      .from("booking_cleaners")
+      .select("id")
+      .eq("booking_id", bid)
+      .eq("cleaner_id", expectedCleanerId)
+      .maybeSingle();
+    if (!bcErr && bc) return true;
+  }
+  return false;
 }
 
 /**
@@ -1359,6 +1370,23 @@ async function verifyDisplayEarningsRowAfterWrite(
   return { ok: true };
 }
 
+/**
+ * Eligibility skips (e.g. terminal booking) may legitimately leave display unset.
+ * Only bypass {@link finalizePersistResult} when display is already persisted —
+ * otherwise callers like cleaner complete would see `ok: true` then fail verify.
+ */
+async function shouldBypassFinalizeForEligibilitySkip(
+  admin: SupabaseClient,
+  bookingId: string,
+  core: PersistCleanerPayoutIfUnsetResult,
+): Promise<boolean> {
+  if (!core.ok || !core.skipped || !isPayoutEligibilitySkipReason(core.skipReason)) {
+    return false;
+  }
+  const cents = await fetchBookingDisplayEarningsCents(admin, bookingId);
+  return hasPersistedDisplayEarningsBasis(cents);
+}
+
 async function finalizePersistResult(
   admin: SupabaseClient,
   bookingId: string,
@@ -1423,21 +1451,21 @@ export async function persistCleanerPayoutIfUnset(
     }
 
     const first = await persistCleanerPayoutIfUnsetCore(params);
-    if (first.ok && first.skipped && isPayoutEligibilitySkipReason(first.skipReason)) {
+    if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, first)) {
       return first;
     }
     let out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, first);
-    if (out.ok && out.skipped && isPayoutEligibilitySkipReason(out.skipReason)) {
+    if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, out)) {
       return out;
     }
     if (!out.ok) {
       await new Promise((r) => setTimeout(r, 200));
       const second = await persistCleanerPayoutIfUnsetCore(params);
-      if (second.ok && second.skipped && isPayoutEligibilitySkipReason(second.skipReason)) {
+      if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, second)) {
         return second;
       }
       out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, second);
-      if (out.ok && out.skipped && isPayoutEligibilitySkipReason(out.skipReason)) {
+      if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, out)) {
         return out;
       }
     }
