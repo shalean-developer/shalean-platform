@@ -48,9 +48,22 @@ create table if not exists public.booking_lifecycle_jobs (
   created_at timestamptz not null default now()
 );
 
-create index if not exists booking_lifecycle_jobs_due_idx
-  on public.booking_lifecycle_jobs (run_at asc)
-  where sent_at is null;
+-- Preview branches may already have booking_lifecycle_jobs without run_at (20260422+).
+do $idx$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'booking_lifecycle_jobs'
+      and column_name = 'run_at'
+  ) then
+    create index if not exists booking_lifecycle_jobs_due_idx
+      on public.booking_lifecycle_jobs (run_at asc)
+      where sent_at is null;
+  end if;
+end;
+$idx$;
 
 create unique index if not exists booking_lifecycle_jobs_unique_booking_type_idx
   on public.booking_lifecycle_jobs (booking_id, job_type);
