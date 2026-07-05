@@ -47,8 +47,8 @@ export default function QuoteRequestPage() {
             Get your free cleaning quote
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-600">
-            Tell us about your home or office and we&apos;ll send a personalised quote by email. No account
-            required — accept and pay online when you&apos;re ready.
+            Three quick steps — tell us what you need, a bit about your place, and how to reach you.
+            We&apos;ll email a personalised quote. No account required.
           </p>
         </div>
         <QuoteRequestForm />
